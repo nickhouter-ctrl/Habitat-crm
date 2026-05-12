@@ -218,7 +218,7 @@ export function DocumentWizard({
           </button>
         </p>
 
-        <Card className="max-w-3xl">
+        <Card>
           <CardContent className="space-y-5">
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
               <Field label={`${Title}nummer`} htmlFor="docNumber">
@@ -259,13 +259,13 @@ export function DocumentWizard({
           </CardContent>
         </Card>
 
-        <Card className="max-w-3xl">
+        <Card>
           <CardContent>
             <LineItemsEditor products={products} />
           </CardContent>
         </Card>
 
-        <Card className="max-w-3xl">
+        <Card>
           <CardContent>
             <Field label="Notities / voorwaarden" htmlFor="notes">
               <Textarea id="notes" name="notes" />

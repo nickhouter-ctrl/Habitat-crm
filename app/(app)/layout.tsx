@@ -19,7 +19,7 @@ export default async function AppLayout({
     <div className="flex min-h-dvh bg-background">
       <AppSidebar user={session.user} />
       <div className="min-w-0 flex-1">
-        <main className="mx-auto max-w-6xl px-4 pb-10 pt-20 sm:px-6 lg:pt-8">{children}</main>
+        <main className="mx-auto max-w-[96rem] px-4 pb-10 pt-20 sm:px-6 lg:pt-8">{children}</main>
       </div>
     </div>
   );

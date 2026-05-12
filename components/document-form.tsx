@@ -82,7 +82,7 @@ export function DocumentForm({
       <input type="hidden" name="kind" value={kind} />
       <input type="hidden" name="currency" value="EUR" />
 
-      <Card className="max-w-3xl">
+      <Card>
         <CardContent className="space-y-5">
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             <Field label={`${KIND_LABEL[kind]}nummer`} htmlFor="docNumber">
@@ -164,13 +164,13 @@ export function DocumentForm({
         </CardContent>
       </Card>
 
-      <Card className="max-w-3xl">
+      <Card>
         <CardContent>
           <LineItemsEditor initialItems={doc?.items} products={products} />
         </CardContent>
       </Card>
 
-      <Card className="max-w-3xl">
+      <Card>
         <CardContent>
           <Field label="Notities / voorwaarden" htmlFor="notes">
             <Textarea id="notes" name="notes" defaultValue={doc?.notes ?? ""} />
