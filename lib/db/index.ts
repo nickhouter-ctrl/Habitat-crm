@@ -13,10 +13,10 @@ if (!connectionString && process.env.NEXT_PHASE !== "phase-production-build") {
   );
 }
 
-// Reuse the underlying client across hot reloads in dev so we don't exhaust
-// connections. `prepare: false` + `max: 1` is the right shape for serverless on
-// Supabase's transaction pooler (port 6543): each function instance keeps one
-// connection, returned to the pool after every statement.
+// Reuse the underlying client across hot reloads / instance re-evals so we don't
+// exhaust connections. For serverless behind Supabase's transaction pooler
+// (port 6543) you want a *small* per-instance pool — the pooler does the real
+// multiplexing — so we cap it at a few connections and let idle ones drop fast.
 const globalForDb = globalThis as unknown as {
   __habitatPg?: ReturnType<typeof postgres>;
 };
@@ -26,12 +26,14 @@ const client =
   postgres(connectionString ?? "postgres://localhost:5432/habitat_crm_unconfigured", {
     // `prepare: false` is required for Supabase's transaction pooler (6543).
     prepare: false,
-    idle_timeout: 20,
+    max: 3,
+    idle_timeout: 10,
     connect_timeout: 15,
   });
 
-if (process.env.NODE_ENV !== "production") globalForDb.__habitatPg = client;
+globalForDb.__habitatPg = client;
 
 export const db = drizzle(client, { schema, casing: "snake_case" });
+export const pgClient = client;
 export { schema };
 export * from "./schema";
