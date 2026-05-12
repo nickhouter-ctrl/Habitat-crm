@@ -1,8 +1,5 @@
 "use client";
 
-import { Plus, Trash2 } from "lucide-react";
-import { useState } from "react";
-
 import {
   Button,
   Card,
@@ -12,18 +9,11 @@ import {
   Select,
   Textarea,
 } from "@/components/ui";
+import { LineItemsEditor } from "@/components/line-items-editor";
 import type { DocumentLineItem } from "@/lib/db/schema";
-import { computeTotals, lineNet, type DocKind } from "@/lib/documents";
-import { cn, formatEUR } from "@/lib/utils";
+import type { DocKind } from "@/lib/documents";
 
 type Option = { id: string; name: string };
-type Row = {
-  name: string;
-  description: string;
-  units: string;
-  price: string;
-  taxRate: string;
-};
 
 const KIND_LABEL: Record<DocKind, string> = {
   estimate: "Offerte",
@@ -33,7 +23,7 @@ const KIND_LABEL: Record<DocKind, string> = {
   salesreceipt: "Bon",
 };
 
-const STATUS_OPTIONS: Array<{ value: string; label: string }> = [
+export const DOC_STATUS_OPTIONS: Array<{ value: string; label: string }> = [
   { value: "draft", label: "Concept" },
   { value: "sent", label: "Verstuurd" },
   { value: "accepted", label: "Geaccepteerd" },
@@ -43,22 +33,6 @@ const STATUS_OPTIONS: Array<{ value: string; label: string }> = [
   { value: "overdue", label: "Achterstallig" },
   { value: "void", label: "Geannuleerd" },
 ];
-
-function emptyRow(): Row {
-  return { name: "", description: "", units: "1", price: "", taxRate: "21" };
-}
-
-function rowsToItems(rows: Row[]): DocumentLineItem[] {
-  return rows
-    .map((r) => ({
-      name: r.name.trim(),
-      description: r.description.trim() || undefined,
-      units: Number(r.units) || 0,
-      price: Number(r.price) || 0,
-      taxRate: Number(r.taxRate) || 0,
-    }))
-    .filter((r) => r.name.length > 0);
-}
 
 export function DocumentForm({
   action,
@@ -92,50 +66,16 @@ export function DocumentForm({
   defaults?: { contactId?: string; dealId?: string; propertyId?: string };
   submitLabel?: string;
 }) {
-  const [rows, setRows] = useState<Row[]>(() =>
-    doc?.items && doc.items.length > 0
-      ? doc.items.map((it) => ({
-          name: it.name,
-          description: it.description ?? "",
-          units: String(it.units),
-          price: String(it.price),
-          taxRate: String(it.taxRate ?? 21),
-        }))
-      : [emptyRow()],
-  );
-
-  const items = rowsToItems(rows);
-  const totals = computeTotals(items);
-
   const now = new Date();
   const today = now.toISOString().slice(0, 10);
   const due = new Date(now);
-  due.setDate(due.getDate() + 30); // default term / validity: 30 days
+  due.setDate(due.getDate() + 30);
   const defaultDueDate = due.toISOString().slice(0, 10);
-
-  const patchRow = (i: number, patch: Partial<Row>) =>
-    setRows((rs) => rs.map((r, idx) => (idx === i ? { ...r, ...patch } : r)));
-  const addRow = () => setRows((rs) => [...rs, emptyRow()]);
-  const removeRow = (i: number) =>
-    setRows((rs) => (rs.length > 1 ? rs.filter((_, idx) => idx !== i) : rs));
 
   return (
     <form action={action} className="space-y-5">
       <input type="hidden" name="kind" value={kind} />
       <input type="hidden" name="currency" value="EUR" />
-      <input
-        type="hidden"
-        name="items"
-        value={JSON.stringify(
-          rows.map((r) => ({
-            name: r.name.trim(),
-            description: r.description.trim(),
-            units: Number(r.units),
-            price: Number(r.price),
-            taxRate: Number(r.taxRate),
-          })),
-        )}
-      />
 
       <Card className="max-w-3xl">
         <CardContent className="space-y-5">
@@ -149,7 +89,7 @@ export function DocumentForm({
             </Field>
             <Field label="Status" htmlFor="status">
               <Select id="status" name="status" defaultValue={doc?.status ?? "draft"}>
-                {STATUS_OPTIONS.map((o) => (
+                {DOC_STATUS_OPTIONS.map((o) => (
                   <option key={o.value} value={o.value}>
                     {o.label}
                   </option>
@@ -179,7 +119,11 @@ export function DocumentForm({
               id="title"
               name="title"
               defaultValue={doc?.title ?? ""}
-              placeholder={kind === "invoice" ? "bv. Renovatie keuken — eindfactuur" : "bv. Renovatie keuken & badkamer"}
+              placeholder={
+                kind === "invoice"
+                  ? "bv. Renovatie keuken — eindfactuur"
+                  : "bv. Renovatie keuken & badkamer"
+              }
             />
           </Field>
 
@@ -230,112 +174,9 @@ export function DocumentForm({
         </CardContent>
       </Card>
 
-      {/* Line items */}
       <Card className="max-w-3xl">
-        <CardContent className="space-y-3">
-          <div className="flex items-center justify-between">
-            <h3 className="text-sm font-semibold">Regels</h3>
-            <Button type="button" variant="secondary" size="sm" onClick={addRow}>
-              <Plus className="size-4" /> Regel toevoegen
-            </Button>
-          </div>
-
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[680px] text-sm">
-              <thead className="text-left text-xs uppercase tracking-wide text-muted">
-                <tr>
-                  <th className="px-1 py-1.5">Omschrijving</th>
-                  <th className="w-20 px-1 py-1.5 text-right">Aantal</th>
-                  <th className="w-28 px-1 py-1.5 text-right">Prijs (ex.)</th>
-                  <th className="w-20 px-1 py-1.5 text-right">BTW %</th>
-                  <th className="w-28 px-1 py-1.5 text-right">Netto</th>
-                  <th className="w-8 px-1 py-1.5" />
-                </tr>
-              </thead>
-              <tbody className="divide-y">
-                {rows.map((r, i) => (
-                  <tr key={i} className="align-top">
-                    <td className="px-1 py-2">
-                      <Input
-                        value={r.name}
-                        onChange={(e) => patchRow(i, { name: e.target.value })}
-                        placeholder="Artikel of werkzaamheid"
-                        className="mb-1"
-                      />
-                      <Input
-                        value={r.description}
-                        onChange={(e) => patchRow(i, { description: e.target.value })}
-                        placeholder="Extra omschrijving (optioneel)"
-                        className="text-xs"
-                      />
-                    </td>
-                    <td className="px-1 py-2">
-                      <Input
-                        type="number"
-                        step="0.01"
-                        min="0"
-                        value={r.units}
-                        onChange={(e) => patchRow(i, { units: e.target.value })}
-                        className="text-right"
-                      />
-                    </td>
-                    <td className="px-1 py-2">
-                      <Input
-                        type="number"
-                        step="0.01"
-                        min="0"
-                        value={r.price}
-                        onChange={(e) => patchRow(i, { price: e.target.value })}
-                        className="text-right"
-                      />
-                    </td>
-                    <td className="px-1 py-2">
-                      <Input
-                        type="number"
-                        step="1"
-                        min="0"
-                        max="100"
-                        value={r.taxRate}
-                        onChange={(e) => patchRow(i, { taxRate: e.target.value })}
-                        className="text-right"
-                      />
-                    </td>
-                    <td className="px-1 py-2 text-right tabular-nums">
-                      {formatEUR(lineNet({ units: Number(r.units) || 0, price: Number(r.price) || 0 }))}
-                    </td>
-                    <td className="px-1 py-2 text-right">
-                      <button
-                        type="button"
-                        onClick={() => removeRow(i)}
-                        title="Regel verwijderen"
-                        className={cn(
-                          "rounded p-1 text-muted transition-colors hover:bg-background hover:text-danger",
-                          rows.length <= 1 && "invisible",
-                        )}
-                      >
-                        <Trash2 className="size-4" />
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-
-          <div className="ml-auto w-full max-w-xs space-y-1 border-t pt-3 text-sm">
-            <div className="flex justify-between">
-              <span className="text-muted">Subtotaal</span>
-              <span className="tabular-nums">{formatEUR(totals.subtotal)}</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-muted">BTW</span>
-              <span className="tabular-nums">{formatEUR(totals.tax)}</span>
-            </div>
-            <div className="flex justify-between border-t pt-1 font-semibold">
-              <span>Totaal</span>
-              <span className="tabular-nums">{formatEUR(totals.total)}</span>
-            </div>
-          </div>
+        <CardContent>
+          <LineItemsEditor initialItems={doc?.items} />
         </CardContent>
       </Card>
 

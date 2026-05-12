@@ -7,7 +7,7 @@ import { z } from "zod";
 
 import { auth } from "@/auth";
 import { db } from "@/lib/db";
-import { documents } from "@/lib/db/schema";
+import { contacts, documents } from "@/lib/db/schema";
 import { computeTotals, parseLineItems, type DocKind } from "@/lib/documents";
 
 const KINDS = ["estimate", "proforma", "invoice", "creditnote", "salesreceipt"] as const;
@@ -93,6 +93,57 @@ export async function createDocument(formData: FormData) {
   const [row] = await db.insert(documents).values(values).returning({ id: documents.id });
 
   revalidatePath(listPathFor(values.kind as DocKind));
+  revalidatePath("/");
+  redirect(`/documents/${row.id}`);
+}
+
+/** Wizard flow: resolve/create the client (step 1), then create the document (step 2). */
+export async function createDocumentFromWizard(formData: FormData) {
+  await requireUser();
+  const raw = Object.fromEntries(formData);
+  const kindParsed = z.enum(KINDS).safeParse(raw.kind);
+  const kind = kindParsed.success ? kindParsed.data : "estimate";
+
+  // Step 1 — client
+  let contactId: string;
+  if (raw.clientMode === "new") {
+    const name = String(raw.newClientName ?? "").trim();
+    if (!name) redirect(`/documents/new?kind=${kind}&error=client`);
+    const language = z
+      .enum(["en", "nl", "es", "de"])
+      .catch("es")
+      .parse(raw.newClientLanguage);
+    const email = String(raw.newClientEmail ?? "").trim();
+    const phone = String(raw.newClientPhone ?? "").trim();
+    const [c] = await db
+      .insert(contacts)
+      .values({
+        name,
+        email: email || null,
+        phone: phone || null,
+        type: "lead",
+        preferredLanguage: language,
+        source: kind === "invoice" ? "factuur" : "offerte",
+      })
+      .returning({ id: contacts.id });
+    contactId = c.id;
+  } else {
+    const cid = z.string().uuid().safeParse(raw.contactId);
+    if (!cid.success) redirect(`/documents/new?kind=${kind}&error=client`);
+    contactId = cid.data;
+  }
+
+  // Step 2 — document fields
+  const docParsed = docSchema.safeParse({ ...raw, status: "draft" });
+  if (!docParsed.success) redirect(`/documents/new?kind=${kind}&error=validation`);
+  const { values } = buildValues(docParsed.data);
+
+  const [row] = await db
+    .insert(documents)
+    .values({ ...values, contactId, status: "draft" })
+    .returning({ id: documents.id });
+
+  revalidatePath(listPathFor(kind));
   revalidatePath("/");
   redirect(`/documents/${row.id}`);
 }

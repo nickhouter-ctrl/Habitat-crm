@@ -1,13 +1,13 @@
 import { count, eq } from "drizzle-orm";
 import Link from "next/link";
 
-import { DocumentForm } from "@/components/document-form";
+import { DocumentWizard } from "@/components/document-wizard";
 import { PageHeader } from "@/components/ui";
 import { db } from "@/lib/db";
 import { documents } from "@/lib/db/schema";
 import { suggestDocNumber, type DocKind } from "@/lib/documents";
 import { getDocumentFormOptions } from "../../_options";
-import { createDocument } from "../actions";
+import { createDocumentFromWizard } from "../actions";
 import { documentKindMeta } from "../../_meta";
 
 export const metadata = { title: "Nieuw document" };
@@ -34,34 +34,37 @@ export default async function NewDocumentPage({
     dealId: typeof params.dealId === "string" ? params.dealId : undefined,
     propertyId: typeof params.propertyId === "string" ? params.propertyId : undefined,
   };
-
-  const backHref = kind === "invoice" ? "/invoices" : kind === "estimate" ? "/quotes" : "/quotes";
+  const backHref = kind === "invoice" ? "/invoices" : "/quotes";
 
   return (
     <>
       <PageHeader
         title={`Nieuwe ${kindLabel.toLowerCase()}`}
-        subtitle="Stel de regels samen — totalen en BTW worden automatisch berekend"
+        subtitle="Stap 1: klant kiezen of aanmaken — stap 2: inhoud & regels"
         actions={
           <Link href={backHref} className="text-sm text-muted hover:underline">
             ← Terug
           </Link>
         }
       />
-      {params.error === "validation" && (
+      {params.error === "client" && (
         <p className="mb-4 max-w-3xl rounded-md bg-red-50 px-3 py-2 text-sm text-danger">
-          Controleer de gegevens (minstens één regel met een omschrijving).
+          Kies een bestaande klant of vul een naam in voor de nieuwe klant.
         </p>
       )}
-      <DocumentForm
-        action={createDocument}
+      {params.error === "validation" && (
+        <p className="mb-4 max-w-3xl rounded-md bg-red-50 px-3 py-2 text-sm text-danger">
+          Controleer de gegevens en probeer het opnieuw.
+        </p>
+      )}
+      <DocumentWizard
+        action={createDocumentFromWizard}
         kind={kind}
         defaultDocNumber={suggestDocNumber(kind, n)}
         contacts={options.contacts}
         deals={options.deals}
         properties={options.properties}
         defaults={defaults}
-        submitLabel={`${kindLabel} aanmaken`}
       />
     </>
   );
