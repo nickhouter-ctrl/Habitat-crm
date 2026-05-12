@@ -119,3 +119,38 @@ export async function addDealNote(dealId: string, body: string) {
   });
   revalidatePath(`/deals/${dealId}`);
 }
+
+const DEAL_STAGES = [
+  "lead",
+  "qualified",
+  "proposal",
+  "negotiation",
+  "won",
+  "lost",
+  "on_hold",
+] as const;
+
+/** Move a deal to another pipeline stage (used by the Kanban board, drag & drop). */
+export async function moveDealToStage(dealId: string, stage: string) {
+  const session = await auth();
+  if (!session?.user) return;
+  if (!(DEAL_STAGES as readonly string[]).includes(stage)) return;
+  const s = stage as (typeof DEAL_STAGES)[number];
+
+  const patch: { stage: (typeof DEAL_STAGES)[number]; probability?: number; closedAt: Date | null } = {
+    stage: s,
+    closedAt: null,
+  };
+  if (s === "won") {
+    patch.probability = 100;
+    patch.closedAt = new Date();
+  } else if (s === "lost") {
+    patch.probability = 0;
+    patch.closedAt = new Date();
+  }
+
+  await db.update(deals).set(patch).where(eq(deals.id, dealId));
+  revalidatePath("/deals");
+  revalidatePath(`/deals/${dealId}`);
+  revalidatePath("/");
+}

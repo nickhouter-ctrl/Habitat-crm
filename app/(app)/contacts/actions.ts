@@ -7,7 +7,7 @@ import { z } from "zod";
 
 import { auth } from "@/auth";
 import { db } from "@/lib/db";
-import { activities, contacts } from "@/lib/db/schema";
+import { activities, contacts, deals } from "@/lib/db/schema";
 
 const contactSchema = z.object({
   firstName: z.string().trim().max(120).optional().or(z.literal("")),
@@ -62,6 +62,18 @@ export async function createContact(formData: FormData) {
       }),
     )
     .returning({ id: contacts.id });
+
+  // New lead → start a deal so it's ready to pick up in the pipeline.
+  if (v.type === "lead") {
+    await db.insert(deals).values({
+      title: `Project — ${displayName}`,
+      type: "renovation",
+      stage: "lead",
+      contactId: row.id,
+      ownerId: session.user.id,
+    });
+    revalidatePath("/deals");
+  }
 
   revalidatePath("/contacts");
   revalidatePath("/");

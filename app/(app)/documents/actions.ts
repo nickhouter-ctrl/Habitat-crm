@@ -7,7 +7,8 @@ import { z } from "zod";
 
 import { auth } from "@/auth";
 import { db } from "@/lib/db";
-import { contacts, documents } from "@/lib/db/schema";
+import { contacts, deals, documents } from "@/lib/db/schema";
+import { syncDealFromDocument } from "@/lib/deals";
 import { computeTotals, parseLineItems, type DocKind } from "@/lib/documents";
 
 const KINDS = ["estimate", "proforma", "invoice", "creditnote", "salesreceipt"] as const;
@@ -51,6 +52,13 @@ function listPathFor(kind: DocKind): string {
   return "/documents";
 }
 
+function revalidateAround(kind: DocKind, id?: string) {
+  revalidatePath(listPathFor(kind));
+  if (id) revalidatePath(`/documents/${id}`);
+  revalidatePath("/deals");
+  revalidatePath("/");
+}
+
 function buildValues(v: z.infer<typeof docSchema>) {
   const items = parseLineItems(v.items);
   const totals = computeTotals(items);
@@ -92,27 +100,30 @@ export async function createDocument(formData: FormData) {
   const { values } = buildValues(parsed.data);
   const [row] = await db.insert(documents).values(values).returning({ id: documents.id });
 
-  revalidatePath(listPathFor(values.kind as DocKind));
-  revalidatePath("/");
+  await syncDealFromDocument(values.dealId, values);
+  revalidateAround(values.kind as DocKind);
   redirect(`/documents/${row.id}`);
 }
 
 /** Wizard flow: resolve/create the client (step 1), then create the document (step 2). */
 export async function createDocumentFromWizard(formData: FormData) {
-  await requireUser();
+  const user = await requireUser();
   const raw = Object.fromEntries(formData);
   const kindParsed = z.enum(KINDS).safeParse(raw.kind);
   const kind = kindParsed.success ? kindParsed.data : "estimate";
 
-  // Step 1 — client
+  // Parse the step-2 fields up front (so we can use title/propertyId for an auto-deal).
+  const docParsed = docSchema.safeParse({ ...raw, status: "draft" });
+  if (!docParsed.success) redirect(`/documents/new?kind=${kind}&error=validation`);
+  const { values } = buildValues(docParsed.data);
+
+  // Step 1 — client (and, for a new lead, an auto-created deal)
   let contactId: string;
+  let dealId: string | null = values.dealId;
   if (raw.clientMode === "new") {
     const name = String(raw.newClientName ?? "").trim();
     if (!name) redirect(`/documents/new?kind=${kind}&error=client`);
-    const language = z
-      .enum(["en", "nl", "es", "de"])
-      .catch("es")
-      .parse(raw.newClientLanguage);
+    const language = z.enum(["en", "nl", "es", "de"]).catch("es").parse(raw.newClientLanguage);
     const email = String(raw.newClientEmail ?? "").trim();
     const phone = String(raw.newClientPhone ?? "").trim();
     const [c] = await db
@@ -124,27 +135,39 @@ export async function createDocumentFromWizard(formData: FormData) {
         type: "lead",
         preferredLanguage: language,
         source: kind === "invoice" ? "factuur" : "offerte",
+        ownerId: user.id,
       })
       .returning({ id: contacts.id });
     contactId = c.id;
+
+    if (!dealId) {
+      const dealTitle = (values.title ?? "").trim() || `Project — ${name}`;
+      const [d] = await db
+        .insert(deals)
+        .values({
+          title: dealTitle,
+          type: "renovation",
+          stage: "lead",
+          contactId,
+          propertyId: values.propertyId,
+          ownerId: user.id,
+        })
+        .returning({ id: deals.id });
+      dealId = d.id;
+    }
   } else {
     const cid = z.string().uuid().safeParse(raw.contactId);
     if (!cid.success) redirect(`/documents/new?kind=${kind}&error=client`);
     contactId = cid.data;
   }
 
-  // Step 2 — document fields
-  const docParsed = docSchema.safeParse({ ...raw, status: "draft" });
-  if (!docParsed.success) redirect(`/documents/new?kind=${kind}&error=validation`);
-  const { values } = buildValues(docParsed.data);
-
   const [row] = await db
     .insert(documents)
-    .values({ ...values, contactId, status: "draft" })
+    .values({ ...values, contactId, dealId, status: "draft" })
     .returning({ id: documents.id });
 
-  revalidatePath(listPathFor(kind));
-  revalidatePath("/");
+  await syncDealFromDocument(dealId, { kind, status: "draft", totalEur: values.totalEur });
+  revalidateAround(kind);
   redirect(`/documents/${row.id}`);
 }
 
@@ -176,9 +199,8 @@ export async function updateDocument(id: string, formData: FormData) {
     })
     .where(eq(documents.id, id));
 
-  revalidatePath(listPathFor(values.kind as DocKind));
-  revalidatePath(`/documents/${id}`);
-  revalidatePath("/");
+  await syncDealFromDocument(values.dealId, values);
+  revalidateAround(values.kind as DocKind, id);
   redirect(`/documents/${id}`);
 }
 
@@ -189,7 +211,7 @@ export async function setDocumentStatus(id: string, formData: FormData) {
 
   const doc = await db.query.documents.findFirst({
     where: eq(documents.id, id),
-    columns: { totalEur: true, kind: true },
+    columns: { totalEur: true, kind: true, dealId: true },
   });
   if (!doc) return;
 
@@ -202,9 +224,8 @@ export async function setDocumentStatus(id: string, formData: FormData) {
   }
 
   await db.update(documents).set(patch).where(eq(documents.id, id));
-  revalidatePath(`/documents/${id}`);
-  revalidatePath(listPathFor(doc.kind as DocKind));
-  revalidatePath("/");
+  await syncDealFromDocument(doc.dealId, { kind: doc.kind, status, totalEur: doc.totalEur });
+  revalidateAround(doc.kind as DocKind, id);
 }
 
 export async function deleteDocument(id: string) {
@@ -214,7 +235,6 @@ export async function deleteDocument(id: string) {
     columns: { kind: true },
   });
   await db.delete(documents).where(eq(documents.id, id));
-  if (doc) revalidatePath(listPathFor(doc.kind as DocKind));
-  revalidatePath("/");
+  if (doc) revalidateAround(doc.kind as DocKind);
   redirect(doc ? listPathFor(doc.kind as DocKind) : "/quotes");
 }
