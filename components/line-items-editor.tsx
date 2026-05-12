@@ -114,12 +114,13 @@ export function LineItemsEditor({
   };
 
   // Margin info for a row that's linked to a product with a known cost.
+  // "marge" = winst t.o.v. de kostprijs (markup), zoals in de productcatalogus.
   const marginFor = (r: Row) => {
     const cost = r.productId ? costById.get(r.productId) ?? null : null;
     if (cost == null || cost <= 0) return null;
     const unit = lineUnitPrice({ price: Number(r.price) || 0, discount: Number(r.discount) || 0 });
     const listPrice = Number(r.price) || 0;
-    const pct = unit > 0 ? ((unit - cost) / unit) * 100 : -100;
+    const pct = ((unit - cost) / cost) * 100;
     const breakEvenDiscount = listPrice > 0 ? Math.max(0, (1 - cost / listPrice) * 100) : 0;
     return { cost, pct, breakEvenDiscount };
   };

@@ -81,14 +81,13 @@ export function CostBreakdown({
             className="text-right"
           />
         </Field>
-        <Field label="Gewenste marge %" htmlFor="targetMarginPct" hint="op verkoopprijs">
+        <Field label="Gewenste marge %" htmlFor="targetMarginPct" hint="t.o.v. de kostprijs (bv. 186%)">
           <Input
             id="targetMarginPct"
             name="targetMarginPct"
             type="number"
             step="0.01"
             min="0"
-            max="99"
             value={v.targetMarginPct}
             onChange={set("targetMarginPct")}
             className="text-right"
@@ -100,7 +99,7 @@ export function CostBreakdown({
           Landed cost (kostprijs):{" "}
           <span className="font-semibold tabular-nums">{formatEUR(cost)}</span>
         </span>
-        {margin > 0 && margin < 100 && cost > 0 && (
+        {margin > 0 && cost > 0 && (
           <span className="text-muted">
             Adviesverkoopprijs bij {margin}% marge:{" "}
             <span className="font-semibold text-foreground tabular-nums">{formatEUR(advice)}</span>{" "}

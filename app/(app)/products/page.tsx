@@ -165,7 +165,7 @@ export default async function ProductsPage({
                     const price = Number(p.priceEur ?? 0);
                     const cost = Number(p.costEur ?? 0);
                     const margin = price > 0 && cost > 0 ? price - cost : null;
-                    const marginPct = margin != null && price > 0 ? Math.round((margin / price) * 100) : null;
+                    const marginPct = margin != null && cost > 0 ? Math.round((margin / cost) * 100) : null;
                     const stock = p.stockQty != null ? Number(p.stockQty) : null;
                     return (
                       <Tr key={p.id}>
