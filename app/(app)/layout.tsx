@@ -3,6 +3,10 @@ import { redirect } from "next/navigation";
 import { auth } from "@/auth";
 import { AppSidebar } from "@/components/app-sidebar";
 
+// The whole authenticated app is per-request (session + live data) — never
+// prerender it at build time.
+export const dynamic = "force-dynamic";
+
 export default async function AppLayout({
   children,
 }: {
