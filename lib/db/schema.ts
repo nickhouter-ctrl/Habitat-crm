@@ -392,6 +392,13 @@ export const documents = pgTable(
     paidEur: numeric({ precision: 14, scale: 2 }).notNull().default("0"),
     items: jsonb().$type<DocumentLineItem[]>().notNull().default(sql`'[]'::jsonb`),
     notes: text(),
+    /** Sent to the client (status moved to "sent"). */
+    sentAt: timestamp({ withTimezone: true }),
+    /** Random token for the public accept/reject page (/offerte/[token]). */
+    acceptToken: text(),
+    acceptedAt: timestamp({ withTimezone: true }),
+    rejectedAt: timestamp({ withTimezone: true }),
+    rejectReason: text(),
     /** Convenience copy of the Holded id; the source of truth mapping lives in holded_sync_map. */
     holdedId: text(),
     ...timestamps,
@@ -401,6 +408,7 @@ export const documents = pgTable(
     index("documents_status_idx").on(t.status),
     index("documents_contact_idx").on(t.contactId),
     uniqueIndex("documents_holded_id_idx").on(t.holdedId),
+    uniqueIndex("documents_accept_token_idx").on(t.acceptToken),
   ],
 );
 

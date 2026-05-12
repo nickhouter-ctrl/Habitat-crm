@@ -18,7 +18,8 @@ export const authConfig = {
       const isPublic =
         pathname.startsWith("/login") ||
         pathname.startsWith("/api/auth") ||
-        pathname.startsWith("/api/webhooks");
+        pathname.startsWith("/api/webhooks") ||
+        pathname.startsWith("/offerte"); // public accept/reject page for clients
       return isPublic || isLoggedIn;
     },
     jwt({ token, user }) {

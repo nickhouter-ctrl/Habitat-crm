@@ -1,15 +1,33 @@
 "use server";
 
-import { eq } from "drizzle-orm";
+import { count, eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
+import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { z } from "zod";
 
 import { auth } from "@/auth";
 import { db } from "@/lib/db";
-import { contacts, deals, documents } from "@/lib/db/schema";
+import { activities, contacts, deals, documents } from "@/lib/db/schema";
 import { syncDealFromDocument } from "@/lib/deals";
-import { computeTotals, parseLineItems, type DocKind } from "@/lib/documents";
+import {
+  computeTotals,
+  parseLineItems,
+  suggestDocNumber,
+  type DocKind,
+} from "@/lib/documents";
+import { offerteEmail, sendEmail } from "@/lib/email";
+
+function newToken(): string {
+  return (crypto.randomUUID() + crypto.randomUUID()).replace(/-/g, "");
+}
+
+async function baseUrl(): Promise<string> {
+  const h = await headers();
+  const host = h.get("host") ?? "localhost:3001";
+  const proto = h.get("x-forwarded-proto") ?? (host.includes("localhost") ? "http" : "https");
+  return `${proto}://${host}`;
+}
 
 const KINDS = ["estimate", "proforma", "invoice", "creditnote", "salesreceipt"] as const;
 const STATUSES = [
@@ -237,4 +255,95 @@ export async function deleteDocument(id: string) {
   await db.delete(documents).where(eq(documents.id, id));
   if (doc) revalidateAround(doc.kind as DocKind);
   redirect(doc ? listPathFor(doc.kind as DocKind) : "/quotes");
+}
+
+/** Mark a document as sent, generate (or reuse) the public accept link, e-mail the client. */
+export async function sendDocument(id: string) {
+  const user = await requireUser();
+  const doc = await db.query.documents.findFirst({
+    where: eq(documents.id, id),
+    with: {
+      contact: { columns: { email: true, name: true, preferredLanguage: true } },
+    },
+  });
+  if (!doc) return;
+
+  const token = doc.acceptToken ?? newToken();
+  const url = `${await baseUrl()}/offerte/${token}`;
+  const kindLabel = doc.kind === "invoice" ? "Factuur" : "Offerte";
+
+  await db
+    .update(documents)
+    .set({
+      acceptToken: token,
+      sentAt: new Date(),
+      // Don't downgrade a paid invoice etc.
+      status: doc.status === "draft" || doc.status === "void" ? "sent" : doc.status,
+    })
+    .where(eq(documents.id, id));
+
+  let emailNote = doc.contact?.email
+    ? `naar ${doc.contact.email}`
+    : "geen e-mailadres bij het contact";
+  if (doc.contact?.email) {
+    const mail = offerteEmail({
+      lang: doc.contact.preferredLanguage,
+      docNumber: doc.docNumber ?? "",
+      title: doc.title,
+      url,
+    });
+    const res = await sendEmail({ to: doc.contact.email, ...mail });
+    if (!res.sent) emailNote += " (mail nog niet ingesteld — link handmatig versturen)";
+  }
+
+  await db.insert(activities).values({
+    type: "email",
+    subject: `${kindLabel} ${doc.docNumber ?? ""} verstuurd`,
+    body: `Klant-link: ${url}\nE-mail: ${emailNote}`,
+    documentId: id,
+    dealId: doc.dealId,
+    contactId: doc.contactId,
+    authorId: user.id,
+  });
+
+  await syncDealFromDocument(doc.dealId, { kind: doc.kind, status: "sent", totalEur: doc.totalEur });
+  revalidateAround(doc.kind as DocKind, id);
+}
+
+/** Create a draft invoice copied from an (accepted) estimate. */
+export async function createInvoiceFromEstimate(estimateId: string) {
+  await requireUser();
+  const est = await db.query.documents.findFirst({ where: eq(documents.id, estimateId) });
+  if (!est) return;
+
+  const [{ n }] = await db.select({ n: count() }).from(documents).where(eq(documents.kind, "invoice"));
+  const today = new Date();
+  const due = new Date(today);
+  due.setDate(due.getDate() + 30);
+
+  const [row] = await db
+    .insert(documents)
+    .values({
+      kind: "invoice",
+      status: "draft",
+      docNumber: suggestDocNumber("invoice", n),
+      title: est.title,
+      contactId: est.contactId,
+      companyId: est.companyId,
+      dealId: est.dealId,
+      propertyId: est.propertyId,
+      issueDate: today.toISOString().slice(0, 10),
+      dueDate: due.toISOString().slice(0, 10),
+      currency: est.currency,
+      subtotalEur: est.subtotalEur,
+      taxEur: est.taxEur,
+      totalEur: est.totalEur,
+      items: est.items,
+      notes: est.notes,
+    })
+    .returning({ id: documents.id });
+
+  revalidateAround("invoice");
+  revalidatePath(`/documents/${estimateId}`);
+  redirect(`/documents/${row.id}/edit`);
 }

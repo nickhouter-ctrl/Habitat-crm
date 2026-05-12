@@ -1,4 +1,5 @@
 import { and, eq } from "drizzle-orm";
+import { headers } from "next/headers";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
@@ -24,7 +25,12 @@ import { documents, holdedSyncMap } from "@/lib/db/schema";
 import { lineNet, lineTax } from "@/lib/documents";
 import { labelForCategory } from "@/lib/products";
 import { formatDate, formatEUR } from "@/lib/utils";
-import { deleteDocument, setDocumentStatus } from "../actions";
+import {
+  createInvoiceFromEstimate,
+  deleteDocument,
+  sendDocument,
+  setDocumentStatus,
+} from "../actions";
 import { documentKindMeta, documentStatusMeta } from "../../_meta";
 
 export async function generateMetadata({
@@ -81,6 +87,13 @@ export default async function DocumentDetailPage({
 
   const changeStatus = setDocumentStatus.bind(null, id);
   const removeDoc = deleteDocument.bind(null, id);
+  const send = sendDocument.bind(null, id);
+  const makeInvoice = createInvoiceFromEstimate.bind(null, id);
+
+  const h = await headers();
+  const host = h.get("host") ?? "";
+  const proto = h.get("x-forwarded-proto") ?? (host.includes("localhost") ? "http" : "https");
+  const publicUrl = doc.acceptToken ? `${proto}://${host}/offerte/${doc.acceptToken}` : null;
 
   return (
     <>
@@ -156,10 +169,52 @@ export default async function DocumentDetailPage({
 
           <Card>
             <CardHeader>
-              <CardTitle>Status</CardTitle>
+              <CardTitle>Versturen & status</CardTitle>
             </CardHeader>
-            <CardContent className="space-y-3">
-              <form action={changeStatus} className="flex items-center gap-2">
+            <CardContent className="space-y-3 text-sm">
+              <form action={send}>
+                <Button type="submit" size="sm">
+                  {doc.sentAt ? "Opnieuw versturen" : "Versturen naar klant"}
+                </Button>
+              </form>
+
+              {doc.sentAt && (
+                <div className="space-y-1.5 rounded-md bg-background px-3 py-2">
+                  <p className="text-muted">
+                    Verstuurd op <span className="text-foreground">{formatDate(doc.sentAt)}</span>
+                  </p>
+                  {publicUrl && (
+                    <p className="break-all">
+                      Klant-link:{" "}
+                      <a href={publicUrl} target="_blank" rel="noopener noreferrer" className="text-accent hover:underline">
+                        {publicUrl}
+                      </a>
+                    </p>
+                  )}
+                  {doc.acceptedAt ? (
+                    <p className="font-medium text-success">
+                      ✓ Geaccepteerd door klant op {formatDate(doc.acceptedAt)}
+                    </p>
+                  ) : doc.rejectedAt ? (
+                    <p className="text-danger">
+                      Afgewezen op {formatDate(doc.rejectedAt)}
+                      {doc.rejectReason ? ` — ${doc.rejectReason}` : ""}
+                    </p>
+                  ) : (
+                    <p className="text-muted">Nog geen reactie van de klant.</p>
+                  )}
+                </div>
+              )}
+
+              {doc.kind === "estimate" && doc.acceptedAt && (
+                <form action={makeInvoice}>
+                  <Button type="submit" size="sm" variant="secondary">
+                    → Maak factuur van deze offerte
+                  </Button>
+                </form>
+              )}
+
+              <form action={changeStatus} className="flex items-center gap-2 pt-1">
                 <Select name="status" defaultValue={doc.status} className="flex-1">
                   {STATUS_OPTIONS.map((s) => (
                     <option key={s} value={s}>
@@ -168,23 +223,15 @@ export default async function DocumentDetailPage({
                   ))}
                 </Select>
                 <Button type="submit" size="sm" variant="secondary">
-                  Bijwerken
+                  Status bijwerken
                 </Button>
               </form>
-              <div className="flex flex-wrap gap-2">
-                <form action={changeStatus}>
-                  <input type="hidden" name="status" value="sent" />
-                  <Button type="submit" size="sm" variant="ghost">
-                    Markeer verstuurd
-                  </Button>
-                </form>
-                <form action={changeStatus}>
-                  <input type="hidden" name="status" value="paid" />
-                  <Button type="submit" size="sm" variant="ghost">
-                    Markeer betaald
-                  </Button>
-                </form>
-              </div>
+              <form action={changeStatus}>
+                <input type="hidden" name="status" value="paid" />
+                <Button type="submit" size="sm" variant="ghost">
+                  Markeer betaald
+                </Button>
+              </form>
             </CardContent>
           </Card>
 
