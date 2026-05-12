@@ -135,6 +135,7 @@ export default async function ProductsPage({
                   <tr>
                     <Th>Naam</Th>
                     <Th>SKU</Th>
+                    <Th className="text-right">Voorraad</Th>
                     <Th>Eenh.</Th>
                     <Th className="text-right">Verkoop (ex.)</Th>
                     <Th className="text-right">BTW</Th>
@@ -149,6 +150,7 @@ export default async function ProductsPage({
                     const cost = Number(p.costEur ?? 0);
                     const margin = price > 0 && cost > 0 ? price - cost : null;
                     const marginPct = margin != null && price > 0 ? Math.round((margin / price) * 100) : null;
+                    const stock = p.stockQty != null ? Number(p.stockQty) : null;
                     return (
                       <Tr key={p.id}>
                         <Td className="font-medium">
@@ -160,6 +162,14 @@ export default async function ProductsPage({
                           )}
                         </Td>
                         <Td className="text-muted">{p.sku ?? "—"}</Td>
+                        <Td
+                          className={cn(
+                            "text-right tabular-nums",
+                            stock != null && stock <= 0 && "font-medium text-danger",
+                          )}
+                        >
+                          {stock != null ? stock.toLocaleString("nl-NL") : "—"}
+                        </Td>
                         <Td className="text-muted">{p.unit ?? "—"}</Td>
                         <Td className="text-right tabular-nums">{p.priceEur ? formatEUR(p.priceEur) : "—"}</Td>
                         <Td className="text-right tabular-nums text-muted">{p.vatRate}%</Td>
