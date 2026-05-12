@@ -77,7 +77,7 @@ export default async function ProductsPage({
         actions={
           <>
             <LinkButton
-              href={`/labels/print${(() => {
+              href={`/print-labels${(() => {
                 const sp = new URLSearchParams();
                 if (collection) sp.set("collection", collection);
                 if (q) sp.set("q", q);

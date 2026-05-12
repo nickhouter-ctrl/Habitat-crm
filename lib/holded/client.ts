@@ -131,6 +131,9 @@ export const holded = {
       request<HoldedProduct[]>("/invoicing/v1/products", { query }),
     get: (id: string) =>
       request<HoldedProduct>(`/invoicing/v1/products/${id}`),
+    /** Create a new product. We only ever *create* — never update Holded products. */
+    create: (body: Record<string, unknown>) =>
+      request<HoldedWriteResult>("/invoicing/v1/products", { method: "POST", body }),
   },
 };
 
