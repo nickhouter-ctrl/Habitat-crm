@@ -24,12 +24,9 @@ const globalForDb = globalThis as unknown as {
 const client =
   globalForDb.__habitatPg ??
   postgres(connectionString ?? "postgres://localhost:5432/habitat_crm_unconfigured", {
+    // `prepare: false` is required for Supabase's transaction pooler (6543).
     prepare: false,
-    max: 1,
-    // Keep the pooled connection alive across a burst of requests, but recycle
-    // it so we don't hold a Supavisor slot once the (serverless) instance idles.
-    idle_timeout: 30,
-    max_lifetime: 60 * 10,
+    idle_timeout: 20,
     connect_timeout: 15,
   });
 
