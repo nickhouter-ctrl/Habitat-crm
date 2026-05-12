@@ -8,6 +8,8 @@ import { z } from "zod";
 import { auth } from "@/auth";
 import { db } from "@/lib/db";
 import { properties } from "@/lib/db/schema";
+import { deletePropertyImageByUrl, uploadPropertyImage } from "@/lib/storage";
+import { revalidateWebsite } from "@/lib/website";
 
 const optionalUuid = z.string().uuid().optional().or(z.literal(""));
 const optionalInt = z.preprocess(
@@ -67,9 +69,14 @@ function toValues(v: z.infer<typeof propertySchema>) {
   };
 }
 
-export async function createProperty(formData: FormData) {
+async function requireUser() {
   const session = await auth();
   if (!session?.user) redirect("/login");
+  return session.user;
+}
+
+export async function createProperty(formData: FormData) {
+  const user = await requireUser();
 
   const parsed = propertySchema.safeParse(Object.fromEntries(formData));
   if (!parsed.success) redirect("/properties/new?error=validation");
@@ -77,17 +84,17 @@ export async function createProperty(formData: FormData) {
   const values = toValues(parsed.data);
   const [row] = await db
     .insert(properties)
-    .values({ ...values, ownerId: values.ownerId ?? session.user.id })
+    .values({ ...values, ownerId: values.ownerId ?? user.id })
     .returning({ id: properties.id });
 
   revalidatePath("/properties");
   revalidatePath("/");
+  await revalidateWebsite(["/properties"]);
   redirect(`/properties/${row.id}`);
 }
 
 export async function updateProperty(id: string, formData: FormData) {
-  const session = await auth();
-  if (!session?.user) redirect("/login");
+  await requireUser();
 
   const parsed = propertySchema.safeParse(Object.fromEntries(formData));
   if (!parsed.success) redirect(`/properties/${id}/edit?error=validation`);
@@ -97,5 +104,63 @@ export async function updateProperty(id: string, formData: FormData) {
   revalidatePath("/properties");
   revalidatePath(`/properties/${id}`);
   revalidatePath("/");
+  await revalidateWebsite(["/properties", `/properties/${id}`]);
   redirect(`/properties/${id}`);
+}
+
+/* ------------------------------------------------------------------ photos */
+
+async function currentImages(propertyId: string): Promise<string[]> {
+  const row = await db.query.properties.findFirst({
+    where: eq(properties.id, propertyId),
+    columns: { images: true },
+  });
+  if (!row) throw new Error("Pand niet gevonden.");
+  return row.images ?? [];
+}
+
+async function saveImages(propertyId: string, images: string[]) {
+  await db.update(properties).set({ images }).where(eq(properties.id, propertyId));
+  revalidatePath(`/properties/${propertyId}`);
+  revalidatePath("/properties");
+  await revalidateWebsite(["/properties", `/properties/${propertyId}`]);
+}
+
+/** Upload one or more photos (from a multipart form field named `photos`). */
+export async function uploadPropertyImages(propertyId: string, formData: FormData) {
+  await requireUser();
+
+  const files = formData
+    .getAll("photos")
+    .filter((f): f is File => f instanceof File && f.size > 0);
+  if (files.length === 0) {
+    redirect(`/properties/${propertyId}?error=no-files`);
+  }
+
+  const uploaded: string[] = [];
+  for (const file of files) {
+    uploaded.push(await uploadPropertyImage(propertyId, file));
+  }
+
+  const images = await currentImages(propertyId);
+  await saveImages(propertyId, [...images, ...uploaded]);
+  redirect(`/properties/${propertyId}`);
+}
+
+export async function removePropertyImage(propertyId: string, formData: FormData) {
+  await requireUser();
+  const url = String(formData.get("url") ?? "");
+  if (!url) return;
+  const images = (await currentImages(propertyId)).filter((u) => u !== url);
+  await saveImages(propertyId, images);
+  // Best-effort cleanup of the stored object.
+  await deletePropertyImageByUrl(url);
+}
+
+export async function setPrimaryPropertyImage(propertyId: string, formData: FormData) {
+  await requireUser();
+  const url = String(formData.get("url") ?? "");
+  if (!url) return;
+  const rest = (await currentImages(propertyId)).filter((u) => u !== url);
+  await saveImages(propertyId, [url, ...rest]);
 }

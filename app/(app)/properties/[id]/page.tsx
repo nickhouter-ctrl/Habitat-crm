@@ -17,6 +17,7 @@ import {
   THead,
   Tr,
 } from "@/components/ui";
+import { PropertyPhotos } from "@/components/property-photos";
 import { db } from "@/lib/db";
 import { deals, properties } from "@/lib/db/schema";
 import { formatDate, formatEUR } from "@/lib/utils";
@@ -87,6 +88,8 @@ export default async function PropertyDetailPage({
           </>
         }
       />
+
+      <PropertyPhotos propertyId={property.id} images={property.images ?? []} />
 
       <div className="grid gap-4 lg:grid-cols-3">
         <div className="space-y-4">
