@@ -310,7 +310,15 @@ export const products = pgTable(
     unit: text(), // "m²", "stuk", "m", "uur", ...
     priceEur: numeric({ precision: 14, scale: 2 }), // default sales price, ex. VAT
     vatRate: integer().notNull().default(21), // default IVA % for this product
-    costEur: numeric({ precision: 14, scale: 2 }), // purchase / landed cost
+    // Landed-cost breakdown (per unit) — China imports etc.:
+    purchaseCostEur: numeric({ precision: 14, scale: 2 }), // inkoopprijs (bv. uit China)
+    freightCostEur: numeric({ precision: 14, scale: 2 }), // vracht China → EU (Valencia)
+    transportCostEur: numeric({ precision: 14, scale: 2 }), // transport Valencia → Xàbia
+    otherCostEur: numeric({ precision: 14, scale: 2 }), // overige kosten
+    dutyPct: numeric({ precision: 6, scale: 2 }), // invoerrechten % op (inkoop + vracht)
+    targetMarginPct: numeric({ precision: 6, scale: 2 }), // gewenste marge % → adviesverkoopprijs
+    /** Cached landed cost = sum of the breakdown (incl. duty). Manually entered too if no breakdown. */
+    costEur: numeric({ precision: 14, scale: 2 }),
     currency: text().notNull().default("EUR"),
     description: text(),
     imageUrl: text(),

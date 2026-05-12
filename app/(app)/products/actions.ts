@@ -8,6 +8,7 @@ import { z } from "zod";
 import { auth } from "@/auth";
 import { db } from "@/lib/db";
 import { products } from "@/lib/db/schema";
+import { hasCostBreakdown, landedCost } from "@/lib/pricing";
 
 const num = z.preprocess(
   (v) => (v === "" || v === undefined || v === null ? undefined : v),
@@ -16,6 +17,10 @@ const num = z.preprocess(
 const int = z.preprocess(
   (v) => (v === "" || v === undefined || v === null ? undefined : v),
   z.coerce.number().int().min(0).max(100).optional(),
+);
+const pct = z.preprocess(
+  (v) => (v === "" || v === undefined || v === null ? undefined : v),
+  z.coerce.number().min(0).max(1000).optional(),
 );
 
 const productSchema = z.object({
@@ -27,13 +32,28 @@ const productSchema = z.object({
   unit: z.string().trim().max(20).optional().or(z.literal("")),
   priceEur: num,
   vatRate: int,
-  costEur: num,
+  purchaseCostEur: num,
+  freightCostEur: num,
+  transportCostEur: num,
+  otherCostEur: num,
+  dutyPct: pct,
+  targetMarginPct: pct,
   description: z.string().trim().max(4000).optional().or(z.literal("")),
   imageUrl: z.string().trim().url().optional().or(z.literal("")),
   isActive: z.preprocess((v) => v === "on" || v === "true" || v === true, z.boolean()),
 });
 
+const dec = (v: number | undefined) => (v === undefined ? null : String(v));
+
 function toValues(v: z.infer<typeof productSchema>) {
+  const breakdown = {
+    purchaseCostEur: v.purchaseCostEur,
+    freightCostEur: v.freightCostEur,
+    transportCostEur: v.transportCostEur,
+    otherCostEur: v.otherCostEur,
+    dutyPct: v.dutyPct,
+  };
+  const cost = hasCostBreakdown(breakdown) ? landedCost(breakdown) : null;
   return {
     name: v.name,
     sku: v.sku || null,
@@ -41,9 +61,15 @@ function toValues(v: z.infer<typeof productSchema>) {
     category: v.category || null,
     subcategory: v.subcategory || null,
     unit: v.unit || null,
-    priceEur: v.priceEur === undefined ? null : String(v.priceEur),
+    priceEur: dec(v.priceEur),
     vatRate: v.vatRate ?? 21,
-    costEur: v.costEur === undefined ? null : String(v.costEur),
+    purchaseCostEur: dec(v.purchaseCostEur),
+    freightCostEur: dec(v.freightCostEur),
+    transportCostEur: dec(v.transportCostEur),
+    otherCostEur: dec(v.otherCostEur),
+    dutyPct: dec(v.dutyPct),
+    targetMarginPct: dec(v.targetMarginPct),
+    costEur: cost === null ? null : String(cost),
     description: v.description || null,
     imageUrl: v.imageUrl || null,
     isActive: v.isActive,

@@ -1,4 +1,5 @@
 import { Combobox } from "@/components/combobox";
+import { CostBreakdown } from "@/components/cost-breakdown";
 import {
   Button,
   Card,
@@ -29,7 +30,12 @@ export function ProductForm({
     | "unit"
     | "priceEur"
     | "vatRate"
-    | "costEur"
+    | "purchaseCostEur"
+    | "freightCostEur"
+    | "transportCostEur"
+    | "otherCostEur"
+    | "dutyPct"
+    | "targetMarginPct"
     | "description"
     | "imageUrl"
     | "isActive"
@@ -93,7 +99,7 @@ export function ProductForm({
             </Field>
           </div>
 
-          <div className="grid gap-4 sm:grid-cols-4">
+          <div className="grid gap-4 sm:grid-cols-3">
             <Field label="Eenheid" htmlFor="unit">
               <Select id="unit" name="unit" defaultValue={product?.unit ?? "stuk"}>
                 {PRODUCT_UNITS.map((u) => (
@@ -103,7 +109,7 @@ export function ProductForm({
                 ))}
               </Select>
             </Field>
-            <Field label="Verkoopprijs €/eenh. (ex.)" htmlFor="priceEur">
+            <Field label="Verkoopprijs €/eenh. (ex. BTW)" htmlFor="priceEur">
               <Input
                 id="priceEur"
                 name="priceEur"
@@ -121,17 +127,9 @@ export function ProductForm({
                 <option value="0">0%</option>
               </Select>
             </Field>
-            <Field label="Inkoop/kostprijs €" htmlFor="costEur" hint="incl. shipping etc. (voor de marge)">
-              <Input
-                id="costEur"
-                name="costEur"
-                type="number"
-                step="0.01"
-                min="0"
-                defaultValue={product?.costEur ?? ""}
-              />
-            </Field>
           </div>
+
+          <CostBreakdown initial={product} />
 
           <Field label="Omschrijving" htmlFor="description">
             <Textarea id="description" name="description" defaultValue={product?.description ?? ""} />
