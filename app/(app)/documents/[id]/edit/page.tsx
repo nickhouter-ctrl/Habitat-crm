@@ -66,6 +66,7 @@ export default async function EditDocumentPage({
         contacts={options.contacts}
         deals={options.deals}
         properties={options.properties}
+        products={options.products}
         submitLabel="Wijzigingen opslaan"
       />
     </>

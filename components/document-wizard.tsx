@@ -13,7 +13,9 @@ import {
   Select,
   Textarea,
 } from "@/components/ui";
+import { Combobox } from "@/components/combobox";
 import { LineItemsEditor } from "@/components/line-items-editor";
+import type { ProductOption } from "@/app/(app)/_options";
 import type { DocKind } from "@/lib/documents";
 import { cn } from "@/lib/utils";
 
@@ -41,6 +43,7 @@ export function DocumentWizard({
   contacts,
   deals,
   properties,
+  products = [],
   defaults,
 }: {
   action: (formData: FormData) => void | Promise<void>;
@@ -49,6 +52,7 @@ export function DocumentWizard({
   contacts: Option[];
   deals: Option[];
   properties: Option[];
+  products?: ProductOption[];
   defaults?: { contactId?: string; dealId?: string; propertyId?: string };
 }) {
   const [step, setStep] = useState<1 | 2>(1);
@@ -143,18 +147,13 @@ export function DocumentWizard({
                   Nog geen contacten — kies &quot;Nieuwe klant&quot;.
                 </p>
               ) : (
-                <Field label="Kies een contact" htmlFor="wiz-contact">
-                  <Select
-                    id="wiz-contact"
-                    value={contactId}
-                    onChange={(e) => setContactId(e.target.value)}
-                  >
-                    {contacts.map((c) => (
-                      <option key={c.id} value={c.id}>
-                        {c.name}
-                      </option>
-                    ))}
-                  </Select>
+                <Field label="Kies een contact">
+                  <Combobox
+                    defaultValue={contactId}
+                    placeholder="Typ een naam om te zoeken…"
+                    options={contacts.map((c) => ({ value: c.id, label: c.name }))}
+                    onSelect={(v) => setContactId(v)}
+                  />
                 </Field>
               )
             ) : (
@@ -230,15 +229,14 @@ export function DocumentWizard({
               <Field label="Vervaldatum" htmlFor="dueDate">
                 <Input id="dueDate" name="dueDate" type="date" defaultValue={defaultDue} />
               </Field>
-              <Field label="Deal (optioneel)" htmlFor="dealId">
-                <Select id="dealId" name="dealId" defaultValue={defaults?.dealId ?? ""}>
-                  <option value="">— geen —</option>
-                  {deals.map((d) => (
-                    <option key={d.id} value={d.id}>
-                      {d.name}
-                    </option>
-                  ))}
-                </Select>
+              <Field label="Deal (optioneel)">
+                <Combobox
+                  name="dealId"
+                  clearable
+                  defaultValue={defaults?.dealId ?? ""}
+                  placeholder="— geen — / zoek een deal"
+                  options={deals.map((d) => ({ value: d.id, label: d.name }))}
+                />
               </Field>
             </div>
             <Field label="Onderwerp / titel" htmlFor="title">
@@ -248,22 +246,21 @@ export function DocumentWizard({
                 placeholder="bv. Renovatie keuken & badkamer"
               />
             </Field>
-            <Field label="Pand (optioneel)" htmlFor="propertyId">
-              <Select id="propertyId" name="propertyId" defaultValue={defaults?.propertyId ?? ""}>
-                <option value="">— geen —</option>
-                {properties.map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {p.name}
-                  </option>
-                ))}
-              </Select>
+            <Field label="Pand (optioneel)">
+              <Combobox
+                name="propertyId"
+                clearable
+                defaultValue={defaults?.propertyId ?? ""}
+                placeholder="— geen — / zoek een pand"
+                options={properties.map((p) => ({ value: p.id, label: p.name }))}
+              />
             </Field>
           </CardContent>
         </Card>
 
         <Card className="max-w-3xl">
           <CardContent>
-            <LineItemsEditor />
+            <LineItemsEditor products={products} />
           </CardContent>
         </Card>
 

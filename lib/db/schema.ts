@@ -287,6 +287,42 @@ export const properties = pgTable(
   ],
 );
 
+/* --------------------------------------------------------------- products */
+
+/**
+ * Product / material catalogue. For now maintained in the CRM; once the Holded
+ * API key is supplied this becomes a mirror of Holded's products (linked via
+ * `holdedProductId`). `category` groups items (e.g. "Magic Stone", with each
+ * variant a row under it).
+ */
+export const products = pgTable(
+  "products",
+  {
+    id: uuid()
+      .primaryKey()
+      .default(sql`gen_random_uuid()`),
+    name: text().notNull(),
+    sku: text(),
+    category: text(), // e.g. "Magic Stone", "Tegels — wand", "Diensten — montage"
+    subcategory: text(),
+    unit: text(), // "m²", "stuk", "m", "uur", ...
+    priceEur: numeric({ precision: 14, scale: 2 }), // default sales price, ex. VAT
+    vatRate: integer().notNull().default(21), // default IVA % for this product
+    costEur: numeric({ precision: 14, scale: 2 }), // purchase / landed cost
+    currency: text().notNull().default("EUR"),
+    description: text(),
+    imageUrl: text(),
+    isActive: boolean().notNull().default(true),
+    holdedProductId: text(),
+    ...timestamps,
+  },
+  (t) => [
+    index("products_category_idx").on(t.category),
+    index("products_name_idx").on(t.name),
+    uniqueIndex("products_holded_id_idx").on(t.holdedProductId),
+  ],
+);
+
 /* -------------------------------------------------------------------- deals */
 
 export const deals = pgTable(
@@ -323,7 +359,11 @@ export type DocumentLineItem = {
   description?: string;
   units: number;
   price: number; // unit price, EUR, ex. VAT
-  taxRate?: number; // percent, e.g. 21
+  taxRate?: number; // IVA percent, e.g. 21 / 10 / 4
+  /** Line category — drives the default VAT (materiaal, arbeid, renovatie, ...). */
+  category?: string;
+  /** Optional link to a catalogue product (snapshot of name/price stays on the line). */
+  productId?: string;
 };
 
 export const documents = pgTable(
@@ -496,6 +536,8 @@ export type Company = typeof companies.$inferSelect;
 export type Contact = typeof contacts.$inferSelect;
 export type NewContact = typeof contacts.$inferInsert;
 export type Property = typeof properties.$inferSelect;
+export type Product = typeof products.$inferSelect;
+export type NewProduct = typeof products.$inferInsert;
 export type Deal = typeof deals.$inferSelect;
 export type NewDeal = typeof deals.$inferInsert;
 export type Document = typeof documents.$inferSelect;

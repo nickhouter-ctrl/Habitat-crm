@@ -1,5 +1,6 @@
 /** Shared helpers for CRM documents (offertes / facturen). */
 import type { DocumentLineItem } from "@/lib/db/schema";
+import { LINE_CATEGORY_VALUES } from "@/lib/products";
 
 export type DocKind = "estimate" | "proforma" | "invoice" | "creditnote" | "salesreceipt";
 
@@ -55,6 +56,14 @@ export function normaliseLineItem(raw: unknown): DocumentLineItem | null {
   if (!name && !units && !price) return null; // empty row
   if (!name) return null;
   const taxRate = r.taxRate === undefined || r.taxRate === null || r.taxRate === "" ? 21 : Number(r.taxRate);
+  const category =
+    typeof r.category === "string" && LINE_CATEGORY_VALUES.includes(r.category)
+      ? r.category
+      : undefined;
+  const productId =
+    typeof r.productId === "string" && r.productId.trim().length > 0
+      ? r.productId.trim()
+      : undefined;
   return {
     name: name.slice(0, 300),
     description:
@@ -64,6 +73,8 @@ export function normaliseLineItem(raw: unknown): DocumentLineItem | null {
     units: Number.isFinite(units) && units > 0 ? units : 1,
     price: Number.isFinite(price) ? round2(price) : 0,
     taxRate: Number.isFinite(taxRate) && taxRate >= 0 ? taxRate : 21,
+    category,
+    productId,
   };
 }
 

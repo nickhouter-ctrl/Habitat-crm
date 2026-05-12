@@ -1,10 +1,19 @@
-/** Shared helpers to populate <select> options in the deal/property/document forms. */
-import { asc, desc } from "drizzle-orm";
+/** Shared helpers to populate pickers in the deal/property/document/product forms. */
+import { asc, desc, eq } from "drizzle-orm";
 
 import { db } from "@/lib/db";
-import { contacts, deals, properties, users } from "@/lib/db/schema";
+import { contacts, deals, products, properties, users } from "@/lib/db/schema";
 
 export type SelectOption = { id: string; name: string };
+
+export type ProductOption = {
+  id: string;
+  name: string;
+  category: string | null;
+  unit: string | null;
+  priceEur: string | null;
+  vatRate: number;
+};
 
 async function listContacts(): Promise<SelectOption[]> {
   return db.query.contacts.findMany({
@@ -41,6 +50,25 @@ async function listDeals(): Promise<SelectOption[]> {
   return rows.map((d) => ({ id: d.id, name: d.title }));
 }
 
+async function listActiveProducts(): Promise<ProductOption[]> {
+  return db.query.products.findMany({
+    where: eq(products.isActive, true),
+    columns: { id: true, name: true, category: true, unit: true, priceEur: true, vatRate: true },
+    orderBy: [asc(products.category), asc(products.name)],
+    limit: 2000,
+  });
+}
+
+export async function getProductCategories(): Promise<string[]> {
+  const rows = await db
+    .selectDistinct({ category: products.category })
+    .from(products)
+    .orderBy(asc(products.category));
+  return rows
+    .map((r) => r.category?.trim())
+    .filter((c): c is string => Boolean(c));
+}
+
 export async function getDealFormOptions() {
   const [c, p, u] = await Promise.all([listContacts(), listProperties(), listUsers()]);
   return { contacts: c, properties: p, users: u };
@@ -52,6 +80,11 @@ export async function getPropertyFormOptions() {
 }
 
 export async function getDocumentFormOptions() {
-  const [c, d, p] = await Promise.all([listContacts(), listDeals(), listProperties()]);
-  return { contacts: c, deals: d, properties: p };
+  const [c, d, p, prods] = await Promise.all([
+    listContacts(),
+    listDeals(),
+    listProperties(),
+    listActiveProducts(),
+  ]);
+  return { contacts: c, deals: d, properties: p, products: prods };
 }

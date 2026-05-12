@@ -13,7 +13,7 @@ import { count } from "drizzle-orm";
 
 import { hashPassword } from "../lib/auth/password";
 import { db } from "../lib/db";
-import { contacts, deals, properties, users } from "../lib/db/schema";
+import { contacts, deals, products, properties, users } from "../lib/db/schema";
 
 async function main() {
   const email = (process.env.SEED_ADMIN_EMAIL ?? "admin@habitat.local").toLowerCase();
@@ -30,9 +30,23 @@ async function main() {
     .returning({ id: users.id });
   console.log(`✓ admin user ready — ${email} / ${password}`);
 
+  // Sample catalogue products (idempotent — only if the catalogue is empty).
+  const [{ p: productCount }] = await db.select({ p: count() }).from(products);
+  if (productCount === 0) {
+    await db.insert(products).values([
+      { name: "Magic Stone Bianco 60×60", sku: "MS-BIA-6060", category: "Magic Stone", unit: "m²", priceEur: "48.00", vatRate: 21, costEur: "22.00" },
+      { name: "Magic Stone Grigio 60×60", sku: "MS-GRI-6060", category: "Magic Stone", unit: "m²", priceEur: "48.00", vatRate: 21, costEur: "22.00" },
+      { name: "Magic Stone Sabbia 80×80", sku: "MS-SAB-8080", category: "Magic Stone", unit: "m²", priceEur: "62.00", vatRate: 21, costEur: "29.00" },
+      { name: "Wandtegel mat wit 30×60", sku: "WT-WIT-3060", category: "Tegels — wand", unit: "m²", priceEur: "24.50", vatRate: 21, costEur: "11.00" },
+      { name: "Plaatsing tegelwerk", sku: "DI-TEGEL", category: "Diensten — montage", unit: "m²", priceEur: "35.00", vatRate: 10 },
+      { name: "Sloop- en voorbereidingswerk", sku: "DI-SLOOP", category: "Diensten — renovatie", unit: "uur", priceEur: "42.00", vatRate: 10 },
+    ]);
+    console.log("✓ sample products inserted");
+  }
+
   const [{ n }] = await db.select({ n: count() }).from(contacts);
   if (n > 0) {
-    console.log(`• ${n} contact(s) already present — skipping sample data`);
+    console.log(`• ${n} contact(s) already present — skipping the rest of the sample data`);
     return;
   }
 

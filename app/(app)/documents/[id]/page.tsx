@@ -22,6 +22,7 @@ import {
 import { db } from "@/lib/db";
 import { documents, holdedSyncMap } from "@/lib/db/schema";
 import { lineNet, lineTax } from "@/lib/documents";
+import { labelForCategory } from "@/lib/products";
 import { formatDate, formatEUR } from "@/lib/utils";
 import { deleteDocument, setDocumentStatus } from "../actions";
 import { documentKindMeta, documentStatusMeta } from "../../_meta";
@@ -232,6 +233,7 @@ export default async function DocumentDetailPage({
                   <THead>
                     <tr>
                       <Th>Omschrijving</Th>
+                      <Th>Categorie</Th>
                       <Th className="text-right">Aantal</Th>
                       <Th className="text-right">Prijs</Th>
                       <Th className="text-right">BTW%</Th>
@@ -248,6 +250,7 @@ export default async function DocumentDetailPage({
                             <span className="block text-xs text-muted">{it.description}</span>
                           )}
                         </Td>
+                        <Td className="text-muted">{labelForCategory(it.category)}</Td>
                         <Td className="text-right tabular-nums">{it.units}</Td>
                         <Td className="text-right tabular-nums">{formatEUR(it.price)}</Td>
                         <Td className="text-right tabular-nums">{it.taxRate ?? 0}%</Td>

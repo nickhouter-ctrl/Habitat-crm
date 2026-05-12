@@ -1,0 +1,141 @@
+import { asc, ilike, or } from "drizzle-orm";
+import { Search } from "lucide-react";
+import Link from "next/link";
+
+import {
+  Badge,
+  Card,
+  EmptyState,
+  Input,
+  LinkButton,
+  PageHeader,
+  TBody,
+  Table,
+  Td,
+  Th,
+  THead,
+  Tr,
+} from "@/components/ui";
+import { db } from "@/lib/db";
+import { products } from "@/lib/db/schema";
+import { formatEUR } from "@/lib/utils";
+
+export const metadata = { title: "Producten" };
+
+export default async function ProductsPage({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}) {
+  const params = await searchParams;
+  const q = typeof params.q === "string" ? params.q.trim() : "";
+
+  const rows = await db.query.products.findMany({
+    where: q
+      ? or(
+          ilike(products.name, `%${q}%`),
+          ilike(products.category, `%${q}%`),
+          ilike(products.sku, `%${q}%`),
+        )
+      : undefined,
+    orderBy: [asc(products.category), asc(products.name)],
+    limit: 1000,
+  });
+
+  // Group by category for the display.
+  const groups = new Map<string, typeof rows>();
+  for (const p of rows) {
+    const key = p.category?.trim() || "Zonder categorie";
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key)!.push(p);
+  }
+
+  return (
+    <>
+      <PageHeader
+        title="Producten"
+        subtitle={`${rows.length} ${rows.length === 1 ? "product" : "producten"}${
+          q ? ` voor "${q}"` : ""
+        }`}
+        actions={<LinkButton href="/products/new">Nieuw product</LinkButton>}
+      />
+
+      <form className="relative mb-4 max-w-sm" action="/products">
+        <Search className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted" />
+        <Input name="q" defaultValue={q} placeholder="Zoek op naam, categorie of SKU…" className="pl-8" />
+      </form>
+
+      {rows.length === 0 ? (
+        <EmptyState
+          title={q ? "Geen producten gevonden" : "Nog geen producten"}
+          description={
+            q
+              ? "Pas je zoekopdracht aan."
+              : "Voeg producten/materialen toe — bv. een categorie 'Magic Stone' met daaronder de varianten. Later worden ze gesynct vanuit Holded."
+          }
+          action={<LinkButton href="/products/new">Nieuw product</LinkButton>}
+        />
+      ) : (
+        <div className="space-y-5">
+          {[...groups.entries()].map(([category, items]) => (
+            <Card key={category} className="overflow-hidden">
+              <div className="flex items-center justify-between gap-3 border-b bg-background/60 px-4 py-2.5">
+                <h2 className="text-sm font-semibold">{category}</h2>
+                <span className="text-xs text-muted">{items.length}</span>
+              </div>
+              <Table>
+                <THead>
+                  <tr>
+                    <Th>Naam</Th>
+                    <Th>SKU</Th>
+                    <Th>Eenh.</Th>
+                    <Th className="text-right">Verkoop (ex.)</Th>
+                    <Th className="text-right">BTW</Th>
+                    <Th className="text-right">Kostprijs</Th>
+                    <Th className="text-right">Marge</Th>
+                    <Th>Status</Th>
+                  </tr>
+                </THead>
+                <TBody>
+                  {items.map((p) => {
+                    const price = Number(p.priceEur ?? 0);
+                    const cost = Number(p.costEur ?? 0);
+                    const margin = price > 0 && cost > 0 ? price - cost : null;
+                    const marginPct = margin != null && price > 0 ? Math.round((margin / price) * 100) : null;
+                    return (
+                      <Tr key={p.id}>
+                        <Td className="font-medium">
+                          <Link href={`/products/${p.id}/edit`} className="hover:underline">
+                            {p.name}
+                          </Link>
+                          {p.subcategory && (
+                            <span className="block text-xs text-muted">{p.subcategory}</span>
+                          )}
+                        </Td>
+                        <Td className="text-muted">{p.sku ?? "—"}</Td>
+                        <Td className="text-muted">{p.unit ?? "—"}</Td>
+                        <Td className="text-right tabular-nums">{p.priceEur ? formatEUR(p.priceEur) : "—"}</Td>
+                        <Td className="text-right tabular-nums text-muted">{p.vatRate}%</Td>
+                        <Td className="text-right tabular-nums text-muted">{p.costEur ? formatEUR(p.costEur) : "—"}</Td>
+                        <Td className="text-right tabular-nums">
+                          {margin != null ? `${formatEUR(margin)}${marginPct != null ? ` (${marginPct}%)` : ""}` : "—"}
+                        </Td>
+                        <Td>
+                          {p.isActive ? (
+                            <Badge tone="success">Actief</Badge>
+                          ) : (
+                            <Badge tone="neutral">Inactief</Badge>
+                          )}
+                        </Td>
+                      </Tr>
+                    );
+                  })}
+                </TBody>
+              </Table>
+            </Card>
+          ))}
+        </div>
+      )}
+    </>
+  );
+}

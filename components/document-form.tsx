@@ -9,7 +9,9 @@ import {
   Select,
   Textarea,
 } from "@/components/ui";
+import { Combobox } from "@/components/combobox";
 import { LineItemsEditor } from "@/components/line-items-editor";
+import type { ProductOption } from "@/app/(app)/_options";
 import type { DocumentLineItem } from "@/lib/db/schema";
 import type { DocKind } from "@/lib/documents";
 
@@ -42,6 +44,7 @@ export function DocumentForm({
   contacts,
   deals,
   properties,
+  products = [],
   defaults,
   submitLabel = "Opslaan",
 }: {
@@ -63,6 +66,7 @@ export function DocumentForm({
   contacts: Option[];
   deals: Option[];
   properties: Option[];
+  products?: ProductOption[];
   defaults?: { contactId?: string; dealId?: string; propertyId?: string };
   submitLabel?: string;
 }) {
@@ -128,47 +132,32 @@ export function DocumentForm({
           </Field>
 
           <div className="grid gap-4 sm:grid-cols-3">
-            <Field label="Klant (contact)" htmlFor="contactId">
-              <Select
-                id="contactId"
+            <Field label="Klant (contact)">
+              <Combobox
                 name="contactId"
+                clearable
                 defaultValue={doc?.contactId ?? defaults?.contactId ?? ""}
-              >
-                <option value="">— geen —</option>
-                {contacts.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.name}
-                  </option>
-                ))}
-              </Select>
+                placeholder="— geen — / zoek een contact"
+                options={contacts.map((c) => ({ value: c.id, label: c.name }))}
+              />
             </Field>
-            <Field label="Deal" htmlFor="dealId">
-              <Select
-                id="dealId"
+            <Field label="Deal">
+              <Combobox
                 name="dealId"
+                clearable
                 defaultValue={doc?.dealId ?? defaults?.dealId ?? ""}
-              >
-                <option value="">— geen —</option>
-                {deals.map((d) => (
-                  <option key={d.id} value={d.id}>
-                    {d.name}
-                  </option>
-                ))}
-              </Select>
+                placeholder="— geen — / zoek een deal"
+                options={deals.map((d) => ({ value: d.id, label: d.name }))}
+              />
             </Field>
-            <Field label="Pand" htmlFor="propertyId">
-              <Select
-                id="propertyId"
+            <Field label="Pand">
+              <Combobox
                 name="propertyId"
+                clearable
                 defaultValue={doc?.propertyId ?? defaults?.propertyId ?? ""}
-              >
-                <option value="">— geen —</option>
-                {properties.map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {p.name}
-                  </option>
-                ))}
-              </Select>
+                placeholder="— geen — / zoek een pand"
+                options={properties.map((p) => ({ value: p.id, label: p.name }))}
+              />
             </Field>
           </div>
         </CardContent>
@@ -176,7 +165,7 @@ export function DocumentForm({
 
       <Card className="max-w-3xl">
         <CardContent>
-          <LineItemsEditor initialItems={doc?.items} />
+          <LineItemsEditor initialItems={doc?.items} products={products} />
         </CardContent>
       </Card>
 

@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  Boxes,
   Briefcase,
   Building2,
   FileText,
@@ -21,6 +22,7 @@ const NAV = [
   { href: "/contacts", label: "Contacten", icon: Users },
   { href: "/deals", label: "Deals & projecten", icon: Briefcase },
   { href: "/properties", label: "Panden", icon: Building2 },
+  { href: "/products", label: "Producten", icon: Boxes },
   { href: "/quotes", label: "Offertes", icon: FileText },
   { href: "/invoices", label: "Facturen", icon: Receipt },
 ];
