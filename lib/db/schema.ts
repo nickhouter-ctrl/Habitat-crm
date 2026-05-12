@@ -483,11 +483,14 @@ export const purchaseOrders = pgTable(
     notes: text(),
     /** Set once stock has been added, so we never double-count. */
     stockAppliedAt: timestamp({ withTimezone: true }),
+    /** When this PO mirrors a Holded purchase document, its id (for idempotent sync). */
+    holdedId: text(),
     ...timestamps,
   },
   (t) => [
     index("purchase_orders_status_idx").on(t.status),
     index("purchase_orders_supplier_idx").on(t.supplier),
+    uniqueIndex("purchase_orders_holded_id_idx").on(t.holdedId),
   ],
 );
 

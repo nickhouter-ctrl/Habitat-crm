@@ -14,6 +14,7 @@ export const HOLDED_DOC_TYPES = [
   "creditnote",
   "salesreceipt",
   "salesorder",
+  "purchase", // inkoop-/aankoopfactuur
 ] as const;
 export type HoldedDocType = (typeof HOLDED_DOC_TYPES)[number];
 

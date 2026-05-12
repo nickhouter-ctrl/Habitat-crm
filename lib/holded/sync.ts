@@ -19,7 +19,9 @@ import {
   documents,
   holdedSyncMap,
   products,
+  purchaseOrders,
   type DocumentLineItem,
+  type PurchaseOrderLineItem,
 } from "@/lib/db/schema";
 
 import { holded, holdedListAll } from "./client";
@@ -108,7 +110,10 @@ type LocalDocKind =
   | "creditnote"
   | "salesreceipt";
 
-/** Map a Holded `docType` to our local document kind (used by the webhook handler). */
+/**
+ * Map a Holded `docType` to our local document kind (used by the webhook handler).
+ * `purchase` is handled separately (→ purchase_orders), so map it to invoice as a fallback.
+ */
 export const HOLDED_DOCTYPE_TO_KIND: Record<HoldedDocType, LocalDocKind> = {
   estimate: "estimate",
   proform: "proforma",
@@ -116,6 +121,7 @@ export const HOLDED_DOCTYPE_TO_KIND: Record<HoldedDocType, LocalDocKind> = {
   creditnote: "creditnote",
   salesreceipt: "salesreceipt",
   salesorder: "estimate",
+  purchase: "invoice",
 };
 
 const KIND_TO_HOLDED_DOCTYPE: Record<LocalDocKind, HoldedDocType> = {
@@ -356,6 +362,55 @@ export async function pullDocumentsFromHolded(
   }
 
   return { created, updated, total };
+}
+
+/* ----------------------------------------------- purchases / aankopen (pull) */
+
+/**
+ * Pull Holded purchase documents ("aankopen" — purchase invoices) into the
+ * `purchase_orders` table so the CRM's Inkooporders match Holded. These are
+ * already-invoiced purchases, so we don't touch stock.
+ */
+export async function pullPurchaseOrdersFromHolded(): Promise<PullResult> {
+  const remote = await holded.documents.list("purchase");
+  let created = 0;
+  let updated = 0;
+
+  for (const d of remote) {
+    const items: PurchaseOrderLineItem[] = (d.products ?? []).map((p) => ({
+      name: p.name ?? "(naamloos)",
+      sku: p.sku && String(p.sku).trim() ? String(p.sku).trim() : undefined,
+      units: p.units ?? 1,
+      unitPrice: p.price ?? 0,
+      note: p.desc && String(p.desc).trim() ? String(p.desc).trim() : undefined,
+    }));
+    const data = {
+      supplier: d.contactName?.trim() || "Onbekende leverancier",
+      reference: d.docNumber?.trim() || null,
+      status: "received" as const,
+      currency: d.currency?.toUpperCase() || "EUR",
+      orderDate: unixToDateString(d.date),
+      total: String(d.total ?? 0),
+      items,
+      notes: [d.desc, d.notes].map((s) => s?.trim()).filter(Boolean).join(" — ") || null,
+      // These are invoices, not inbound stock — mark stock as "handled" so we never add it.
+      stockAppliedAt: new Date(),
+      receivedAt: unixToDateString(d.date) ? new Date(unixToDateString(d.date)!) : new Date(),
+      holdedId: d.id,
+    };
+
+    const existing = await db.query.purchaseOrders.findFirst({
+      where: eq(purchaseOrders.holdedId, d.id),
+    });
+    if (existing) {
+      await db.update(purchaseOrders).set(data).where(eq(purchaseOrders.id, existing.id));
+      updated++;
+    } else {
+      await db.insert(purchaseOrders).values(data);
+      created++;
+    }
+  }
+  return { created, updated, total: remote.length };
 }
 
 /* --------------------------------------------------------- products (pull) */

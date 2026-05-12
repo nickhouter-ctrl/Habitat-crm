@@ -8,6 +8,7 @@ import {
   pullContactsFromHolded,
   pullDocumentsFromHolded,
   pullProductsFromHolded,
+  pullPurchaseOrdersFromHolded,
 } from "./sync";
 
 /** Pull products, contacts and financial documents from Holded into the CRM. */
@@ -24,6 +25,7 @@ export async function syncHoldedNow(): Promise<{ ok: boolean; message: string }>
     const products = await pullProductsFromHolded();
     const contacts = await pullContactsFromHolded();
     const docs = await pullDocumentsFromHolded(["estimate", "invoice", "creditnote"]);
+    const purchases = await pullPurchaseOrdersFromHolded();
 
     for (const path of [
       "/",
@@ -31,6 +33,7 @@ export async function syncHoldedNow(): Promise<{ ok: boolean; message: string }>
       "/products",
       "/quotes",
       "/invoices",
+      "/inkooporders",
       "/settings",
     ]) {
       revalidatePath(path);
@@ -38,7 +41,7 @@ export async function syncHoldedNow(): Promise<{ ok: boolean; message: string }>
 
     return {
       ok: true,
-      message: `Producten +${products.created}/~${products.updated} · contacten +${contacts.created}/~${contacts.updated} · documenten +${docs.created}/~${docs.updated}.`,
+      message: `Producten +${products.created}/~${products.updated} · contacten +${contacts.created}/~${contacts.updated} · documenten +${docs.created}/~${docs.updated} · aankopen +${purchases.created}/~${purchases.updated}.`,
     };
   } catch (err) {
     return {

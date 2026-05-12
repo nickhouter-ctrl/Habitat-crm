@@ -64,6 +64,13 @@
       "when": 1778589320847,
       "tag": "0008_groovy_bulldozer",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1778594269108,
+      "tag": "0009_smart_mister_fear",
+      "breakpoints": true
     }
   ]
 }
