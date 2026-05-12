@@ -81,13 +81,14 @@ export function CostBreakdown({
             className="text-right"
           />
         </Field>
-        <Field label="Gewenste marge %" htmlFor="targetMarginPct" hint="t.o.v. de kostprijs (bv. 186%)">
+        <Field label="Gewenste marge %" htmlFor="targetMarginPct" hint="op verkoopprijs (= max. korting)">
           <Input
             id="targetMarginPct"
             name="targetMarginPct"
             type="number"
             step="0.01"
             min="0"
+            max="99"
             value={v.targetMarginPct}
             onChange={set("targetMarginPct")}
             className="text-right"

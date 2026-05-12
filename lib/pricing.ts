@@ -38,18 +38,19 @@ export function hasCostBreakdown(p: CostBreakdownInput): boolean {
 
 /**
  * Suggested ex-VAT sales price from a target margin %.
- * "Marge" here = profit as a percentage of the **cost** (markup): 186 % → price = cost × 2,86.
+ * "Marge" = profit as a percentage of the **selling price** (the usual retail
+ * definition, and the max discount you can give): 65 % → price = cost / 0,35.
  */
 export function suggestedPrice(cost: number, marginPct: number | null | undefined): number {
   const m = num(marginPct);
   if (cost <= 0) return 0;
-  if (m <= 0) return round2(cost);
-  return round2(cost * (1 + m / 100));
+  if (m <= 0 || m >= 100) return round2(cost);
+  return round2(cost / (1 - m / 100));
 }
 
-/** Profit of `price` over `cost`, and that profit as a % of the cost. */
+/** Profit of `price` over `cost`, and that profit as a % of the selling price. */
 export function marginOf(price: number, cost: number): { eur: number; pct: number } | null {
   if (!(price > 0) || !(cost > 0)) return null;
   const eur = round2(price - cost);
-  return { eur, pct: Math.round((eur / cost) * 100) };
+  return { eur, pct: Math.round((eur / price) * 100) };
 }
