@@ -11,6 +11,7 @@ import {
   CardHeader,
   CardTitle,
   EmptyState,
+  LinkButton,
   PageHeader,
   TBody,
   Table,
@@ -241,6 +242,13 @@ export default async function ContactDetailPage({
           <Card>
             <CardHeader>
               <CardTitle>Deals & projecten</CardTitle>
+              <LinkButton
+                href={`/deals/new?contactId=${contact.id}`}
+                variant="secondary"
+                size="sm"
+              >
+                Nieuwe deal
+              </LinkButton>
             </CardHeader>
             {relatedDeals.length === 0 ? (
               <CardContent>
@@ -258,7 +266,11 @@ export default async function ContactDetailPage({
                 <TBody>
                   {relatedDeals.map((d) => (
                     <Tr key={d.id}>
-                      <Td className="font-medium">{d.title}</Td>
+                      <Td className="font-medium">
+                        <Link href={`/deals/${d.id}`} className="hover:underline">
+                          {d.title}
+                        </Link>
+                      </Td>
                       <Td>
                         <Badge tone={dealStageMeta[d.stage].tone}>
                           {dealStageMeta[d.stage].label}

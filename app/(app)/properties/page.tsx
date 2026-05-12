@@ -1,9 +1,11 @@
 import { desc } from "drizzle-orm";
+import Link from "next/link";
 
 import {
   Badge,
   Card,
   EmptyState,
+  LinkButton,
   PageHeader,
   StatTile,
   TBody,
@@ -40,6 +42,7 @@ export default async function PropertiesPage() {
       <PageHeader
         title="Panden"
         subtitle="Vastgoed te koop — villa's, appartementen, bouwgrond en renovatieprojecten"
+        actions={<LinkButton href="/properties/new">Nieuw pand</LinkButton>}
       />
 
       <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-3">
@@ -72,7 +75,9 @@ export default async function PropertiesPage() {
               {rows.map((p) => (
                 <Tr key={p.id}>
                   <Td className="font-medium">
-                    {p.title}
+                    <Link href={`/properties/${p.id}`} className="hover:underline">
+                      {p.title}
+                    </Link>
                     {p.reference && (
                       <span className="block text-xs text-muted">{p.reference}</span>
                     )}

@@ -5,6 +5,7 @@ import {
   Badge,
   Card,
   EmptyState,
+  LinkButton,
   PageHeader,
   StatTile,
   TBody,
@@ -45,6 +46,7 @@ export default async function DealsPage() {
       <PageHeader
         title="Deals & projecten"
         subtitle="Renovaties, nieuwbouw, materiaallevering en verkoop"
+        actions={<LinkButton href="/deals/new">Nieuwe deal</LinkButton>}
       />
 
       <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
@@ -76,7 +78,11 @@ export default async function DealsPage() {
             <TBody>
               {rows.map((d) => (
                 <Tr key={d.id}>
-                  <Td className="font-medium">{d.title}</Td>
+                  <Td className="font-medium">
+                    <Link href={`/deals/${d.id}`} className="hover:underline">
+                      {d.title}
+                    </Link>
+                  </Td>
                   <Td className="text-muted">{dealTypeMeta[d.type]}</Td>
                   <Td>
                     <Badge tone={dealStageMeta[d.stage].tone}>

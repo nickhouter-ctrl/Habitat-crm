@@ -175,7 +175,7 @@ export default async function DashboardPage() {
                   <Tr key={d.id}>
                     <Td>
                       <Link
-                        href={`/deals?focus=${d.id}`}
+                        href={`/deals/${d.id}`}
                         className="font-medium hover:underline"
                       >
                         {d.title}
