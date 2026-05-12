@@ -1,4 +1,4 @@
-import { desc, eq } from "drizzle-orm";
+import { desc, eq, inArray } from "drizzle-orm";
 import Link from "next/link";
 
 import {
@@ -19,7 +19,7 @@ import { SyncHoldedButton } from "@/components/sync-holded-button";
 import { db } from "@/lib/db";
 import { documents } from "@/lib/db/schema";
 import { formatDate, formatEUR } from "@/lib/utils";
-import { documentStatusMeta } from "./_meta";
+import { documentKindMeta, documentStatusMeta } from "./_meta";
 
 type Kind =
   | "estimate"
@@ -35,13 +35,17 @@ export async function DocumentsList({
   subtitle,
   newLabel,
 }: {
-  kind: Kind;
+  kind: Kind | Kind[];
   title: string;
   subtitle: string;
   newLabel: string;
 }) {
+  const kinds = Array.isArray(kind) ? kind : [kind];
+  const primaryKind = kinds[0];
+  const showKindColumn = kinds.length > 1;
+
   const rows = await db.query.documents.findMany({
-    where: eq(documents.kind, kind),
+    where: kinds.length === 1 ? eq(documents.kind, primaryKind) : inArray(documents.kind, kinds),
     orderBy: [desc(documents.issueDate), desc(documents.createdAt)],
     limit: 300,
     with: {
@@ -50,12 +54,13 @@ export async function DocumentsList({
     },
   });
 
-  const total = rows.reduce((s, d) => s + Number(d.totalEur ?? 0), 0);
+  const sign = (k: Kind) => (k === "creditnote" ? -1 : 1);
+  const total = rows.reduce((s, d) => s + sign(d.kind) * Number(d.totalEur ?? 0), 0);
   const outstanding = rows
-    .filter((d) => d.status !== "paid" && d.status !== "void")
+    .filter((d) => d.kind !== "creditnote" && d.status !== "paid" && d.status !== "void")
     .reduce((s, d) => s + (Number(d.totalEur ?? 0) - Number(d.paidEur ?? 0)), 0);
 
-  const newHref = `/documents/new?kind=${kind}`;
+  const newHref = `/documents/new?kind=${primaryKind}`;
 
   return (
     <>
@@ -88,6 +93,7 @@ export async function DocumentsList({
             <THead>
               <tr>
                 <Th>Nr.</Th>
+                {showKindColumn && <Th>Type</Th>}
                 <Th>Klant</Th>
                 <Th>Status</Th>
                 <Th>Datum</Th>
@@ -110,6 +116,13 @@ export async function DocumentsList({
                         <span className="block text-xs text-muted">{d.title}</span>
                       )}
                     </Td>
+                    {showKindColumn && (
+                      <Td>
+                        <Badge tone={d.kind === "creditnote" ? "warning" : "neutral"}>
+                          {documentKindMeta[d.kind]}
+                        </Badge>
+                      </Td>
+                    )}
                     <Td>
                       {d.contact ? (
                         <Link href={`/contacts/${d.contact.id}`} className="hover:underline">

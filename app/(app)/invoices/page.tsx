@@ -5,9 +5,9 @@ export const metadata = { title: "Facturen" };
 export default function InvoicesPage() {
   return (
     <DocumentsList
-      kind="invoice"
+      kind={["invoice", "creditnote"]}
       title="Facturen"
-      subtitle="Verkoopfacturen — aangemaakt in het CRM of gesynct vanuit Holded"
+      subtitle="Verkoopfacturen en creditnota's — aangemaakt in het CRM of gesynct vanuit Holded"
       newLabel="Nieuwe factuur"
     />
   );

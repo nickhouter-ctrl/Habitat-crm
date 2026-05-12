@@ -23,7 +23,7 @@ export async function syncHoldedNow(): Promise<{ ok: boolean; message: string }>
   try {
     const products = await pullProductsFromHolded();
     const contacts = await pullContactsFromHolded();
-    const docs = await pullDocumentsFromHolded(["estimate", "invoice"]);
+    const docs = await pullDocumentsFromHolded(["estimate", "invoice", "creditnote"]);
 
     for (const path of [
       "/",
