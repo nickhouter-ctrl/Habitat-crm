@@ -289,6 +289,22 @@ export default async function ContactDetailPage({
           <Card>
             <CardHeader>
               <CardTitle>Offertes & facturen</CardTitle>
+              <div className="flex gap-1.5">
+                <LinkButton
+                  href={`/documents/new?kind=estimate&contactId=${contact.id}`}
+                  variant="secondary"
+                  size="sm"
+                >
+                  Nieuwe offerte
+                </LinkButton>
+                <LinkButton
+                  href={`/documents/new?kind=invoice&contactId=${contact.id}`}
+                  variant="secondary"
+                  size="sm"
+                >
+                  Nieuwe factuur
+                </LinkButton>
+              </div>
             </CardHeader>
             {relatedDocs.length === 0 ? (
               <CardContent>
@@ -308,7 +324,11 @@ export default async function ContactDetailPage({
                 <TBody>
                   {relatedDocs.map((doc) => (
                     <Tr key={doc.id}>
-                      <Td className="font-medium">{doc.docNumber ?? "—"}</Td>
+                      <Td className="font-medium">
+                        <Link href={`/documents/${doc.id}`} className="hover:underline">
+                          {doc.docNumber ?? "(geen nr.)"}
+                        </Link>
+                      </Td>
                       <Td>{documentKindMeta[doc.kind]}</Td>
                       <Td>
                         <Badge tone={documentStatusMeta[doc.status].tone}>

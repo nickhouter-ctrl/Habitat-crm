@@ -5,6 +5,7 @@ import {
   Badge,
   Card,
   EmptyState,
+  LinkButton,
   PageHeader,
   StatTile,
   TBody,
@@ -26,10 +27,12 @@ export async function DocumentsList({
   kind,
   title,
   subtitle,
+  newLabel,
 }: {
   kind: Kind;
   title: string;
   subtitle: string;
+  newLabel: string;
 }) {
   const rows = await db.query.documents.findMany({
     where: eq(documents.kind, kind),
@@ -46,9 +49,20 @@ export async function DocumentsList({
     .filter((d) => d.status !== "paid" && d.status !== "void")
     .reduce((s, d) => s + (Number(d.totalEur ?? 0) - Number(d.paidEur ?? 0)), 0);
 
+  const newHref = `/documents/new?kind=${kind}`;
+
   return (
     <>
-      <PageHeader title={title} subtitle={subtitle} actions={<SyncHoldedButton />} />
+      <PageHeader
+        title={title}
+        subtitle={subtitle}
+        actions={
+          <>
+            <SyncHoldedButton />
+            <LinkButton href={newHref}>{newLabel}</LinkButton>
+          </>
+        }
+      />
 
       <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-3">
         <StatTile label="Aantal" value={rows.length} />
@@ -59,8 +73,8 @@ export async function DocumentsList({
       {rows.length === 0 ? (
         <EmptyState
           title={`Nog geen ${title.toLowerCase()}`}
-          description="Synchroniseer met Holded om bestaande documenten op te halen."
-          action={<SyncHoldedButton />}
+          description="Maak er een aan, of synchroniseer met Holded om bestaande documenten op te halen."
+          action={<LinkButton href={newHref}>{newLabel}</LinkButton>}
         />
       ) : (
         <Card className="overflow-hidden">
@@ -80,13 +94,19 @@ export async function DocumentsList({
             <TBody>
               {rows.map((d) => {
                 const partyName = d.contact?.name ?? d.company?.name ?? "—";
-                const partyHref = d.contact ? `/contacts/${d.contact.id}` : null;
                 return (
                   <Tr key={d.id}>
-                    <Td className="font-medium">{d.docNumber ?? "—"}</Td>
+                    <Td className="font-medium">
+                      <Link href={`/documents/${d.id}`} className="hover:underline">
+                        {d.docNumber ?? "(geen nr.)"}
+                      </Link>
+                      {d.title && (
+                        <span className="block text-xs text-muted">{d.title}</span>
+                      )}
+                    </Td>
                     <Td>
-                      {partyHref ? (
-                        <Link href={partyHref} className="hover:underline">
+                      {d.contact ? (
+                        <Link href={`/contacts/${d.contact.id}`} className="hover:underline">
                           {partyName}
                         </Link>
                       ) : (

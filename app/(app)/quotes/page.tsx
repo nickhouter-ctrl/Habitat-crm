@@ -7,7 +7,8 @@ export default function QuotesPage() {
     <DocumentsList
       kind="estimate"
       title="Offertes"
-      subtitle="Uitgebrachte offertes (estimates), gesynct vanuit Holded"
+      subtitle="Uitgebrachte offertes — aangemaakt in het CRM of gesynct vanuit Holded"
+      newLabel="Nieuwe offerte"
     />
   );
 }
