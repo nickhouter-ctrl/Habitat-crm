@@ -27,6 +27,7 @@ const KIND_LABEL: Record<DocKind, string> = {
   invoice: "factuur",
   creditnote: "creditnota",
   salesreceipt: "bon",
+  deliverynote: "pakbon",
 };
 
 const LANGS: Array<{ value: string; label: string }> = [

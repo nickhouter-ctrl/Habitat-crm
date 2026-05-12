@@ -108,6 +108,7 @@ export const documentKind = pgEnum("document_kind", [
   "invoice", // factuur
   "creditnote",
   "salesreceipt",
+  "deliverynote", // pakbon / albarán
 ]);
 
 export const documentStatus = pgEnum("document_status", [
@@ -303,6 +304,10 @@ export const products = pgTable(
       .default(sql`gen_random_uuid()`),
     name: text().notNull(),
     sku: text(),
+    /** EAN-13 / GTIN barcode (auto-generated, or entered manually). */
+    barcode: text(),
+    /** Current stock on hand (mirror of Holded once synced). */
+    stockQty: numeric({ precision: 14, scale: 3 }),
     /** Top-level group / department, e.g. "Wandpanelen", "Badkamer", "Accessoires". */
     collection: text(),
     category: text(), // e.g. "Italian Travertine", "Magic Stone" — the product family

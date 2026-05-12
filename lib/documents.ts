@@ -2,7 +2,13 @@
 import type { DocumentLineItem } from "@/lib/db/schema";
 import { LINE_CATEGORY_VALUES } from "@/lib/products";
 
-export type DocKind = "estimate" | "proforma" | "invoice" | "creditnote" | "salesreceipt";
+export type DocKind =
+  | "estimate"
+  | "proforma"
+  | "invoice"
+  | "creditnote"
+  | "salesreceipt"
+  | "deliverynote";
 
 export const DOC_KIND_PREFIX: Record<DocKind, string> = {
   estimate: "OFF",
@@ -10,6 +16,7 @@ export const DOC_KIND_PREFIX: Record<DocKind, string> = {
   invoice: "FAC",
   creditnote: "CN",
   salesreceipt: "BON",
+  deliverynote: "PAK",
 };
 
 /** Round to cents. */

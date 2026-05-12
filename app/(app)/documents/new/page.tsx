@@ -12,7 +12,14 @@ import { documentKindMeta } from "../../_meta";
 
 export const metadata = { title: "Nieuw document" };
 
-const VALID_KINDS: DocKind[] = ["estimate", "proforma", "invoice", "creditnote", "salesreceipt"];
+const VALID_KINDS: DocKind[] = [
+  "estimate",
+  "proforma",
+  "invoice",
+  "creditnote",
+  "salesreceipt",
+  "deliverynote",
+];
 
 export default async function NewDocumentPage({
   searchParams,
@@ -34,7 +41,8 @@ export default async function NewDocumentPage({
     dealId: typeof params.dealId === "string" ? params.dealId : undefined,
     propertyId: typeof params.propertyId === "string" ? params.propertyId : undefined,
   };
-  const backHref = kind === "invoice" ? "/invoices" : "/quotes";
+  const backHref =
+    kind === "invoice" ? "/invoices" : kind === "deliverynote" ? "/pakbonnen" : "/quotes";
 
   return (
     <>

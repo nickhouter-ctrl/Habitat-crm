@@ -2,12 +2,21 @@ import { eq } from "drizzle-orm";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
+import { Barcode } from "@/components/barcode";
 import { ProductForm } from "@/components/product-form";
-import { Button, PageHeader } from "@/components/ui";
+import {
+  Button,
+  buttonClass,
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+  PageHeader,
+} from "@/components/ui";
 import { db } from "@/lib/db";
 import { products } from "@/lib/db/schema";
 import { getProductCategories, getProductCollections } from "../../../_options";
-import { deleteProduct, updateProduct } from "../../actions";
+import { deleteProduct, generateBarcode, updateProduct } from "../../actions";
 
 export const metadata = { title: "Product bewerken" };
 
@@ -30,6 +39,7 @@ export default async function EditProductPage({
 
   const update = updateProduct.bind(null, id);
   const remove = deleteProduct.bind(null, id);
+  const genBarcode = generateBarcode.bind(null, id);
 
   return (
     <>
@@ -52,6 +62,41 @@ export default async function EditProductPage({
           Controleer de gegevens (naam verplicht; geldige URL?).
         </p>
       )}
+
+      <Card className="mb-4 max-w-2xl">
+        <CardHeader>
+          <CardTitle>Barcode</CardTitle>
+          {product.barcode && (
+            <a
+              href={`/products/${id}/label`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className={buttonClass({ variant: "secondary", size: "sm" })}
+            >
+              Label printen
+            </a>
+          )}
+        </CardHeader>
+        <CardContent className="space-y-3">
+          {product.barcode ? (
+            <div className="flex flex-wrap items-center gap-6">
+              <Barcode value={product.barcode} />
+              <code className="font-mono text-sm">{product.barcode}</code>
+            </div>
+          ) : (
+            <p className="text-sm text-muted">
+              Nog geen barcode. Genereer er automatisch een (EAN-13), of vul er handmatig één in
+              hierboven en sla op.
+            </p>
+          )}
+          <form action={genBarcode}>
+            <Button type="submit" size="sm" variant="secondary">
+              {product.barcode ? "Nieuwe barcode genereren" : "Barcode genereren"}
+            </Button>
+          </form>
+        </CardContent>
+      </Card>
+
       <ProductForm
         action={update}
         product={product}

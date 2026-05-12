@@ -27,6 +27,7 @@ import { lineNet, lineTax } from "@/lib/documents";
 import { labelForCategory } from "@/lib/products";
 import { formatDate, formatEUR } from "@/lib/utils";
 import {
+  createDeliveryNoteFromDocument,
   createInvoiceFromEstimate,
   deleteDocument,
   sendDocument,
@@ -90,6 +91,7 @@ export default async function DocumentDetailPage({
   const removeDoc = deleteDocument.bind(null, id);
   const send = sendDocument.bind(null, id);
   const makeInvoice = createInvoiceFromEstimate.bind(null, id);
+  const makeDeliveryNote = createDeliveryNoteFromDocument.bind(null, id);
 
   const h = await headers();
   const host = h.get("host") ?? "";
@@ -219,6 +221,13 @@ export default async function DocumentDetailPage({
                 <form action={makeInvoice}>
                   <Button type="submit" size="sm" variant="secondary">
                     → Maak factuur van deze offerte
+                  </Button>
+                </form>
+              )}
+              {doc.kind !== "deliverynote" && (
+                <form action={makeDeliveryNote}>
+                  <Button type="submit" size="sm" variant="secondary">
+                    → Maak pakbon
                   </Button>
                 </form>
               )}

@@ -23,6 +23,7 @@ const KIND_LABEL: Record<DocKind, string> = {
   invoice: "Factuur",
   creditnote: "Creditnota",
   salesreceipt: "Bon",
+  deliverynote: "Pakbon",
 };
 
 export const DOC_STATUS_OPTIONS: Array<{ value: string; label: string }> = [

@@ -90,7 +90,7 @@ export const propertyTypeMeta: Record<
 };
 
 export const documentKindMeta: Record<
-  "estimate" | "proforma" | "invoice" | "creditnote" | "salesreceipt",
+  "estimate" | "proforma" | "invoice" | "creditnote" | "salesreceipt" | "deliverynote",
   string
 > = {
   estimate: "Offerte",
@@ -98,6 +98,7 @@ export const documentKindMeta: Record<
   invoice: "Factuur",
   creditnote: "Creditnota",
   salesreceipt: "Bon",
+  deliverynote: "Pakbon",
 };
 
 export const documentStatusMeta: Record<

@@ -20,6 +20,7 @@
     "bcryptjs": "^3.0.2",
     "clsx": "^2.1.1",
     "drizzle-orm": "^0.44.6",
+    "jsbarcode": "^3.12.3",
     "lucide-react": "^0.487.0",
     "next": "16.2.6",
     "next-auth": "^5.0.0-beta.30",

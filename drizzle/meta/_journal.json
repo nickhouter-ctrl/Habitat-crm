@@ -36,6 +36,20 @@
       "when": 1778581571521,
       "tag": "0004_product_cost_breakdown",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1778584785956,
+      "tag": "0005_barcode_stock_deliverynote",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1778585301991,
+      "tag": "0006_deliverynote_enum",
+      "breakpoints": true
     }
   ]
 }

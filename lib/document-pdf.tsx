@@ -31,6 +31,7 @@ const KIND_LABEL: Record<string, string> = {
   invoice: "FACTUUR",
   creditnote: "CREDITNOTA",
   salesreceipt: "BON",
+  deliverynote: "PAKBON",
 };
 
 const s = StyleSheet.create({
@@ -80,6 +81,7 @@ export type PdfDoc = {
 
 function DocumentPdf({ doc }: { doc: PdfDoc }) {
   const items = doc.items ?? [];
+  const isDelivery = doc.kind === "deliverynote";
   const footerLine =
     `${COMPANY.legalName}${COMPANY.vatNumber ? ` · NIF ${COMPANY.vatNumber}` : ""} · ${COMPANY.address}\n` +
     `${COMPANY.email}${COMPANY.phone ? ` · ${COMPANY.phone}` : ""} · ${COMPANY.website}${COMPANY.iban ? ` · IBAN ${COMPANY.iban}` : ""}`;
@@ -99,7 +101,7 @@ function DocumentPdf({ doc }: { doc: PdfDoc }) {
             <Text style={s.meta}>
               Datum: <Text style={s.metaStrong}>{fdate(doc.issueDate)}</Text>
             </Text>
-            {doc.dueDate ? (
+            {doc.dueDate && !isDelivery ? (
               <Text style={s.meta}>
                 {doc.kind === "invoice" ? "Vervaldatum" : "Geldig t/m"}:{" "}
                 <Text style={s.metaStrong}>{fdate(doc.dueDate)}</Text>
@@ -133,10 +135,14 @@ function DocumentPdf({ doc }: { doc: PdfDoc }) {
         <View style={s.th}>
           <Text style={[s.thText, s.cDesc]}>OMSCHRIJVING</Text>
           <Text style={[s.thText, s.cCat]}>CATEGORIE</Text>
-          <Text style={[s.thText, s.cNum]}>AANTAL</Text>
-          <Text style={[s.thText, s.cNum]}>PRIJS</Text>
-          <Text style={[s.thText, s.cVat]}>BTW</Text>
-          <Text style={[s.thText, s.cAmt]}>NETTO</Text>
+          <Text style={[s.thText, isDelivery ? s.cAmt : s.cNum]}>AANTAL</Text>
+          {!isDelivery && (
+            <>
+              <Text style={[s.thText, s.cNum]}>PRIJS</Text>
+              <Text style={[s.thText, s.cVat]}>BTW</Text>
+              <Text style={[s.thText, s.cAmt]}>NETTO</Text>
+            </>
+          )}
         </View>
         {items.length === 0 ? (
           <Text style={[s.tr, s.muted]}>Geen regels.</Text>
@@ -148,28 +154,45 @@ function DocumentPdf({ doc }: { doc: PdfDoc }) {
                 {it.description ? <Text style={s.itemDesc}>{it.description}</Text> : null}
               </View>
               <Text style={s.cCat}>{labelForCategory(it.category)}</Text>
-              <Text style={s.cNum}>{it.units}</Text>
-              <Text style={s.cNum}>{eur(it.price)}</Text>
-              <Text style={s.cVat}>{it.taxRate ?? 0}%</Text>
-              <Text style={s.cAmt}>{eur(lineNet(it))}</Text>
+              <Text style={isDelivery ? s.cAmt : s.cNum}>{it.units}</Text>
+              {!isDelivery && (
+                <>
+                  <Text style={s.cNum}>{eur(it.price)}</Text>
+                  <Text style={s.cVat}>{it.taxRate ?? 0}%</Text>
+                  <Text style={s.cAmt}>{eur(lineNet(it))}</Text>
+                </>
+              )}
             </View>
           ))
         )}
 
-        <View style={s.totals}>
-          <View style={s.totalRow}>
-            <Text style={s.muted}>Subtotaal</Text>
-            <Text>{eur(doc.subtotalEur)}</Text>
+        {!isDelivery && (
+          <View style={s.totals}>
+            <View style={s.totalRow}>
+              <Text style={s.muted}>Subtotaal</Text>
+              <Text>{eur(doc.subtotalEur)}</Text>
+            </View>
+            <View style={s.totalRow}>
+              <Text style={s.muted}>BTW (IVA)</Text>
+              <Text>{eur(doc.taxEur)}</Text>
+            </View>
+            <View style={[s.totalRow, s.totalGrand]}>
+              <Text>Totaal</Text>
+              <Text>{eur(doc.totalEur)}</Text>
+            </View>
           </View>
-          <View style={s.totalRow}>
-            <Text style={s.muted}>BTW (IVA)</Text>
-            <Text>{eur(doc.taxEur)}</Text>
+        )}
+
+        {isDelivery && (
+          <View style={{ marginTop: 28, flexDirection: "row", gap: 40 }}>
+            <View style={{ flex: 1, borderTopWidth: 0.5, borderColor: "#999", paddingTop: 4 }}>
+              <Text style={s.muted}>Geleverd door (handtekening)</Text>
+            </View>
+            <View style={{ flex: 1, borderTopWidth: 0.5, borderColor: "#999", paddingTop: 4 }}>
+              <Text style={s.muted}>Ontvangen door (handtekening)</Text>
+            </View>
           </View>
-          <View style={[s.totalRow, s.totalGrand]}>
-            <Text>Totaal</Text>
-            <Text>{eur(doc.totalEur)}</Text>
-          </View>
-        </View>
+        )}
 
         {doc.notes ? <Text style={s.notes}>{doc.notes}</Text> : null}
 

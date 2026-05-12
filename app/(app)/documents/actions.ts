@@ -29,7 +29,7 @@ async function baseUrl(): Promise<string> {
   return `${proto}://${host}`;
 }
 
-const KINDS = ["estimate", "proforma", "invoice", "creditnote", "salesreceipt"] as const;
+const KINDS = ["estimate", "proforma", "invoice", "creditnote", "salesreceipt", "deliverynote"] as const;
 const STATUSES = [
   "draft",
   "sent",
@@ -67,6 +67,7 @@ const docSchema = z.object({
 function listPathFor(kind: DocKind): string {
   if (kind === "invoice") return "/invoices";
   if (kind === "estimate") return "/quotes";
+  if (kind === "deliverynote") return "/pakbonnen";
   return "/documents";
 }
 
@@ -347,5 +348,42 @@ export async function createInvoiceFromEstimate(estimateId: string) {
 
   revalidateAround("invoice");
   revalidatePath(`/documents/${estimateId}`);
+  redirect(`/documents/${row.id}/edit`);
+}
+
+/** Create a draft delivery note (pakbon) copied from another document's lines. */
+export async function createDeliveryNoteFromDocument(sourceId: string) {
+  await requireUser();
+  const src = await db.query.documents.findFirst({ where: eq(documents.id, sourceId) });
+  if (!src) return;
+
+  const [{ n }] = await db
+    .select({ n: count() })
+    .from(documents)
+    .where(eq(documents.kind, "deliverynote"));
+
+  const [row] = await db
+    .insert(documents)
+    .values({
+      kind: "deliverynote",
+      status: "draft",
+      docNumber: suggestDocNumber("deliverynote", n),
+      title: src.title,
+      contactId: src.contactId,
+      companyId: src.companyId,
+      dealId: src.dealId,
+      propertyId: src.propertyId,
+      issueDate: new Date().toISOString().slice(0, 10),
+      currency: src.currency,
+      subtotalEur: src.subtotalEur,
+      taxEur: src.taxEur,
+      totalEur: src.totalEur,
+      items: src.items,
+      notes: src.notes,
+    })
+    .returning({ id: documents.id });
+
+  revalidateAround("deliverynote");
+  revalidatePath(`/documents/${sourceId}`);
   redirect(`/documents/${row.id}/edit`);
 }

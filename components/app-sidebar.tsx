@@ -11,6 +11,7 @@ import {
   Receipt,
   Search,
   Settings,
+  Truck,
   Users,
   X,
 } from "lucide-react";
@@ -29,6 +30,7 @@ const NAV = [
   { href: "/products", label: "Producten", icon: Boxes },
   { href: "/quotes", label: "Offertes", icon: FileText },
   { href: "/invoices", label: "Facturen", icon: Receipt },
+  { href: "/pakbonnen", label: "Pakbonnen", icon: Truck },
 ];
 
 export function AppSidebar({

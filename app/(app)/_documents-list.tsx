@@ -21,7 +21,13 @@ import { documents } from "@/lib/db/schema";
 import { formatDate, formatEUR } from "@/lib/utils";
 import { documentStatusMeta } from "./_meta";
 
-type Kind = "estimate" | "invoice" | "proforma" | "creditnote" | "salesreceipt";
+type Kind =
+  | "estimate"
+  | "invoice"
+  | "proforma"
+  | "creditnote"
+  | "salesreceipt"
+  | "deliverynote";
 
 export async function DocumentsList({
   kind,

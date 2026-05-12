@@ -117,7 +117,12 @@ export default async function PublicOffertePage({
     : "es";
   const t = T[lang];
   const items = doc.items ?? [];
-  const kindLabel = doc.kind === "invoice" ? t.invoice : t.quote;
+  const kindLabel =
+    doc.kind === "invoice"
+      ? t.invoice
+      : doc.kind === "deliverynote"
+        ? "Pakbon"
+        : t.quote;
   const isClosed = doc.status === "void";
   const accept = acceptOfferte.bind(null, token);
   const reject = rejectOfferte.bind(null, token);
@@ -227,7 +232,7 @@ export default async function PublicOffertePage({
           <p className="rounded-xl border bg-background px-5 py-4 text-sm text-muted">
             {t.unavailable}
           </p>
-        ) : doc.kind === "invoice" ? null : (
+        ) : doc.kind !== "estimate" ? null : (
           <div className="rounded-xl border bg-surface p-5 shadow-sm">
             <p className="mb-3 text-sm text-muted">{t.confirm}</p>
             <div className="flex flex-wrap items-center gap-3">

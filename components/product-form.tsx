@@ -24,6 +24,8 @@ export function ProductForm({
     Product,
     | "name"
     | "sku"
+    | "barcode"
+    | "stockQty"
     | "collection"
     | "category"
     | "subcategory"
@@ -48,18 +50,41 @@ export function ProductForm({
     <Card className="max-w-2xl">
       <CardContent>
         <form action={action} className="space-y-5">
-          <div className="grid gap-4 sm:grid-cols-[1fr_auto]">
-            <Field label="Naam *" htmlFor="name">
+          <Field label="Naam *" htmlFor="name">
+            <Input
+              id="name"
+              name="name"
+              defaultValue={product?.name ?? ""}
+              required
+              placeholder="bv. Magic Stone Bianco 60×60"
+            />
+          </Field>
+
+          <div className="grid gap-4 sm:grid-cols-4">
+            <Field label="SKU / code" htmlFor="sku">
+              <Input id="sku" name="sku" defaultValue={product?.sku ?? ""} />
+            </Field>
+            <Field
+              label="Barcode (EAN-13)"
+              htmlFor="barcode"
+              hint="Leeg laten = automatisch genereren"
+            >
               <Input
-                id="name"
-                name="name"
-                defaultValue={product?.name ?? ""}
-                required
-                placeholder="bv. Magic Stone Bianco 60×60"
+                id="barcode"
+                name="barcode"
+                defaultValue={product?.barcode ?? ""}
+                inputMode="numeric"
               />
             </Field>
-            <Field label="SKU / code" htmlFor="sku">
-              <Input id="sku" name="sku" defaultValue={product?.sku ?? ""} className="w-36" />
+            <Field label="Voorraad" htmlFor="stockQty" hint="huidige stand">
+              <Input
+                id="stockQty"
+                name="stockQty"
+                type="number"
+                step="0.001"
+                defaultValue={product?.stockQty ?? ""}
+                className="text-right"
+              />
             </Field>
           </div>
 
