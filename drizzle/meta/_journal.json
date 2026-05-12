@@ -50,6 +50,13 @@
       "when": 1778585301991,
       "tag": "0006_deliverynote_enum",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1778588291522,
+      "tag": "0007_mysterious_scalphunter",
+      "breakpoints": true
     }
   ]
 }

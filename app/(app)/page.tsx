@@ -1,4 +1,4 @@
-import { count, desc, eq, sql } from "drizzle-orm";
+import { count, desc, eq, inArray, sql } from "drizzle-orm";
 import Link from "next/link";
 
 import {
@@ -19,7 +19,8 @@ import {
   Tr,
 } from "@/components/ui";
 import { db } from "@/lib/db";
-import { activities, contacts, deals, documents } from "@/lib/db/schema";
+import { activities, contacts, deals, documents, purchaseOrders } from "@/lib/db/schema";
+import { formatMoney, PO_OPEN_STATUSES, PO_STATUS_META } from "@/lib/purchase-orders";
 import { formatDate, formatEUR } from "@/lib/utils";
 import { dealStageMeta, documentKindMeta } from "./_meta";
 
@@ -42,7 +43,7 @@ export default async function DashboardPage() {
 
   const openExpr = sql`${documents.status} not in ('paid', 'void', 'draft')`;
 
-  const [[contactsTotal], pipelineRows, [docAgg], recentDeals, recentActivity] =
+  const [[contactsTotal], pipelineRows, [docAgg], openPurchaseOrders, recentDeals, recentActivity] =
     await Promise.all([
       db.select({ n: count() }).from(contacts),
       db
@@ -63,6 +64,11 @@ export default async function DashboardPage() {
         })
         .from(documents)
         .where(eq(documents.kind, "invoice")),
+      db
+        .select()
+        .from(purchaseOrders)
+        .where(inArray(purchaseOrders.status, PO_OPEN_STATUSES))
+        .orderBy(purchaseOrders.expectedDate),
       db.query.deals.findMany({
         orderBy: desc(deals.updatedAt),
         limit: 7,
@@ -108,6 +114,7 @@ export default async function DashboardPage() {
         <StatTile label="Omzet deze maand" value={formatEUR(docAgg.revenueMonth)} hint="betaalde facturen" />
         <StatTile label="Openstaande facturen" value={docAgg.outstandingN} hint={formatEUR(docAgg.outstandingV)} />
         <StatTile label="Vervallen facturen" value={docAgg.overdueN} hint={formatEUR(docAgg.overdueV)} />
+        <StatTile label="Inkooporders onderweg" value={openPurchaseOrders.length} hint="aankomende voorraad" />
       </div>
 
       <Card className="mt-6">
@@ -137,6 +144,55 @@ export default async function DashboardPage() {
           ))}
         </CardContent>
       </Card>
+
+      {openPurchaseOrders.length > 0 && (
+        <Card className="mt-6">
+          <CardHeader>
+            <CardTitle>Inkooporders onderweg</CardTitle>
+            <Link href="/inkooporders" className="text-xs text-accent hover:underline">
+              Alle inkooporders
+            </Link>
+          </CardHeader>
+          <Table>
+            <THead>
+              <tr>
+                <Th>Leverancier</Th>
+                <Th>Referentie</Th>
+                <Th>Verwacht</Th>
+                <Th className="text-right">Regels</Th>
+                <Th className="text-right">Totaal</Th>
+                <Th>Status</Th>
+              </tr>
+            </THead>
+            <TBody>
+              {openPurchaseOrders.map((po) => (
+                <Tr key={po.id}>
+                  <Td>
+                    <Link href={`/inkooporders/${po.id}`} className="font-medium hover:underline">
+                      {po.supplier}
+                    </Link>
+                  </Td>
+                  <Td className="text-muted">{po.reference ?? "—"}</Td>
+                  <Td className="text-muted">
+                    {po.expectedDate
+                      ? new Date(po.expectedDate).toLocaleDateString("nl-NL", {
+                          day: "numeric",
+                          month: "short",
+                          year: "numeric",
+                        })
+                      : "—"}
+                  </Td>
+                  <Td className="text-right tabular-nums text-muted">{po.items?.length ?? 0}</Td>
+                  <Td className="text-right tabular-nums">{formatMoney(po.total, po.currency)}</Td>
+                  <Td>
+                    <Badge tone={PO_STATUS_META[po.status].tone}>{PO_STATUS_META[po.status].label}</Badge>
+                  </Td>
+                </Tr>
+              ))}
+            </TBody>
+          </Table>
+        </Card>
+      )}
 
       <div className="mt-6 grid gap-4 lg:grid-cols-2">
         <Card>

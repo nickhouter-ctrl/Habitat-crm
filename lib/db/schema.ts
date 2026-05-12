@@ -122,6 +122,14 @@ export const documentStatus = pgEnum("document_status", [
   "void",
 ]);
 
+export const purchaseOrderStatus = pgEnum("purchase_order_status", [
+  "draft", // concept
+  "ordered", // besteld / aanbetaling gedaan
+  "in_transit", // onderweg (geproduceerd / verscheept)
+  "received", // ontvangen — voorraad bijgewerkt
+  "cancelled",
+]);
+
 export const activityType = pgEnum("activity_type", [
   "note",
   "call",
@@ -425,6 +433,52 @@ export const documents = pgTable(
   ],
 );
 
+/* ------------------------------------------------ purchase orders (inkoop) */
+
+export type PurchaseOrderLineItem = {
+  name: string;
+  sku?: string;
+  /** Link to the catalogue product this line replenishes. */
+  productId?: string;
+  units: number;
+  /** Unit price in the order's `currency` (often USD for the China suppliers). */
+  unitPrice: number;
+  note?: string;
+};
+
+/**
+ * Incoming supplier orders ("binnenkomende bestellingen") — e.g. the China
+ * proforma invoices from KingKonree / Magic Stone. When a PO is marked
+ * `received`, each line's `units` is added to its product's `stockQty`.
+ */
+export const purchaseOrders = pgTable(
+  "purchase_orders",
+  {
+    id: uuid()
+      .primaryKey()
+      .default(sql`gen_random_uuid()`),
+    supplier: text().notNull(),
+    /** Supplier's order / proforma-invoice number. */
+    reference: text(),
+    status: purchaseOrderStatus().notNull().default("ordered"),
+    currency: text().notNull().default("EUR"),
+    orderDate: date(),
+    expectedDate: date(),
+    receivedAt: timestamp({ withTimezone: true }),
+    /** Sum of the line totals, in `currency`. */
+    total: numeric({ precision: 14, scale: 2 }).notNull().default("0"),
+    items: jsonb().$type<PurchaseOrderLineItem[]>().notNull().default(sql`'[]'::jsonb`),
+    notes: text(),
+    /** Set once stock has been added, so we never double-count. */
+    stockAppliedAt: timestamp({ withTimezone: true }),
+    ...timestamps,
+  },
+  (t) => [
+    index("purchase_orders_status_idx").on(t.status),
+    index("purchase_orders_supplier_idx").on(t.supplier),
+  ],
+);
+
 /* ----------------------------------------------------------------- activities */
 
 export const activities = pgTable(
@@ -565,6 +619,8 @@ export type NewProduct = typeof products.$inferInsert;
 export type Deal = typeof deals.$inferSelect;
 export type NewDeal = typeof deals.$inferInsert;
 export type Document = typeof documents.$inferSelect;
+export type PurchaseOrder = typeof purchaseOrders.$inferSelect;
+export type NewPurchaseOrder = typeof purchaseOrders.$inferInsert;
 export type Activity = typeof activities.$inferSelect;
 export type HoldedSyncMap = typeof holdedSyncMap.$inferSelect;
 export type WebhookEvent = typeof webhookEvents.$inferSelect;

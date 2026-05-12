@@ -402,6 +402,15 @@ export async function pullProductsFromHolded(): Promise<PullResult> {
       category: true,
       subcategory: true,
       imageUrl: true,
+      unit: true,
+      // Cost data is maintained CRM-side (from the supplier spreadsheets) —
+      // Holded's cost/purchasePrice fields are unreliable, so never clobber.
+      costEur: true,
+      purchaseCostEur: true,
+      otherCostEur: true,
+      freightCostEur: true,
+      transportCostEur: true,
+      dutyPct: true,
     },
   });
   const byHoldedId = new Map(
@@ -443,6 +452,14 @@ export async function pullProductsFromHolded(): Promise<PullResult> {
         .update(products)
         .set({
           ...base,
+          // CRM-side cost data wins; Holded only fills the blanks.
+          costEur: match.costEur ?? base.costEur,
+          purchaseCostEur: match.purchaseCostEur ?? base.purchaseCostEur,
+          otherCostEur: match.otherCostEur,
+          freightCostEur: match.freightCostEur,
+          transportCostEur: match.transportCostEur,
+          dutyPct: match.dutyPct,
+          unit: match.unit,
           collection: match.collection ?? inherit?.collection ?? null,
           category: match.category ?? inherit?.category ?? null,
           subcategory: match.subcategory ?? inherit?.subcategory ?? null,
