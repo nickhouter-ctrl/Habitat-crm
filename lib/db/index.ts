@@ -26,7 +26,11 @@ const client =
   postgres(connectionString ?? "postgres://localhost:5432/habitat_crm_unconfigured", {
     prepare: false,
     max: 1,
-    idle_timeout: 20,
+    // Release the pooled connection quickly when the (serverless) instance is
+    // idle, and recycle long-lived ones, so we don't hold Supavisor slots.
+    idle_timeout: 5,
+    max_lifetime: 60 * 5,
+    connect_timeout: 15,
   });
 
 if (process.env.NODE_ENV !== "production") globalForDb.__habitatPg = client;
