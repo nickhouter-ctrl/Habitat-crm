@@ -18,14 +18,16 @@ import {
   contacts,
   documents,
   holdedSyncMap,
+  products,
   type DocumentLineItem,
 } from "@/lib/db/schema";
 
-import { holded } from "./client";
+import { holded, holdedListAll } from "./client";
 import type {
   HoldedContact,
   HoldedDocType,
   HoldedDocument,
+  HoldedProduct,
   HoldedWebhookPayload,
 } from "./types";
 
@@ -355,6 +357,114 @@ export async function pullDocumentsFromHolded(
   return { created, updated, total };
 }
 
+/* --------------------------------------------------------- products (pull) */
+
+function vatFromTaxes(taxes: string[] | undefined): number {
+  const code = taxes?.find((t) => /iva/i.test(t)) ?? taxes?.[0];
+  const m = code?.match(/(\d+)/);
+  return m ? Number(m[1]) : 21;
+}
+
+/** Coerce a possibly-string/empty Holded numeric to a clean decimal string, or null. */
+function numOrNull(v: unknown): string | null {
+  if (v === null || v === undefined || v === "") return null;
+  const n = Number(v);
+  return Number.isFinite(n) ? String(n) : null;
+}
+
+/** Normalise a product name for fuzzy matching (lowercase, drop accents/dashes, collapse spaces). */
+function normName(s: string): string {
+  return s
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[—–-]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+/**
+ * Pull the Holded product catalogue into the CRM `products` table. Holded is the
+ * source of truth for products / stock / prices / barcodes; the CRM keeps its own
+ * categorisation (collection/category) and image URL, which it inherits by name
+ * from the earlier website import where possible.
+ */
+export async function pullProductsFromHolded(): Promise<PullResult> {
+  const remote = await holdedListAll((page) => holded.products.list({ page }));
+
+  const existing = await db.query.products.findMany({
+    columns: {
+      id: true,
+      name: true,
+      holdedProductId: true,
+      barcode: true,
+      collection: true,
+      category: true,
+      subcategory: true,
+      imageUrl: true,
+    },
+  });
+  const byHoldedId = new Map(
+    existing.filter((p) => p.holdedProductId).map((p) => [p.holdedProductId!, p]),
+  );
+  const byBarcode = new Map(
+    existing.filter((p) => p.barcode).map((p) => [p.barcode!, p]),
+  );
+  const byName = new Map<string, (typeof existing)[number]>();
+  for (const p of existing) {
+    const k = normName(p.name);
+    if (!byName.has(k)) byName.set(k, p);
+  }
+
+  let created = 0;
+  let updated = 0;
+  for (const rp of remote as HoldedProduct[]) {
+    const inherit = byName.get(normName(rp.name));
+    const base = {
+      name: rp.name,
+      sku: rp.sku?.trim() || null,
+      barcode: rp.barcode?.trim() || null,
+      priceEur: numOrNull(rp.price),
+      vatRate: vatFromTaxes(rp.taxes),
+      costEur: numOrNull(rp.cost),
+      purchaseCostEur: numOrNull(rp.purchasePrice),
+      stockQty: rp.hasStock ? numOrNull(rp.stock) : null,
+      description: rp.desc?.trim() || null,
+      holdedProductId: rp.id,
+      isActive: rp.forSale !== false,
+    };
+    const match =
+      byHoldedId.get(rp.id) ??
+      (rp.barcode ? byBarcode.get(rp.barcode.trim()) : undefined) ??
+      byName.get(normName(rp.name));
+
+    if (match && (!match.holdedProductId || match.holdedProductId === rp.id)) {
+      await db
+        .update(products)
+        .set({
+          ...base,
+          collection: match.collection ?? inherit?.collection ?? null,
+          category: match.category ?? inherit?.category ?? null,
+          subcategory: match.subcategory ?? inherit?.subcategory ?? null,
+          imageUrl: match.imageUrl ?? inherit?.imageUrl ?? null,
+        })
+        .where(eq(products.id, match.id));
+      match.holdedProductId = rp.id; // claim it for the rest of this run
+      updated++;
+    } else {
+      await db.insert(products).values({
+        ...base,
+        collection: inherit?.collection ?? null,
+        category: inherit?.category ?? null,
+        subcategory: inherit?.subcategory ?? null,
+        imageUrl: inherit?.imageUrl ?? null,
+      });
+      created++;
+    }
+  }
+  return { created, updated, total: remote.length };
+}
+
 /* ---------------------------------------------------------- push (stubbed) */
 
 /**
@@ -406,6 +516,10 @@ export async function handleHoldedWebhook(
   const name = String(payload.name ?? payload.event ?? "").toLowerCase();
   if (!name) return;
 
+  if (name.includes("product") || name.includes("stock") || name.includes("warehouse")) {
+    await pullProductsFromHolded();
+    return;
+  }
   if (name.includes("contact")) {
     await pullContactsFromHolded();
     return;

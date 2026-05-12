@@ -4,9 +4,13 @@ import { revalidatePath } from "next/cache";
 
 import { auth } from "@/auth";
 
-import { pullContactsFromHolded, pullDocumentsFromHolded } from "./sync";
+import {
+  pullContactsFromHolded,
+  pullDocumentsFromHolded,
+  pullProductsFromHolded,
+} from "./sync";
 
-/** Pull contacts + financial documents from Holded into the CRM. */
+/** Pull products, contacts and financial documents from Holded into the CRM. */
 export async function syncHoldedNow(): Promise<{ ok: boolean; message: string }> {
   const session = await auth();
   if (!session?.user) {
@@ -17,16 +21,24 @@ export async function syncHoldedNow(): Promise<{ ok: boolean; message: string }>
   }
 
   try {
+    const products = await pullProductsFromHolded();
     const contacts = await pullContactsFromHolded();
     const docs = await pullDocumentsFromHolded(["estimate", "invoice"]);
 
-    for (const path of ["/", "/contacts", "/quotes", "/invoices", "/settings"]) {
+    for (const path of [
+      "/",
+      "/contacts",
+      "/products",
+      "/quotes",
+      "/invoices",
+      "/settings",
+    ]) {
       revalidatePath(path);
     }
 
     return {
       ok: true,
-      message: `Contacten +${contacts.created}/~${contacts.updated} · documenten +${docs.created}/~${docs.updated}.`,
+      message: `Producten +${products.created}/~${products.updated} · contacten +${contacts.created}/~${contacts.updated} · documenten +${docs.created}/~${docs.updated}.`,
     };
   } catch (err) {
     return {

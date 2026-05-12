@@ -10,6 +10,7 @@ import type {
   HoldedContact,
   HoldedDocType,
   HoldedDocument,
+  HoldedProduct,
 } from "./types";
 
 const BASE = (process.env.HOLDED_API_BASE ?? "https://api.holded.com/api").replace(
@@ -124,6 +125,28 @@ export const holded = {
         body,
       }),
   },
+
+  products: {
+    list: (query?: Query) =>
+      request<HoldedProduct[]>("/invoicing/v1/products", { query }),
+    get: (id: string) =>
+      request<HoldedProduct>(`/invoicing/v1/products/${id}`),
+  },
 };
+
+/** Fetch all pages of a paginated list endpoint (Holded uses `?page=N`). */
+export async function holdedListAll<T>(
+  fetchPage: (page: number) => Promise<T[]>,
+  maxPages = 50,
+): Promise<T[]> {
+  const all: T[] = [];
+  for (let page = 1; page <= maxPages; page++) {
+    const batch = await fetchPage(page);
+    if (!Array.isArray(batch) || batch.length === 0) break;
+    all.push(...batch);
+    if (batch.length < 100) break; // last (partial) page — heuristic
+  }
+  return all;
+}
 
 export type HoldedClient = typeof holded;

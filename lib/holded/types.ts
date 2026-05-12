@@ -51,6 +51,29 @@ export interface HoldedContact {
   updateHash?: string;
 }
 
+export interface HoldedProduct {
+  id: string;
+  kind?: string; // "simple" | "variants" | ...
+  name: string;
+  desc?: string;
+  sku?: string;
+  barcode?: string;
+  price?: number; // sales price, ex. VAT
+  taxes?: string[]; // e.g. ["s_iva_21"]
+  total?: number; // incl. VAT
+  hasStock?: boolean;
+  stock?: number;
+  cost?: number; // cost price
+  purchasePrice?: number; // last purchase price
+  weight?: number;
+  tags?: string[];
+  categoryId?: string;
+  factoryCode?: string;
+  forSale?: boolean;
+  forPurchase?: boolean;
+  updateHash?: string;
+}
+
 export interface HoldedAddress {
   address?: string;
   city?: string;
