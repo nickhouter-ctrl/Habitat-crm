@@ -107,7 +107,11 @@ export function DocumentForm({
   const items = rowsToItems(rows);
   const totals = computeTotals(items);
 
-  const today = new Date().toISOString().slice(0, 10);
+  const now = new Date();
+  const today = now.toISOString().slice(0, 10);
+  const due = new Date(now);
+  due.setDate(due.getDate() + 30); // default term / validity: 30 days
+  const defaultDueDate = due.toISOString().slice(0, 10);
 
   const patchRow = (i: number, patch: Partial<Row>) =>
     setRows((rs) => rs.map((r, idx) => (idx === i ? { ...r, ...patch } : r)));
@@ -165,7 +169,7 @@ export function DocumentForm({
                 id="dueDate"
                 name="dueDate"
                 type="date"
-                defaultValue={doc?.dueDate ?? ""}
+                defaultValue={doc?.dueDate ?? defaultDueDate}
               />
             </Field>
           </div>

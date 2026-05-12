@@ -10,8 +10,12 @@ for (const file of [".env", ".env.local"]) {
 }
 
 // `generate` only needs the schema; `migrate`/`push`/`studio` need a real URL.
+// Prefer DIRECT_URL (session pooler / direct) — drizzle-kit needs advisory locks,
+// which the transaction pooler doesn't support.
 const url =
-  process.env.DATABASE_URL ?? "postgres://localhost:5432/habitat_crm_unset";
+  process.env.DIRECT_URL ??
+  process.env.DATABASE_URL ??
+  "postgres://localhost:5432/habitat_crm_unset";
 
 export default defineConfig({
   schema: "./lib/db/schema.ts",
