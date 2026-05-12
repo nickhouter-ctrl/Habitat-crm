@@ -6,7 +6,7 @@ import { ProductForm } from "@/components/product-form";
 import { Button, PageHeader } from "@/components/ui";
 import { db } from "@/lib/db";
 import { products } from "@/lib/db/schema";
-import { getProductCategories } from "../../../_options";
+import { getProductCategories, getProductCollections } from "../../../_options";
 import { deleteProduct, updateProduct } from "../../actions";
 
 export const metadata = { title: "Product bewerken" };
@@ -21,8 +21,9 @@ export default async function EditProductPage({
   const { id } = await params;
   const sp = await searchParams;
 
-  const [product, categories] = await Promise.all([
+  const [product, collections, categories] = await Promise.all([
     db.query.products.findFirst({ where: eq(products.id, id) }),
+    getProductCollections(),
     getProductCategories(),
   ]);
   if (!product) notFound();
@@ -54,6 +55,7 @@ export default async function EditProductPage({
       <ProductForm
         action={update}
         product={product}
+        collections={collections}
         categories={categories}
         submitLabel="Wijzigingen opslaan"
       />

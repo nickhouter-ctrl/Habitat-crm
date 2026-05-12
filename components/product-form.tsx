@@ -14,6 +14,7 @@ import { PRODUCT_UNITS } from "@/lib/products";
 export function ProductForm({
   action,
   product,
+  collections,
   categories,
   submitLabel = "Opslaan",
 }: {
@@ -22,6 +23,7 @@ export function ProductForm({
     Product,
     | "name"
     | "sku"
+    | "collection"
     | "category"
     | "subcategory"
     | "unit"
@@ -32,6 +34,7 @@ export function ProductForm({
     | "imageUrl"
     | "isActive"
   >;
+  collections: string[];
   categories: string[];
   submitLabel?: string;
 }) {
@@ -54,17 +57,30 @@ export function ProductForm({
             </Field>
           </div>
 
-          <div className="grid gap-4 sm:grid-cols-2">
+          <div className="grid gap-4 sm:grid-cols-3">
+            <Field
+              label="Collectie"
+              hint="Bovenste indeling — bv. Wandpanelen / Badkamer / Accessoires."
+            >
+              <Combobox
+                name="collection"
+                allowCustom
+                clearable
+                defaultValue={product?.collection ?? ""}
+                placeholder="bv. Wandpanelen"
+                options={collections.map((c) => ({ value: c, label: c }))}
+              />
+            </Field>
             <Field
               label="Categorie"
-              hint="Groepeert producten, bv. &quot;Magic Stone&quot;. Typ een nieuwe of kies een bestaande."
+              hint="Productfamilie, bv. &quot;Italian Travertine&quot;."
             >
               <Combobox
                 name="category"
                 allowCustom
                 clearable
                 defaultValue={product?.category ?? ""}
-                placeholder="bv. Magic Stone"
+                placeholder="bv. Italian Travertine"
                 options={categories.map((c) => ({ value: c, label: c }))}
               />
             </Field>

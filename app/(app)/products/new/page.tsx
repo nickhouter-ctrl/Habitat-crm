@@ -2,7 +2,7 @@ import Link from "next/link";
 
 import { ProductForm } from "@/components/product-form";
 import { PageHeader } from "@/components/ui";
-import { getProductCategories } from "../../_options";
+import { getProductCategories, getProductCollections } from "../../_options";
 import { createProduct } from "../actions";
 
 export const metadata = { title: "Nieuw product" };
@@ -13,7 +13,10 @@ export default async function NewProductPage({
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const params = await searchParams;
-  const categories = await getProductCategories();
+  const [collections, categories] = await Promise.all([
+    getProductCollections(),
+    getProductCategories(),
+  ]);
 
   return (
     <>
@@ -31,7 +34,12 @@ export default async function NewProductPage({
           Controleer de gegevens (naam verplicht; geldige URL?).
         </p>
       )}
-      <ProductForm action={createProduct} categories={categories} submitLabel="Product aanmaken" />
+      <ProductForm
+        action={createProduct}
+        collections={collections}
+        categories={categories}
+        submitLabel="Product aanmaken"
+      />
     </>
   );
 }

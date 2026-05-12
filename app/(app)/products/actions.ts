@@ -21,6 +21,7 @@ const int = z.preprocess(
 const productSchema = z.object({
   name: z.string().trim().min(1).max(300),
   sku: z.string().trim().max(60).optional().or(z.literal("")),
+  collection: z.string().trim().max(120).optional().or(z.literal("")),
   category: z.string().trim().max(120).optional().or(z.literal("")),
   subcategory: z.string().trim().max(120).optional().or(z.literal("")),
   unit: z.string().trim().max(20).optional().or(z.literal("")),
@@ -36,6 +37,7 @@ function toValues(v: z.infer<typeof productSchema>) {
   return {
     name: v.name,
     sku: v.sku || null,
+    collection: v.collection || null,
     category: v.category || null,
     subcategory: v.subcategory || null,
     unit: v.unit || null,

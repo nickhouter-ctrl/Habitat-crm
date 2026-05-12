@@ -69,6 +69,16 @@ export async function getProductCategories(): Promise<string[]> {
     .filter((c): c is string => Boolean(c));
 }
 
+export async function getProductCollections(): Promise<string[]> {
+  const rows = await db
+    .selectDistinct({ collection: products.collection })
+    .from(products)
+    .orderBy(asc(products.collection));
+  return rows
+    .map((r) => r.collection?.trim())
+    .filter((c): c is string => Boolean(c));
+}
+
 export async function getDealFormOptions() {
   const [c, p, u] = await Promise.all([listContacts(), listProperties(), listUsers()]);
   return { contacts: c, properties: p, users: u };

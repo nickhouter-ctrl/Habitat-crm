@@ -1,4 +1,4 @@
-import { asc, ilike, or } from "drizzle-orm";
+import { and, asc, eq, ilike, or } from "drizzle-orm";
 import { Search } from "lucide-react";
 import Link from "next/link";
 
@@ -18,7 +18,8 @@ import {
 } from "@/components/ui";
 import { db } from "@/lib/db";
 import { products } from "@/lib/db/schema";
-import { formatEUR } from "@/lib/utils";
+import { cn, formatEUR } from "@/lib/utils";
+import { getProductCollections } from "../_options";
 
 export const metadata = { title: "Producten" };
 
@@ -29,15 +30,23 @@ export default async function ProductsPage({
 }) {
   const params = await searchParams;
   const q = typeof params.q === "string" ? params.q.trim() : "";
+  const collectionParam =
+    typeof params.collection === "string" ? params.collection.trim() : "";
+
+  const allCollections = await getProductCollections();
+  const collection = allCollections.includes(collectionParam) ? collectionParam : "";
 
   const rows = await db.query.products.findMany({
-    where: q
-      ? or(
-          ilike(products.name, `%${q}%`),
-          ilike(products.category, `%${q}%`),
-          ilike(products.sku, `%${q}%`),
-        )
-      : undefined,
+    where: and(
+      collection ? eq(products.collection, collection) : undefined,
+      q
+        ? or(
+            ilike(products.name, `%${q}%`),
+            ilike(products.category, `%${q}%`),
+            ilike(products.sku, `%${q}%`),
+          )
+        : undefined,
+    ),
     orderBy: [asc(products.category), asc(products.name)],
     limit: 1000,
   });
@@ -50,20 +59,58 @@ export default async function ProductsPage({
     groups.get(key)!.push(p);
   }
 
+  const tabHref = (col: string) => {
+    const sp = new URLSearchParams();
+    if (q) sp.set("q", q);
+    if (col) sp.set("collection", col);
+    const s = sp.toString();
+    return s ? `/products?${s}` : "/products";
+  };
+
   return (
     <>
       <PageHeader
         title="Producten"
         subtitle={`${rows.length} ${rows.length === 1 ? "product" : "producten"}${
-          q ? ` voor "${q}"` : ""
-        }`}
+          collection ? ` in ${collection}` : ""
+        }${q ? ` voor "${q}"` : ""}`}
         actions={<LinkButton href="/products/new">Nieuw product</LinkButton>}
       />
 
-      <form className="relative mb-4 max-w-sm" action="/products">
-        <Search className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted" />
-        <Input name="q" defaultValue={q} placeholder="Zoek op naam, categorie of SKU…" className="pl-8" />
-      </form>
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+        <div className="flex flex-wrap gap-1">
+          <Link
+            href={tabHref("")}
+            className={cn(
+              "rounded-md px-3 py-1.5 text-sm transition-colors",
+              !collection
+                ? "bg-accent/10 font-medium text-accent"
+                : "text-muted hover:bg-surface hover:text-foreground",
+            )}
+          >
+            Alle
+          </Link>
+          {allCollections.map((col) => (
+            <Link
+              key={col}
+              href={tabHref(col)}
+              className={cn(
+                "rounded-md px-3 py-1.5 text-sm transition-colors",
+                collection === col
+                  ? "bg-accent/10 font-medium text-accent"
+                  : "text-muted hover:bg-surface hover:text-foreground",
+              )}
+            >
+              {col}
+            </Link>
+          ))}
+        </div>
+        <form className="relative max-w-xs flex-1 sm:flex-none" action="/products">
+          {collection && <input type="hidden" name="collection" value={collection} />}
+          <Search className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted" />
+          <Input name="q" defaultValue={q} placeholder="Zoek op naam, categorie of SKU…" className="w-64 pl-8" />
+        </form>
+      </div>
 
       {rows.length === 0 ? (
         <EmptyState

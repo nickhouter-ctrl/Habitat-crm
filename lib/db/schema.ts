@@ -303,7 +303,9 @@ export const products = pgTable(
       .default(sql`gen_random_uuid()`),
     name: text().notNull(),
     sku: text(),
-    category: text(), // e.g. "Magic Stone", "Tegels — wand", "Diensten — montage"
+    /** Top-level group / department, e.g. "Wandpanelen", "Badkamer", "Accessoires". */
+    collection: text(),
+    category: text(), // e.g. "Italian Travertine", "Magic Stone" — the product family
     subcategory: text(),
     unit: text(), // "m²", "stuk", "m", "uur", ...
     priceEur: numeric({ precision: 14, scale: 2 }), // default sales price, ex. VAT
@@ -317,6 +319,7 @@ export const products = pgTable(
     ...timestamps,
   },
   (t) => [
+    index("products_collection_idx").on(t.collection),
     index("products_category_idx").on(t.category),
     index("products_name_idx").on(t.name),
     uniqueIndex("products_holded_id_idx").on(t.holdedProductId),
