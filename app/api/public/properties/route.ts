@@ -1,24 +1,23 @@
-import { and, desc, eq, ne } from "drizzle-orm";
+import { desc, eq } from "drizzle-orm";
 import { NextResponse } from "next/server";
 
 import { db } from "@/lib/db";
 import { properties } from "@/lib/db/schema";
 
-// Runs per request (the marketing site does its own ISR + on-demand revalidation).
+// Always fresh — the marketing site reads this with `no-store`, so unpublishing
+// or changing a property's status shows up right away.
 export const dynamic = "force-dynamic";
+export const revalidate = 0;
 
 /**
- * Public read-only feed of published properties — consumed by the marketing
- * site (habitat-one). No auth: only `isPublished` properties, and "sold"/
- * "withdrawn" ones are omitted.
+ * Public read-only feed of properties — consumed by the marketing site
+ * (habitat-one). No auth. Returns every property with `isPublished = true`
+ * (any status); the site shows available ones in the main grid and
+ * sold/withdrawn ones in a separate "no longer available" section.
  */
 export async function GET() {
   const rows = await db.query.properties.findMany({
-    where: and(
-      eq(properties.isPublished, true),
-      ne(properties.status, "sold"),
-      ne(properties.status, "withdrawn"),
-    ),
+    where: eq(properties.isPublished, true),
     orderBy: [desc(properties.updatedAt)],
     columns: {
       id: true,
@@ -43,8 +42,7 @@ export async function GET() {
     {
       headers: {
         "access-control-allow-origin": "*",
-        "cache-control":
-          "public, s-maxage=60, stale-while-revalidate=600",
+        "cache-control": "no-store, max-age=0",
       },
     },
   );
