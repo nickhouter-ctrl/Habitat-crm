@@ -7,13 +7,7 @@
  *
  * Env (optional): SEED_ADMIN_EMAIL, SEED_ADMIN_PASSWORD
  */
-for (const file of [".env", ".env.local"]) {
-  try {
-    process.loadEnvFile(file);
-  } catch {
-    /* not present */
-  }
-}
+import "./load-env"; // must be first — loads .env.local before lib/db is evaluated
 
 import { count } from "drizzle-orm";
 
