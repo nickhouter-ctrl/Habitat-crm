@@ -4,6 +4,7 @@ import Link from "next/link";
 
 import {
   Badge,
+  buttonClass,
   Card,
   EmptyState,
   Input,
@@ -85,18 +86,22 @@ export default async function ProductsPage({
         }${q ? ` voor "${q}"` : ""}`}
         actions={
           <>
-            <LinkButton
-              href={`/print-labels${(() => {
-                const sp = new URLSearchParams();
-                if (collection) sp.set("collection", collection);
-                if (q) sp.set("q", q);
-                const s = sp.toString();
-                return s ? `?${s}` : "";
-              })()}`}
-              variant="secondary"
-            >
-              Labels printen
-            </LinkButton>
+            {(() => {
+              const sp = new URLSearchParams();
+              if (collection) sp.set("collection", collection);
+              if (q) sp.set("q", q);
+              const qs = sp.toString() ? `?${sp.toString()}` : "";
+              return (
+                <>
+                  <a href={`/products/export${qs}`} className={buttonClass({ variant: "secondary" })} download>
+                    Excel downloaden
+                  </a>
+                  <LinkButton href={`/print-labels${qs}`} variant="secondary">
+                    Labels printen
+                  </LinkButton>
+                </>
+              );
+            })()}
             <LinkButton href="/products/new">Nieuw product</LinkButton>
           </>
         }
