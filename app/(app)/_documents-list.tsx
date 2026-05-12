@@ -56,6 +56,7 @@ export async function DocumentsList({
 
   const sign = (k: Kind) => (k === "creditnote" ? -1 : 1);
   const total = rows.reduce((s, d) => s + sign(d.kind) * Number(d.totalEur ?? 0), 0);
+  const paid = rows.reduce((s, d) => s + sign(d.kind) * Number(d.paidEur ?? 0), 0);
   const outstanding = rows
     .filter((d) => d.kind !== "creditnote" && d.status !== "paid" && d.status !== "void")
     .reduce((s, d) => s + (Number(d.totalEur ?? 0) - Number(d.paidEur ?? 0)), 0);
@@ -75,9 +76,10 @@ export async function DocumentsList({
         }
       />
 
-      <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-3">
+      <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
         <StatTile label="Aantal" value={rows.length} />
-        <StatTile label="Totaalbedrag" value={formatEUR(total)} />
+        <StatTile label="Totaalbedrag" value={formatEUR(total)} hint={showKindColumn ? "facturen − creditnota's" : undefined} />
+        <StatTile label="Betaald" value={formatEUR(paid)} />
         <StatTile label="Openstaand" value={formatEUR(outstanding)} />
       </div>
 

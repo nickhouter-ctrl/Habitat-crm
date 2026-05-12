@@ -1,4 +1,4 @@
-import { and, asc, eq, ilike, or } from "drizzle-orm";
+import { and, asc, eq, ilike, or, sql } from "drizzle-orm";
 import { Search } from "lucide-react";
 import Link from "next/link";
 
@@ -9,6 +9,7 @@ import {
   Input,
   LinkButton,
   PageHeader,
+  StatTile,
   TBody,
   Table,
   Td,
@@ -51,6 +52,14 @@ export default async function ProductsPage({
     limit: 1000,
   });
 
+  const [agg] = await db
+    .select({
+      n: sql<number>`count(*)::int`,
+      stockCostValue: sql<string>`coalesce(sum(coalesce(${products.costEur},0) * coalesce(${products.stockQty},0)), 0)`,
+      stockSaleValue: sql<string>`coalesce(sum(coalesce(${products.priceEur},0) * coalesce(${products.stockQty},0)), 0)`,
+    })
+    .from(products);
+
   // Group by category for the display.
   const groups = new Map<string, typeof rows>();
   for (const p of rows) {
@@ -92,6 +101,12 @@ export default async function ProductsPage({
           </>
         }
       />
+
+      <div className="mb-5 grid grid-cols-2 gap-3 sm:grid-cols-3">
+        <StatTile label="Producten (totaal)" value={agg.n} />
+        <StatTile label="Voorraadwaarde (kostprijs)" value={formatEUR(agg.stockCostValue)} hint="kostprijs × voorraad" />
+        <StatTile label="Voorraadwaarde (verkoop)" value={formatEUR(agg.stockSaleValue)} hint="verkoopprijs × voorraad" />
+      </div>
 
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <div className="flex flex-wrap gap-1">

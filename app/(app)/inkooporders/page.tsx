@@ -7,6 +7,7 @@ import {
   EmptyState,
   LinkButton,
   PageHeader,
+  StatTile,
   TBody,
   Table,
   Td,
@@ -16,7 +17,8 @@ import {
 } from "@/components/ui";
 import { db } from "@/lib/db";
 import { purchaseOrders } from "@/lib/db/schema";
-import { formatMoney, PO_STATUS_META } from "@/lib/purchase-orders";
+import { formatMoney, PO_OPEN_STATUSES, PO_STATUS_META } from "@/lib/purchase-orders";
+import { formatEUR } from "@/lib/utils";
 
 export const metadata = { title: "Inkooporders" };
 
@@ -28,20 +30,39 @@ export default async function PurchaseOrdersPage() {
     .select()
     .from(purchaseOrders)
     .orderBy(desc(purchaseOrders.orderDate), desc(purchaseOrders.createdAt))
-    .limit(500);
+    .limit(2000);
+
+  const eurRows = rows.filter((r) => (r.currency ?? "EUR") === "EUR");
+  const sum = (rs: typeof eurRows) => rs.reduce((s, r) => s + Number(r.total ?? 0), 0);
+  const totalEur = sum(eurRows);
+  const open = rows.filter((r) => PO_OPEN_STATUSES.includes(r.status));
+  const received = rows.filter((r) => r.status === "received");
+  const nonEur = rows.filter((r) => (r.currency ?? "EUR") !== "EUR");
 
   return (
     <>
       <PageHeader
         title="Inkooporders"
-        subtitle="Binnenkomende leveranciersbestellingen — bij ‘ontvangen’ wordt de voorraad bijgewerkt."
+        subtitle={
+          `${rows.length} ${rows.length === 1 ? "bestelling/aankoop" : "bestellingen/aankopen"} — incl. aankoopfacturen uit Holded` +
+          (nonEur.length ? ` · ${nonEur.length} in vreemde valuta (niet in het totaal)` : "")
+        }
         actions={<LinkButton href="/inkooporders/new">Nieuwe bestelling</LinkButton>}
       />
+
+      {rows.length > 0 && (
+        <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
+          <StatTile label="Aantal" value={rows.length} />
+          <StatTile label="Totaal (EUR)" value={formatEUR(totalEur)} hint="alle aankopen samen" />
+          <StatTile label="Onderweg" value={open.length} hint={open.length ? formatEUR(sum(open.filter((r) => (r.currency ?? "EUR") === "EUR"))) : "—"} />
+          <StatTile label="Ontvangen / gefactureerd" value={received.length} hint={formatEUR(sum(received.filter((r) => (r.currency ?? "EUR") === "EUR")))} />
+        </div>
+      )}
 
       {rows.length === 0 ? (
         <EmptyState
           title="Nog geen inkooporders"
-          description="Voeg een leveranciersbestelling toe (bv. een KKR/Magic Stone proforma) om aankomende voorraad bij te houden."
+          description="Voeg een leveranciersbestelling toe (bv. een KKR/Magic Stone proforma) of synchroniseer met Holded om aankoopfacturen op te halen."
           action={<LinkButton href="/inkooporders/new">Nieuwe bestelling</LinkButton>}
         />
       ) : (
@@ -51,7 +72,7 @@ export default async function PurchaseOrdersPage() {
               <tr>
                 <Th>Leverancier</Th>
                 <Th>Referentie</Th>
-                <Th>Besteld</Th>
+                <Th>Datum</Th>
                 <Th>Verwacht</Th>
                 <Th className="text-right">Regels</Th>
                 <Th className="text-right">Totaal</Th>

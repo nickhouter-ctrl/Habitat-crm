@@ -43,7 +43,7 @@ export default async function DashboardPage() {
 
   const openExpr = sql`${documents.status} not in ('paid', 'void', 'draft')`;
 
-  const [[contactsTotal], pipelineRows, [docAgg], openPurchaseOrders, recentDeals, recentActivity] =
+  const [[contactsTotal], pipelineRows, [docAgg], [purchaseAgg], openPurchaseOrders, recentDeals, recentActivity] =
     await Promise.all([
       db.select({ n: count() }).from(contacts),
       db
@@ -57,6 +57,7 @@ export default async function DashboardPage() {
       db
         .select({
           revenueMonth: sql<string>`coalesce(sum(case when ${documents.status} = 'paid' and ${documents.issueDate} >= ${monthStart} then ${documents.totalEur} else 0 end), 0)`,
+          revenueAll: sql<string>`coalesce(sum(case when ${documents.status} = 'paid' then ${documents.totalEur} else 0 end), 0)`,
           outstandingN: sql<number>`count(case when ${openExpr} then 1 end)::int`,
           outstandingV: sql<string>`coalesce(sum(case when ${openExpr} then ${documents.totalEur} - ${documents.paidEur} else 0 end), 0)`,
           overdueN: sql<number>`count(case when ${openExpr} and ${documents.dueDate} < ${today} then 1 end)::int`,
@@ -64,6 +65,12 @@ export default async function DashboardPage() {
         })
         .from(documents)
         .where(eq(documents.kind, "invoice")),
+      db
+        .select({
+          n: count(),
+          totalEur: sql<string>`coalesce(sum(case when ${purchaseOrders.currency} = 'EUR' then ${purchaseOrders.total} else 0 end), 0)`,
+        })
+        .from(purchaseOrders),
       db
         .select()
         .from(purchaseOrders)
@@ -107,14 +114,15 @@ export default async function DashboardPage() {
         actions={<LinkButton href="/contacts/new">Nieuw contact</LinkButton>}
       />
 
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
-        <StatTile label="Contacten" value={contactsTotal.n} />
-        <StatTile label="Open deals" value={openDeals.n} hint="lopende projecten" />
-        <StatTile label="Pijplijnwaarde" value={formatEUR(openDeals.value)} />
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+        <StatTile label="Totale omzet" value={formatEUR(docAgg.revenueAll)} hint="betaalde facturen, totaal" />
+        <StatTile label="Totale inkoop" value={formatEUR(purchaseAgg.totalEur)} hint={`${purchaseAgg.n} aankopen`} />
         <StatTile label="Omzet deze maand" value={formatEUR(docAgg.revenueMonth)} hint="betaalde facturen" />
         <StatTile label="Openstaande facturen" value={docAgg.outstandingN} hint={formatEUR(docAgg.outstandingV)} />
         <StatTile label="Vervallen facturen" value={docAgg.overdueN} hint={formatEUR(docAgg.overdueV)} />
+        <StatTile label="Pijplijnwaarde" value={formatEUR(openDeals.value)} hint={`${openDeals.n} open deals`} />
         <StatTile label="Inkooporders onderweg" value={openPurchaseOrders.length} hint="aankomende voorraad" />
+        <StatTile label="Contacten" value={contactsTotal.n} />
       </div>
 
       <Card className="mt-6">
