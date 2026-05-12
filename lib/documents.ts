@@ -24,8 +24,18 @@ function round2(n: number): number {
   return Math.round((n + Number.EPSILON) * 100) / 100;
 }
 
-export function lineNet(item: Pick<DocumentLineItem, "units" | "price">): number {
-  return round2((Number(item.units) || 0) * (Number(item.price) || 0));
+function clampPct(v: unknown): number {
+  const n = Number(v) || 0;
+  return Math.min(100, Math.max(0, n));
+}
+
+/** Effective unit price after the line discount. */
+export function lineUnitPrice(item: Pick<DocumentLineItem, "price" | "discount">): number {
+  return round2((Number(item.price) || 0) * (1 - clampPct(item.discount) / 100));
+}
+
+export function lineNet(item: Pick<DocumentLineItem, "units" | "price" | "discount">): number {
+  return round2((Number(item.units) || 0) * lineUnitPrice(item));
 }
 
 export function lineTax(item: DocumentLineItem): number {
@@ -63,6 +73,7 @@ export function normaliseLineItem(raw: unknown): DocumentLineItem | null {
   if (!name && !units && !price) return null; // empty row
   if (!name) return null;
   const taxRate = r.taxRate === undefined || r.taxRate === null || r.taxRate === "" ? 21 : Number(r.taxRate);
+  const discount = clampPct(r.discount);
   const category =
     typeof r.category === "string" && LINE_CATEGORY_VALUES.includes(r.category)
       ? r.category
@@ -79,6 +90,7 @@ export function normaliseLineItem(raw: unknown): DocumentLineItem | null {
         : undefined,
     units: Number.isFinite(units) && units > 0 ? units : 1,
     price: Number.isFinite(price) ? round2(price) : 0,
+    discount: discount > 0 ? round2(discount) : undefined,
     taxRate: Number.isFinite(taxRate) && taxRate >= 0 ? taxRate : 21,
     category,
     productId,

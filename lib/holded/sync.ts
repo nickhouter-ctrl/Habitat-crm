@@ -160,6 +160,7 @@ export function mapHoldedDocumentToLocal(
     description: p.desc,
     units: p.units ?? 1,
     price: p.price ?? 0,
+    discount: typeof p.discount === "number" && p.discount > 0 ? p.discount : undefined,
     taxRate: p.tax,
   }));
   return {

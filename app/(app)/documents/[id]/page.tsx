@@ -301,6 +301,7 @@ export default async function DocumentDetailPage({
                       <Th>Categorie</Th>
                       <Th className="text-right">Aantal</Th>
                       <Th className="text-right">Prijs</Th>
+                      <Th className="text-right">Korting</Th>
                       <Th className="text-right">BTW%</Th>
                       <Th className="text-right">Netto</Th>
                       <Th className="text-right">BTW</Th>
@@ -318,6 +319,9 @@ export default async function DocumentDetailPage({
                         <Td className="text-muted">{labelForCategory(it.category)}</Td>
                         <Td className="text-right tabular-nums">{it.units}</Td>
                         <Td className="text-right tabular-nums">{formatEUR(it.price)}</Td>
+                        <Td className="text-right tabular-nums text-muted">
+                          {it.discount ? `${it.discount}%` : "—"}
+                        </Td>
                         <Td className="text-right tabular-nums">{it.taxRate ?? 0}%</Td>
                         <Td className="text-right tabular-nums">{formatEUR(lineNet(it))}</Td>
                         <Td className="text-right tabular-nums text-muted">

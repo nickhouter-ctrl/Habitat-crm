@@ -382,7 +382,9 @@ export type DocumentLineItem = {
   name: string;
   description?: string;
   units: number;
-  price: number; // unit price, EUR, ex. VAT
+  price: number; // unit price, EUR, ex. VAT (before discount)
+  /** Line discount, percent (0–100). */
+  discount?: number;
   taxRate?: number; // IVA percent, e.g. 21 / 10 / 4
   /** Line category — drives the default VAT (materiaal, arbeid, renovatie, ...). */
   category?: string;

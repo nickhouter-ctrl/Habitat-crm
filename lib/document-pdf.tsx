@@ -152,6 +152,9 @@ function DocumentPdf({ doc }: { doc: PdfDoc }) {
               <View style={s.cDesc}>
                 <Text style={s.itemName}>{it.name}</Text>
                 {it.description ? <Text style={s.itemDesc}>{it.description}</Text> : null}
+                {!isDelivery && it.discount ? (
+                  <Text style={s.itemDesc}>Korting {it.discount}%</Text>
+                ) : null}
               </View>
               <Text style={s.cCat}>{labelForCategory(it.category)}</Text>
               <Text style={isDelivery ? s.cAmt : s.cNum}>{it.units}</Text>
