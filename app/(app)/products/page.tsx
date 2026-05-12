@@ -74,7 +74,23 @@ export default async function ProductsPage({
         subtitle={`${rows.length} ${rows.length === 1 ? "product" : "producten"}${
           collection ? ` in ${collection}` : ""
         }${q ? ` voor "${q}"` : ""}`}
-        actions={<LinkButton href="/products/new">Nieuw product</LinkButton>}
+        actions={
+          <>
+            <LinkButton
+              href={`/labels/print${(() => {
+                const sp = new URLSearchParams();
+                if (collection) sp.set("collection", collection);
+                if (q) sp.set("q", q);
+                const s = sp.toString();
+                return s ? `?${s}` : "";
+              })()}`}
+              variant="secondary"
+            >
+              Labels printen
+            </LinkButton>
+            <LinkButton href="/products/new">Nieuw product</LinkButton>
+          </>
+        }
       />
 
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
