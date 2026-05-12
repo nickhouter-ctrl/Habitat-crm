@@ -288,8 +288,10 @@ export async function sendDocument(id: string) {
   if (doc.contact?.email) {
     const mail = offerteEmail({
       lang: doc.contact.preferredLanguage,
+      kind: doc.kind,
       docNumber: doc.docNumber ?? "",
       title: doc.title,
+      contactName: doc.contact.name,
       url,
     });
     const res = await sendEmail({ to: doc.contact.email, ...mail });

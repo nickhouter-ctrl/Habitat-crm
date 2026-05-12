@@ -15,6 +15,8 @@ const nextConfig: NextConfig = {
     // Photo uploads go through Server Actions; default body limit is 1 MB.
     serverActions: { bodySizeLimit: "25mb" },
   },
+  // @react-pdf/renderer is Node-only — don't try to bundle it.
+  serverExternalPackages: ["@react-pdf/renderer"],
 };
 
 export default nextConfig;

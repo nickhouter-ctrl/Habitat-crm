@@ -6,6 +6,7 @@ import { notFound } from "next/navigation";
 import {
   Badge,
   Button,
+  buttonClass,
   Card,
   CardContent,
   CardHeader,
@@ -112,6 +113,14 @@ export default async function DocumentDetailPage({
             <Link href={doc.kind === "invoice" ? "/invoices" : "/quotes"} className="text-sm text-muted hover:underline">
               ← Terug
             </Link>
+            <a
+              href={`/documents/${id}/pdf`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className={buttonClass({ variant: "secondary" })}
+            >
+              PDF
+            </a>
             <LinkButton href={`/documents/${id}/edit`} variant="secondary">
               Bewerken
             </LinkButton>

@@ -121,6 +121,7 @@ export default async function PublicOffertePage({
   const isClosed = doc.status === "void";
   const accept = acceptOfferte.bind(null, token);
   const reject = rejectOfferte.bind(null, token);
+  const pdfHref = `/offerte/${token}/pdf`;
 
   return (
     <main className="mx-auto max-w-2xl px-4 py-10 sm:py-16">
@@ -156,6 +157,9 @@ export default async function PublicOffertePage({
                 {t.for}: {doc.contact.name}
               </div>
             )}
+            <a href={pdfHref} className="mt-1 inline-block text-accent hover:underline">
+              ↓ PDF
+            </a>
           </div>
         </div>
 
