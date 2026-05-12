@@ -61,3 +61,68 @@ export async function deletePropertyImageByUrl(url: string): Promise<void> {
   if (!path) return;
   await supabase().storage.from(BUCKET).remove([path]);
 }
+
+/* ----------------------------------------- purchase-order source documents */
+/* Private bucket — proforma invoices contain bank details, so never public.   */
+
+const PO_BUCKET = process.env.SUPABASE_PO_BUCKET ?? "purchase-order-files";
+const PO_DOC_MIME = new Set([
+  "application/pdf",
+  "image/jpeg",
+  "image/png",
+  "image/webp",
+  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  "application/vnd.ms-excel",
+]);
+
+async function ensurePoBucket() {
+  const sb = supabase();
+  const { data } = await sb.storage.getBucket(PO_BUCKET);
+  if (data) return;
+  await sb.storage.createBucket(PO_BUCKET, { public: false });
+}
+
+function safeName(name: string): string {
+  return name.replace(/[^\w.\- ]+/g, "_").slice(0, 120) || "bestand";
+}
+
+/** Upload one source document for a purchase order; returns storage metadata. */
+export async function uploadPurchaseOrderFile(
+  file: File,
+): Promise<{ name: string; path: string; size: number }> {
+  if (!file || file.size === 0) throw new Error("Leeg bestand.");
+  if (file.type && !PO_DOC_MIME.has(file.type)) {
+    throw new Error(`Niet-ondersteund bestandstype (${file.type}). Gebruik PDF, een afbeelding of Excel.`);
+  }
+  if (file.size > MAX_BYTES) throw new Error("Bestand te groot (max 25 MB).");
+
+  await ensurePoBucket();
+  const path = `${crypto.randomUUID()}-${safeName(file.name)}`;
+  const { error } = await supabase()
+    .storage.from(PO_BUCKET)
+    .upload(path, file, { contentType: file.type || "application/octet-stream", upsert: false });
+  if (error) throw new Error(`Upload mislukt: ${error.message}`);
+  return { name: file.name, path, size: file.size };
+}
+
+/** Short-lived signed download URL for a stored purchase-order file. */
+export async function purchaseOrderFileUrl(path: string, expiresInSec = 3600): Promise<string | null> {
+  try {
+    const { data, error } = await supabase()
+      .storage.from(PO_BUCKET)
+      .createSignedUrl(path, expiresInSec);
+    if (error) return null;
+    return data?.signedUrl ?? null;
+  } catch {
+    return null;
+  }
+}
+
+export async function deletePurchaseOrderFile(path: string): Promise<void> {
+  if (!path) return;
+  try {
+    await supabase().storage.from(PO_BUCKET).remove([path]);
+  } catch {
+    /* best effort */
+  }
+}

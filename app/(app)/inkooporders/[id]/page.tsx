@@ -22,6 +22,7 @@ import {
 import { db } from "@/lib/db";
 import { products, purchaseOrders } from "@/lib/db/schema";
 import { formatMoney, poLineTotal, PO_STATUS_META } from "@/lib/purchase-orders";
+import { purchaseOrderFileUrl } from "@/lib/storage";
 import { deletePurchaseOrder, setPurchaseOrderStatus } from "../actions";
 
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }) {
@@ -52,6 +53,10 @@ export default async function PurchaseOrderPage({ params }: { params: Promise<{ 
         .where(inArray(products.id, linkedIds))
     : [];
   const stockById = new Map(linked.map((p) => [p.id, p.stockQty]));
+
+  const attachments = await Promise.all(
+    (po.attachments ?? []).map(async (a) => ({ ...a, url: await purchaseOrderFileUrl(a.path) })),
+  );
 
   const meta = PO_STATUS_META[po.status];
   const remove = deletePurchaseOrder.bind(null, id);
@@ -149,6 +154,30 @@ export default async function PurchaseOrderPage({ params }: { params: Promise<{ 
               {po.notes && <p className="whitespace-pre-line border-t pt-2 text-muted">{po.notes}</p>}
             </CardContent>
           </Card>
+
+          {attachments.length > 0 && (
+            <Card>
+              <CardHeader>
+                <CardTitle>Bijlagen</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-1.5 text-sm">
+                {attachments.map((a) => (
+                  <div key={a.path} className="flex items-center justify-between gap-2">
+                    {a.url ? (
+                      <a href={a.url} target="_blank" rel="noopener noreferrer" className="truncate text-accent hover:underline">
+                        {a.name}
+                      </a>
+                    ) : (
+                      <span className="truncate text-muted">{a.name}</span>
+                    )}
+                    {a.size != null && (
+                      <span className="shrink-0 text-xs text-muted">{Math.round(a.size / 1024)} kB</span>
+                    )}
+                  </div>
+                ))}
+              </CardContent>
+            </Card>
+          )}
 
           <Card>
             <CardHeader>

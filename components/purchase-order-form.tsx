@@ -1,11 +1,15 @@
 "use client";
 
-import { Plus, Trash2 } from "lucide-react";
-import { useMemo, useState } from "react";
+import { FileText, Loader2, Plus, Trash2, Upload, X } from "lucide-react";
+import { useMemo, useRef, useState } from "react";
 
 import { Combobox, type ComboOption } from "@/components/combobox";
 import { Button, Field, Input, Select, Textarea } from "@/components/ui";
-import type { PurchaseOrder, PurchaseOrderLineItem } from "@/lib/db/schema";
+import type {
+  PurchaseOrder,
+  PurchaseOrderAttachment,
+  PurchaseOrderLineItem,
+} from "@/lib/db/schema";
 import { formatMoney, poLineTotal, PO_STATUS_META } from "@/lib/purchase-orders";
 import { cn } from "@/lib/utils";
 
@@ -46,6 +50,20 @@ function rowsToItems(rows: Row[]): PurchaseOrderLineItem[] {
 
 const CURRENCIES = ["EUR", "USD", "GBP", "CNY"];
 
+type ParseResult = {
+  attachment: PurchaseOrderAttachment;
+  parsed: {
+    supplier?: string;
+    reference?: string;
+    orderDate?: string;
+    expectedDate?: string;
+    currency?: string;
+    items: (PurchaseOrderLineItem & { productId?: string })[];
+  } | null;
+  note?: string;
+  error?: string;
+};
+
 export function PurchaseOrderForm({
   order,
   products,
@@ -55,10 +73,22 @@ export function PurchaseOrderForm({
   products: POProductOption[];
   action: (formData: FormData) => void | Promise<void>;
 }) {
+  const [supplier, setSupplier] = useState(order?.supplier ?? "");
+  const [reference, setReference] = useState(order?.reference ?? "");
+  const [status, setStatus] = useState(order?.status ?? "ordered");
+  const [currency, setCurrency] = useState(order?.currency ?? "EUR");
+  const [orderDate, setOrderDate] = useState(order?.orderDate ?? "");
+  const [expectedDate, setExpectedDate] = useState(order?.expectedDate ?? "");
+  const [notes, setNotes] = useState(order?.notes ?? "");
   const [rows, setRows] = useState<Row[]>(
     order?.items?.length ? order.items.map(toRow) : [toRow({})],
   );
-  const [currency, setCurrency] = useState(order?.currency ?? "EUR");
+  const [attachments, setAttachments] = useState<PurchaseOrderAttachment[]>(
+    order?.attachments ?? [],
+  );
+  const [uploading, setUploading] = useState(false);
+  const [uploadMsg, setUploadMsg] = useState<{ kind: "ok" | "err"; text: string } | null>(null);
+  const fileRef = useRef<HTMLInputElement>(null);
 
   const productOptions = useMemo<ComboOption[]>(
     () =>
@@ -77,9 +107,107 @@ export function PurchaseOrderForm({
   const update = (i: number, patch: Partial<Row>) =>
     setRows((rs) => rs.map((r, idx) => (idx === i ? { ...r, ...patch } : r)));
 
+  async function handleFile(file: File) {
+    setUploading(true);
+    setUploadMsg(null);
+    try {
+      const fd = new FormData();
+      fd.set("file", file);
+      const res = await fetch("/api/inkooporders/parse", { method: "POST", body: fd });
+      const data: ParseResult = await res.json();
+      if (!res.ok || data.error) {
+        setUploadMsg({ kind: "err", text: data.error ?? "Upload mislukt." });
+        return;
+      }
+      setAttachments((a) => [...a, data.attachment]);
+      if (data.parsed) {
+        const p = data.parsed;
+        if (p.supplier && !supplier) setSupplier(p.supplier);
+        if (p.reference && !reference) setReference(p.reference);
+        if (p.currency) setCurrency(p.currency);
+        if (p.orderDate && !orderDate) setOrderDate(p.orderDate);
+        if (p.expectedDate && !expectedDate) setExpectedDate(p.expectedDate);
+        if (p.items.length) {
+          setRows((rs) => {
+            const existing = rowsToItems(rs);
+            const fresh = p.items.map(toRow);
+            // If the form only has the one empty starter row, replace it.
+            return existing.length === 0 ? fresh : [...rs, ...fresh];
+          });
+        }
+      }
+      setUploadMsg({ kind: "ok", text: data.note ?? "Bestand toegevoegd." });
+    } catch {
+      setUploadMsg({ kind: "err", text: "Er ging iets mis bij het uploaden." });
+    } finally {
+      setUploading(false);
+      if (fileRef.current) fileRef.current.value = "";
+    }
+  }
+
   return (
     <form action={action} className="space-y-6">
       <input type="hidden" name="items" value={JSON.stringify(items)} />
+      <input type="hidden" name="attachments" value={JSON.stringify(attachments)} />
+
+      {/* Upload / auto-read */}
+      <div className="rounded-lg border border-dashed bg-surface/50 p-4">
+        <div className="flex flex-wrap items-center gap-3">
+          <Button
+            type="button"
+            variant="secondary"
+            size="sm"
+            disabled={uploading}
+            onClick={() => fileRef.current?.click()}
+          >
+            {uploading ? <Loader2 className="size-4 animate-spin" /> : <Upload className="size-4" />}
+            {uploading ? "Bezig met uitlezen…" : "Proforma / PI uploaden"}
+          </Button>
+          <span className="text-xs text-muted">
+            PDF wordt automatisch uitgelezen (leverancier, regels, aantallen). Excel/afbeelding wordt
+            alleen als bijlage bewaard.
+          </span>
+          <input
+            ref={fileRef}
+            type="file"
+            accept=".pdf,.png,.jpg,.jpeg,.webp,.xlsx,.xls"
+            className="hidden"
+            onChange={(e) => {
+              const f = e.target.files?.[0];
+              if (f) void handleFile(f);
+            }}
+          />
+        </div>
+        {uploadMsg && (
+          <p className={cn("mt-2 text-xs", uploadMsg.kind === "ok" ? "text-accent" : "text-danger")}>
+            {uploadMsg.text}
+          </p>
+        )}
+        {attachments.length > 0 && (
+          <ul className="mt-3 space-y-1">
+            {attachments.map((a, i) => (
+              <li
+                key={a.path}
+                className="flex items-center gap-2 rounded-md bg-background px-2.5 py-1.5 text-sm"
+              >
+                <FileText className="size-4 shrink-0 text-muted" />
+                <span className="flex-1 truncate">{a.name}</span>
+                {a.size != null && (
+                  <span className="text-xs text-muted">{Math.round(a.size / 1024)} kB</span>
+                )}
+                <button
+                  type="button"
+                  onClick={() => setAttachments((arr) => arr.filter((_, idx) => idx !== i))}
+                  className="text-muted hover:text-danger"
+                  aria-label="Bijlage verwijderen"
+                >
+                  <X className="size-4" />
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
 
       <div className="grid gap-4 sm:grid-cols-2">
         <Field label="Leverancier" htmlFor="supplier">
@@ -87,7 +215,8 @@ export function PurchaseOrderForm({
             id="supplier"
             name="supplier"
             required
-            defaultValue={order?.supplier ?? ""}
+            value={supplier}
+            onChange={(e) => setSupplier(e.target.value)}
             placeholder="KingKonree International (H.K) Limited"
           />
         </Field>
@@ -95,12 +224,13 @@ export function PurchaseOrderForm({
           <Input
             id="reference"
             name="reference"
-            defaultValue={order?.reference ?? ""}
+            value={reference}
+            onChange={(e) => setReference(e.target.value)}
             placeholder="33#kkr20251126xm"
           />
         </Field>
         <Field label="Status" htmlFor="status">
-          <Select id="status" name="status" defaultValue={order?.status ?? "ordered"}>
+          <Select id="status" name="status" value={status} onChange={(e) => setStatus(e.target.value as PurchaseOrder["status"])}>
             {Object.entries(PO_STATUS_META).map(([v, m]) => (
               <option key={v} value={v}>
                 {m.label}
@@ -109,13 +239,8 @@ export function PurchaseOrderForm({
           </Select>
         </Field>
         <Field label="Valuta" htmlFor="currency">
-          <Select
-            id="currency"
-            name="currency"
-            value={currency}
-            onChange={(e) => setCurrency(e.target.value)}
-          >
-            {CURRENCIES.map((c) => (
+          <Select id="currency" name="currency" value={currency} onChange={(e) => setCurrency(e.target.value)}>
+            {[...new Set([currency, ...CURRENCIES])].map((c) => (
               <option key={c} value={c}>
                 {c}
               </option>
@@ -127,7 +252,8 @@ export function PurchaseOrderForm({
             id="orderDate"
             name="orderDate"
             type="date"
-            defaultValue={order?.orderDate ?? ""}
+            value={orderDate}
+            onChange={(e) => setOrderDate(e.target.value)}
           />
         </Field>
         <Field label="Verwacht binnen" htmlFor="expectedDate">
@@ -135,7 +261,8 @@ export function PurchaseOrderForm({
             id="expectedDate"
             name="expectedDate"
             type="date"
-            defaultValue={order?.expectedDate ?? ""}
+            value={expectedDate}
+            onChange={(e) => setExpectedDate(e.target.value)}
           />
         </Field>
       </div>
@@ -143,12 +270,7 @@ export function PurchaseOrderForm({
       <div>
         <div className="mb-2 flex items-center justify-between">
           <h2 className="text-sm font-semibold">Regels</h2>
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            onClick={() => setRows((rs) => [...rs, toRow({})])}
-          >
+          <Button type="button" variant="ghost" size="sm" onClick={() => setRows((rs) => [...rs, toRow({})])}>
             <Plus className="size-4" /> Regel
           </Button>
         </div>
@@ -183,11 +305,7 @@ export function PurchaseOrderForm({
                   />
                 </div>
                 <div className="space-y-1">
-                  <Input
-                    value={r.sku}
-                    onChange={(e) => update(i, { sku: e.target.value })}
-                    placeholder="SKU"
-                  />
+                  <Input value={r.sku} onChange={(e) => update(i, { sku: e.target.value })} placeholder="SKU" />
                   <Input
                     value={r.note}
                     onChange={(e) => update(i, { note: e.target.value })}
@@ -207,7 +325,6 @@ export function PurchaseOrderForm({
                   <Input
                     type="number"
                     step="any"
-                    min="0"
                     value={r.unitPrice}
                     onChange={(e) => update(i, { unitPrice: e.target.value })}
                     placeholder="Stukprijs"
@@ -220,9 +337,7 @@ export function PurchaseOrderForm({
                 <button
                   type="button"
                   onClick={() => setRows((rs) => (rs.length > 1 ? rs.filter((_, idx) => idx !== i) : rs))}
-                  className={cn(
-                    "mt-0.5 flex size-9 items-center justify-center rounded-md text-muted transition-colors hover:bg-danger/10 hover:text-danger",
-                  )}
+                  className="mt-0.5 flex size-9 items-center justify-center rounded-md text-muted transition-colors hover:bg-danger/10 hover:text-danger"
                   aria-label="Regel verwijderen"
                 >
                   <Trash2 className="size-4" />
@@ -243,7 +358,8 @@ export function PurchaseOrderForm({
           id="notes"
           name="notes"
           rows={3}
-          defaultValue={order?.notes ?? ""}
+          value={notes}
+          onChange={(e) => setNotes(e.target.value)}
           placeholder="Levertijd, aanbetaling, opmerkingen…"
         />
       </Field>

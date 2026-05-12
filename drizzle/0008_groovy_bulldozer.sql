@@ -1,0 +1,1 @@
+ALTER TABLE "purchase_orders" ADD COLUMN "attachments" jsonb DEFAULT '[]'::jsonb NOT NULL;

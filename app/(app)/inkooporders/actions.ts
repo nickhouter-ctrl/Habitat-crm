@@ -8,7 +8,9 @@ import { z } from "zod";
 import { auth } from "@/auth";
 import { db } from "@/lib/db";
 import { activities, products, purchaseOrders } from "@/lib/db/schema";
+import type { PurchaseOrderAttachment } from "@/lib/db/schema";
 import { parsePoLineItems, poTotal, PO_STATUSES } from "@/lib/purchase-orders";
+import { deletePurchaseOrderFile } from "@/lib/storage";
 
 const schema = z.object({
   supplier: z.string().trim().min(1, "Leverancier is verplicht"),
@@ -19,7 +21,35 @@ const schema = z.object({
   expectedDate: z.string().trim().optional(),
   notes: z.string().trim().optional(),
   items: z.string().optional(),
+  attachments: z.string().optional(),
 });
+
+function parseAttachments(raw: unknown): PurchaseOrderAttachment[] {
+  let arr: unknown = raw;
+  if (typeof raw === "string") {
+    try {
+      arr = JSON.parse(raw);
+    } catch {
+      return [];
+    }
+  }
+  if (!Array.isArray(arr)) return [];
+  const out: PurchaseOrderAttachment[] = [];
+  for (const r of arr) {
+    if (!r || typeof r !== "object") continue;
+    const o = r as Record<string, unknown>;
+    const name = String(o.name ?? "").trim();
+    const path = String(o.path ?? "").trim();
+    if (!path) continue;
+    out.push({
+      name: name || path,
+      path,
+      size: typeof o.size === "number" ? o.size : undefined,
+      uploadedAt: o.uploadedAt ? String(o.uploadedAt) : undefined,
+    });
+  }
+  return out;
+}
 
 function dateOrNull(v?: string) {
   return v && v.length ? v : null;
@@ -39,6 +69,7 @@ export async function createPurchaseOrder(formData: FormData) {
   }
   const d = parsed.data;
   const items = parsePoLineItems(d.items);
+  const attachments = parseAttachments(d.attachments);
 
   const [row] = await db
     .insert(purchaseOrders)
@@ -51,6 +82,7 @@ export async function createPurchaseOrder(formData: FormData) {
       expectedDate: dateOrNull(d.expectedDate),
       notes: d.notes || null,
       items,
+      attachments,
       total: String(poTotal(items)),
       receivedAt: d.status === "received" ? new Date() : null,
     })
@@ -71,11 +103,18 @@ export async function updatePurchaseOrder(id: string, formData: FormData) {
   }
   const d = parsed.data;
   const items = parsePoLineItems(d.items);
+  const attachments = parseAttachments(d.attachments);
 
   const existing = await db.query.purchaseOrders.findFirst({
     where: eq(purchaseOrders.id, id),
   });
   if (!existing) throw new Error("Bestelling niet gevonden");
+
+  // Delete storage files that were removed from the attachment list.
+  const keptPaths = new Set(attachments.map((a) => a.path));
+  for (const a of existing.attachments ?? []) {
+    if (!keptPaths.has(a.path)) await deletePurchaseOrderFile(a.path);
+  }
 
   await db
     .update(purchaseOrders)
@@ -88,6 +127,7 @@ export async function updatePurchaseOrder(id: string, formData: FormData) {
       expectedDate: dateOrNull(d.expectedDate),
       notes: d.notes || null,
       items,
+      attachments,
       total: String(poTotal(items)),
       receivedAt:
         d.status === "received" ? existing.receivedAt ?? new Date() : existing.receivedAt,
@@ -130,6 +170,11 @@ export async function setPurchaseOrderStatus(id: string, status: (typeof PO_STAT
 
 export async function deletePurchaseOrder(id: string) {
   await requireUser();
+  const existing = await db.query.purchaseOrders.findFirst({
+    where: eq(purchaseOrders.id, id),
+    columns: { attachments: true },
+  });
+  for (const a of existing?.attachments ?? []) await deletePurchaseOrderFile(a.path);
   await db.delete(purchaseOrders).where(eq(purchaseOrders.id, id));
   revalidatePath("/inkooporders");
   revalidatePath("/");

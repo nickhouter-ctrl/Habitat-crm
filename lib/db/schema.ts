@@ -446,6 +446,15 @@ export type PurchaseOrderLineItem = {
   note?: string;
 };
 
+/** An uploaded source document (proforma invoice / PI PDF) stored in Supabase. */
+export type PurchaseOrderAttachment = {
+  name: string;
+  /** Storage object path (private bucket — fetch a signed URL on demand). */
+  path: string;
+  size?: number;
+  uploadedAt?: string;
+};
+
 /**
  * Incoming supplier orders ("binnenkomende bestellingen") — e.g. the China
  * proforma invoices from KingKonree / Magic Stone. When a PO is marked
@@ -468,6 +477,7 @@ export const purchaseOrders = pgTable(
     /** Sum of the line totals, in `currency`. */
     total: numeric({ precision: 14, scale: 2 }).notNull().default("0"),
     items: jsonb().$type<PurchaseOrderLineItem[]>().notNull().default(sql`'[]'::jsonb`),
+    attachments: jsonb().$type<PurchaseOrderAttachment[]>().notNull().default(sql`'[]'::jsonb`),
     notes: text(),
     /** Set once stock has been added, so we never double-count. */
     stockAppliedAt: timestamp({ withTimezone: true }),

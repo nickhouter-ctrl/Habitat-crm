@@ -57,6 +57,13 @@
       "when": 1778588291522,
       "tag": "0007_mysterious_scalphunter",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1778589320847,
+      "tag": "0008_groovy_bulldozer",
+      "breakpoints": true
     }
   ]
 }
