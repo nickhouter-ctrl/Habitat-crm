@@ -1,4 +1,4 @@
-import { and, count, desc, eq, gte, lt, notInArray, sql } from "drizzle-orm";
+import { count, desc, eq, sql } from "drizzle-orm";
 import Link from "next/link";
 
 import {
@@ -40,83 +40,53 @@ export default async function DashboardPage() {
   const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0, 10);
   const today = now.toISOString().slice(0, 10);
 
-  const [
-    [contactsTotal],
-    [openDealsRow],
-    pipelineRows,
-    [invoicedThisMonth],
-    [outstanding],
-    [overdue],
-    recentDeals,
-    recentActivity,
-  ] = await Promise.all([
-    db.select({ n: count() }).from(contacts),
-    db
-      .select({ n: count(), value: sql<string>`coalesce(sum(${deals.valueEur}), 0)` })
-      .from(deals)
-      .where(notInArray(deals.stage, ["won", "lost"])),
-    db
-      .select({
-        stage: deals.stage,
-        n: count(),
-        value: sql<string>`coalesce(sum(${deals.valueEur}), 0)`,
-      })
-      .from(deals)
-      .groupBy(deals.stage),
-    db
-      .select({ value: sql<string>`coalesce(sum(${documents.totalEur}), 0)` })
-      .from(documents)
-      .where(
-        and(
-          eq(documents.kind, "invoice"),
-          eq(documents.status, "paid"),
-          gte(documents.issueDate, monthStart),
-        ),
-      ),
-    db
-      .select({
-        n: count(),
-        value: sql<string>`coalesce(sum(${documents.totalEur} - ${documents.paidEur}), 0)`,
-      })
-      .from(documents)
-      .where(
-        and(
-          eq(documents.kind, "invoice"),
-          notInArray(documents.status, ["paid", "void", "draft"]),
-        ),
-      ),
-    db
-      .select({
-        n: count(),
-        value: sql<string>`coalesce(sum(${documents.totalEur} - ${documents.paidEur}), 0)`,
-      })
-      .from(documents)
-      .where(
-        and(
-          eq(documents.kind, "invoice"),
-          notInArray(documents.status, ["paid", "void", "draft"]),
-          lt(documents.dueDate, today),
-        ),
-      ),
-    db.query.deals.findMany({
-      orderBy: desc(deals.updatedAt),
-      limit: 7,
-      with: { contact: { columns: { name: true } } },
-    }),
-    db.query.activities.findMany({
-      orderBy: desc(activities.createdAt),
-      limit: 10,
-      with: {
-        author: { columns: { name: true } },
-        contact: { columns: { id: true, name: true } },
-        deal: { columns: { id: true, title: true } },
-        document: { columns: { id: true, docNumber: true, kind: true } },
-      },
-    }),
-  ]);
+  const openExpr = sql`${documents.status} not in ('paid', 'void', 'draft')`;
 
-  // Pipeline funnel data
+  const [[contactsTotal], pipelineRows, [docAgg], recentDeals, recentActivity] =
+    await Promise.all([
+      db.select({ n: count() }).from(contacts),
+      db
+        .select({
+          stage: deals.stage,
+          n: count(),
+          value: sql<string>`coalesce(sum(${deals.valueEur}), 0)`,
+        })
+        .from(deals)
+        .groupBy(deals.stage),
+      db
+        .select({
+          revenueMonth: sql<string>`coalesce(sum(case when ${documents.status} = 'paid' and ${documents.issueDate} >= ${monthStart} then ${documents.totalEur} else 0 end), 0)`,
+          outstandingN: sql<number>`count(case when ${openExpr} then 1 end)::int`,
+          outstandingV: sql<string>`coalesce(sum(case when ${openExpr} then ${documents.totalEur} - ${documents.paidEur} else 0 end), 0)`,
+          overdueN: sql<number>`count(case when ${openExpr} and ${documents.dueDate} < ${today} then 1 end)::int`,
+          overdueV: sql<string>`coalesce(sum(case when ${openExpr} and ${documents.dueDate} < ${today} then ${documents.totalEur} - ${documents.paidEur} else 0 end), 0)`,
+        })
+        .from(documents)
+        .where(eq(documents.kind, "invoice")),
+      db.query.deals.findMany({
+        orderBy: desc(deals.updatedAt),
+        limit: 7,
+        with: { contact: { columns: { name: true } } },
+      }),
+      db.query.activities.findMany({
+        orderBy: desc(activities.createdAt),
+        limit: 10,
+        with: {
+          author: { columns: { name: true } },
+          contact: { columns: { id: true, name: true } },
+          deal: { columns: { id: true, title: true } },
+          document: { columns: { id: true, docNumber: true, kind: true } },
+        },
+      }),
+    ]);
+
   const byStage = new Map(pipelineRows.map((r) => [r.stage, r]));
+  const openDeals = pipelineRows
+    .filter((r) => r.stage !== "won" && r.stage !== "lost")
+    .reduce(
+      (acc, r) => ({ n: acc.n + r.n, value: acc.value + Number(r.value ?? 0) }),
+      { n: 0, value: 0 },
+    );
   const pipeline = PIPELINE_STAGES.map((stage) => {
     const r = byStage.get(stage);
     return { stage, n: r?.n ?? 0, value: Number(r?.value ?? 0) };
@@ -133,11 +103,11 @@ export default async function DashboardPage() {
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
         <StatTile label="Contacten" value={contactsTotal.n} />
-        <StatTile label="Open deals" value={openDealsRow.n} hint="lopende projecten" />
-        <StatTile label="Pijplijnwaarde" value={formatEUR(openDealsRow.value)} />
-        <StatTile label="Omzet deze maand" value={formatEUR(invoicedThisMonth.value)} hint="betaalde facturen" />
-        <StatTile label="Openstaande facturen" value={outstanding.n} hint={formatEUR(outstanding.value)} />
-        <StatTile label="Vervallen facturen" value={overdue.n} hint={formatEUR(overdue.value)} />
+        <StatTile label="Open deals" value={openDeals.n} hint="lopende projecten" />
+        <StatTile label="Pijplijnwaarde" value={formatEUR(openDeals.value)} />
+        <StatTile label="Omzet deze maand" value={formatEUR(docAgg.revenueMonth)} hint="betaalde facturen" />
+        <StatTile label="Openstaande facturen" value={docAgg.outstandingN} hint={formatEUR(docAgg.outstandingV)} />
+        <StatTile label="Vervallen facturen" value={docAgg.overdueN} hint={formatEUR(docAgg.overdueV)} />
       </div>
 
       <Card className="mt-6">

@@ -26,10 +26,10 @@ const client =
   postgres(connectionString ?? "postgres://localhost:5432/habitat_crm_unconfigured", {
     prepare: false,
     max: 1,
-    // Release the pooled connection quickly when the (serverless) instance is
-    // idle, and recycle long-lived ones, so we don't hold Supavisor slots.
-    idle_timeout: 5,
-    max_lifetime: 60 * 5,
+    // Keep the pooled connection alive across a burst of requests, but recycle
+    // it so we don't hold a Supavisor slot once the (serverless) instance idles.
+    idle_timeout: 30,
+    max_lifetime: 60 * 10,
     connect_timeout: 15,
   });
 
