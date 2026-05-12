@@ -376,23 +376,33 @@ export async function pullPurchaseOrdersFromHolded(): Promise<PullResult> {
   let created = 0;
   let updated = 0;
 
+  const r2 = (n: number) => Math.round(n * 100) / 100;
   for (const d of remote) {
+    // Convert everything to EUR so the Inkooporden-totalen kloppen (Holded geeft de koers mee).
+    const origCurrency = (d.currency ?? "EUR").toUpperCase();
+    const isEur = origCurrency === "EUR";
+    const rate = Number((d as { currencyChange?: number }).currencyChange) || 1;
+    const toEur = (v: unknown) => (isEur ? Number(v ?? 0) : r2(Number(v ?? 0) / rate));
+
     const items: PurchaseOrderLineItem[] = (d.products ?? []).map((p) => ({
       name: p.name ?? "(naamloos)",
       sku: p.sku && String(p.sku).trim() ? String(p.sku).trim() : undefined,
       units: p.units ?? 1,
-      unitPrice: p.price ?? 0,
+      unitPrice: toEur(p.price),
       note: p.desc && String(p.desc).trim() ? String(p.desc).trim() : undefined,
     }));
     const data = {
       supplier: d.contactName?.trim() || "Onbekende leverancier",
       reference: d.docNumber?.trim() || null,
       status: "received" as const,
-      currency: d.currency?.toUpperCase() || "EUR",
+      currency: "EUR",
       orderDate: unixToDateString(d.date),
-      total: String(d.total ?? 0),
+      total: String(toEur(d.total)),
       items,
-      notes: [d.desc, d.notes].map((s) => s?.trim()).filter(Boolean).join(" — ") || null,
+      notes:
+        [d.desc, d.notes].map((s) => s?.trim()).filter(Boolean).join(" — ")
+        + (isEur ? "" : `${[d.desc, d.notes].some((s) => s?.trim()) ? " — " : ""}Origineel: ${Number(d.total ?? 0).toLocaleString("nl-NL")} ${origCurrency} (koers ${rate})`)
+        || null,
       // These are invoices, not inbound stock — mark stock as "handled" so we never add it.
       stockAppliedAt: new Date(),
       receivedAt: unixToDateString(d.date) ? new Date(unixToDateString(d.date)!) : new Date(),
