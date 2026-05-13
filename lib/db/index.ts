@@ -27,9 +27,17 @@ const client =
     // `prepare: false` is required for Supabase's transaction pooler (6543).
     // We deliberately leave `max` at the postgres.js default — capping it lower
     // caused query queues that hit Postgres's statement_timeout under load.
+    // A short per-statement timeout means a stuck query dies fast and frees its
+    // pool slot — far better than letting it linger for the default 2 min and
+    // cascade-block every other request.
     prepare: false,
     idle_timeout: 10,
     connect_timeout: 15,
+    connection: {
+      application_name: "habitat-crm",
+      statement_timeout: "30000",
+      idle_in_transaction_session_timeout: "15000",
+    },
   });
 
 globalForDb.__habitatPg = client;
