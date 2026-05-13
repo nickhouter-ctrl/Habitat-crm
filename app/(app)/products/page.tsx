@@ -252,6 +252,7 @@ export default async function ProductsPage({
                     <Th>Naam</Th>
                     <Th>SKU</Th>
                     <Th className="text-right">Voorraad</Th>
+                    <Th className="text-right">Onderweg</Th>
                     <Th>Eenh.</Th>
                     <Th className="text-right">Verkoop (ex.)</Th>
                     <Th className="text-right">BTW</Th>
@@ -285,11 +286,15 @@ export default async function ProductsPage({
                           )}
                         >
                           {stock != null ? stock.toLocaleString("nl-NL") : "—"}
+                        </Td>
+                        <Td className="text-right tabular-nums">
                           {(() => {
                             const oo = onOrderByProduct.get(p.id);
                             return oo && oo.qty > 0 ? (
-                              <span className="ml-1 text-xs font-medium text-accent">+{oo.qty.toLocaleString("nl-NL")}</span>
-                            ) : null;
+                              <span className="font-medium text-accent">+{oo.qty.toLocaleString("nl-NL")}</span>
+                            ) : (
+                              <span className="text-muted">—</span>
+                            );
                           })()}
                         </Td>
                         <Td className="text-muted">{p.unit ?? "—"}</Td>
