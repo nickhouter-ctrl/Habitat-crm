@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { db } from "@/lib/db";
 import { products } from "@/lib/db/schema";
+import { rateToEur } from "@/lib/fx";
 import { anthropicConfigured, extractPurchaseOrderFromPdf } from "@/lib/pdf-extract";
 import { uploadPurchaseOrderFile } from "@/lib/storage";
 
@@ -66,15 +67,9 @@ export async function POST(req: Request) {
   const SKIP_NEW_RX = /(korting|discount|sample|monster|voorbeeld)/i;
 
   const r2 = (n: number) => Math.round(n * 100) / 100;
-  // Eenvoudige koers EUR<-doc-valuta voor cost-prijs-schatting.
-  const fxToEur = (n: number) => {
-    const c = (parsed.currency ?? "EUR").toUpperCase();
-    if (c === "EUR" || !n) return n;
-    if (c === "USD") return r2(n / 1.08);
-    if (c === "GBP") return r2(n * 1.17);
-    if (c === "CNY") return r2(n / 7.85);
-    return n; // fallback: laat staan; gebruiker corrigeert
-  };
+  // Live koers (ECB via Frankfurter); valt terug op een veilige default als de bron onbereikbaar is.
+  const fxRate = await rateToEur(parsed.currency);
+  const fxToEur = (n: number) => r2((Number(n) || 0) * fxRate);
 
   let linked = 0;
   let created = 0;

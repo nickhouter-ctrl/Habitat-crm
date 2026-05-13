@@ -1,4 +1,4 @@
-import { count, desc, eq, inArray, sql } from "drizzle-orm";
+import { and, count, desc, eq, inArray, isNull, sql } from "drizzle-orm";
 import Link from "next/link";
 
 import {
@@ -19,7 +19,7 @@ import {
   Tr,
 } from "@/components/ui";
 import { db } from "@/lib/db";
-import { activities, contacts, deals, documents, purchaseOrders } from "@/lib/db/schema";
+import { activities, contacts, deals, documents, products, purchaseOrders } from "@/lib/db/schema";
 import { formatMoney, PO_OPEN_STATUSES, PO_STATUS_META } from "@/lib/purchase-orders";
 import { formatDate, formatEUR } from "@/lib/utils";
 import { dealStageMeta, documentKindMeta } from "./_meta";
@@ -43,7 +43,7 @@ export default async function DashboardPage() {
 
   const openExpr = sql`${documents.status} not in ('paid', 'void', 'draft')`;
 
-  const [[contactsTotal], pipelineRows, [docAgg], [creditAgg], [purchaseAgg], openPurchaseOrders, recentDeals, recentActivity] =
+  const [[contactsTotal], pipelineRows, [docAgg], [creditAgg], [purchaseAgg], [productsAgg], openPurchaseOrders, recentDeals, recentActivity] =
     await Promise.all([
       db.select({ n: count() }).from(contacts),
       db
@@ -79,6 +79,11 @@ export default async function DashboardPage() {
           totalEur: sql<string>`coalesce(sum(case when ${purchaseOrders.currency} = 'EUR' then ${purchaseOrders.total} else 0 end), 0)`,
         })
         .from(purchaseOrders),
+      // Actieve producten zonder barcode — die hebben nog labels nodig.
+      db
+        .select({ n: count() })
+        .from(products)
+        .where(and(eq(products.isActive, true), isNull(products.barcode))),
       db
         .select()
         .from(purchaseOrders)
@@ -123,6 +128,18 @@ export default async function DashboardPage() {
         subtitle="Overzicht van de pijplijn, facturen en activiteit"
         actions={<LinkButton href="/contacts/new">Nieuw contact</LinkButton>}
       />
+
+      {productsAgg.n > 0 && (
+        <Link
+          href="/products?nobarcode=1"
+          className="mb-4 flex items-center justify-between gap-3 rounded-md border border-warning/40 bg-warning/10 px-4 py-3 text-sm text-foreground transition-colors hover:bg-warning/15"
+        >
+          <span>
+            ⚠️ <strong>{productsAgg.n}</strong> producten hebben nog geen barcode — labels kunnen niet geprint worden tot deze zijn aangemaakt.
+          </span>
+          <span className="font-medium text-warning">Bekijk →</span>
+        </Link>
+      )}
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
         <StatTile label="Totale omzet" value={formatEUR(revenueAll)} hint="betaalde facturen − creditnota's" />

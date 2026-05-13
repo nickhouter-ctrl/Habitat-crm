@@ -1,4 +1,4 @@
-import { and, asc, eq, ilike, or, sql } from "drizzle-orm";
+import { and, asc, eq, ilike, isNull, or, sql } from "drizzle-orm";
 import { Search } from "lucide-react";
 import Link from "next/link";
 
@@ -34,6 +34,7 @@ export default async function ProductsPage({
   const q = typeof params.q === "string" ? params.q.trim() : "";
   const collectionParam =
     typeof params.collection === "string" ? params.collection.trim() : "";
+  const noBarcode = params.nobarcode === "1";
 
   const allCollections = await getProductCollections();
   const collection = allCollections.includes(collectionParam) ? collectionParam : "";
@@ -41,6 +42,7 @@ export default async function ProductsPage({
   const rows = await db.query.products.findMany({
     where: and(
       collection ? eq(products.collection, collection) : undefined,
+      noBarcode ? and(isNull(products.barcode), eq(products.isActive, true)) : undefined,
       q
         ? or(
             ilike(products.name, `%${q}%`),
@@ -82,8 +84,8 @@ export default async function ProductsPage({
       <PageHeader
         title="Producten"
         subtitle={`${rows.length} ${rows.length === 1 ? "product" : "producten"}${
-          collection ? ` in ${collection}` : ""
-        }${q ? ` voor "${q}"` : ""}`}
+          noBarcode ? " zonder barcode" : ""
+        }${collection ? ` in ${collection}` : ""}${q ? ` voor "${q}"` : ""}`}
         actions={
           <>
             {(() => {
