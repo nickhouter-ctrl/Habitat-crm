@@ -518,8 +518,12 @@ export const purchaseOrders = pgTable(
     orderDate: date(),
     expectedDate: date(),
     receivedAt: timestamp({ withTimezone: true }),
-    /** Sum of the line totals, in `currency`. */
+    /** Sum of the line totals (incl. BTW), in `currency`. */
     total: numeric({ precision: 14, scale: 2 }).notNull().default("0"),
+    /** Subtotal (ex. BTW). Door Holded geleverd; voor handmatige PO's gelijk aan total. */
+    subtotal: numeric({ precision: 14, scale: 2 }),
+    /** BTW-bedrag, in `currency`. */
+    tax: numeric({ precision: 14, scale: 2 }),
     items: jsonb().$type<PurchaseOrderLineItem[]>().notNull().default(sql`'[]'::jsonb`),
     attachments: jsonb().$type<PurchaseOrderAttachment[]>().notNull().default(sql`'[]'::jsonb`),
     notes: text(),

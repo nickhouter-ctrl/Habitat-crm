@@ -395,21 +395,27 @@ export async function pullPurchaseOrdersFromHolded(): Promise<PullResult> {
       unitPrice: toEur(p.price),
       note: p.desc && String(p.desc).trim() ? String(p.desc).trim() : undefined,
     }));
+    // Holded status: 0 = concept, 1 = goedgekeurd, 2 = betaald. Concepten zijn nog niet definitief.
+    const holdedStatus = Number((d as { status?: number }).status ?? 0);
+    const isDraft = holdedStatus === 0;
+
     const data = {
       supplier: d.contactName?.trim() || "Onbekende leverancier",
       reference: d.docNumber?.trim() || null,
-      status: "received" as const,
+      status: (isDraft ? "draft" : "received") as "draft" | "received",
       currency: "EUR",
       orderDate: unixToDateString(d.date),
       total: String(toEur(d.total)),
+      subtotal: String(toEur((d as { subtotal?: number }).subtotal)),
+      tax: String(toEur((d as { tax?: number }).tax)),
       items,
       notes:
         [d.desc, d.notes].map((s) => s?.trim()).filter(Boolean).join(" — ")
         + (isEur ? "" : `${[d.desc, d.notes].some((s) => s?.trim()) ? " — " : ""}Origineel: ${Number(d.total ?? 0).toLocaleString("nl-NL")} ${origCurrency} (koers ${rate})`)
         || null,
-      // These are invoices, not inbound stock — mark stock as "handled" so we never add it.
-      stockAppliedAt: new Date(),
-      receivedAt: unixToDateString(d.date) ? new Date(unixToDateString(d.date)!) : new Date(),
+      // Invoice-style imports: niet als nieuwe voorraad markeren behalve als 'ie definitief is.
+      stockAppliedAt: isDraft ? null : new Date(),
+      receivedAt: isDraft ? null : (unixToDateString(d.date) ? new Date(unixToDateString(d.date)!) : new Date()),
       holdedId: d.id,
     };
 

@@ -55,7 +55,8 @@ export async function DocumentsList({
   });
 
   const sign = (k: Kind) => (k === "creditnote" ? -1 : 1);
-  const total = rows.reduce((s, d) => s + sign(d.kind) * Number(d.totalEur ?? 0), 0);
+  const totalEx = rows.reduce((s, d) => s + sign(d.kind) * Number(d.subtotalEur ?? 0), 0);
+  const totalIncl = rows.reduce((s, d) => s + sign(d.kind) * Number(d.totalEur ?? 0), 0);
   const paid = rows.reduce((s, d) => s + sign(d.kind) * Number(d.paidEur ?? 0), 0);
   const outstanding = rows
     .filter((d) => d.kind !== "creditnote" && d.status !== "paid" && d.status !== "void")
@@ -76,11 +77,12 @@ export async function DocumentsList({
         }
       />
 
-      <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
+      <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
         <StatTile label="Aantal" value={rows.length} />
-        <StatTile label="Totaalbedrag" value={formatEUR(total)} hint={showKindColumn ? "facturen − creditnota's" : undefined} />
-        <StatTile label="Betaald" value={formatEUR(paid)} />
-        <StatTile label="Openstaand" value={formatEUR(outstanding)} />
+        <StatTile label="Totaal ex. BTW" value={formatEUR(totalEx)} hint={showKindColumn ? "fact. − creditnota's" : undefined} />
+        <StatTile label="Totaal incl. BTW" value={formatEUR(totalIncl)} hint="met BTW" />
+        <StatTile label="Betaald" value={formatEUR(paid)} hint="incl. BTW" />
+        <StatTile label="Openstaand" value={formatEUR(outstanding)} hint="incl. BTW" />
       </div>
 
       {rows.length === 0 ? (

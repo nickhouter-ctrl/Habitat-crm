@@ -99,6 +99,13 @@
       "when": 1778661828410,
       "tag": "0013_narrow_kabuki",
       "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1778664714836,
+      "tag": "0014_curious_devos",
+      "breakpoints": true
     }
   ]
 }

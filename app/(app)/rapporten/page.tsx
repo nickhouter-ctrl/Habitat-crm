@@ -33,36 +33,37 @@ export default async function RapportenPage() {
   const from = months[0].key + "-01";
 
   const [revenueRows, purchaseRows, topCustomers] = await Promise.all([
-    // Omzet per maand: facturen − creditnota's (gefactureerd), uit Holded gesynct of CRM
+    // Omzet per maand ex. BTW: facturen − creditnota's (gefactureerd)
     db.execute(sql`
       select to_char(issue_date,'YYYY-MM') as ym,
-             coalesce(sum(case when kind='invoice' then total_eur else 0 end),0)::text as invoiced,
-             coalesce(sum(case when kind='creditnote' then total_eur else 0 end),0)::text as credited,
+             coalesce(sum(case when kind='invoice' then subtotal_eur else 0 end),0)::text as invoiced,
+             coalesce(sum(case when kind='creditnote' then subtotal_eur else 0 end),0)::text as credited,
              coalesce(sum(case when kind in ('invoice','creditnote') then paid_eur else 0 end),0)::text as paid_signed
       from documents
       where issue_date is not null and issue_date >= ${from}
       group by ym
       order by ym
     `),
-    // Inkoop per maand: alle EUR-aankopen (Holded converteert USD al)
+    // Inkoop per maand: alle EUR-aankopen ex. BTW, zónder concept-facturen.
     db.execute(sql`
-      select to_char(order_date,'YYYY-MM') as ym, coalesce(sum(total),0)::text as total
+      select to_char(order_date,'YYYY-MM') as ym,
+             coalesce(sum(coalesce(subtotal, total)), 0)::text as total
       from purchase_orders
-      where currency = 'EUR' and order_date is not null and order_date >= ${from}
+      where currency = 'EUR' and status <> 'draft' and order_date is not null and order_date >= ${from}
       group by ym
       order by ym
     `),
-    // Top 10 klanten op netto-omzet (facturen − creditnota's), all-time
+    // Top 10 klanten op netto-omzet ex. BTW (facturen − creditnota's), all-time
     db
       .select({
         id: contacts.id,
         name: contacts.name,
-        revenue: sql<string>`coalesce(sum(case when ${documents.kind}='invoice' then ${documents.totalEur} when ${documents.kind}='creditnote' then -${documents.totalEur} else 0 end),0)::text`,
+        revenue: sql<string>`coalesce(sum(case when ${documents.kind}='invoice' then ${documents.subtotalEur} when ${documents.kind}='creditnote' then -${documents.subtotalEur} else 0 end),0)::text`,
       })
       .from(documents)
       .leftJoin(contacts, eq(contacts.id, documents.contactId))
       .groupBy(contacts.id, contacts.name)
-      .orderBy(desc(sql`sum(case when ${documents.kind}='invoice' then ${documents.totalEur} when ${documents.kind}='creditnote' then -${documents.totalEur} else 0 end)`))
+      .orderBy(desc(sql`sum(case when ${documents.kind}='invoice' then ${documents.subtotalEur} when ${documents.kind}='creditnote' then -${documents.subtotalEur} else 0 end)`))
       .limit(10),
   ]);
 
@@ -93,11 +94,11 @@ export default async function RapportenPage() {
 
   return (
     <>
-      <PageHeader title="Rapporten" subtitle="Omzet, inkoop en de belangrijkste klanten — laatste 12 maanden." />
+      <PageHeader title="Rapporten" subtitle="Omzet, inkoop en de belangrijkste klanten — laatste 12 maanden. Alle bedragen ex. BTW." />
 
       <div className="mb-5 grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <StatTile label="Omzet (12 mnd)" value={formatEUR(totalRev)} hint="facturen − creditnota's" />
-        <StatTile label="Inkoop (12 mnd)" value={formatEUR(totalPur)} hint="aankopen in EUR" />
+        <StatTile label="Omzet (12 mnd)" value={formatEUR(totalRev)} hint="ex. BTW · facturen − creditnota's" />
+        <StatTile label="Inkoop (12 mnd)" value={formatEUR(totalPur)} hint="ex. BTW · zonder concepten" />
         <StatTile label="Bruto-resultaat" value={formatEUR(totalRev - totalPur)} hint={grossMargin != null ? `${grossMargin}% van de omzet` : undefined} />
         <StatTile label="Top-klanten" value={topCustData.length} hint="met omzet" />
       </div>
@@ -106,7 +107,7 @@ export default async function RapportenPage() {
         <Card>
           <CardHeader>
             <CardTitle>Omzet per maand</CardTitle>
-            <span className="text-xs text-muted">facturen − creditnota's, gefactureerd</span>
+            <span className="text-xs text-muted">ex. BTW · facturen − creditnota's</span>
           </CardHeader>
           <CardContent>
             <MonthlyAmountChart data={revenueChart} />
@@ -116,7 +117,7 @@ export default async function RapportenPage() {
         <Card>
           <CardHeader>
             <CardTitle>Inkoop per maand</CardTitle>
-            <span className="text-xs text-muted">alle leveranciers-aankopen (EUR)</span>
+            <span className="text-xs text-muted">ex. BTW, zonder concept-facturen</span>
           </CardHeader>
           <CardContent>
             <MonthlyAmountChart data={purchaseChart} color="#3a2a20" />

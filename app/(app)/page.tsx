@@ -56,8 +56,10 @@ export default async function DashboardPage() {
         .groupBy(deals.stage),
       db
         .select({
-          revenueMonth: sql<string>`coalesce(sum(case when ${documents.status} = 'paid' and ${documents.issueDate} >= ${monthStart} then ${documents.totalEur} else 0 end), 0)`,
-          revenueAll: sql<string>`coalesce(sum(${documents.paidEur}), 0)`,
+          // Ex BTW: omzet = subtotaal van facturen
+          revenueMonth: sql<string>`coalesce(sum(case when ${documents.issueDate} >= ${monthStart} then ${documents.subtotalEur} else 0 end), 0)`,
+          revenueAll: sql<string>`coalesce(sum(${documents.subtotalEur}), 0)`,
+          // Openstaand/vervallen blijft cash-flow (incl. BTW), dat is wat klant betaalt.
           outstandingN: sql<number>`count(case when ${openExpr} then 1 end)::int`,
           outstandingV: sql<string>`coalesce(sum(case when ${openExpr} then ${documents.totalEur} - ${documents.paidEur} else 0 end), 0)`,
           overdueN: sql<number>`count(case when ${openExpr} and ${documents.dueDate} < ${today} then 1 end)::int`,
@@ -65,18 +67,18 @@ export default async function DashboardPage() {
         })
         .from(documents)
         .where(eq(documents.kind, "invoice")),
-      // Credit notes to subtract from revenue.
+      // Credit notes to subtract from revenue (ex BTW).
       db
         .select({
-          paidAll: sql<string>`coalesce(sum(${documents.paidEur}), 0)`,
-          revenueMonth: sql<string>`coalesce(sum(case when ${documents.status} = 'paid' and ${documents.issueDate} >= ${monthStart} then ${documents.totalEur} else 0 end), 0)`,
+          paidAll: sql<string>`coalesce(sum(${documents.subtotalEur}), 0)`,
+          revenueMonth: sql<string>`coalesce(sum(case when ${documents.issueDate} >= ${monthStart} then ${documents.subtotalEur} else 0 end), 0)`,
         })
         .from(documents)
         .where(eq(documents.kind, "creditnote")),
       db
         .select({
           n: count(),
-          totalEur: sql<string>`coalesce(sum(case when ${purchaseOrders.currency} = 'EUR' then ${purchaseOrders.total} else 0 end), 0)`,
+          totalEur: sql<string>`coalesce(sum(case when ${purchaseOrders.currency} = 'EUR' and ${purchaseOrders.status} <> 'draft' then coalesce(${purchaseOrders.subtotal}, ${purchaseOrders.total}) else 0 end), 0)`,
         })
         .from(purchaseOrders),
       // Actieve producten zonder barcode + actieve producten onder de drempel.
@@ -189,9 +191,9 @@ export default async function DashboardPage() {
       )}
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
-        <StatTile label="Totale omzet" value={formatEUR(revenueAll)} hint="betaalde facturen − creditnota's" />
-        <StatTile label="Totale inkoop" value={formatEUR(purchaseAgg.totalEur)} hint={`${purchaseAgg.n} aankopen`} />
-        <StatTile label="Omzet deze maand" value={formatEUR(revenueMonth)} hint="betaald deze maand" />
+        <StatTile label="Totale omzet" value={formatEUR(revenueAll)} hint="ex. BTW · facturen − creditnota's" />
+        <StatTile label="Totale inkoop" value={formatEUR(purchaseAgg.totalEur)} hint={`ex. BTW · ${purchaseAgg.n} aankopen`} />
+        <StatTile label="Omzet deze maand" value={formatEUR(revenueMonth)} hint="ex. BTW" />
         <StatTile label="Openstaande facturen" value={docAgg.outstandingN} hint={formatEUR(docAgg.outstandingV)} />
         <StatTile label="Vervallen facturen" value={docAgg.overdueN} hint={formatEUR(docAgg.overdueV)} />
         <StatTile label="Pijplijnwaarde" value={formatEUR(openDeals.value)} hint={`${openDeals.n} open deals`} />
