@@ -71,7 +71,7 @@ export default async function LoginPage({
               type="email"
               autoComplete="email"
               required
-              className="w-full rounded-md border bg-background px-3 py-2 text-sm outline-none focus:border-ring focus:ring-2 focus:ring-ring/20"
+              className="w-full rounded-md border bg-background px-3 py-2 text-base sm:text-sm outline-none focus:border-ring focus:ring-2 focus:ring-ring/20"
             />
           </div>
           <div className="space-y-1.5">
@@ -84,7 +84,7 @@ export default async function LoginPage({
               type="password"
               autoComplete="current-password"
               required
-              className="w-full rounded-md border bg-background px-3 py-2 text-sm outline-none focus:border-ring focus:ring-2 focus:ring-ring/20"
+              className="w-full rounded-md border bg-background px-3 py-2 text-base sm:text-sm outline-none focus:border-ring focus:ring-2 focus:ring-ring/20"
             />
           </div>
           <button

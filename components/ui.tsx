@@ -179,8 +179,10 @@ export function Label({ className, ...props }: ComponentProps<"label">) {
   return <label className={cn("text-sm font-medium", className)} {...props} />;
 }
 
+// `text-base` on mobile (≥16 px) prevents iOS Safari from auto-zooming on focus;
+// `sm:text-sm` keeps the compact desktop look from 640 px upwards.
 const fieldControl =
-  "w-full rounded-md border bg-background px-3 py-2 text-sm outline-none transition-colors focus:border-ring focus:ring-2 focus:ring-ring/20 disabled:opacity-60";
+  "w-full rounded-md border bg-background px-3 py-2 text-base sm:text-sm outline-none transition-colors focus:border-ring focus:ring-2 focus:ring-ring/20 disabled:opacity-60";
 
 export function Input({ className, ...props }: ComponentProps<"input">) {
   return <input className={cn(fieldControl, className)} {...props} />;
