@@ -188,10 +188,26 @@ export default async function ProjectDetailPage({
               <CardTitle>Documenten in dit project</CardTitle>
               <span className="text-xs text-muted">{linkedDocs.length}</span>
             </CardHeader>
-            <CardContent className="space-y-1.5 text-sm">
+            <CardContent className="space-y-2 text-sm">
+              <div className="flex flex-wrap gap-2">
+                <LinkButton
+                  href={`/documents/new?kind=estimate&projectId=${id}${project.contactId ? `&contactId=${project.contactId}` : ""}${project.propertyId ? `&propertyId=${project.propertyId}` : ""}`}
+                  variant="secondary"
+                  className="text-xs"
+                >
+                  + Nieuwe offerte
+                </LinkButton>
+                <LinkButton
+                  href={`/documents/new?kind=invoice&projectId=${id}${project.contactId ? `&contactId=${project.contactId}` : ""}${project.propertyId ? `&propertyId=${project.propertyId}` : ""}`}
+                  variant="ghost"
+                  className="text-xs"
+                >
+                  + Nieuwe factuur
+                </LinkButton>
+              </div>
               {linkedDocs.length === 0 ? (
                 <p className="text-muted">
-                  Nog niets gekoppeld. Bij het maken/bewerken van een <Link href="/quotes" className="text-accent hover:underline">offerte</Link> of <Link href="/invoices" className="text-accent hover:underline">factuur</Link> kies je dit project in het projectveld.
+                  Nog niets gekoppeld — gebruik de knop hierboven, of kies dit project in het projectveld bij het bewerken van een bestaand document.
                 </p>
               ) : (
                 <ul className="space-y-1">

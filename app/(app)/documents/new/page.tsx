@@ -40,6 +40,7 @@ export default async function NewDocumentPage({
     contactId: typeof params.contactId === "string" ? params.contactId : undefined,
     dealId: typeof params.dealId === "string" ? params.dealId : undefined,
     propertyId: typeof params.propertyId === "string" ? params.propertyId : undefined,
+    projectId: typeof params.projectId === "string" ? params.projectId : undefined,
   };
   const backHref =
     kind === "invoice" ? "/invoices" : kind === "deliverynote" ? "/pakbonnen" : "/quotes";

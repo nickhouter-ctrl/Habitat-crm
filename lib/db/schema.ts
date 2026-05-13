@@ -337,8 +337,17 @@ export const products = pgTable(
     costEur: numeric({ precision: 14, scale: 2 }),
     currency: text().notNull().default("EUR"),
     description: text(),
+    // Afmetingen — gesynct naar de habitat-one website (matched op SKU).
+    widthMm: numeric({ precision: 10, scale: 2 }),
+    heightMm: numeric({ precision: 10, scale: 2 }),
+    lengthMm: numeric({ precision: 10, scale: 2 }),
+    thicknessMm: numeric({ precision: 10, scale: 2 }),
     imageUrl: text(),
     isActive: boolean().notNull().default(true),
+    /** Aan = mag op de website. De sync-actie creëert dan een entry op habitat-one (matched op SKU); bestaande entries worden altijd bijgewerkt, los van deze vlag. */
+    pushToWebsite: boolean().notNull().default(false),
+    /** Habitat-one product-id, ingevuld door de sync zodra een match (of nieuwe entry) is gemaakt. */
+    websiteProductId: integer(),
     holdedProductId: text(),
     ...timestamps,
   },

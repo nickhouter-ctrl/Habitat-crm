@@ -11,7 +11,7 @@
  */
 import { createHash } from "node:crypto";
 
-import { and, eq } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 
 import { db } from "@/lib/db";
 import {
@@ -395,9 +395,9 @@ export async function pullPurchaseOrdersFromHolded(): Promise<PullResult> {
       unitPrice: toEur(p.price),
       note: p.desc && String(p.desc).trim() ? String(p.desc).trim() : undefined,
     }));
-    // Holded status: 0 = concept, 1 = goedgekeurd, 2 = betaald. Concepten zijn nog niet definitief.
-    const holdedStatus = Number((d as { status?: number }).status ?? 0);
-    const isDraft = holdedStatus === 0;
+    // Holded's `status` veld is *betaal*-status (0/1/2), niet concept-status.
+    // Echte concepten staan in het aparte `draft`-veld (boolean).
+    const isDraft = (d as { draft?: boolean }).draft === true;
 
     const data = {
       supplier: d.contactName?.trim() || "Onbekende leverancier",
@@ -431,6 +431,93 @@ export async function pullPurchaseOrdersFromHolded(): Promise<PullResult> {
     }
   }
   return { created, updated, total: remote.length };
+}
+
+/* ------------------------------------------- push een PO naar Holded (purchase) */
+
+/**
+ * Push een lokale inkooporder naar Holded als purchase-document. Slaat de
+ * teruggegeven Holded-id op de lokale PO op, zodat een volgende sync ze koppelt
+ * en geen duplicaat aanmaakt.
+ */
+export async function pushPurchaseOrderToHolded(poId: string): Promise<string> {
+  const po = await db.query.purchaseOrders.findFirst({
+    where: eq(purchaseOrders.id, poId),
+  });
+  if (!po) throw new Error("Inkooporder niet gevonden.");
+  if (po.holdedId) return po.holdedId; // al gekoppeld
+
+  // 1. Probeer een bestaand Holded-contact te vinden via de naam.
+  let contactRef: string | undefined;
+  try {
+    const matches = await holded.contacts.list({ q: po.supplier });
+    const exact = matches.find(
+      (c) => (c.name ?? "").toLowerCase().trim() === po.supplier.toLowerCase().trim(),
+    );
+    contactRef = (exact ?? matches[0])?.id;
+  } catch {
+    /* zoeken is best-effort — anders sturen we contactName */
+  }
+
+  // 2. Lijn-items: koppel onze productIds aan Holded-productIds waar mogelijk.
+  const items = (po.items ?? []) as PurchaseOrderLineItem[];
+  const localIds = items.map((i) => i.productId).filter(Boolean) as string[];
+  const productLookup = localIds.length
+    ? new Map(
+        (
+          await db
+            .select({ id: products.id, holdedProductId: products.holdedProductId })
+            .from(products)
+            .where(inArray(products.id, localIds))
+        ).map((p) => [p.id, p.holdedProductId]),
+      )
+    : new Map<string, string | null>();
+
+  const productsBody = items.map((it) => {
+    const hid = it.productId ? productLookup.get(it.productId) : null;
+    return {
+      name: it.name,
+      ...(it.sku ? { sku: it.sku } : {}),
+      ...(hid ? { productId: hid } : {}),
+      units: it.units,
+      price: it.unitPrice,
+      tax: 0,
+      ...(it.note ? { desc: it.note } : {}),
+    };
+  });
+
+  // 3. Body samenstellen.
+  const dateUnix = po.orderDate
+    ? Math.floor(new Date(po.orderDate).getTime() / 1000)
+    : Math.floor(Date.now() / 1000);
+  const dueUnix = po.expectedDate
+    ? Math.floor(new Date(po.expectedDate).getTime() / 1000)
+    : undefined;
+
+  const body: Record<string, unknown> = {
+    desc: po.reference ?? `Bestelling ${po.supplier}`,
+    date: dateUnix,
+    ...(dueUnix ? { dueDate: dueUnix } : {}),
+    currency: (po.currency ?? "EUR").toLowerCase(),
+    notes: po.notes ?? "",
+    products: productsBody,
+    ...(po.reference ? { docNumber: po.reference } : {}),
+    draft: true, // markeer als concept tot ie definitief is
+  };
+  if (contactRef) body.contact = contactRef;
+  else body.contactName = po.supplier;
+
+  const result = await holded.documents.create("purchase", body);
+  if (!result?.id) {
+    throw new Error(`Holded gaf geen id terug — antwoord: ${JSON.stringify(result).slice(0, 200)}`);
+  }
+
+  await db
+    .update(purchaseOrders)
+    .set({ holdedId: result.id, updatedAt: new Date() })
+    .where(eq(purchaseOrders.id, poId));
+
+  return result.id;
 }
 
 /* --------------------------------------------------------- projecten (pull) */

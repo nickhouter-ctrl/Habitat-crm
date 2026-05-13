@@ -20,6 +20,7 @@ import {
 } from "@/components/ui";
 import { db } from "@/lib/db";
 import { products } from "@/lib/db/schema";
+import { formatDimensions } from "@/lib/products";
 import { cn, formatEUR } from "@/lib/utils";
 import { getProductCollections } from "../_options";
 
@@ -36,6 +37,7 @@ export default async function ProductsPage({
     typeof params.collection === "string" ? params.collection.trim() : "";
   const noBarcode = params.nobarcode === "1";
   const lowStock = params.lowstock === "1";
+  const noPhoto = params.nofoto === "1";
   const sort = typeof params.sort === "string" ? params.sort : "";
   const sortByOnderweg = sort === "onderweg";
 
@@ -46,6 +48,7 @@ export default async function ProductsPage({
     where: and(
       collection ? eq(products.collection, collection) : undefined,
       noBarcode ? and(isNull(products.barcode), eq(products.isActive, true)) : undefined,
+      noPhoto ? and(isNull(products.imageUrl), eq(products.isActive, true)) : undefined,
       lowStock
         ? and(
             eq(products.isActive, true),
@@ -58,6 +61,7 @@ export default async function ProductsPage({
             ilike(products.name, `%${q}%`),
             ilike(products.category, `%${q}%`),
             ilike(products.sku, `%${q}%`),
+            ilike(products.description, `%${q}%`),
           )
         : undefined,
     ),
@@ -70,6 +74,7 @@ export default async function ProductsPage({
       n: sql<number>`count(*)::int`,
       stockCostValue: sql<string>`coalesce(sum(coalesce(${products.costEur},0) * coalesce(${products.stockQty},0)), 0)`,
       stockSaleValue: sql<string>`coalesce(sum(coalesce(${products.priceEur},0) * coalesce(${products.stockQty},0)), 0)`,
+      noPhoto: sql<number>`count(case when ${products.isActive} = true and ${products.imageUrl} is null then 1 end)::int`,
     })
     .from(products);
 
@@ -119,6 +124,7 @@ export default async function ProductsPage({
     if (sort) sp.set("sort", sort);
     if (noBarcode) sp.set("nobarcode", "1");
     if (lowStock) sp.set("lowstock", "1");
+    if (noPhoto) sp.set("nofoto", "1");
     for (const [k, v] of Object.entries(overrides)) {
       if (v === undefined || v === "") sp.delete(k);
       else sp.set(k, v);
@@ -135,7 +141,7 @@ export default async function ProductsPage({
         title="Producten"
         subtitle={`${rows.length} ${rows.length === 1 ? "product" : "producten"}${
           noBarcode ? " zonder barcode" : ""
-        }${lowStock ? " onder voorraaddrempel" : ""}${collection ? ` in ${collection}` : ""}${q ? ` voor "${q}"` : ""}`}
+        }${noPhoto ? " zonder foto" : ""}${lowStock ? " onder voorraaddrempel" : ""}${collection ? ` in ${collection}` : ""}${q ? ` voor "${q}"` : ""}`}
         actions={
           <>
             {(() => {
@@ -159,10 +165,13 @@ export default async function ProductsPage({
         }
       />
 
-      <div className="mb-5 grid grid-cols-2 gap-3 sm:grid-cols-3">
+      <div className="mb-5 grid grid-cols-2 gap-3 sm:grid-cols-4">
         <StatTile label="Producten (totaal)" value={agg.n} />
         <StatTile label="Voorraadwaarde (kostprijs)" value={formatEUR(agg.stockCostValue)} hint="kostprijs × voorraad" />
         <StatTile label="Voorraadwaarde (verkoop)" value={formatEUR(agg.stockSaleValue)} hint="verkoopprijs × voorraad" />
+        <Link href="/products?nofoto=1" className="block">
+          <StatTile label="Zonder foto" value={agg.noPhoto} hint="actieve producten · ontbreekt op de site" />
+        </Link>
       </div>
 
 
@@ -223,6 +232,9 @@ export default async function ProductsPage({
                 <THead>
                   <tr>
                     <Th>Naam</Th>
+                    <Th>Site</Th>
+                    <Th>Afmetingen</Th>
+                    <Th>Omschrijving</Th>
                     <Th>SKU</Th>
                     <Th className="text-right">Voorraad</Th>
                     <Th className="text-right">
@@ -258,8 +270,37 @@ export default async function ProductsPage({
                           <Link href={`/products/${p.id}/edit`} className="hover:underline">
                             {p.name}
                           </Link>
+                          {!p.imageUrl && p.isActive && (
+                            <Badge tone="warning" className="ml-2 align-middle text-[10px]">
+                              geen foto
+                            </Badge>
+                          )}
                           {p.subcategory && (
                             <span className="block text-xs text-muted">{p.subcategory}</span>
+                          )}
+                        </Td>
+                        <Td className="whitespace-nowrap text-xs">
+                          {p.websiteProductId ? (
+                            <Badge tone="success" className="text-[10px]">✓ op site</Badge>
+                          ) : p.pushToWebsite ? (
+                            <Badge tone="info" className="text-[10px]">klaargezet</Badge>
+                          ) : (
+                            <span className="text-muted">—</span>
+                          )}
+                        </Td>
+                        <Td className="whitespace-nowrap text-xs tabular-nums">
+                          {formatDimensions(p) ?? <span className="text-muted">—</span>}
+                        </Td>
+                        <Td className="max-w-[18rem] text-xs text-muted">
+                          {p.description ? (
+                            <span
+                              className="line-clamp-2 whitespace-pre-line"
+                              title={p.description}
+                            >
+                              {p.description}
+                            </span>
+                          ) : (
+                            "—"
                           )}
                         </Td>
                         <Td className="text-muted">{p.sku ?? "—"}</Td>

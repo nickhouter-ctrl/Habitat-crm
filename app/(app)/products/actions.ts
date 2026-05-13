@@ -47,8 +47,13 @@ const productSchema = z.object({
   dutyPct: pct,
   targetMarginPct: pct,
   description: z.string().trim().max(4000).optional().or(z.literal("")),
+  widthMm: num,
+  heightMm: num,
+  lengthMm: num,
+  thicknessMm: num,
   imageUrl: z.string().trim().url().optional().or(z.literal("")),
   isActive: z.preprocess((v) => v === "on" || v === "true" || v === true, z.boolean()),
+  pushToWebsite: z.preprocess((v) => v === "on" || v === "true" || v === true, z.boolean()),
 });
 
 const dec = (v: number | undefined) => (v === undefined ? null : String(v));
@@ -82,8 +87,13 @@ function toValues(v: z.infer<typeof productSchema>) {
     targetMarginPct: dec(v.targetMarginPct),
     costEur: cost === null ? null : String(cost),
     description: v.description || null,
+    widthMm: dec(v.widthMm),
+    heightMm: dec(v.heightMm),
+    lengthMm: dec(v.lengthMm),
+    thicknessMm: dec(v.thicknessMm),
     imageUrl: v.imageUrl || null,
     isActive: v.isActive,
+    pushToWebsite: v.pushToWebsite,
   };
 }
 

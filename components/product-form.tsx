@@ -40,8 +40,14 @@ export function ProductForm({
     | "dutyPct"
     | "targetMarginPct"
     | "description"
+    | "widthMm"
+    | "heightMm"
+    | "lengthMm"
+    | "thicknessMm"
     | "imageUrl"
     | "isActive"
+    | "pushToWebsite"
+    | "websiteProductId"
   >;
   collections: string[];
   categories: string[];
@@ -170,6 +176,58 @@ export function ProductForm({
 
           <CostBreakdown initial={product} />
 
+          <fieldset className="rounded-md border border-border p-3">
+            <legend className="px-1 text-xs font-medium uppercase tracking-wide text-muted">
+              Afmetingen (mm) — synced naar de website
+            </legend>
+            <div className="grid gap-4 sm:grid-cols-4">
+              <Field label="Breedte" htmlFor="widthMm">
+                <Input
+                  id="widthMm"
+                  name="widthMm"
+                  type="number"
+                  step="0.1"
+                  min="0"
+                  defaultValue={product?.widthMm ?? ""}
+                  className="text-right"
+                />
+              </Field>
+              <Field label="Hoogte" htmlFor="heightMm">
+                <Input
+                  id="heightMm"
+                  name="heightMm"
+                  type="number"
+                  step="0.1"
+                  min="0"
+                  defaultValue={product?.heightMm ?? ""}
+                  className="text-right"
+                />
+              </Field>
+              <Field label="Lengte" htmlFor="lengthMm">
+                <Input
+                  id="lengthMm"
+                  name="lengthMm"
+                  type="number"
+                  step="0.1"
+                  min="0"
+                  defaultValue={product?.lengthMm ?? ""}
+                  className="text-right"
+                />
+              </Field>
+              <Field label="Dikte" htmlFor="thicknessMm">
+                <Input
+                  id="thicknessMm"
+                  name="thicknessMm"
+                  type="number"
+                  step="0.1"
+                  min="0"
+                  defaultValue={product?.thicknessMm ?? ""}
+                  className="text-right"
+                />
+              </Field>
+            </div>
+          </fieldset>
+
           <Field label="Omschrijving" htmlFor="description">
             <Textarea id="description" name="description" defaultValue={product?.description ?? ""} />
           </Field>
@@ -193,6 +251,25 @@ export function ProductForm({
             />
             Actief (verschijnt in de productkeuze bij offertes/facturen)
           </label>
+
+          <div className="rounded-md border border-border p-3 text-sm">
+            <label className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                name="pushToWebsite"
+                defaultChecked={product?.pushToWebsite ?? false}
+                className="size-4 rounded border-border"
+              />
+              Op de website tonen (habitat-one)
+            </label>
+            <p className="mt-1 text-xs text-muted">
+              {product?.websiteProductId
+                ? `Staat al op de website (id ${product.websiteProductId}). Bestaande gegevens worden bij elke sync bijgewerkt.`
+                : product?.pushToWebsite
+                  ? "Klaargezet om gepubliceerd te worden — wordt aangemaakt zodra je de sync draait."
+                  : "Niet zichtbaar op de website."}
+            </p>
+          </div>
 
           <div className="pt-1">
             <Button type="submit">{submitLabel}</Button>

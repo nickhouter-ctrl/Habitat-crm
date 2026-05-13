@@ -76,10 +76,12 @@ export default async function DashboardPage() {
         })
         .from(documents)
         .where(eq(documents.kind, "creditnote")),
+      // Lokale PO's die nog niet in Holded staan — die zijn al "besteld + betaald"
+      // maar zitten nog niet in de Holded-aankoopfacturen, dus tellen we los bij op.
       db
         .select({
           n: count(),
-          totalEur: sql<string>`coalesce(sum(case when ${purchaseOrders.currency} = 'EUR' and ${purchaseOrders.status} <> 'draft' then coalesce(${purchaseOrders.subtotal}, ${purchaseOrders.total}) else 0 end), 0)`,
+          totalEur: sql<string>`coalesce(sum(case when ${purchaseOrders.currency} = 'EUR' and ${purchaseOrders.holdedId} is null and ${purchaseOrders.status} not in ('draft', 'cancelled') then coalesce(${purchaseOrders.subtotal}, ${purchaseOrders.total}) else 0 end), 0)`,
         })
         .from(purchaseOrders),
       // Actieve producten zonder barcode + actieve producten onder de drempel.
@@ -87,6 +89,7 @@ export default async function DashboardPage() {
         .select({
           noBarcode: sql<number>`count(case when ${products.isActive} = true and ${products.barcode} is null then 1 end)::int`,
           lowStock: sql<number>`count(case when ${products.isActive} = true and ${products.stockMin} is not null and coalesce(${products.stockQty}, 0) < ${products.stockMin} then 1 end)::int`,
+          stockNoPhoto: sql<number>`count(case when ${products.isActive} = true and coalesce(${products.stockQty}, 0) > 0 and ${products.imageUrl} is null then 1 end)::int`,
         })
         .from(products),
       db
@@ -126,6 +129,8 @@ export default async function DashboardPage() {
   const maxN = Math.max(1, ...pipeline.map((p) => p.n));
   const revenueAll = Number(docAgg.revenueAll) - Number(creditAgg.paidAll);
   const revenueMonth = Number(docAgg.revenueMonth) - Number(creditAgg.revenueMonth);
+  const unpushedPurchase = Number(purchaseAgg.totalEur);
+  const totalPurchase = Number(holdedExpensesYTD) + unpushedPurchase;
 
   return (
     <>
@@ -135,8 +140,19 @@ export default async function DashboardPage() {
         actions={<LinkButton href="/contacts/new">Nieuw contact</LinkButton>}
       />
 
-      {(productsAgg.noBarcode > 0 || productsAgg.lowStock > 0 || docAgg.overdueN > 0 || openPurchaseOrders.length > 0) && (
+      {(productsAgg.noBarcode > 0 || productsAgg.lowStock > 0 || productsAgg.stockNoPhoto > 0 || docAgg.overdueN > 0 || openPurchaseOrders.length > 0) && (
         <div className="mb-4 space-y-2">
+          {productsAgg.stockNoPhoto > 0 && (
+            <Link
+              href="/products?nofoto=1"
+              className="flex items-center justify-between gap-3 rounded-md border border-warning/40 bg-warning/10 px-4 py-3 text-sm text-foreground transition-colors hover:bg-warning/15"
+            >
+              <span>
+                📸 <strong>{productsAgg.stockNoPhoto}</strong> producten hebben voorraad maar nog geen foto — vul aan en push naar de website.
+              </span>
+              <span className="font-medium text-warning">Bekijk →</span>
+            </Link>
+          )}
           {productsAgg.lowStock > 0 && (
             <Link
               href="/products?lowstock=1"
@@ -194,7 +210,15 @@ export default async function DashboardPage() {
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
         <StatTile label="Totale omzet" value={formatEUR(revenueAll)} hint="ex. BTW · facturen − creditnota's" />
-        <StatTile label="Totale inkoop" value={formatEUR(holdedExpensesYTD)} hint="ex. BTW · uit Holded aankoopfacturen" />
+        <StatTile
+          label="Totale inkoop"
+          value={formatEUR(totalPurchase)}
+          hint={
+            unpushedPurchase > 0
+              ? `ex. BTW · Holded ${formatEUR(holdedExpensesYTD)} + ${purchaseAgg.n} nog-niet-gepushte PO's`
+              : "ex. BTW · uit Holded aankoopfacturen"
+          }
+        />
         <StatTile label="Omzet deze maand" value={formatEUR(revenueMonth)} hint="ex. BTW" />
         <StatTile label="Openstaande facturen" value={docAgg.outstandingN} hint={formatEUR(docAgg.outstandingV)} />
         <StatTile label="Vervallen facturen" value={docAgg.overdueN} hint={formatEUR(docAgg.overdueV)} />

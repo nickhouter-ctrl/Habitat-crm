@@ -115,6 +115,8 @@ export interface HoldedDocument {
   total?: number;
   /** 0 = unpaid, 1 = paid, 2 = partially paid (Holded conventions vary). */
   status?: number;
+  /** True for concept-/draft-documenten in Holded. `status` is *payment*-status, niet approval. */
+  draft?: boolean;
   paymentsTotal?: number;
   paymentsPending?: number;
   products?: HoldedDocumentItem[];

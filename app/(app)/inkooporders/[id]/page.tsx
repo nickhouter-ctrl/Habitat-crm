@@ -1,4 +1,4 @@
-import { eq, inArray } from "drizzle-orm";
+import { and, eq, ilike, inArray, isNotNull } from "drizzle-orm";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
@@ -21,9 +21,15 @@ import {
 } from "@/components/ui";
 import { db } from "@/lib/db";
 import { products, purchaseOrders } from "@/lib/db/schema";
+import { nextSequentialSku } from "@/lib/products";
 import { formatMoney, poLineTotal, PO_STATUS_META } from "@/lib/purchase-orders";
 import { purchaseOrderFileUrl } from "@/lib/storage";
-import { deletePurchaseOrder, setPurchaseOrderStatus } from "../actions";
+import {
+  createProductFromPoLine,
+  deletePurchaseOrder,
+  pushPurchaseOrderToHolded,
+  setPurchaseOrderStatus,
+} from "../actions";
 
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -53,6 +59,29 @@ export default async function PurchaseOrderPage({ params }: { params: Promise<{ 
         .where(inArray(products.id, linkedIds))
     : [];
   const stockById = new Map(linked.map((p) => [p.id, p.stockQty]));
+
+  // Per losse regel een voorspelde volgende SKU (default prefix MS).
+  const SKU_PREFIX = "MS";
+  const hasUnlinked = items.some((it) => !it.productId);
+  const existingSkus = hasUnlinked
+    ? (
+        await db
+          .select({ sku: products.sku })
+          .from(products)
+          .where(and(isNotNull(products.sku), ilike(products.sku, `${SKU_PREFIX}%`)))
+      ).map((r) => r.sku)
+    : [];
+  const predictedSkus: (string | null)[] = [];
+  const reservedSkus = [...existingSkus];
+  for (const it of items) {
+    if (it.productId) {
+      predictedSkus.push(null);
+    } else {
+      const next = nextSequentialSku(SKU_PREFIX, reservedSkus);
+      predictedSkus.push(next);
+      reservedSkus.push(next);
+    }
+  }
 
   const attachments = await Promise.all(
     (po.attachments ?? []).map(async (a) => ({ ...a, url: await purchaseOrderFileUrl(a.path) })),
@@ -103,7 +132,10 @@ export default async function PurchaseOrderPage({ params }: { params: Promise<{ 
               </tr>
             </THead>
             <TBody>
-              {items.map((it, i) => (
+              {items.map((it, i) => {
+                const predictedSku = predictedSkus[i];
+                const makeProduct = createProductFromPoLine.bind(null, id, i);
+                return (
                 <Tr key={i}>
                   <Td className="font-medium">
                     {it.productId ? (
@@ -111,7 +143,17 @@ export default async function PurchaseOrderPage({ params }: { params: Promise<{ 
                         {it.name}
                       </Link>
                     ) : (
-                      it.name
+                      <div className="space-y-1">
+                        <span>{it.name}</span>
+                        <form action={makeProduct}>
+                          <button
+                            className={buttonClass({ variant: "secondary", size: "sm" })}
+                            title={`Maak product met SKU ${predictedSku}`}
+                          >
+                            + Maak product ({predictedSku})
+                          </button>
+                        </form>
+                      </div>
                     )}
                     {it.note && <span className="block text-xs text-muted">{it.note}</span>}
                   </Td>
@@ -125,7 +167,8 @@ export default async function PurchaseOrderPage({ params }: { params: Promise<{ 
                       : "—"}
                   </Td>
                 </Tr>
-              ))}
+                );
+              })}
               <Tr>
                 <Td className="font-semibold" colSpan={4}>
                   Totaal
@@ -196,6 +239,30 @@ export default async function PurchaseOrderPage({ params }: { params: Promise<{ 
                 <p className="text-xs text-muted">
                   Bij ‘Ontvangen’ worden de aantallen van gekoppelde producten bij de voorraad opgeteld.
                 </p>
+              )}
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Holded</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-2">
+              {po.holdedId ? (
+                <p className="text-xs text-muted">
+                  Gekoppeld aan Holded (id <span className="font-mono">{po.holdedId}</span>).
+                </p>
+              ) : (
+                <>
+                  <form action={pushPurchaseOrderToHolded.bind(null, id)}>
+                    <button className={buttonClass({ variant: "secondary", size: "sm" })}>
+                      Push naar Holded
+                    </button>
+                  </form>
+                  <p className="text-xs text-muted">
+                    Maakt deze bestelling als concept-aankoopfactuur in Holded en koppelt 'm.
+                  </p>
+                </>
               )}
             </CardContent>
           </Card>

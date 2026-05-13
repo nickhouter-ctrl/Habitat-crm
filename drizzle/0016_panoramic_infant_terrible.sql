@@ -1,0 +1,1 @@
+ALTER TABLE "products" ADD COLUMN "push_to_website" boolean DEFAULT false NOT NULL;
