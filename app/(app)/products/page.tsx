@@ -1,4 +1,4 @@
-import { and, asc, eq, ilike, isNotNull, isNull, lt, or, sql } from "drizzle-orm";
+import { and, asc, eq, ilike, inArray, isNotNull, isNull, lt, or, sql } from "drizzle-orm";
 import { Search } from "lucide-react";
 import Link from "next/link";
 
@@ -71,6 +71,32 @@ export default async function ProductsPage({
     })
     .from(products);
 
+  // Producten die nu onderweg/besteld zijn (open inkooporders).
+  const onOrderRows = (await db.execute(sql`
+    select
+      (item->>'productId')::uuid as product_id,
+      sum((item->>'units')::numeric) as qty,
+      max(po.expected_date) as next_date,
+      string_agg(distinct po.supplier, ', ') as suppliers
+    from purchase_orders po,
+      jsonb_array_elements(po.items) as item
+    where po.status in ('ordered', 'in_transit')
+      and item->>'productId' is not null
+    group by product_id
+  `)) as unknown as { product_id: string; qty: string; next_date: string | null; suppliers: string }[];
+  const onOrderByProduct = new Map(
+    (Array.isArray(onOrderRows) ? onOrderRows : (onOrderRows as { rows?: any[] }).rows ?? []).map(
+      (r: any) => [r.product_id as string, { qty: Number(r.qty || 0), nextDate: r.next_date as string | null, suppliers: r.suppliers as string }],
+    ),
+  );
+
+  const onOrderProducts = onOrderByProduct.size
+    ? await db
+        .select({ id: products.id, name: products.name, sku: products.sku, stockQty: products.stockQty })
+        .from(products)
+        .where(inArray(products.id, [...onOrderByProduct.keys()]))
+    : [];
+
   // Group by category for the display.
   const groups = new Map<string, typeof rows>();
   for (const p of rows) {
@@ -122,6 +148,50 @@ export default async function ProductsPage({
         <StatTile label="Voorraadwaarde (kostprijs)" value={formatEUR(agg.stockCostValue)} hint="kostprijs × voorraad" />
         <StatTile label="Voorraadwaarde (verkoop)" value={formatEUR(agg.stockSaleValue)} hint="verkoopprijs × voorraad" />
       </div>
+
+      {onOrderProducts.length > 0 && (
+        <Card className="mb-5 overflow-hidden">
+          <div className="flex items-center justify-between gap-3 border-b bg-background/60 px-4 py-2.5">
+            <h2 className="text-sm font-semibold">📦 Onderweg / besteld</h2>
+            <span className="text-xs text-muted">{onOrderProducts.length} product(en) in open inkooporders</span>
+          </div>
+          <Table>
+            <THead>
+              <tr>
+                <Th>Product</Th>
+                <Th>SKU</Th>
+                <Th className="text-right">Huidige voorraad</Th>
+                <Th className="text-right">Besteld</Th>
+                <Th>Leverancier</Th>
+                <Th>Verwacht</Th>
+              </tr>
+            </THead>
+            <TBody>
+              {onOrderProducts.map((p) => {
+                const info = onOrderByProduct.get(p.id)!;
+                return (
+                  <Tr key={p.id}>
+                    <Td className="font-medium">
+                      <Link href={`/products/${p.id}/edit`} className="hover:underline">
+                        {p.name}
+                      </Link>
+                    </Td>
+                    <Td className="text-muted">{p.sku ?? "—"}</Td>
+                    <Td className="text-right tabular-nums">{p.stockQty != null ? Number(p.stockQty).toLocaleString("nl-NL") : "—"}</Td>
+                    <Td className="text-right tabular-nums font-medium text-accent">+{info.qty.toLocaleString("nl-NL")}</Td>
+                    <Td className="text-muted">{info.suppliers}</Td>
+                    <Td className="text-muted">
+                      {info.nextDate
+                        ? new Date(info.nextDate).toLocaleDateString("nl-NL", { day: "numeric", month: "short", year: "numeric" })
+                        : "—"}
+                    </Td>
+                  </Tr>
+                );
+              })}
+            </TBody>
+          </Table>
+        </Card>
+      )}
 
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <div className="flex flex-wrap gap-1">
@@ -215,6 +285,12 @@ export default async function ProductsPage({
                           )}
                         >
                           {stock != null ? stock.toLocaleString("nl-NL") : "—"}
+                          {(() => {
+                            const oo = onOrderByProduct.get(p.id);
+                            return oo && oo.qty > 0 ? (
+                              <span className="ml-1 text-xs font-medium text-accent">+{oo.qty.toLocaleString("nl-NL")}</span>
+                            ) : null;
+                          })()}
                         </Td>
                         <Td className="text-muted">{p.unit ?? "—"}</Td>
                         <Td className="text-right tabular-nums">{p.priceEur ? formatEUR(p.priceEur) : "—"}</Td>
