@@ -25,8 +25,9 @@ const client =
   globalForDb.__habitatPg ??
   postgres(connectionString ?? "postgres://localhost:5432/habitat_crm_unconfigured", {
     // `prepare: false` is required for Supabase's transaction pooler (6543).
+    // We deliberately leave `max` at the postgres.js default — capping it lower
+    // caused query queues that hit Postgres's statement_timeout under load.
     prepare: false,
-    max: 3,
     idle_timeout: 10,
     connect_timeout: 15,
   });
