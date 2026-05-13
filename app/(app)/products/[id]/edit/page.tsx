@@ -68,7 +68,7 @@ export default async function EditProductPage({
           <CardTitle>Barcode</CardTitle>
           {product.barcode && (
             <a
-              href={`/products/${id}/label`}
+              href={`/labels/${id}`}
               target="_blank"
               rel="noopener noreferrer"
               className={buttonClass({ variant: "secondary", size: "sm" })}
