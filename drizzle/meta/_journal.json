@@ -134,6 +134,13 @@
       "when": 1778671510810,
       "tag": "0018_glossy_galactus",
       "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1778675012486,
+      "tag": "0019_bitter_the_spike",
+      "breakpoints": true
     }
   ]
 }

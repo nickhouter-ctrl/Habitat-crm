@@ -239,6 +239,8 @@ export interface PricelistItem {
   heightMm: string | number | null;
   lengthMm: string | number | null;
   thicknessMm: string | number | null;
+  /** Alternatieve maten, bv. ["2400 × 590 mm", "1200 × 190 mm"]. */
+  additionalSizes?: string[] | null;
   unit: string | null;
   priceEur: string | number | null;
   vatRate: number;
@@ -345,6 +347,7 @@ function PricelistPdf({
               const desc = shortDesc(localDesc);
               const ex = Number(it.priceEur ?? 0);
               const inc = ex > 0 ? incl(ex, it.vatRate) : 0;
+              const extraSizes = (it.additionalSizes ?? []).filter(Boolean);
               return (
                 <View key={i} style={s.tr} wrap={false}>
                   <View style={s.cPhoto}>
@@ -360,7 +363,14 @@ function PricelistPdf({
                     <Text style={s.itemName}>{it.name}</Text>
                     {desc && <Text style={s.itemDesc}>{desc}</Text>}
                   </View>
-                  <Text style={s.cDim}>{dim ?? "—"}</Text>
+                  <View style={s.cDim}>
+                    <Text>{dim ?? "—"}</Text>
+                    {extraSizes.length > 0 && (
+                      <Text style={{ fontSize: 7.5, color: COMPANY.muted, marginTop: 2, fontFamily: "Times-Italic" }}>
+                        + {extraSizes.join(" · ")}
+                      </Text>
+                    )}
+                  </View>
                   <Text style={s.cSku}>{it.sku ?? "—"}</Text>
                   <Text style={s.cPriceEx}>{ex > 0 ? eur(ex) : "—"}</Text>
                   <Text style={s.cVat}>{it.vatRate}%</Text>

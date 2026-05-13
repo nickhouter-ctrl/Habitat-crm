@@ -36,6 +36,8 @@ interface WebsiteProduct {
   length: number | null;
   thickness: number | null;
   dimension_unit: string | null;
+  /** Alternatieve maten — strings zoals "2400 × 590 mm". */
+  additional_sizes?: string[] | null;
   coverage_value: number | null;
   coverage_unit: string | null;
   stock_unit: string | null;
@@ -163,12 +165,15 @@ export async function pushProductToWebsite(productId: string): Promise<PushResul
     translatedDesc = { nl: product.description };
   }
 
+  const extraSizes = (product.additionalSizes as string[] | null) ?? null;
+
   if (existingIdx >= 0) {
     // Update
     entry = { ...websiteProducts[existingIdx] };
     entry.name = product.name;
     if (product.description) entry.description = product.description;
     if (translatedDesc) entry.description_i18n = translatedDesc;
+    if (extraSizes !== null) entry.additional_sizes = extraSizes;
     if (nextW != null) entry.width = nextW;
     if (nextH != null) entry.height = nextH;
     if (nextL != null) entry.length = nextL;
@@ -194,6 +199,7 @@ export async function pushProductToWebsite(productId: string): Promise<PushResul
       length: nextL,
       thickness: nextT,
       dimension_unit: "mm",
+      additional_sizes: extraSizes,
       coverage_value: null,
       coverage_unit: null,
       stock_unit: "Pcs",

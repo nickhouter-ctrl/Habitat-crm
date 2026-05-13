@@ -46,6 +46,7 @@ export async function GET(req: Request) {
     heightMm: p.heightMm ?? null,
     lengthMm: p.lengthMm ?? null,
     thicknessMm: p.thicknessMm ?? null,
+    additionalSizes: (p.additionalSizes as string[] | null) ?? null,
     unit: p.unit ?? null,
     priceEur: p.priceEur ?? null,
     vatRate: p.vatRate ?? 21,
