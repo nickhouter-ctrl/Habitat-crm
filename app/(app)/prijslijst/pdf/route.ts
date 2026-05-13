@@ -1,0 +1,64 @@
+import { NextResponse } from "next/server";
+import { and, asc, eq, isNotNull } from "drizzle-orm";
+
+import { auth } from "@/auth";
+import { db } from "@/lib/db";
+import { products } from "@/lib/db/schema";
+import { renderPricelistPdf, type PricelistItem } from "@/lib/pricelist-pdf";
+
+export async function GET(req: Request) {
+  const session = await auth();
+  if (!session?.user) return NextResponse.json({ error: "unauth" }, { status: 401 });
+
+  const url = new URL(req.url);
+  const collection = url.searchParams.get("collection") || "";
+  const category = url.searchParams.get("category") || "";
+  const onlyActive = url.searchParams.get("onlyActive") === "on";
+  const onlyWithPrice = url.searchParams.get("onlyWithPrice") === "on";
+  const title = (url.searchParams.get("title") || "PRIJSLIJST VERKOOP").toUpperCase();
+
+  const filters = [
+    collection ? eq(products.collection, collection) : undefined,
+    category ? eq(products.category, category) : undefined,
+    onlyActive ? eq(products.isActive, true) : undefined,
+    onlyWithPrice ? isNotNull(products.priceEur) : undefined,
+  ].filter(Boolean) as never[];
+
+  const rows = await db
+    .select()
+    .from(products)
+    .where(filters.length ? and(...filters) : undefined)
+    .orderBy(asc(products.collection), asc(products.category), asc(products.name));
+
+  const groupBy = collection ? "category" : "collection";
+  const items: PricelistItem[] = rows.map((p) => ({
+    name: p.name,
+    sku: p.sku ?? null,
+    description: p.description ?? null,
+    imageUrl: p.imageUrl ?? null,
+    widthMm: p.widthMm ?? null,
+    heightMm: p.heightMm ?? null,
+    lengthMm: p.lengthMm ?? null,
+    thicknessMm: p.thicknessMm ?? null,
+    unit: p.unit ?? null,
+    priceEur: p.priceEur ?? null,
+    vatRate: p.vatRate ?? 21,
+    group: ((groupBy === "category" ? p.category : p.collection) ?? "Overige").trim(),
+  }));
+
+  const subtitleParts: string[] = [];
+  if (collection) subtitleParts.push(`Collectie: ${collection}`);
+  if (category) subtitleParts.push(`Categorie: ${category}`);
+  const subtitle = subtitleParts.length ? subtitleParts.join(" · ") : null;
+
+  const pdf = await renderPricelistPdf({ items, title, subtitle });
+  const filename = `${title.toLowerCase().replace(/\s+/g, "-")}.pdf`;
+  return new NextResponse(new Uint8Array(pdf), {
+    status: 200,
+    headers: {
+      "content-type": "application/pdf",
+      "content-disposition": `inline; filename="${filename}"`,
+      "cache-control": "no-store",
+    },
+  });
+}

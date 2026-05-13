@@ -5,11 +5,19 @@
  */
 type Lang = "en" | "nl" | "es" | "de";
 
+export interface EmailAttachment {
+  filename: string;
+  /** Raw bytes — wordt voor Resend base64-encoded. */
+  content: Buffer | Uint8Array;
+  contentType?: string;
+}
+
 export async function sendEmail(input: {
   to: string;
   subject: string;
   html: string;
   text?: string;
+  attachments?: EmailAttachment[];
 }): Promise<{ sent: boolean; reason?: string }> {
   const apiKey = process.env.RESEND_API_KEY;
   const from = process.env.EMAIL_FROM;
@@ -20,19 +28,27 @@ export async function sendEmail(input: {
     return { sent: false, reason: "not-configured" };
   }
   try {
+    const payload: Record<string, unknown> = {
+      from,
+      to: input.to,
+      subject: input.subject,
+      html: input.html,
+      text: input.text,
+    };
+    if (input.attachments?.length) {
+      payload.attachments = input.attachments.map((a) => ({
+        filename: a.filename,
+        content: Buffer.from(a.content).toString("base64"),
+        ...(a.contentType ? { content_type: a.contentType } : {}),
+      }));
+    }
     const res = await fetch("https://api.resend.com/emails", {
       method: "POST",
       headers: {
         authorization: `Bearer ${apiKey}`,
         "content-type": "application/json",
       },
-      body: JSON.stringify({
-        from,
-        to: input.to,
-        subject: input.subject,
-        html: input.html,
-        text: input.text,
-      }),
+      body: JSON.stringify(payload),
       cache: "no-store",
     });
     if (!res.ok) {
