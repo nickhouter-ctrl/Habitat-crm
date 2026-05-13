@@ -266,10 +266,24 @@ export function DocumentWizard({
         </Card>
 
         <Card>
-          <CardContent>
+          <CardContent className="space-y-3">
             <Field label="Notities / voorwaarden" htmlFor="notes">
               <Textarea id="notes" name="notes" />
             </Field>
+            {(kind === "invoice" || kind === "estimate") && (
+              <label className="flex cursor-pointer items-center gap-2 text-sm text-foreground">
+                <input
+                  type="checkbox"
+                  name="alsoDeliveryNote"
+                  value="1"
+                  className="size-4 rounded border bg-background"
+                />
+                <span>
+                  Direct ook een <strong>pakbon</strong> klaarzetten met dezelfde regels
+                  <span className="text-muted"> — zonder prijzen, klaar om mee te nemen naar de levering</span>
+                </span>
+              </label>
+            )}
           </CardContent>
         </Card>
 

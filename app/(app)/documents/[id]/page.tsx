@@ -63,10 +63,20 @@ const STATUS_OPTIONS = [
 
 export default async function DocumentDetailPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>;
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const { id } = await params;
+  const sp = await searchParams;
+  const pakbonId = typeof sp.pakbon === "string" ? sp.pakbon : null;
+  const pakbonDoc = pakbonId
+    ? await db.query.documents.findFirst({
+        where: eq(documents.id, pakbonId),
+        columns: { id: true, docNumber: true },
+      })
+    : null;
 
   const doc = await db.query.documents.findFirst({
     where: eq(documents.id, id),
@@ -129,6 +139,17 @@ export default async function DocumentDetailPage({
           </>
         }
       />
+
+      {pakbonDoc && (
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-md border border-accent/40 bg-accent/10 px-3 py-2 text-sm">
+          <span>
+            ✓ Pakbon <strong>{pakbonDoc.docNumber ?? ""}</strong> klaargezet met dezelfde regels (zonder prijzen).
+          </span>
+          <Link href={`/documents/${pakbonDoc.id}`} className="font-medium text-accent hover:underline">
+            Open pakbon →
+          </Link>
+        </div>
+      )}
 
       <div className="grid gap-4 lg:grid-cols-3">
         <div className="space-y-4">

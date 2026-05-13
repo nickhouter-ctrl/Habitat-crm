@@ -186,8 +186,16 @@ export async function createDocumentFromWizard(formData: FormData) {
     .returning({ id: documents.id });
 
   await syncDealFromDocument(dealId, { kind, status: "draft", totalEur: values.totalEur });
+
+  // Optional: spin off a pakbon meteen, met dezelfde regels.
+  const alsoDelivery = String(raw.alsoDeliveryNote ?? "") === "1";
+  let deliveryId: string | null = null;
+  if (alsoDelivery && (kind === "invoice" || kind === "estimate")) {
+    deliveryId = await createDeliveryNoteInternal(row.id);
+  }
+
   revalidateAround(kind);
-  redirect(`/documents/${row.id}`);
+  redirect(deliveryId ? `/documents/${row.id}?pakbon=${deliveryId}` : `/documents/${row.id}`);
 }
 
 export async function updateDocument(id: string, formData: FormData) {
@@ -352,10 +360,10 @@ export async function createInvoiceFromEstimate(estimateId: string) {
 }
 
 /** Create a draft delivery note (pakbon) copied from another document's lines. */
-export async function createDeliveryNoteFromDocument(sourceId: string) {
-  await requireUser();
+/** Internal: clone a document as a pakbon and return the new id (no redirect). */
+async function createDeliveryNoteInternal(sourceId: string): Promise<string | null> {
   const src = await db.query.documents.findFirst({ where: eq(documents.id, sourceId) });
-  if (!src) return;
+  if (!src) return null;
 
   const [{ n }] = await db
     .select({ n: count() })
@@ -385,5 +393,11 @@ export async function createDeliveryNoteFromDocument(sourceId: string) {
 
   revalidateAround("deliverynote");
   revalidatePath(`/documents/${sourceId}`);
-  redirect(`/documents/${row.id}/edit`);
+  return row.id;
+}
+
+export async function createDeliveryNoteFromDocument(sourceId: string) {
+  await requireUser();
+  const id = await createDeliveryNoteInternal(sourceId);
+  if (id) redirect(`/documents/${id}/edit`);
 }
