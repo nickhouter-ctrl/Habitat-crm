@@ -317,6 +317,8 @@ export const products = pgTable(
     barcode: text(),
     /** Current stock on hand (mirror of Holded once synced). */
     stockQty: numeric({ precision: 14, scale: 3 }),
+    /** Lage-voorraad-drempel — alert verschijnt wanneer stockQty onder dit getal zakt. */
+    stockMin: numeric({ precision: 14, scale: 3 }),
     /** Top-level group / department, e.g. "Wandpanelen", "Badkamer", "Accessoires". */
     collection: text(),
     category: text(), // e.g. "Italian Travertine", "Magic Stone" — the product family

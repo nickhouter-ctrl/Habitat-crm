@@ -26,6 +26,7 @@ export function ProductForm({
     | "sku"
     | "barcode"
     | "stockQty"
+    | "stockMin"
     | "collection"
     | "category"
     | "subcategory"
@@ -60,7 +61,7 @@ export function ProductForm({
             />
           </Field>
 
-          <div className="grid gap-4 sm:grid-cols-4">
+          <div className="grid gap-4 sm:grid-cols-5">
             <Field label="SKU / code" htmlFor="sku">
               <Input id="sku" name="sku" defaultValue={product?.sku ?? ""} />
             </Field>
@@ -68,6 +69,7 @@ export function ProductForm({
               label="Barcode (EAN-13)"
               htmlFor="barcode"
               hint="Leeg laten = automatisch genereren"
+              className="sm:col-span-2"
             >
               <Input
                 id="barcode"
@@ -84,6 +86,18 @@ export function ProductForm({
                 step="0.001"
                 defaultValue={product?.stockQty ?? ""}
                 className="text-right"
+              />
+            </Field>
+            <Field label="Min. voorraad" htmlFor="stockMin" hint="alert onder dit aantal">
+              <Input
+                id="stockMin"
+                name="stockMin"
+                type="number"
+                step="0.001"
+                min="0"
+                defaultValue={product?.stockMin ?? ""}
+                className="text-right"
+                placeholder="leeg = geen alert"
               />
             </Field>
           </div>

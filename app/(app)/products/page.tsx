@@ -1,4 +1,4 @@
-import { and, asc, eq, ilike, isNull, or, sql } from "drizzle-orm";
+import { and, asc, eq, ilike, isNotNull, isNull, lt, or, sql } from "drizzle-orm";
 import { Search } from "lucide-react";
 import Link from "next/link";
 
@@ -35,6 +35,7 @@ export default async function ProductsPage({
   const collectionParam =
     typeof params.collection === "string" ? params.collection.trim() : "";
   const noBarcode = params.nobarcode === "1";
+  const lowStock = params.lowstock === "1";
 
   const allCollections = await getProductCollections();
   const collection = allCollections.includes(collectionParam) ? collectionParam : "";
@@ -43,6 +44,13 @@ export default async function ProductsPage({
     where: and(
       collection ? eq(products.collection, collection) : undefined,
       noBarcode ? and(isNull(products.barcode), eq(products.isActive, true)) : undefined,
+      lowStock
+        ? and(
+            eq(products.isActive, true),
+            isNotNull(products.stockMin),
+            lt(sql<number>`coalesce(${products.stockQty}, 0)`, sql<number>`${products.stockMin}`),
+          )
+        : undefined,
       q
         ? or(
             ilike(products.name, `%${q}%`),
@@ -85,7 +93,7 @@ export default async function ProductsPage({
         title="Producten"
         subtitle={`${rows.length} ${rows.length === 1 ? "product" : "producten"}${
           noBarcode ? " zonder barcode" : ""
-        }${collection ? ` in ${collection}` : ""}${q ? ` voor "${q}"` : ""}`}
+        }${lowStock ? " onder voorraaddrempel" : ""}${collection ? ` in ${collection}` : ""}${q ? ` voor "${q}"` : ""}`}
         actions={
           <>
             {(() => {

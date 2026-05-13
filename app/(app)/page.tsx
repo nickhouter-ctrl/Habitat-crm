@@ -79,11 +79,13 @@ export default async function DashboardPage() {
           totalEur: sql<string>`coalesce(sum(case when ${purchaseOrders.currency} = 'EUR' then ${purchaseOrders.total} else 0 end), 0)`,
         })
         .from(purchaseOrders),
-      // Actieve producten zonder barcode — die hebben nog labels nodig.
+      // Actieve producten zonder barcode + actieve producten onder de drempel.
       db
-        .select({ n: count() })
-        .from(products)
-        .where(and(eq(products.isActive, true), isNull(products.barcode))),
+        .select({
+          noBarcode: sql<number>`count(case when ${products.isActive} = true and ${products.barcode} is null then 1 end)::int`,
+          lowStock: sql<number>`count(case when ${products.isActive} = true and ${products.stockMin} is not null and coalesce(${products.stockQty}, 0) < ${products.stockMin} then 1 end)::int`,
+        })
+        .from(products),
       db
         .select()
         .from(purchaseOrders)
@@ -129,16 +131,61 @@ export default async function DashboardPage() {
         actions={<LinkButton href="/contacts/new">Nieuw contact</LinkButton>}
       />
 
-      {productsAgg.n > 0 && (
-        <Link
-          href="/products?nobarcode=1"
-          className="mb-4 flex items-center justify-between gap-3 rounded-md border border-warning/40 bg-warning/10 px-4 py-3 text-sm text-foreground transition-colors hover:bg-warning/15"
-        >
-          <span>
-            ⚠️ <strong>{productsAgg.n}</strong> producten hebben nog geen barcode — labels kunnen niet geprint worden tot deze zijn aangemaakt.
-          </span>
-          <span className="font-medium text-warning">Bekijk →</span>
-        </Link>
+      {(productsAgg.noBarcode > 0 || productsAgg.lowStock > 0 || docAgg.overdueN > 0 || openPurchaseOrders.length > 0) && (
+        <div className="mb-4 space-y-2">
+          {productsAgg.lowStock > 0 && (
+            <Link
+              href="/products?lowstock=1"
+              className="flex items-center justify-between gap-3 rounded-md border border-danger/40 bg-danger/10 px-4 py-3 text-sm text-foreground transition-colors hover:bg-danger/15"
+            >
+              <span>
+                🔻 <strong>{productsAgg.lowStock}</strong> producten staan onder de voorraaddrempel — bijbestellen voordat het op is.
+              </span>
+              <span className="font-medium text-danger">Bekijk →</span>
+            </Link>
+          )}
+          {docAgg.overdueN > 0 && (
+            <Link
+              href="/invoices"
+              className="flex items-center justify-between gap-3 rounded-md border border-danger/40 bg-danger/10 px-4 py-3 text-sm text-foreground transition-colors hover:bg-danger/15"
+            >
+              <span>
+                ⏰ <strong>{docAgg.overdueN}</strong> factu{docAgg.overdueN === 1 ? "ur is" : "ren zijn"} vervallen ({formatEUR(docAgg.overdueV)} openstaand) — verstuur herinnering.
+              </span>
+              <span className="font-medium text-danger">Open facturen →</span>
+            </Link>
+          )}
+          {(() => {
+            const soon = openPurchaseOrders.filter((po) => {
+              if (!po.expectedDate) return false;
+              const d = new Date(po.expectedDate).getTime();
+              const diff = (d - Date.now()) / (1000 * 60 * 60 * 24);
+              return diff <= 7 && diff >= -1;
+            });
+            return soon.length > 0 ? (
+              <Link
+                href="/inkooporders"
+                className="flex items-center justify-between gap-3 rounded-md border border-accent/40 bg-accent/10 px-4 py-3 text-sm text-foreground transition-colors hover:bg-accent/15"
+              >
+                <span>
+                  📦 <strong>{soon.length}</strong> inkooporder{soon.length === 1 ? "" : "s"} komen deze week binnen — voorraad klaarzetten.
+                </span>
+                <span className="font-medium text-accent">Open inkooporders →</span>
+              </Link>
+            ) : null;
+          })()}
+          {productsAgg.noBarcode > 0 && (
+            <Link
+              href="/products?nobarcode=1"
+              className="flex items-center justify-between gap-3 rounded-md border border-warning/40 bg-warning/10 px-4 py-3 text-sm text-foreground transition-colors hover:bg-warning/15"
+            >
+              <span>
+                🏷️ <strong>{productsAgg.noBarcode}</strong> producten hebben nog geen barcode — labels kunnen niet geprint worden.
+              </span>
+              <span className="font-medium text-warning">Bekijk →</span>
+            </Link>
+          )}
+        </div>
       )}
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
