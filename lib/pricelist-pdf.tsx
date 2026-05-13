@@ -14,6 +14,28 @@ import { formatDimensions } from "@/lib/products";
 
 export type PricelistLocale = "nl" | "de" | "en" | "es";
 
+/**
+ * Vertaaltabel voor collectie/categorie-namen — sleutel is de Nederlandse
+ * naam (zoals 'ie in CRM staat). Onbekende namen vallen terug op zichzelf.
+ */
+const GROUP_TRANSLATIONS: Record<string, Record<PricelistLocale, string>> = {
+  // Collecties
+  "Wandpanelen": { nl: "Wandpanelen", de: "Wandpaneele", en: "Wall Panels", es: "Paneles de Pared" },
+  "Badkamer": { nl: "Badkamer", de: "Bad", en: "Bathroom", es: "Baño" },
+  "Badkamer accessoires": { nl: "Badkamer accessoires", de: "Bad-Zubehör", en: "Bathroom Accessories", es: "Accesorios de Baño" },
+  "Binnen en buiten deuren": { nl: "Binnen en buiten deuren", de: "Innen- und Außentüren", en: "Interior & Exterior Doors", es: "Puertas Interiores y Exteriores" },
+  "Accessoires": { nl: "Accessoires", de: "Zubehör", en: "Accessories", es: "Accesorios" },
+  // Categorieën (productfamilies)
+  "Binnendeuren": { nl: "Binnendeuren", de: "Innentüren", en: "Interior Doors", es: "Puertas Interiores" },
+  "Buitendeuren": { nl: "Buitendeuren", de: "Außentüren", en: "Exterior Doors", es: "Puertas Exteriores" },
+  "Beslag": { nl: "Beslag", de: "Beschläge", en: "Hardware", es: "Herrajes" },
+  "Overige": { nl: "Overige", de: "Sonstige", en: "Other", es: "Otros" },
+};
+
+function translateGroup(name: string, locale: PricelistLocale): string {
+  return GROUP_TRANSLATIONS[name]?.[locale] ?? name;
+}
+
 const LABELS: Record<PricelistLocale, {
   docTitle: string;
   coverSubtitle: string;
@@ -328,7 +350,7 @@ function PricelistPdf({
         {groupEntries.map(([groupName, rows], gi) => (
           <View key={groupName} style={s.sectionGroup} break={gi > 0}>
             <Text style={s.sectionLabel}>{L.collection}</Text>
-            <Text style={s.sectionTitle}>{groupName}</Text>
+            <Text style={s.sectionTitle}>{translateGroup(groupName, locale)}</Text>
             <View style={s.sectionGold} />
 
             <View style={s.th} wrap={false}>
