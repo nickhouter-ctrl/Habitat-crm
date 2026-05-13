@@ -86,12 +86,30 @@ function buildSheet(wb: ExcelJS.Workbook, sheetName: string, titleSuffix: string
   headerRow.height = 30;
 
   const sorted = [...rows].sort((a, b) =>
-    (a.category ?? "").localeCompare(b.category ?? "") || a.name.localeCompare(b.name),
+    (a.collection ?? "").localeCompare(b.collection ?? "") ||
+    (a.category ?? "").localeCompare(b.category ?? "") ||
+    a.name.localeCompare(b.name),
   );
+  let lastCollection: string | null = null;
   let lastCat: string | null = null;
   let zebra = false;
   for (const p of sorted) {
+    const coll = (p.collection ?? "Overig").trim() || "Overig";
     const cat = (p.category ?? "Zonder categorie").trim() || "Zonder categorie";
+    // Collectie-banner (dikkere visuele scheiding tussen Wandpanelen / Badkamer / Deuren / Accessoires)
+    if (coll !== lastCollection) {
+      lastCollection = coll;
+      lastCat = null;
+      zebra = false;
+      const rowIdx = ws.rowCount + 1;
+      ws.mergeCells(rowIdx, 1, rowIdx, LAST_COL);
+      const c = ws.getCell(rowIdx, 1);
+      c.value = `▌  ${coll.toUpperCase()}`;
+      c.fill = { type: "pattern", pattern: "solid", fgColor: { argb: BROWN } };
+      c.font = { bold: true, color: { argb: "FFFFFFFF" }, size: 12 };
+      c.alignment = { vertical: "middle" };
+      ws.getRow(rowIdx).height = 24;
+    }
     if (cat !== lastCat) {
       lastCat = cat;
       zebra = false;
