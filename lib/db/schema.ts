@@ -424,6 +424,8 @@ export const documents = pgTable(
     acceptedAt: timestamp({ withTimezone: true }),
     rejectedAt: timestamp({ withTimezone: true }),
     rejectReason: text(),
+    /** Voor pakbonnen: op dit moment is de voorraad afgeboekt (één keer). */
+    stockAppliedAt: timestamp({ withTimezone: true }),
     /** Convenience copy of the Holded id; the source of truth mapping lives in holded_sync_map. */
     holdedId: text(),
     ...timestamps,

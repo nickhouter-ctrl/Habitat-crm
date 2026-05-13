@@ -27,9 +27,11 @@ import { lineNet, lineTax } from "@/lib/documents";
 import { labelForCategory } from "@/lib/products";
 import { formatDate, formatEUR } from "@/lib/utils";
 import {
+  applyStockOutFromDocument,
   createDeliveryNoteFromDocument,
   createInvoiceFromEstimate,
   deleteDocument,
+  reverseStockOutFromDocument,
   sendDocument,
   setDocumentStatus,
 } from "../actions";
@@ -262,6 +264,26 @@ export default async function DocumentDetailPage({
                     → Maak pakbon
                   </Button>
                 </form>
+              )}
+              {doc.kind === "deliverynote" && (
+                doc.stockAppliedAt ? (
+                  <div className="space-y-1">
+                    <p className="text-xs text-success">
+                      ✓ Voorraad afgeboekt op {new Date(doc.stockAppliedAt).toLocaleDateString("nl-NL", { day: "numeric", month: "short", year: "numeric" })}
+                    </p>
+                    <form action={reverseStockOutFromDocument.bind(null, id)}>
+                      <Button type="submit" size="sm" variant="ghost" className="text-muted">
+                        Voorraad-afboeking ongedaan maken
+                      </Button>
+                    </form>
+                  </div>
+                ) : (
+                  <form action={applyStockOutFromDocument.bind(null, id)}>
+                    <Button type="submit" size="sm" variant="primary">
+                      → Geleverd · voorraad afboeken
+                    </Button>
+                  </form>
+                )
               )}
 
               <form action={changeStatus} className="flex items-center gap-2 pt-1">

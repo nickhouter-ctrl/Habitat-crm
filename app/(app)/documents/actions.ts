@@ -1,6 +1,6 @@
 "use server";
 
-import { count, eq } from "drizzle-orm";
+import { count, eq, sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
@@ -8,7 +8,7 @@ import { z } from "zod";
 
 import { auth } from "@/auth";
 import { db } from "@/lib/db";
-import { activities, contacts, deals, documents } from "@/lib/db/schema";
+import { activities, contacts, deals, documents, products } from "@/lib/db/schema";
 import { syncDealFromDocument } from "@/lib/deals";
 import {
   computeTotals,
@@ -403,4 +403,81 @@ export async function createDeliveryNoteFromDocument(sourceId: string) {
   await requireUser();
   const id = await createDeliveryNoteInternal(sourceId);
   if (id) redirect(`/documents/${sourceId}?pakbon=${id}`);
+}
+
+/**
+ * Voorraad **afboeken** voor een pakbon. Idempotent: alleen de eerste keer.
+ * Per regel: als er een productId aan hangt, trek de aantallen af van de voorraad.
+ */
+export async function applyStockOutFromDocument(id: string) {
+  const user = await requireUser();
+  const doc = await db.query.documents.findFirst({ where: eq(documents.id, id) });
+  if (!doc) return;
+  if (doc.kind !== "deliverynote") throw new Error("Voorraad afboeken kan alleen op een pakbon.");
+  if (doc.stockAppliedAt) {
+    revalidatePath(`/documents/${id}`);
+    return;
+  }
+
+  let applied = 0;
+  for (const it of doc.items ?? []) {
+    if (!it.productId || !it.units) continue;
+    await db
+      .update(products)
+      .set({
+        stockQty: sql`coalesce(${products.stockQty}, 0) - ${String(it.units)}`,
+        updatedAt: new Date(),
+      })
+      .where(eq(products.id, it.productId));
+    applied++;
+  }
+
+  await db
+    .update(documents)
+    .set({ stockAppliedAt: new Date() })
+    .where(eq(documents.id, id));
+
+  await db.insert(activities).values({
+    type: "note",
+    subject: `Voorraad afgeboekt — pakbon ${doc.docNumber ?? ""}`.trim(),
+    body: `${applied} productregel(s) van de voorraad afgehaald.`,
+    documentId: id,
+    contactId: doc.contactId,
+    authorId: user.id,
+  });
+
+  revalidatePath(`/documents/${id}`);
+  revalidatePath("/products");
+  revalidatePath("/pakbonnen");
+}
+
+/** Voorraad-afboeken ongedaan maken (bv. pakbon terug-getrokken). */
+export async function reverseStockOutFromDocument(id: string) {
+  const user = await requireUser();
+  const doc = await db.query.documents.findFirst({ where: eq(documents.id, id) });
+  if (!doc || !doc.stockAppliedAt) return;
+
+  for (const it of doc.items ?? []) {
+    if (!it.productId || !it.units) continue;
+    await db
+      .update(products)
+      .set({
+        stockQty: sql`coalesce(${products.stockQty}, 0) + ${String(it.units)}`,
+        updatedAt: new Date(),
+      })
+      .where(eq(products.id, it.productId));
+  }
+  await db
+    .update(documents)
+    .set({ stockAppliedAt: null })
+    .where(eq(documents.id, id));
+  await db.insert(activities).values({
+    type: "note",
+    subject: `Voorraad-afboeking teruggedraaid — pakbon ${doc.docNumber ?? ""}`.trim(),
+    documentId: id,
+    contactId: doc.contactId,
+    authorId: user.id,
+  });
+  revalidatePath(`/documents/${id}`);
+  revalidatePath("/products");
 }
