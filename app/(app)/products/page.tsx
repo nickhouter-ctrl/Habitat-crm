@@ -36,6 +36,8 @@ export default async function ProductsPage({
     typeof params.collection === "string" ? params.collection.trim() : "";
   const noBarcode = params.nobarcode === "1";
   const lowStock = params.lowstock === "1";
+  const sort = typeof params.sort === "string" ? params.sort : "";
+  const sortByOnderweg = sort === "onderweg";
 
   const allCollections = await getProductCollections();
   const collection = allCollections.includes(collectionParam) ? collectionParam : "";
@@ -91,21 +93,41 @@ export default async function ProductsPage({
   );
 
 
-  // Group by category for the display.
+  // Group by category for the display (skip when sorting flat by onderweg).
   const groups = new Map<string, typeof rows>();
-  for (const p of rows) {
-    const key = p.category?.trim() || "Zonder categorie";
-    if (!groups.has(key)) groups.set(key, []);
-    groups.get(key)!.push(p);
+  if (sortByOnderweg) {
+    // Eén platte lijst, gesorteerd op aantal onderweg (desc), dan op naam.
+    const sorted = [...rows].sort((a, b) => {
+      const qa = onOrderByProduct.get(a.id)?.qty ?? 0;
+      const qb = onOrderByProduct.get(b.id)?.qty ?? 0;
+      if (qb !== qa) return qb - qa;
+      return a.name.localeCompare(b.name);
+    });
+    groups.set("Op aantal onderweg", sorted);
+  } else {
+    for (const p of rows) {
+      const key = p.category?.trim() || "Zonder categorie";
+      if (!groups.has(key)) groups.set(key, []);
+      groups.get(key)!.push(p);
+    }
   }
 
-  const tabHref = (col: string) => {
+  const buildHref = (overrides: Record<string, string | undefined>) => {
     const sp = new URLSearchParams();
     if (q) sp.set("q", q);
-    if (col) sp.set("collection", col);
+    if (collection) sp.set("collection", collection);
+    if (sort) sp.set("sort", sort);
+    if (noBarcode) sp.set("nobarcode", "1");
+    if (lowStock) sp.set("lowstock", "1");
+    for (const [k, v] of Object.entries(overrides)) {
+      if (v === undefined || v === "") sp.delete(k);
+      else sp.set(k, v);
+    }
     const s = sp.toString();
     return s ? `/products?${s}` : "/products";
   };
+  const tabHref = (col: string) => buildHref({ collection: col || undefined });
+  const onderwegHref = sortByOnderweg ? buildHref({ sort: undefined }) : buildHref({ sort: "onderweg" });
 
   return (
     <>
@@ -203,7 +225,18 @@ export default async function ProductsPage({
                     <Th>Naam</Th>
                     <Th>SKU</Th>
                     <Th className="text-right">Voorraad</Th>
-                    <Th className="text-right">Onderweg</Th>
+                    <Th className="text-right">
+                      <Link
+                        href={onderwegHref}
+                        className={cn(
+                          "inline-flex items-center gap-0.5 hover:text-foreground",
+                          sortByOnderweg && "text-accent",
+                        )}
+                        title={sortByOnderweg ? "Klik om sortering uit te zetten" : "Sorteer op aantal onderweg"}
+                      >
+                        Onderweg {sortByOnderweg ? "↓" : "↕"}
+                      </Link>
+                    </Th>
                     <Th>Eenh.</Th>
                     <Th className="text-right">Verkoop (ex.)</Th>
                     <Th className="text-right">BTW</Th>
