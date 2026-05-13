@@ -22,7 +22,6 @@ import {
   generateBarcode,
   pushProductToWebsiteAction,
   removeProductPhoto,
-  translateProductDescription,
   updateProduct,
   uploadProductPhoto,
 } from "../../actions";
@@ -52,11 +51,7 @@ export default async function EditProductPage({
   const uploadPhoto = uploadProductPhoto.bind(null, id);
   const removePhoto = removeProductPhoto.bind(null, id);
   const pushSite = pushProductToWebsiteAction.bind(null, id);
-  const translate = translateProductDescription.bind(null, id);
   const hasGithubToken = Boolean(process.env.GITHUB_TOKEN_HABITAT_ONE);
-  const hasOpenAi = Boolean(process.env.OPENAI_API_KEY);
-  const i18n = (product.descriptionI18n ?? {}) as { nl?: string; de?: string; en?: string; es?: string };
-  const filledLocales = (["nl", "de", "en", "es"] as const).filter((l) => i18n[l]);
 
   return (
     <>
@@ -94,16 +89,6 @@ export default async function EditProductPage({
           Push mislukt: {sp.pushError}
         </p>
       )}
-      {typeof sp.translated === "string" && (
-        <p className="mb-4 max-w-2xl rounded-md bg-green-50 px-3 py-2 text-sm text-success">
-          ✨ Vertaald naar {sp.translated}. De talen staan nu in de velden hieronder — pas aan en sla op.
-        </p>
-      )}
-      {typeof sp.translateError === "string" && (
-        <p className="mb-4 max-w-2xl rounded-md bg-red-50 px-3 py-2 text-sm text-danger">
-          Vertaling mislukt: {sp.translateError}
-        </p>
-      )}
 
       <Card className="mb-4 max-w-2xl">
         <CardHeader>
@@ -136,46 +121,6 @@ export default async function EditProductPage({
               {product.barcode ? "Nieuwe barcode genereren" : "Barcode genereren"}
             </Button>
           </form>
-        </CardContent>
-      </Card>
-
-      <Card className="mb-4 max-w-2xl">
-        <CardHeader>
-          <CardTitle>Vertaal omschrijving</CardTitle>
-          {filledLocales.length > 0 && (
-            <span className="text-xs text-muted">
-              Talen ingevuld: {filledLocales.join(", ").toUpperCase()}
-            </span>
-          )}
-        </CardHeader>
-        <CardContent className="space-y-2">
-          {!hasOpenAi && (
-            <p className="text-xs text-warning">
-              ⚠️ OPENAI_API_KEY niet ingesteld — auto-vertaling werkt niet tot dat goed staat.
-            </p>
-          )}
-          <form action={translate} className="flex flex-wrap items-end gap-2">
-            <label className="text-sm">
-              <span className="block text-xs text-muted">Bron-taal</span>
-              <select
-                name="from"
-                className="rounded-md border border-border bg-background px-2 py-1.5 text-sm"
-                defaultValue={i18n.nl ? "nl" : i18n.en ? "en" : "nl"}
-              >
-                <option value="nl">🇳🇱 Nederlands</option>
-                <option value="en">🇬🇧 Engels (uit Holded)</option>
-                <option value="de">🇩🇪 Duits</option>
-                <option value="es">🇪🇸 Spaans</option>
-              </select>
-            </label>
-            <Button type="submit" variant="secondary" size="sm" disabled={!hasOpenAi}>
-              ✨ Vertaal met AI naar 3 andere talen
-            </Button>
-          </form>
-          <p className="text-xs text-muted">
-            Gebruikt de tekst uit het bovenstaande taal-veld (of de hoofd-omschrijving als die leeg is) als bron, en
-            vult de andere 3 vakken in via OpenAI. Je kunt elk veld daarna handmatig overschrijven.
-          </p>
         </CardContent>
       </Card>
 

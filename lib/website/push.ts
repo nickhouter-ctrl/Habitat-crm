@@ -17,6 +17,7 @@ import { eq } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { products } from "@/lib/db/schema";
 import { fetchProductImageBytes } from "@/lib/storage";
+import { translateText, type Locale } from "@/lib/translate";
 import { commitFiles, getTextFile, GithubSyncDisabledError, websiteRepo } from "./github-client";
 
 interface WebsiteProduct {
@@ -24,6 +25,8 @@ interface WebsiteProduct {
   name: string;
   slug: string;
   description: string | null;
+  /** Vertalingen per locale (NL/DE/EN/ES) — geschreven door pushProductToWebsite. */
+  description_i18n?: Partial<Record<Locale, string>> | null;
   short_description: string | null;
   sku: string | null;
   thumbnail_path: string | null;
@@ -142,11 +145,30 @@ export async function pushProductToWebsite(productId: string): Promise<PushResul
   const nextT = num(product.thicknessMm);
   const nowIso = new Date().toISOString();
 
+  // Auto-vertaal de omschrijving naar de andere 3 talen (best-effort).
+  // We gaan ervan uit dat de bron NL is; valt stilletjes terug als OpenAI faalt.
+  let translatedDesc: Partial<Record<Locale, string>> | null = null;
+  if (product.description?.trim() && process.env.OPENAI_API_KEY) {
+    try {
+      const out = await translateText({
+        text: product.description,
+        fromLocale: "nl",
+        targetLocales: ["de", "en", "es"],
+      });
+      translatedDesc = { nl: product.description, ...out };
+    } catch {
+      translatedDesc = { nl: product.description };
+    }
+  } else if (product.description?.trim()) {
+    translatedDesc = { nl: product.description };
+  }
+
   if (existingIdx >= 0) {
     // Update
     entry = { ...websiteProducts[existingIdx] };
     entry.name = product.name;
     if (product.description) entry.description = product.description;
+    if (translatedDesc) entry.description_i18n = translatedDesc;
     if (nextW != null) entry.width = nextW;
     if (nextH != null) entry.height = nextH;
     if (nextL != null) entry.length = nextL;
@@ -162,6 +184,7 @@ export async function pushProductToWebsite(productId: string): Promise<PushResul
       name: product.name,
       slug: `${slugify(product.name) || `product-${nextId}`}-${Date.now()}`,
       description: product.description ?? null,
+      description_i18n: translatedDesc,
       short_description: null,
       sku: product.sku,
       thumbnail_path: null,

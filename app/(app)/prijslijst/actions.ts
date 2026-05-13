@@ -8,7 +8,9 @@ import { COMPANY } from "@/lib/company";
 import { db } from "@/lib/db";
 import { contacts, products } from "@/lib/db/schema";
 import { sendEmail } from "@/lib/email";
-import { renderPricelistPdf, type PricelistItem } from "@/lib/pricelist-pdf";
+import { renderPricelistPdf, type PricelistItem, type PricelistLocale } from "@/lib/pricelist-pdf";
+
+const LOCALES: PricelistLocale[] = ["nl", "de", "en", "es"];
 
 export async function mailPricelist(formData: FormData) {
   const session = await auth();
@@ -21,6 +23,8 @@ export async function mailPricelist(formData: FormData) {
   const category = String(formData.get("category") ?? "");
   const onlyActive = formData.get("onlyActive") === "on";
   const onlyWithPrice = formData.get("onlyWithPrice") === "on";
+  const langParam = String(formData.get("lang") ?? "nl");
+  const locale: PricelistLocale = LOCALES.includes(langParam as PricelistLocale) ? (langParam as PricelistLocale) : "nl";
 
   if (!contactId) {
     redirect(`/prijslijst?error=${encodeURIComponent("Kies een klant.")}`);
@@ -48,6 +52,7 @@ export async function mailPricelist(formData: FormData) {
     name: p.name,
     sku: p.sku ?? null,
     description: p.description ?? null,
+    descriptionI18n: (p.descriptionI18n as Partial<Record<PricelistLocale, string>> | null) ?? null,
     imageUrl: p.imageUrl ?? null,
     widthMm: p.widthMm ?? null,
     heightMm: p.heightMm ?? null,
@@ -64,8 +69,8 @@ export async function mailPricelist(formData: FormData) {
   if (category) subtitleParts.push(`Categorie: ${category}`);
   const subtitle = subtitleParts.length ? subtitleParts.join(" · ") : null;
 
-  const pdf = await renderPricelistPdf({ items, title: "PRIJSLIJST VERKOOP", subtitle });
-  const filename = `prijslijst-${collection || "alles"}.pdf`.replace(/[^a-z0-9.-]/gi, "-").toLowerCase();
+  const pdf = await renderPricelistPdf({ items, subtitle, locale });
+  const filename = `habitat-one-prijslijst-${locale}-${collection || "alles"}.pdf`.replace(/[^a-z0-9.-]/gi, "-").toLowerCase();
 
   const html = `
     <p>Beste ${contact.name ?? ""},</p>

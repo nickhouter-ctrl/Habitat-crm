@@ -16,8 +16,15 @@ export const COMPANY = {
   phone: process.env.COMPANY_PHONE ?? "+34 637 459 239",
   website: process.env.COMPANY_WEBSITE ?? "habitat-one.com",
   iban: process.env.COMPANY_IBAN ?? "", // not provided yet
-  // Brand colour (deep Mediterranean brown — matches the wordmark).
-  brown: "#3a2a20",
-  cream: "#f3efe9",
-  accent: "#1f6f5c",
+  // Luxe-mediterraanse palet — gebruikt op PDFs en e-mails.
+  brown: "#3a2a20",        // wordmark / hoofdtitels
+  cream: "#f3efe9",        // achtergrond
+  sand: "#e8dfd0",          // alternating row bg, scheidingslijn
+  terracotta: "#b6552d",    // accent, secundaire titel
+  gold: "#a98a4b",          // dunne highlight-lijntjes
+  sage: "#7d8763",          // tertiaire accent (rust, evenwicht)
+  charcoal: "#2a2520",      // body-tekst
+  muted: "#7a6f63",         // labels, captions
+  /** Legacy alias — sommige oudere PDF-onderdelen gebruiken dit nog. */
+  accent: "#b6552d",
 } as const;

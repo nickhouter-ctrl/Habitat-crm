@@ -4,7 +4,9 @@ import { and, asc, eq, isNotNull } from "drizzle-orm";
 import { auth } from "@/auth";
 import { db } from "@/lib/db";
 import { products } from "@/lib/db/schema";
-import { renderPricelistPdf, type PricelistItem } from "@/lib/pricelist-pdf";
+import { renderPricelistPdf, type PricelistItem, type PricelistLocale } from "@/lib/pricelist-pdf";
+
+const LOCALES: PricelistLocale[] = ["nl", "de", "en", "es"];
 
 export async function GET(req: Request) {
   const session = await auth();
@@ -15,7 +17,10 @@ export async function GET(req: Request) {
   const category = url.searchParams.get("category") || "";
   const onlyActive = url.searchParams.get("onlyActive") === "on";
   const onlyWithPrice = url.searchParams.get("onlyWithPrice") === "on";
-  const title = (url.searchParams.get("title") || "PRIJSLIJST VERKOOP").toUpperCase();
+  const langParam = url.searchParams.get("lang") ?? "nl";
+  const locale: PricelistLocale = LOCALES.includes(langParam as PricelistLocale)
+    ? (langParam as PricelistLocale)
+    : "nl";
 
   const filters = [
     collection ? eq(products.collection, collection) : undefined,
@@ -35,6 +40,7 @@ export async function GET(req: Request) {
     name: p.name,
     sku: p.sku ?? null,
     description: p.description ?? null,
+    descriptionI18n: (p.descriptionI18n as Partial<Record<PricelistLocale, string>> | null) ?? null,
     imageUrl: p.imageUrl ?? null,
     widthMm: p.widthMm ?? null,
     heightMm: p.heightMm ?? null,
@@ -47,12 +53,12 @@ export async function GET(req: Request) {
   }));
 
   const subtitleParts: string[] = [];
-  if (collection) subtitleParts.push(`Collectie: ${collection}`);
-  if (category) subtitleParts.push(`Categorie: ${category}`);
+  if (collection) subtitleParts.push(collection);
+  if (category) subtitleParts.push(category);
   const subtitle = subtitleParts.length ? subtitleParts.join(" · ") : null;
 
-  const pdf = await renderPricelistPdf({ items, title, subtitle });
-  const filename = `${title.toLowerCase().replace(/\s+/g, "-")}.pdf`;
+  const pdf = await renderPricelistPdf({ items, subtitle, locale });
+  const filename = `habitat-one-prijslijst-${locale}${collection ? "-" + collection.toLowerCase().replace(/\s+/g, "-") : ""}.pdf`.replace(/[^a-z0-9.-]/gi, "-");
   return new NextResponse(new Uint8Array(pdf), {
     status: 200,
     headers: {

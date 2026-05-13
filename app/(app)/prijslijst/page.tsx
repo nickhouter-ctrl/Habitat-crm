@@ -111,6 +111,14 @@ export default async function PrijslijstPage({
 function FiltersInputs({ collections, categories }: { collections: string[]; categories: string[] }) {
   return (
     <>
+      <Field label="Taal van de PDF" htmlFor="lang">
+        <Select id="lang" name="lang" defaultValue="nl">
+          <option value="nl">🇳🇱 Nederlands</option>
+          <option value="de">🇩🇪 Duits (Deutsch)</option>
+          <option value="en">🇬🇧 Engels (English)</option>
+          <option value="es">🇪🇸 Spaans (Español)</option>
+        </Select>
+      </Field>
       <Field label="Collectie" htmlFor="collection">
         <Select id="collection" name="collection" defaultValue="">
           <option value="">— Alle collecties —</option>

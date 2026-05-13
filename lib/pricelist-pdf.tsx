@@ -1,4 +1,4 @@
-/* Server-only: rendert een prijslijst als PDF in de Habitat-huisstijl. */
+/* Server-only: rendert een luxe-Mediterrane prijslijst als PDF. */
 import {
   Document,
   Image as PdfImage,
@@ -12,45 +12,209 @@ import {
 import { COMPANY } from "@/lib/company";
 import { formatDimensions } from "@/lib/products";
 
+export type PricelistLocale = "nl" | "de" | "en" | "es";
+
+const LABELS: Record<PricelistLocale, {
+  title: string;
+  intro: string;
+  date: string;
+  count: string;
+  product: string;
+  dimensions: string;
+  sku: string;
+  priceEx: string;
+  vat: string;
+  priceIn: string;
+  noPhoto: string;
+  page: string;
+  validUntil: string;
+  pricesNote: string;
+}> = {
+  nl: {
+    title: "PRIJSLIJST · VERKOOP",
+    intro: "Verkoopprijzen — exclusief en inclusief BTW",
+    date: "Datum",
+    count: "Artikelen",
+    product: "Product",
+    dimensions: "Afmetingen",
+    sku: "Artikelnr.",
+    priceEx: "Excl. BTW",
+    vat: "BTW",
+    priceIn: "Incl. BTW",
+    noPhoto: "geen\nfoto",
+    page: "Pagina",
+    validUntil: "Prijzen geldig op aanvraag",
+    pricesNote: "Alle prijzen in euro. Onder voorbehoud van wijzigingen.",
+  },
+  de: {
+    title: "PREISLISTE · VERKAUF",
+    intro: "Verkaufspreise — netto und brutto",
+    date: "Datum",
+    count: "Artikel",
+    product: "Produkt",
+    dimensions: "Abmessungen",
+    sku: "Art.-Nr.",
+    priceEx: "Netto",
+    vat: "MwSt",
+    priceIn: "Brutto",
+    noPhoto: "kein\nFoto",
+    page: "Seite",
+    validUntil: "Preise gültig auf Anfrage",
+    pricesNote: "Alle Preise in Euro. Änderungen vorbehalten.",
+  },
+  en: {
+    title: "PRICE LIST · SALES",
+    intro: "Sales prices — excluding and including VAT",
+    date: "Date",
+    count: "Items",
+    product: "Product",
+    dimensions: "Dimensions",
+    sku: "SKU",
+    priceEx: "Excl. VAT",
+    vat: "VAT",
+    priceIn: "Incl. VAT",
+    noPhoto: "no\nphoto",
+    page: "Page",
+    validUntil: "Prices valid on request",
+    pricesNote: "All prices in euros. Subject to change.",
+  },
+  es: {
+    title: "LISTA DE PRECIOS · VENTA",
+    intro: "Precios de venta — sin y con IVA",
+    date: "Fecha",
+    count: "Artículos",
+    product: "Producto",
+    dimensions: "Dimensiones",
+    sku: "Ref.",
+    priceEx: "Sin IVA",
+    vat: "IVA",
+    priceIn: "Con IVA",
+    noPhoto: "sin\nfoto",
+    page: "Página",
+    validUntil: "Precios válidos bajo consulta",
+    pricesNote: "Todos los precios en euros. Sujetos a cambios.",
+  },
+};
+
 const eur = (v: string | number | null | undefined) =>
   new Intl.NumberFormat("nl-NL", { style: "currency", currency: "EUR" }).format(Number(v) || 0);
 
-const today = () =>
-  new Intl.DateTimeFormat("nl-NL", { day: "numeric", month: "long", year: "numeric" }).format(new Date());
+const today = (locale: PricelistLocale) =>
+  new Intl.DateTimeFormat(locale, { day: "numeric", month: "long", year: "numeric" }).format(new Date());
 
 const s = StyleSheet.create({
-  page: { paddingHorizontal: 36, paddingTop: 36, paddingBottom: 56, fontSize: 8.5, fontFamily: "Helvetica", color: "#1c1c1a" },
-  headerRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 18 },
-  brand1: { fontFamily: "Times-Bold", fontSize: 20, letterSpacing: 4, color: COMPANY.brown },
-  brand2: { fontFamily: "Times-Bold", fontSize: 20, letterSpacing: 4, color: COMPANY.brown, marginTop: -3 },
-  tagline: { fontSize: 7.5, color: "#999", marginTop: 4 },
-  docTitle: { fontFamily: "Helvetica-Bold", fontSize: 15, color: COMPANY.brown, textAlign: "right" },
-  meta: { fontSize: 8, color: "#666", textAlign: "right", marginTop: 2 },
-  metaStrong: { color: "#1c1c1a", fontFamily: "Helvetica-Bold" },
-  intro: { marginBottom: 12, color: "#555", lineHeight: 1.5 },
-  group: { fontFamily: "Helvetica-Bold", fontSize: 11, color: COMPANY.brown, marginTop: 12, marginBottom: 6, textTransform: "uppercase", letterSpacing: 1 },
-  th: { flexDirection: "row", borderBottomWidth: 1, borderColor: COMPANY.brown, paddingBottom: 3, marginTop: 1 },
-  thText: { fontFamily: "Helvetica-Bold", fontSize: 6.8, letterSpacing: 0.5, color: "#666", textTransform: "uppercase" },
-  tr: { flexDirection: "row", borderBottomWidth: 0.5, borderColor: "#eee", paddingVertical: 4, alignItems: "center" },
-  cPhoto: { width: 40, height: 40, marginRight: 6 },
-  cName: { flex: 3.4, paddingRight: 6 },
-  cDim: { flex: 1.6, color: "#666" },
-  cSku: { flex: 1.1, color: "#888" },
-  cPriceEx: { flex: 1.2, textAlign: "right" },
-  cVat: { flex: 0.7, textAlign: "right", color: "#888" },
-  cPriceIn: { flex: 1.2, textAlign: "right", fontFamily: "Helvetica-Bold" },
-  itemName: { fontFamily: "Helvetica-Bold", fontSize: 9 },
-  itemDesc: { fontSize: 7, color: "#888", marginTop: 1 },
-  photoBox: { width: 40, height: 40, borderRadius: 4, marginRight: 6, backgroundColor: "#f3f1ec", justifyContent: "center", alignItems: "center", overflow: "hidden" },
-  photoEmpty: { fontSize: 7, color: "#bbb" },
-  footer: { position: "absolute", left: 36, right: 36, bottom: 24, borderTopWidth: 0.5, borderColor: "#ddd", paddingTop: 6, fontSize: 7, color: "#999", textAlign: "center", lineHeight: 1.6 },
-  pageNum: { position: "absolute", right: 36, bottom: 14, fontSize: 7, color: "#999" },
+  page: {
+    paddingHorizontal: 44,
+    paddingTop: 56,
+    paddingBottom: 66,
+    fontSize: 8.5,
+    fontFamily: "Helvetica",
+    color: COMPANY.charcoal,
+    backgroundColor: "#fdfaf5",
+  },
+  // Header (cover-stijl)
+  cover: {
+    backgroundColor: COMPANY.brown,
+    color: COMPANY.cream,
+    padding: 32,
+    marginBottom: 22,
+    marginHorizontal: -44,
+    marginTop: -56,
+    paddingHorizontal: 44,
+    paddingTop: 56,
+    paddingBottom: 26,
+  },
+  brand1: { fontFamily: "Times-Bold", fontSize: 26, letterSpacing: 6, color: COMPANY.cream },
+  brand2: { fontFamily: "Times-Bold", fontSize: 26, letterSpacing: 6, color: COMPANY.cream, marginTop: -4 },
+  brandLine: { width: 36, height: 1.6, backgroundColor: COMPANY.gold, marginTop: 10, marginBottom: 10 },
+  tagline: { fontSize: 8, color: COMPANY.cream, letterSpacing: 2, opacity: 0.7 },
+  coverFooter: { flexDirection: "row", justifyContent: "space-between", marginTop: 26, alignItems: "flex-end" },
+  docTitle: { fontFamily: "Times-Italic", fontSize: 22, color: COMPANY.cream, letterSpacing: 1.5 },
+  docMeta: { fontSize: 8, color: COMPANY.cream, opacity: 0.85, textAlign: "right", lineHeight: 1.5 },
+  intro: {
+    fontFamily: "Times-Italic",
+    fontSize: 10,
+    color: COMPANY.muted,
+    marginBottom: 14,
+    lineHeight: 1.5,
+  },
+  // Groeptitel
+  group: {
+    fontFamily: "Times-Bold",
+    fontSize: 13,
+    color: COMPANY.brown,
+    marginTop: 12,
+    marginBottom: 2,
+    letterSpacing: 1.5,
+    textTransform: "uppercase",
+  },
+  groupLine: { width: 28, height: 1.2, backgroundColor: COMPANY.terracotta, marginBottom: 8 },
+  // Tabel
+  th: {
+    flexDirection: "row",
+    borderBottomWidth: 1,
+    borderColor: COMPANY.brown,
+    paddingBottom: 4,
+    marginTop: 4,
+  },
+  thText: {
+    fontFamily: "Helvetica-Bold",
+    fontSize: 6.5,
+    letterSpacing: 1,
+    color: COMPANY.brown,
+    textTransform: "uppercase",
+  },
+  tr: {
+    flexDirection: "row",
+    borderBottomWidth: 0.4,
+    borderColor: COMPANY.sand,
+    paddingVertical: 6,
+    alignItems: "center",
+  },
+  trAlt: { backgroundColor: "#f6f0e5" },
+  cPhoto: { width: 46, marginRight: 8 },
+  photoBox: {
+    width: 46,
+    height: 46,
+    borderRadius: 4,
+    backgroundColor: COMPANY.sand,
+    justifyContent: "center",
+    alignItems: "center",
+    overflow: "hidden",
+  },
+  photoEmpty: { fontSize: 6.5, color: COMPANY.muted, textAlign: "center" },
+  cName: { flex: 3.2, paddingRight: 6 },
+  cDim: { flex: 1.5, color: COMPANY.muted, fontSize: 8 },
+  cSku: { flex: 1.1, color: COMPANY.terracotta, fontSize: 8, fontFamily: "Helvetica-Bold", letterSpacing: 0.5 },
+  cPriceEx: { flex: 1.1, textAlign: "right", color: COMPANY.muted, fontSize: 8.5 },
+  cVat: { flex: 0.6, textAlign: "right", color: COMPANY.muted, fontSize: 8 },
+  cPriceIn: { flex: 1.2, textAlign: "right", fontFamily: "Times-Bold", fontSize: 10, color: COMPANY.brown },
+  itemName: { fontFamily: "Times-Bold", fontSize: 10, color: COMPANY.charcoal, lineHeight: 1.3 },
+  itemDesc: { fontSize: 7.5, color: COMPANY.muted, marginTop: 2, lineHeight: 1.35 },
+  // Footer
+  footer: {
+    position: "absolute",
+    left: 44,
+    right: 44,
+    bottom: 28,
+    paddingTop: 8,
+    borderTopWidth: 0.5,
+    borderColor: COMPANY.sand,
+    fontSize: 7,
+    color: COMPANY.muted,
+    textAlign: "center",
+    lineHeight: 1.6,
+  },
+  footerStrong: { fontFamily: "Helvetica-Bold", color: COMPANY.brown },
+  pageNum: { position: "absolute", right: 44, bottom: 14, fontSize: 7, color: COMPANY.muted },
 });
 
 export interface PricelistItem {
   name: string;
   sku: string | null;
   description: string | null;
+  /** Vertaalde omschrijvingen per locale (cache uit products.descriptionI18n). */
+  descriptionI18n?: Partial<Record<PricelistLocale, string>> | null;
   imageUrl: string | null;
   widthMm: string | number | null;
   heightMm: string | number | null;
@@ -67,7 +231,7 @@ function shortDesc(desc: string | null): string | null {
   if (!desc) return null;
   const oneLine = desc.replace(/\s+/g, " ").trim();
   if (!oneLine) return null;
-  return oneLine.length > 90 ? oneLine.slice(0, 87) + "…" : oneLine;
+  return oneLine.length > 110 ? oneLine.slice(0, 107) + "…" : oneLine;
 }
 
 function incl(price: number, vatPct: number): number {
@@ -76,70 +240,78 @@ function incl(price: number, vatPct: number): number {
 
 function PricelistPdf({
   items,
-  title,
   subtitle,
+  locale,
 }: {
   items: PricelistItem[];
-  title: string;
   subtitle: string | null;
+  locale: PricelistLocale;
 }) {
-  // Group by 'group' field, behoud volgorde van eerste verschijning.
+  const L = LABELS[locale];
+
+  // Group, behoud volgorde
   const groups = new Map<string, PricelistItem[]>();
   for (const it of items) {
     const key = it.group || "Overige";
     if (!groups.has(key)) groups.set(key, []);
     groups.get(key)!.push(it);
   }
-  const footerLine =
-    `${COMPANY.legalName}${COMPANY.vatNumber ? ` · NIF ${COMPANY.vatNumber}` : ""} · ${COMPANY.address}\n` +
-    `${COMPANY.email}${COMPANY.phone ? ` · ${COMPANY.phone}` : ""} · ${COMPANY.website}`;
 
+  const footerLine = `${COMPANY.legalName} · ${COMPANY.address}`;
+  const footerLine2 = `${COMPANY.email} · ${COMPANY.phone} · ${COMPANY.website}`;
+
+  let rowCounter = 0;
   return (
     <Document>
       <Page size="A4" style={s.page}>
-        <View style={s.headerRow}>
-          <View>
-            <Text style={s.brand1}>{COMPANY.wordmark1}</Text>
-            <Text style={s.brand2}>{COMPANY.wordmark2}</Text>
-            <Text style={s.tagline}>{COMPANY.tagline}</Text>
-          </View>
-          <View>
-            <Text style={s.docTitle}>{title}</Text>
-            <Text style={s.meta}>
-              Datum: <Text style={s.metaStrong}>{today()}</Text>
-            </Text>
-            <Text style={s.meta}>
-              Aantal artikelen: <Text style={s.metaStrong}>{items.length}</Text>
+        {/* Cover-header */}
+        <View style={s.cover}>
+          <Text style={s.brand1}>{COMPANY.wordmark1}</Text>
+          <Text style={s.brand2}>{COMPANY.wordmark2}</Text>
+          <View style={s.brandLine} />
+          <Text style={s.tagline}>{COMPANY.tagline.toUpperCase()}</Text>
+          <View style={s.coverFooter}>
+            <Text style={s.docTitle}>{L.title}</Text>
+            <Text style={s.docMeta}>
+              {L.date}: {today(locale)}
+              {"\n"}
+              {L.count}: {items.length}
             </Text>
           </View>
         </View>
-        {subtitle && <Text style={s.intro}>{subtitle}</Text>}
+
+        {subtitle ? <Text style={s.intro}>{subtitle}</Text> : <Text style={s.intro}>{L.intro}</Text>}
 
         {[...groups.entries()].map(([groupName, rows]) => (
           <View key={groupName} wrap>
             <Text style={s.group}>{groupName}</Text>
+            <View style={s.groupLine} />
             <View style={s.th} wrap={false}>
               <View style={s.cPhoto} />
-              <Text style={[s.thText, s.cName]}>Product</Text>
-              <Text style={[s.thText, s.cDim]}>Afmetingen</Text>
-              <Text style={[s.thText, s.cSku]}>SKU</Text>
-              <Text style={[s.thText, s.cPriceEx]}>Ex BTW</Text>
-              <Text style={[s.thText, s.cVat]}>BTW</Text>
-              <Text style={[s.thText, s.cPriceIn]}>Incl BTW</Text>
+              <Text style={[s.thText, s.cName]}>{L.product}</Text>
+              <Text style={[s.thText, s.cDim]}>{L.dimensions}</Text>
+              <Text style={[s.thText, s.cSku]}>{L.sku}</Text>
+              <Text style={[s.thText, s.cPriceEx]}>{L.priceEx}</Text>
+              <Text style={[s.thText, s.cVat]}>{L.vat}</Text>
+              <Text style={[s.thText, s.cPriceIn]}>{L.priceIn}</Text>
             </View>
             {rows.map((it, i) => {
               const dim = formatDimensions(it);
-              const desc = shortDesc(it.description);
+              const localDesc = it.descriptionI18n?.[locale] ?? it.description;
+              const desc = shortDesc(localDesc);
               const ex = Number(it.priceEur ?? 0);
               const inc = ex > 0 ? incl(ex, it.vatRate) : 0;
+              const alt = rowCounter++ % 2 === 1;
               return (
-                <View key={i} style={s.tr} wrap={false}>
-                  <View style={s.photoBox}>
-                    {it.imageUrl ? (
-                      <PdfImage src={it.imageUrl} style={{ width: 40, height: 40, objectFit: "cover" }} />
-                    ) : (
-                      <Text style={s.photoEmpty}>geen{"\n"}foto</Text>
-                    )}
+                <View key={i} style={alt ? [s.tr, s.trAlt] : s.tr} wrap={false}>
+                  <View style={s.cPhoto}>
+                    <View style={s.photoBox}>
+                      {it.imageUrl ? (
+                        <PdfImage src={it.imageUrl} style={{ width: 46, height: 46, objectFit: "cover" }} />
+                      ) : (
+                        <Text style={s.photoEmpty}>{L.noPhoto}</Text>
+                      )}
+                    </View>
                   </View>
                   <View style={s.cName}>
                     <Text style={s.itemName}>{it.name}</Text>
@@ -156,10 +328,17 @@ function PricelistPdf({
           </View>
         ))}
 
-        <Text style={s.footer} fixed>
-          {footerLine}
-        </Text>
-        <Text style={s.pageNum} render={({ pageNumber, totalPages }) => `${pageNumber} / ${totalPages}`} fixed />
+        <View style={s.footer} fixed>
+          <Text style={s.footerStrong}>{COMPANY.legalName}</Text>
+          <Text>{footerLine.replace(COMPANY.legalName + " · ", "")}</Text>
+          <Text>{footerLine2}</Text>
+          <Text style={{ marginTop: 3, fontFamily: "Times-Italic" }}>{L.pricesNote}</Text>
+        </View>
+        <Text
+          style={s.pageNum}
+          render={({ pageNumber, totalPages }) => `${L.page} ${pageNumber} / ${totalPages}`}
+          fixed
+        />
       </Page>
     </Document>
   );
@@ -167,8 +346,10 @@ function PricelistPdf({
 
 export async function renderPricelistPdf(args: {
   items: PricelistItem[];
-  title: string;
   subtitle: string | null;
+  locale?: PricelistLocale;
 }): Promise<Buffer> {
-  return renderToBuffer(<PricelistPdf {...args} />);
+  return renderToBuffer(
+    <PricelistPdf items={args.items} subtitle={args.subtitle} locale={args.locale ?? "nl"} />,
+  );
 }

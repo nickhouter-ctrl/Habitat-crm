@@ -6,22 +6,27 @@
  *   1. SKU-match → website-product.thumbnail_path
  *   2. Naam-prefix-match (family) → eerste site-product met thumbnail
  *
- * URL-formaat: `<WEBSITE_PUBLIC_URL>/products/<filename>`
- *   Standaard https://habitat-one.com (override via WEBSITE_PUBLIC_URL).
+ * URL-formaat: `<WEBSITE_PUBLIC_URL>/products/v/<variantImageId>.jpg`
+ *   (gen2.mjs op habitat-one mapt thumbnail_path → /products/v/{id}.jpg via
+ *   product_variant_images.json; die zelfde resolutie doen we hier.)
+ *   Standaard https://habitat-one-ecru.vercel.app (override via WEBSITE_PUBLIC_URL).
  *
  *   npx tsx scripts/import-site-photos.ts          (dry run)
  *   npx tsx scripts/import-site-photos.ts --apply
+ *   npx tsx scripts/import-site-photos.ts --apply --overwrite     (vervangt bestaande URLs)
  */
 import "./load-env";
 import fs from "node:fs";
 import path from "node:path";
-import { eq, isNull } from "drizzle-orm";
+import { eq, isNull, or } from "drizzle-orm";
 import { db } from "../lib/db";
 import { products } from "../lib/db/schema";
 
 const APPLY = process.argv.includes("--apply");
-const WEBSITE_PUBLIC = (process.env.WEBSITE_PUBLIC_URL ?? "https://habitat-one.com").replace(/\/$/, "");
+const OVERWRITE = process.argv.includes("--overwrite");
+const WEBSITE_PUBLIC = (process.env.WEBSITE_PUBLIC_URL ?? "https://habitat-one-ecru.vercel.app").replace(/\/$/, "");
 const SITE_JSON = path.resolve(__dirname, "..", "..", "habitat-one", "tmp-data", "products.json");
+const VARIMG_JSON = path.resolve(__dirname, "..", "..", "habitat-one", "tmp-data", "product_variant_images.json");
 
 const normSku = (s: unknown) => String(s ?? "").toUpperCase().replace(/\s+/g, "").trim();
 const normName = (s: unknown) =>
@@ -33,9 +38,12 @@ const normName = (s: unknown) =>
     .trim();
 
 interface WP { id: number; name: string; sku: string | null; thumbnail_path: string | null; }
+interface VImg { id: number; image_path: string; }
 
 async function main() {
   const site: WP[] = JSON.parse(fs.readFileSync(SITE_JSON, "utf8"));
+  const varImgs: VImg[] = JSON.parse(fs.readFileSync(VARIMG_JSON, "utf8"));
+  const imgByPath = new Map(varImgs.map((v) => [v.image_path, v]));
 
   const bySku = new Map<string, WP>();
   for (const w of site) {
@@ -43,9 +51,9 @@ async function main() {
   }
 
   const noPhoto = await db
-    .select({ id: products.id, name: products.name, sku: products.sku, isActive: products.isActive })
+    .select({ id: products.id, name: products.name, sku: products.sku, isActive: products.isActive, imageUrl: products.imageUrl })
     .from(products)
-    .where(isNull(products.imageUrl));
+    .where(OVERWRITE ? undefined : isNull(products.imageUrl));
 
   let updates = 0;
   const planned: Array<{ id: string; name: string; sku: string | null; url: string; via: string }> = [];
@@ -72,7 +80,11 @@ async function main() {
     }
     if (!match || !match.thumbnail_path) continue;
 
-    const url = `${WEBSITE_PUBLIC}/products/${match.thumbnail_path}`;
+    // Pas dezelfde resolutie toe als gen2.mjs: thumbnail_path → variant_image.id → /products/v/<id>.jpg
+    const vi = imgByPath.get(match.thumbnail_path);
+    if (!vi) continue;
+    const url = `${WEBSITE_PUBLIC}/products/v/${vi.id}.jpg`;
+    if (!OVERWRITE && p.imageUrl === url) continue;
     planned.push({ id: p.id, name: p.name, sku: p.sku, url, via });
     if (APPLY) {
       await db
