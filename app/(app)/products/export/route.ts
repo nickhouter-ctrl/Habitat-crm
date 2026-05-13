@@ -18,7 +18,9 @@ const RED = "FFB91C1C";
 const RED_BG = "FFFDECEC";
 const GREEN = "FF166534";
 const EUR_FMT = '#,##0.00 "€"';
-const PCT_FMT = '0.0 "%"';
+// Standaard Excel-percentage: waarde 0.65 → "65,0%". Locale-safe, geen
+// herinterpretatie bij re-save in andere Excel-versies.
+const PCT_FMT = "0.0%";
 
 const HEADER = [
   "Collectie", "Categorie", "Naam", "SKU", "Eenheid", "Voorraad",
@@ -46,7 +48,9 @@ function rowValues(p: Product): (string | number | null)[] {
   const purchase = p.purchaseCostEur != null ? Number(p.purchaseCostEur) : null;
   const stock = p.stockQty != null ? Number(p.stockQty) : null;
   const profit = price != null && cost != null ? r2(price - cost) : null;
-  const marginPct = price != null && cost != null && price > 0 ? r2(((price - cost) / price) * 100) : null;
+  // Marge als DECIMAAL (0.65 = 65%) — Excel's built-in percentage format
+  // toont dit als "65,0%" en blijft consistent bij elke re-save/mail-flow.
+  const marginPct = price != null && cost != null && price > 0 ? Math.round(((price - cost) / price) * 1000) / 1000 : null;
   const breakEven = marginPct; // korting wordt over de verkoopprijs gerekend → zelfde getal
   const disc = DISCOUNTS.flatMap((d) => {
     if (price == null) return [null, null];
