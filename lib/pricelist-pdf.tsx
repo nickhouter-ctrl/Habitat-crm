@@ -1,4 +1,4 @@
-/* Server-only: rendert een luxe-Mediterrane prijslijst als PDF. */
+/* Server-only: rendert een luxe-Mediterrane prijslijst — magazine-stijl met cover. */
 import {
   Document,
   Image as PdfImage,
@@ -15,10 +15,10 @@ import { formatDimensions } from "@/lib/products";
 export type PricelistLocale = "nl" | "de" | "en" | "es";
 
 const LABELS: Record<PricelistLocale, {
-  title: string;
-  intro: string;
-  date: string;
-  count: string;
+  docTitle: string;
+  coverSubtitle: string;
+  coverIntro: string;
+  collection: string;
   product: string;
   dimensions: string;
   sku: string;
@@ -27,71 +27,79 @@ const LABELS: Record<PricelistLocale, {
   priceIn: string;
   noPhoto: string;
   page: string;
-  validUntil: string;
+  date: string;
   pricesNote: string;
 }> = {
   nl: {
-    title: "PRIJSLIJST · VERKOOP",
-    intro: "Verkoopprijzen — exclusief en inclusief BTW",
-    date: "Datum",
-    count: "Artikelen",
+    docTitle: "Prijslijst",
+    coverSubtitle: "Verkoop",
+    coverIntro:
+      "Een selectie uit ons assortiment Magic Stone wandpanelen, badkamer-collectie en accessoires. " +
+      "Alle prijzen in euro — exclusief en inclusief BTW.",
+    collection: "Collectie",
     product: "Product",
     dimensions: "Afmetingen",
     sku: "Artikelnr.",
     priceEx: "Excl. BTW",
     vat: "BTW",
     priceIn: "Incl. BTW",
-    noPhoto: "geen\nfoto",
+    noPhoto: "—",
     page: "Pagina",
-    validUntil: "Prijzen geldig op aanvraag",
+    date: "Datum",
     pricesNote: "Alle prijzen in euro. Onder voorbehoud van wijzigingen.",
   },
   de: {
-    title: "PREISLISTE · VERKAUF",
-    intro: "Verkaufspreise — netto und brutto",
-    date: "Datum",
-    count: "Artikel",
+    docTitle: "Preisliste",
+    coverSubtitle: "Verkauf",
+    coverIntro:
+      "Eine Auswahl aus unserem Sortiment Magic Stone Wandpaneele, Badkollektion und Accessoires. " +
+      "Alle Preise in Euro — netto und brutto.",
+    collection: "Kollektion",
     product: "Produkt",
     dimensions: "Abmessungen",
     sku: "Art.-Nr.",
     priceEx: "Netto",
     vat: "MwSt",
     priceIn: "Brutto",
-    noPhoto: "kein\nFoto",
+    noPhoto: "—",
     page: "Seite",
-    validUntil: "Preise gültig auf Anfrage",
+    date: "Datum",
     pricesNote: "Alle Preise in Euro. Änderungen vorbehalten.",
   },
   en: {
-    title: "PRICE LIST · SALES",
-    intro: "Sales prices — excluding and including VAT",
-    date: "Date",
-    count: "Items",
+    docTitle: "Price List",
+    coverSubtitle: "Sales",
+    coverIntro:
+      "A selection from our Magic Stone wall panels, bathroom collection and accessories. " +
+      "All prices in euros — excluding and including VAT.",
+    collection: "Collection",
     product: "Product",
     dimensions: "Dimensions",
     sku: "SKU",
     priceEx: "Excl. VAT",
     vat: "VAT",
     priceIn: "Incl. VAT",
-    noPhoto: "no\nphoto",
+    noPhoto: "—",
     page: "Page",
-    validUntil: "Prices valid on request",
+    date: "Date",
     pricesNote: "All prices in euros. Subject to change.",
   },
   es: {
-    title: "LISTA DE PRECIOS · VENTA",
-    intro: "Precios de venta — sin y con IVA",
-    date: "Fecha",
-    count: "Artículos",
+    docTitle: "Lista de Precios",
+    coverSubtitle: "Venta",
+    coverIntro:
+      "Una selección de nuestros paneles de pared Magic Stone, colección de baño y accesorios. " +
+      "Todos los precios en euros — sin y con IVA.",
+    collection: "Colección",
     product: "Producto",
     dimensions: "Dimensiones",
     sku: "Ref.",
     priceEx: "Sin IVA",
     vat: "IVA",
     priceIn: "Con IVA",
-    noPhoto: "sin\nfoto",
+    noPhoto: "—",
     page: "Página",
-    validUntil: "Precios válidos bajo consulta",
+    date: "Fecha",
     pricesNote: "Todos los precios en euros. Sujetos a cambios.",
   },
 };
@@ -103,117 +111,128 @@ const today = (locale: PricelistLocale) =>
   new Intl.DateTimeFormat(locale, { day: "numeric", month: "long", year: "numeric" }).format(new Date());
 
 const s = StyleSheet.create({
+  // ---------- COVER ----------
+  cover: {
+    fontFamily: "Helvetica",
+    backgroundColor: COMPANY.brown,
+    color: COMPANY.cream,
+    padding: 0,
+  },
+  coverInner: {
+    paddingHorizontal: 56,
+    paddingTop: 120,
+    paddingBottom: 56,
+    flexGrow: 1,
+    justifyContent: "space-between",
+  },
+  coverTopGold: { width: 60, height: 2, backgroundColor: COMPANY.gold },
+  brand1: { fontFamily: "Times-Bold", fontSize: 44, letterSpacing: 14, color: COMPANY.cream, marginTop: 32 },
+  brand2: { fontFamily: "Times-Bold", fontSize: 44, letterSpacing: 14, color: COMPANY.cream, marginTop: -6 },
+  tagline: { fontSize: 9, color: COMPANY.cream, opacity: 0.7, marginTop: 18, letterSpacing: 4 },
+  coverDivider: { width: 80, height: 1, backgroundColor: COMPANY.gold, marginTop: 64 },
+  coverDocTitle: { fontFamily: "Times-Italic", fontSize: 56, color: COMPANY.cream, marginTop: 24, letterSpacing: 1 },
+  coverSubtitle: { fontFamily: "Helvetica", fontSize: 11, letterSpacing: 8, color: COMPANY.gold, marginTop: 12, textTransform: "uppercase" },
+  coverIntro: { fontFamily: "Times-Italic", fontSize: 12, color: COMPANY.cream, marginTop: 36, lineHeight: 1.7, maxWidth: 380, opacity: 0.92 },
+  coverMeta: { fontSize: 8.5, color: COMPANY.cream, opacity: 0.65, letterSpacing: 2, textTransform: "uppercase" },
+  coverFooter: { borderTopWidth: 0.5, borderColor: "rgba(243,239,233,0.25)", paddingTop: 14, marginTop: 32 },
+  coverCompany: { fontFamily: "Helvetica-Bold", fontSize: 8.5, color: COMPANY.cream, letterSpacing: 1, textTransform: "uppercase", marginBottom: 4 },
+  coverContact: { fontSize: 8.5, color: COMPANY.cream, opacity: 0.75, lineHeight: 1.6 },
+
+  // ---------- CONTENT PAGES ----------
   page: {
-    paddingHorizontal: 44,
+    paddingHorizontal: 56,
     paddingTop: 56,
-    paddingBottom: 66,
-    fontSize: 8.5,
+    paddingBottom: 78,
+    fontSize: 9,
     fontFamily: "Helvetica",
     color: COMPANY.charcoal,
     backgroundColor: "#fdfaf5",
   },
-  // Header (cover-stijl)
-  cover: {
-    backgroundColor: COMPANY.brown,
-    color: COMPANY.cream,
-    padding: 32,
-    marginBottom: 22,
-    marginHorizontal: -44,
-    marginTop: -56,
-    paddingHorizontal: 44,
-    paddingTop: 56,
-    paddingBottom: 26,
+  pageHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingBottom: 12,
+    borderBottomWidth: 0.5,
+    borderColor: COMPANY.sand,
+    marginBottom: 28,
   },
-  brand1: { fontFamily: "Times-Bold", fontSize: 26, letterSpacing: 6, color: COMPANY.cream },
-  brand2: { fontFamily: "Times-Bold", fontSize: 26, letterSpacing: 6, color: COMPANY.cream, marginTop: -4 },
-  brandLine: { width: 36, height: 1.6, backgroundColor: COMPANY.gold, marginTop: 10, marginBottom: 10 },
-  tagline: { fontSize: 8, color: COMPANY.cream, letterSpacing: 2, opacity: 0.7 },
-  coverFooter: { flexDirection: "row", justifyContent: "space-between", marginTop: 26, alignItems: "flex-end" },
-  docTitle: { fontFamily: "Times-Italic", fontSize: 22, color: COMPANY.cream, letterSpacing: 1.5 },
-  docMeta: { fontSize: 8, color: COMPANY.cream, opacity: 0.85, textAlign: "right", lineHeight: 1.5 },
-  intro: {
-    fontFamily: "Times-Italic",
-    fontSize: 10,
-    color: COMPANY.muted,
-    marginBottom: 14,
-    lineHeight: 1.5,
-  },
-  // Groeptitel
-  group: {
-    fontFamily: "Times-Bold",
-    fontSize: 13,
-    color: COMPANY.brown,
-    marginTop: 12,
-    marginBottom: 2,
-    letterSpacing: 1.5,
-    textTransform: "uppercase",
-  },
-  groupLine: { width: 28, height: 1.2, backgroundColor: COMPANY.terracotta, marginBottom: 8 },
-  // Tabel
+  pageHeaderBrand: { fontFamily: "Times-Bold", fontSize: 11, letterSpacing: 4, color: COMPANY.brown },
+  pageHeaderRight: { fontFamily: "Times-Italic", fontSize: 9, color: COMPANY.muted },
+
+  // ---------- SECTION ----------
+  sectionGroup: { marginBottom: 36 },
+  sectionLabel: { fontSize: 8, color: COMPANY.terracotta, letterSpacing: 4, textTransform: "uppercase", marginBottom: 6 },
+  sectionTitle: { fontFamily: "Times-Bold", fontSize: 26, color: COMPANY.brown, letterSpacing: 0.5, lineHeight: 1.1 },
+  sectionGold: { width: 40, height: 1.4, backgroundColor: COMPANY.gold, marginTop: 10, marginBottom: 18 },
+
+  // ---------- TABLE ----------
   th: {
     flexDirection: "row",
-    borderBottomWidth: 1,
+    borderBottomWidth: 0.6,
     borderColor: COMPANY.brown,
-    paddingBottom: 4,
-    marginTop: 4,
+    paddingBottom: 6,
+    marginBottom: 4,
   },
   thText: {
     fontFamily: "Helvetica-Bold",
-    fontSize: 6.5,
-    letterSpacing: 1,
+    fontSize: 6.8,
+    letterSpacing: 1.2,
     color: COMPANY.brown,
     textTransform: "uppercase",
   },
   tr: {
     flexDirection: "row",
-    borderBottomWidth: 0.4,
+    borderBottomWidth: 0.35,
     borderColor: COMPANY.sand,
-    paddingVertical: 6,
+    paddingTop: 10,
+    paddingBottom: 10,
     alignItems: "center",
   },
-  trAlt: { backgroundColor: "#f6f0e5" },
-  cPhoto: { width: 46, marginRight: 8 },
+  cPhoto: { width: 78, marginRight: 14 },
   photoBox: {
-    width: 46,
-    height: 46,
+    width: 78,
+    height: 78,
     borderRadius: 4,
     backgroundColor: COMPANY.sand,
     justifyContent: "center",
     alignItems: "center",
     overflow: "hidden",
   },
-  photoEmpty: { fontSize: 6.5, color: COMPANY.muted, textAlign: "center" },
-  cName: { flex: 3.2, paddingRight: 6 },
-  cDim: { flex: 1.5, color: COMPANY.muted, fontSize: 8 },
+  photoEmpty: { fontSize: 18, color: COMPANY.muted, textAlign: "center" },
+  cName: { flex: 3.2, paddingRight: 8 },
+  cDim: { flex: 1.6, color: COMPANY.muted, fontSize: 8.5, fontFamily: "Times-Italic" },
   cSku: { flex: 1.1, color: COMPANY.terracotta, fontSize: 8, fontFamily: "Helvetica-Bold", letterSpacing: 0.5 },
-  cPriceEx: { flex: 1.1, textAlign: "right", color: COMPANY.muted, fontSize: 8.5 },
+  cPriceEx: { flex: 1.1, textAlign: "right", color: COMPANY.muted, fontSize: 9 },
   cVat: { flex: 0.6, textAlign: "right", color: COMPANY.muted, fontSize: 8 },
-  cPriceIn: { flex: 1.2, textAlign: "right", fontFamily: "Times-Bold", fontSize: 10, color: COMPANY.brown },
-  itemName: { fontFamily: "Times-Bold", fontSize: 10, color: COMPANY.charcoal, lineHeight: 1.3 },
-  itemDesc: { fontSize: 7.5, color: COMPANY.muted, marginTop: 2, lineHeight: 1.35 },
-  // Footer
+  cPriceIn: { flex: 1.3, textAlign: "right", fontFamily: "Times-Bold", fontSize: 12, color: COMPANY.brown },
+  itemName: { fontFamily: "Times-Bold", fontSize: 12, color: COMPANY.charcoal, lineHeight: 1.25 },
+  itemDesc: { fontSize: 8, color: COMPANY.muted, marginTop: 3, lineHeight: 1.4, fontFamily: "Times-Italic" },
+
+  // ---------- FOOTER ----------
   footer: {
     position: "absolute",
-    left: 44,
-    right: 44,
-    bottom: 28,
-    paddingTop: 8,
+    left: 56,
+    right: 56,
+    bottom: 32,
+    paddingTop: 10,
     borderTopWidth: 0.5,
     borderColor: COMPANY.sand,
     fontSize: 7,
     color: COMPANY.muted,
     textAlign: "center",
     lineHeight: 1.6,
+    fontFamily: "Helvetica",
   },
-  footerStrong: { fontFamily: "Helvetica-Bold", color: COMPANY.brown },
-  pageNum: { position: "absolute", right: 44, bottom: 14, fontSize: 7, color: COMPANY.muted },
+  footerStrong: { fontFamily: "Helvetica-Bold", color: COMPANY.brown, letterSpacing: 1, textTransform: "uppercase" },
+  footerNote: { marginTop: 4, fontFamily: "Times-Italic", color: COMPANY.muted, fontSize: 7.5 },
+  pageNum: { position: "absolute", right: 56, bottom: 14, fontSize: 7.5, color: COMPANY.muted, fontFamily: "Times-Italic" },
 });
 
 export interface PricelistItem {
   name: string;
   sku: string | null;
   description: string | null;
-  /** Vertaalde omschrijvingen per locale (cache uit products.descriptionI18n). */
   descriptionI18n?: Partial<Record<PricelistLocale, string>> | null;
   imageUrl: string | null;
   widthMm: string | number | null;
@@ -223,7 +242,6 @@ export interface PricelistItem {
   unit: string | null;
   priceEur: string | number | null;
   vatRate: number;
-  /** Top-level grouping key, e.g. categorie of collectie. */
   group: string;
 }
 
@@ -231,7 +249,7 @@ function shortDesc(desc: string | null): string | null {
   if (!desc) return null;
   const oneLine = desc.replace(/\s+/g, " ").trim();
   if (!oneLine) return null;
-  return oneLine.length > 110 ? oneLine.slice(0, 107) + "…" : oneLine;
+  return oneLine.length > 130 ? oneLine.slice(0, 127) + "…" : oneLine;
 }
 
 function incl(price: number, vatPct: number): number {
@@ -256,36 +274,61 @@ function PricelistPdf({
     if (!groups.has(key)) groups.set(key, []);
     groups.get(key)!.push(it);
   }
+  const groupEntries = [...groups.entries()];
 
-  const footerLine = `${COMPANY.legalName} · ${COMPANY.address}`;
-  const footerLine2 = `${COMPANY.email} · ${COMPANY.phone} · ${COMPANY.website}`;
-
-  let rowCounter = 0;
   return (
     <Document>
-      <Page size="A4" style={s.page}>
-        {/* Cover-header */}
-        <View style={s.cover}>
-          <Text style={s.brand1}>{COMPANY.wordmark1}</Text>
-          <Text style={s.brand2}>{COMPANY.wordmark2}</Text>
-          <View style={s.brandLine} />
-          <Text style={s.tagline}>{COMPANY.tagline.toUpperCase()}</Text>
-          <View style={s.coverFooter}>
-            <Text style={s.docTitle}>{L.title}</Text>
-            <Text style={s.docMeta}>
+      {/* -------- COVER PAGE -------- */}
+      <Page size="A4" style={s.cover}>
+        <View style={s.coverInner}>
+          <View>
+            <View style={s.coverTopGold} />
+            <Text style={s.brand1}>{COMPANY.wordmark1}</Text>
+            <Text style={s.brand2}>{COMPANY.wordmark2}</Text>
+            <Text style={s.tagline}>{COMPANY.tagline.toUpperCase()}</Text>
+
+            <View style={s.coverDivider} />
+            <Text style={s.coverDocTitle}>{L.docTitle}</Text>
+            <Text style={s.coverSubtitle}>{L.coverSubtitle}</Text>
+            <Text style={s.coverIntro}>{L.coverIntro}</Text>
+            {subtitle && (
+              <Text style={[s.coverIntro, { fontSize: 10, marginTop: 16, opacity: 0.8 }]}>
+                — {subtitle}
+              </Text>
+            )}
+          </View>
+
+          <View>
+            <Text style={s.coverMeta}>
               {L.date}: {today(locale)}
-              {"\n"}
-              {L.count}: {items.length}
             </Text>
+            <View style={s.coverFooter}>
+              <Text style={s.coverCompany}>{COMPANY.legalName}</Text>
+              <Text style={s.coverContact}>
+                {COMPANY.address}
+                {"\n"}
+                {COMPANY.email} · {COMPANY.phone} · {COMPANY.website}
+              </Text>
+            </View>
           </View>
         </View>
+      </Page>
 
-        {subtitle ? <Text style={s.intro}>{subtitle}</Text> : <Text style={s.intro}>{L.intro}</Text>}
+      {/* -------- CONTENT PAGES -------- */}
+      <Page size="A4" style={s.page}>
+        <View style={s.pageHeader} fixed>
+          <Text style={s.pageHeaderBrand}>HABITAT ONE</Text>
+          <Text style={s.pageHeaderRight}>
+            {L.docTitle} {L.coverSubtitle.toLowerCase()} · {today(locale)}
+          </Text>
+        </View>
 
-        {[...groups.entries()].map(([groupName, rows]) => (
-          <View key={groupName} wrap>
-            <Text style={s.group}>{groupName}</Text>
-            <View style={s.groupLine} />
+        {groupEntries.map(([groupName, rows], gi) => (
+          <View key={groupName} style={s.sectionGroup} break={gi > 0}>
+            <Text style={s.sectionLabel}>{L.collection}</Text>
+            <Text style={s.sectionTitle}>{groupName}</Text>
+            <View style={s.sectionGold} />
+
             <View style={s.th} wrap={false}>
               <View style={s.cPhoto} />
               <Text style={[s.thText, s.cName]}>{L.product}</Text>
@@ -295,19 +338,19 @@ function PricelistPdf({
               <Text style={[s.thText, s.cVat]}>{L.vat}</Text>
               <Text style={[s.thText, s.cPriceIn]}>{L.priceIn}</Text>
             </View>
+
             {rows.map((it, i) => {
               const dim = formatDimensions(it);
               const localDesc = it.descriptionI18n?.[locale] ?? it.description;
               const desc = shortDesc(localDesc);
               const ex = Number(it.priceEur ?? 0);
               const inc = ex > 0 ? incl(ex, it.vatRate) : 0;
-              const alt = rowCounter++ % 2 === 1;
               return (
-                <View key={i} style={alt ? [s.tr, s.trAlt] : s.tr} wrap={false}>
+                <View key={i} style={s.tr} wrap={false}>
                   <View style={s.cPhoto}>
                     <View style={s.photoBox}>
                       {it.imageUrl ? (
-                        <PdfImage src={it.imageUrl} style={{ width: 46, height: 46, objectFit: "cover" }} />
+                        <PdfImage src={it.imageUrl} style={{ width: 78, height: 78, objectFit: "cover" }} />
                       ) : (
                         <Text style={s.photoEmpty}>{L.noPhoto}</Text>
                       )}
@@ -330,13 +373,16 @@ function PricelistPdf({
 
         <View style={s.footer} fixed>
           <Text style={s.footerStrong}>{COMPANY.legalName}</Text>
-          <Text>{footerLine.replace(COMPANY.legalName + " · ", "")}</Text>
-          <Text>{footerLine2}</Text>
-          <Text style={{ marginTop: 3, fontFamily: "Times-Italic" }}>{L.pricesNote}</Text>
+          <Text>
+            {COMPANY.address} · {COMPANY.email} · {COMPANY.phone}
+          </Text>
+          <Text style={s.footerNote}>{L.pricesNote}</Text>
         </View>
         <Text
           style={s.pageNum}
-          render={({ pageNumber, totalPages }) => `${L.page} ${pageNumber} / ${totalPages}`}
+          render={({ pageNumber, totalPages }) =>
+            pageNumber === 1 ? "" : `${L.page} ${pageNumber} / ${totalPages}`
+          }
           fixed
         />
       </Page>
