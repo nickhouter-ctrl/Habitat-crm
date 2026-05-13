@@ -58,7 +58,7 @@ export async function mailPricelist(formData: FormData) {
     heightMm: p.heightMm ?? null,
     lengthMm: p.lengthMm ?? null,
     thicknessMm: p.thicknessMm ?? null,
-    additionalSizes: (p.additionalSizes as string[] | null) ?? null,
+    additionalSizes: (p.additionalSizes as Array<{ sku: string; label: string }> | null) ?? null,
     unit: p.unit ?? null,
     priceEur: p.priceEur ?? null,
     vatRate: p.vatRate ?? 21,

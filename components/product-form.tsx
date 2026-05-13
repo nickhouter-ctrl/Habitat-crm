@@ -44,7 +44,6 @@ export function ProductForm({
     | "heightMm"
     | "lengthMm"
     | "thicknessMm"
-    | "additionalSizes"
     | "imageUrl"
     | "isActive"
     | "pushToWebsite"
@@ -227,19 +226,6 @@ export function ProductForm({
                 />
               </Field>
             </div>
-            <Field
-              label="Beschikbare maten (optioneel)"
-              htmlFor="additionalSizes"
-              hint="Eén maat per regel — bv. '2400 × 1190 mm'. Toont op de site als 'ook leverbaar in'."
-            >
-              <Textarea
-                id="additionalSizes"
-                name="additionalSizes"
-                rows={3}
-                defaultValue={(product?.additionalSizes ?? []).join("\n")}
-                placeholder={"2400 × 590 mm\n1200 × 190 mm"}
-              />
-            </Field>
           </fieldset>
 
           <Field

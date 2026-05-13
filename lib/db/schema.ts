@@ -348,10 +348,12 @@ export const products = pgTable(
     lengthMm: numeric({ precision: 10, scale: 2 }),
     thicknessMm: numeric({ precision: 10, scale: 2 }),
     /**
-     * Alternatieve maten (los van de hoofdmaat). Bv. wandpanelen die in
-     * meerdere formaten leverbaar zijn: `["2400 × 590 mm", "1200 × 190 mm"]`.
+     * Alternatieve maten met eigen SKU per maat. Bv. wandpanelen die in
+     * meerdere formaten leverbaar zijn:
+     *   [{ sku: "MS-167", label: "2400 × 590 mm" },
+     *    { sku: "MS-168", label: "1200 × 190 mm" }]
      */
-    additionalSizes: jsonb().$type<string[]>(),
+    additionalSizes: jsonb().$type<Array<{ sku: string; label: string }>>(),
     imageUrl: text(),
     isActive: boolean().notNull().default(true),
     /** Aan = mag op de website. De sync-actie creëert dan een entry op habitat-one (matched op SKU); bestaande entries worden altijd bijgewerkt, los van deze vlag. */

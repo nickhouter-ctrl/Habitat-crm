@@ -53,7 +53,6 @@ const productSchema = z.object({
   heightMm: num,
   lengthMm: num,
   thicknessMm: num,
-  additionalSizes: z.string().optional().or(z.literal("")),
   imageUrl: z.string().trim().url().optional().or(z.literal("")),
   isActive: z.preprocess((v) => v === "on" || v === "true" || v === true, z.boolean()),
   pushToWebsite: z.preprocess((v) => v === "on" || v === "true" || v === true, z.boolean()),
@@ -94,12 +93,6 @@ function toValues(v: z.infer<typeof productSchema>) {
     heightMm: dec(v.heightMm),
     lengthMm: dec(v.lengthMm),
     thicknessMm: dec(v.thicknessMm),
-    additionalSizes: v.additionalSizes
-      ? v.additionalSizes
-          .split(/\r?\n/)
-          .map((s) => s.trim())
-          .filter(Boolean)
-      : null,
     imageUrl: v.imageUrl || null,
     isActive: v.isActive,
     pushToWebsite: v.pushToWebsite,
