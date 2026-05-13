@@ -110,6 +110,55 @@ export async function expensesYTD(): Promise<number> {
   return Math.round(sum * 100) / 100;
 }
 
+/**
+ * Sommatie zoals Holded's aankoopfacturen-overzicht: subtotaal (ex BTW) over
+ * alle purchase-documenten, currency-naive (Holded telt USD-getallen en EUR-
+ * getallen bij elkaar op zoals ze in het document staan). Klopt 1-op-1 met
+ * wat je in Holded ziet onder "Aankoopfacturen".
+ */
+const docsCache: { fetchedAt: number; subtotal: number; byMonth: Map<string, number> } | null = null;
+let _docsCache: { fetchedAt: number; subtotal: number; byMonth: Map<string, number> } | null = docsCache;
+
+async function fetchPurchaseDocs() {
+  if (_docsCache && Date.now() - _docsCache.fetchedAt < TTL_MS) return _docsCache;
+  try {
+    const docs = await holded.request<Array<{ subtotal?: number; date?: number; currency?: string }>>(
+      `/invoicing/v1/documents/purchase`,
+    );
+    let subtotal = 0;
+    const byMonth = new Map<string, number>();
+    for (const d of docs ?? []) {
+      const s = Number(d.subtotal || 0);
+      subtotal += s; // currency-naive optelling (matcht Holded UI)
+      if (d.date) {
+        const ym = ymKey(d.date);
+        byMonth.set(ym, (byMonth.get(ym) ?? 0) + s);
+      }
+    }
+    _docsCache = { fetchedAt: Date.now(), subtotal, byMonth };
+    return _docsCache;
+  } catch {
+    return { fetchedAt: Date.now(), subtotal: 0, byMonth: new Map<string, number>() };
+  }
+}
+
+export async function purchaseDocsTotalExBTW(): Promise<number> {
+  const c = await fetchPurchaseDocs();
+  return Math.round(c.subtotal * 100) / 100;
+}
+
+export async function purchaseDocsByMonth(months = 12): Promise<{ ym: string; total: number }[]> {
+  const c = await fetchPurchaseDocs();
+  const now = new Date();
+  const out: { ym: string; total: number }[] = [];
+  for (let i = months - 1; i >= 0; i--) {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    const ym = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+    out.push({ ym, total: Math.round((c.byMonth.get(ym) ?? 0) * 100) / 100 });
+  }
+  return out;
+}
+
 export async function revenueYTD(): Promise<number> {
   const start = startOfYearTs(new Date().getFullYear());
   const lines = await fetchLedger(start, Math.floor(Date.now() / 1000));

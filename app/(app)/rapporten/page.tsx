@@ -17,7 +17,7 @@ import {
 import { HorizontalBarChart, MonthlyAmountChart } from "@/components/rapporten-charts";
 import { db } from "@/lib/db";
 import { contacts, documents, products, purchaseOrders } from "@/lib/db/schema";
-import { expensesByMonth } from "@/lib/holded/accounting";
+import { purchaseDocsByMonth } from "@/lib/holded/accounting";
 import { formatEUR } from "@/lib/utils";
 
 export const metadata = { title: "Rapporten" };
@@ -39,10 +39,10 @@ export default async function RapportenPage() {
   const months = lastTwelveMonths();
   const from = months[0].key + "-01";
 
-  // Holded grootboek voor inkoop (uitgaven) per maand — exact zoals in de boekhouding.
+  // Holded aankoopfacturen-overzicht: exact zoals in Holded's "Aankoopfacturen"-pagina (sum subtotal ex BTW).
   const [holdedExpenses, revenueRows, topCustomers, topProductsRows, supplierRows, leadSourceRows, openInvoices, allDocsForMargin] =
     await Promise.all([
-      expensesByMonth(12),
+      purchaseDocsByMonth(12),
       // Omzet per maand (ex BTW), uit eigen documenten (zelfde model dat door Holded gesynct is).
       db.execute(sql`
         select to_char(issue_date,'YYYY-MM') as ym,
@@ -206,7 +206,7 @@ export default async function RapportenPage() {
 
       <div className="mb-5 grid grid-cols-2 gap-3 sm:grid-cols-4">
         <StatTile label="Omzet (12 mnd)" value={formatEUR(totalRev)} hint="ex. BTW · facturen − creditnota's" />
-        <StatTile label="Inkoop (12 mnd)" value={formatEUR(totalPur)} hint="uit Holded-grootboek" />
+        <StatTile label="Inkoop (12 mnd)" value={formatEUR(totalPur)} hint="ex. BTW · Holded aankoopfacturen" />
         <StatTile label="Bruto-resultaat" value={formatEUR(totalRev - totalPur)} hint={grossMargin != null ? `${grossMargin}% van de omzet` : undefined} />
         <StatTile label="Open facturen" value={openInvoices.length} hint={formatEUR(cashflowBuckets.reduce((s, b) => s + b.open, 0))} />
       </div>
@@ -225,7 +225,7 @@ export default async function RapportenPage() {
         <Card>
           <CardHeader>
             <CardTitle>Inkoop per maand</CardTitle>
-            <span className="text-xs text-muted">uit Holded-grootboek (kostenrekeningen)</span>
+            <span className="text-xs text-muted">ex. BTW · uit Holded aankoopfacturen</span>
           </CardHeader>
           <CardContent>
             <MonthlyAmountChart data={purchaseChart} color="#3a2a20" />
