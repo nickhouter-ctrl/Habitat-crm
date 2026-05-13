@@ -1,4 +1,4 @@
-import { and, asc, eq, ilike, inArray, isNotNull, isNull, lt, or, sql } from "drizzle-orm";
+import { and, asc, eq, ilike, isNotNull, isNull, lt, or, sql } from "drizzle-orm";
 import { Search } from "lucide-react";
 import Link from "next/link";
 
@@ -90,12 +90,6 @@ export default async function ProductsPage({
     ),
   );
 
-  const onOrderProducts = onOrderByProduct.size
-    ? await db
-        .select({ id: products.id, name: products.name, sku: products.sku, stockQty: products.stockQty })
-        .from(products)
-        .where(inArray(products.id, [...onOrderByProduct.keys()]))
-    : [];
 
   // Group by category for the display.
   const groups = new Map<string, typeof rows>();
@@ -149,49 +143,6 @@ export default async function ProductsPage({
         <StatTile label="Voorraadwaarde (verkoop)" value={formatEUR(agg.stockSaleValue)} hint="verkoopprijs × voorraad" />
       </div>
 
-      {onOrderProducts.length > 0 && (
-        <Card className="mb-5 overflow-hidden">
-          <div className="flex items-center justify-between gap-3 border-b bg-background/60 px-4 py-2.5">
-            <h2 className="text-sm font-semibold">📦 Onderweg / besteld</h2>
-            <span className="text-xs text-muted">{onOrderProducts.length} product(en) in open inkooporders</span>
-          </div>
-          <Table>
-            <THead>
-              <tr>
-                <Th>Product</Th>
-                <Th>SKU</Th>
-                <Th className="text-right">Huidige voorraad</Th>
-                <Th className="text-right">Besteld</Th>
-                <Th>Leverancier</Th>
-                <Th>Verwacht</Th>
-              </tr>
-            </THead>
-            <TBody>
-              {onOrderProducts.map((p) => {
-                const info = onOrderByProduct.get(p.id)!;
-                return (
-                  <Tr key={p.id}>
-                    <Td className="font-medium">
-                      <Link href={`/products/${p.id}/edit`} className="hover:underline">
-                        {p.name}
-                      </Link>
-                    </Td>
-                    <Td className="text-muted">{p.sku ?? "—"}</Td>
-                    <Td className="text-right tabular-nums">{p.stockQty != null ? Number(p.stockQty).toLocaleString("nl-NL") : "—"}</Td>
-                    <Td className="text-right tabular-nums font-medium text-accent">+{info.qty.toLocaleString("nl-NL")}</Td>
-                    <Td className="text-muted">{info.suppliers}</Td>
-                    <Td className="text-muted">
-                      {info.nextDate
-                        ? new Date(info.nextDate).toLocaleDateString("nl-NL", { day: "numeric", month: "short", year: "numeric" })
-                        : "—"}
-                    </Td>
-                  </Tr>
-                );
-              })}
-            </TBody>
-          </Table>
-        </Card>
-      )}
 
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <div className="flex flex-wrap gap-1">

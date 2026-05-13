@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  BarChart3,
   Boxes,
   Briefcase,
   Building2,
@@ -33,6 +34,7 @@ const NAV = [
   { href: "/quotes", label: "Offertes", icon: FileText },
   { href: "/invoices", label: "Facturen", icon: Receipt },
   { href: "/pakbonnen", label: "Pakbonnen", icon: Truck },
+  { href: "/rapporten", label: "Rapporten", icon: BarChart3 },
 ];
 
 export function AppSidebar({
