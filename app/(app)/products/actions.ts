@@ -11,6 +11,7 @@ import { products } from "@/lib/db/schema";
 import { isValidEan13, nextProductBarcode } from "@/lib/barcode";
 import { hasCostBreakdown, landedCost } from "@/lib/pricing";
 import { deleteProductImageByUrl, uploadProductImage } from "@/lib/storage";
+import { translateText, type Locale } from "@/lib/translate";
 import { pushProductToWebsite } from "@/lib/website/push";
 
 const num = z.preprocess(
@@ -49,6 +50,10 @@ const productSchema = z.object({
   dutyPct: pct,
   targetMarginPct: pct,
   description: z.string().trim().max(4000).optional().or(z.literal("")),
+  descriptionNl: z.string().trim().max(4000).optional().or(z.literal("")),
+  descriptionDe: z.string().trim().max(4000).optional().or(z.literal("")),
+  descriptionEn: z.string().trim().max(4000).optional().or(z.literal("")),
+  descriptionEs: z.string().trim().max(4000).optional().or(z.literal("")),
   widthMm: num,
   heightMm: num,
   lengthMm: num,
@@ -89,6 +94,15 @@ function toValues(v: z.infer<typeof productSchema>) {
     targetMarginPct: dec(v.targetMarginPct),
     costEur: cost === null ? null : String(cost),
     description: v.description || null,
+    descriptionI18n:
+      v.descriptionNl || v.descriptionDe || v.descriptionEn || v.descriptionEs
+        ? {
+            ...(v.descriptionNl ? { nl: v.descriptionNl } : {}),
+            ...(v.descriptionDe ? { de: v.descriptionDe } : {}),
+            ...(v.descriptionEn ? { en: v.descriptionEn } : {}),
+            ...(v.descriptionEs ? { es: v.descriptionEs } : {}),
+          }
+        : null,
     widthMm: dec(v.widthMm),
     heightMm: dec(v.heightMm),
     lengthMm: dec(v.lengthMm),
@@ -188,6 +202,39 @@ export async function pushProductToWebsiteAction(id: string) {
   revalidatePath("/products");
   revalidatePath(`/products/${id}/edit`);
   redirect(target);
+}
+
+/**
+ * Vertaal de omschrijving van een product naar NL/DE/EN/ES via OpenAI.
+ * Slaat de vertalingen op in description_i18n. Bron-taal komt mee in 'from'.
+ */
+export async function translateProductDescription(id: string, formData: FormData) {
+  await requireUser();
+  const from = (formData.get("from") as Locale | null) ?? "nl";
+  const product = await db.query.products.findFirst({
+    where: eq(products.id, id),
+    columns: { description: true, descriptionI18n: true },
+  });
+  if (!product) redirect(`/products/${id}/edit?error=validation`);
+  const i18n = (product?.descriptionI18n ?? {}) as Record<Locale, string | undefined>;
+  const sourceText = i18n[from] || product?.description || "";
+  if (!sourceText.trim()) {
+    redirect(`/products/${id}/edit?translateError=${encodeURIComponent("Geen brontekst om te vertalen.")}`);
+  }
+  const targets = (["nl", "de", "en", "es"] as Locale[]).filter((l) => l !== from);
+  try {
+    const out = await translateText({ text: sourceText, fromLocale: from, targetLocales: targets });
+    const merged = { ...i18n, [from]: sourceText, ...out };
+    await db
+      .update(products)
+      .set({ descriptionI18n: merged, updatedAt: new Date() })
+      .where(eq(products.id, id));
+    revalidatePath(`/products/${id}/edit`);
+    redirect(`/products/${id}/edit?translated=${Object.keys(out).join(",")}`);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : "vertaling mislukt";
+    redirect(`/products/${id}/edit?translateError=${encodeURIComponent(msg)}`);
+  }
 }
 
 /** Assign an auto-generated EAN-13 barcode to a product (skips if it already has one). */

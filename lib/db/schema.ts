@@ -337,6 +337,11 @@ export const products = pgTable(
     costEur: numeric({ precision: 14, scale: 2 }),
     currency: text().notNull().default("EUR"),
     description: text(),
+    /**
+     * Vertaalde omschrijvingen per locale (NL/DE/EN/ES). `description` blijft
+     * de primaire/originele tekst; gevulde locales overrulen op de website.
+     */
+    descriptionI18n: jsonb().$type<{ nl?: string; de?: string; en?: string; es?: string }>(),
     // Afmetingen — gesynct naar de habitat-one website (matched op SKU).
     widthMm: numeric({ precision: 10, scale: 2 }),
     heightMm: numeric({ precision: 10, scale: 2 }),

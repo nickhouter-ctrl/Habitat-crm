@@ -48,6 +48,7 @@ export function ProductForm({
     | "isActive"
     | "pushToWebsite"
     | "websiteProductId"
+    | "descriptionI18n"
   >;
   collections: string[];
   categories: string[];
@@ -228,9 +229,53 @@ export function ProductForm({
             </div>
           </fieldset>
 
-          <Field label="Omschrijving" htmlFor="description">
+          <Field
+            label="Omschrijving (bron-taal — wordt automatisch vertaald)"
+            htmlFor="description"
+            hint="Vul deze in. Op de detailpagina kun je 'Vertaal met AI' draaien om NL/DE/EN/ES te genereren."
+          >
             <Textarea id="description" name="description" defaultValue={product?.description ?? ""} />
           </Field>
+
+          <fieldset className="rounded-md border border-border p-3">
+            <legend className="px-1 text-xs font-medium uppercase tracking-wide text-muted">
+              Omschrijvingen per taal (overrulen op de website)
+            </legend>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <Field label="🇳🇱 Nederlands" htmlFor="descriptionNl">
+                <Textarea
+                  id="descriptionNl"
+                  name="descriptionNl"
+                  rows={3}
+                  defaultValue={product?.descriptionI18n?.nl ?? ""}
+                />
+              </Field>
+              <Field label="🇩🇪 Duits" htmlFor="descriptionDe">
+                <Textarea
+                  id="descriptionDe"
+                  name="descriptionDe"
+                  rows={3}
+                  defaultValue={product?.descriptionI18n?.de ?? ""}
+                />
+              </Field>
+              <Field label="🇬🇧 Engels" htmlFor="descriptionEn">
+                <Textarea
+                  id="descriptionEn"
+                  name="descriptionEn"
+                  rows={3}
+                  defaultValue={product?.descriptionI18n?.en ?? ""}
+                />
+              </Field>
+              <Field label="🇪🇸 Spaans" htmlFor="descriptionEs">
+                <Textarea
+                  id="descriptionEs"
+                  name="descriptionEs"
+                  rows={3}
+                  defaultValue={product?.descriptionI18n?.es ?? ""}
+                />
+              </Field>
+            </div>
+          </fieldset>
 
           <Field label="Afbeelding-URL (optioneel)" htmlFor="imageUrl">
             <Input
