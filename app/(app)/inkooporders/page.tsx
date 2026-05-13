@@ -33,10 +33,13 @@ export default async function PurchaseOrdersPage() {
     .limit(2000);
 
   const eurRows = rows.filter((r) => (r.currency ?? "EUR") === "EUR");
-  // Aggregaten ex. BTW; concept-facturen worden niet meegeteld.
+  // Aggregaten zonder concept-facturen.
   const sumEx = (rs: typeof eurRows) =>
     rs.filter((r) => r.status !== "draft").reduce((s, r) => s + Number(r.subtotal ?? r.total ?? 0), 0);
-  const totalEur = sumEx(eurRows);
+  const sumIncl = (rs: typeof eurRows) =>
+    rs.filter((r) => r.status !== "draft").reduce((s, r) => s + Number(r.total ?? 0), 0);
+  const totalEurEx = sumEx(eurRows);
+  const totalEurIncl = sumIncl(eurRows);
   const open = rows.filter((r) => PO_OPEN_STATUSES.includes(r.status));
   const received = rows.filter((r) => r.status === "received");
   const drafts = rows.filter((r) => r.status === "draft");
@@ -54,9 +57,10 @@ export default async function PurchaseOrdersPage() {
       />
 
       {rows.length > 0 && (
-        <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
+        <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
           <StatTile label="Aantal" value={rows.length} hint={drafts.length ? `${drafts.length} concept(en) niet meegeteld` : undefined} />
-          <StatTile label="Totaal ex. BTW" value={formatEUR(totalEur)} hint="alle aankopen samen" />
+          <StatTile label="Totaal ex. BTW" value={formatEUR(totalEurEx)} hint="zonder concept" />
+          <StatTile label="Totaal incl. BTW" value={formatEUR(totalEurIncl)} hint="zonder concept" />
           <StatTile label="Onderweg" value={open.length} hint={open.length ? formatEUR(sumEx(open.filter((r) => (r.currency ?? "EUR") === "EUR"))) : "—"} />
           <StatTile label="Ontvangen / gefactureerd" value={received.length} hint={formatEUR(sumEx(received.filter((r) => (r.currency ?? "EUR") === "EUR")))} />
         </div>
@@ -78,7 +82,8 @@ export default async function PurchaseOrdersPage() {
                 <Th>Datum</Th>
                 <Th>Verwacht</Th>
                 <Th className="text-right">Regels</Th>
-                <Th className="text-right">Totaal</Th>
+                <Th className="text-right">Ex. BTW</Th>
+                <Th className="text-right">Incl. BTW</Th>
                 <Th>Status</Th>
               </tr>
             </THead>
@@ -96,6 +101,7 @@ export default async function PurchaseOrdersPage() {
                     <Td className="text-muted">{fmtDate(po.orderDate)}</Td>
                     <Td className="text-muted">{fmtDate(po.expectedDate)}</Td>
                     <Td className="text-right tabular-nums text-muted">{po.items?.length ?? 0}</Td>
+                    <Td className="text-right tabular-nums">{formatMoney(po.subtotal ?? po.total, po.currency)}</Td>
                     <Td className="text-right tabular-nums">{formatMoney(po.total, po.currency)}</Td>
                     <Td>
                       <Badge tone={meta.tone}>{meta.label}</Badge>
