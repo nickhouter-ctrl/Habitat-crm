@@ -21,6 +21,7 @@ import {
   Tr,
 } from "@/components/ui";
 import { SyncHoldedButton } from "@/components/sync-holded-button";
+import { TeamMemberRoleSelect } from "@/components/team-member-role";
 import { db } from "@/lib/db";
 import { users, webhookEvents } from "@/lib/db/schema";
 import { formatDate } from "@/lib/utils";
@@ -78,14 +79,12 @@ export default async function SettingsPage() {
                       {isSelf ? (
                         <Badge tone={meta.tone}>{meta.label}</Badge>
                       ) : (
-                        <form action={setTeamMemberRole.bind(null, u.id)} className="flex items-center gap-1.5">
-                          <Select name="role" defaultValue={u.role} className="h-8 w-36 py-0 text-xs">
-                            {Object.entries(ROLE_META).map(([v, m]) => (
-                              <option key={v} value={v}>{m.label}</option>
-                            ))}
-                          </Select>
-                          <button className={buttonClass({ variant: "ghost", size: "sm" })}>Opslaan</button>
-                        </form>
+                        <TeamMemberRoleSelect
+                          key={`${u.id}:${u.role}`}
+                          initialRole={u.role}
+                          action={setTeamMemberRole.bind(null, u.id)}
+                          roles={Object.entries(ROLE_META).map(([value, m]) => ({ value, label: m.label }))}
+                        />
                       )}
                     </Td>
                     <Td className="text-right">

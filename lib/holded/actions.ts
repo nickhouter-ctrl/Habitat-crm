@@ -8,6 +8,7 @@ import {
   pullContactsFromHolded,
   pullDocumentsFromHolded,
   pullProductsFromHolded,
+  pullProjectsFromHolded,
   pullPurchaseOrdersFromHolded,
 } from "./sync";
 
@@ -24,8 +25,9 @@ export async function syncHoldedNow(): Promise<{ ok: boolean; message: string }>
   try {
     const products = await pullProductsFromHolded();
     const contacts = await pullContactsFromHolded();
-    const docs = await pullDocumentsFromHolded(["estimate", "invoice", "creditnote"]);
+    const docs = await pullDocumentsFromHolded(["estimate", "invoice", "creditnote", "deliverynote"]);
     const purchases = await pullPurchaseOrdersFromHolded();
+    const projects = await pullProjectsFromHolded();
 
     for (const path of [
       "/",
@@ -33,7 +35,9 @@ export async function syncHoldedNow(): Promise<{ ok: boolean; message: string }>
       "/products",
       "/quotes",
       "/invoices",
+      "/pakbonnen",
       "/inkooporders",
+      "/projects",
       "/settings",
     ]) {
       revalidatePath(path);
@@ -41,7 +45,7 @@ export async function syncHoldedNow(): Promise<{ ok: boolean; message: string }>
 
     return {
       ok: true,
-      message: `Producten +${products.created}/~${products.updated} · contacten +${contacts.created}/~${contacts.updated} · documenten +${docs.created}/~${docs.updated} · aankopen +${purchases.created}/~${purchases.updated}.`,
+      message: `Producten +${products.created}/~${products.updated} · contacten +${contacts.created}/~${contacts.updated} · documenten +${docs.created}/~${docs.updated} · aankopen +${purchases.created}/~${purchases.updated} · projecten +${projects.created}/~${projects.updated}.`,
     };
   } catch (err) {
     return {

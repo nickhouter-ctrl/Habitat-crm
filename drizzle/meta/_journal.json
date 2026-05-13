@@ -71,6 +71,13 @@
       "when": 1778594269108,
       "tag": "0009_smart_mister_fear",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1778658669629,
+      "tag": "0010_lazy_killraven",
+      "breakpoints": true
     }
   ]
 }

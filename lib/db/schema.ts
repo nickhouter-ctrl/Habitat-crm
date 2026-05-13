@@ -435,6 +435,42 @@ export const documents = pgTable(
   ],
 );
 
+/* ------------------------------------------------------------- projecten */
+/* Projecten zoals in Holded — een container voor werkzaamheden/uren/kosten   */
+/* over één klus heen. (Onze `deals` zijn salesgericht; projecten zijn meer  */
+/* uitvoeringsgericht en kunnen aan documenten/inkoop gekoppeld worden.)    */
+
+export const projects = pgTable(
+  "projects",
+  {
+    id: uuid()
+      .primaryKey()
+      .default(sql`gen_random_uuid()`),
+    name: text().notNull(),
+    description: text(),
+    /** Korte code/sleutel uit Holded (bv. "VER"). */
+    code: text(),
+    color: text(),
+    /** "active" | "archived" — eenvoudig vrij veld voor nu. */
+    status: text().notNull().default("active"),
+    /** Eigenaar (verantwoordelijke medewerker). */
+    ownerId: uuid().references(() => users.id, { onDelete: "set null" }),
+    /** Belangrijkste klant van het project (optioneel). */
+    contactId: uuid().references(() => contacts.id, { onDelete: "set null" }),
+    /** Eventueel gekoppeld aan een pand. */
+    propertyId: uuid().references(() => properties.id, { onDelete: "set null" }),
+    startDate: date(),
+    endDate: date(),
+    holdedProjectId: text(),
+    ...timestamps,
+  },
+  (t) => [
+    index("projects_status_idx").on(t.status),
+    index("projects_owner_idx").on(t.ownerId),
+    uniqueIndex("projects_holded_id_idx").on(t.holdedProjectId),
+  ],
+);
+
 /* ------------------------------------------------ purchase orders (inkoop) */
 
 export type PurchaseOrderLineItem = {
@@ -636,6 +672,8 @@ export type NewDeal = typeof deals.$inferInsert;
 export type Document = typeof documents.$inferSelect;
 export type PurchaseOrder = typeof purchaseOrders.$inferSelect;
 export type NewPurchaseOrder = typeof purchaseOrders.$inferInsert;
+export type Project = typeof projects.$inferSelect;
+export type NewProject = typeof projects.$inferInsert;
 export type Activity = typeof activities.$inferSelect;
 export type HoldedSyncMap = typeof holdedSyncMap.$inferSelect;
 export type WebhookEvent = typeof webhookEvents.$inferSelect;

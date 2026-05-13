@@ -19,6 +19,7 @@ import {
   documents,
   holdedSyncMap,
   products,
+  projects,
   purchaseOrders,
   type DocumentLineItem,
   type PurchaseOrderLineItem,
@@ -108,7 +109,8 @@ type LocalDocKind =
   | "proforma"
   | "invoice"
   | "creditnote"
-  | "salesreceipt";
+  | "salesreceipt"
+  | "deliverynote";
 
 /**
  * Map a Holded `docType` to our local document kind (used by the webhook handler).
@@ -122,6 +124,7 @@ export const HOLDED_DOCTYPE_TO_KIND: Record<HoldedDocType, LocalDocKind> = {
   salesreceipt: "salesreceipt",
   salesorder: "estimate",
   purchase: "invoice",
+  waybill: "deliverynote",
 };
 
 const KIND_TO_HOLDED_DOCTYPE: Record<LocalDocKind, HoldedDocType> = {
@@ -130,6 +133,7 @@ const KIND_TO_HOLDED_DOCTYPE: Record<LocalDocKind, HoldedDocType> = {
   invoice: "invoice",
   creditnote: "creditnote",
   salesreceipt: "salesreceipt",
+  deliverynote: "waybill",
 };
 
 type LocalDocStatus =
@@ -421,6 +425,48 @@ export async function pullPurchaseOrdersFromHolded(): Promise<PullResult> {
     }
   }
   return { created, updated, total: remote.length };
+}
+
+/* --------------------------------------------------------- projecten (pull) */
+
+interface HoldedProjectShape {
+  id: string;
+  name?: string;
+  desc?: string;
+  type?: string;
+  color?: string;
+  key?: string;
+  scope?: string;
+  status?: string;
+  archived?: boolean;
+}
+
+/** Pull projects from Holded into our `projects` table. */
+export async function pullProjectsFromHolded(): Promise<PullResult> {
+  const remote = await holded.request<HoldedProjectShape[]>("/projects/v1/projects");
+  let created = 0;
+  let updated = 0;
+  for (const p of remote ?? []) {
+    const data = {
+      name: (p.name ?? "(naamloos project)").trim(),
+      description: p.desc?.trim() || null,
+      code: p.key?.trim() || null,
+      color: p.color?.trim() || null,
+      status: p.archived ? "archived" : "active",
+      holdedProjectId: p.id,
+    };
+    const existing = await db.query.projects.findFirst({
+      where: eq(projects.holdedProjectId, p.id),
+    });
+    if (existing) {
+      await db.update(projects).set(data).where(eq(projects.id, existing.id));
+      updated++;
+    } else {
+      await db.insert(projects).values(data);
+      created++;
+    }
+  }
+  return { created, updated, total: remote?.length ?? 0 };
 }
 
 /* --------------------------------------------------------- products (pull) */
