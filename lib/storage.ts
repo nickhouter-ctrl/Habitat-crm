@@ -62,6 +62,62 @@ export async function deletePropertyImageByUrl(url: string): Promise<void> {
   await supabase().storage.from(BUCKET).remove([path]);
 }
 
+/* ------------------------------------------------------------- product photos */
+/* Publieke bucket — productfoto's verschijnen op de website.                   */
+
+const PRODUCT_BUCKET = process.env.SUPABASE_PRODUCT_BUCKET ?? "product-images";
+
+async function ensureProductBucket() {
+  const sb = supabase();
+  const { data } = await sb.storage.getBucket(PRODUCT_BUCKET);
+  if (data) return;
+  await sb.storage.createBucket(PRODUCT_BUCKET, { public: true });
+}
+
+/** Upload één foto voor een product; geeft een publieke URL terug. */
+export async function uploadProductImage(productId: string, file: File): Promise<string> {
+  if (!file || file.size === 0) throw new Error("Leeg bestand.");
+  if (!IMAGE_MIME.has(file.type)) {
+    throw new Error(`Niet-ondersteund bestandstype (${file.type || "onbekend"}). Gebruik JPG, PNG, WebP of AVIF.`);
+  }
+  if (file.size > MAX_BYTES) throw new Error("Bestand te groot (max 25 MB).");
+
+  await ensureProductBucket();
+  const path = `${productId}/${crypto.randomUUID()}.${extensionFor(file)}`;
+  const { error } = await supabase()
+    .storage.from(PRODUCT_BUCKET)
+    .upload(path, file, { contentType: file.type, upsert: false });
+  if (error) throw new Error(`Upload mislukt: ${error.message}`);
+  const { data } = supabase().storage.from(PRODUCT_BUCKET).getPublicUrl(path);
+  return data.publicUrl;
+}
+
+export async function deleteProductImageByUrl(url: string): Promise<void> {
+  const marker = `/storage/v1/object/public/${PRODUCT_BUCKET}/`;
+  const idx = url.indexOf(marker);
+  if (idx === -1) return;
+  const path = decodeURIComponent(url.slice(idx + marker.length));
+  if (!path) return;
+  try {
+    await supabase().storage.from(PRODUCT_BUCKET).remove([path]);
+  } catch {
+    /* best effort */
+  }
+}
+
+/** Haal de bytes op die in deze publieke Supabase-URL staan (voor GitHub-push). */
+export async function fetchProductImageBytes(url: string): Promise<{ bytes: Uint8Array; contentType: string } | null> {
+  try {
+    const res = await fetch(url, { cache: "no-store" });
+    if (!res.ok) return null;
+    const contentType = res.headers.get("content-type") ?? "application/octet-stream";
+    const buf = new Uint8Array(await res.arrayBuffer());
+    return { bytes: buf, contentType };
+  } catch {
+    return null;
+  }
+}
+
 /* ----------------------------------------- purchase-order source documents */
 /* Private bucket — proforma invoices contain bank details, so never public.   */
 

@@ -20,7 +20,6 @@ import {
 } from "@/components/ui";
 import { db } from "@/lib/db";
 import { products } from "@/lib/db/schema";
-import { formatDimensions } from "@/lib/products";
 import { cn, formatEUR } from "@/lib/utils";
 import { getProductCollections } from "../_options";
 
@@ -233,7 +232,6 @@ export default async function ProductsPage({
                   <tr>
                     <Th>Naam</Th>
                     <Th>Site</Th>
-                    <Th>Afmetingen</Th>
                     <Th>Omschrijving</Th>
                     <Th>SKU</Th>
                     <Th className="text-right">Voorraad</Th>
@@ -287,9 +285,6 @@ export default async function ProductsPage({
                           ) : (
                             <span className="text-muted">—</span>
                           )}
-                        </Td>
-                        <Td className="whitespace-nowrap text-xs tabular-nums">
-                          {formatDimensions(p) ?? <span className="text-muted">—</span>}
                         </Td>
                         <Td className="max-w-[18rem] text-xs text-muted">
                           {p.description ? (

@@ -10,6 +10,8 @@ import { db } from "@/lib/db";
 import { products } from "@/lib/db/schema";
 import { isValidEan13, nextProductBarcode } from "@/lib/barcode";
 import { hasCostBreakdown, landedCost } from "@/lib/pricing";
+import { deleteProductImageByUrl, uploadProductImage } from "@/lib/storage";
+import { pushProductToWebsite } from "@/lib/website/push";
 
 const num = z.preprocess(
   (v) => (v === "" || v === undefined || v === null ? undefined : v),
@@ -126,6 +128,66 @@ export async function deleteProduct(id: string) {
   await db.delete(products).where(eq(products.id, id));
   revalidatePath("/products");
   redirect("/products");
+}
+
+/**
+ * Upload of vervang de foto van een product. Verwijdert de oude foto uit
+ * Supabase als die ook door ons gehost was (vreemde URL's laten we staan).
+ */
+export async function uploadProductPhoto(id: string, formData: FormData) {
+  await requireUser();
+  const file = formData.get("photo");
+  if (!(file instanceof File) || file.size === 0) {
+    redirect(`/products/${id}/edit?error=upload`);
+  }
+  const existing = await db.query.products.findFirst({
+    where: eq(products.id, id),
+    columns: { imageUrl: true },
+  });
+  const url = await uploadProductImage(id, file as File);
+  if (existing?.imageUrl) await deleteProductImageByUrl(existing.imageUrl);
+  await db.update(products).set({ imageUrl: url, updatedAt: new Date() }).where(eq(products.id, id));
+  revalidatePath("/products");
+  revalidatePath(`/products/${id}/edit`);
+  redirect(`/products/${id}/edit?saved=1`);
+}
+
+/** Verwijder de gehoste foto van een product (zet imageUrl op null). */
+export async function removeProductPhoto(id: string) {
+  await requireUser();
+  const existing = await db.query.products.findFirst({
+    where: eq(products.id, id),
+    columns: { imageUrl: true },
+  });
+  if (existing?.imageUrl) await deleteProductImageByUrl(existing.imageUrl);
+  await db.update(products).set({ imageUrl: null, updatedAt: new Date() }).where(eq(products.id, id));
+  revalidatePath("/products");
+  revalidatePath(`/products/${id}/edit`);
+  redirect(`/products/${id}/edit?saved=1`);
+}
+
+/**
+ * Push dit product nu naar habitat-one via één GitHub-commit (atomic).
+ * De website re-deployt zelf na de push.
+ */
+export async function pushProductToWebsiteAction(id: string) {
+  await requireUser();
+  let target: string;
+  try {
+    const r = await pushProductToWebsite(id);
+    const sp = new URLSearchParams({
+      pushed: r.action,
+      websiteId: String(r.websiteProductId),
+      commit: r.commitSha.slice(0, 7),
+    });
+    target = `/products/${id}/edit?${sp.toString()}`;
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : "push mislukt";
+    target = `/products/${id}/edit?pushError=${encodeURIComponent(msg)}`;
+  }
+  revalidatePath("/products");
+  revalidatePath(`/products/${id}/edit`);
+  redirect(target);
 }
 
 /** Assign an auto-generated EAN-13 barcode to a product (skips if it already has one). */
