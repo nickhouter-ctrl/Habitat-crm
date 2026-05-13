@@ -20,6 +20,7 @@ import {
 } from "@/components/ui";
 import { db } from "@/lib/db";
 import { activities, contacts, deals, documents, products, purchaseOrders } from "@/lib/db/schema";
+import { expensesYTD } from "@/lib/holded/accounting";
 import { formatMoney, PO_OPEN_STATUSES, PO_STATUS_META } from "@/lib/purchase-orders";
 import { formatDate, formatEUR } from "@/lib/utils";
 import { dealStageMeta, documentKindMeta } from "./_meta";
@@ -43,7 +44,7 @@ export default async function DashboardPage() {
 
   const openExpr = sql`${documents.status} not in ('paid', 'void', 'draft')`;
 
-  const [[contactsTotal], pipelineRows, [docAgg], [creditAgg], [purchaseAgg], [productsAgg], openPurchaseOrders, recentDeals, recentActivity] =
+  const [[contactsTotal], pipelineRows, [docAgg], [creditAgg], [purchaseAgg], [productsAgg], openPurchaseOrders, recentDeals, recentActivity, holdedExpensesYTD] =
     await Promise.all([
       db.select({ n: count() }).from(contacts),
       db
@@ -108,6 +109,7 @@ export default async function DashboardPage() {
           document: { columns: { id: true, docNumber: true, kind: true } },
         },
       }),
+      expensesYTD(),
     ]);
 
   const byStage = new Map(pipelineRows.map((r) => [r.stage, r]));
@@ -192,7 +194,7 @@ export default async function DashboardPage() {
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
         <StatTile label="Totale omzet" value={formatEUR(revenueAll)} hint="ex. BTW · facturen − creditnota's" />
-        <StatTile label="Totale inkoop" value={formatEUR(purchaseAgg.totalEur)} hint={`ex. BTW · ${purchaseAgg.n} aankopen`} />
+        <StatTile label="Totale inkoop" value={formatEUR(holdedExpensesYTD)} hint="ex. BTW · Holded-grootboek YTD" />
         <StatTile label="Omzet deze maand" value={formatEUR(revenueMonth)} hint="ex. BTW" />
         <StatTile label="Openstaande facturen" value={docAgg.outstandingN} hint={formatEUR(docAgg.outstandingV)} />
         <StatTile label="Vervallen facturen" value={docAgg.overdueN} hint={formatEUR(docAgg.overdueV)} />
