@@ -61,17 +61,78 @@ export async function POST(req: Request) {
   // Match parsed SKUs to catalogue products so receiving can update stock.
   const crm = await db.select({ id: products.id, sku: products.sku, name: products.name }).from(products);
   const bySku = new Map(crm.filter((p) => p.sku).map((p) => [normSku(p.sku), p]));
+
+  // Lijnen die geen voorraad-impact hebben (kortingen, samples e.d.).
+  const SKIP_NEW_RX = /(korting|discount|sample|monster|voorbeeld)/i;
+
+  const r2 = (n: number) => Math.round(n * 100) / 100;
+  // Eenvoudige koers EUR<-doc-valuta voor cost-prijs-schatting.
+  const fxToEur = (n: number) => {
+    const c = (parsed.currency ?? "EUR").toUpperCase();
+    if (c === "EUR" || !n) return n;
+    if (c === "USD") return r2(n / 1.08);
+    if (c === "GBP") return r2(n * 1.17);
+    if (c === "CNY") return r2(n / 7.85);
+    return n; // fallback: laat staan; gebruiker corrigeert
+  };
+
   let linked = 0;
-  const items = parsed.items.map((it) => {
-    const match = it.sku ? bySku.get(normSku(it.sku)) : undefined;
-    if (match) linked++;
-    return { ...it, productId: match?.id };
-  });
+  let created = 0;
+  const items: (typeof parsed.items[number] & { productId?: string })[] = [];
+  for (const it of parsed.items) {
+    const key = it.sku ? normSku(it.sku) : "";
+    const match = key ? bySku.get(key) : undefined;
+    if (match) {
+      linked++;
+      items.push({ ...it, productId: match.id });
+      continue;
+    }
+    // Onbekende regel: maak automatisch een product aan als er een SKU + naam zijn
+    // en het géén korting/sample-regel is.
+    const sku = (it.sku ?? "").trim();
+    const isCreatable =
+      sku && it.name && (it.units ?? 0) > 0 && !SKIP_NEW_RX.test(it.name) && (it.unitPrice ?? 0) > 0;
+    if (!isCreatable) {
+      items.push({ ...it });
+      continue;
+    }
+    const purchase = r2(fxToEur(Number(it.unitPrice) || 0));
+    const cost = r2(purchase * 1.61);
+    const freight = r2(purchase * 0.46);
+    const other = r2(cost - purchase - freight);
+    const docNote = `Auto-aangemaakt uit ${parsed.reference ? `PI ${parsed.reference}` : "geüploade PI"} op ${new Date().toLocaleDateString("nl-NL")}.${(parsed.currency ?? "EUR").toUpperCase() !== "EUR" ? ` Prijs omgerekend van ${parsed.currency?.toUpperCase()}; controleer.` : " Controleer kostprijs en categorie."}`;
+    const [row] = await db
+      .insert(products)
+      .values({
+        name: it.name,
+        sku,
+        unit: "stuk",
+        vatRate: 21,
+        purchaseCostEur: String(purchase),
+        freightCostEur: String(freight),
+        otherCostEur: String(other),
+        costEur: String(cost),
+        priceEur: null,
+        targetMarginPct: null,
+        description: [it.note, docNote].filter(Boolean).join(" — "),
+        currency: "EUR",
+        isActive: true,
+      })
+      .returning({ id: products.id });
+    bySku.set(key, { id: row.id, sku, name: it.name });
+    created++;
+    items.push({ ...it, productId: row.id });
+  }
 
   return NextResponse.json({
     attachment,
     parsed: { ...parsed, items },
     linked,
-    note: `PDF uitgelezen: ${items.length} regel(s), ${linked} gekoppeld aan een bestaand product.`,
+    created,
+    note:
+      `PDF uitgelezen: ${items.length} regel(s)` +
+      (linked ? `, ${linked} gekoppeld aan bestaand product` : "") +
+      (created ? `, ${created} nieuw aangemaakt (controleer kostprijs/categorie op /products)` : "") +
+      ".",
   });
 }
