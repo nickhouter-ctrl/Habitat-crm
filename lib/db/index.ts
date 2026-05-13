@@ -35,8 +35,8 @@ const client =
     connect_timeout: 15,
     connection: {
       application_name: "habitat-crm",
-      statement_timeout: "30000",
-      idle_in_transaction_session_timeout: "15000",
+      statement_timeout: 30000,
+      idle_in_transaction_session_timeout: 15000,
     },
   });
 
