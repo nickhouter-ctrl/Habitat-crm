@@ -79,28 +79,44 @@ async function main() {
     let url: string | null = null;
     let via = "";
 
-    // 1. Variant-match via CRM SKU
+    const pickProduct = (imgs: VImg[]) => imgs.find((i) => i.image_type === "product") ?? null;
+
+    // 1. Variant-match via CRM SKU → kleur-staal (product-type) van die specifieke kleur
     if (p.sku) {
       const vm = variantBySku.get(normSku(p.sku));
       if (vm) {
         const imgs = imgsByVariant.get(vm.id) ?? [];
-        const first = imgs.find((i) => i.image_type !== "explainer") ?? imgs[0];
-        if (first) {
-          url = `${WEBSITE_PUBLIC}/products/v/${first.id}.jpg`;
-          via = `variant ${vm.variant_name ?? vm.id} (${p.sku})`;
+        const productImg = pickProduct(imgs);
+        if (productImg) {
+          url = `${WEBSITE_PUBLIC}/products/v/${productImg.id}.jpg`;
+          via = `variant ${vm.variant_name ?? vm.id} (${p.sku}) — kleurstaal`;
         }
       }
     }
 
-    // 2. Fallback: family-thumbnail
+    // 2. Fallback: pak een product-type foto van een sibling-variant
+    //    (zelfde family, andere kleur — beter een kleurstaal van een andere kleur
+    //    dan een sfeer-foto van de family).
     if (!url) {
       const pn = normName(p.name);
-      const fam = site.find((w) => w.thumbnail_path && pn.startsWith(normName(w.name)));
-      if (fam?.thumbnail_path) {
-        const im = imgByPath.get(fam.thumbnail_path);
-        if (im) {
-          url = `${WEBSITE_PUBLIC}/products/v/${im.id}.jpg`;
-          via = `family "${fam.name}"`;
+      const fam = site.find((w) => pn.startsWith(normName(w.name)));
+      if (fam) {
+        const sibVariants = variants.filter((v) => v.product_id === fam.id && v.is_active);
+        for (const sv of sibVariants) {
+          const sib = pickProduct(imgsByVariant.get(sv.id) ?? []);
+          if (sib) {
+            url = `${WEBSITE_PUBLIC}/products/v/${sib.id}.jpg`;
+            via = `sibling-variant "${sv.variant_name}" van "${fam.name}"`;
+            break;
+          }
+        }
+        // Laatste redmiddel: family-thumbnail (kan sfeer zijn)
+        if (!url && fam.thumbnail_path) {
+          const im = imgByPath.get(fam.thumbnail_path);
+          if (im) {
+            url = `${WEBSITE_PUBLIC}/products/v/${im.id}.jpg`;
+            via = `family-thumbnail "${fam.name}" (mogelijk sfeer-foto)`;
+          }
         }
       }
     }
