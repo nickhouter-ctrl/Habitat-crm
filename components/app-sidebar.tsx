@@ -5,7 +5,6 @@ import {
   Briefcase,
   Building2,
   FileText,
-  FolderKanban,
   LayoutDashboard,
   LogOut,
   Menu,
@@ -27,8 +26,7 @@ import { cn, initials } from "@/lib/utils";
 const NAV = [
   { href: "/", label: "Dashboard", icon: LayoutDashboard, exact: true },
   { href: "/contacts", label: "Contacten", icon: Users },
-  { href: "/deals", label: "Deals", icon: Briefcase },
-  { href: "/projects", label: "Projecten", icon: FolderKanban },
+  { href: "/deals", label: "Deals & projecten", icon: Briefcase },
   { href: "/properties", label: "Panden", icon: Building2 },
   { href: "/products", label: "Producten", icon: Boxes },
   { href: "/inkooporders", label: "Inkooporders", icon: PackagePlus },

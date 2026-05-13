@@ -1,9 +1,11 @@
-import { desc } from "drizzle-orm";
+import { asc, desc, eq } from "drizzle-orm";
 import Link from "next/link";
 
 import {
   Badge,
   Card,
+  CardHeader,
+  CardTitle,
   EmptyState,
   LinkButton,
   PageHeader,
@@ -17,7 +19,7 @@ import {
 } from "@/components/ui";
 import { DealsBoard, type BoardDeal } from "@/components/deals-board";
 import { db } from "@/lib/db";
-import { deals } from "@/lib/db/schema";
+import { contacts, deals, projects } from "@/lib/db/schema";
 import { cn, formatDate, formatEUR } from "@/lib/utils";
 import { dealStageMeta, dealTypeMeta } from "../_meta";
 
@@ -31,15 +33,31 @@ export default async function DealsPage({
   const params = await searchParams;
   const view = params.view === "list" ? "list" : "board";
 
-  const rows = await db.query.deals.findMany({
-    orderBy: desc(deals.updatedAt),
-    limit: 500,
-    with: {
-      contact: { columns: { id: true, name: true } },
-      property: { columns: { id: true, title: true } },
-      owner: { columns: { name: true } },
-    },
-  });
+  const [rows, projectRows] = await Promise.all([
+    db.query.deals.findMany({
+      orderBy: desc(deals.updatedAt),
+      limit: 500,
+      with: {
+        contact: { columns: { id: true, name: true } },
+        property: { columns: { id: true, title: true } },
+        owner: { columns: { name: true } },
+      },
+    }),
+    db
+      .select({
+        id: projects.id,
+        name: projects.name,
+        code: projects.code,
+        color: projects.color,
+        status: projects.status,
+        holdedProjectId: projects.holdedProjectId,
+        contactId: projects.contactId,
+        contactName: contacts.name,
+      })
+      .from(projects)
+      .leftJoin(contacts, eq(projects.contactId, contacts.id))
+      .orderBy(asc(projects.status), desc(projects.updatedAt)),
+  ]);
 
   const isOpen = (stage: string) => stage !== "won" && stage !== "lost";
   const openValue = rows
@@ -154,6 +172,64 @@ export default async function DealsPage({
           </Table>
         </Card>
       )}
+
+      <Card className="mt-6 overflow-hidden">
+        <CardHeader>
+          <CardTitle>Projecten</CardTitle>
+          <span className="text-xs text-muted">
+            {projectRows.length} {projectRows.length === 1 ? "project" : "projecten"} · gesynct met Holded
+          </span>
+        </CardHeader>
+        {projectRows.length === 0 ? (
+          <div className="px-5 pb-5 text-sm text-muted">
+            Nog geen projecten — maak er een aan in Holded en draai "Sync met Holded".
+          </div>
+        ) : (
+          <Table>
+            <THead>
+              <tr>
+                <Th>Project</Th>
+                <Th>Code</Th>
+                <Th>Klant</Th>
+                <Th>Status</Th>
+                <Th>Bron</Th>
+              </tr>
+            </THead>
+            <TBody>
+              {projectRows.map((p) => (
+                <Tr key={p.id}>
+                  <Td>
+                    <Link href={`/projects/${p.id}`} className="flex items-center gap-2 font-medium hover:underline">
+                      <span
+                        aria-hidden
+                        className="inline-block size-2.5 shrink-0 rounded-full"
+                        style={{ background: p.color ?? "#9ca3af" }}
+                      />
+                      {p.name}
+                    </Link>
+                  </Td>
+                  <Td className="text-muted">{p.code ?? "—"}</Td>
+                  <Td>
+                    {p.contactName ? (
+                      <Link href={`/contacts/${p.contactId}`} className="hover:underline">
+                        {p.contactName}
+                      </Link>
+                    ) : (
+                      <span className="text-muted">—</span>
+                    )}
+                  </Td>
+                  <Td>
+                    <Badge tone={p.status === "active" ? "success" : "neutral"}>
+                      {p.status === "active" ? "Actief" : "Gearchiveerd"}
+                    </Badge>
+                  </Td>
+                  <Td className="text-xs text-muted">{p.holdedProjectId ? "Holded" : "CRM"}</Td>
+                </Tr>
+              ))}
+            </TBody>
+          </Table>
+        )}
+      </Card>
     </>
   );
 }

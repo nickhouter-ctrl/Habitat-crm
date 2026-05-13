@@ -1,0 +1,187 @@
+import { asc, eq } from "drizzle-orm";
+import Link from "next/link";
+import { notFound } from "next/navigation";
+
+import {
+  Badge,
+  Button,
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+  Field,
+  Input,
+  LinkButton,
+  PageHeader,
+  Select,
+  Textarea,
+} from "@/components/ui";
+import { Combobox, type ComboOption } from "@/components/combobox";
+import { db } from "@/lib/db";
+import { contacts, projects, properties, users } from "@/lib/db/schema";
+import { deleteProject, updateProject } from "../actions";
+
+export const metadata = { title: "Project" };
+
+export default async function ProjectDetailPage({
+  params,
+}: {
+  params: Promise<{ id: string }>;
+}) {
+  const { id } = await params;
+  const project = await db.query.projects.findFirst({ where: eq(projects.id, id) });
+  if (!project) notFound();
+
+  const [contactOpts, ownerOpts, propertyOpts] = await Promise.all([
+    db.select({ id: contacts.id, name: contacts.name }).from(contacts).orderBy(asc(contacts.name)),
+    db.select({ id: users.id, name: users.name, email: users.email }).from(users).orderBy(asc(users.email)),
+    db.select({ id: properties.id, title: properties.title }).from(properties).orderBy(asc(properties.title)),
+  ]);
+
+  const contactOptions: ComboOption[] = contactOpts.map((c) => ({ value: c.id, label: c.name }));
+  const ownerOptions: ComboOption[] = ownerOpts.map((u) => ({ value: u.id, label: u.name ?? u.email }));
+  const propertyOptions: ComboOption[] = propertyOpts.map((p) => ({ value: p.id, label: p.title }));
+
+  const action = updateProject.bind(null, id);
+  const remove = deleteProject.bind(null, id);
+
+  return (
+    <>
+      <PageHeader
+        title={
+          <span className="flex items-center gap-2">
+            <span
+              aria-hidden
+              className="inline-block size-3 shrink-0 rounded-full"
+              style={{ background: project.color ?? "#9ca3af" }}
+            />
+            {project.name}
+            {project.holdedProjectId ? (
+              <span className="rounded-full bg-background px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-muted">
+                Holded
+              </span>
+            ) : null}
+            <Badge tone={project.status === "active" ? "success" : "neutral"}>
+              {project.status === "active" ? "Actief" : "Gearchiveerd"}
+            </Badge>
+          </span>
+        }
+        actions={
+          <LinkButton href="/projects" variant="ghost">
+            ← Overzicht
+          </LinkButton>
+        }
+      />
+
+      <div className="grid gap-5 lg:grid-cols-[1fr_18rem]">
+        <Card>
+          <CardContent className="p-5">
+            <form action={action} className="space-y-4">
+              <div className="grid gap-4 sm:grid-cols-2">
+                <Field label="Naam" htmlFor="name">
+                  <Input id="name" name="name" required defaultValue={project.name} />
+                </Field>
+                <Field label="Code (optioneel)" htmlFor="code" hint="korte projectcode, bv. VER">
+                  <Input id="code" name="code" defaultValue={project.code ?? ""} />
+                </Field>
+                <Field label="Status" htmlFor="status">
+                  <Select id="status" name="status" defaultValue={project.status}>
+                    <option value="active">Actief</option>
+                    <option value="archived">Gearchiveerd</option>
+                  </Select>
+                </Field>
+                <Field label="Verantwoordelijke" htmlFor="ownerId">
+                  <Combobox
+                    name="ownerId"
+                    options={ownerOptions}
+                    defaultValue={project.ownerId ?? ""}
+                    placeholder="— geen — / kies medewerker"
+                    clearable
+                  />
+                </Field>
+                <Field label="Klant" htmlFor="contactId">
+                  <Combobox
+                    name="contactId"
+                    options={contactOptions}
+                    defaultValue={project.contactId ?? ""}
+                    placeholder="— geen — / zoek contact"
+                    clearable
+                  />
+                </Field>
+                <Field label="Pand (optioneel)" htmlFor="propertyId">
+                  <Combobox
+                    name="propertyId"
+                    options={propertyOptions}
+                    defaultValue={project.propertyId ?? ""}
+                    placeholder="— geen — / zoek pand"
+                    clearable
+                  />
+                </Field>
+                <Field label="Startdatum" htmlFor="startDate">
+                  <Input id="startDate" name="startDate" type="date" defaultValue={project.startDate ?? ""} />
+                </Field>
+                <Field label="Einddatum (gepland)" htmlFor="endDate">
+                  <Input id="endDate" name="endDate" type="date" defaultValue={project.endDate ?? ""} />
+                </Field>
+              </div>
+              <Field label="Omschrijving" htmlFor="description">
+                <Textarea id="description" name="description" rows={4} defaultValue={project.description ?? ""} />
+              </Field>
+              <div className="flex flex-wrap items-center justify-between gap-2 border-t pt-4">
+                <Button type="submit">Opslaan</Button>
+                {!project.holdedProjectId && (
+                  <form action={remove}>
+                    <Button type="submit" variant="ghost" className="text-danger hover:bg-danger/10">
+                      Project verwijderen
+                    </Button>
+                  </form>
+                )}
+              </div>
+            </form>
+          </CardContent>
+        </Card>
+
+        <div className="space-y-5">
+          <Card>
+            <CardHeader>
+              <CardTitle>Gegevens</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-1.5 text-sm">
+              <div className="flex justify-between gap-3">
+                <span className="text-muted">Aangemaakt</span>
+                <span>{new Date(project.createdAt).toLocaleDateString("nl-NL", { day: "numeric", month: "short", year: "numeric" })}</span>
+              </div>
+              <div className="flex justify-between gap-3">
+                <span className="text-muted">Bijgewerkt</span>
+                <span>{new Date(project.updatedAt).toLocaleDateString("nl-NL", { day: "numeric", month: "short", year: "numeric" })}</span>
+              </div>
+              {project.holdedProjectId && (
+                <div className="flex justify-between gap-3 border-t pt-1.5">
+                  <span className="text-muted">Holded-ID</span>
+                  <span className="truncate font-mono text-xs">{project.holdedProjectId}</span>
+                </div>
+              )}
+              {project.code && (
+                <div className="flex justify-between gap-3">
+                  <span className="text-muted">Code</span>
+                  <span className="font-medium">{project.code}</span>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Koppelingen</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-2 text-sm text-muted">
+              <p>
+                Binnenkort: gekoppelde <Link href="/quotes" className="text-accent hover:underline">offertes</Link>, <Link href="/invoices" className="text-accent hover:underline">facturen</Link> en <Link href="/inkooporders" className="text-accent hover:underline">inkooporders</Link> rechtstreeks vanuit dit project. Holded markeert regels al met een project — die koppeling neem ik in een volgende ronde over.
+              </p>
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+    </>
+  );
+}
