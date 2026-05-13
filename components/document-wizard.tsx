@@ -44,6 +44,7 @@ export function DocumentWizard({
   contacts,
   deals,
   properties,
+  projects = [],
   products = [],
   defaults,
 }: {
@@ -53,8 +54,9 @@ export function DocumentWizard({
   contacts: Option[];
   deals: Option[];
   properties: Option[];
+  projects?: Option[];
   products?: ProductOption[];
-  defaults?: { contactId?: string; dealId?: string; propertyId?: string };
+  defaults?: { contactId?: string; dealId?: string; propertyId?: string; projectId?: string };
 }) {
   const [step, setStep] = useState<1 | 2>(1);
   const [mode, setMode] = useState<"existing" | "new">(
@@ -247,15 +249,26 @@ export function DocumentWizard({
                 placeholder="bv. Renovatie keuken & badkamer"
               />
             </Field>
-            <Field label="Pand (optioneel)">
-              <Combobox
-                name="propertyId"
-                clearable
-                defaultValue={defaults?.propertyId ?? ""}
-                placeholder="— geen — / zoek een pand"
-                options={properties.map((p) => ({ value: p.id, label: p.name }))}
-              />
-            </Field>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <Field label="Project (optioneel)">
+                <Combobox
+                  name="projectId"
+                  clearable
+                  defaultValue={defaults?.projectId ?? ""}
+                  placeholder="— geen — / zoek een project"
+                  options={projects.map((p) => ({ value: p.id, label: p.name }))}
+                />
+              </Field>
+              <Field label="Pand (optioneel)">
+                <Combobox
+                  name="propertyId"
+                  clearable
+                  defaultValue={defaults?.propertyId ?? ""}
+                  placeholder="— geen — / zoek een pand"
+                  options={properties.map((p) => ({ value: p.id, label: p.name }))}
+                />
+              </Field>
+            </div>
           </CardContent>
         </Card>
 

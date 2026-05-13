@@ -58,6 +58,7 @@ export default async function EditDocumentPage({
           contactId: doc.contactId,
           dealId: doc.dealId,
           propertyId: doc.propertyId,
+          projectId: doc.projectId,
           issueDate: doc.issueDate,
           dueDate: doc.dueDate,
           notes: doc.notes,
@@ -66,6 +67,7 @@ export default async function EditDocumentPage({
         contacts={options.contacts}
         deals={options.deals}
         properties={options.properties}
+        projects={options.projects}
         products={options.products}
         submitLabel="Wijzigingen opslaan"
       />

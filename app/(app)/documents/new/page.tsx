@@ -72,6 +72,7 @@ export default async function NewDocumentPage({
         contacts={options.contacts}
         deals={options.deals}
         properties={options.properties}
+        projects={options.projects}
         products={options.products}
         defaults={defaults}
       />

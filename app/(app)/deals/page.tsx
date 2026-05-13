@@ -176,9 +176,12 @@ export default async function DealsPage({
       <Card className="mt-6 overflow-hidden">
         <CardHeader>
           <CardTitle>Projecten</CardTitle>
-          <span className="text-xs text-muted">
-            {projectRows.length} {projectRows.length === 1 ? "project" : "projecten"} · gesynct met Holded
-          </span>
+          <div className="flex items-center gap-3">
+            <span className="text-xs text-muted">
+              {projectRows.length} {projectRows.length === 1 ? "project" : "projecten"}
+            </span>
+            <LinkButton href="/projects/new" variant="secondary">Nieuw project</LinkButton>
+          </div>
         </CardHeader>
         {projectRows.length === 0 ? (
           <div className="px-5 pb-5 text-sm text-muted">

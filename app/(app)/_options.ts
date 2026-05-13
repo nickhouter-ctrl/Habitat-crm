@@ -2,7 +2,7 @@
 import { asc, desc, eq } from "drizzle-orm";
 
 import { db } from "@/lib/db";
-import { contacts, deals, products, properties, users } from "@/lib/db/schema";
+import { contacts, deals, products, projects, properties, users } from "@/lib/db/schema";
 
 export type SelectOption = { id: string; name: string };
 
@@ -51,6 +51,15 @@ async function listDeals(): Promise<SelectOption[]> {
   return rows.map((d) => ({ id: d.id, name: d.title }));
 }
 
+async function listProjects(): Promise<SelectOption[]> {
+  const rows = await db.query.projects.findMany({
+    columns: { id: true, name: true, status: true },
+    orderBy: [asc(projects.status), desc(projects.updatedAt)],
+    limit: 500,
+  });
+  return rows.map((p) => ({ id: p.id, name: p.status === "archived" ? `${p.name} (gearchiveerd)` : p.name }));
+}
+
 async function listActiveProducts(): Promise<ProductOption[]> {
   return db.query.products.findMany({
     where: eq(products.isActive, true),
@@ -91,11 +100,12 @@ export async function getPropertyFormOptions() {
 }
 
 export async function getDocumentFormOptions() {
-  const [c, d, p, prods] = await Promise.all([
+  const [c, d, p, prods, projs] = await Promise.all([
     listContacts(),
     listDeals(),
     listProperties(),
     listActiveProducts(),
+    listProjects(),
   ]);
-  return { contacts: c, deals: d, properties: p, products: prods };
+  return { contacts: c, deals: d, properties: p, products: prods, projects: projs };
 }

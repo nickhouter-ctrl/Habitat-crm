@@ -14,6 +14,41 @@ async function requireUser() {
   if (!session?.user) redirect("/login");
 }
 
+const createSchema = z.object({
+  name: z.string().trim().min(1, "Naam is verplicht"),
+  description: z.string().trim().optional(),
+  code: z.string().trim().optional(),
+  contactId: z.string().trim().optional(),
+  ownerId: z.string().trim().optional(),
+  propertyId: z.string().trim().optional(),
+  startDate: z.string().trim().optional(),
+  endDate: z.string().trim().optional(),
+});
+
+export async function createProject(formData: FormData) {
+  await requireUser();
+  const parsed = createSchema.safeParse(Object.fromEntries(formData));
+  if (!parsed.success) throw new Error(parsed.error.issues.map((i) => i.message).join(", "));
+  const d = parsed.data;
+  const [row] = await db
+    .insert(projects)
+    .values({
+      name: d.name,
+      description: d.description || null,
+      code: d.code || null,
+      status: "active",
+      contactId: uuidOrNull(d.contactId),
+      ownerId: uuidOrNull(d.ownerId),
+      propertyId: uuidOrNull(d.propertyId),
+      startDate: dateOrNull(d.startDate),
+      endDate: dateOrNull(d.endDate),
+    })
+    .returning({ id: projects.id });
+  revalidatePath("/deals");
+  revalidatePath("/projects");
+  redirect(`/projects/${row.id}`);
+}
+
 const updateSchema = z.object({
   name: z.string().trim().min(1, "Naam is verplicht"),
   description: z.string().trim().optional(),

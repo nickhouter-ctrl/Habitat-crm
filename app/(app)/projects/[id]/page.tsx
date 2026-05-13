@@ -1,4 +1,4 @@
-import { asc, eq } from "drizzle-orm";
+import { asc, desc, eq } from "drizzle-orm";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
@@ -18,7 +18,7 @@ import {
 } from "@/components/ui";
 import { Combobox, type ComboOption } from "@/components/combobox";
 import { db } from "@/lib/db";
-import { contacts, projects, properties, users } from "@/lib/db/schema";
+import { contacts, documents, projects, properties, users } from "@/lib/db/schema";
 import { deleteProject, updateProject } from "../actions";
 
 export const metadata = { title: "Project" };
@@ -32,10 +32,23 @@ export default async function ProjectDetailPage({
   const project = await db.query.projects.findFirst({ where: eq(projects.id, id) });
   if (!project) notFound();
 
-  const [contactOpts, ownerOpts, propertyOpts] = await Promise.all([
+  const [contactOpts, ownerOpts, propertyOpts, linkedDocs] = await Promise.all([
     db.select({ id: contacts.id, name: contacts.name }).from(contacts).orderBy(asc(contacts.name)),
     db.select({ id: users.id, name: users.name, email: users.email }).from(users).orderBy(asc(users.email)),
     db.select({ id: properties.id, title: properties.title }).from(properties).orderBy(asc(properties.title)),
+    db
+      .select({
+        id: documents.id,
+        kind: documents.kind,
+        status: documents.status,
+        docNumber: documents.docNumber,
+        title: documents.title,
+        totalEur: documents.totalEur,
+        issueDate: documents.issueDate,
+      })
+      .from(documents)
+      .where(eq(documents.projectId, id))
+      .orderBy(desc(documents.issueDate), desc(documents.createdAt)),
   ]);
 
   const contactOptions: ComboOption[] = contactOpts.map((c) => ({ value: c.id, label: c.name }));
@@ -172,12 +185,33 @@ export default async function ProjectDetailPage({
 
           <Card>
             <CardHeader>
-              <CardTitle>Koppelingen</CardTitle>
+              <CardTitle>Documenten in dit project</CardTitle>
+              <span className="text-xs text-muted">{linkedDocs.length}</span>
             </CardHeader>
-            <CardContent className="space-y-2 text-sm text-muted">
-              <p>
-                Binnenkort: gekoppelde <Link href="/quotes" className="text-accent hover:underline">offertes</Link>, <Link href="/invoices" className="text-accent hover:underline">facturen</Link> en <Link href="/inkooporders" className="text-accent hover:underline">inkooporders</Link> rechtstreeks vanuit dit project. Holded markeert regels al met een project — die koppeling neem ik in een volgende ronde over.
-              </p>
+            <CardContent className="space-y-1.5 text-sm">
+              {linkedDocs.length === 0 ? (
+                <p className="text-muted">
+                  Nog niets gekoppeld. Bij het maken/bewerken van een <Link href="/quotes" className="text-accent hover:underline">offerte</Link> of <Link href="/invoices" className="text-accent hover:underline">factuur</Link> kies je dit project in het projectveld.
+                </p>
+              ) : (
+                <ul className="space-y-1">
+                  {linkedDocs.map((d) => {
+                    const kindLabel = d.kind === "invoice" ? "Factuur" : d.kind === "estimate" ? "Offerte" : d.kind === "creditnote" ? "Creditnota" : d.kind === "deliverynote" ? "Pakbon" : d.kind;
+                    return (
+                      <li key={d.id} className="flex items-center justify-between gap-2">
+                        <Link href={`/documents/${d.id}`} className="truncate hover:underline">
+                          <span className="font-medium">{kindLabel}</span>{" "}
+                          <span className="text-muted">{d.docNumber ?? "(geen nr.)"}</span>
+                          {d.title && <span className="ml-1 text-xs text-muted">— {d.title}</span>}
+                        </Link>
+                        <span className="shrink-0 text-xs tabular-nums text-muted">
+                          € {Number(d.totalEur ?? 0).toLocaleString("nl-NL", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        </span>
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
             </CardContent>
           </Card>
         </div>

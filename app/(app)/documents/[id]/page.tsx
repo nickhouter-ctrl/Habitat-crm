@@ -85,6 +85,7 @@ export default async function DocumentDetailPage({
       company: { columns: { id: true, name: true } },
       deal: { columns: { id: true, title: true } },
       property: { columns: { id: true, title: true } },
+      project: { columns: { id: true, name: true } },
     },
   });
   if (!doc) notFound();
@@ -184,6 +185,16 @@ export default async function DocumentDetailPage({
                   {doc.property ? (
                     <Link href={`/properties/${doc.property.id}`} className="hover:underline">
                       {doc.property.title}
+                    </Link>
+                  ) : (
+                    "—"
+                  )}
+                </dd>
+                <dt className="text-muted">Project</dt>
+                <dd>
+                  {doc.project ? (
+                    <Link href={`/projects/${doc.project.id}`} className="hover:underline">
+                      {doc.project.name}
                     </Link>
                   ) : (
                     "—"

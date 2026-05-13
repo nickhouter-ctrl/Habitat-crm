@@ -45,6 +45,7 @@ export function DocumentForm({
   contacts,
   deals,
   properties,
+  projects = [],
   products = [],
   defaults,
   submitLabel = "Opslaan",
@@ -58,6 +59,7 @@ export function DocumentForm({
     contactId: string | null;
     dealId: string | null;
     propertyId: string | null;
+    projectId: string | null;
     issueDate: string | null;
     dueDate: string | null;
     notes: string | null;
@@ -67,8 +69,9 @@ export function DocumentForm({
   contacts: Option[];
   deals: Option[];
   properties: Option[];
+  projects?: Option[];
   products?: ProductOption[];
-  defaults?: { contactId?: string; dealId?: string; propertyId?: string };
+  defaults?: { contactId?: string; dealId?: string; propertyId?: string; projectId?: string };
   submitLabel?: string;
 }) {
   const now = new Date();
@@ -158,6 +161,15 @@ export function DocumentForm({
                 defaultValue={doc?.propertyId ?? defaults?.propertyId ?? ""}
                 placeholder="— geen — / zoek een pand"
                 options={properties.map((p) => ({ value: p.id, label: p.name }))}
+              />
+            </Field>
+            <Field label="Project">
+              <Combobox
+                name="projectId"
+                clearable
+                defaultValue={doc?.projectId ?? defaults?.projectId ?? ""}
+                placeholder="— geen — / zoek een project"
+                options={projects.map((p) => ({ value: p.id, label: p.name }))}
               />
             </Field>
           </div>

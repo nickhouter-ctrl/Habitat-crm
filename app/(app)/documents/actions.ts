@@ -57,6 +57,7 @@ const docSchema = z.object({
   companyId: optionalUuid,
   dealId: optionalUuid,
   propertyId: optionalUuid,
+  projectId: optionalUuid,
   issueDate: optionalDate,
   dueDate: optionalDate,
   currency: z.string().trim().min(3).max(3).default("EUR"),
@@ -91,6 +92,7 @@ function buildValues(v: z.infer<typeof docSchema>) {
       companyId: v.companyId || null,
       dealId: v.dealId || null,
       propertyId: v.propertyId || null,
+      projectId: v.projectId || null,
       issueDate: v.issueDate || null,
       dueDate: v.dueDate || null,
       currency: (v.currency || "EUR").toUpperCase(),
@@ -216,6 +218,7 @@ export async function updateDocument(id: string, formData: FormData) {
       companyId: values.companyId,
       dealId: values.dealId,
       propertyId: values.propertyId,
+      projectId: values.projectId,
       issueDate: values.issueDate,
       dueDate: values.dueDate,
       currency: values.currency,
@@ -399,5 +402,5 @@ async function createDeliveryNoteInternal(sourceId: string): Promise<string | nu
 export async function createDeliveryNoteFromDocument(sourceId: string) {
   await requireUser();
   const id = await createDeliveryNoteInternal(sourceId);
-  if (id) redirect(`/documents/${id}/edit`);
+  if (id) redirect(`/documents/${sourceId}?pakbon=${id}`);
 }

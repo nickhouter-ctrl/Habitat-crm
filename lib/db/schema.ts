@@ -19,6 +19,7 @@ import {
   timestamp,
   uniqueIndex,
   uuid,
+  type AnyPgColumn,
 } from "drizzle-orm/pg-core";
 import type { AdapterAccountType } from "next-auth/adapters";
 
@@ -406,6 +407,7 @@ export const documents = pgTable(
     companyId: uuid().references(() => companies.id, { onDelete: "set null" }),
     dealId: uuid().references(() => deals.id, { onDelete: "set null" }),
     propertyId: uuid().references(() => properties.id, { onDelete: "set null" }),
+    projectId: uuid().references((): AnyPgColumn => projects.id, { onDelete: "set null" }),
     issueDate: date(),
     dueDate: date(),
     currency: text().notNull().default("EUR"),
@@ -646,7 +648,15 @@ export const documentsRelations = relations(documents, ({ one, many }) => ({
   company: one(companies, { fields: [documents.companyId], references: [companies.id] }),
   deal: one(deals, { fields: [documents.dealId], references: [deals.id] }),
   property: one(properties, { fields: [documents.propertyId], references: [properties.id] }),
+  project: one(projects, { fields: [documents.projectId], references: [projects.id] }),
   activities: many(activities),
+}));
+
+export const projectsRelations = relations(projects, ({ one, many }) => ({
+  owner: one(users, { fields: [projects.ownerId], references: [users.id] }),
+  contact: one(contacts, { fields: [projects.contactId], references: [contacts.id] }),
+  property: one(properties, { fields: [projects.propertyId], references: [properties.id] }),
+  documents: many(documents),
 }));
 
 export const activitiesRelations = relations(activities, ({ one }) => ({

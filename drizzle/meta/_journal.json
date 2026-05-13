@@ -78,6 +78,13 @@
       "when": 1778658669629,
       "tag": "0010_lazy_killraven",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1778659871402,
+      "tag": "0011_little_slyde",
+      "breakpoints": true
     }
   ]
 }
