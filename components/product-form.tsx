@@ -154,12 +154,20 @@ export function ProductForm({
                 ))}
               </Select>
             </Field>
-            <Field label="Verkoopprijs €/eenh. (ex. BTW)" htmlFor="priceEur">
+            <Field
+              label="Verkoopprijs €/eenh. (ex. BTW)"
+              htmlFor="priceEur"
+              hint={
+                product?.priceEur && product?.vatRate
+                  ? `Incl ${product.vatRate}% BTW: € ${(Number(product.priceEur) * (1 + Number(product.vatRate) / 100)).toFixed(2)}`
+                  : undefined
+              }
+            >
               <Input
                 id="priceEur"
                 name="priceEur"
                 type="number"
-                step="0.01"
+                step="0.0001"
                 min="0"
                 defaultValue={product?.priceEur ?? ""}
               />

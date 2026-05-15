@@ -148,6 +148,13 @@
       "when": 1778831332620,
       "tag": "0020_overjoyed_shen",
       "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "7",
+      "when": 1778847596752,
+      "tag": "0021_modern_firestar",
+      "breakpoints": true
     }
   ]
 }

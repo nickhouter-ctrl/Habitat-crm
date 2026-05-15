@@ -324,7 +324,7 @@ export const products = pgTable(
     category: text(), // e.g. "Italian Travertine", "Magic Stone" — the product family
     subcategory: text(),
     unit: text(), // "m²", "stuk", "m", "uur", ...
-    priceEur: numeric({ precision: 14, scale: 2 }), // default sales price, ex. VAT
+    priceEur: numeric({ precision: 14, scale: 4 }), // default sales price, ex. VAT — 4 decimalen voor exacte BTW-roundtrip (× 1.21 → ronde .95 incl)
     vatRate: integer().notNull().default(21), // default IVA % for this product
     // Landed-cost breakdown (per unit) — China imports etc.:
     purchaseCostEur: numeric({ precision: 14, scale: 2 }), // inkoopprijs (bv. uit China)
