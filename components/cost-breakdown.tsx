@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import { Field, Input } from "@/components/ui";
 import { landedCost, suggestedPrice } from "@/lib/pricing";
@@ -12,7 +12,6 @@ type Vals = {
   transportCostEur: string;
   otherCostEur: string;
   dutyPct: string;
-  targetMarginPct: string;
 };
 
 const str = (v: string | number | null | undefined) =>
@@ -21,7 +20,7 @@ const str = (v: string | number | null | undefined) =>
 export function CostBreakdown({
   initial,
 }: {
-  initial?: Partial<Record<keyof Vals, string | number | null>>;
+  initial?: Partial<Record<keyof Vals | "targetMarginPct", string | number | null>>;
 }) {
   const [v, setV] = useState<Vals>({
     purchaseCostEur: str(initial?.purchaseCostEur),
@@ -29,10 +28,28 @@ export function CostBreakdown({
     transportCostEur: str(initial?.transportCostEur),
     otherCostEur: str(initial?.otherCostEur),
     dutyPct: str(initial?.dutyPct),
-    targetMarginPct: str(initial?.targetMarginPct),
   });
   const set = (k: keyof Vals) => (e: React.ChangeEvent<HTMLInputElement>) =>
     setV((p) => ({ ...p, [k]: e.target.value }));
+
+  // Live "actuele verkoopprijs" uit het hoofdveld in ProductForm — luisteren via DOM
+  const [livePrice, setLivePrice] = useState<number>(0);
+  useEffect(() => {
+    const read = () => {
+      const el = document.getElementById("priceEur") as HTMLInputElement | null;
+      const n = Number(el?.value ?? 0);
+      setLivePrice(Number.isFinite(n) ? n : 0);
+    };
+    read();
+    const el = document.getElementById("priceEur") as HTMLInputElement | null;
+    if (!el) return;
+    el.addEventListener("input", read);
+    el.addEventListener("change", read);
+    return () => {
+      el.removeEventListener("input", read);
+      el.removeEventListener("change", read);
+    };
+  }, []);
 
   const cost = landedCost({
     purchaseCostEur: v.purchaseCostEur,
@@ -41,8 +58,13 @@ export function CostBreakdown({
     otherCostEur: v.otherCostEur,
     dutyPct: v.dutyPct,
   });
-  const margin = Number(v.targetMarginPct) || 0;
-  const advice = suggestedPrice(cost, margin);
+  // Werkelijke marge = winst als % van verkoop = max. korting voor break-even
+  const actualMarginPct = livePrice > 0 && cost > 0 ? ((livePrice - cost) / livePrice) * 100 : 0;
+  const marginTone = actualMarginPct < 0 ? "red" : actualMarginPct < 20 ? "amber" : actualMarginPct < 40 ? "yellow" : "green";
+
+  // Mini-calculator: gewenste marge → adviesprijs (niet opgeslagen)
+  const [wantPct, setWantPct] = useState<string>("");
+  const advice = wantPct ? suggestedPrice(cost, Number(wantPct) || 0) : 0;
 
   const moneyInput = (k: keyof Vals, label: string, hint?: string) => (
     <Field label={label} htmlFor={k} hint={hint}>
@@ -81,54 +103,73 @@ export function CostBreakdown({
             className="text-right"
           />
         </Field>
-        <Field label="Gewenste marge %" htmlFor="targetMarginPct" hint="op verkoopprijs (= max. korting)">
-          <Input
-            id="targetMarginPct"
-            name="targetMarginPct"
-            type="number"
-            step="0.01"
-            min="0"
-            max="99"
-            value={v.targetMarginPct}
-            onChange={set("targetMarginPct")}
-            className="text-right"
-          />
-        </Field>
       </div>
-      <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-1 border-t pt-2 text-sm">
+
+      {/* Hidden — bewaar oude targetMarginPct waarde uit DB onveranderd zodat 't
+          niet weg-gestripped wordt bij update. Veld is niet meer zichtbaar. */}
+      <input type="hidden" name="targetMarginPct" defaultValue={str(initial?.targetMarginPct)} />
+
+      <div className="flex flex-wrap items-baseline justify-between gap-x-6 gap-y-1 border-t pt-2 text-sm">
         <span>
           Landed cost (kostprijs):{" "}
           <span className="font-semibold tabular-nums">{formatEUR(cost)}</span>
         </span>
-        {margin > 0 && cost > 0 && (
-          <span className="flex flex-wrap items-center gap-2 text-muted">
-            <span>
-              Adviesverkoopprijs bij {margin}% marge:{" "}
-              <span className="font-semibold text-foreground tabular-nums">{formatEUR(advice)}</span>{" "}
-              <span className="text-xs">(ex. BTW)</span>
-            </span>
-            <button
-              type="button"
-              onClick={() => {
-                const el = document.getElementById("priceEur") as HTMLInputElement | null;
-                if (el) {
-                  el.value = String(advice);
-                  el.dispatchEvent(new Event("input", { bubbles: true }));
-                  el.dispatchEvent(new Event("change", { bubbles: true }));
-                  el.focus();
-                }
-              }}
-              className="rounded-md border border-accent/40 bg-accent/10 px-2 py-0.5 text-xs font-medium text-accent transition-colors hover:bg-accent/20"
-            >
-              → Pas toe op verkoopprijs
-            </button>
+        {livePrice > 0 && cost > 0 && (
+          <span
+            className={
+              marginTone === "red" ? "font-medium text-danger" :
+              marginTone === "amber" ? "font-medium text-warning" :
+              marginTone === "yellow" ? "text-foreground" :
+              "font-medium text-success"
+            }
+          >
+            Werkelijke marge:{" "}
+            <span className="text-base tabular-nums">{actualMarginPct.toFixed(1)}%</span>
+            <span className="ml-1 text-xs text-muted">(= max. korting voor break-even)</span>
           </span>
         )}
       </div>
+
+      <div className="flex flex-wrap items-center gap-2 rounded-md bg-background/60 px-3 py-2 text-sm">
+        <span className="text-xs text-muted">Rekenhulp:</span>
+        <span className="text-xs">Bij</span>
+        <input
+          type="number"
+          step="0.1"
+          min="0"
+          max="99"
+          value={wantPct}
+          onChange={(e) => setWantPct(e.target.value)}
+          placeholder="50"
+          className="w-16 rounded-md border border-border bg-background px-2 py-1 text-right text-sm"
+        />
+        <span className="text-xs">% marge → verkoopprijs zou</span>
+        <span className="font-semibold tabular-nums">
+          {wantPct && Number(wantPct) > 0 ? formatEUR(advice) : "—"}
+        </span>
+        <span className="text-xs text-muted">ex BTW</span>
+        {wantPct && Number(wantPct) > 0 && advice > 0 && (
+          <button
+            type="button"
+            onClick={() => {
+              const el = document.getElementById("priceEur") as HTMLInputElement | null;
+              if (el) {
+                el.value = String(advice);
+                el.dispatchEvent(new Event("input", { bubbles: true }));
+                el.dispatchEvent(new Event("change", { bubbles: true }));
+                el.focus();
+              }
+            }}
+            className="ml-1 rounded-md border border-accent/40 bg-accent/10 px-2 py-0.5 text-xs font-medium text-accent transition-colors hover:bg-accent/20"
+          >
+            → Toepassen
+          </button>
+        )}
+      </div>
+
       <p className="text-xs text-muted">
-        De landed cost wordt opgeslagen als kostprijs. De marge in het productenoverzicht wordt
-        berekend uit verkoop- en kostprijs (niet uit dit veld) — klik op &apos;Pas toe&apos; om de
-        verkoopprijs aan deze gewenste marge te koppelen.
+        De landed cost wordt opgeslagen als kostprijs. De werkelijke marge is live berekend uit
+        verkoop- en kostprijs.
       </p>
     </div>
   );
