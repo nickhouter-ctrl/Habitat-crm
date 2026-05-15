@@ -20,6 +20,7 @@ import {
 } from "@/components/ui";
 import { db } from "@/lib/db";
 import { products } from "@/lib/db/schema";
+import { resolveKitStocks, type KitComponent } from "@/lib/stock";
 import { cn, formatEUR } from "@/lib/utils";
 import { getProductCollections } from "../_options";
 
@@ -96,6 +97,11 @@ export default async function ProductsPage({
     ),
   );
 
+
+  // Bereken effectieve voorraad voor kit-producten (sets met components-array).
+  const kitStocks = await resolveKitStocks(
+    rows.map((r) => ({ sku: r.sku, components: r.components as KitComponent[] | null })),
+  );
 
   // Group by category for the display (skip when sorting flat by onderweg).
   const groups = new Map<string, typeof rows>();
@@ -261,7 +267,13 @@ export default async function ProductsPage({
                     const cost = Number(p.costEur ?? 0);
                     const margin = price > 0 && cost > 0 ? price - cost : null;
                     const marginPct = margin != null && price > 0 ? Math.round((margin / price) * 100) : null;
-                    const stock = p.stockQty != null ? Number(p.stockQty) : null;
+                    const kitComponents = (p.components as KitComponent[] | null) ?? null;
+                    const isKit = !!kitComponents && kitComponents.length > 0;
+                    const stock = isKit
+                      ? (kitStocks.get(p.sku ?? "") ?? 0)
+                      : p.stockQty != null
+                        ? Number(p.stockQty)
+                        : null;
                     return (
                       <Tr key={p.id}>
                         <Td className="font-medium">

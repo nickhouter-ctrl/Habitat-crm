@@ -422,13 +422,29 @@ export async function applyStockOutFromDocument(id: string) {
   let applied = 0;
   for (const it of doc.items ?? []) {
     if (!it.productId || !it.units) continue;
-    await db
-      .update(products)
-      .set({
-        stockQty: sql`coalesce(${products.stockQty}, 0) - ${String(it.units)}`,
-        updatedAt: new Date(),
-      })
-      .where(eq(products.id, it.productId));
+    // Check of dit product een bundle/kit is — dan componenten aftrekken i.p.v. het set zelf
+    const prod = await db.query.products.findFirst({ where: eq(products.id, it.productId) });
+    const kit = (prod?.components as Array<{ sku: string; qty: number }> | null) ?? null;
+    if (kit && kit.length > 0) {
+      for (const comp of kit) {
+        const deductQty = Number(it.units) * Number(comp.qty);
+        await db
+          .update(products)
+          .set({
+            stockQty: sql`coalesce(${products.stockQty}, 0) - ${String(deductQty)}`,
+            updatedAt: new Date(),
+          })
+          .where(eq(products.sku, comp.sku));
+      }
+    } else {
+      await db
+        .update(products)
+        .set({
+          stockQty: sql`coalesce(${products.stockQty}, 0) - ${String(it.units)}`,
+          updatedAt: new Date(),
+        })
+        .where(eq(products.id, it.productId));
+    }
     applied++;
   }
 
@@ -459,13 +475,28 @@ export async function reverseStockOutFromDocument(id: string) {
 
   for (const it of doc.items ?? []) {
     if (!it.productId || !it.units) continue;
-    await db
-      .update(products)
-      .set({
-        stockQty: sql`coalesce(${products.stockQty}, 0) + ${String(it.units)}`,
-        updatedAt: new Date(),
-      })
-      .where(eq(products.id, it.productId));
+    const prod = await db.query.products.findFirst({ where: eq(products.id, it.productId) });
+    const kit = (prod?.components as Array<{ sku: string; qty: number }> | null) ?? null;
+    if (kit && kit.length > 0) {
+      for (const comp of kit) {
+        const addQty = Number(it.units) * Number(comp.qty);
+        await db
+          .update(products)
+          .set({
+            stockQty: sql`coalesce(${products.stockQty}, 0) + ${String(addQty)}`,
+            updatedAt: new Date(),
+          })
+          .where(eq(products.sku, comp.sku));
+      }
+    } else {
+      await db
+        .update(products)
+        .set({
+          stockQty: sql`coalesce(${products.stockQty}, 0) + ${String(it.units)}`,
+          updatedAt: new Date(),
+        })
+        .where(eq(products.id, it.productId));
+    }
   }
   await db
     .update(documents)

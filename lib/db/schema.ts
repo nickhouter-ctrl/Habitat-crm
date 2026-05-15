@@ -354,6 +354,15 @@ export const products = pgTable(
      *    { sku: "MS-168", label: "1200 × 190 mm" }]
      */
     additionalSizes: jsonb().$type<Array<{ sku: string; label: string }>>(),
+    /**
+     * Bundle-componenten voor set/kit-producten. Per regel een component-SKU
+     * en hoeveel-stuks-per-set. Stock van de set = min(component.stockQty / qty).
+     * Bij verkoop wordt elk component met qty afgetrokken.
+     *   [{ sku: "DR-002", qty: 1 },
+     *    { sku: "DR-001", qty: 4 },   // 4 hinges per deur
+     *    { sku: "DR-009", qty: 1 }]
+     */
+    components: jsonb().$type<Array<{ sku: string; qty: number }>>(),
     imageUrl: text(),
     isActive: boolean().notNull().default(true),
     /** Aan = mag op de website. De sync-actie creëert dan een entry op habitat-one (matched op SKU); bestaande entries worden altijd bijgewerkt, los van deze vlag. */
