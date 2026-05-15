@@ -88,8 +88,8 @@ export function CostBreakdown({
       </p>
       <div className="grid gap-3 sm:grid-cols-3">
         {moneyInput("purchaseCostEur", "Inkoop €", "fabrieksprijs China (raw factuur)")}
-        {moneyInput("freightCostEur", "Vracht €", "5,45% — zeevracht China → Valencia (Alianza)")}
-        {moneyInput("transportCostEur", "Transport €", "1,91% — lokaal + containerscan + toeslag")}
+        {moneyInput("freightCostEur", "Vracht €", "5,63% — zeevracht China → Valencia (Alianza)")}
+        {moneyInput("transportCostEur", "Transport €", "1,89% — lokaal + containerscan + toeslag")}
         {moneyInput("otherCostEur", "Overig €", "22,14% — Allpack 15% + Teresa 5% + Alianza-handling 2,14%")}
         <Field label="Invoerrechten %" htmlFor="dutyPct" hint="op inkoop + vracht — uit DUA per HS-code">
           <Input
