@@ -9,9 +9,10 @@ export const COMPANY = {
   tagline: process.env.COMPANY_TAGLINE ?? "Xàbia · Costa Blanca",
   // Legal / contact
   legalName: process.env.COMPANY_LEGAL_NAME ?? "Habitat One & One SL",
-  vatNumber: process.env.COMPANY_VAT ?? "B24855603", // CIF/NIF/VAT
+  vatNumber: process.env.COMPANY_VAT ?? "ESB24855603", // CIF officieel (uit DUA's)
   address:
-    process.env.COMPANY_ADDRESS ?? "C/ Charles Ives 15, 03738 Xàbia/Jávea, Alicante, España",
+    process.env.COMPANY_ADDRESS ??
+    "Camí de la Fontana 3, Locales 2, 3 en 5, 03730 Jávea (Alicante), España",
   email: process.env.COMPANY_EMAIL ?? "hi@habitat-one.com",
   phone: process.env.COMPANY_PHONE ?? "+34 637 459 239",
   website: process.env.COMPANY_WEBSITE ?? "habitat-one.com",
