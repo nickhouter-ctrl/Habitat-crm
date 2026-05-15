@@ -101,16 +101,34 @@ export function CostBreakdown({
           <span className="font-semibold tabular-nums">{formatEUR(cost)}</span>
         </span>
         {margin > 0 && cost > 0 && (
-          <span className="text-muted">
-            Adviesverkoopprijs bij {margin}% marge:{" "}
-            <span className="font-semibold text-foreground tabular-nums">{formatEUR(advice)}</span>{" "}
-            <span className="text-xs">(ex. BTW)</span>
+          <span className="flex flex-wrap items-center gap-2 text-muted">
+            <span>
+              Adviesverkoopprijs bij {margin}% marge:{" "}
+              <span className="font-semibold text-foreground tabular-nums">{formatEUR(advice)}</span>{" "}
+              <span className="text-xs">(ex. BTW)</span>
+            </span>
+            <button
+              type="button"
+              onClick={() => {
+                const el = document.getElementById("priceEur") as HTMLInputElement | null;
+                if (el) {
+                  el.value = String(advice);
+                  el.dispatchEvent(new Event("input", { bubbles: true }));
+                  el.dispatchEvent(new Event("change", { bubbles: true }));
+                  el.focus();
+                }
+              }}
+              className="rounded-md border border-accent/40 bg-accent/10 px-2 py-0.5 text-xs font-medium text-accent transition-colors hover:bg-accent/20"
+            >
+              → Pas toe op verkoopprijs
+            </button>
           </span>
         )}
       </div>
       <p className="text-xs text-muted">
-        De landed cost wordt opgeslagen als kostprijs van het product (zie de marge-kolom in het
-        productenoverzicht). Laat velden leeg als je ze niet weet.
+        De landed cost wordt opgeslagen als kostprijs. De marge in het productenoverzicht wordt
+        berekend uit verkoop- en kostprijs (niet uit dit veld) — klik op &apos;Pas toe&apos; om de
+        verkoopprijs aan deze gewenste marge te koppelen.
       </p>
     </div>
   );
