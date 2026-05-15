@@ -561,6 +561,48 @@ export const purchaseOrders = pgTable(
   ],
 );
 
+/* ----------------------------------------------- quote requests (van website) */
+
+/**
+ * Aanvragen die binnenkomen via "Vraag offerte aan" op habitat-one.
+ * Status: pending → accepted | rejected. Bij accept maken we (optioneel)
+ * een contact + offerte aan en wordt de klant gemaild.
+ */
+export const quoteRequests = pgTable(
+  "quote_requests",
+  {
+    id: uuid().primaryKey().default(sql`gen_random_uuid()`),
+    name: text().notNull(),
+    email: text().notNull(),
+    phone: text(),
+    company: text(),
+    message: text(),
+    /** Producten waar klant interesse in heeft, vrij overgenomen van de site. */
+    productSkus: jsonb().$type<string[]>(),
+    productNames: jsonb().$type<string[]>(),
+    productSlugs: jsonb().$type<string[]>(),
+    locale: text(), // nl/de/en/es waar request vandaan kwam
+    source: text().notNull().default("website"),
+    status: text().notNull().default("pending"), // pending|accepted|rejected
+    /** Gekoppeld contact (gemaakt bij accepteren als nog niet bekend). */
+    contactId: uuid().references((): AnyPgColumn => contacts.id, { onDelete: "set null" }),
+    /** Gekoppeld offerte-document (optioneel). */
+    documentId: uuid().references((): AnyPgColumn => documents.id, { onDelete: "set null" }),
+    notes: text(), // interne notitie
+    acceptedAt: timestamp({ withTimezone: true }),
+    rejectedAt: timestamp({ withTimezone: true }),
+    ...timestamps,
+  },
+  (t) => [
+    index("quote_requests_status_idx").on(t.status),
+    index("quote_requests_email_idx").on(t.email),
+    index("quote_requests_created_idx").on(t.createdAt),
+  ],
+);
+
+export type QuoteRequest = typeof quoteRequests.$inferSelect;
+export type NewQuoteRequest = typeof quoteRequests.$inferInsert;
+
 /* ----------------------------------------------------------------- activities */
 
 export const activities = pgTable(

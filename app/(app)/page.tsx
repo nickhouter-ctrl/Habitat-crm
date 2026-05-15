@@ -19,7 +19,7 @@ import {
   Tr,
 } from "@/components/ui";
 import { db } from "@/lib/db";
-import { activities, contacts, deals, documents, products, purchaseOrders } from "@/lib/db/schema";
+import { activities, contacts, deals, documents, products, purchaseOrders, quoteRequests } from "@/lib/db/schema";
 import { purchaseDocsTotalExBTW } from "@/lib/holded/accounting";
 import { formatMoney, PO_OPEN_STATUSES, PO_STATUS_META } from "@/lib/purchase-orders";
 import { formatDate, formatEUR } from "@/lib/utils";
@@ -44,7 +44,7 @@ export default async function DashboardPage() {
 
   const openExpr = sql`${documents.status} not in ('paid', 'void', 'draft')`;
 
-  const [[contactsTotal], pipelineRows, [docAgg], [creditAgg], [purchaseAgg], [productsAgg], openPurchaseOrders, recentDeals, recentActivity, holdedExpensesYTD] =
+  const [[contactsTotal], pipelineRows, [docAgg], [creditAgg], [purchaseAgg], [productsAgg], openPurchaseOrders, recentDeals, recentActivity, holdedExpensesYTD, [openRequestsAgg]] =
     await Promise.all([
       db.select({ n: count() }).from(contacts),
       db
@@ -113,6 +113,10 @@ export default async function DashboardPage() {
         },
       }),
       purchaseDocsTotalExBTW(),
+      db
+        .select({ n: sql<number>`count(*)::int` })
+        .from(quoteRequests)
+        .where(eq(quoteRequests.status, "pending")),
     ]);
 
   const byStage = new Map(pipelineRows.map((r) => [r.stage, r]));
@@ -140,8 +144,19 @@ export default async function DashboardPage() {
         actions={<LinkButton href="/contacts/new">Nieuw contact</LinkButton>}
       />
 
-      {(productsAgg.noBarcode > 0 || productsAgg.lowStock > 0 || productsAgg.stockNoPhoto > 0 || docAgg.overdueN > 0 || openPurchaseOrders.length > 0) && (
+      {((openRequestsAgg?.n ?? 0) > 0 || productsAgg.noBarcode > 0 || productsAgg.lowStock > 0 || productsAgg.stockNoPhoto > 0 || docAgg.overdueN > 0 || openPurchaseOrders.length > 0) && (
         <div className="mb-4 space-y-2">
+          {(openRequestsAgg?.n ?? 0) > 0 && (
+            <Link
+              href="/aanvragen?status=pending"
+              className="flex items-center justify-between gap-3 rounded-md border border-accent/40 bg-accent/10 px-4 py-3 text-sm text-foreground transition-colors hover:bg-accent/15"
+            >
+              <span>
+                📩 <strong>{openRequestsAgg!.n}</strong> open offerte-aanvra{openRequestsAgg!.n === 1 ? "ag" : "gen"} via de website — even bekijken en accepteren/afwijzen.
+              </span>
+              <span className="font-medium text-accent">Naar inbox →</span>
+            </Link>
+          )}
           {productsAgg.stockNoPhoto > 0 && (
             <Link
               href="/products?nofoto=1"

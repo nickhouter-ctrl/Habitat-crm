@@ -11,6 +11,7 @@ import {
   Menu,
   PackagePlus,
   Receipt,
+  Inbox,
   Search,
   Settings,
   Tag,
@@ -28,6 +29,7 @@ import { cn, initials } from "@/lib/utils";
 const NAV = [
   { href: "/", label: "Dashboard", icon: LayoutDashboard, exact: true },
   { href: "/contacts", label: "Contacten", icon: Users },
+  { href: "/aanvragen", label: "Aanvragen", icon: Inbox },
   { href: "/deals", label: "Deals & projecten", icon: Briefcase },
   { href: "/properties", label: "Panden", icon: Building2 },
   { href: "/products", label: "Producten", icon: Boxes },
