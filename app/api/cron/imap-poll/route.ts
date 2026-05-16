@@ -9,6 +9,7 @@ import { sql } from "drizzle-orm";
 
 import { db } from "@/lib/db";
 import { emailInbox, emailSyncState } from "@/lib/db/schema";
+import { storeMailAttachments } from "@/lib/email-attachments";
 import { fetchNewMails } from "@/lib/gmail";
 
 export const dynamic = "force-dynamic";
@@ -30,24 +31,43 @@ export async function GET(req: Request) {
 
     let inserted = 0;
     let duplicates = 0;
+    let attachmentsStored = 0;
     for (const m of mails) {
       try {
-        await db.insert(emailInbox).values({
-          messageId: m.messageId,
-          imapUid: m.imapUid,
-          threadId: m.threadId,
-          fromEmail: m.fromEmail,
-          fromName: m.fromName,
-          toEmail: m.toEmail,
-          ccEmail: m.ccEmail,
-          subject: m.subject,
-          bodyText: m.bodyText,
-          bodyHtml: m.bodyHtml,
-          receivedAt: m.receivedAt,
-          attachments: m.attachments,
-          status: "new",
-        });
+        // Eerst email-row maken (alleen metadata, geen content)
+        const [row] = await db
+          .insert(emailInbox)
+          .values({
+            messageId: m.messageId,
+            imapUid: m.imapUid,
+            threadId: m.threadId,
+            fromEmail: m.fromEmail,
+            fromName: m.fromName,
+            toEmail: m.toEmail,
+            ccEmail: m.ccEmail,
+            subject: m.subject,
+            bodyText: m.bodyText,
+            bodyHtml: m.bodyHtml,
+            receivedAt: m.receivedAt,
+            attachments: m.attachments.map((a) => ({
+              filename: a.filename,
+              size: a.size,
+              contentType: a.contentType,
+            })),
+            status: "new",
+          })
+          .returning({ id: emailInbox.id });
         inserted++;
+
+        // Upload bijlagen naar Storage + categoriseer
+        if (m.attachments.length > 0 && row?.id) {
+          try {
+            const r = await storeMailAttachments({ emailId: row.id, mail: m });
+            attachmentsStored += r.stored;
+          } catch (e: any) {
+            console.error(`Attachment store fail voor ${m.subject}:`, e?.message);
+          }
+        }
       } catch (e: any) {
         if (e?.code === "23505") {
           duplicates++;
@@ -83,6 +103,7 @@ export async function GET(req: Request) {
       fetched: mails.length,
       inserted,
       duplicates,
+      attachmentsStored,
     });
   } catch (e: any) {
     // Log error in state-tabel zodat we 't kunnen zien in /inbox

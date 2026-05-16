@@ -169,6 +169,13 @@
       "when": 1778925486388,
       "tag": "0023_green_mentor",
       "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1778928032636,
+      "tag": "0024_narrow_boomerang",
+      "breakpoints": true
     }
   ]
 }

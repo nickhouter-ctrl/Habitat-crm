@@ -32,6 +32,7 @@ const NAV = [
   { href: "/contacts", label: "Contacten", icon: Users },
   { href: "/aanvragen", label: "Aanvragen", icon: Inbox },
   { href: "/inbox", label: "Mail-inbox", icon: Mail },
+  { href: "/archief", label: "Archief", icon: FileText },
   { href: "/deals", label: "Deals & projecten", icon: Briefcase },
   { href: "/properties", label: "Panden", icon: Building2 },
   { href: "/products", label: "Producten", icon: Boxes },

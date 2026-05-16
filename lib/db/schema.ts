@@ -819,3 +819,55 @@ export const emailSyncState = pgTable("email_sync_state", {
 export type EmailInbox = typeof emailInbox.$inferSelect;
 export type NewEmailInbox = typeof emailInbox.$inferInsert;
 export type EmailSyncState = typeof emailSyncState.$inferSelect;
+
+/**
+ * Doorzoekbaar archief van mail-bijlages — facturen, vrachtbrieven, DUA's, etc.
+ * Elke bijlage uit email_inbox krijgt een eigen rij hier, met categorisatie en
+ * link naar Supabase Storage.
+ */
+export const mailAttachments = pgTable(
+  "mail_attachments",
+  {
+    id: uuid().primaryKey().default(sql`gen_random_uuid()`),
+    emailId: uuid()
+      .notNull()
+      .references(() => emailInbox.id, { onDelete: "cascade" }),
+    filename: text().notNull(),
+    contentType: text(),
+    sizeBytes: integer(),
+    /** Pad in Supabase Storage bucket `email-attachments` */
+    storagePath: text().notNull(),
+    publicUrl: text(),
+    /**
+     * Categorie — auto-detected op basis van afzender + naam + onderwerp.
+     * Kan handmatig overschreven worden in UI.
+     *  - supplier-invoice (Allpack/Yohome/KKR-factuur)
+     *  - freight-invoice (Alianza/Galadtrans transport)
+     *  - customs-dua (Spaanse DUA / Certificado de Importación)
+     *  - commission (Teresa / España Trading)
+     *  - bank-statement (Banco Sabadell etc.)
+     *  - quote-proforma (PI / offertes)
+     *  - certificate (CE, CITES, etc.)
+     *  - other
+     */
+    category: text().notNull().default("other"),
+    /** Gedetecteerde supplier/afzender naam (Allpack, Yohome, Alianza, Teresa, etc.). */
+    supplierTag: text(),
+    /** Datum van mail die de bijlage bevatte. */
+    receivedAt: timestamp({ withTimezone: true }),
+    /** Optioneel: extracted bedrag uit factuur (voor latere AI-OCR). */
+    amountEur: numeric({ precision: 14, scale: 2 }),
+    /** Vrije notitie. */
+    notes: text(),
+    ...timestamps,
+  },
+  (t) => [
+    index("mail_attachments_email_idx").on(t.emailId),
+    index("mail_attachments_category_idx").on(t.category),
+    index("mail_attachments_supplier_idx").on(t.supplierTag),
+    index("mail_attachments_received_idx").on(t.receivedAt),
+  ],
+);
+
+export type MailAttachment = typeof mailAttachments.$inferSelect;
+export type NewMailAttachment = typeof mailAttachments.$inferInsert;

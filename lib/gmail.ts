@@ -39,6 +39,13 @@ export function createSmtpTransporter(): Transporter {
   });
 }
 
+export interface ParsedAttachment {
+  filename: string;
+  size: number;
+  contentType: string;
+  content: Buffer;
+}
+
 export interface ParsedEmail {
   messageId: string;
   imapUid: number;
@@ -51,7 +58,7 @@ export interface ParsedEmail {
   bodyText: string | null;
   bodyHtml: string | null;
   receivedAt: Date | null;
-  attachments: Array<{ filename: string; size: number; contentType: string }>;
+  attachments: ParsedAttachment[];
 }
 
 function joinAddresses(a: AddressObject | AddressObject[] | undefined): string | null {
@@ -90,12 +97,13 @@ export async function fetchNewMails(
       if (!msg.uid || msg.uid <= sinceUid) continue;
       if (!msg.source) continue;
       const parsed: ParsedMail = await simpleParser(msg.source);
-      const attachments = (parsed.attachments ?? [])
+      const attachments: ParsedAttachment[] = (parsed.attachments ?? [])
         .filter((a) => a.filename)
         .map((a) => ({
           filename: a.filename ?? "attachment",
           size: a.size ?? 0,
           contentType: a.contentType ?? "application/octet-stream",
+          content: a.content as Buffer,
         }));
       mails.push({
         messageId: parsed.messageId ?? msg.envelope?.messageId ?? `imap-uid-${msg.uid}`,
