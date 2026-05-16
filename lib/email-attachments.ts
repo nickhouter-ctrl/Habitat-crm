@@ -18,61 +18,78 @@ function supabase() {
 }
 
 export const CATEGORIES = {
-  "supplier-invoice": "Factuur leverancier",
-  "freight-invoice": "Vrachtfactuur",
+  "supplier-invoice": "Factuur leverancier (Yohome/KKR/MS)",
+  "agent-fee-china": "Allpack handling (China)",
+  "agent-fee-spain": "Teresa commissie (Spanje)",
+  "freight-invoice": "Vrachtfactuur (Alianza)",
   "customs-dua": "DUA / Douane",
-  "commission": "Commissie (Teresa)",
   "bank-statement": "Bankafschrift",
   "quote-proforma": "Offerte / Proforma",
-  "certificate": "Certificaat",
+  "certificate": "Certificaat (CE/CITES)",
   "other": "Overig",
 } as const;
 export type AttachmentCategory = keyof typeof CATEGORIES;
 
 const SUPPLIER_PATTERNS: Array<{ tag: string; patterns: RegExp[] }> = [
-  { tag: "Allpack", patterns: [/allpack/i, /@allpack/i] },
+  // Echte leveranciers
   { tag: "Yohome", patterns: [/yohome/i, /YHES\d+/i] },
   { tag: "KKR / KingKonree", patterns: [/kingkonree/i, /@kkr/i, /KKR-?\d/i, /33#kkr/i] },
-  { tag: "Magic Stone", patterns: [/magicstone/i, /magic-stone/i, /flexistone/i, /MS\d{6,}/, /MS-20\d{6}/] },
-  { tag: "Arkwright (MS)", patterns: [/arkwright/i, /ARK\d+/i] },
-  { tag: "Alianza", patterns: [/alianza/i, /@galadtrans/i, /galadtrans/i, /23T\/[AC]-\d/i] },
-  { tag: "Teresa / España Trading", patterns: [/españa\s*trading/i, /tborras/i, /etrading\.tborras/i, /^255\d{5}$/, /^265\d{5}$/] },
-  { tag: "Gomez Macias (douane)", patterns: [/gomez\s*macias/i, /\bgmcargo\b/i] },
+  { tag: "Magic Stone", patterns: [/magicstone/i, /magic-stone/i, /flexistone/i, /MS\d{6,}/, /MS-20\d{6}/, /MS20\d{6}/] },
+  { tag: "Arkwright (MS-supplier)", patterns: [/arkwright/i, /ARK\d+/i] },
+  // Agents/intermediairs (geen leveranciers)
+  { tag: "Allpack (CN agent)", patterns: [/allpack/i, /@allpack/i] },
+  { tag: "Teresa (ES agent)", patterns: [/españa\s*trading/i, /tborras/i, /etrading\.tborras/i] },
+  // Transport / douane / overheid
+  { tag: "Alianza (transport)", patterns: [/alianza/i, /@galadtrans/i, /galadtrans/i, /23T\/[AC]-\d/i] },
+  { tag: "Gomez Macias (douane-agent)", patterns: [/gomez\s*macias/i, /\bgmcargo\b/i] },
   { tag: "Spanish Tax Agency", patterns: [/agenciatributaria/i, /agencia\s*tributaria/i] },
   { tag: "Banco Sabadell", patterns: [/sabadell/i, /bsabesbb/i] },
   { tag: "CaixaBank", patterns: [/caixabank/i, /caixesbb/i] },
 ];
 
 const CATEGORY_RULES: Array<{ cat: AttachmentCategory; test: (ctx: CategorizeCtx) => boolean }> = [
-  // DUA / douane
+  // DUA / douane (eerst, want vaak combineerbaar met andere)
   { cat: "customs-dua", test: (c) =>
-      /levante|certificado.*importaci[oó]n|d\.?u\.?a\.?|aduana|customs/i.test(c.allText) ||
+      /levante|certificado.*importaci[oó]n|d\.?u\.?a\.?|aduana|customs|comunidad\s*europea/i.test(c.allText) ||
       /^20260\d{10,}\.pdf$/i.test(c.filename) },
-  // Vrachtfactuur
-  { cat: "freight-invoice", test: (c) =>
-      /alianza|galadtrans/i.test(c.fromEmail + " " + c.allText) ||
-      /transportkosten|fact(uur)?.*transport|freight\s*invoice|23T\/[AC]-/i.test(c.allText) },
-  // Commissie Teresa
-  { cat: "commission", test: (c) =>
+
+  // Teresa commissie (Spanje) — eerst, want vaak verkleurd onder andere
+  { cat: "agent-fee-spain", test: (c) =>
       /españa\s*trading|tborras|etrading\.tborras/i.test(c.fromEmail + " " + c.allText) ||
-      /factura\s+(25|26)5\d{5}/i.test(c.allText) },
+      /^Factura\s+(25|26)5\d{5}/i.test(c.filename) },
+
+  // Allpack handling-fee (China) — handling costs CI
+  { cat: "agent-fee-china", test: (c) =>
+      /handling\s*costs?|handling[-\s]*fee/i.test(c.allText) &&
+      /allpack/i.test(c.fromEmail + " " + c.allText) },
+
+  // Vrachtfactuur — Alianza/Galadtrans
+  { cat: "freight-invoice", test: (c) =>
+      /alianza|galadtrans/i.test(c.fromEmail) ||
+      /^23T[\/_-][AC][_-]?\d/i.test(c.filename) ||
+      /transportkosten|fact(uur)?.*transport|freight\s*invoice/i.test(c.allText) },
+
   // Bankafschrift
   { cat: "bank-statement", test: (c) =>
-      /sabadell|caixabank|extracto.*cuenta|bank.*statement|account.*statement/i.test(c.allText) },
+      /sabadell|caixabank|bbva|santander/i.test(c.fromEmail) ||
+      /extracto.*cuenta|bank.*statement|account.*statement|posición\s+global/i.test(c.allText) },
+
   // Certificaat (CE / CITES / etc.)
   { cat: "certificate", test: (c) =>
-      /\bCE\s*cert|certificate|certificaat|cites|declaration\s*of\s*performance|conformity/i.test(c.allText) ||
-      /欧标/.test(c.allText) },
-  // Quote / Proforma
+      /\bCE\s*cert|declaration\s*of\s*performance|conformity\s*declaration|CITES|EN\s*1634/i.test(c.allText) ||
+      /欧标|cites/i.test(c.allText) },
+
+  // Quote / Proforma — PI's en draft-offertes (NIET de echte handling-CI)
   { cat: "quote-proforma", test: (c) =>
-      /proforma|quotation|offerte|pro[\s-]*forma|PI[\s-]*\d/i.test(c.allText) ||
-      /revised\s*PI/i.test(c.allText) },
-  // Supplier-invoice (Allpack / Yohome / KKR / Magic Stone CI)
+      /\bproforma|\bquotation|\boff?erte|pro[\s-]*forma\s*invoice|\bPI\b.*\d|revised\s*PI/i.test(c.allText) &&
+      !/handling\s*costs/i.test(c.allText) },
+
+  // Supplier-invoice — Yohome/KKR/Magic Stone factory CI (NIET Allpack handling)
   { cat: "supplier-invoice", test: (c) =>
-      /commercial\s*invoice|invoice\s*no/i.test(c.allText) ||
-      /CI[\s-]*MS\d+|33#kkr/i.test(c.allText) ||
-      /YHES\d+|^MS\d{8,}/i.test(c.allText) ||
-      /handling\s*costs/i.test(c.allText) },
+      (/commercial\s*invoice|invoice\s*no/i.test(c.allText) ||
+       /YHES\d+|MS\d{8,}|33#kkr.*without/i.test(c.allText) ||
+       /CI[-\s]*MS\d+/i.test(c.filename)) &&
+      !/handling\s*costs?/i.test(c.allText) },
 ];
 
 interface CategorizeCtx {
@@ -129,6 +146,17 @@ export async function storeMailAttachments(args: {
     }
     if (att.size > 20 * 1024 * 1024) {
       // Skip >20MB
+      skipped++;
+      continue;
+    }
+    // Skip afbeeldingen onder 500kB — vrijwel altijd e-mail-signatures, logos, inline graphics.
+    // Echte gescande facturen zijn meestal >500kB en hebben image/jpeg of image/pdf.
+    if (att.contentType.startsWith("image/") && att.size < 500 * 1024) {
+      skipped++;
+      continue;
+    }
+    // .ics calendar invites zijn nooit relevant voor archief
+    if (att.contentType === "application/ics" || att.filename.endsWith(".ics")) {
       skipped++;
       continue;
     }
