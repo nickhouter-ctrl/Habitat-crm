@@ -176,6 +176,13 @@
       "when": 1778928032636,
       "tag": "0024_narrow_boomerang",
       "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "7",
+      "when": 1778928580141,
+      "tag": "0025_deep_epoch",
+      "breakpoints": true
     }
   ]
 }

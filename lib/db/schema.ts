@@ -561,12 +561,29 @@ export const purchaseOrders = pgTable(
     stockAppliedAt: timestamp({ withTimezone: true }),
     /** When this PO mirrors a Holded purchase document, its id (for idempotent sync). */
     holdedId: text(),
+    /** Container nummer (bv. YMMU1441857) — voor auto-link van facturen. */
+    containerRef: text(),
+    /** Shipment / booking referentie (bv. ZMI2600251) — voor auto-link. */
+    shipmentRef: text(),
+    /**
+     * Cached landed-cost-berekening (laatst toegepast).
+     * Format: { factoryTotal, overheadTotal, ratio, appliedAt, breakdown: [{ category, amount }] }
+     */
+    landedCostSummary: jsonb().$type<{
+      factoryTotalEur: number;
+      overheadTotalEur: number;
+      ratio: number;
+      appliedAt: string;
+      breakdown: Array<{ category: string; amount: number; attachmentCount: number }>;
+    }>(),
     ...timestamps,
   },
   (t) => [
     index("purchase_orders_status_idx").on(t.status),
     index("purchase_orders_supplier_idx").on(t.supplier),
     uniqueIndex("purchase_orders_holded_id_idx").on(t.holdedId),
+    index("purchase_orders_container_ref_idx").on(t.containerRef),
+    index("purchase_orders_shipment_ref_idx").on(t.shipmentRef),
   ],
 );
 

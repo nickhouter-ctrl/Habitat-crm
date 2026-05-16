@@ -1,4 +1,4 @@
-import { desc, eq, sql } from "drizzle-orm";
+import { and, desc, eq, ilike, or, sql } from "drizzle-orm";
 import { Mail, RefreshCw, Paperclip } from "lucide-react";
 import Link from "next/link";
 
@@ -35,22 +35,63 @@ export default async function InboxPage({
 }) {
   const params = await searchParams;
   const statusFilter = typeof params.status === "string" ? params.status : "new";
+  const mailboxFilter = typeof params.mailbox === "string" ? params.mailbox : "all";
 
-  const [rows, state, counts] = await Promise.all([
+  // Mailbox-filter:
+  //  - 'purchase' = mails verzonden NAAR purchase@ (inkoop-gerelateerd)
+  //  - 'hi' = mails NIET naar purchase@ (alle overige, primair hi@)
+  //  - 'all' = beide
+  const goesToPurchase = or(
+    ilike(emailInbox.toEmail, "%purchase@habitat-one.com%"),
+    ilike(emailInbox.ccEmail, "%purchase@habitat-one.com%"),
+  );
+  const mailboxClause =
+    mailboxFilter === "purchase"
+      ? goesToPurchase
+      : mailboxFilter === "hi"
+        ? sql`NOT (
+            COALESCE(${emailInbox.toEmail}, '') ILIKE '%purchase@habitat-one.com%'
+            OR COALESCE(${emailInbox.ccEmail}, '') ILIKE '%purchase@habitat-one.com%'
+          )`
+        : undefined;
+
+  const [rows, state, counts, mailboxCounts] = await Promise.all([
     db
       .select()
       .from(emailInbox)
-      .where(statusFilter === "all" ? undefined : eq(emailInbox.status, statusFilter))
+      .where(
+        and(
+          statusFilter === "all" ? undefined : eq(emailInbox.status, statusFilter),
+          mailboxClause,
+        ),
+      )
       .orderBy(desc(emailInbox.receivedAt))
       .limit(200),
     db.select().from(emailSyncState).limit(1),
     db
       .select({ status: emailInbox.status, n: sql<number>`count(*)::int` })
       .from(emailInbox)
+      .where(mailboxClause)
       .groupBy(emailInbox.status),
+    db.execute<{ mailbox: string; n: number }>(sql`
+      SELECT
+        CASE
+          WHEN to_email ILIKE '%purchase@habitat-one.com%' OR cc_email ILIKE '%purchase@habitat-one.com%' THEN 'purchase'
+          ELSE 'hi'
+        END AS mailbox,
+        count(*)::int AS n
+      FROM email_inbox
+      GROUP BY 1
+    `),
   ]);
 
   const countByStatus = Object.fromEntries(counts.map((c) => [c.status, Number(c.n)]));
+  const mailboxByName = Object.fromEntries(
+    (mailboxCounts as unknown as Array<{ mailbox: string; n: number }>).map((r) => [
+      r.mailbox,
+      Number(r.n),
+    ]),
+  );
   const lastPolled = state[0]?.lastPolledAt;
   const lastError = state[0]?.errorMessage;
 
@@ -61,44 +102,81 @@ export default async function InboxPage({
         subtitle={`${countByStatus.new ?? 0} nieuw · ${countByStatus.linked ?? 0} gelinkt · ${countByStatus.archived ?? 0} gearchiveerd`}
       />
 
-      <Card className="mb-4 flex items-center justify-between gap-3 px-4 py-3 text-sm">
-        <div className="flex items-center gap-2 text-muted">
-          <RefreshCw className="h-4 w-4" />
-          <span>
-            Laatste poll:{" "}
-            {lastPolled ? formatDate(lastPolled) : "nog niet gepolled"}
-          </span>
-          {lastError && (
-            <span className="ml-3 rounded bg-danger/10 px-2 py-0.5 text-xs text-danger">
-              fout: {lastError.slice(0, 80)}
+      <Card className="mb-4 space-y-3 px-4 py-3 text-sm">
+        {/* Mailbox-tabs: hi@ / purchase@ / alle */}
+        <div className="flex items-center justify-between gap-3 border-b border-border pb-2">
+          <div className="flex gap-1.5">
+            {[
+              { key: "all", label: "Beide mailboxen", count: undefined },
+              { key: "hi", label: "hi@", count: mailboxByName.hi },
+              { key: "purchase", label: "purchase@", count: mailboxByName.purchase },
+            ].map((m) => {
+              const sp = new URLSearchParams();
+              if (m.key !== "all") sp.set("mailbox", m.key);
+              if (statusFilter !== "new") sp.set("status", statusFilter);
+              return (
+                <Link
+                  key={m.key}
+                  href={sp.toString() ? `/inbox?${sp.toString()}` : "/inbox"}
+                  className={cn(
+                    "rounded-md px-3 py-1 text-xs transition-colors",
+                    mailboxFilter === m.key
+                      ? "bg-accent/15 font-medium text-accent"
+                      : "text-muted hover:bg-background-soft",
+                  )}
+                >
+                  {m.label}
+                  {m.count != null && (
+                    <span className="ml-1.5 text-[10px] opacity-70">({m.count})</span>
+                  )}
+                </Link>
+              );
+            })}
+          </div>
+          <div className="flex items-center gap-2 text-xs text-muted">
+            <RefreshCw className="h-3 w-3" />
+            <span>
+              Poll: {lastPolled ? formatDate(lastPolled) : "—"}
             </span>
-          )}
+            {lastError && (
+              <span className="ml-2 rounded bg-danger/10 px-2 py-0.5 text-[10px] text-danger">
+                fout: {lastError.slice(0, 40)}
+              </span>
+            )}
+          </div>
         </div>
+
+        {/* Status-tabs */}
         <div className="flex gap-2">
           {[
             { key: "new", label: "Nieuw" },
             { key: "linked", label: "Gelinkt" },
             { key: "archived", label: "Archief" },
             { key: "all", label: "Alles" },
-          ].map((tab) => (
-            <Link
-              key={tab.key}
-              href={`/inbox?status=${tab.key}`}
-              className={cn(
-                "rounded-md px-3 py-1 text-xs transition-colors",
-                statusFilter === tab.key
-                  ? "bg-accent/15 font-medium text-accent"
-                  : "text-muted hover:bg-background-soft",
-              )}
-            >
-              {tab.label}
-              {tab.key !== "all" && countByStatus[tab.key] != null && (
-                <span className="ml-1.5 text-[10px] opacity-70">
-                  {countByStatus[tab.key]}
-                </span>
-              )}
-            </Link>
-          ))}
+          ].map((tab) => {
+            const sp = new URLSearchParams();
+            sp.set("status", tab.key);
+            if (mailboxFilter !== "all") sp.set("mailbox", mailboxFilter);
+            return (
+              <Link
+                key={tab.key}
+                href={`/inbox?${sp.toString()}`}
+                className={cn(
+                  "rounded-md px-3 py-1 text-xs transition-colors",
+                  statusFilter === tab.key
+                    ? "bg-accent/15 font-medium text-accent"
+                    : "text-muted hover:bg-background-soft",
+                )}
+              >
+                {tab.label}
+                {tab.key !== "all" && countByStatus[tab.key] != null && (
+                  <span className="ml-1.5 text-[10px] opacity-70">
+                    {countByStatus[tab.key]}
+                  </span>
+                )}
+              </Link>
+            );
+          })}
         </div>
       </Card>
 
