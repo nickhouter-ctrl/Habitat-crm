@@ -767,3 +767,55 @@ export type NewProject = typeof projects.$inferInsert;
 export type Activity = typeof activities.$inferSelect;
 export type HoldedSyncMap = typeof holdedSyncMap.$inferSelect;
 export type WebhookEvent = typeof webhookEvents.$inferSelect;
+
+/**
+ * Inkomende mails vanuit Gmail. Wordt gevuld door cron-job (IMAP polling) en
+ * kan manueel gelinkt worden aan een PO (leverancier-bevestiging) of offerte-
+ * aanvraag (klant-vraag). Statussen: new → linked → archived.
+ */
+export const emailInbox = pgTable(
+  "email_inbox",
+  {
+    id: uuid().primaryKey().default(sql`gen_random_uuid()`),
+    messageId: text().notNull(),
+    imapUid: integer(),
+    threadId: text(),
+    fromEmail: text(),
+    fromName: text(),
+    toEmail: text(),
+    ccEmail: text(),
+    subject: text(),
+    bodyText: text(),
+    bodyHtml: text(),
+    receivedAt: timestamp({ withTimezone: true }),
+    attachments: jsonb().$type<Array<{
+      filename: string;
+      size: number;
+      contentType: string;
+      storagePath?: string;
+    }>>(),
+    status: text().notNull().default("new"),
+    linkedPurchaseOrderId: uuid().references(() => purchaseOrders.id, { onDelete: "set null" }),
+    linkedQuoteRequestId: uuid().references(() => quoteRequests.id, { onDelete: "set null" }),
+    notes: text(),
+    ...timestamps,
+  },
+  (t) => [
+    uniqueIndex("email_inbox_message_id_idx").on(t.messageId),
+    index("email_inbox_status_idx").on(t.status),
+    index("email_inbox_received_at_idx").on(t.receivedAt),
+  ],
+);
+
+/** Singleton voor IMAP poll-state. */
+export const emailSyncState = pgTable("email_sync_state", {
+  id: text().primaryKey().default("singleton"),
+  lastImapUid: integer().notNull().default(0),
+  lastPolledAt: timestamp({ withTimezone: true }),
+  errorMessage: text(),
+  ...timestamps,
+});
+
+export type EmailInbox = typeof emailInbox.$inferSelect;
+export type NewEmailInbox = typeof emailInbox.$inferInsert;
+export type EmailSyncState = typeof emailSyncState.$inferSelect;
