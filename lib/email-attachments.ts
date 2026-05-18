@@ -47,6 +47,7 @@ const SUPPLIER_PATTERNS: Array<{
   // 2. Agents/intermediairs (alleen als geen echte supplier gevonden)
   { tag: "Allpack (CN agent)", isAgent: true, weak: [/allpack/i, /@allpack/i] },
   { tag: "Teresa (ES agent)", isAgent: true, weak: [/españa\s*trading/i, /tborras/i, /etrading\.tborras/i] },
+  { tag: "CSABAHOME SL", strong: [/^INVOICE\s+A1[2-6][0-9].*WAREHOUSE/i], weak: [/csaba/i, /csabahome/i] },
   // 3. Transport / douane / overheid (sterk signaal want eigen merknaam)
   { tag: "Alianza (transport)", strong: [/23T[\/_-][AC][_-]?\d/i, /galadtrans/i, /@alianza-gt/i], weak: [/alianza/i] },
   { tag: "Oper-Traimer (transport ES)", strong: [/^FACTURA_MARTRM-F[A-Z]+\d+/i, /oper[-\s]*traimer/i], weak: [/A83205815/i] },
