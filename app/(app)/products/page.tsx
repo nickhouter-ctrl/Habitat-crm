@@ -159,6 +159,14 @@ export default async function ProductsPage({
                   <a href={`/products/export${qs}`} className={buttonClass({ variant: "secondary" })} download>
                     Excel downloaden
                   </a>
+                  <a
+                    href="/api/products/barcodes-csv"
+                    className={buttonClass({ variant: "secondary" })}
+                    download
+                    title="Exporteer alle producten met barcode (GS1) als CSV voor MijnGS1-portal import"
+                  >
+                    GS1 CSV
+                  </a>
                   <LinkButton href={`/print-labels${qs}`} variant="secondary">
                     Labels printen
                   </LinkButton>
