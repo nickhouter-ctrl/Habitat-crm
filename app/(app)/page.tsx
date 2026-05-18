@@ -89,7 +89,7 @@ export default async function DashboardPage() {
         .select({
           noBarcode: sql<number>`count(case when ${products.isActive} = true and ${products.barcode} is null then 1 end)::int`,
           lowStock: sql<number>`count(case when ${products.isActive} = true and ${products.stockMin} is not null and coalesce(${products.stockQty}, 0) < ${products.stockMin} then 1 end)::int`,
-          stockNoPhoto: sql<number>`count(case when ${products.isActive} = true and coalesce(${products.stockQty}, 0) > 0 and ${products.imageUrl} is null then 1 end)::int`,
+          stockNoPhoto: sql<number>`count(case when ${products.isActive} = true and ${products.imageUrl} is null then 1 end)::int`,
         })
         .from(products),
       db
@@ -163,7 +163,7 @@ export default async function DashboardPage() {
               className="flex items-center justify-between gap-3 rounded-md border border-warning/40 bg-warning/10 px-4 py-3 text-sm text-foreground transition-colors hover:bg-warning/15"
             >
               <span>
-                📸 <strong>{productsAgg.stockNoPhoto}</strong> producten hebben voorraad maar nog geen foto — vul aan en push naar de website.
+                📸 <strong>{productsAgg.stockNoPhoto}</strong> actieve producten zonder foto — vul aan en push naar de website.
               </span>
               <span className="font-medium text-warning">Bekijk →</span>
             </Link>
