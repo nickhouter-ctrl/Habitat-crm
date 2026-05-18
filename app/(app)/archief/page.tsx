@@ -65,8 +65,10 @@ export default async function ArchiefPage({
   const category = typeof params.category === "string" ? params.category : "";
   const supplier = typeof params.supplier === "string" ? params.supplier : "";
   const type = typeof params.type === "string" ? params.type : "";
-  const sort: SortKey = (typeof params.sort === "string" && params.sort in SORT_COL ? params.sort : "date") as SortKey;
+  const sort: SortKey = (typeof params.sort === "string" && params.sort in SORT_COL ? params.sort : "category") as SortKey;
   const dir = params.dir === "asc" ? "asc" : "desc";
+  // Default: sorteer op categorie zodat groepen samenklonteren, dan datum binnen groep
+  const useGrouping = sort === "category" && !category;
 
   const typeFilter =
     type === "image"
@@ -90,7 +92,9 @@ export default async function ArchiefPage({
   );
 
   const orderCol = SORT_COL[sort];
-  const orderBy = dir === "asc" ? asc(orderCol) : desc(orderCol);
+  const primary = dir === "asc" ? asc(orderCol) : desc(orderCol);
+  // Bij groepering: secondaire sort op datum-desc binnen elke categorie
+  const orderBy = useGrouping ? [primary, desc(mailAttachments.receivedAt)] : [primary];
 
   const [rows, categoryCounts, supplierList, typeCounts] = await Promise.all([
     db
@@ -110,7 +114,7 @@ export default async function ArchiefPage({
       .from(mailAttachments)
       .innerJoin(emailInbox, eq(emailInbox.id, mailAttachments.emailId))
       .where(where)
-      .orderBy(orderBy)
+      .orderBy(...orderBy)
       .limit(500),
     db
       .select({ category: mailAttachments.category, n: sql<number>`count(*)::int` })

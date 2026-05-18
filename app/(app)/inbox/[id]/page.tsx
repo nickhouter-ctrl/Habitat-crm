@@ -1,11 +1,12 @@
-import { desc, eq, ilike, or } from "drizzle-orm";
-import { ArrowLeft, Archive, Link2, Mail, Paperclip, RotateCcw } from "lucide-react";
+import { asc, desc, eq, ilike, or } from "drizzle-orm";
+import { ArrowLeft, Archive, Download, Link2, Mail, Paperclip, RotateCcw } from "lucide-react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { Badge, Card, LinkButton, PageHeader, buttonClass } from "@/components/ui";
 import { db } from "@/lib/db";
-import { emailInbox, purchaseOrders, quoteRequests } from "@/lib/db/schema";
+import { emailInbox, mailAttachments, purchaseOrders, quoteRequests } from "@/lib/db/schema";
+import { CATEGORIES } from "@/lib/email-categories";
 import { cn, formatEUR } from "@/lib/utils";
 
 import {
@@ -79,7 +80,20 @@ export default async function MailDetailPage({ params }: { params: Promise<{ id:
     ? await db.query.quoteRequests.findFirst({ where: eq(quoteRequests.id, mail.linkedQuoteRequestId) })
     : null;
 
-  const attachments = (mail.attachments as Array<{ filename: string; size: number; contentType: string }>) ?? [];
+  // Bijlages uit Supabase Storage (downloadbaar). Fall-back: metadata uit JSON-veld.
+  const storedAttachments = await db
+    .select({
+      id: mailAttachments.id,
+      filename: mailAttachments.filename,
+      contentType: mailAttachments.contentType,
+      sizeBytes: mailAttachments.sizeBytes,
+      category: mailAttachments.category,
+    })
+    .from(mailAttachments)
+    .where(eq(mailAttachments.emailId, mail.id))
+    .orderBy(asc(mailAttachments.filename));
+
+  const metaAttachments = (mail.attachments as Array<{ filename: string; size: number; contentType: string }>) ?? [];
 
   return (
     <>
@@ -129,28 +143,61 @@ export default async function MailDetailPage({ params }: { params: Promise<{ id:
             <p className="text-sm text-muted">(geen body)</p>
           )}
 
-          {/* Attachments */}
-          {attachments.length > 0 && (
+          {/* Attachments — downloadbaar vanaf Supabase Storage */}
+          {storedAttachments.length > 0 ? (
             <div className="border-t border-border pt-3">
               <p className="mb-2 text-xs font-medium uppercase tracking-wide text-muted">
-                Bijlagen ({attachments.length})
+                Bijlagen ({storedAttachments.length})
+              </p>
+              <ul className="space-y-1">
+                {storedAttachments.map((a) => (
+                  <li key={a.id} className="group flex items-center gap-2 rounded-md px-2 py-1.5 text-sm hover:bg-background-soft">
+                    <Paperclip className="h-3.5 w-3.5 shrink-0 text-muted" />
+                    <Link
+                      href={`/api/archief/${a.id}`}
+                      target="_blank"
+                      className="min-w-0 flex-1 truncate font-medium hover:underline"
+                      title={a.filename}
+                    >
+                      {a.filename}
+                    </Link>
+                    <span className="hidden text-xs text-muted md:inline">
+                      {CATEGORIES[a.category as keyof typeof CATEGORIES] ?? a.category}
+                    </span>
+                    <span className="text-xs tabular-nums text-muted">
+                      {a.sizeBytes ? `${(a.sizeBytes / 1024).toFixed(0)} kB` : ""}
+                    </span>
+                    <Link
+                      href={`/api/archief/${a.id}`}
+                      target="_blank"
+                      className="rounded p-1 text-muted opacity-0 transition-opacity hover:bg-background hover:text-foreground group-hover:opacity-100"
+                      title="Download"
+                    >
+                      <Download className="h-3.5 w-3.5" />
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : metaAttachments.length > 0 ? (
+            <div className="border-t border-border pt-3">
+              <p className="mb-2 text-xs font-medium uppercase tracking-wide text-muted">
+                Bijlagen ({metaAttachments.length})
               </p>
               <ul className="space-y-1.5">
-                {attachments.map((a, i) => (
-                  <li key={i} className="flex items-center gap-2 text-sm">
-                    <Paperclip className="h-3.5 w-3.5 text-muted" />
+                {metaAttachments.map((a, i) => (
+                  <li key={i} className="flex items-center gap-2 text-sm text-muted">
+                    <Paperclip className="h-3.5 w-3.5" />
                     <span className="font-medium">{a.filename}</span>
-                    <span className="text-xs text-muted">
-                      {(a.size / 1024).toFixed(0)} kB · {a.contentType}
-                    </span>
+                    <span className="text-xs">{(a.size / 1024).toFixed(0)} kB · {a.contentType}</span>
                   </li>
                 ))}
               </ul>
               <p className="mt-2 text-xs text-muted">
-                Bijlagen-inhoud nog niet opgeslagen — alleen metadata. Voor PDF/CI bekijken: open in Gmail.
+                Deze bijlages zijn van vóór de archief-upload — alleen metadata beschikbaar. Open de mail in Gmail om ze te bekijken.
               </p>
             </div>
-          )}
+          ) : null}
         </Card>
 
         {/* RIGHT: actions sidebar */}

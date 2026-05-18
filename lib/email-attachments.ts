@@ -56,21 +56,48 @@ const SUPPLIER_PATTERNS: Array<{
 ];
 
 const CATEGORY_RULES: Array<{ cat: AttachmentCategory; test: (ctx: CategorizeCtx) => boolean }> = [
-  // DUA / douane (eerst, want vaak combineerbaar met andere)
+  // Eigen analyses (kostprijs/inkoop-verkoop spreadsheets) — EERST, want anders
+  // worden ze meegezogen in customs-dua/supplier door e-mail-context.
+  { cat: "other", test: (c) =>
+      /\.xlsx?$/i.test(c.filename) &&
+      /\b(kostprijs|inkoop[_\s-]*verkoop|verkoop[_\s-]*prijs|prijslijst|kalkulatie|berekening)\b/i.test(c.filename) },
+
+  // DUA / douane — alleen wanneer FILENAME of strong signaal in TEKST matcht
+  // (niet wanneer alleen het woord 'DUA' ergens in een mail-body voorkomt).
   { cat: "customs-dua", test: (c) =>
-      /levante|certificado.*importaci[oó]n|d\.?u\.?a\.?|aduana|customs|comunidad\s*europea/i.test(c.allText) ||
-      /HS\s*code.*duty|BorradorH1IMCAU|H1IMCAU.*OPERVAL/i.test(c.allText + " " + c.filename) ||
-      /^20260\d{10,}\.pdf$/i.test(c.filename) },
+      // Strong filename patterns
+      /^LEVANTE\b|^23T[\/_-][AC][_-]?\d|certificado.*importaci|^BorradorH1IMCAU|H1IMCAU.*OPERVAL|^DUA[-\s]?\d|HS[_\s-]*CODE.*DUTY/i.test(c.filename) ||
+      /^20260\d{10,}\.pdf$/i.test(c.filename) ||
+      // Tax-overview spreadsheets (Allpack/Yohome) — herkenbaar via 'import taxes'
+      /^import\s*taxes/i.test(c.filename) ||
+      // Sterke tekst-signalen: AEAT / Aduana / declaración aduanera
+      /agencia\s*aduanera|declaraci[oó]n\s*aduanera|aeat\s*despacho/i.test(c.allText) },
 
   // Teresa commissie (Spanje) — eerst, want vaak verkleurd onder andere
   { cat: "agent-fee-spain", test: (c) =>
       /españa\s*trading|tborras|etrading\.tborras/i.test(c.fromEmail + " " + c.allText) ||
       /^Factura\s+(25|26)5\d{5}/i.test(c.filename) },
 
-  // Allpack handling-fee (China) — handling costs CI
+  // Allpack handling-fee (China) — handling costs CI. Filename met
+  // 'handling cost' → altijd Allpack, ongeacht afzender.
   { cat: "agent-fee-china", test: (c) =>
-      /handling\s*costs?|handling[-\s]*fee/i.test(c.allText) &&
-      /allpack/i.test(c.fromEmail + " " + c.allText) },
+      /handling[\s-]*costs?|handling[\s-]*fee/i.test(c.filename) ||
+      (/handling\s*costs?|handling[-\s]*fee/i.test(c.allText) &&
+       /allpack/i.test(c.fromEmail + " " + c.allText)) },
+
+  // Supplier-invoice — factory CIs (eerst, vóór de Allpack-sender catch-all,
+  // want Allpack stuurt vaak supplier-CIs door)
+  { cat: "supplier-invoice", test: (c) =>
+      /^FACTURA_MARTRM-F[A-Z]+\d+/i.test(c.filename) ||
+      /^CI[\s-]*33#?kkr.*without/i.test(c.filename) ||
+      /^CI[\s-]*MS\d+.*XBY|^CI-MS\d{6,}\.xls/i.test(c.filename) ||
+      /^CI[\s-]*HL\d+|^CI[\s-]*YH\d+|^CI[\s-]*AP\d+|^CI-KY086-\d+/i.test(c.filename) ||
+      /^Commercial\s*Invoice\s*for\s*PJ\d+|YOHOME[\s-]*Commercial\s*invoice|KKR\s*PI\s*33#kkr/i.test(c.filename) ||
+      /HN-K-20\d+-S-PL.*(without|backing\s*board)/i.test(c.filename) },
+
+  // Allpack-sender catch-all (na supplier-invoice)
+  { cat: "agent-fee-china", test: (c) =>
+      /allpack-?ent\.com|@allpack/i.test(c.fromEmail) },
 
   // Vrachtfactuur — Alianza/Galadtrans + lokale transporteurs
   { cat: "freight-invoice", test: (c) =>
