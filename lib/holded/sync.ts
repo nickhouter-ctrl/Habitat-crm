@@ -447,6 +447,25 @@ export async function pushPurchaseOrderToHolded(poId: string): Promise<string> {
   if (!po) throw new Error("Inkooporder niet gevonden.");
   if (po.holdedId) return po.holdedId; // al gekoppeld
 
+  // 0. Voorkom duplicaten: kijk eerst of Holded al een purchase-doc heeft
+  //    met deze docNumber. Zo ja, link onze PO aan die bestaande Holded-doc
+  //    in plaats van een nieuwe aan te maken.
+  if (po.reference) {
+    try {
+      const existing = await holded.documents.list("purchase", { docNumber: po.reference });
+      const match = existing.find((d) => d.docNumber === po.reference);
+      if (match?.id) {
+        await db
+          .update(purchaseOrders)
+          .set({ holdedId: match.id, updatedAt: new Date() })
+          .where(eq(purchaseOrders.id, poId));
+        return match.id;
+      }
+    } catch {
+      /* lookup is best-effort — bij fout gewoon doorgaan met POST */
+    }
+  }
+
   // 1. Probeer een bestaand Holded-contact te vinden via de naam.
   let contactRef: string | undefined;
   try {

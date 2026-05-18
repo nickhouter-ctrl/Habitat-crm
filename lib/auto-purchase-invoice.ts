@@ -62,11 +62,20 @@ export async function tryAutoCreatePurchaseInvoice(emailId: string): Promise<Aut
       const refMatch = a.filename.match(/(?:FAC[_-]?|Factura[_\s]*|Invoice[_\s]*)([\w\d-]+)/i);
       const reference = refMatch?.[1] ?? a.filename.replace(/\.[a-z]+$/i, "");
 
-      // Skip als er al een PO bestaat met dezelfde supplier + reference (dedupe)
+      // Dedupe: skip ALS er al een PO bestaat met deze reference (ongeacht
+      // supplier-spelling). Bij conflict liever de bestaande PO linken aan
+      // de mail, dan dubbele records aanmaken.
       const existing = await db.query.purchaseOrders.findFirst({
         where: eq(purchaseOrders.reference, reference),
       });
-      if (existing && existing.supplier === a.supplierTag) continue;
+      if (existing) {
+        // Link mail aan de bestaande PO i.p.v. nieuwe aanmaken
+        await db
+          .update(emailInbox)
+          .set({ linkedPurchaseOrderId: existing.id, status: "linked", updatedAt: new Date() })
+          .where(eq(emailInbox.id, emailId));
+        continue;
+      }
 
       // Kopieer bron-bestand naar PO-bucket
       const copied = await copyMailAttachmentToPoBucket({
