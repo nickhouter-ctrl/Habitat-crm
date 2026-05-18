@@ -119,13 +119,19 @@ const CATEGORY_RULES: Array<{ cat: AttachmentCategory; test: (ctx: CategorizeCtx
       /sabadell|caixabank|bbva|santander/i.test(c.fromEmail) ||
       /extracto.*cuenta|bank.*statement|account.*statement|posición\s+global/i.test(c.allText) },
 
-  // Aannemer — Csaba (Hongaarse aannemer voor installaties/renovaties op
-  // diverse locaties: Benissa, Costa Nova, Oliva, warehouse). Aparte categorie
-  // want bouwkosten ≠ vaste lasten.
+  // Aannemer — Csaba's invoices VOOR HABITAT (showroom-verbouwing). Csaba
+  // werkt ook voor andere klanten in Benissa/Costa Nova/Oliva — die invoices
+  // gaan naar 'other' (niet relevant voor Habitat).
   { cat: "contractor", test: (c) =>
-      /csaba/i.test(c.fromName + " " + c.fromEmail) ||
-      /^INVOICE\s+A1[2-6][0-9].*(WAREHOUSE|BENISSA|COSTA\s*NOVA|OLIVA)/i.test(c.filename) ||
+      (/csaba/i.test(c.fromName + " " + c.fromEmail) &&
+       /WAREHOUSE|showroom|habitat/i.test(c.filename + " " + c.subject)) ||
+      /^INVOICE\s+A1[2-6][0-9].*WAREHOUSE/i.test(c.filename) ||
       /works[_\s]*costs[_\s]*summary/i.test(c.filename) },
+
+  // Csaba's externe klanten — apart afvangen → other (niet voor Habitat)
+  { cat: "other", test: (c) =>
+      /^INVOICE\s+A1[2-6][0-9].*(BENISSA|COSTA\s*NOVA|OLIVA|VILLAJOYOSA|DENIA)/i.test(c.filename) &&
+      !/WAREHOUSE/i.test(c.filename) },
 
   // Bedrijfskosten — loods-huur, elektriciteit, water, forklift-rental, Google
   // Workspace, verzekeringen, AECOC, juridisch, trademark, JYSK
