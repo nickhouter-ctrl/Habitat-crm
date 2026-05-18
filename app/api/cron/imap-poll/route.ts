@@ -8,9 +8,12 @@ import { NextResponse } from "next/server";
 import { sql } from "drizzle-orm";
 
 import { db } from "@/lib/db";
-import { emailInbox, emailSyncState } from "@/lib/db/schema";
+import { emailInbox, emailSyncState, mailAttachments } from "@/lib/db/schema";
+import { autoLinkEmail } from "@/lib/auto-link";
+import { extractAttachmentAmount } from "@/lib/amount-extract";
 import { storeMailAttachments } from "@/lib/email-attachments";
 import { fetchNewMails } from "@/lib/gmail";
+import { eq } from "drizzle-orm";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -64,8 +67,41 @@ export async function GET(req: Request) {
           try {
             const r = await storeMailAttachments({ emailId: row.id, mail: m });
             attachmentsStored += r.stored;
+
+            // Auto-extract bedragen voor net geuploade attachments
+            const newAtts = await db
+              .select()
+              .from(mailAttachments)
+              .where(eq(mailAttachments.emailId, row.id));
+            for (const a of newAtts) {
+              if (a.amountEur) continue;
+              try {
+                const amt = await extractAttachmentAmount({
+                  storagePath: a.storagePath,
+                  filename: a.filename,
+                  contentType: a.contentType ?? "",
+                });
+                if (amt != null) {
+                  await db
+                    .update(mailAttachments)
+                    .set({ amountEur: String(amt) })
+                    .where(eq(mailAttachments.id, a.id));
+                }
+              } catch (e: any) {
+                console.error(`Amount-extract fail voor ${a.filename}:`, e?.message);
+              }
+            }
           } catch (e: any) {
             console.error(`Attachment store fail voor ${m.subject}:`, e?.message);
+          }
+        }
+
+        // Auto-link aan PO op basis van shipment-ref
+        if (row?.id) {
+          try {
+            await autoLinkEmail(row.id);
+          } catch (e: any) {
+            console.error(`Auto-link fail voor ${m.subject}:`, e?.message);
           }
         }
       } catch (e: any) {
