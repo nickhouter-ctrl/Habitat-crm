@@ -3,15 +3,15 @@
  * Geen server-only imports — mag in client-componenten worden gebruikt.
  */
 export const CATEGORIES = {
-  "supplier-invoice": "Factuur leverancier (Yohome/KKR/MS)",
-  "agent-fee-china": "Allpack handling (China)",
-  "agent-fee-spain": "Teresa commissie (Spanje)",
-  "freight-invoice": "Vrachtfactuur (Alianza)",
-  "customs-dua": "DUA / Douane",
-  "opex": "Bedrijfskosten (loods/utilities/SaaS)",
-  "bank-statement": "Bankafschrift",
-  "quote-proforma": "Offerte / Proforma",
-  "certificate": "Certificaat (CE/CITES)",
+  "supplier-invoice": "Leverancier",
+  "agent-fee-china": "Allpack",
+  "agent-fee-spain": "Teresa",
+  "freight-invoice": "Vracht",
+  "customs-dua": "Douane",
+  "opex": "Bedrijfskosten",
+  "bank-statement": "Bank",
+  "quote-proforma": "Offerte",
+  "certificate": "Certificaat",
   "other": "Overig",
 } as const;
 

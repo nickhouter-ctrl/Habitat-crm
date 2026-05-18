@@ -38,7 +38,6 @@ const CATEGORY_ICONS: Record<string, string> = {
   "other": "📎",
 };
 
-/** Bestandstype-icon op basis van content_type */
 function fileIcon(ct: string | null) {
   if (!ct) return <FileText className="h-4 w-4 text-muted" />;
   if (ct.startsWith("image/")) return <ImageIcon className="h-4 w-4 text-accent" />;
@@ -65,7 +64,7 @@ export default async function ArchiefPage({
   const q = typeof params.q === "string" ? params.q.trim() : "";
   const category = typeof params.category === "string" ? params.category : "";
   const supplier = typeof params.supplier === "string" ? params.supplier : "";
-  const type = typeof params.type === "string" ? params.type : ""; // 'image' | 'doc' | ''
+  const type = typeof params.type === "string" ? params.type : "";
   const sort: SortKey = (typeof params.sort === "string" && params.sort in SORT_COL ? params.sort : "date") as SortKey;
   const dir = params.dir === "asc" ? "asc" : "desc";
 
@@ -123,7 +122,7 @@ export default async function ArchiefPage({
       .where(sql`${mailAttachments.supplierTag} IS NOT NULL`)
       .groupBy(mailAttachments.supplierTag)
       .orderBy(sql`count(*) desc`)
-      .limit(20),
+      .limit(50),
     db
       .select({
         images: sql<number>`count(case when ${mailAttachments.contentType} like 'image/%' then 1 end)::int`,
@@ -155,109 +154,99 @@ export default async function ArchiefPage({
   const SortArrow = ({ k }: { k: SortKey }) =>
     sort !== k ? null : dir === "asc" ? <ArrowUp className="inline h-3 w-3" /> : <ArrowDown className="inline h-3 w-3" />;
 
+  // Categorie-pills met counts > 0, alfabetisch maar 'Alle' eerst
+  const visibleCats = (Object.keys(CATEGORIES) as Array<keyof typeof CATEGORIES>)
+    .filter((k) => (countByCat[k] ?? 0) > 0);
+
   return (
     <>
       <PageHeader
         title="Archief"
-        subtitle={`${counts.total} bijlagen · ${counts.docs} documenten · ${counts.images} afbeeldingen${rows.length !== counts.total ? ` · gefilterd: ${rows.length}` : ""}`}
+        subtitle={`${counts.total} bijlagen · ${rows.length} weergegeven`}
       />
 
-      <Card className="mb-4 space-y-3 p-4">
-        <form className="flex gap-2" action="/archief">
+      <Card className="mb-4 space-y-2.5 p-3">
+        {/* Rij 1: zoeken + leverancier-dropdown + type-toggle */}
+        <form className="flex flex-wrap items-center gap-2" action="/archief">
           <input type="hidden" name="category" value={category} />
-          <input type="hidden" name="supplier" value={supplier} />
           <input type="hidden" name="type" value={type} />
-          <div className="relative flex-1">
+          <div className="relative min-w-[14rem] flex-1">
             <Search className="pointer-events-none absolute left-2 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" />
             <Input
               name="q"
               defaultValue={q}
-              placeholder="Zoek op bestandsnaam, afzender, onderwerp…"
+              placeholder="Zoek op bestand, afzender of onderwerp…"
               className="pl-8"
             />
           </div>
-          <button className="rounded-md border border-border bg-background px-3 py-1.5 text-sm hover:bg-background-soft">
+          <select
+            name="supplier"
+            defaultValue={supplier}
+            className="h-9 rounded-md border border-border bg-background px-2 text-sm"
+          >
+            <option value="">Alle leveranciers</option>
+            {supplierList.map(
+              (s) =>
+                s.supplier && (
+                  <option key={s.supplier} value={s.supplier}>
+                    {s.supplier} ({s.n})
+                  </option>
+                ),
+            )}
+          </select>
+          <div className="flex items-center overflow-hidden rounded-md border border-border text-xs">
+            <Link
+              href={buildUrl({ type: undefined })}
+              className={cn("px-2.5 py-1.5", !type ? "bg-accent/15 font-medium text-accent" : "hover:bg-background-soft")}
+            >
+              Alle
+            </Link>
+            <Link
+              href={buildUrl({ type: "doc" })}
+              className={cn("border-l border-border px-2.5 py-1.5", type === "doc" ? "bg-accent/15 font-medium text-accent" : "hover:bg-background-soft")}
+              title="Alleen documenten"
+            >
+              📄 {counts.docs}
+            </Link>
+            <Link
+              href={buildUrl({ type: "image" })}
+              className={cn("border-l border-border px-2.5 py-1.5", type === "image" ? "bg-accent/15 font-medium text-accent" : "hover:bg-background-soft")}
+              title="Alleen afbeeldingen"
+            >
+              🖼 {counts.images}
+            </Link>
+          </div>
+          <button className="h-9 rounded-md border border-border bg-background px-3 text-sm hover:bg-background-soft">
             Zoeken
           </button>
         </form>
 
-        {/* Type-filter (documenten / afbeeldingen) */}
-        <div className="flex flex-wrap gap-1.5 text-xs">
-          <span className="self-center font-medium text-muted">Type:</span>
+        {/* Rij 2: categorie-pills */}
+        <div className="flex flex-wrap gap-1">
           <Link
-            href={buildUrl({ type: undefined })}
-            className={cn("rounded-md px-2.5 py-1", !type ? "bg-accent/15 font-medium text-accent" : "text-muted hover:bg-background-soft")}
+            href={buildUrl({ category: undefined })}
+            className={cn(
+              "rounded-full px-3 py-1 text-xs",
+              !category ? "bg-accent text-accent-foreground" : "bg-background-soft text-muted hover:text-foreground",
+            )}
           >
             Alle ({counts.total})
           </Link>
-          <Link
-            href={buildUrl({ type: "doc" })}
-            className={cn("rounded-md px-2.5 py-1", type === "doc" ? "bg-accent/15 font-medium text-accent" : "text-muted hover:bg-background-soft")}
-          >
-            📄 Documenten ({counts.docs})
-          </Link>
-          <Link
-            href={buildUrl({ type: "image" })}
-            className={cn("rounded-md px-2.5 py-1", type === "image" ? "bg-accent/15 font-medium text-accent" : "text-muted hover:bg-background-soft")}
-          >
-            🖼 Afbeeldingen ({counts.images})
-          </Link>
-        </div>
-
-        {/* Categorie-filter */}
-        <div className="flex flex-wrap gap-1.5 text-xs">
-          <span className="self-center font-medium text-muted">Categorie:</span>
-          <Link
-            href={buildUrl({ category: undefined })}
-            className={cn("rounded-md px-2.5 py-1", !category ? "bg-accent/15 font-medium text-accent" : "text-muted hover:bg-background-soft")}
-          >
-            Alle
-          </Link>
-          {Object.entries(CATEGORIES).map(([k, label]) =>
-            (countByCat[k] ?? 0) > 0 ? (
-              <Link
-                key={k}
-                href={buildUrl({ category: k })}
-                className={cn(
-                  "rounded-md px-2.5 py-1",
-                  category === k ? "bg-accent/15 font-medium text-accent" : "text-muted hover:bg-background-soft",
-                )}
-              >
-                {CATEGORY_ICONS[k]} {label}
-                <span className="ml-1 text-[10px] opacity-70">({countByCat[k]})</span>
-              </Link>
-            ) : null,
-          )}
-        </div>
-
-        {/* Leverancier-filter */}
-        {supplierList.length > 0 && (
-          <div className="flex flex-wrap gap-1.5 text-xs">
-            <span className="self-center font-medium text-muted">Leverancier:</span>
+          {visibleCats.map((k) => (
             <Link
-              href={buildUrl({ supplier: undefined })}
-              className={cn("rounded-md px-2.5 py-1", !supplier ? "bg-accent/15 font-medium text-accent" : "text-muted hover:bg-background-soft")}
+              key={k}
+              href={buildUrl({ category: k })}
+              className={cn(
+                "rounded-full px-3 py-1 text-xs",
+                category === k
+                  ? "bg-accent text-accent-foreground"
+                  : "bg-background-soft text-muted hover:text-foreground",
+              )}
             >
-              Alle
+              {CATEGORY_ICONS[k]} {CATEGORIES[k]} <span className="opacity-60">({countByCat[k]})</span>
             </Link>
-            {supplierList.map(
-              (s) =>
-                s.supplier && (
-                  <Link
-                    key={s.supplier}
-                    href={buildUrl({ supplier: s.supplier })}
-                    className={cn(
-                      "rounded-md px-2.5 py-1",
-                      supplier === s.supplier ? "bg-accent/15 font-medium text-accent" : "text-muted hover:bg-background-soft",
-                    )}
-                  >
-                    {s.supplier}
-                    <span className="ml-1 text-[10px] opacity-70">({s.n})</span>
-                  </Link>
-                ),
-            )}
-          </div>
-        )}
+          ))}
+        </div>
       </Card>
 
       {rows.length === 0 ? (
@@ -281,7 +270,7 @@ export default async function ArchiefPage({
                     Bestand <SortArrow k="name" />
                   </Link>
                 </Th>
-                <Th className="w-[11rem]">
+                <Th className="w-[10rem]">
                   <Link href={sortHref("category")} className="inline-flex items-center gap-1 hover:text-foreground">
                     Categorie <SortArrow k="category" />
                   </Link>
@@ -291,7 +280,6 @@ export default async function ArchiefPage({
                     Leverancier <SortArrow k="supplier" />
                   </Link>
                 </Th>
-                <Th>Mail</Th>
                 <Th className="w-[5rem] text-right">
                   <Link href={sortHref("size")} className="inline-flex items-center gap-1 hover:text-foreground">
                     Grootte <SortArrow k="size" />
@@ -304,8 +292,8 @@ export default async function ArchiefPage({
                 const isImage = r.contentType?.startsWith("image/");
                 return (
                   <Tr key={r.id}>
-                    <Td className="whitespace-nowrap py-1.5 text-xs text-muted">{formatDate(r.receivedAt)}</Td>
-                    <Td className="py-1.5">
+                    <Td className="whitespace-nowrap py-2 text-xs text-muted">{formatDate(r.receivedAt)}</Td>
+                    <Td className="py-2">
                       {isImage ? (
                         <Link href={`/api/archief/${r.id}`} target="_blank">
                           <img
@@ -321,22 +309,20 @@ export default async function ArchiefPage({
                         </span>
                       )}
                     </Td>
-                    <Td className="max-w-[24rem] py-1.5">
-                      <Link href={`/api/archief/${r.id}`} target="_blank" className="block text-sm font-medium hover:underline">
+                    <Td className="max-w-[28rem] py-2">
+                      <Link href={`/api/archief/${r.id}`} target="_blank" className="block truncate text-sm font-medium hover:underline" title={r.filename}>
                         {r.filename}
                       </Link>
-                    </Td>
-                    <Td className="py-1.5">
-                      <CategorySelect attachmentId={r.id} current={r.category} />
-                    </Td>
-                    <Td className="py-1.5 text-xs text-muted">{r.supplierTag ?? "—"}</Td>
-                    <Td className="max-w-[20rem] py-1.5 text-xs">
-                      <Link href={`/inbox/${r.emailId}`} className="hover:underline">
-                        <span className="block truncate text-muted">{r.emailFrom ?? r.emailFromAddr}</span>
-                        <span className="block truncate">{r.emailSubject ?? "(geen onderwerp)"}</span>
+                      <Link href={`/inbox/${r.emailId}`} className="block truncate text-xs text-muted hover:underline" title={r.emailSubject ?? ""}>
+                        <span className="opacity-70">{r.emailFrom ?? r.emailFromAddr}</span>
+                        {r.emailSubject && <span className="ml-1">· {r.emailSubject}</span>}
                       </Link>
                     </Td>
-                    <Td className="whitespace-nowrap py-1.5 text-right text-xs text-muted tabular-nums">
+                    <Td className="py-2">
+                      <CategorySelect attachmentId={r.id} current={r.category} />
+                    </Td>
+                    <Td className="py-2 text-xs text-muted">{r.supplierTag ?? "—"}</Td>
+                    <Td className="whitespace-nowrap py-2 text-right text-xs text-muted tabular-nums">
                       {formatBytes(r.sizeBytes)}
                     </Td>
                   </Tr>
