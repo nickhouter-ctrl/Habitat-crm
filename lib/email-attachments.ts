@@ -73,10 +73,12 @@ const CATEGORY_RULES: Array<{ cat: AttachmentCategory; test: (ctx: CategorizeCtx
       // Sterke tekst-signalen: AEAT / Aduana / declaración aduanera
       /agencia\s*aduanera|declaraci[oó]n\s*aduanera|aeat\s*despacho/i.test(c.allText) },
 
-  // Teresa commissie (Spanje) — eerst, want vaak verkleurd onder andere
+  // Teresa commissie + MARTRM transport-tak (Spanje) — eerst, want filenames
+  // matchen anders fout met supplier-invoice patroon
   { cat: "agent-fee-spain", test: (c) =>
-      /españa\s*trading|tborras|etrading\.tborras/i.test(c.fromEmail + " " + c.allText) ||
-      /^Factura\s+(25|26)5\d{5}/i.test(c.filename) },
+      /^FACTURA_MARTRM-F[A-Z]+\d+/i.test(c.filename) ||
+      /^Factura\s+(25|26)5\d{5}/i.test(c.filename) ||
+      /españa\s*trading|tborras|etrading\.tborras/i.test(c.fromEmail + " " + c.allText) },
 
   // Allpack handling-fee (China) — handling costs CI. Filename met
   // 'handling cost' → altijd Allpack, ongeacht afzender.

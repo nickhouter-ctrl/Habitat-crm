@@ -78,7 +78,13 @@ function classify(filename: string, fromEmail: string, fromName: string): Cat | 
     return "opex";
   }
 
-  // 4. Allpack handling-fee — EERST want "CI-MS... -handling costs" moet hier landen
+  // 4a. Teresa's MARTRM-facturen (haar transport/douane-tak in Spanje) — vóór
+  // supplier-invoice want filename matcht anders fout
+  if (/^FACTURA_MARTRM-F[A-Z]+\d+/i.test(fn)) {
+    return "agent-fee-spain";
+  }
+
+  // 4b. Allpack handling-fee — EERST want "CI-MS... -handling costs" moet hier landen
   // niet bij supplier-invoice
   if (/handling[\s-]*costs?|handling[\s-]*fee/i.test(fn)) {
     return "agent-fee-china";
@@ -86,7 +92,6 @@ function classify(filename: string, fromEmail: string, fromName: string): Cat | 
 
   // 5. Supplier invoice — factory CIs (zelfs als ze via Allpack/Teresa zijn doorgestuurd)
   if (
-    /^FACTURA_MARTRM-F[A-Z]+\d+/i.test(fn) ||
     /^CI[\s-]*33#?kkr.*without/i.test(fn) ||
     /^CI[\s-]*MS\d+.*XBY|^CI-MS\d{6,}\.xls/i.test(fn) ||
     /^CI[\s-]*HL\d+|^CI[\s-]*YH\d+/i.test(fn) ||
