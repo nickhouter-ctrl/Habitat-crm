@@ -23,6 +23,7 @@ export async function mailPricelist(formData: FormData) {
   const category = String(formData.get("category") ?? "");
   const onlyActive = formData.get("onlyActive") === "on";
   const onlyWithPrice = formData.get("onlyWithPrice") === "on";
+  const audience = String(formData.get("audience") ?? "") === "trade" ? "trade" : "particulier";
   const langParam = String(formData.get("lang") ?? "nl");
   const locale: PricelistLocale = LOCALES.includes(langParam as PricelistLocale) ? (langParam as PricelistLocale) : "nl";
 
@@ -60,18 +61,19 @@ export async function mailPricelist(formData: FormData) {
     thicknessMm: p.thicknessMm ?? null,
     additionalSizes: (p.additionalSizes as Array<{ sku: string; label: string }> | null) ?? null,
     unit: p.unit ?? null,
-    priceEur: p.priceEur ?? null,
+    priceEur: audience === "trade" ? (p.tradePriceEur ?? p.priceEur ?? null) : (p.priceEur ?? null),
     vatRate: p.vatRate ?? 21,
     group: ((groupBy === "category" ? p.category : p.collection) ?? "Overige").trim(),
   }));
 
   const subtitleParts: string[] = [];
+  if (audience === "trade") subtitleParts.push("Aannemers / architecten");
   if (collection) subtitleParts.push(`Collectie: ${collection}`);
   if (category) subtitleParts.push(`Categorie: ${category}`);
   const subtitle = subtitleParts.length ? subtitleParts.join(" · ") : null;
 
   const pdf = await renderPricelistPdf({ items, subtitle, locale });
-  const filename = `habitat-one-prijslijst-${locale}-${collection || "alles"}.pdf`.replace(/[^a-z0-9.-]/gi, "-").toLowerCase();
+  const filename = `habitat-one-prijslijst-${audience === "trade" ? "trade-" : ""}${locale}-${collection || "alles"}.pdf`.replace(/[^a-z0-9.-]/gi, "-").toLowerCase();
 
   const html = `
     <p>Beste ${contact.name ?? ""},</p>

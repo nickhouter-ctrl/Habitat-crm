@@ -111,6 +111,12 @@ export default async function PrijslijstPage({
 function FiltersInputs({ collections, categories }: { collections: string[]; categories: string[] }) {
   return (
     <>
+      <Field label="Doelgroep / prijsniveau" htmlFor="audience">
+        <Select id="audience" name="audience" defaultValue="particulier">
+          <option value="particulier">👤 Particulier — showroomprijs</option>
+          <option value="trade">🔨 Aannemer / architect — B2B-prijs</option>
+        </Select>
+      </Field>
       <Field label="Taal van de PDF" htmlFor="lang">
         <Select id="lang" name="lang" defaultValue="nl">
           <option value="nl">🇳🇱 Nederlands</option>
