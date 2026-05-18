@@ -49,6 +49,7 @@ const SUPPLIER_PATTERNS: Array<{
   { tag: "Teresa (ES agent)", isAgent: true, weak: [/españa\s*trading/i, /tborras/i, /etrading\.tborras/i] },
   // 3. Transport / douane / overheid (sterk signaal want eigen merknaam)
   { tag: "Alianza (transport)", strong: [/23T[\/_-][AC][_-]?\d/i, /galadtrans/i, /@alianza-gt/i], weak: [/alianza/i] },
+  { tag: "Oper-Traimer (transport ES)", strong: [/^FACTURA_MARTRM-F[A-Z]+\d+/i, /oper[-\s]*traimer/i], weak: [/A83205815/i] },
   { tag: "Gomez Macias (douane-agent)", weak: [/gomez\s*macias/i, /\bgmcargo\b/i] },
   { tag: "Spanish Tax Agency", weak: [/agenciatributaria/i, /agencia\s*tributaria/i] },
   { tag: "Banco Sabadell", weak: [/sabadell/i, /bsabesbb/i] },
@@ -73,12 +74,17 @@ const CATEGORY_RULES: Array<{ cat: AttachmentCategory; test: (ctx: CategorizeCtx
       // Sterke tekst-signalen: AEAT / Aduana / declaración aduanera
       /agencia\s*aduanera|declaraci[oó]n\s*aduanera|aeat\s*despacho/i.test(c.allText) },
 
-  // Teresa commissie + MARTRM transport-tak (Spanje) — eerst, want filenames
-  // matchen anders fout met supplier-invoice patroon
+  // Teresa commissie (Spanje) — alleen haar eigen Factura 26500xxx files
   { cat: "agent-fee-spain", test: (c) =>
-      /^FACTURA_MARTRM-F[A-Z]+\d+/i.test(c.filename) ||
       /^Factura\s+(25|26)5\d{5}/i.test(c.filename) ||
-      /españa\s*trading|tborras|etrading\.tborras/i.test(c.fromEmail + " " + c.allText) },
+      (/españa\s*trading|tborras|etrading\.tborras/i.test(c.fromEmail) &&
+       !/FACTURA_MARTRM/i.test(c.filename)) },
+
+  // OPER-TRAIMER S.A. (Madrid) — Spaanse vrachtagent. FACTURA_MARTRM-F* zijn
+  // hun zeevracht-facturen. NIET Teresa, NIET de Chinese leverancier.
+  { cat: "freight-invoice", test: (c) =>
+      /^FACTURA_MARTRM-F[A-Z]+\d+/i.test(c.filename) ||
+      /oper[-\s]*traimer/i.test(c.allText + " " + c.fromEmail) },
 
   // Allpack handling-fee (China) — handling costs CI. Filename met
   // 'handling cost' → altijd Allpack, ongeacht afzender.

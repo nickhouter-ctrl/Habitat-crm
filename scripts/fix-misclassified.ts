@@ -78,10 +78,10 @@ function classify(filename: string, fromEmail: string, fromName: string): Cat | 
     return "opex";
   }
 
-  // 4a. Teresa's MARTRM-facturen (haar transport/douane-tak in Spanje) — vóór
-  // supplier-invoice want filename matcht anders fout
+  // 4a. OPER-TRAIMER S.A. (Spaanse vrachtagent uit Madrid) — facturen
+  // FACTURA_MARTRM-F*. NIET Teresa, maar een aparte transport-agent.
   if (/^FACTURA_MARTRM-F[A-Z]+\d+/i.test(fn)) {
-    return "agent-fee-spain";
+    return "freight-invoice";
   }
 
   // 4b. Allpack handling-fee — EERST want "CI-MS... -handling costs" moet hier landen
