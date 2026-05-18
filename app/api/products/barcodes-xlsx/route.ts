@@ -54,7 +54,9 @@ export async function GET(req: Request) {
   // Lees template
   const templatePath = join(process.cwd(), "lib", "gs1", "template.xlsx");
   const buf = await readFile(templatePath);
-  const wb = XLSX.read(buf, { type: "buffer" });
+  // cellStyles+bookVBA behoudt kolombreedtes, kleurmarkeringen en data-validatie
+  // dropdowns van het oorspronkelijke GS1-template.
+  const wb = XLSX.read(buf, { type: "buffer", cellStyles: true, bookVBA: true });
 
   const sheetName = "Importación con GTIN";
   const ws = wb.Sheets[sheetName];
@@ -100,7 +102,7 @@ export async function GET(req: Request) {
   const lastCol = 59; // 60 kolommen totaal (A..BH)
   ws["!ref"] = XLSX.utils.encode_range({ s: { r: 0, c: 0 }, e: { r: Math.max(lastRow, 5), c: lastCol } });
 
-  const out = XLSX.write(wb, { type: "buffer", bookType: "xlsx" });
+  const out = XLSX.write(wb, { type: "buffer", bookType: "xlsx", cellStyles: true });
   const filename = `habitat-one-gs1${since ? `-vanaf-${since}` : ""}.xlsx`;
 
   return new NextResponse(out as unknown as BodyInit, {
