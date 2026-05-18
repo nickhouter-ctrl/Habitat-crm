@@ -5,8 +5,10 @@ import { redirect } from "next/navigation";
 import { eq, sql } from "drizzle-orm";
 
 import { auth } from "@/auth";
+import { extractAttachmentAmount } from "@/lib/amount-extract";
 import { db } from "@/lib/db";
-import { activities, emailInbox, purchaseOrders, quoteRequests } from "@/lib/db/schema";
+import { activities, emailInbox, mailAttachments, purchaseOrders, quoteRequests } from "@/lib/db/schema";
+import { pushPurchaseOrderToHolded } from "@/lib/holded/sync";
 
 async function requireUser() {
   const session = await auth();
@@ -103,6 +105,107 @@ export async function saveMailNotes(emailId: string, notes: string) {
     .set({ notes, updatedAt: new Date() })
     .where(eq(emailInbox.id, emailId));
   revalidatePath(`/inbox/${emailId}`);
+}
+
+/**
+ * Maak een inkoopfactuur uit een mail-bijlage en push 'm naar Holded.
+ * - Probeert bedrag te extraheren via amount-extract (PDF/Excel)
+ * - Maakt nieuwe purchase_orders row met status='received' (factuur ontvangen)
+ * - Linkt de mail aan deze PO
+ * - Best-effort push naar Holded — laat lokale PO bestaan als push faalt
+ */
+export async function createPurchaseInvoiceFromMail(args: {
+  emailId: string;
+  attachmentId: string;
+  /** Override: supplier / reference / amount als de extractie iets verkeerd haalt */
+  override?: { supplier?: string; reference?: string; total?: number };
+}): Promise<{ purchaseOrderId: string; holdedId: string | null; total: number; holdedError?: string }> {
+  const user = await requireUser();
+
+  const mail = await db.query.emailInbox.findFirst({ where: eq(emailInbox.id, args.emailId) });
+  if (!mail) throw new Error("Mail niet gevonden");
+
+  const att = await db.query.mailAttachments.findFirst({ where: eq(mailAttachments.id, args.attachmentId) });
+  if (!att) throw new Error("Bijlage niet gevonden");
+
+  // 1. Probeer bedrag uit PDF/Excel te halen
+  let total = args.override?.total ?? 0;
+  if (total <= 0) {
+    const extracted = att.amountEur ? Number(att.amountEur) : await extractAttachmentAmount({
+      storagePath: att.storagePath,
+      filename: att.filename,
+      contentType: att.contentType ?? "",
+    });
+    if (extracted && extracted > 0) total = extracted;
+  }
+
+  const supplier =
+    args.override?.supplier ??
+    att.supplierTag ??
+    mail.fromName ??
+    mail.fromEmail ??
+    "Onbekende leverancier";
+
+  // Probeer factuurnummer uit filename te halen — anders fallback naar filename
+  const refMatch = att.filename.match(/(?:FAC[_-]?|Factura[_\s]*|Invoice[_\s]*)([\w\d-]+)/i);
+  const reference = args.override?.reference ?? (refMatch?.[1] ?? att.filename.replace(/\.[a-z]+$/i, ""));
+
+  // 2. Insert lokaal — 'received' = factuur ontvangen, voorraad-onafhankelijk
+  const [po] = await db
+    .insert(purchaseOrders)
+    .values({
+      supplier,
+      reference,
+      status: "received",
+      currency: "EUR",
+      orderDate: (att.receivedAt ?? mail.receivedAt ?? new Date()).toISOString().slice(0, 10),
+      receivedAt: att.receivedAt ?? mail.receivedAt ?? new Date(),
+      total: String(total.toFixed(2)),
+      items: [
+        {
+          name: mail.subject ?? `Factuur ${reference}`,
+          units: 1,
+          unitPrice: total,
+          sku: null,
+          productId: null,
+          note: `Bron: ${att.filename}`,
+        },
+      ],
+      notes: `Aangemaakt uit mail ${mail.subject ?? ""} (${mail.fromEmail ?? ""}). Bijlage: ${att.filename}`,
+      stockAppliedAt: new Date(), // markeer dat we GEEN voorraad bijwerken
+    })
+    .returning({ id: purchaseOrders.id });
+
+  // 3. Link mail → PO
+  await db
+    .update(emailInbox)
+    .set({ linkedPurchaseOrderId: po.id, status: "linked", updatedAt: new Date() })
+    .where(eq(emailInbox.id, args.emailId));
+
+  // 4. Activity log
+  await db.insert(activities).values({
+    type: "note",
+    subject: `Inkoopfactuur aangemaakt: ${supplier} ${reference}`,
+    body: `Bedrag: €${total.toFixed(2)}\nBron: ${att.filename}\nMail: ${mail.subject ?? ""}`,
+    authorId: user.id,
+  });
+
+  // 5. Best-effort push naar Holded
+  let holdedId: string | null = null;
+  let holdedError: string | undefined;
+  try {
+    holdedId = await pushPurchaseOrderToHolded(po.id);
+  } catch (e) {
+    holdedError = e instanceof Error ? e.message : String(e);
+    console.error("[createPurchaseInvoiceFromMail] Holded push failed:", holdedError);
+  }
+
+  revalidatePath("/inbox");
+  revalidatePath(`/inbox/${args.emailId}`);
+  revalidatePath("/inkooporders");
+  revalidatePath(`/inkooporders/${po.id}`);
+
+  return { purchaseOrderId: po.id, holdedId, total, holdedError };
 }
 
 /** Handmatig polling triggeren — handig om niet 15 min te wachten op cron. */

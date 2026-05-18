@@ -1,5 +1,5 @@
 import { asc, desc, eq, ilike, or } from "drizzle-orm";
-import { ArrowLeft, Archive, Download, Link2, Mail, Paperclip, RotateCcw } from "lucide-react";
+import { ArrowLeft, Archive, Download, FileText, Link2, Mail, Paperclip, Receipt, RotateCcw } from "lucide-react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
@@ -11,6 +11,7 @@ import { cn, formatEUR } from "@/lib/utils";
 
 import {
   archiveMail,
+  createPurchaseInvoiceFromMail,
   linkMailToPurchaseOrder,
   linkMailToQuoteRequest,
   reopenMail,
@@ -150,34 +151,64 @@ export default async function MailDetailPage({ params }: { params: Promise<{ id:
                 Bijlagen ({storedAttachments.length})
               </p>
               <ul className="space-y-1">
-                {storedAttachments.map((a) => (
-                  <li key={a.id} className="group flex items-center gap-2 rounded-md px-2 py-1.5 text-sm hover:bg-background-soft">
-                    <Paperclip className="h-3.5 w-3.5 shrink-0 text-muted" />
-                    <Link
-                      href={`/api/archief/${a.id}`}
-                      target="_blank"
-                      className="min-w-0 flex-1 truncate font-medium hover:underline"
-                      title={a.filename}
-                    >
-                      {a.filename}
-                    </Link>
-                    <span className="hidden text-xs text-muted md:inline">
-                      {CATEGORIES[a.category as keyof typeof CATEGORIES] ?? a.category}
-                    </span>
-                    <span className="text-xs tabular-nums text-muted">
-                      {a.sizeBytes ? `${(a.sizeBytes / 1024).toFixed(0)} kB` : ""}
-                    </span>
-                    <Link
-                      href={`/api/archief/${a.id}`}
-                      target="_blank"
-                      className="rounded p-1 text-muted opacity-0 transition-opacity hover:bg-background hover:text-foreground group-hover:opacity-100"
-                      title="Download"
-                    >
-                      <Download className="h-3.5 w-3.5" />
-                    </Link>
-                  </li>
-                ))}
+                {storedAttachments.map((a) => {
+                  // Is dit een financiële bijlage waar 'Maak inkoopfactuur' zinvol is?
+                  const isInvoiceCandidate =
+                    !linkedPO &&
+                    ["supplier-invoice", "freight-invoice", "agent-fee-china", "agent-fee-spain", "opex"].includes(
+                      a.category,
+                    );
+                  return (
+                    <li key={a.id} className="group flex flex-wrap items-center gap-2 rounded-md px-2 py-1.5 text-sm hover:bg-background-soft">
+                      <Paperclip className="h-3.5 w-3.5 shrink-0 text-muted" />
+                      <Link
+                        href={`/api/archief/${a.id}`}
+                        target="_blank"
+                        className="min-w-0 flex-1 truncate font-medium hover:underline"
+                        title={a.filename}
+                      >
+                        {a.filename}
+                      </Link>
+                      <span className="hidden text-xs text-muted md:inline">
+                        {CATEGORIES[a.category as keyof typeof CATEGORIES] ?? a.category}
+                      </span>
+                      <span className="text-xs tabular-nums text-muted">
+                        {a.sizeBytes ? `${(a.sizeBytes / 1024).toFixed(0)} kB` : ""}
+                      </span>
+                      <Link
+                        href={`/api/archief/${a.id}`}
+                        target="_blank"
+                        className="rounded p-1 text-muted opacity-0 transition-opacity hover:bg-background hover:text-foreground group-hover:opacity-100"
+                        title="Download"
+                      >
+                        <Download className="h-3.5 w-3.5" />
+                      </Link>
+                      {isInvoiceCandidate && (
+                        <form
+                          action={async () => {
+                            "use server";
+                            await createPurchaseInvoiceFromMail({
+                              emailId: mail.id,
+                              attachmentId: a.id,
+                            });
+                          }}
+                        >
+                          <button
+                            type="submit"
+                            className="rounded-md bg-accent/10 px-2 py-1 text-xs font-medium text-accent hover:bg-accent/20"
+                            title="Inkoopfactuur aanmaken + naar Holded sturen"
+                          >
+                            <Receipt className="mr-1 inline h-3 w-3" /> Inkoopfactuur
+                          </button>
+                        </form>
+                      )}
+                    </li>
+                  );
+                })}
               </ul>
+              <p className="mt-2 text-xs text-muted">
+                Klik <Receipt className="inline h-3 w-3" /> bij een factuur → maakt inkoopfactuur in CRM + pusht naar Holded.
+              </p>
             </div>
           ) : metaAttachments.length > 0 ? (
             <div className="border-t border-border pt-3">
