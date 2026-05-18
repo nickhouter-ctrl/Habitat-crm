@@ -8,6 +8,8 @@ import { emailInbox, mailAttachments } from "@/lib/db/schema";
 import { CATEGORIES, type AttachmentCategory } from "@/lib/email-attachments";
 import { cn } from "@/lib/utils";
 
+import { CategorySelect } from "./category-select";
+
 export const metadata = { title: "Archief — bijlagen" };
 export const dynamic = "force-dynamic";
 
@@ -214,10 +216,8 @@ export default async function ArchiefPage({
                     </Link>
                     <span className="text-xs text-muted">{r.contentType}</span>
                   </Td>
-                  <Td className="whitespace-nowrap text-xs">
-                    <Badge tone="neutral">
-                      {CATEGORY_ICONS[r.category]} {CATEGORIES[r.category as AttachmentCategory] ?? r.category}
-                    </Badge>
+                  <Td className="min-w-[14rem] text-xs">
+                    <CategorySelect attachmentId={r.id} current={r.category} />
                   </Td>
                   <Td className="text-xs text-muted">{r.supplierTag ?? "—"}</Td>
                   <Td className="max-w-[24rem] text-xs">
