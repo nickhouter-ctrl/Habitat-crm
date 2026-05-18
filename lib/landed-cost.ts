@@ -197,11 +197,18 @@ export const SHIPMENT_REF_PATTERNS = [
   /\bZMI\d{6,}/i,                      // Galadtrans/Alianza shipment IDs
   /\bYMMU\d{6,}/i,                     // Yang Ming container numbers
   /\bYMJAM\d{6,}/i,                    // Yang Ming Master BL
-  /\bYHES\d+-?ZYX\d+/i,                // Yohome invoice ref
-  /\b33#kkr\d+lxm/i,                   // KKR invoice ref
-  /\bMS\d{8}-XBY/i,                    // Magic Stone CI ref
-  /\bDM\d{10}/i,                       // Customs document ref
+  /\bYHES\d+[-_]?ZYX\d+/i,              // Yohome invoice ref
+  /\bYHES\d{6,}/i,                     // Yohome short
+  /33#kkr\d{6,}[a-z]*/i,                // KKR invoice ref (with optional suffix)
+  /kkr\d{6,}[a-z]+/i,                  // KKR shorter
+  /\bMS\d{8}[-_]XBY/i,                 // Magic Stone CI ref
+  /\bMS\d{8}/i,                        // Magic Stone short
+  /\bDM\d{10,}/i,                      // Customs doc ref
   /\b26ES\d{6}I\d{2}[A-Z]+\d+/i,       // Spanish DUA MRN
+  /\b23T[\/_-][AC][_-]?\d{8,}/i,        // Alianza factuurnummer
+  /\bHN-K-20\d{6}-S-PL/i,               // Hebei Zengyi XPS
+  /\bHANH\d{8,}/i,                     // Foshan Hanhai
+  /\bKY086-\d{4,}/i,                   // Foshan Keyi
 ];
 
 /** Extract shipment-refs uit een tekst. */

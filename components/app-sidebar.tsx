@@ -38,6 +38,7 @@ const NAV = [
   { href: "/products", label: "Producten", icon: Boxes },
   { href: "/prijslijst", label: "Prijslijst", icon: Tag },
   { href: "/inkooporders", label: "Inkooporders", icon: PackagePlus },
+  { href: "/shipments", label: "Shipments", icon: Boxes },
   { href: "/quotes", label: "Offertes", icon: FileText },
   { href: "/invoices", label: "Facturen", icon: Receipt },
   { href: "/pakbonnen", label: "Pakbonnen", icon: Truck },
