@@ -6,7 +6,11 @@ import { createClient } from "@supabase/supabase-js";
 
 import { db } from "@/lib/db";
 import { mailAttachments } from "@/lib/db/schema";
+import { CATEGORIES, type AttachmentCategory } from "@/lib/email-categories";
 import type { ParsedAttachment, ParsedEmail } from "@/lib/gmail";
+
+export { CATEGORIES };
+export type { AttachmentCategory };
 
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -16,19 +20,6 @@ function supabase() {
   if (!SUPABASE_URL || !SERVICE_KEY) throw new Error("Supabase env vars missing");
   return createClient(SUPABASE_URL, SERVICE_KEY, { auth: { persistSession: false } });
 }
-
-export const CATEGORIES = {
-  "supplier-invoice": "Factuur leverancier (Yohome/KKR/MS)",
-  "agent-fee-china": "Allpack handling (China)",
-  "agent-fee-spain": "Teresa commissie (Spanje)",
-  "freight-invoice": "Vrachtfactuur (Alianza)",
-  "customs-dua": "DUA / Douane",
-  "bank-statement": "Bankafschrift",
-  "quote-proforma": "Offerte / Proforma",
-  "certificate": "Certificaat (CE/CITES)",
-  "other": "Overig",
-} as const;
-export type AttachmentCategory = keyof typeof CATEGORIES;
 
 /**
  * Suppliers worden in volgorde gecheckt — **echte leveranciers eerst**, daarna

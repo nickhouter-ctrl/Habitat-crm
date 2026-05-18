@@ -2,7 +2,7 @@
 
 import { useTransition } from "react";
 
-import { CATEGORIES } from "@/lib/email-attachments";
+import { CATEGORIES } from "@/lib/email-categories";
 import { updateAttachmentCategory } from "./actions";
 
 const CATEGORY_KEYS = Object.keys(CATEGORIES) as Array<keyof typeof CATEGORIES>;
