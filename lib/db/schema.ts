@@ -324,7 +324,11 @@ export const products = pgTable(
     category: text(), // e.g. "Italian Travertine", "Magic Stone" — the product family
     subcategory: text(),
     unit: text(), // "m²", "stuk", "m", "uur", ...
-    priceEur: numeric({ precision: 14, scale: 4 }), // default sales price, ex. VAT — 4 decimalen voor exacte BTW-roundtrip (× 1.21 → ronde .95 incl)
+    priceEur: numeric({ precision: 14, scale: 4 }), // showroom-prijs voor particulieren, ex. VAT
+    /** Aannemers-/architectenprijs (B2B), ex. VAT. Doorgaans ~20% lager dan
+     * priceEur, maar per product instelbaar. Wordt gebruikt wanneer een offerte/
+     * factuur wordt aangemaakt met klanttype = aannemer. */
+    tradePriceEur: numeric({ precision: 14, scale: 4 }),
     vatRate: integer().notNull().default(21), // default IVA % for this product
     // Landed-cost breakdown (per unit) — China imports etc.:
     purchaseCostEur: numeric({ precision: 14, scale: 2 }), // inkoopprijs (bv. uit China)

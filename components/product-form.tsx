@@ -32,6 +32,7 @@ export function ProductForm({
     | "subcategory"
     | "unit"
     | "priceEur"
+    | "tradePriceEur"
     | "vatRate"
     | "purchaseCostEur"
     | "freightCostEur"
@@ -155,7 +156,7 @@ export function ProductForm({
               </Select>
             </Field>
             <Field
-              label="Verkoopprijs €/eenh. (ex. BTW)"
+              label="Showroom-prijs (particulier, ex. BTW)"
               htmlFor="priceEur"
               hint={
                 product?.priceEur && product?.vatRate
@@ -179,6 +180,29 @@ export function ProductForm({
                 <option value="4">4%</option>
                 <option value="0">0%</option>
               </Select>
+            </Field>
+          </div>
+
+          <div className="grid gap-4 sm:grid-cols-3">
+            <Field
+              label="Aannemers-prijs (B2B, ex. BTW)"
+              htmlFor="tradePriceEur"
+              hint={
+                product?.tradePriceEur && product?.vatRate
+                  ? `Incl ${product.vatRate}% BTW: € ${(Number(product.tradePriceEur) * (1 + Number(product.vatRate) / 100)).toFixed(2)} · leeg = particulier-prijs ook voor aannemer`
+                  : "Leeg = aannemer betaalt showroomprijs · typisch 80% van particulierprijs"
+              }
+              className="sm:col-span-2"
+            >
+              <Input
+                id="tradePriceEur"
+                name="tradePriceEur"
+                type="number"
+                step="0.0001"
+                min="0"
+                defaultValue={product?.tradePriceEur ?? ""}
+                placeholder="bv. 20.6198"
+              />
             </Field>
           </div>
 

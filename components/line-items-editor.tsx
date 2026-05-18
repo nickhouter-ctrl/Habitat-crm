@@ -75,15 +75,23 @@ export function LineItemsEditor({
       : [emptyRow()],
   );
 
+  // Klanttype bepaalt welke prijs we trekken uit de productcatalogus.
+  // 'particulier' = showroom-prijs (priceEur); 'aannemer' = B2B (tradePriceEur,
+  // valt terug op priceEur als die leeg is).
+  const [audience, setAudience] = useState<"particulier" | "aannemer">("particulier");
+
   const totals = computeTotals(rows.map(rowToItem).filter((r) => r.name.length > 0));
   const costById = new Map(products.map((p) => [p.id, p.costEur != null ? Number(p.costEur) : null]));
+
+  const priceFor = (p: { priceEur: string | null; tradePriceEur: string | null }) =>
+    audience === "aannemer" && p.tradePriceEur ? p.tradePriceEur : p.priceEur;
 
   const productOptions: ComboOption[] = products.map((p) => ({
     value: p.id,
     // SKU vooraan zodat je 'm kunt typen om te zoeken
     label: p.sku ? `${p.sku} — ${p.name}` : p.name,
     group: p.category?.trim() || "Overig",
-    hint: p.priceEur ? formatEUR(p.priceEur) : undefined,
+    hint: priceFor(p) ? formatEUR(priceFor(p)!) : undefined,
   }));
 
   const patchRow = (i: number, patch: Partial<Row>) =>
@@ -99,7 +107,7 @@ export function LineItemsEditor({
       name: p.name,
       description: p.category ? p.category : "",
       units: "1",
-      price: p.priceEur ?? "",
+      price: priceFor(p) ?? "",
       discount: "0",
       taxRate: String(p.vatRate ?? 21),
       category: "materiaal",
@@ -151,7 +159,33 @@ export function LineItemsEditor({
       />
 
       <div className="flex flex-wrap items-end justify-between gap-3">
-        <h3 className="text-sm font-semibold">Regels</h3>
+        <div className="flex items-center gap-3">
+          <h3 className="text-sm font-semibold">Regels</h3>
+          <div className="flex items-center overflow-hidden rounded-md border border-border text-xs">
+            <button
+              type="button"
+              onClick={() => setAudience("particulier")}
+              className={cn(
+                "px-3 py-1.5",
+                audience === "particulier" ? "bg-accent/15 font-medium text-accent" : "hover:bg-background-soft",
+              )}
+              title="Showroom-prijzen voor particulieren"
+            >
+              👤 Particulier
+            </button>
+            <button
+              type="button"
+              onClick={() => setAudience("aannemer")}
+              className={cn(
+                "border-l border-border px-3 py-1.5",
+                audience === "aannemer" ? "bg-accent/15 font-medium text-accent" : "hover:bg-background-soft",
+              )}
+              title="Aannemers-/architectenprijs (~20% lager)"
+            >
+              🔨 Aannemer
+            </button>
+          </div>
+        </div>
         <div className="flex flex-wrap items-center gap-2">
           {products.length > 0 && (
             <div className="w-64">
