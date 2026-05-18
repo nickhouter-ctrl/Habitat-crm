@@ -1,4 +1,4 @@
-import { desc } from "drizzle-orm";
+import { desc, isNull, sql } from "drizzle-orm";
 import Link from "next/link";
 
 import {
@@ -20,6 +20,8 @@ import { purchaseOrders } from "@/lib/db/schema";
 import { formatMoney, PO_OPEN_STATUSES, PO_STATUS_META } from "@/lib/purchase-orders";
 import { formatEUR } from "@/lib/utils";
 
+import { SyncHoldedButton } from "./sync-holded-button";
+
 export const metadata = { title: "Inkooporders" };
 
 const fmtDate = (d: string | null) =>
@@ -31,6 +33,8 @@ export default async function PurchaseOrdersPage() {
     .from(purchaseOrders)
     .orderBy(desc(purchaseOrders.orderDate), desc(purchaseOrders.createdAt))
     .limit(2000);
+
+  const pendingHolded = rows.filter((r) => !r.holdedId).length;
 
   const eurRows = rows.filter((r) => (r.currency ?? "EUR") === "EUR");
   // Aggregaten zonder concept-facturen.
@@ -53,7 +57,12 @@ export default async function PurchaseOrdersPage() {
           `${rows.length} ${rows.length === 1 ? "bestelling/aankoop" : "bestellingen/aankopen"} — incl. aankoopfacturen uit Holded` +
           (nonEur.length ? ` · ${nonEur.length} in vreemde valuta (niet in het totaal)` : "")
         }
-        actions={<LinkButton href="/inkooporders/new">Nieuwe bestelling</LinkButton>}
+        actions={
+          <>
+            <SyncHoldedButton pendingCount={pendingHolded} />
+            <LinkButton href="/inkooporders/new">Nieuwe bestelling</LinkButton>
+          </>
+        }
       />
 
       {rows.length > 0 && (

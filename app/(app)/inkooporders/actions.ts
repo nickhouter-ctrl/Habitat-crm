@@ -187,6 +187,34 @@ export async function pushPurchaseOrderToHolded(id: string) {
 }
 
 /**
+ * Push alle inkooporders die nog geen Holded-id hebben in 1 batch.
+ * Stopt niet bij fouten — verzamelt resultaten en geeft samenvatting terug.
+ */
+export async function pushAllPendingToHolded(): Promise<{ pushed: number; failed: number; errors: string[] }> {
+  await requireUser();
+  const pending = await db
+    .select({ id: purchaseOrders.id, supplier: purchaseOrders.supplier, reference: purchaseOrders.reference })
+    .from(purchaseOrders)
+    .where(sql`${purchaseOrders.holdedId} IS NULL`);
+
+  let pushed = 0;
+  let failed = 0;
+  const errors: string[] = [];
+  for (const p of pending) {
+    try {
+      await syncPushToHolded(p.id);
+      pushed++;
+    } catch (e) {
+      failed++;
+      errors.push(`${p.supplier} ${p.reference ?? ""}: ${e instanceof Error ? e.message : String(e)}`);
+    }
+  }
+  revalidatePath("/inkooporders");
+  revalidatePath("/");
+  return { pushed, failed, errors };
+}
+
+/**
  * Maak een nieuw product aan op basis van een regel uit deze inkooporder en
  * koppel de regel meteen aan dat product. SKU = volgende oplopende code voor
  * de gegeven prefix (default "MS" — onze Magic Stone-reeks).

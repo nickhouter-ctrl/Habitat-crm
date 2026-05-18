@@ -32,6 +32,7 @@ const CATEGORY_ICONS: Record<string, string> = {
   "freight-invoice": "🚛",
   "customs-dua": "📋",
   "opex": "🏢",
+  "contractor": "🔨",
   "bank-statement": "🏦",
   "quote-proforma": "📝",
   "certificate": "📜",

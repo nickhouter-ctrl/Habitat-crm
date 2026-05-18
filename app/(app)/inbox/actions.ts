@@ -166,8 +166,6 @@ export async function createPurchaseInvoiceFromMail(args: {
           name: mail.subject ?? `Factuur ${reference}`,
           units: 1,
           unitPrice: total,
-          sku: null,
-          productId: null,
           note: `Bron: ${att.filename}`,
         },
       ],

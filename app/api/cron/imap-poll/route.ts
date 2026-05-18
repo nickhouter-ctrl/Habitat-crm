@@ -10,6 +10,7 @@ import { sql } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { emailInbox, emailSyncState, mailAttachments } from "@/lib/db/schema";
 import { autoLinkEmail } from "@/lib/auto-link";
+import { tryAutoCreatePurchaseInvoice } from "@/lib/auto-purchase-invoice";
 import { extractAttachmentAmount } from "@/lib/amount-extract";
 import { storeMailAttachments } from "@/lib/email-attachments";
 import { fetchNewMails } from "@/lib/gmail";
@@ -35,6 +36,8 @@ export async function GET(req: Request) {
     let inserted = 0;
     let duplicates = 0;
     let attachmentsStored = 0;
+    let invoicesAutoCreated = 0;
+    let invoicesNeedReview = 0;
     for (const m of mails) {
       try {
         // Eerst email-row maken (alleen metadata, geen content)
@@ -103,6 +106,15 @@ export async function GET(req: Request) {
           } catch (e: any) {
             console.error(`Auto-link fail voor ${m.subject}:`, e?.message);
           }
+
+          // Auto-aanmaak inkoopfactuur als er een financiële bijlage is
+          try {
+            const r = await tryAutoCreatePurchaseInvoice(row.id);
+            invoicesAutoCreated += r.created;
+            invoicesNeedReview += r.needsReview;
+          } catch (e: any) {
+            console.error(`Auto-invoice fail voor ${m.subject}:`, e?.message);
+          }
         }
       } catch (e: any) {
         if (e?.code === "23505") {
@@ -140,6 +152,8 @@ export async function GET(req: Request) {
       inserted,
       duplicates,
       attachmentsStored,
+      invoicesAutoCreated,
+      invoicesNeedReview,
     });
   } catch (e: any) {
     // Log error in state-tabel zodat we 't kunnen zien in /inbox

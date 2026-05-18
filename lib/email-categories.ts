@@ -9,6 +9,7 @@ export const CATEGORIES = {
   "freight-invoice": "Vracht",
   "customs-dua": "Douane",
   "opex": "Bedrijfskosten",
+  "contractor": "Aannemer",
   "bank-statement": "Bank",
   "quote-proforma": "Offerte",
   "certificate": "Certificaat",

@@ -119,9 +119,16 @@ const CATEGORY_RULES: Array<{ cat: AttachmentCategory; test: (ctx: CategorizeCtx
       /sabadell|caixabank|bbva|santander/i.test(c.fromEmail) ||
       /extracto.*cuenta|bank.*statement|account.*statement|posición\s+global/i.test(c.allText) },
 
-  // Bedrijfskosten — loods-huur, elektriciteit, water, Csaba-installateurs,
-  // forklift-rental, Google Workspace, verzekeringen, AECOC, juridisch,
-  // trademark, JYSK (kantoormeubels)
+  // Aannemer — Csaba (Hongaarse aannemer voor installaties/renovaties op
+  // diverse locaties: Benissa, Costa Nova, Oliva, warehouse). Aparte categorie
+  // want bouwkosten ≠ vaste lasten.
+  { cat: "contractor", test: (c) =>
+      /csaba/i.test(c.fromName + " " + c.fromEmail) ||
+      /^INVOICE\s+A1[2-6][0-9].*(WAREHOUSE|BENISSA|COSTA\s*NOVA|OLIVA)/i.test(c.filename) ||
+      /works[_\s]*costs[_\s]*summary/i.test(c.filename) },
+
+  // Bedrijfskosten — loods-huur, elektriciteit, water, forklift-rental, Google
+  // Workspace, verzekeringen, AECOC, juridisch, trademark, JYSK
   { cat: "opex", test: (c) => {
       const t = c.allText + " " + c.filename;
       const f = c.fromName + " " + c.fromEmail;
@@ -139,9 +146,7 @@ const CATEGORY_RULES: Array<{ cat: AttachmentCategory; test: (ctx: CategorizeCtx
         // Verzekering
         /\bseguro|verzekering|p[oó]liza|insurance.*habitat|D&O/i.test(t) ||
         // Csaba — aannemer
-        /^INVOICE\s+A1[2-6][0-9]/i.test(c.filename) ||
-        /csaba\s*team/i.test(f) ||
-        /works[_\s]*costs[_\s]*summary/i.test(c.filename) ||
+        // Csaba-invoices nu via 'contractor' regel hierboven afgevangen
         // Juridisch / trademark
         /trademark|deborah\s*vincze|mary\s*loas|HAB\s*\d+-\d+.*UE|registro.*marca/i.test(f + " " + t) ||
         // JYSK kantoormeubels

@@ -26,6 +26,7 @@ type Cat =
   | "freight-invoice"
   | "customs-dua"
   | "opex"
+  | "contractor"
   | "bank-statement"
   | "quote-proforma"
   | "certificate"
@@ -59,7 +60,16 @@ function classify(filename: string, fromEmail: string, fromName: string): Cat | 
     return "customs-dua";
   }
 
-  // 3. Opex
+  // 3a. Aannemer — Csaba (showroom-verbouwing en andere bouwprojecten)
+  if (
+    /csaba/i.test(sender) ||
+    /^INVOICE\s+A1[2-6][0-9].*(WAREHOUSE|BENISSA|COSTA\s*NOVA|OLIVA)/i.test(fn) ||
+    /works[_\s]*costs[_\s]*summary/i.test(fn)
+  ) {
+    return "contractor";
+  }
+
+  // 3b. Opex — vaste lasten en abonnementen
   if (
     /CREADORES\s*SORPRENDENTES|alquiler.*camí|warehouse\s*rental|anexo.*contrato.*alquiler/i.test(fn) ||
     /B5\d{2}\.?\s*CREADORES/i.test(fn) ||
@@ -67,13 +77,10 @@ function classify(filename: string, fromEmail: string, fromName: string): Cat | 
     /^P\d{4}\.pdf$/i.test(fn) ||
     /google\s*workspace|holded.*invoice|aecoc/i.test(fn) ||
     /poliza|insurance.*habitat|D&O/i.test(fn) ||
-    /^INVOICE\s+A1[2-6][0-9]/i.test(fn) ||
-    /works[_\s]*costs[_\s]*summary/i.test(fn) ||
     /trademark|HAB\s*\d+-\d+.*UE|registro.*marca/i.test(fn) ||
     /jysk\s*empresas/i.test(fn) ||
     /F26ALT\d+|^FAC_\d{4}_\d{5}/i.test(fn) ||
-    /A-Factura\s*A2[56]/i.test(fn) ||
-    /csaba/i.test(sender)
+    /A-Factura\s*A2[56]/i.test(fn)
   ) {
     return "opex";
   }
