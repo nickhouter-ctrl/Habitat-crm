@@ -30,21 +30,38 @@ export const CATEGORIES = {
 } as const;
 export type AttachmentCategory = keyof typeof CATEGORIES;
 
-const SUPPLIER_PATTERNS: Array<{ tag: string; patterns: RegExp[] }> = [
-  // Echte leveranciers
-  { tag: "Yohome", patterns: [/yohome/i, /YHES\d+/i] },
-  { tag: "KKR / KingKonree", patterns: [/kingkonree/i, /@kkr/i, /KKR-?\d/i, /33#kkr/i] },
-  { tag: "Magic Stone", patterns: [/magicstone/i, /magic-stone/i, /flexistone/i, /MS\d{6,}/, /MS-20\d{6}/, /MS20\d{6}/] },
-  { tag: "Arkwright (MS-supplier)", patterns: [/arkwright/i, /ARK\d+/i] },
-  // Agents/intermediairs (geen leveranciers)
-  { tag: "Allpack (CN agent)", patterns: [/allpack/i, /@allpack/i] },
-  { tag: "Teresa (ES agent)", patterns: [/españa\s*trading/i, /tborras/i, /etrading\.tborras/i] },
-  // Transport / douane / overheid
-  { tag: "Alianza (transport)", patterns: [/alianza/i, /@galadtrans/i, /galadtrans/i, /23T\/[AC]-\d/i] },
-  { tag: "Gomez Macias (douane-agent)", patterns: [/gomez\s*macias/i, /\bgmcargo\b/i] },
-  { tag: "Spanish Tax Agency", patterns: [/agenciatributaria/i, /agencia\s*tributaria/i] },
-  { tag: "Banco Sabadell", patterns: [/sabadell/i, /bsabesbb/i] },
-  { tag: "CaixaBank", patterns: [/caixabank/i, /caixesbb/i] },
+/**
+ * Suppliers worden in volgorde gecheckt — **echte leveranciers eerst**, daarna
+ * agents/intermediairs, daarna transport/banken. Allpack is geen leverancier
+ * maar formele exporter; alleen taggen als geen ECHTE supplier-referentie te
+ * vinden is. Per supplier zijn de patterns gesplit in:
+ *   - strong: zeer specifiek (order-id, factuur-prefix) — sterke signaal
+ *   - weak: alleen naam — alleen meetellen als geen strong-match elders
+ */
+const SUPPLIER_PATTERNS: Array<{
+  tag: string;
+  isAgent?: boolean;
+  strong?: RegExp[];
+  weak?: RegExp[];
+}> = [
+  // 1. Echte leveranciers (strong signals = orderrefs/factuur-prefixen)
+  { tag: "Yohome", strong: [/YHES\d+/i, /YH-?ES\d+/i], weak: [/yohome/i, /\@yohome/i] },
+  { tag: "KKR / KingKonree", strong: [/33#kkr\d/i, /\bkkr20\d{6,}/i], weak: [/kingkonree/i, /\@kkr/i, /KKR-[A-Z0-9]/i] },
+  { tag: "Magic Stone", strong: [/MS20\d{6}-XBY/i, /flexi[-\s]*modified[-\s]*clay/i], weak: [/magicstone/i, /magic-stone/i, /flexistone/i] },
+  { tag: "Arkwright (MS-supplier)", strong: [/ARK25\d{5,}/i, /ARK\d{6,}/i, /changzhou\s*arkwright/i], weak: [/arkwright/i] },
+  { tag: "Hebei Zengyi (XPS)", strong: [/HN-K-20\d{6}-S-PL/i, /hebei\s*zengyi/i], weak: [/XPS\s*Backer/i] },
+  { tag: "Foshan Hanhai (Windows)", strong: [/HANH002\d+/i], weak: [/foshan\s*hanhai/i] },
+  { tag: "Foshan Keyi (Windows)", strong: [/KY086-\d+/i], weak: [/foshan\s*keyi/i] },
+  { tag: "Foshan HanTherm", strong: [/H251\d{5,}/i], weak: [/hantherm/i] },
+  // 2. Agents/intermediairs (alleen als geen echte supplier gevonden)
+  { tag: "Allpack (CN agent)", isAgent: true, weak: [/allpack/i, /@allpack/i] },
+  { tag: "Teresa (ES agent)", isAgent: true, weak: [/españa\s*trading/i, /tborras/i, /etrading\.tborras/i] },
+  // 3. Transport / douane / overheid (sterk signaal want eigen merknaam)
+  { tag: "Alianza (transport)", strong: [/23T[\/_-][AC][_-]?\d/i, /galadtrans/i, /@alianza-gt/i], weak: [/alianza/i] },
+  { tag: "Gomez Macias (douane-agent)", weak: [/gomez\s*macias/i, /\bgmcargo\b/i] },
+  { tag: "Spanish Tax Agency", weak: [/agenciatributaria/i, /agencia\s*tributaria/i] },
+  { tag: "Banco Sabadell", weak: [/sabadell/i, /bsabesbb/i] },
+  { tag: "CaixaBank", weak: [/caixabank/i, /caixesbb/i] },
 ];
 
 const CATEGORY_RULES: Array<{ cat: AttachmentCategory; test: (ctx: CategorizeCtx) => boolean }> = [
@@ -102,9 +119,28 @@ interface CategorizeCtx {
 }
 
 function detectSupplierTag(ctx: CategorizeCtx): string | null {
-  for (const { tag, patterns } of SUPPLIER_PATTERNS) {
-    for (const p of patterns) {
-      if (p.test(ctx.allText) || p.test(ctx.fromEmail)) return tag;
+  const haystack = ctx.allText + " " + ctx.fromEmail;
+  // 1. Eerst echte leveranciers met STRONG signals
+  for (const sp of SUPPLIER_PATTERNS) {
+    if (sp.isAgent) continue;
+    if (!sp.strong?.length) continue;
+    for (const p of sp.strong) {
+      if (p.test(haystack)) return sp.tag;
+    }
+  }
+  // 2. Dan echte leveranciers met WEAK signals (naam alleen)
+  for (const sp of SUPPLIER_PATTERNS) {
+    if (sp.isAgent) continue;
+    if (!sp.weak?.length) continue;
+    for (const p of sp.weak) {
+      if (p.test(haystack)) return sp.tag;
+    }
+  }
+  // 3. Pas dan agents (Allpack/Teresa)
+  for (const sp of SUPPLIER_PATTERNS) {
+    if (!sp.isAgent) continue;
+    for (const p of sp.weak ?? []) {
+      if (p.test(haystack)) return sp.tag;
     }
   }
   return null;
