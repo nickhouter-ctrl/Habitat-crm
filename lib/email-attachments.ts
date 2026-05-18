@@ -270,6 +270,29 @@ export async function storeMailAttachments(args: {
       skipped++;
       continue;
     }
+    // Csaba's invoices voor andere klanten (BENISSA/COSTA NOVA/OLIVA etc.) zijn
+    // NIET voor Habitat — niet eens in archief opnemen. WAREHOUSE = Habitat
+    // showroom, blijft wel binnen.
+    if (
+      /^INVOICE\s+A1[2-6][0-9].*(BENISSA|COSTA\s*NOVA|OLIVA|VILLAJOYOSA|DENIA)/i.test(att.filename) &&
+      !/WAREHOUSE/i.test(att.filename)
+    ) {
+      skipped++;
+      continue;
+    }
+    // CREADORES SORPRENDENTES SL is de loods-eigenaar / juridische entiteit
+    // boven Habitat — facturen aan CREADORES horen niet in Habitat's archief.
+    // (Loods-huur en utilities betaalt Habitat via doorbelasting; die hoeven
+    // dus niet in dit archief — alleen invoices direct aan HABITAT ONE SL.)
+    if (
+      /CREADORES|SORPRENDENTES|Cam[íi]\s*Fontana/i.test(att.filename) ||
+      /^B5\d{2}\s|^B5\d{2}\./i.test(att.filename) ||
+      /A-Factura\s*A2[56][-\s]?\d+/i.test(att.filename) ||
+      /CREADORES|SORPRENDENTES/i.test(ctxBase.subject)
+    ) {
+      skipped++;
+      continue;
+    }
 
     const ctx: CategorizeCtx = {
       ...ctxBase,
