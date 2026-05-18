@@ -83,10 +83,10 @@ export async function GET(req: Request) {
     writeCell(0, r.sku ?? "");                    // referencia_interna
     writeCell(1, r.barcode ?? "");                // gtin_unidad
     writeCell(2, r.imageUrl ?? "");               // url_imagen_unidad
-    writeCell(3, "Español");                      // idioma1
+    writeCell(3, "Inglés");                       // idioma1 — productnamen staan in EN
     writeCell(4, COMPANY.name);                   // marca1
     // submarca1 leeg
-    writeCell(6, r.name ?? "");                   // nombre1 (NL/origineel)
+    writeCell(6, r.name ?? "");                   // nombre1 (Engels)
     // talla1/color1/variante1 leeg
     writeCell(38, "España");                      // pais1
     writeCell(43, gpc.gpc);                       // gpc
