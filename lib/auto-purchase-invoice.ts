@@ -12,6 +12,7 @@ import { eq } from "drizzle-orm";
 
 import { db } from "@/lib/db";
 import { activities, emailInbox, mailAttachments, purchaseOrders } from "@/lib/db/schema";
+import { copyMailAttachmentToPoBucket } from "@/lib/storage";
 
 const FINANCIAL_CATEGORIES = new Set([
   "supplier-invoice",
@@ -67,6 +68,12 @@ export async function tryAutoCreatePurchaseInvoice(emailId: string): Promise<Aut
       });
       if (existing && existing.supplier === a.supplierTag) continue;
 
+      // Kopieer bron-bestand naar PO-bucket
+      const copied = await copyMailAttachmentToPoBucket({
+        mailStoragePath: a.storagePath,
+        filename: a.filename,
+      });
+
       const [po] = await db
         .insert(purchaseOrders)
         .values({
@@ -85,6 +92,9 @@ export async function tryAutoCreatePurchaseInvoice(emailId: string): Promise<Aut
               note: `Bron: ${a.filename}`,
             },
           ],
+          attachments: copied
+            ? [{ name: copied.name, path: copied.path, size: copied.size, uploadedAt: new Date().toISOString() }]
+            : [],
           notes: `Auto-aangemaakt uit mail "${mail.subject ?? ""}" (${mail.fromEmail ?? ""}). Bijlage: ${a.filename}`,
           stockAppliedAt: new Date(), // GEEN voorraadmutatie
         })

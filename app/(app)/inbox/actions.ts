@@ -9,6 +9,7 @@ import { extractAttachmentAmount } from "@/lib/amount-extract";
 import { db } from "@/lib/db";
 import { activities, emailInbox, mailAttachments, purchaseOrders, quoteRequests } from "@/lib/db/schema";
 import { pushPurchaseOrderToHolded } from "@/lib/holded/sync";
+import { copyMailAttachmentToPoBucket } from "@/lib/storage";
 
 async function requireUser() {
   const session = await auth();
@@ -150,7 +151,13 @@ export async function createPurchaseInvoiceFromMail(args: {
   const refMatch = att.filename.match(/(?:FAC[_-]?|Factura[_\s]*|Invoice[_\s]*)([\w\d-]+)/i);
   const reference = args.override?.reference ?? (refMatch?.[1] ?? att.filename.replace(/\.[a-z]+$/i, ""));
 
-  // 2. Insert lokaal — 'received' = factuur ontvangen, voorraad-onafhankelijk
+  // 2a. Kopieer het bron-bestand naar de PO-bucket zodat het ook aan de PO hangt
+  const copied = await copyMailAttachmentToPoBucket({
+    mailStoragePath: att.storagePath,
+    filename: att.filename,
+  });
+
+  // 2b. Insert lokaal — 'received' = factuur ontvangen, voorraad-onafhankelijk
   const [po] = await db
     .insert(purchaseOrders)
     .values({
@@ -169,6 +176,9 @@ export async function createPurchaseInvoiceFromMail(args: {
           note: `Bron: ${att.filename}`,
         },
       ],
+      attachments: copied
+        ? [{ name: copied.name, path: copied.path, size: copied.size, uploadedAt: new Date().toISOString() }]
+        : [],
       notes: `Aangemaakt uit mail ${mail.subject ?? ""} (${mail.fromEmail ?? ""}). Bijlage: ${att.filename}`,
       stockAppliedAt: new Date(), // markeer dat we GEEN voorraad bijwerken
     })

@@ -182,3 +182,33 @@ export async function deletePurchaseOrderFile(path: string): Promise<void> {
     /* best effort */
   }
 }
+
+/**
+ * Kopieer een mail-bijlage (uit bucket 'email-attachments') naar de
+ * purchase-order-files bucket. Returns metadata voor opslag in
+ * purchase_orders.attachments JSON.
+ */
+const MAIL_BUCKET = "email-attachments";
+export async function copyMailAttachmentToPoBucket(args: {
+  mailStoragePath: string;
+  filename: string;
+}): Promise<{ name: string; path: string; size: number } | null> {
+  const sb = supabase();
+  await ensurePoBucket();
+
+  const { data, error } = await sb.storage.from(MAIL_BUCKET).download(args.mailStoragePath);
+  if (error || !data) {
+    console.error("Mail-attachment download fail:", error?.message);
+    return null;
+  }
+  const buf = Buffer.from(await data.arrayBuffer());
+  const path = `${crypto.randomUUID()}-${safeName(args.filename)}`;
+  const up = await sb.storage
+    .from(PO_BUCKET)
+    .upload(path, buf, { contentType: data.type || "application/octet-stream", upsert: false });
+  if (up.error) {
+    console.error("PO-bucket upload fail:", up.error.message);
+    return null;
+  }
+  return { name: args.filename, path, size: buf.length };
+}
