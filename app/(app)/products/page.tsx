@@ -258,8 +258,9 @@ export default async function ProductsPage({
                     <Th>Eenh.</Th>
                     <Th className="text-right">Verkoop (ex.)</Th>
                     <Th className="text-right">BTW</Th>
-                    <Th className="text-right">Kostprijs</Th>
-                    <Th className="text-right">Marge</Th>
+                    <Th className="text-right" title="Inkoopprijs leverancier (ex. overhead)">Inkoop</Th>
+                    <Th className="text-right" title="Kostprijs incl. landed-cost (Allpack + Teresa + vracht + douane)">Kostprijs</Th>
+                    <Th className="text-right" title="Marge € en % — % is tegelijk de maximale korting voor break-even">Marge / max. korting</Th>
                     <Th>Status</Th>
                   </tr>
                 </THead>
@@ -334,9 +335,26 @@ export default async function ProductsPage({
                         <Td className="text-muted">{p.unit ?? "—"}</Td>
                         <Td className="text-right tabular-nums">{p.priceEur ? formatEUR(p.priceEur) : "—"}</Td>
                         <Td className="text-right tabular-nums text-muted">{p.vatRate}%</Td>
+                        <Td className="text-right tabular-nums text-muted">
+                          {p.purchaseCostEur ? formatEUR(p.purchaseCostEur) : "—"}
+                        </Td>
                         <Td className="text-right tabular-nums text-muted">{p.costEur ? formatEUR(p.costEur) : "—"}</Td>
                         <Td className="text-right tabular-nums">
-                          {margin != null ? `${formatEUR(margin)}${marginPct != null ? ` (${marginPct}%)` : ""}` : "—"}
+                          {margin != null ? (
+                            <>
+                              <span>{formatEUR(margin)}</span>
+                              {marginPct != null && (
+                                <span className={cn(
+                                  "ml-1 text-xs",
+                                  marginPct < 0 ? "text-danger" : marginPct < 15 ? "text-warning" : "text-muted",
+                                )}>
+                                  ({marginPct}%)
+                                </span>
+                              )}
+                            </>
+                          ) : (
+                            "—"
+                          )}
                         </Td>
                         <Td>
                           {p.isActive ? (

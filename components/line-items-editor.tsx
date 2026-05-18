@@ -80,7 +80,8 @@ export function LineItemsEditor({
 
   const productOptions: ComboOption[] = products.map((p) => ({
     value: p.id,
-    label: p.name,
+    // SKU vooraan zodat je 'm kunt typen om te zoeken
+    label: p.sku ? `${p.sku} — ${p.name}` : p.name,
     group: p.category?.trim() || "Overig",
     hint: p.priceEur ? formatEUR(p.priceEur) : undefined,
   }));
