@@ -21,6 +21,7 @@ const CATEGORY_ICONS: Record<string, string> = {
   "agent-fee-spain": "🇪🇸",
   "freight-invoice": "🚛",
   "customs-dua": "📋",
+  "opex": "🏢",
   "bank-statement": "🏦",
   "quote-proforma": "📝",
   "certificate": "📜",

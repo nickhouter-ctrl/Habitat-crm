@@ -8,6 +8,7 @@ export const CATEGORIES = {
   "agent-fee-spain": "Teresa commissie (Spanje)",
   "freight-invoice": "Vrachtfactuur (Alianza)",
   "customs-dua": "DUA / Douane",
+  "opex": "Bedrijfskosten (loods/utilities/SaaS)",
   "bank-statement": "Bankafschrift",
   "quote-proforma": "Offerte / Proforma",
   "certificate": "Certificaat (CE/CITES)",

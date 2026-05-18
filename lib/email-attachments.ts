@@ -59,6 +59,7 @@ const CATEGORY_RULES: Array<{ cat: AttachmentCategory; test: (ctx: CategorizeCtx
   // DUA / douane (eerst, want vaak combineerbaar met andere)
   { cat: "customs-dua", test: (c) =>
       /levante|certificado.*importaci[oó]n|d\.?u\.?a\.?|aduana|customs|comunidad\s*europea/i.test(c.allText) ||
+      /HS\s*code.*duty|BorradorH1IMCAU|H1IMCAU.*OPERVAL/i.test(c.allText + " " + c.filename) ||
       /^20260\d{10,}\.pdf$/i.test(c.filename) },
 
   // Teresa commissie (Spanje) — eerst, want vaak verkleurd onder andere
@@ -71,16 +72,49 @@ const CATEGORY_RULES: Array<{ cat: AttachmentCategory; test: (ctx: CategorizeCtx
       /handling\s*costs?|handling[-\s]*fee/i.test(c.allText) &&
       /allpack/i.test(c.fromEmail + " " + c.allText) },
 
-  // Vrachtfactuur — Alianza/Galadtrans
+  // Vrachtfactuur — Alianza/Galadtrans + lokale transporteurs
   { cat: "freight-invoice", test: (c) =>
       /alianza|galadtrans/i.test(c.fromEmail) ||
       /^23T[\/_-][AC][_-]?\d/i.test(c.filename) ||
+      /transportes\s*garcia\s*costa/i.test(c.allText) ||
       /transportkosten|fact(uur)?.*transport|freight\s*invoice/i.test(c.allText) },
 
   // Bankafschrift
   { cat: "bank-statement", test: (c) =>
       /sabadell|caixabank|bbva|santander/i.test(c.fromEmail) ||
       /extracto.*cuenta|bank.*statement|account.*statement|posición\s+global/i.test(c.allText) },
+
+  // Bedrijfskosten — loods-huur, elektriciteit, water, Csaba-installateurs,
+  // forklift-rental, Google Workspace, verzekeringen, AECOC, juridisch,
+  // trademark, JYSK (kantoormeubels)
+  { cat: "opex", test: (c) => {
+      const t = c.allText + " " + c.filename;
+      const f = c.fromName + " " + c.fromEmail;
+      return (
+        // Loods/warehouse-huur
+        /creadores\s*sorprendentes|alquiler.*camí|alquiler.*javea|warehouse\s*rental|anexo.*contrato.*alquiler/i.test(t) ||
+        /B5\d{2}\.?\s*CREADORES/i.test(c.filename) ||
+        // Utilities
+        /\belectric\s*consumpti|electricidad|iberdrola|endesa|naturgy|utilities|gastos\s*suplidos/i.test(t) ||
+        // Forklift
+        /\bforklift|carretilla.*elev|sabadell.*renting|alquiler.*forklift/i.test(t) ||
+        /^P\d{4}\.pdf$/i.test(c.filename) ||
+        // SaaS / subscriptions
+        /google\s*workspace|microsoft\s*365|m365|holded\s*invoice|saas\s*subscription|aecoc|gs1\s*subscript/i.test(t) ||
+        // Verzekering
+        /\bseguro|verzekering|p[oó]liza|insurance.*habitat|D&O/i.test(t) ||
+        // Csaba — aannemer
+        /^INVOICE\s+A1[2-6][0-9]/i.test(c.filename) ||
+        /csaba\s*team/i.test(f) ||
+        /works[_\s]*costs[_\s]*summary/i.test(c.filename) ||
+        // Juridisch / trademark
+        /trademark|deborah\s*vincze|mary\s*loas|HAB\s*\d+-\d+.*UE|registro.*marca/i.test(f + " " + t) ||
+        // JYSK kantoormeubels
+        /jysk\s*empresas/i.test(t) ||
+        // AECOC GS1
+        /aecoc/i.test(f) || /F26ALT\d+/i.test(c.filename)
+      );
+    } },
 
   // Certificaat (CE / CITES / etc.)
   { cat: "certificate", test: (c) =>
@@ -96,7 +130,10 @@ const CATEGORY_RULES: Array<{ cat: AttachmentCategory; test: (ctx: CategorizeCtx
   { cat: "supplier-invoice", test: (c) =>
       (/commercial\s*invoice|invoice\s*no/i.test(c.allText) ||
        /YHES\d+|MS\d{8,}|33#kkr.*without/i.test(c.allText) ||
-       /CI[-\s]*MS\d+/i.test(c.filename)) &&
+       /CI[-\s]*MS\d+/i.test(c.filename) ||
+       /FACTURA_MARTRM-F[A-Z]+\d+/i.test(c.filename) ||
+       /发票.*invoice/i.test(c.filename) ||
+       /cornelius.*invoice|inkoop\s*order\s*cornelius/i.test(c.allText)) &&
       !/handling\s*costs?/i.test(c.allText) },
 ];
 
