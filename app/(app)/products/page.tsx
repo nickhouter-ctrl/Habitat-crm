@@ -23,6 +23,7 @@ import { products } from "@/lib/db/schema";
 import { resolveKitStocks, type KitComponent } from "@/lib/stock";
 import { cn, formatEUR } from "@/lib/utils";
 import { getProductCollections } from "../_options";
+import { Gs1ExcelDownload } from "./gs1-download";
 
 export const metadata = { title: "Producten" };
 
@@ -159,14 +160,7 @@ export default async function ProductsPage({
                   <a href={`/products/export${qs}`} className={buttonClass({ variant: "secondary" })} download>
                     Excel downloaden
                   </a>
-                  <a
-                    href="/api/products/barcodes-xlsx"
-                    className={buttonClass({ variant: "secondary" })}
-                    download
-                    title="MijnGS1 import-template (xlsx) gevuld met alle producten met barcode"
-                  >
-                    GS1 Excel
-                  </a>
+                  <Gs1ExcelDownload />
                   <LinkButton href={`/print-labels${qs}`} variant="secondary">
                     Labels printen
                   </LinkButton>
