@@ -17,6 +17,10 @@ const nextConfig: NextConfig = {
   },
   // @react-pdf/renderer is Node-only — don't try to bundle it.
   serverExternalPackages: ["@react-pdf/renderer"],
+  // PDF fonts are read from public/fonts at runtime — trace them into the bundle.
+  outputFileTracingIncludes: {
+    "/**/*": ["./public/fonts/**/*"],
+  },
 };
 
 export default nextConfig;
