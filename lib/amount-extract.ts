@@ -36,6 +36,8 @@ const PDF_PATTERNS: Array<{ name: string; regex: RegExp }> = [
   { name: "Allpack handling", regex: /Total\s*Amount\s*\([A-Z]+\)\s*[\$]?([\d.,]+)/i },
   // Teresa: "Total Factura 735,03 EUR"
   { name: "Teresa Total Factura", regex: /Total\s*Factura\s*([\d.,]+)\s*EUR/i },
+  // Oper-Traimer: "TOTAL (EUR)         2.723,14"
+  { name: "Oper-Traimer TOTAL (EUR)", regex: /TOTAL\s*\(\s*EUR\s*\)\s+([\d.,]+)/i },
   // DUA: 'CUOTAS RESULTANTES ... A00 ... 894,17  B00 ... 11.292,05'
   // (gebruiken we niet voor invoice-totaal, IVA is recoverable)
   // Generic fallback: "Total: 1234.56" or "Grand Total: 1234,56 EUR"
