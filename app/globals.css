@@ -1,21 +1,23 @@
 @import "tailwindcss";
 
 /*
-  Habitat CRM design tokens.
-  Light, calm, document-heavy UI. A touch of Mediterranean ("habitat") in the accent.
+  Habitat CRM design tokens — afgestemd op de Habitat One huisstijl
+  (warm cream/sand achtergrond, brown text, terracotta accent).
 */
 :root {
-  --background: #f7f7f5;
+  --background: #faf7f1;    /* warm cream */
   --surface: #ffffff;
-  --foreground: #1c1c1a;
-  --muted: #6b7280;
-  --border: #e5e3de;
-  --accent: #1f6f5c; /* deep Mediterranean green */
+  --foreground: #2a2520;    /* COMPANY.charcoal */
+  --muted: #7a6f63;         /* COMPANY.muted */
+  --border: #e8dfd0;        /* COMPANY.sand */
+  --accent: #b6552d;        /* COMPANY.terracotta — primary brand accent */
   --accent-foreground: #ffffff;
-  --ring: #1f6f5c;
+  --ring: #b6552d;
   --danger: #b91c1c;
   --warning: #b45309;
   --success: #15803d;
+  --brand-brown: #3a2a20;
+  --brand-gold: #a98a4b;
   --radius: 0.625rem;
 }
 
@@ -31,8 +33,9 @@
   --color-danger: var(--danger);
   --color-warning: var(--warning);
   --color-success: var(--success);
-  --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
+  --font-sans: var(--font-sora), ui-sans-serif, system-ui, sans-serif;
   --font-mono: var(--font-geist-mono), ui-monospace, monospace;
+  --font-sora: var(--font-sora), ui-sans-serif, system-ui, sans-serif;
   --radius-lg: var(--radius);
   --radius-md: calc(var(--radius) - 2px);
   --radius-sm: calc(var(--radius) - 4px);
