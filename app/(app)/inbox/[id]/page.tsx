@@ -153,12 +153,10 @@ export default async function MailDetailPage({ params }: { params: Promise<{ id:
               </p>
               <ul className="space-y-1">
                 {storedAttachments.map((a) => {
-                  // Is dit een financiële bijlage waar 'Maak inkoopfactuur' zinvol is?
-                  const isInvoiceCandidate =
-                    !linkedPO &&
-                    ["supplier-invoice", "freight-invoice", "agent-fee-china", "agent-fee-spain", "opex"].includes(
-                      a.category,
-                    );
+                  // Toon de 'Inkoopfactuur'-knop bij élke bijlage van een nog-niet-
+                  // gelinkte mail — de auto-categorie is maar een hint, de gebruiker
+                  // bepaalt zelf wat een factuur is.
+                  const isInvoiceCandidate = !linkedPO;
                   return (
                     <li key={a.id} className="group flex flex-wrap items-center gap-2 rounded-md px-2 py-1.5 text-sm hover:bg-background-soft">
                       <Paperclip className="h-3.5 w-3.5 shrink-0 text-muted" />
