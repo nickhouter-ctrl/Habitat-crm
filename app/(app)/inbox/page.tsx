@@ -75,7 +75,7 @@ export default async function InboxPage({
       )
       .orderBy(desc(emailInbox.receivedAt))
       .limit(200),
-    db.select().from(emailSyncState).limit(1),
+    db.select().from(emailSyncState),
     db
       .select({ status: emailInbox.status, n: sql<number>`count(*)::int` })
       .from(emailInbox)
@@ -100,8 +100,13 @@ export default async function InboxPage({
       Number(r.n),
     ]),
   );
-  const lastPolled = state[0]?.lastPolledAt;
-  const lastError = state[0]?.errorMessage;
+  // Eén sync-rij per postvak (hi@ / purchase@) — toon de laatste poll + evt. fout.
+  const lastPolled =
+    state
+      .map((s) => s.lastPolledAt)
+      .filter((d): d is Date => d != null)
+      .sort((a, b) => b.getTime() - a.getTime())[0] ?? null;
+  const lastError = state.find((s) => s.errorMessage)?.errorMessage ?? null;
 
   return (
     <>

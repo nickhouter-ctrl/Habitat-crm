@@ -16,9 +16,31 @@ function getCreds() {
   return { user, pass };
 }
 
+/** Eén Gmail-postvak: e-mailadres + app-wachtwoord. */
+export type MailAccount = { user: string; pass: string };
+
+/**
+ * Alle Gmail-postvakken die het CRM moet pollen: hi@ (hoofdaccount) en —
+ * indien geconfigureerd — purchase@ (apart account). Wachtwoorden zijn
+ * Gmail app-wachtwoorden.
+ */
+export function getMailAccounts(): MailAccount[] {
+  const accounts: MailAccount[] = [];
+  const user = process.env.GMAIL_USER;
+  const pass = process.env.GMAIL_APP_PASSWORD?.replace(/\s/g, "");
+  if (user && pass) accounts.push({ user, pass });
+  const pUser = process.env.GMAIL_PURCHASE_USER;
+  const pPass = process.env.GMAIL_PURCHASE_APP_PASSWORD?.replace(/\s/g, "");
+  if (pUser && pPass) accounts.push({ user: pUser, pass: pPass });
+  if (accounts.length === 0) {
+    throw new Error("Geen Gmail-account geconfigureerd (GMAIL_USER / GMAIL_APP_PASSWORD).");
+  }
+  return accounts;
+}
+
 /** Maak een IMAP-client. Caller moet zelf connect() + logout() doen. */
-export function createImapClient(): ImapFlow {
-  const { user, pass } = getCreds();
+export function createImapClient(account?: MailAccount): ImapFlow {
+  const { user, pass } = account ?? getCreds();
   return new ImapFlow({
     host: HOST_IMAP,
     port: 993,
@@ -103,8 +125,9 @@ function envelopeToPurchase(env: FetchMessageObject["envelope"]): boolean {
 export async function fetchNewMails(
   sinceUid: number,
   limit = 50,
+  account?: MailAccount,
 ): Promise<{ mails: ParsedEmail[]; maxUid: number }> {
-  const client = createImapClient();
+  const client = createImapClient(account);
   await client.connect();
   let lock: MailboxLockObject | null = null;
   try {
