@@ -156,6 +156,24 @@ async function pollOneMailbox(account: MailAccount): Promise<IngestStats & { fet
   return { ...stats, fetched: mails.length };
 }
 
+/**
+ * Wrap een belofte met een harde deadline. Serverless-functies hebben een
+ * tijdslimiet (60s); als een IMAP-operatie ergens blijft hangen moet de poll
+ * tóch netjes terugkeren i.p.v. de hele functie te laten time-outen (504).
+ */
+function withDeadline<T>(p: Promise<T>, ms: number, label: string): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const deadline = new Promise<never>((_, reject) => {
+    timer = setTimeout(
+      () => reject(new Error(`${label}: time-out na ${Math.round(ms / 1000)}s`)),
+      ms,
+    );
+  });
+  return Promise.race([p, deadline]).finally(() => {
+    if (timer) clearTimeout(timer);
+  });
+}
+
 /** Poll alle geconfigureerde postvakken. Een fout in één postvak stopt de andere niet. */
 export async function runImapPoll(): Promise<ImapPollResult> {
   const totals = {
@@ -171,9 +189,13 @@ export async function runImapPoll(): Promise<ImapPollResult> {
     return { ok: false, error: String(e?.message ?? e) };
   }
 
+  // Verdeel een totaalbudget van 48s over de postvakken — ruim binnen de 60s
+  // serverless-limiet, ook als een postvak vastloopt.
+  const budgetMs = Math.floor(48_000 / accounts.length);
+
   for (const account of accounts) {
     try {
-      const r = await pollOneMailbox(account);
+      const r = await withDeadline(pollOneMailbox(account), budgetMs, account.user);
       totals.fetched += r.fetched;
       totals.inserted += r.inserted;
       totals.duplicates += r.duplicates;
