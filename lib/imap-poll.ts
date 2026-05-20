@@ -22,6 +22,7 @@ export type ImapPollResult = {
   fetched?: number;
   inserted?: number;
   duplicates?: number;
+  failed?: number;
   attachmentsStored?: number;
   invoicesAutoCreated?: number;
   invoicesNeedReview?: number;
@@ -39,6 +40,7 @@ export async function runImapPoll(): Promise<ImapPollResult> {
 
     let inserted = 0;
     let duplicates = 0;
+    let failed = 0;
     let attachmentsStored = 0;
     let invoicesAutoCreated = 0;
     let invoicesNeedReview = 0;
@@ -121,10 +123,14 @@ export async function runImapPoll(): Promise<ImapPollResult> {
           }
         }
       } catch (e: any) {
-        if (e?.code === "23505") {
-          duplicates++;
+        // Drizzle wikkelt de Postgres-fout — code kan op e of e.cause zitten.
+        const pgCode = e?.code ?? e?.cause?.code;
+        if (pgCode === "23505") {
+          duplicates++; // mail bestaat al (messageId-uniek)
         } else {
-          throw e;
+          // Eén kapotte mail mag de hele poll niet stoppen — log en ga door.
+          failed++;
+          console.error(`Mail overgeslagen (${m.messageId}):`, e?.cause?.message ?? e?.message ?? e);
         }
       }
     }
@@ -155,6 +161,7 @@ export async function runImapPoll(): Promise<ImapPollResult> {
       fetched: mails.length,
       inserted,
       duplicates,
+      failed,
       attachmentsStored,
       invoicesAutoCreated,
       invoicesNeedReview,

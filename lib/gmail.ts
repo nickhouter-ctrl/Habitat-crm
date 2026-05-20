@@ -68,8 +68,36 @@ function joinAddresses(a: AddressObject | AddressObject[] | undefined): string |
   return addrs.length ? addrs.join(", ") : null;
 }
 
+/** Postgres' text-kolom accepteert geen NUL-bytes — strip ze uit geparseerde tekst. */
+function clean(s: string | null | undefined): string | null {
+  if (s == null) return null;
+  return s.replace(/\u0000/g, "");
+}
+
+/** Vind de Gmail "Alle e-mail"-map (special-use \All) — bevat óók gearchiveerde mail. */
+async function findAllMailFolder(client: ImapFlow): Promise<string> {
+  const list = await client.list();
+  const all = list.find((mb) => mb.specialUse === "\\All");
+  return all?.path ?? "[Gmail]/All Mail";
+}
+
+/** De inkoop-mailbox; mail hiernaartoe halen we altijd op, ook als wij 'm zelf stuurden. */
+const PURCHASE_INBOX = "purchase@habitat-one.com";
+
+/** Is deze mail (volgens envelope) aan de purchase-inbox geadresseerd? */
+function envelopeToPurchase(env: FetchMessageObject["envelope"]): boolean {
+  const recipients = [...(env?.to ?? []), ...(env?.cc ?? [])];
+  return recipients.some((a) => (a.address ?? "").toLowerCase().includes(PURCHASE_INBOX));
+}
+
 /**
  * Haal nieuwe mails op sinds UID `sinceUid` (exclusief). Returns geparseerde mails.
+ *
+ * Pollt de "Alle e-mail"-map i.p.v. INBOX, zodat ook mail die door een Gmail-
+ * filter is gearchiveerd (bv. naar purchase@ gestuurde mail die de inbox
+ * overslaat) wordt opgehaald. Verzonden mail en concepten — die ook in
+ * "Alle e-mail" zitten — worden overgeslagen op basis van hun Gmail-labels.
+ *
  * Beperkt tot `limit` om geheugen-gebruik te beperken.
  */
 export async function fetchNewMails(
@@ -80,8 +108,9 @@ export async function fetchNewMails(
   await client.connect();
   let lock: MailboxLockObject | null = null;
   try {
-    lock = await client.getMailboxLock("INBOX");
-    const status = await client.mailboxOpen("INBOX");
+    const folder = await findAllMailFolder(client);
+    lock = await client.getMailboxLock(folder);
+    const status = await client.mailboxOpen(folder);
     const mails: ParsedEmail[] = [];
     let maxUid = sinceUid;
 
@@ -89,12 +118,27 @@ export async function fetchNewMails(
 
     // UID-range: sinceUid+1 t/m * (alles tot eind)
     const range = `${sinceUid + 1}:*`;
-    const generator = client.fetch(range, { uid: true, envelope: true, source: true, threadId: true }, { uid: true });
+    const generator = client.fetch(
+      range,
+      { uid: true, envelope: true, source: true, threadId: true, labels: true },
+      { uid: true },
+    );
 
     let count = 0;
     for await (const msg of generator as AsyncIterable<FetchMessageObject>) {
       if (count >= limit) break;
       if (!msg.uid || msg.uid <= sinceUid) continue;
+      // "Alle e-mail" bevat ook verzonden mail + concepten. Concepten en
+      // gewone verzonden mail slaan we over — maar mail die wij zelf naar
+      // purchase@ doorsturen moet juist wél in de inbox komen.
+      const labels = msg.labels;
+      const skip =
+        !!labels?.has("\\Draft") ||
+        (!!labels?.has("\\Sent") && !envelopeToPurchase(msg.envelope));
+      if (skip) {
+        if (msg.uid > maxUid) maxUid = msg.uid;
+        continue;
+      }
       if (!msg.source) continue;
       const parsed: ParsedMail = await simpleParser(msg.source);
       const attachments: ParsedAttachment[] = (parsed.attachments ?? [])
@@ -106,16 +150,16 @@ export async function fetchNewMails(
           content: a.content as Buffer,
         }));
       mails.push({
-        messageId: parsed.messageId ?? msg.envelope?.messageId ?? `imap-uid-${msg.uid}`,
+        messageId: clean(parsed.messageId ?? msg.envelope?.messageId) ?? `imap-uid-${msg.uid}`,
         imapUid: msg.uid,
         threadId: msg.threadId ?? null,
-        fromEmail: parsed.from?.value?.[0]?.address ?? null,
-        fromName: parsed.from?.value?.[0]?.name ?? null,
-        toEmail: joinAddresses(parsed.to),
-        ccEmail: joinAddresses(parsed.cc),
-        subject: parsed.subject ?? null,
-        bodyText: parsed.text ?? null,
-        bodyHtml: typeof parsed.html === "string" ? parsed.html : null,
+        fromEmail: clean(parsed.from?.value?.[0]?.address),
+        fromName: clean(parsed.from?.value?.[0]?.name),
+        toEmail: clean(joinAddresses(parsed.to)),
+        ccEmail: clean(joinAddresses(parsed.cc)),
+        subject: clean(parsed.subject),
+        bodyText: clean(parsed.text),
+        bodyHtml: clean(typeof parsed.html === "string" ? parsed.html : null),
         receivedAt: parsed.date ?? null,
         attachments,
       });
