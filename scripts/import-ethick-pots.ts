@@ -270,7 +270,7 @@ async function main() {
          'Tuinmeubilair', 'Loungers', 'stuk',
          ${priceEx.toFixed(4)}, ${tradeEx.toFixed(4)}, 21,
          ${cost.toFixed(2)}, ${cost.toFixed(2)}, ${MARGIN_PCT},
-         'EUR', 'Prosperplast Capre lounger, mono white. Niet in de ETHICK-katalogus.',
+         'EUR', 'ETHICK Capre-lounger, kleur wit. 1790 × 590 × 695 mm.',
          true, 1)
     `;
     added++;
