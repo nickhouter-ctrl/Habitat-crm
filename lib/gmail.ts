@@ -10,7 +10,9 @@ const HOST_IMAP = "imap.gmail.com";
 const HOST_SMTP = "smtp.gmail.com";
 
 function getCreds() {
-  const user = process.env.GMAIL_USER;
+  // .trim() op de user: een stray newline in de env-var breekt de IMAP-login
+  // (newline = commando-einde in het IMAP-protocol) én de SMTP From-header.
+  const user = process.env.GMAIL_USER?.trim();
   const pass = process.env.GMAIL_APP_PASSWORD?.replace(/\s/g, "");
   if (!user || !pass) throw new Error("GMAIL_USER en/of GMAIL_APP_PASSWORD niet gezet.");
   return { user, pass };
@@ -26,10 +28,11 @@ export type MailAccount = { user: string; pass: string };
  */
 export function getMailAccounts(): MailAccount[] {
   const accounts: MailAccount[] = [];
-  const user = process.env.GMAIL_USER;
+  // .trim() op de user — een stray newline in de env-var breekt de IMAP-login.
+  const user = process.env.GMAIL_USER?.trim();
   const pass = process.env.GMAIL_APP_PASSWORD?.replace(/\s/g, "");
   if (user && pass) accounts.push({ user, pass });
-  const pUser = process.env.GMAIL_PURCHASE_USER;
+  const pUser = process.env.GMAIL_PURCHASE_USER?.trim();
   const pPass = process.env.GMAIL_PURCHASE_APP_PASSWORD?.replace(/\s/g, "");
   if (pUser && pPass) accounts.push({ user: pUser, pass: pPass });
   if (accounts.length === 0) {
