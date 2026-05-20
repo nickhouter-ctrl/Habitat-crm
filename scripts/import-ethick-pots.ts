@@ -10,8 +10,8 @@
  * - Bloempotten → collectie "Bloempotten", categorie = modelserie (Ulpho, Epocco, …).
  * - Lounger     → collectie "Tuinmeubilair", categorie "Loungers" (geen foto in de katalogus).
  * - Inkoopprijs uit de order (levering CPT — vracht v/d leverancier is inbegrepen).
- * - Verkoopprijs berekend zoals Magic Stone: 75% marge ex-BTW, incl-BTW afgerond op .95,
- *   aannemersprijs = 80% daarvan (mits resterende marge ≥ 20%).
+ * - Verkoopprijs: 50% marge ex-BTW, incl-BTW afgerond op .95 (zelfde afrondaanpak
+ *   als Magic Stone), aannemersprijs = 80% daarvan (mits resterende marge ≥ 20%).
  * - Foto per basismodel; kleurvarianten van hetzelfde model delen die foto.
  */
 import { readFileSync } from "node:fs";
@@ -166,13 +166,15 @@ const POTS: Line[] = [
 ];
 
 /* --------------------------------------------------------------- pricing */
-/* Identiek aan scripts/reprice-magicstone.ts                               */
+/** Gewenste marge (ex-BTW) op de inkoopprijs. */
+const MARGIN_PCT = 50;
+
 function roundTo95(incl: number): number {
   const cents95 = Math.round((incl - 0.95) / 1);
   return Math.max(0.95, cents95 + 0.95);
 }
 function pricing(cost: number): { priceEx: number; tradeEx: number; inclP: number } {
-  const targetIncl = (cost / 0.25) * 1.21; // 75% marge ex-BTW, dan +21% IVA
+  const targetIncl = (cost / (1 - MARGIN_PCT / 100)) * 1.21; // marge ex-BTW, dan +21% IVA
   const inclP = roundTo95(targetIncl);
   const priceEx = Math.round((inclP / 1.21) * 10000) / 10000;
   const tradeIncl = roundTo95(inclP * 0.8);
@@ -246,7 +248,7 @@ async function main() {
       VALUES
         (${name}, ${fullSku}, ${ean}, 'Bloempotten', ${m.serie}, 'stuk',
          ${priceEx.toFixed(4)}, ${tradeEx.toFixed(4)}, 21,
-         ${cost.toFixed(2)}, ${cost.toFixed(2)}, 75,
+         ${cost.toFixed(2)}, ${cost.toFixed(2)}, ${MARGIN_PCT},
          'EUR', ${desc}, ${m.w}, ${m.h}, ${m.l},
          ${imageUrl.get(base)!}, true, 1)
     `;
@@ -267,7 +269,7 @@ async function main() {
         ('Lounger Capre FCAK1867R — wit', 'FCAK1867R-440R', '5905197875156',
          'Tuinmeubilair', 'Loungers', 'stuk',
          ${priceEx.toFixed(4)}, ${tradeEx.toFixed(4)}, 21,
-         ${cost.toFixed(2)}, ${cost.toFixed(2)}, 75,
+         ${cost.toFixed(2)}, ${cost.toFixed(2)}, ${MARGIN_PCT},
          'EUR', 'Prosperplast Capre lounger, mono white. Niet in de ETHICK-katalogus.',
          true, 1)
     `;
