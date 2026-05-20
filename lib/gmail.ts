@@ -47,6 +47,12 @@ export function createImapClient(account?: MailAccount): ImapFlow {
     secure: true,
     auth: { user, pass },
     logger: false,
+    // Faal snel bij een trage/geweigerde verbinding. ImapFlow wacht standaard
+    // 90s — langer dan de serverless-tijdslimiet (60s), waardoor de hele poll-
+    // functie zou vastlopen i.p.v. de fout netjes af te handelen.
+    connectionTimeout: 20000,
+    greetingTimeout: 12000,
+    socketTimeout: 30000,
   });
 }
 
