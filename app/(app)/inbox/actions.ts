@@ -9,6 +9,7 @@ import { extractAttachmentAmount } from "@/lib/amount-extract";
 import { db } from "@/lib/db";
 import { activities, emailInbox, mailAttachments, purchaseOrders, quoteRequests } from "@/lib/db/schema";
 import { pushPurchaseOrderToHolded } from "@/lib/holded/sync";
+import { runImapPoll, type ImapPollResult } from "@/lib/imap-poll";
 import { copyMailAttachmentToPoBucket } from "@/lib/storage";
 
 async function requireUser() {
@@ -216,17 +217,10 @@ export async function createPurchaseInvoiceFromMail(args: {
   return { purchaseOrderId: po.id, holdedId, total, holdedError };
 }
 
-/** Handmatig polling triggeren — handig om niet 15 min te wachten op cron. */
-export async function manualPoll() {
+/** Handmatig mails ophalen — handig om niet op de kwartier-cron te wachten. */
+export async function fetchMails(): Promise<ImapPollResult> {
   await requireUser();
-  const baseUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
-  const res = await fetch(`${baseUrl}/api/cron/imap-poll`, {
-    headers: {
-      authorization: `Bearer ${process.env.CRON_SECRET}`,
-    },
-    cache: "no-store",
-  });
-  const json = await res.json().catch(() => ({}));
+  const result = await runImapPoll();
   revalidatePath("/inbox");
-  return json;
+  return result;
 }

@@ -7,6 +7,8 @@ import { db } from "@/lib/db";
 import { emailInbox, emailSyncState } from "@/lib/db/schema";
 import { cn } from "@/lib/utils";
 
+import { FetchMailsButton } from "./fetch-mails-button";
+
 export const metadata = { title: "Mail-inbox" };
 export const dynamic = "force-dynamic";
 
@@ -100,6 +102,7 @@ export default async function InboxPage({
       <PageHeader
         title="Mail-inbox"
         subtitle={`${countByStatus.new ?? 0} nieuw · ${countByStatus.linked ?? 0} gelinkt · ${countByStatus.archived ?? 0} gearchiveerd`}
+        actions={<FetchMailsButton />}
       />
 
       <Card className="mb-4 space-y-3 px-4 py-3 text-sm">
@@ -183,7 +186,7 @@ export default async function InboxPage({
       {rows.length === 0 ? (
         <EmptyState
           title="Geen mails in deze categorie"
-          description="Cron-job draait elk kwartier en haalt nieuwe mails op. Of trigger manueel via /api/cron/imap-poll."
+          description="Cron-job draait elk kwartier en haalt nieuwe mails op. Of klik rechtsboven op 'Mails ophalen'."
         />
       ) : (
         <Card>
