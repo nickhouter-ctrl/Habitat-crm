@@ -15,7 +15,7 @@ for (const line of readFileSync(".env.local", "utf-8").split("\n")) {
 }
 
 /** Gewenste marge (ex-BTW) op de inkoopprijs. */
-const MARGIN_PCT = 50;
+const MARGIN_PCT = 75;
 
 function roundTo95(incl: number): number {
   const cents95 = Math.round((incl - 0.95) / 1);
