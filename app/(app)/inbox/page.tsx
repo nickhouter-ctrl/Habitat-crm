@@ -11,6 +11,8 @@ import { FetchMailsButton } from "./fetch-mails-button";
 
 export const metadata = { title: "Mail-inbox" };
 export const dynamic = "force-dynamic";
+// De "Mails ophalen"-knop draait een IMAP-poll als server-action op deze route.
+export const maxDuration = 60;
 
 function statusBadge(status: string) {
   switch (status) {
@@ -27,7 +29,11 @@ function statusBadge(status: string) {
 
 function formatDate(d: Date | null): string {
   if (!d) return "—";
-  return d.toLocaleString("nl-NL", { dateStyle: "short", timeStyle: "short" });
+  return d.toLocaleString("nl-NL", {
+    dateStyle: "short",
+    timeStyle: "short",
+    timeZone: "Europe/Amsterdam",
+  });
 }
 
 export default async function InboxPage({

@@ -26,6 +26,7 @@ function formatDate(d: Date | null): string {
   return d.toLocaleString("nl-NL", {
     dateStyle: "long",
     timeStyle: "short",
+    timeZone: "Europe/Amsterdam",
   });
 }
 

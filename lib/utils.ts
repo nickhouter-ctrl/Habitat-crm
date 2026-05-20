@@ -27,6 +27,7 @@ export function formatDate(value: Date | string | number | null | undefined) {
     day: "numeric",
     month: "short",
     year: "numeric",
+    timeZone: "Europe/Amsterdam",
   }).format(d);
 }
 
