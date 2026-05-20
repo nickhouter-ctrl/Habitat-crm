@@ -42,9 +42,12 @@ const GROUP_TRANSLATIONS: Record<string, Record<PricelistLocale, string>> = {
   "Buitendeuren": { nl: "Buitendeuren", de: "Außentüren", en: "Exterior Doors", es: "Puertas Exteriores" },
   "Beslag": { nl: "Beslag", de: "Beschläge", en: "Hardware", es: "Herrajes" },
   "Overige": { nl: "Overige", de: "Sonstige", en: "Other", es: "Otros" },
+  "Bloempotten": { nl: "Bloempotten", de: "Blumentöpfe", en: "Flower Pots", es: "Macetas" },
+  "Tuinmeubilair": { nl: "Tuinmeubilair", de: "Gartenmöbel", en: "Garden Furniture", es: "Mobiliario de Jardín" },
+  "Loungers": { nl: "Loungers", de: "Sonnenliegen", en: "Loungers", es: "Tumbonas" },
 };
 
-function translateGroup(name: string, locale: PricelistLocale): string {
+export function translateGroup(name: string, locale: PricelistLocale): string {
   return GROUP_TRANSLATIONS[name]?.[locale] ?? name;
 }
 

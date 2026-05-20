@@ -4,7 +4,8 @@ import { and, asc, eq, isNotNull } from "drizzle-orm";
 import { auth } from "@/auth";
 import { db } from "@/lib/db";
 import { products } from "@/lib/db/schema";
-import { renderPricelistPdf, type PricelistItem, type PricelistLocale } from "@/lib/pricelist-pdf";
+import { localizeEthick } from "@/lib/ethick-i18n";
+import { renderPricelistPdf, translateGroup, type PricelistItem, type PricelistLocale } from "@/lib/pricelist-pdf";
 
 const LOCALES: PricelistLocale[] = ["nl", "de", "en", "es"];
 
@@ -37,27 +38,39 @@ export async function GET(req: Request) {
     .orderBy(asc(products.collection), asc(products.category), asc(products.name));
 
   const groupBy = collection ? "category" : "collection";
-  const items: PricelistItem[] = rows.map((p) => ({
-    name: p.name,
-    sku: p.sku ?? null,
-    description: p.description ?? null,
-    descriptionI18n: (p.descriptionI18n as Partial<Record<PricelistLocale, string>> | null) ?? null,
-    imageUrl: p.imageUrl ?? null,
-    widthMm: p.widthMm ?? null,
-    heightMm: p.heightMm ?? null,
-    lengthMm: p.lengthMm ?? null,
-    thicknessMm: p.thicknessMm ?? null,
-    additionalSizes: (p.additionalSizes as Array<{ sku: string; label: string }> | null) ?? null,
-    unit: p.unit ?? null,
-    priceEur: audience === "trade" ? (p.tradePriceEur ?? p.priceEur ?? null) : (p.priceEur ?? null),
-    vatRate: p.vatRate ?? 21,
-    group: ((groupBy === "category" ? p.category : p.collection) ?? "Overige").trim(),
-  }));
+  const items: PricelistItem[] = rows.map((p) => {
+    // ETHICK-bloempotten/-loungers: naam + omschrijving gelokaliseerd opbouwen.
+    const loc = localizeEthick(p, locale);
+    return {
+      name: loc?.name ?? p.name,
+      sku: p.sku ?? null,
+      description: loc?.description ?? p.description ?? null,
+      descriptionI18n: loc
+        ? null
+        : ((p.descriptionI18n as Partial<Record<PricelistLocale, string>> | null) ?? null),
+      imageUrl: p.imageUrl ?? null,
+      widthMm: p.widthMm ?? null,
+      heightMm: p.heightMm ?? null,
+      lengthMm: p.lengthMm ?? null,
+      thicknessMm: p.thicknessMm ?? null,
+      additionalSizes: (p.additionalSizes as Array<{ sku: string; label: string }> | null) ?? null,
+      unit: p.unit ?? null,
+      priceEur: audience === "trade" ? (p.tradePriceEur ?? p.priceEur ?? null) : (p.priceEur ?? null),
+      vatRate: p.vatRate ?? 21,
+      group: ((groupBy === "category" ? p.category : p.collection) ?? "Overige").trim(),
+    };
+  });
 
+  const TRADE_LABEL: Record<PricelistLocale, string> = {
+    nl: "Aannemers / architecten",
+    de: "Bauunternehmer / Architekten",
+    en: "Contractors / architects",
+    es: "Constructores / arquitectos",
+  };
   const subtitleParts: string[] = [];
-  if (audience === "trade") subtitleParts.push("Aannemers / architecten");
-  if (collection) subtitleParts.push(collection);
-  if (category) subtitleParts.push(category);
+  if (audience === "trade") subtitleParts.push(TRADE_LABEL[locale]);
+  if (collection) subtitleParts.push(translateGroup(collection, locale));
+  if (category) subtitleParts.push(translateGroup(category, locale));
   const subtitle = subtitleParts.length ? subtitleParts.join(" · ") : null;
 
   const pdf = await renderPricelistPdf({ items, subtitle, locale });
