@@ -153,10 +153,10 @@ export default async function MailDetailPage({ params }: { params: Promise<{ id:
               </p>
               <ul className="space-y-1">
                 {storedAttachments.map((a) => {
-                  // Toon de 'Inkoopfactuur'-knop bij élke bijlage van een nog-niet-
-                  // gelinkte mail — de auto-categorie is maar een hint, de gebruiker
-                  // bepaalt zelf wat een factuur is.
-                  const isInvoiceCandidate = !linkedPO;
+                  // Knop bij élke bijlage. Eén mail kan meerdere facturen bevatten,
+                  // dus niet blokkeren zodra de mail al een keer gelinkt is — de
+                  // gebruiker bepaalt zelf wat een factuur is.
+                  const isInvoiceCandidate = true;
                   return (
                     <li key={a.id} className="group flex flex-wrap items-center gap-2 rounded-md px-2 py-1.5 text-sm hover:bg-background-soft">
                       <Paperclip className="h-3.5 w-3.5 shrink-0 text-muted" />
