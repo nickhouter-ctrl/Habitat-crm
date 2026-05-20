@@ -38,7 +38,7 @@ type IngestStats = {
 };
 
 /** Verwerk geparseerde mails: opslaan, bijlagen, bedrag-extractie, auto-link, auto-factuur. */
-async function ingestMails(mails: ParsedEmail[]): Promise<IngestStats> {
+export async function ingestMails(mails: ParsedEmail[]): Promise<IngestStats> {
   const s: IngestStats = {
     inserted: 0, duplicates: 0, failed: 0,
     attachmentsStored: 0, invoicesAutoCreated: 0, invoicesNeedReview: 0,
