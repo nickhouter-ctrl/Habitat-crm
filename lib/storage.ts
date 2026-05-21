@@ -243,13 +243,19 @@ export async function listCatalogFiles(): Promise<CatalogFile[]> {
   if (error || !data) return [];
   return data
     .filter((f) => f.id) // mappen overslaan
-    .map((f) => ({
-      name: f.name,
-      path: f.name,
-      url: sb.storage.from(CATALOG_BUCKET).getPublicUrl(f.name).data.publicUrl,
-      size: Number((f.metadata as { size?: number } | null)?.size ?? 0),
-      uploadedAt: (f.created_at as string | undefined) ?? null,
-    }));
+    .map((f) => {
+      const base = sb.storage.from(CATALOG_BUCKET).getPublicUrl(f.name).data.publicUrl;
+      // Cache-buster: verandert zodra het bestand opnieuw geüpload wordt, zodat
+      // browser/CDN nooit een oude versie blijft serveren.
+      const ver = (f.updated_at ?? f.created_at) as string | undefined;
+      return {
+        name: f.name,
+        path: f.name,
+        url: ver ? `${base}?v=${Date.parse(ver) || 0}` : base,
+        size: Number((f.metadata as { size?: number } | null)?.size ?? 0),
+        uploadedAt: (f.created_at as string | undefined) ?? null,
+      };
+    });
 }
 
 /** Upload één catalogus-PDF. */
