@@ -552,6 +552,12 @@ export const purchaseOrders = pgTable(
     orderDate: date(),
     expectedDate: date(),
     receivedAt: timestamp({ withTimezone: true }),
+    /** Vervaldatum van de inkoopfactuur — wanneer die betaald moet zijn. */
+    dueDate: date(),
+    /** Gezet zodra de inkoopfactuur volledig betaald is (null = openstaand). */
+    paidAt: timestamp({ withTimezone: true }),
+    /** Reeds betaald bedrag — voor deelbetalingen / Holded-sync. */
+    paidEur: numeric({ precision: 14, scale: 2 }),
     /** Sum of the line totals (incl. BTW), in `currency`. */
     total: numeric({ precision: 14, scale: 2 }).notNull().default("0"),
     /** Subtotal (ex. BTW). Door Holded geleverd; voor handmatige PO's gelijk aan total. */

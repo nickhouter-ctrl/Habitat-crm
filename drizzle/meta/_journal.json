@@ -183,6 +183,13 @@
       "when": 1778928580141,
       "tag": "0025_deep_epoch",
       "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "7",
+      "when": 1779372516088,
+      "tag": "0026_broad_mulholland_black",
+      "breakpoints": true
     }
   ]
 }
