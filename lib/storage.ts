@@ -212,3 +212,64 @@ export async function copyMailAttachmentToPoBucket(args: {
   }
   return { name: args.filename, path, size: buf.length };
 }
+
+/* --------------------------------------------------------------- catalogi */
+/* Publieke bucket — catalogus/brochure-PDF's, downloadbaar op /catalogi.       */
+
+const CATALOG_BUCKET = process.env.SUPABASE_CATALOG_BUCKET ?? "catalogs";
+
+async function ensureCatalogBucket() {
+  const sb = supabase();
+  const { data } = await sb.storage.getBucket(CATALOG_BUCKET);
+  if (data) return;
+  await sb.storage.createBucket(CATALOG_BUCKET, { public: true });
+}
+
+export type CatalogFile = {
+  name: string;
+  path: string;
+  url: string;
+  size: number;
+  uploadedAt: string | null;
+};
+
+/** Alle geüploade catalogus-PDF's, nieuwste eerst. */
+export async function listCatalogFiles(): Promise<CatalogFile[]> {
+  const sb = supabase();
+  await ensureCatalogBucket();
+  const { data, error } = await sb.storage
+    .from(CATALOG_BUCKET)
+    .list("", { limit: 200, sortBy: { column: "created_at", order: "desc" } });
+  if (error || !data) return [];
+  return data
+    .filter((f) => f.id) // mappen overslaan
+    .map((f) => ({
+      name: f.name,
+      path: f.name,
+      url: sb.storage.from(CATALOG_BUCKET).getPublicUrl(f.name).data.publicUrl,
+      size: Number((f.metadata as { size?: number } | null)?.size ?? 0),
+      uploadedAt: (f.created_at as string | undefined) ?? null,
+    }));
+}
+
+/** Upload één catalogus-PDF. */
+export async function uploadCatalogFile(file: File): Promise<void> {
+  if (!file || file.size === 0) throw new Error("Leeg bestand.");
+  if (file.type && file.type !== "application/pdf") throw new Error("Alleen PDF-bestanden.");
+  if (file.size > MAX_BYTES) throw new Error("Bestand te groot (max 25 MB).");
+  await ensureCatalogBucket();
+  const path = safeName(file.name).replace(/\.pdf$/i, "") + ".pdf";
+  const { error } = await supabase()
+    .storage.from(CATALOG_BUCKET)
+    .upload(path, file, { contentType: "application/pdf", upsert: true });
+  if (error) throw new Error(`Upload mislukt: ${error.message}`);
+}
+
+export async function deleteCatalogFile(path: string): Promise<void> {
+  if (!path) return;
+  try {
+    await supabase().storage.from(CATALOG_BUCKET).remove([path]);
+  } catch {
+    /* best effort */
+  }
+}

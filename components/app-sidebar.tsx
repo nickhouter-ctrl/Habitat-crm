@@ -2,6 +2,7 @@
 
 import {
   BarChart3,
+  BookOpen,
   Boxes,
   Briefcase,
   Building2,
@@ -37,6 +38,7 @@ const NAV = [
   { href: "/properties", label: "Panden", icon: Building2 },
   { href: "/products", label: "Producten", icon: Boxes },
   { href: "/prijslijst", label: "Prijslijst", icon: Tag },
+  { href: "/catalogi", label: "Catalogi", icon: BookOpen },
   { href: "/inkooporders", label: "Inkooporders", icon: PackagePlus },
   { href: "/shipments", label: "Shipments", icon: Boxes },
   { href: "/quotes", label: "Offertes", icon: FileText },
