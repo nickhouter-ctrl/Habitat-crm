@@ -154,6 +154,34 @@ export async function createPurchaseInvoiceFromMail(args: {
   const refMatch = att.filename.match(/(?:FAC[_-]?|Factura[_\s]*|Invoice[_\s]*)([\w\d-]+)/i);
   const reference = args.override?.reference ?? (refMatch?.[1] ?? att.filename.replace(/\.[a-z]+$/i, ""));
 
+  // Dedup: bestaat er al een inkooporder met dit factuurnummer? Dezelfde factuur
+  // komt soms via beide mailboxen (hi@ + purchase@) binnen — dan koppelen we de
+  // mail aan de bestaande inkooporder i.p.v. een dubbele aan te maken.
+  const existingPo = await db.query.purchaseOrders.findFirst({
+    where: eq(purchaseOrders.reference, reference),
+  });
+  if (existingPo) {
+    await db
+      .update(emailInbox)
+      .set({ linkedPurchaseOrderId: existingPo.id, status: "linked", updatedAt: new Date() })
+      .where(eq(emailInbox.id, args.emailId));
+    await db.insert(activities).values({
+      type: "note",
+      subject: `Mail gekoppeld aan bestaande inkoopfactuur: ${existingPo.supplier} ${reference}`,
+      body: "Dubbele inkoopfactuur voorkomen — deze mail wijst naar de al bestaande inkooporder.",
+      authorId: user.id,
+    });
+    revalidatePath("/");
+    revalidatePath("/inbox");
+    revalidatePath(`/inbox/${args.emailId}`);
+    revalidatePath("/inkooporders");
+    return {
+      purchaseOrderId: existingPo.id,
+      holdedId: existingPo.holdedId ?? null,
+      total: Number(existingPo.total ?? 0),
+    };
+  }
+
   // 2a. Kopieer het bron-bestand naar de PO-bucket zodat het ook aan de PO hangt
   const copied = await copyMailAttachmentToPoBucket({
     mailStoragePath: att.storagePath,
