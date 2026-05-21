@@ -53,6 +53,7 @@ export function localizeEthick(
   const colour = COLOURS[code]?.[locale] ?? storedColour;
 
   const name = `${PREFIX[kind][locale]} ${middle} — ${colour}`.replace(/\s+/g, " ").trim();
-  const description = `ETHICK ${modelMain} — ${colour}.`;
+  // Geen leveranciersmerk op de Habitat One-brochure — alleen model + kleur.
+  const description = `${modelMain} — ${colour}.`;
   return { name, description };
 }
