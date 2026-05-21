@@ -183,23 +183,43 @@ export default async function MailDetailPage({ params }: { params: Promise<{ id:
                         <Download className="h-3.5 w-3.5" />
                       </Link>
                       {isInvoiceCandidate && (
-                        <form
-                          action={async () => {
-                            "use server";
-                            await createPurchaseInvoiceFromMail({
-                              emailId: mail.id,
-                              attachmentId: a.id,
-                            });
-                          }}
-                        >
-                          <button
-                            type="submit"
-                            className="rounded-md bg-accent/10 px-2 py-1 text-xs font-medium text-accent hover:bg-accent/20"
-                            title="Inkoopfactuur aanmaken + naar Holded sturen"
+                        <>
+                          <form
+                            action={async () => {
+                              "use server";
+                              await createPurchaseInvoiceFromMail({
+                                emailId: mail.id,
+                                attachmentId: a.id,
+                              });
+                            }}
                           >
-                            <Receipt className="mr-1 inline h-3 w-3" /> Inkoopfactuur
-                          </button>
-                        </form>
+                            <button
+                              type="submit"
+                              className="rounded-md bg-accent/10 px-2 py-1 text-xs font-medium text-accent hover:bg-accent/20"
+                              title="Inkoopfactuur aanmaken + naar Holded sturen"
+                            >
+                              <Receipt className="mr-1 inline h-3 w-3" /> Inkoopfactuur
+                            </button>
+                          </form>
+                          <form
+                            action={async () => {
+                              "use server";
+                              await createPurchaseInvoiceFromMail({
+                                emailId: mail.id,
+                                attachmentId: a.id,
+                                asProforma: true,
+                              });
+                            }}
+                          >
+                            <button
+                              type="submit"
+                              className="rounded-md bg-background-soft px-2 py-1 text-xs font-medium text-muted hover:bg-border"
+                              title="Proforma toevoegen — concept-inkooporder dat op goedkeuring wacht"
+                            >
+                              <Receipt className="mr-1 inline h-3 w-3" /> Proforma
+                            </button>
+                          </form>
+                        </>
                       )}
                     </li>
                   );

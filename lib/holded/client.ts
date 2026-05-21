@@ -124,6 +124,12 @@ export const holded = {
         method: "POST",
         body,
       }),
+    /** Registreer een betaling op een document (date = unix-seconden). */
+    pay: (docType: HoldedDocType, id: string, body: { date: number; amount: number; desc?: string }) =>
+      request<HoldedWriteResult>(`/invoicing/v1/documents/${docType}/${id}/pay`, {
+        method: "POST",
+        body,
+      }),
   },
 
   products: {

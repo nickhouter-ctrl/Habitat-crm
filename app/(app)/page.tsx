@@ -24,6 +24,7 @@ import { purchaseDocsTotalExBTW } from "@/lib/holded/accounting";
 import { formatMoney, PO_OPEN_STATUSES, PO_STATUS_META } from "@/lib/purchase-orders";
 import { formatDate, formatEUR } from "@/lib/utils";
 import { dealStageMeta, documentKindMeta } from "./_meta";
+import { approveProforma, markPurchaseOrderPaid } from "./inkooporders/actions";
 
 export const metadata = { title: "Dashboard" };
 
@@ -44,7 +45,7 @@ export default async function DashboardPage() {
 
   const openExpr = sql`${documents.status} not in ('paid', 'void', 'draft')`;
 
-  const [[contactsTotal], pipelineRows, [docAgg], [creditAgg], [purchaseAgg], [productsAgg], openPurchaseOrders, recentDeals, recentActivity, holdedExpensesYTD, [openRequestsAgg], [invoiceReviewAgg]] =
+  const [[contactsTotal], pipelineRows, [docAgg], [creditAgg], [purchaseAgg], [productsAgg], openPurchaseOrders, recentDeals, recentActivity, holdedExpensesYTD, [openRequestsAgg], [invoiceReviewAgg], unpaidInvoices, proformas] =
     await Promise.all([
       db.select({ n: count() }).from(contacts),
       db
@@ -132,6 +133,23 @@ export default async function DashboardPage() {
             sql`${emailInbox.status} != 'archived'`,
           ),
         ),
+      // Openstaande inkoopfacturen — nog te betalen (nieuwste eerst)
+      db
+        .select()
+        .from(purchaseOrders)
+        .where(
+          and(
+            isNull(purchaseOrders.paidAt),
+            sql`${purchaseOrders.status} not in ('draft', 'cancelled')`,
+          ),
+        )
+        .orderBy(desc(purchaseOrders.createdAt)),
+      // Proforma's die op goedkeuring wachten
+      db
+        .select()
+        .from(purchaseOrders)
+        .where(eq(purchaseOrders.status, "draft"))
+        .orderBy(desc(purchaseOrders.createdAt)),
     ]);
 
   const byStage = new Map(pipelineRows.map((r) => [r.stage, r]));
@@ -150,6 +168,7 @@ export default async function DashboardPage() {
   const revenueMonth = Number(docAgg.revenueMonth) - Number(creditAgg.revenueMonth);
   const unpushedPurchase = Number(purchaseAgg.totalEur);
   const totalPurchase = Number(holdedExpensesYTD) + unpushedPurchase;
+  const unpaidPurchaseTotal = unpaidInvoices.reduce((s, p) => s + Number(p.total ?? 0), 0);
 
   return (
     <>
@@ -159,8 +178,22 @@ export default async function DashboardPage() {
         actions={<LinkButton href="/contacts/new">Nieuw contact</LinkButton>}
       />
 
-      {((openRequestsAgg?.n ?? 0) > 0 || (invoiceReviewAgg?.n ?? 0) > 0 || productsAgg.noBarcode > 0 || productsAgg.lowStock > 0 || productsAgg.stockNoPhoto > 0 || docAgg.overdueN > 0 || openPurchaseOrders.length > 0) && (
+      {((openRequestsAgg?.n ?? 0) > 0 || (invoiceReviewAgg?.n ?? 0) > 0 || productsAgg.noBarcode > 0 || productsAgg.lowStock > 0 || productsAgg.stockNoPhoto > 0 || docAgg.overdueN > 0 || openPurchaseOrders.length > 0 || proformas.length > 0 || unpaidInvoices.length > 0) && (
         <div className="mb-4 space-y-2">
+          {proformas.length > 0 && (
+            <div className="flex items-center justify-between gap-3 rounded-md border border-accent/40 bg-accent/10 px-4 py-3 text-sm text-foreground">
+              <span>
+                ✅ <strong>{proformas.length}</strong> proforma{proformas.length === 1 ? "" : "'s"} wacht{proformas.length === 1 ? "" : "en"} op goedkeuring — zie hieronder.
+              </span>
+            </div>
+          )}
+          {unpaidInvoices.length > 0 && (
+            <div className="flex items-center justify-between gap-3 rounded-md border border-warning/40 bg-warning/10 px-4 py-3 text-sm text-foreground">
+              <span>
+                💶 <strong>{unpaidInvoices.length}</strong> inkoopfactu{unpaidInvoices.length === 1 ? "ur" : "ren"} nog te betalen — {formatEUR(unpaidPurchaseTotal)}.
+              </span>
+            </div>
+          )}
           {(openRequestsAgg?.n ?? 0) > 0 && (
             <Link
               href="/aanvragen?status=pending"
@@ -265,6 +298,7 @@ export default async function DashboardPage() {
         <StatTile label="Vervallen facturen" value={docAgg.overdueN} hint={formatEUR(docAgg.overdueV)} />
         <StatTile label="Pijplijnwaarde" value={formatEUR(openDeals.value)} hint={`${openDeals.n} open deals`} />
         <StatTile label="Inkooporders onderweg" value={openPurchaseOrders.length} hint="aankomende voorraad" />
+        <StatTile label="Te betalen (inkoop)" value={unpaidInvoices.length} hint={formatEUR(unpaidPurchaseTotal)} />
         <StatTile label="Contacten" value={contactsTotal.n} />
       </div>
 
@@ -344,6 +378,118 @@ export default async function DashboardPage() {
           </Table>
         </Card>
       )}
+
+      {proformas.length > 0 && (
+        <Card className="mt-6">
+          <CardHeader>
+            <CardTitle>Proforma&apos;s ter goedkeuring</CardTitle>
+            <Link href="/inkooporders" className="text-xs text-accent hover:underline">
+              Alle inkooporders
+            </Link>
+          </CardHeader>
+          <Table>
+            <THead>
+              <tr>
+                <Th>Leverancier</Th>
+                <Th>Referentie</Th>
+                <Th className="text-right">Bedrag</Th>
+                <Th />
+              </tr>
+            </THead>
+            <TBody>
+              {proformas.map((po) => (
+                <Tr key={po.id}>
+                  <Td>
+                    <Link href={`/inkooporders/${po.id}`} className="font-medium hover:underline">
+                      {po.supplier}
+                    </Link>
+                  </Td>
+                  <Td className="text-muted">{po.reference ?? "—"}</Td>
+                  <Td className="text-right tabular-nums">{formatMoney(po.total, po.currency)}</Td>
+                  <Td className="text-right">
+                    <form
+                      action={async () => {
+                        "use server";
+                        await approveProforma(po.id);
+                      }}
+                    >
+                      <button
+                        type="submit"
+                        className="rounded-md bg-accent/10 px-2.5 py-1 text-xs font-medium text-accent hover:bg-accent/20"
+                      >
+                        Goedkeuren
+                      </button>
+                    </form>
+                  </Td>
+                </Tr>
+              ))}
+            </TBody>
+          </Table>
+        </Card>
+      )}
+
+      <Card className="mt-6">
+        <CardHeader>
+          <CardTitle>Openstaande inkoopfacturen</CardTitle>
+          <Link href="/inkooporders" className="text-xs text-accent hover:underline">
+            Alle inkooporders
+          </Link>
+        </CardHeader>
+        {unpaidInvoices.length === 0 ? (
+          <CardContent>
+            <EmptyState title="Alles betaald ✓" description="Geen openstaande inkoopfacturen." />
+          </CardContent>
+        ) : (
+          <Table>
+            <THead>
+              <tr>
+                <Th>Leverancier</Th>
+                <Th>Referentie</Th>
+                <Th>Vervaldatum</Th>
+                <Th className="text-right">Bedrag</Th>
+                <Th />
+              </tr>
+            </THead>
+            <TBody>
+              {unpaidInvoices.map((po) => {
+                const overdue = !!po.dueDate && po.dueDate < today;
+                return (
+                  <Tr key={po.id}>
+                    <Td>
+                      <Link href={`/inkooporders/${po.id}`} className="font-medium hover:underline">
+                        {po.supplier}
+                      </Link>
+                    </Td>
+                    <Td className="text-muted">{po.reference ?? "—"}</Td>
+                    <Td className={overdue ? "font-medium text-danger" : "text-muted"}>
+                      {po.dueDate ? formatDate(po.dueDate) : "—"}
+                      {overdue ? " · vervallen" : ""}
+                    </Td>
+                    <Td className="text-right font-medium tabular-nums">
+                      {formatMoney(po.total, po.currency)}
+                    </Td>
+                    <Td className="text-right">
+                      <form
+                        action={async () => {
+                          "use server";
+                          await markPurchaseOrderPaid(po.id);
+                        }}
+                      >
+                        <button
+                          type="submit"
+                          className="rounded-md bg-accent/10 px-2.5 py-1 text-xs font-medium text-accent hover:bg-accent/20"
+                        >
+                          Betaald
+                        </button>
+                      </form>
+                    </Td>
+                  </Tr>
+                );
+              })}
+            </TBody>
+          </Table>
+        )}
+      </Card>
 
       <div className="mt-6 grid gap-4 lg:grid-cols-2">
         <Card>

@@ -417,13 +417,21 @@ export async function pullPurchaseOrdersFromHolded(): Promise<PullResult> {
       stockAppliedAt: isDraft ? null : new Date(),
       receivedAt: isDraft ? null : (unixToDateString(d.date) ? new Date(unixToDateString(d.date)!) : new Date()),
       holdedId: d.id,
+      // Betaalstatus uit Holded overnemen (vice-versa sync). status 1 = volledig
+      // betaald; paymentsTotal = reeds betaald bedrag (ook bij deelbetaling).
+      paidEur: (d.paymentsTotal ?? 0) > 0 ? String(toEur(d.paymentsTotal)) : null,
+      paidAt: d.status === 1 ? new Date() : null,
     };
 
     const existing = await db.query.purchaseOrders.findFirst({
       where: eq(purchaseOrders.holdedId, d.id),
     });
     if (existing) {
-      await db.update(purchaseOrders).set(data).where(eq(purchaseOrders.id, existing.id));
+      // paidAt niet overschrijven als 'ie al gezet is — de eerste keer telt.
+      await db
+        .update(purchaseOrders)
+        .set({ ...data, paidAt: existing.paidAt ?? data.paidAt })
+        .where(eq(purchaseOrders.id, existing.id));
       updated++;
     } else {
       await db.insert(purchaseOrders).values(data);

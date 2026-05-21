@@ -119,6 +119,8 @@ export async function saveMailNotes(emailId: string, notes: string) {
 export async function createPurchaseInvoiceFromMail(args: {
   emailId: string;
   attachmentId: string;
+  /** True = proforma: concept-inkooporder dat op goedkeuring wacht; niet naar Holded. */
+  asProforma?: boolean;
   /** Override: supplier / reference / amount als de extractie iets verkeerd haalt */
   override?: { supplier?: string; reference?: string; total?: number };
 }): Promise<{ purchaseOrderId: string; holdedId: string | null; total: number; holdedError?: string }> {
@@ -158,16 +160,24 @@ export async function createPurchaseInvoiceFromMail(args: {
     filename: att.filename,
   });
 
-  // 2b. Insert lokaal — 'received' = factuur ontvangen, voorraad-onafhankelijk
+  // 2b. Insert lokaal. Inkoopfactuur → 'received'; proforma → 'draft' (wacht op
+  //     goedkeuring). Vervaldatum standaard 30 dagen na ontvangst.
+  const isProforma = !!args.asProforma;
+  const baseDate = att.receivedAt ?? mail.receivedAt ?? new Date();
+  const orderDate = baseDate.toISOString().slice(0, 10);
+  const dueDate = isProforma
+    ? null
+    : new Date(baseDate.getTime() + 30 * 864e5).toISOString().slice(0, 10);
   const [po] = await db
     .insert(purchaseOrders)
     .values({
       supplier,
       reference,
-      status: "received",
+      status: isProforma ? "draft" : "received",
       currency: "EUR",
-      orderDate: (att.receivedAt ?? mail.receivedAt ?? new Date()).toISOString().slice(0, 10),
-      receivedAt: att.receivedAt ?? mail.receivedAt ?? new Date(),
+      orderDate,
+      dueDate,
+      receivedAt: isProforma ? null : baseDate,
       total: String(total.toFixed(2)),
       items: [
         {
@@ -194,21 +204,24 @@ export async function createPurchaseInvoiceFromMail(args: {
   // 4. Activity log
   await db.insert(activities).values({
     type: "note",
-    subject: `Inkoopfactuur aangemaakt: ${supplier} ${reference}`,
+    subject: `${isProforma ? "Proforma" : "Inkoopfactuur"} toegevoegd: ${supplier} ${reference}`,
     body: `Bedrag: €${total.toFixed(2)}\nBron: ${att.filename}\nMail: ${mail.subject ?? ""}`,
     authorId: user.id,
   });
 
-  // 5. Best-effort push naar Holded
+  // 5. Best-effort push naar Holded — alleen echte facturen, geen proforma's.
   let holdedId: string | null = null;
   let holdedError: string | undefined;
-  try {
-    holdedId = await pushPurchaseOrderToHolded(po.id);
-  } catch (e) {
-    holdedError = e instanceof Error ? e.message : String(e);
-    console.error("[createPurchaseInvoiceFromMail] Holded push failed:", holdedError);
+  if (!isProforma) {
+    try {
+      holdedId = await pushPurchaseOrderToHolded(po.id);
+    } catch (e) {
+      holdedError = e instanceof Error ? e.message : String(e);
+      console.error("[createPurchaseInvoiceFromMail] Holded push failed:", holdedError);
+    }
   }
 
+  revalidatePath("/");
   revalidatePath("/inbox");
   revalidatePath(`/inbox/${args.emailId}`);
   revalidatePath("/inkooporders");
