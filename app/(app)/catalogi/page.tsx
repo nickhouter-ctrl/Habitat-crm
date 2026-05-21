@@ -1,7 +1,10 @@
+import { and, asc, eq, isNotNull } from "drizzle-orm";
 import { BookOpen, Download, Trash2, Upload } from "lucide-react";
 import Link from "next/link";
 
 import { Card, CardContent, CardHeader, CardTitle, EmptyState, PageHeader, buttonClass } from "@/components/ui";
+import { db } from "@/lib/db";
+import { products } from "@/lib/db/schema";
 import { listCatalogFiles } from "@/lib/storage";
 import { formatDate } from "@/lib/utils";
 
@@ -17,6 +20,12 @@ function formatSize(bytes: number): string {
 
 export default async function CatalogiPage() {
   const files = await listCatalogFiles();
+  const collectionRows = await db
+    .selectDistinct({ collection: products.collection })
+    .from(products)
+    .where(and(eq(products.isActive, true), isNotNull(products.collection)))
+    .orderBy(asc(products.collection));
+  const collections = collectionRows.map((r) => r.collection).filter(Boolean) as string[];
 
   return (
     <>
@@ -47,17 +56,31 @@ export default async function CatalogiPage() {
       </Card>
 
       <Card className="mb-4">
-        <CardContent className="flex flex-wrap items-center justify-between gap-3 py-4">
-          <div>
-            <p className="text-sm font-medium">Habitat One prijslijst / brochure</p>
-            <p className="text-xs text-muted">
-              Genereer een prijslijst in jullie eigen huisstijl (NL/ES/EN/DE) uit de productcatalogus
-              — zonder leveranciersmerk.
-            </p>
+        <CardHeader>
+          <CardTitle>Habitat One catalogus &amp; prijslijst</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <p className="text-xs text-muted">
+            Onze eigen documenten — in huisstijl gegenereerd uit de productcatalogus, zonder
+            leveranciersmerk. De catalogus toont de producten met grote foto&apos;s; de prijslijst is
+            de gedetailleerde versie met alle prijzen (NL/ES/EN/DE).
+          </p>
+          <div className="flex flex-wrap gap-2">
+            {collections.map((c) => (
+              <a
+                key={c}
+                href={`/catalogi/pdf?collection=${encodeURIComponent(c)}`}
+                target="_blank"
+                rel="noreferrer"
+                className={buttonClass({ variant: "secondary" })}
+              >
+                <BookOpen className="h-4 w-4" /> Catalogus: {c}
+              </a>
+            ))}
+            <Link href="/prijslijst" className={buttonClass({ variant: "secondary" })}>
+              Prijslijst genereren →
+            </Link>
           </div>
-          <Link href="/prijslijst" className={buttonClass({ variant: "secondary" })}>
-            Naar prijslijst →
-          </Link>
         </CardContent>
       </Card>
 
