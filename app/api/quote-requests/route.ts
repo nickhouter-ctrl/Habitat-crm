@@ -3,7 +3,7 @@ import { z } from "zod";
 
 import { db } from "@/lib/db";
 import { quoteRequests } from "@/lib/db/schema";
-import { sendEmail } from "@/lib/email";
+import { sendMail } from "@/lib/gmail";
 import { COMPANY } from "@/lib/company";
 
 /**
@@ -77,8 +77,8 @@ export async function POST(req: Request) {
     })
     .returning({ id: quoteRequests.id });
 
-  // Meldings-mail naar Habitat One. sendEmail is een no-op tot
-  // RESEND_API_KEY + EMAIL_FROM op Vercel gezet zijn — breekt de response niet.
+  // Meldings-mail naar Habitat One via Gmail (GMAIL_USER/GMAIL_APP_PASSWORD).
+  // In try/catch — een mail-fout mag het opslaan van de aanvraag nooit breken.
   try {
     const crmUrl = process.env.APP_URL || "https://habitat-crm-delta.vercel.app";
     const rows: [string, string][] = [
@@ -90,8 +90,9 @@ export async function POST(req: Request) {
       ["Herkomst", v.source?.trim() || "website"],
       ["Bericht", v.message || "—"],
     ];
-    await sendEmail({
+    await sendMail({
       to: process.env.NOTIFY_EMAIL || COMPANY.email,
+      replyTo: v.email,
       subject: `Nieuwe offerte-aanvraag — ${v.name}`,
       html: `<div style="font-family:Arial,Helvetica,sans-serif;color:#2a2620;max-width:560px">
   <h2 style="color:#402419;margin:0 0 14px">Nieuwe offerte-aanvraag</h2>
