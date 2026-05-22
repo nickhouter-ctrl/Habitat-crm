@@ -3,6 +3,8 @@ import { z } from "zod";
 
 import { db } from "@/lib/db";
 import { quoteRequests } from "@/lib/db/schema";
+import { sendEmail } from "@/lib/email";
+import { COMPANY } from "@/lib/company";
 
 /**
  * Publieke endpoint waar habitat-one (of een andere bron) een offerte-aanvraag
@@ -19,7 +21,15 @@ const schema = z.object({
   productNames: z.array(z.string()).max(50).optional(),
   productSlugs: z.array(z.string()).max(50).optional(),
   locale: z.enum(["nl", "de", "en", "es"]).optional(),
+  source: z.string().trim().max(80).optional(),
 });
+
+function escapeHtml(s: string): string {
+  return s.replace(
+    /[&<>"]/g,
+    (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c] ?? c,
+  );
+}
 
 function corsHeaders(origin?: string | null): HeadersInit {
   // Sta habitat-one en lokale dev toe. Andere oorsprongs vallen door op same-origin.
@@ -63,8 +73,43 @@ export async function POST(req: Request) {
       productNames: v.productNames?.length ? v.productNames : null,
       productSlugs: v.productSlugs?.length ? v.productSlugs : null,
       locale: v.locale ?? null,
+      source: v.source?.trim() || "website",
     })
     .returning({ id: quoteRequests.id });
+
+  // Meldings-mail naar Habitat One. sendEmail is een no-op tot
+  // RESEND_API_KEY + EMAIL_FROM op Vercel gezet zijn — breekt de response niet.
+  try {
+    const crmUrl = process.env.APP_URL || "https://habitat-crm-delta.vercel.app";
+    const rows: [string, string][] = [
+      ["Naam", v.name],
+      ["E-mail", v.email],
+      ["Telefoon", v.phone || "—"],
+      ["Bedrijf", v.company || "—"],
+      ["Producten", v.productNames?.length ? v.productNames.join(", ") : "—"],
+      ["Herkomst", v.source?.trim() || "website"],
+      ["Bericht", v.message || "—"],
+    ];
+    await sendEmail({
+      to: process.env.NOTIFY_EMAIL || COMPANY.email,
+      subject: `Nieuwe offerte-aanvraag — ${v.name}`,
+      html: `<div style="font-family:Arial,Helvetica,sans-serif;color:#2a2620;max-width:560px">
+  <h2 style="color:#402419;margin:0 0 14px">Nieuwe offerte-aanvraag</h2>
+  <table style="border-collapse:collapse;width:100%;font-size:14px">${rows
+    .map(
+      ([k, val]) =>
+        `<tr><td style="padding:6px 10px;color:#7a6a58;vertical-align:top;white-space:nowrap">${k}</td><td style="padding:6px 10px;white-space:pre-wrap">${escapeHtml(val)}</td></tr>`,
+    )
+    .join("")}</table>
+  <p style="margin:20px 0 0"><a href="${crmUrl}/aanvragen/${row.id}" style="background:#b5532b;color:#fff;padding:11px 20px;border-radius:8px;text-decoration:none;font-size:14px">Bekijk in het CRM</a></p>
+</div>`,
+      text:
+        rows.map(([k, val]) => `${k}: ${val}`).join("\n") +
+        `\n\nCRM: ${crmUrl}/aanvragen/${row.id}`,
+    });
+  } catch (err) {
+    console.warn("[quote-requests] meldings-mail mislukt:", err);
+  }
 
   return NextResponse.json({ ok: true, id: row.id }, { status: 201, headers: corsHeaders(origin) });
 }
