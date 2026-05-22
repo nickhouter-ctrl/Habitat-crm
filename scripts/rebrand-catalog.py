@@ -42,7 +42,7 @@ CONFIGS = {
         "out": "/tmp/ethick/habitat-bloempotten.pdf",
         "title": "Bloempotten",
         "drop_front": 5,
-        "drop_back": 4,
+        "drop_back": 3,
     },
 }
 
@@ -138,7 +138,12 @@ def find_wordmarks(page):
                 break
         else:
             clusters.append([r[0], r[1], r[2], r[3], 1])
-    return [c[:4] for c in clusters if c[4] >= 4 and (c[2] - c[0]) < 135]
+    # Een woordmerk = >=3 lettervormen op een rij, breder dan hoog, < 150pt.
+    return [
+        c[:4] for c in clusters
+        if c[4] >= 3 and 12 < (c[2] - c[0]) < 150
+        and (c[2] - c[0]) > 1.8 * (c[3] - c[1])
+    ]
 
 
 def cover_with_logo(page, rect, sora):
