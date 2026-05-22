@@ -4,7 +4,6 @@ import { z } from "zod";
 import { db } from "@/lib/db";
 import { quoteRequests } from "@/lib/db/schema";
 import { sendMail } from "@/lib/gmail";
-import { COMPANY } from "@/lib/company";
 
 /**
  * Publieke endpoint waar habitat-one (of een andere bron) een offerte-aanvraag
@@ -79,6 +78,7 @@ export async function POST(req: Request) {
 
   // Meldings-mail naar Habitat One via Gmail (GMAIL_USER/GMAIL_APP_PASSWORD).
   // In try/catch — een mail-fout mag het opslaan van de aanvraag nooit breken.
+  let mailStatus = "skipped";
   try {
     const crmUrl = process.env.APP_URL || "https://habitat-crm-delta.vercel.app";
     const rows: [string, string][] = [
@@ -91,7 +91,9 @@ export async function POST(req: Request) {
       ["Bericht", v.message || "—"],
     ];
     await sendMail({
-      to: process.env.NOTIFY_EMAIL || COMPANY.email,
+      to:
+        process.env.NOTIFY_EMAIL?.trim() ||
+        "hi@habitat-one.com, purchase@habitat-one.com",
       replyTo: v.email,
       subject: `Nieuwe offerte-aanvraag — ${v.name}`,
       html: `<div style="font-family:Arial,Helvetica,sans-serif;color:#2a2620;max-width:560px">
@@ -108,9 +110,14 @@ export async function POST(req: Request) {
         rows.map(([k, val]) => `${k}: ${val}`).join("\n") +
         `\n\nCRM: ${crmUrl}/aanvragen/${row.id}`,
     });
+    mailStatus = "sent";
   } catch (err) {
+    mailStatus = `failed: ${err instanceof Error ? err.message : String(err)}`;
     console.warn("[quote-requests] meldings-mail mislukt:", err);
   }
 
-  return NextResponse.json({ ok: true, id: row.id }, { status: 201, headers: corsHeaders(origin) });
+  return NextResponse.json(
+    { ok: true, id: row.id, mail: mailStatus },
+    { status: 201, headers: corsHeaders(origin) },
+  );
 }
