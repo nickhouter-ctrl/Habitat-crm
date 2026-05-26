@@ -27,6 +27,8 @@ import { dealStageMeta, documentKindMeta } from "./_meta";
 import { approveProforma, markPurchaseOrderPaid } from "./inkooporders/actions";
 
 export const metadata = { title: "Dashboard" };
+// Cold start mag tot 60s, ruim voor de eerste Holded-fetch; warm is dit 1–2s.
+export const maxDuration = 60;
 
 const PIPELINE_STAGES = ["lead", "qualified", "proposal", "negotiation", "won"] as const;
 
