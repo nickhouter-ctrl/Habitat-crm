@@ -7,6 +7,8 @@
  *   6xxxxxxx → Gastos (kosten / uitgaven)
  *   7xxxxxxx → Ingresos (omzet)
  */
+import { unstable_cache } from "next/cache";
+
 import { holded } from "./client";
 
 interface LedgerLine {
@@ -116,31 +118,35 @@ export async function expensesYTD(): Promise<number> {
  * getallen bij elkaar op zoals ze in het document staan). Klopt 1-op-1 met
  * wat je in Holded ziet onder "Aankoopfacturen".
  */
-const docsCache: { fetchedAt: number; subtotal: number; byMonth: Map<string, number> } | null = null;
-let _docsCache: { fetchedAt: number; subtotal: number; byMonth: Map<string, number> } | null = docsCache;
-
-async function fetchPurchaseDocs() {
-  if (_docsCache && Date.now() - _docsCache.fetchedAt < TTL_MS) return _docsCache;
-  try {
-    const docs = await holded.request<Array<{ subtotal?: number; date?: number; currency?: string }>>(
-      `/invoicing/v1/documents/purchase`,
-    );
-    let subtotal = 0;
-    const byMonth = new Map<string, number>();
-    for (const d of docs ?? []) {
-      const s = Number(d.subtotal || 0);
-      subtotal += s; // currency-naive optelling (matcht Holded UI)
-      if (d.date) {
-        const ym = ymKey(d.date);
-        byMonth.set(ym, (byMonth.get(ym) ?? 0) + s);
+/**
+ * Eén Holded-fetch per 30 min, gedeeld over alle function-instances via Next's
+ * Data Cache. Zonder dit blokkeerde elke cold-start van het dashboard op een
+ * trage externe API.
+ */
+const fetchPurchaseDocs = unstable_cache(
+  async (): Promise<{ subtotal: number; byMonth: Record<string, number> }> => {
+    try {
+      const docs = await holded.request<Array<{ subtotal?: number; date?: number; currency?: string }>>(
+        `/invoicing/v1/documents/purchase`,
+      );
+      let subtotal = 0;
+      const byMonth: Record<string, number> = {};
+      for (const d of docs ?? []) {
+        const s = Number(d.subtotal || 0);
+        subtotal += s; // currency-naive optelling (matcht Holded UI)
+        if (d.date) {
+          const ym = ymKey(d.date);
+          byMonth[ym] = (byMonth[ym] ?? 0) + s;
+        }
       }
+      return { subtotal, byMonth };
+    } catch {
+      return { subtotal: 0, byMonth: {} };
     }
-    _docsCache = { fetchedAt: Date.now(), subtotal, byMonth };
-    return _docsCache;
-  } catch {
-    return { fetchedAt: Date.now(), subtotal: 0, byMonth: new Map<string, number>() };
-  }
-}
+  },
+  ["holded-purchase-docs-v1"],
+  { revalidate: 1800 },
+);
 
 export async function purchaseDocsTotalExBTW(): Promise<number> {
   const c = await fetchPurchaseDocs();
@@ -154,7 +160,7 @@ export async function purchaseDocsByMonth(months = 12): Promise<{ ym: string; to
   for (let i = months - 1; i >= 0; i--) {
     const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
     const ym = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
-    out.push({ ym, total: Math.round((c.byMonth.get(ym) ?? 0) * 100) / 100 });
+    out.push({ ym, total: Math.round((c.byMonth[ym] ?? 0) * 100) / 100 });
   }
   return out;
 }
