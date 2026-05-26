@@ -42,7 +42,7 @@ export default async function InboxPage({
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const params = await searchParams;
-  const statusFilter = typeof params.status === "string" ? params.status : "new";
+  const statusFilter = typeof params.status === "string" ? params.status : "all";
   const mailboxFilter = typeof params.mailbox === "string" ? params.mailbox : "all";
 
   // Mailbox-filter:
@@ -127,7 +127,7 @@ export default async function InboxPage({
             ].map((m) => {
               const sp = new URLSearchParams();
               if (m.key !== "all") sp.set("mailbox", m.key);
-              if (statusFilter !== "new") sp.set("status", statusFilter);
+              if (statusFilter !== "all") sp.set("status", statusFilter);
               return (
                 <Link
                   key={m.key}
