@@ -7,8 +7,6 @@
  *   6xxxxxxx → Gastos (kosten / uitgaven)
  *   7xxxxxxx → Ingresos (omzet)
  */
-import { unstable_cache } from "next/cache";
-
 import { holded } from "./client";
 
 interface LedgerLine {
@@ -119,34 +117,43 @@ export async function expensesYTD(): Promise<number> {
  * wat je in Holded ziet onder "Aankoopfacturen".
  */
 /**
- * Eén Holded-fetch per 30 min, gedeeld over alle function-instances via Next's
- * Data Cache. Zonder dit blokkeerde elke cold-start van het dashboard op een
- * trage externe API.
+ * In-memory cache (per function-instance, 30 min) + harde timeout op de
+ * Holded-fetch zodat het dashboard nooit langer dan 5s blokkeert. Een mislukte
+ * fetch wordt NIET gecachet — volgende request probeert opnieuw.
  */
-const fetchPurchaseDocs = unstable_cache(
-  async (): Promise<{ subtotal: number; byMonth: Record<string, number> }> => {
-    try {
-      const docs = await holded.request<Array<{ subtotal?: number; date?: number; currency?: string }>>(
+type DocsCache = { fetchedAt: number; subtotal: number; byMonth: Record<string, number> };
+let _docsCache: DocsCache | null = null;
+const DOCS_TIMEOUT_MS = 5000;
+
+async function fetchPurchaseDocs(): Promise<DocsCache> {
+  if (_docsCache && Date.now() - _docsCache.fetchedAt < TTL_MS) return _docsCache;
+  try {
+    const docs = await Promise.race([
+      holded.request<Array<{ subtotal?: number; date?: number; currency?: string }>>(
         `/invoicing/v1/documents/purchase`,
-      );
-      let subtotal = 0;
-      const byMonth: Record<string, number> = {};
-      for (const d of docs ?? []) {
-        const s = Number(d.subtotal || 0);
-        subtotal += s; // currency-naive optelling (matcht Holded UI)
-        if (d.date) {
-          const ym = ymKey(d.date);
-          byMonth[ym] = (byMonth[ym] ?? 0) + s;
-        }
+      ),
+      new Promise<never>((_, rej) =>
+        setTimeout(() => rej(new Error("Holded purchase-docs timeout")), DOCS_TIMEOUT_MS),
+      ),
+    ]);
+    let subtotal = 0;
+    const byMonth: Record<string, number> = {};
+    for (const d of docs ?? []) {
+      const s = Number(d.subtotal || 0);
+      subtotal += s; // currency-naive (matcht Holded UI)
+      if (d.date) {
+        const ym = ymKey(d.date);
+        byMonth[ym] = (byMonth[ym] ?? 0) + s;
       }
-      return { subtotal, byMonth };
-    } catch {
-      return { subtotal: 0, byMonth: {} };
     }
-  },
-  ["holded-purchase-docs-v1"],
-  { revalidate: 1800 },
-);
+    _docsCache = { fetchedAt: Date.now(), subtotal, byMonth };
+    return _docsCache;
+  } catch {
+    // Niet cachen — geef de laatste bekende waarde terug, anders 0 (subtotaal),
+    // en laat de volgende request de fetch opnieuw proberen.
+    return _docsCache ?? { fetchedAt: 0, subtotal: 0, byMonth: {} };
+  }
+}
 
 export async function purchaseDocsTotalExBTW(): Promise<number> {
   const c = await fetchPurchaseDocs();
