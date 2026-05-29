@@ -30,7 +30,8 @@ import {
   holdedSyncMap,
 } from "@/lib/db/schema";
 import { formatDate, formatEUR } from "@/lib/utils";
-import { addContactNote } from "../actions";
+import { ConfirmSubmit } from "@/components/confirm-submit";
+import { addContactNote, deleteContact } from "../actions";
 import {
   contactTypeMeta,
   dealStageMeta,
@@ -70,10 +71,13 @@ function InfoRow({
 
 export default async function ContactDetailPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>;
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const { id } = await params;
+  const sp = await searchParams;
 
   const contact = await db.query.contacts.findFirst({
     where: eq(contacts.id, id),
@@ -156,9 +160,24 @@ export default async function ContactDetailPage({
             <LinkButton href={`/contacts/${id}/edit`} variant="secondary">
               Bewerken
             </LinkButton>
+            <form action={deleteContact.bind(null, id)} className="contents">
+              <ConfirmSubmit
+                message={`Contact "${contact.name}" definitief verwijderen?`}
+                className="rounded-md px-3 py-2 text-sm font-medium text-danger transition-colors hover:bg-danger/10"
+              >
+                Verwijderen
+              </ConfirmSubmit>
+            </form>
           </>
         }
       />
+
+      {sp.verwijderen === "facturen" && (
+        <p className="mb-4 rounded-md bg-warning/10 px-3 py-2 text-sm text-warning">
+          Dit contact kan niet verwijderd worden — er hangen nog verstuurde of betaalde
+          facturen aan. Verwijder of ontkoppel die eerst.
+        </p>
+      )}
 
       <div className="grid gap-4 lg:grid-cols-3">
         {/* Left: details */}

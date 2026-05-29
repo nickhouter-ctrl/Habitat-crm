@@ -35,6 +35,7 @@ import {
   setDocumentStatus,
 } from "../actions";
 import { documentKindMeta, documentStatusMeta } from "../../_meta";
+import { ConfirmSubmit } from "@/components/confirm-submit";
 
 export async function generateMetadata({
   params,
@@ -339,14 +340,16 @@ export default async function DocumentDetailPage({
             </CardContent>
           </Card>
 
-          <form action={removeDoc}>
-            <button
-              type="submit"
-              className="text-xs text-muted underline-offset-2 hover:text-danger hover:underline"
-            >
-              {kindLabel} verwijderen
-            </button>
-          </form>
+          {(doc.kind === "estimate" || doc.status === "draft") && (
+            <form action={removeDoc}>
+              <ConfirmSubmit
+                message={`${kindLabel} ${doc.docNumber ?? ""} definitief verwijderen?`}
+                className="text-xs text-muted underline-offset-2 hover:text-danger hover:underline"
+              >
+                {kindLabel} verwijderen
+              </ConfirmSubmit>
+            </form>
+          )}
         </div>
 
         <div className="lg:col-span-2">

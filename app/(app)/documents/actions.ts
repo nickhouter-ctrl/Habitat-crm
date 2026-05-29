@@ -1,6 +1,6 @@
 "use server";
 
-import { count, eq, sql } from "drizzle-orm";
+import { and, count, eq, sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
@@ -8,7 +8,7 @@ import { z } from "zod";
 
 import { auth } from "@/auth";
 import { db } from "@/lib/db";
-import { activities, contacts, deals, documents, products } from "@/lib/db/schema";
+import { activities, contacts, deals, documents, holdedSyncMap, products } from "@/lib/db/schema";
 import { syncDealFromDocument } from "@/lib/deals";
 import {
   computeTotals,
@@ -263,11 +263,22 @@ export async function deleteDocument(id: string) {
   await requireUser();
   const doc = await db.query.documents.findFirst({
     where: eq(documents.id, id),
-    columns: { kind: true },
+    columns: { kind: true, status: true },
   });
+  if (!doc) redirect("/quotes");
+  // Veilig verwijderen: offertes mogen altijd weg; facturen e.d. alleen zolang
+  // ze nog concept zijn. Verstuurde/betaalde facturen blijven beschermd.
+  const deletable = doc.kind === "estimate" || doc.status === "draft";
+  if (!deletable) {
+    redirect(`/documents/${id}?verwijderen=beschermd`);
+  }
+  // Holded-koppeling opruimen zodat het document niet terug-synct.
+  await db
+    .delete(holdedSyncMap)
+    .where(and(eq(holdedSyncMap.entityType, "document"), eq(holdedSyncMap.localId, id)));
   await db.delete(documents).where(eq(documents.id, id));
-  if (doc) revalidateAround(doc.kind as DocKind);
-  redirect(doc ? listPathFor(doc.kind as DocKind) : "/quotes");
+  revalidateAround(doc.kind as DocKind);
+  redirect(listPathFor(doc.kind as DocKind));
 }
 
 /** Mark a document as sent, generate (or reuse) the public accept link, e-mail the client. */

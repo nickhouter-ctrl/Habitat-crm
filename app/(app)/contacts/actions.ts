@@ -1,13 +1,13 @@
 "use server";
 
-import { eq } from "drizzle-orm";
+import { and, eq, inArray, ne } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
 
 import { auth } from "@/auth";
 import { db } from "@/lib/db";
-import { activities, contacts, deals } from "@/lib/db/schema";
+import { activities, contacts, deals, documents, holdedSyncMap } from "@/lib/db/schema";
 
 const contactSchema = z.object({
   firstName: z.string().trim().max(120).optional().or(z.literal("")),
@@ -124,4 +124,32 @@ export async function addContactNote(contactId: string, body: string) {
     .where(eq(contacts.id, contactId));
 
   revalidatePath(`/contacts/${contactId}`);
+}
+
+export async function deleteContact(id: string) {
+  const session = await auth();
+  if (!session?.user) redirect("/login");
+
+  // Beschermd: niet verwijderen als er verstuurde/betaalde facturen aan hangen.
+  const blocking = await db.query.documents.findFirst({
+    where: and(
+      eq(documents.contactId, id),
+      inArray(documents.kind, ["invoice", "proforma", "creditnote", "salesreceipt"]),
+      ne(documents.status, "draft"),
+    ),
+    columns: { id: true },
+  });
+  if (blocking) {
+    redirect(`/contacts/${id}?verwijderen=facturen`);
+  }
+
+  // Holded-koppeling opruimen zodat het contact niet terug-synct.
+  await db
+    .delete(holdedSyncMap)
+    .where(and(eq(holdedSyncMap.entityType, "contact"), eq(holdedSyncMap.localId, id)));
+  await db.delete(contacts).where(eq(contacts.id, id));
+
+  revalidatePath("/contacts");
+  revalidatePath("/");
+  redirect("/contacts");
 }
