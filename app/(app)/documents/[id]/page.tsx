@@ -32,7 +32,6 @@ import {
   createInvoiceFromEstimate,
   deleteDocument,
   reverseStockOutFromDocument,
-  sendDocument,
   setDocumentStatus,
 } from "../actions";
 import { documentKindMeta, documentStatusMeta } from "../../_meta";
@@ -102,7 +101,6 @@ export default async function DocumentDetailPage({
 
   const changeStatus = setDocumentStatus.bind(null, id);
   const removeDoc = deleteDocument.bind(null, id);
-  const send = sendDocument.bind(null, id);
   const makeInvoice = createInvoiceFromEstimate.bind(null, id);
   const makeDeliveryNote = createDeliveryNoteFromDocument.bind(null, id);
 
@@ -217,11 +215,25 @@ export default async function DocumentDetailPage({
               <CardTitle>Versturen & status</CardTitle>
             </CardHeader>
             <CardContent className="space-y-3 text-sm">
-              <form action={send}>
-                <Button type="submit" size="sm">
-                  {doc.sentAt ? "Opnieuw versturen" : "Versturen naar klant"}
-                </Button>
-              </form>
+              <LinkButton href={`/documents/${id}/verzenden`} size="sm">
+                {doc.sentAt ? "Opnieuw versturen" : "Versturen naar klant"}
+              </LinkButton>
+
+              {sp.verzonden === "verzonden" && (
+                <p className="rounded-md bg-success/10 px-3 py-2 text-sm font-medium text-success">
+                  ✓ Mail verstuurd naar de klant.
+                </p>
+              )}
+              {sp.verzonden === "geenmail" && (
+                <p className="rounded-md bg-warning/10 px-3 py-2 text-sm text-warning">
+                  De klant-link is aangemaakt, maar de mail kon niet verstuurd worden.
+                </p>
+              )}
+              {sp.verzonden === "geenadres" && (
+                <p className="rounded-md bg-warning/10 px-3 py-2 text-sm text-warning">
+                  Verstuurd zonder mail — dit contact heeft geen e-mailadres.
+                </p>
+              )}
 
               {doc.sentAt && (
                 <div className="space-y-1.5 rounded-md bg-background px-3 py-2">

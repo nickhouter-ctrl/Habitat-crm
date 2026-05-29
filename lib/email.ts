@@ -140,14 +140,18 @@ const T: Record<
 };
 
 function signatureHtml(): string {
+  // Zelfde meerregelige opmaak als op de PDF: straat, dan postcode + plaats,
+  // daarna telefoon en e-mail onder elkaar.
+  const strong = `<span style="display:block;font-weight:600;color:#555">${escapeHtml(COMPANY.legalName)}</span>`;
   const parts = [
-    COMPANY.legalName,
-    COMPANY.address,
-    [COMPANY.phone, COMPANY.email].filter(Boolean).join(" · "),
+    COMPANY.addressStreet,
+    COMPANY.addressRegion,
+    COMPANY.phone,
+    COMPANY.email,
     COMPANY.website,
     COMPANY.vatNumber ? `NIF ${COMPANY.vatNumber}` : "",
   ].filter(Boolean);
-  return parts.map((p) => `<span style="display:block">${escapeHtml(p)}</span>`).join("");
+  return strong + parts.map((p) => `<span style="display:block">${escapeHtml(p)}</span>`).join("");
 }
 
 export function offerteEmail(args: {
@@ -157,6 +161,9 @@ export function offerteEmail(args: {
   title?: string | null;
   contactName?: string | null;
   url: string;
+  /** Aangepast onderwerp/bericht uit het verzend-previewscherm (optioneel). */
+  subject?: string | null;
+  message?: string | null;
 }): { subject: string; html: string; text: string } {
   const lang: Lang = (["en", "nl", "es", "de"] as const).includes(args.lang as Lang)
     ? (args.lang as Lang)
@@ -164,7 +171,12 @@ export function offerteEmail(args: {
   const t = T[lang];
   const kind = args.kind ?? "estimate";
   const nr = args.docNumber || "—";
-  const subject = t.subject(nr, kind);
+  const subject = args.subject?.trim() || t.subject(nr, kind);
+  const introText = args.message?.trim() || t.intro(kind);
+  const introHtml = introText
+    .split(/\n+/)
+    .map((p) => `<p>${escapeHtml(p)}</p>`)
+    .join("");
   const greeting = args.contactName ? `${t.hi} ${escapeHtml(args.contactName)},` : `${t.hi},`;
   const title = args.title ? `<p style="color:#555;margin:4px 0 0">${escapeHtml(args.title)}</p>` : "";
   const html = `<div style="font-family:Helvetica,Arial,sans-serif;background:${COMPANY.cream};padding:24px 0">
@@ -175,27 +187,36 @@ export function offerteEmail(args: {
     </div>
     <div style="padding:24px 28px">
       <p style="margin:0">${greeting}</p>
-      <p>${t.intro(kind)}</p>
+      ${introHtml}
       ${title}
-      <p style="margin:24px 0 12px">
-        <a href="${args.url}" style="background:${COMPANY.accent};color:#fff;text-decoration:none;padding:11px 20px;border-radius:8px;display:inline-block;font-weight:600">${t.review(kind)} (${nr})</a>
-      </p>
-      ${
-        kind === "estimate"
-          ? `<p style="margin:0 0 20px">
-        <a href="${args.url}?actie=accepteren" style="background:#2e7d32;color:#fff;text-decoration:none;padding:11px 20px;border-radius:8px;display:inline-block;font-weight:600">✓ ${t.accept}</a>
-      </p>`
-          : ""
-      }
-      <p style="font-size:13px"><a href="${args.url}/pdf" style="color:${COMPANY.accent}">${t.pdf}</a></p>
-      <p style="font-size:12px;color:#aaa;word-break:break-all">${escapeHtml(args.url)}</p>
-      <p style="margin-top:28px">${t.regards}</p>
-      <div style="font-size:13px;color:#555;margin-top:6px">${signatureHtml()}</div>
+      <div style="margin:28px 0 18px">
+        ${
+          kind === "estimate"
+            ? `<a href="${args.url}?actie=accepteren" style="background:${COMPANY.accent};color:#ffffff;text-decoration:none;padding:12px 24px;border-radius:8px;display:inline-block;font-weight:600;font-size:15px">${t.accept}</a>
+        <a href="${args.url}" style="color:${COMPANY.brown};text-decoration:none;padding:11px 20px;border:1px solid ${COMPANY.sand};border-radius:8px;display:inline-block;font-weight:600;font-size:15px;margin:6px 0 0 8px">${t.review(kind)}</a>`
+            : `<a href="${args.url}" style="background:${COMPANY.accent};color:#ffffff;text-decoration:none;padding:12px 24px;border-radius:8px;display:inline-block;font-weight:600;font-size:15px">${t.review(kind)} (${nr})</a>`
+        }
+      </div>
+      <p style="font-size:13px;color:#888;margin:0">${t.pdf}: <a href="${args.url}/pdf" style="color:${COMPANY.accent};text-decoration:none">${nr}.pdf</a></p>
+      <hr style="border:none;border-top:1px solid ${COMPANY.sand};margin:28px 0 16px" />
+      <p style="margin:0 0 4px">${t.regards}</p>
+      <div style="font-size:13px;color:#888;line-height:1.7">${signatureHtml()}</div>
     </div>
   </div>
 </div>`;
-  const text = `${greeting}\n\n${t.intro(kind)}\n\n${t.review(kind)}: ${args.url}\n${t.pdf}: ${args.url}/pdf\n\n${t.regards}\n${COMPANY.legalName}\n${COMPANY.address}\n${[COMPANY.phone, COMPANY.email].filter(Boolean).join(" · ")}`;
+  const text = `${greeting}\n\n${introText}\n\n${t.review(kind)}: ${args.url}\n${t.pdf}: ${args.url}/pdf\n\n${t.regards}\n${COMPANY.legalName}\n${COMPANY.address}\n${[COMPANY.phone, COMPANY.email].filter(Boolean).join(" · ")}`;
   return { subject, html, text };
+}
+
+/** Standaard onderwerp + introtekst om het verzend-previewscherm voor te vullen. */
+export function offerteDefaults(args: { lang?: string | null; kind?: string; docNumber: string }) {
+  const lang: Lang = (["en", "nl", "es", "de"] as const).includes(args.lang as Lang)
+    ? (args.lang as Lang)
+    : "es";
+  const t = T[lang];
+  const kind = args.kind ?? "estimate";
+  const nr = args.docNumber || "—";
+  return { subject: t.subject(nr, kind), intro: t.intro(kind) };
 }
 
 /** Bevestigingsmail naar de klant nadat die de offerte heeft geaccepteerd. */

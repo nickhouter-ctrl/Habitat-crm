@@ -371,6 +371,122 @@ export async function sendDocument(id: string) {
   revalidateAround(doc.kind as DocKind, id);
 }
 
+/** Versturen vanuit het preview-scherm: aangepast onderwerp/bericht + extra bijlagen. */
+export async function sendDocumentCustom(id: string, formData: FormData) {
+  const user = await requireUser();
+  const doc = await db.query.documents.findFirst({
+    where: eq(documents.id, id),
+    with: {
+      contact: {
+        columns: {
+          email: true,
+          name: true,
+          preferredLanguage: true,
+          addressLine: true,
+          postalCode: true,
+          city: true,
+        },
+      },
+    },
+  });
+  if (!doc) return;
+
+  const to = String(formData.get("to") ?? "").trim() || doc.contact?.email || "";
+  const subject = String(formData.get("subject") ?? "").trim();
+  const message = String(formData.get("message") ?? "").trim();
+
+  const token = doc.acceptToken ?? newToken();
+  const url = `${await baseUrl()}/offerte/${token}`;
+  const kindLabel = doc.kind === "invoice" ? "Factuur" : "Offerte";
+
+  await db
+    .update(documents)
+    .set({
+      acceptToken: token,
+      sentAt: new Date(),
+      status: doc.status === "draft" || doc.status === "void" ? "sent" : doc.status,
+    })
+    .where(eq(documents.id, id));
+
+  let result: "verzonden" | "geenmail" | "geenadres" = "geenadres";
+  if (to) {
+    const attachments: { filename: string; content: Uint8Array; contentType: string }[] = [];
+    try {
+      const addr =
+        [
+          doc.contact?.addressLine,
+          [doc.contact?.postalCode, doc.contact?.city].filter(Boolean).join(" "),
+        ]
+          .filter((p) => p && p.trim())
+          .join(", ") || null;
+      const buf = await renderDocumentPdf({
+        kind: doc.kind,
+        docNumber: doc.docNumber,
+        title: doc.title,
+        issueDate: doc.issueDate,
+        dueDate: doc.dueDate,
+        subtotalEur: doc.subtotalEur,
+        taxEur: doc.taxEur,
+        totalEur: doc.totalEur,
+        items: doc.items ?? [],
+        notes: doc.notes,
+        contactName: doc.contact?.name ?? null,
+        contactAddress: addr,
+        locale: doc.contact?.preferredLanguage ?? "es",
+      });
+      attachments.push({
+        filename: `${kindLabel}-${doc.docNumber ?? doc.id.slice(0, 8)}.pdf`,
+        content: new Uint8Array(buf),
+        contentType: "application/pdf",
+      });
+    } catch (err) {
+      console.warn("[habitat-crm] kon PDF niet genereren voor mail:", err);
+    }
+    // Extra bijlagen die in het previewscherm zijn toegevoegd.
+    for (const f of formData.getAll("extra")) {
+      if (f instanceof File && f.size > 0) {
+        attachments.push({
+          filename: f.name,
+          content: new Uint8Array(await f.arrayBuffer()),
+          contentType: f.type || "application/octet-stream",
+        });
+      }
+    }
+    const mail = offerteEmail({
+      lang: doc.contact?.preferredLanguage,
+      kind: doc.kind,
+      docNumber: doc.docNumber ?? "",
+      title: doc.title,
+      contactName: doc.contact?.name,
+      url,
+      subject: subject || null,
+      message: message || null,
+    });
+    const res = await sendEmail({ to, ...mail, attachments });
+    result = res.sent ? "verzonden" : "geenmail";
+  }
+
+  await db.insert(activities).values({
+    type: "email",
+    subject: `${kindLabel} ${doc.docNumber ?? ""} verstuurd`,
+    body: `Klant-link: ${url}\nE-mail: ${
+      result === "verzonden"
+        ? `verzonden naar ${to}`
+        : result === "geenmail"
+          ? `mislukt of niet ingesteld (${to})`
+          : "geen e-mailadres bij het contact"
+    }`,
+    documentId: id,
+    dealId: doc.dealId,
+    contactId: doc.contactId,
+    authorId: user.id,
+  });
+
+  await syncDealFromDocument(doc.dealId, { kind: doc.kind, status: "sent", totalEur: doc.totalEur });
+  revalidateAround(doc.kind as DocKind, id);
+  redirect(`/documents/${id}?verzonden=${result}`);
+}
+
 /** Create a draft invoice copied from an (accepted) estimate. */
 export async function createInvoiceFromEstimate(estimateId: string) {
   await requireUser();
