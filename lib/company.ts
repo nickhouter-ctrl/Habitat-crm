@@ -14,7 +14,7 @@ export const COMPANY = {
     process.env.COMPANY_ADDRESS ??
     "Camí de la Fontana 3, Locales 2, 3 en 5, 03730 Jávea (Alicante), España",
   email: process.env.COMPANY_EMAIL ?? "hi@habitat-one.com",
-  phone: process.env.COMPANY_PHONE ?? "+34 637 459 239",
+  phone: process.env.COMPANY_PHONE ?? "+34 965 00 11 22",
   website: process.env.COMPANY_WEBSITE ?? "habitat-one.com",
   iban: process.env.COMPANY_IBAN ?? "", // not provided yet
   // Luxe-mediterraanse palet — gebruikt op PDFs en e-mails.

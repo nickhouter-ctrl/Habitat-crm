@@ -15,7 +15,15 @@ export async function GET(
   const doc = await db.query.documents.findFirst({
     where: eq(documents.acceptToken, token),
     with: {
-      contact: { columns: { name: true, addressLine: true, postalCode: true, city: true } },
+      contact: {
+        columns: {
+          name: true,
+          addressLine: true,
+          postalCode: true,
+          city: true,
+          preferredLanguage: true,
+        },
+      },
     },
   });
   if (!doc) return new Response("Not found", { status: 404 });
@@ -41,6 +49,7 @@ export async function GET(
     notes: doc.notes,
     contactName: doc.contact?.name ?? null,
     contactAddress: addr,
+    locale: doc.contact?.preferredLanguage ?? "es",
   });
 
   const label = doc.kind === "invoice" ? "Factuur" : "Offerte";
