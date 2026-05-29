@@ -214,6 +214,7 @@ export async function sendMail(args: {
   replyTo?: string;
   inReplyTo?: string;
   references?: string;
+  attachments?: { filename: string; content: Buffer | Uint8Array; contentType?: string }[];
 }): Promise<{ messageId: string }> {
   const { user } = getCreds();
   const t = createSmtpTransporter();
@@ -226,6 +227,11 @@ export async function sendMail(args: {
     replyTo: args.replyTo,
     inReplyTo: args.inReplyTo,
     references: args.references,
+    attachments: args.attachments?.map((a) => ({
+      filename: a.filename,
+      content: Buffer.from(a.content),
+      contentType: a.contentType,
+    })),
   });
   return { messageId: info.messageId };
 }

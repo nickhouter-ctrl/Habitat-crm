@@ -3,22 +3,23 @@
 import { eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 
+import { COMPANY } from "@/lib/company";
 import { db } from "@/lib/db";
 import { syncDealFromDocument } from "@/lib/deals";
 import { activities, documents } from "@/lib/db/schema";
-import { sendEmail } from "@/lib/email";
+import { offerteAcceptedEmail, sendEmail } from "@/lib/email";
 
 // No auth — these are invoked by the client from the public /offerte/[token] page.
 
 async function loadByToken(token: string) {
   return db.query.documents.findFirst({
     where: eq(documents.acceptToken, token),
-    with: { contact: { columns: { name: true } } },
+    with: { contact: { columns: { name: true, email: true, preferredLanguage: true } } },
   });
 }
 
 async function notifyTeam(subject: string, html: string) {
-  const to = process.env.NOTIFY_EMAIL;
+  const to = process.env.NOTIFY_EMAIL || COMPANY.email;
   if (to) {
     await sendEmail({ to, subject, html });
   } else {
@@ -51,6 +52,15 @@ export async function acceptOfferte(token: string) {
       `✅ Offerte ${doc.docNumber ?? ""} geaccepteerd`.trim(),
       `<p>${doc.contact?.name ?? "Een klant"} heeft offerte ${doc.docNumber ?? ""} geaccepteerd — tijd om te factureren.</p>`,
     );
+    // Bevestigingsmail naar de klant, in diens eigen taal.
+    if (doc.contact?.email) {
+      const mail = offerteAcceptedEmail({
+        lang: doc.contact.preferredLanguage,
+        docNumber: doc.docNumber ?? "",
+        contactName: doc.contact.name,
+      });
+      await sendEmail({ to: doc.contact.email, ...mail });
+    }
   }
   revalidatePath(`/offerte/${token}`);
   revalidatePath(`/documents/${doc.id}`);

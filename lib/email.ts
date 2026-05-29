@@ -19,6 +19,25 @@ export async function sendEmail(input: {
   text?: string;
   attachments?: EmailAttachment[];
 }): Promise<{ sent: boolean; reason?: string }> {
+  // Voorkeur: Gmail (dezelfde route als de meldingsmails — verstuurt vanaf
+  // GMAIL_USER, bv. hi@habitat-one.com). Valt terug op Resend; en als niets is
+  // ingesteld een stub, zodat de accept-link altijd in het CRM blijft staan.
+  if (process.env.GMAIL_USER && process.env.GMAIL_APP_PASSWORD) {
+    try {
+      const { sendMail } = await import("@/lib/gmail");
+      await sendMail({
+        to: input.to,
+        subject: input.subject,
+        html: input.html,
+        text: input.text,
+        attachments: input.attachments,
+      });
+      return { sent: true };
+    } catch (err) {
+      console.warn("[habitat-crm] gmail send error:", err);
+      return { sent: false, reason: "gmail-exception" };
+    }
+  }
   const apiKey = process.env.RESEND_API_KEY;
   const from = process.env.EMAIL_FROM;
   if (!apiKey || !from) {
@@ -165,6 +184,55 @@ export function offerteEmail(args: {
 </div>`;
   const text = `${greeting}\n\n${t.intro(kind)}\n\n${t.review(kind)}: ${args.url}\n${t.pdf}: ${args.url}/pdf\n\n${t.regards}\n${COMPANY.legalName}\n${COMPANY.address}\n${[COMPANY.phone, COMPANY.email].filter(Boolean).join(" · ")}`;
   return { subject, html, text };
+}
+
+/** Bevestigingsmail naar de klant nadat die de offerte heeft geaccepteerd. */
+const TA: Record<Lang, { subject: (nr: string) => string; body: string }> = {
+  nl: {
+    subject: (nr) => `Bevestiging: offerte ${nr} geaccepteerd`,
+    body: "Hartelijk dank! We hebben uw akkoord op de offerte ontvangen. We gaan voor u aan de slag en nemen indien nodig contact met u op over de volgende stappen.",
+  },
+  en: {
+    subject: (nr) => `Confirmation: quote ${nr} accepted`,
+    body: "Thank you! We've received your acceptance of the quote. We'll get started and will be in touch about the next steps if needed.",
+  },
+  es: {
+    subject: (nr) => `Confirmación: presupuesto ${nr} aceptado`,
+    body: "¡Gracias! Hemos recibido la aceptación de su presupuesto. Empezaremos a trabajar y, si es necesario, nos pondremos en contacto con usted sobre los siguientes pasos.",
+  },
+  de: {
+    subject: (nr) => `Bestätigung: Angebot ${nr} angenommen`,
+    body: "Vielen Dank! Wir haben Ihre Annahme des Angebots erhalten. Wir legen los und melden uns bei Bedarf bezüglich der nächsten Schritte.",
+  },
+};
+
+export function offerteAcceptedEmail(args: {
+  lang?: string | null;
+  docNumber: string;
+  contactName?: string | null;
+}): { subject: string; html: string; text: string } {
+  const lang: Lang = (["en", "nl", "es", "de"] as const).includes(args.lang as Lang)
+    ? (args.lang as Lang)
+    : "es";
+  const ta = TA[lang];
+  const t = T[lang];
+  const nr = args.docNumber || "—";
+  const greeting = args.contactName ? `${t.hi} ${escapeHtml(args.contactName)},` : `${t.hi},`;
+  const html = `<div style="font-family:Helvetica,Arial,sans-serif;background:${COMPANY.cream};padding:24px 0">
+  <div style="max-width:560px;margin:0 auto;background:#fff;border-radius:12px;overflow:hidden;color:#1c1c1a">
+    <div style="background:${COMPANY.cream};padding:22px 28px">
+      <div style="font-family:Georgia,'Times New Roman',serif;font-size:22px;letter-spacing:4px;color:${COMPANY.brown};line-height:1.05">${COMPANY.wordmark1}<br/>${COMPANY.wordmark2}</div>
+    </div>
+    <div style="padding:24px 28px">
+      <p style="margin:0">${greeting}</p>
+      <p>${ta.body}</p>
+      <p style="margin-top:28px">${t.regards}</p>
+      <div style="font-size:13px;color:#555;margin-top:6px">${signatureHtml()}</div>
+    </div>
+  </div>
+</div>`;
+  const text = `${greeting}\n\n${ta.body}\n\n${t.regards}\n${COMPANY.legalName}`;
+  return { subject: ta.subject(nr), html, text };
 }
 
 function escapeHtml(s: string): string {

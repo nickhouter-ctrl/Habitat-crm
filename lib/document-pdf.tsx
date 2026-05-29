@@ -435,12 +435,11 @@ function DocumentPdf({ doc }: { doc: PdfDoc }) {
             <View style={{ flex: 1 }}>
               <Text style={s.partyLabel}>{t.from}</Text>
               <Text style={s.partyName}>{C.legalName}</Text>
-              <Text style={s.muted}>{C.address}</Text>
+              <Text style={s.muted}>{C.addressStreet}</Text>
+              <Text style={s.muted}>{C.addressRegion}</Text>
               {C.vatNumber ? <Text style={s.muted}>NIF: {C.vatNumber}</Text> : null}
-              <Text style={s.muted}>
-                {C.email}
-                {C.phone ? ` · ${C.phone}` : ""}
-              </Text>
+              <Text style={s.muted}>{C.email}</Text>
+              {C.phone ? <Text style={s.muted}>{C.phone}</Text> : null}
             </View>
             <View style={{ flex: 1, alignItems: "flex-end" }}>
               <Text style={s.partyLabel}>{t.to}</Text>

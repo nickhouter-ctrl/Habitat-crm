@@ -14,6 +14,9 @@ import { cn, formatEUR } from "@/lib/utils";
 /** Below this margin a line is flagged amber; below 0 it's flagged red. */
 const LOW_MARGIN_PCT = 15;
 
+/** Rond een geldbedrag af op 2 decimalen (centen). */
+const round2 = (n: number) => Math.round((n + Number.EPSILON) * 100) / 100;
+
 type Row = {
   name: string;
   description: string;
@@ -66,7 +69,7 @@ export function LineItemsEditor({
           name: it.name,
           description: it.description ?? "",
           units: String(it.units),
-          price: String(it.price),
+          price: String(round2(Number(it.price) || 0)),
           discount: String(it.discount ?? 0),
           taxRate: String(it.taxRate ?? 21),
           category: it.category ?? "materiaal",
@@ -107,7 +110,7 @@ export function LineItemsEditor({
       name: p.name,
       description: p.category ? p.category : "",
       units: "1",
-      price: priceFor(p) ?? "",
+      price: priceFor(p) ? String(round2(Number(priceFor(p)))) : "",
       discount: "0",
       taxRate: String(p.vatRate ?? 21),
       category: "materiaal",
@@ -149,7 +152,7 @@ export function LineItemsEditor({
             name: r.name.trim(),
             description: r.description.trim(),
             units: Number(r.units),
-            price: Number(r.price),
+            price: round2(Number(r.price) || 0),
             discount: Number(r.discount) || 0,
             taxRate: Number(r.taxRate),
             category: r.category,
@@ -276,10 +279,18 @@ export function LineItemsEditor({
                   <td className="px-1 py-2">
                     <Input
                       type="number"
-                      step="0.01"
+                      step="any"
                       min="0"
                       value={r.price}
                       onChange={(e) => patchRow(i, { price: e.target.value })}
+                      onBlur={(e) =>
+                        patchRow(i, {
+                          price:
+                            e.target.value === ""
+                              ? ""
+                              : String(round2(Number(e.target.value) || 0)),
+                        })
+                      }
                       className="text-right"
                     />
                   </td>

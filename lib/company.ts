@@ -2,6 +2,12 @@
  * Company details shown on PDFs and in e-mails. Env vars override the defaults
  * below — a Settings screen for this can come later.
  */
+// Adres in twee regels: straat, en daaronder postcode + plaats + land.
+const addressStreet =
+  process.env.COMPANY_ADDRESS_STREET ?? "Camí de la Fontana 3, Locales 2, 3 en 5";
+const addressRegion =
+  process.env.COMPANY_ADDRESS_REGION ?? "03730 Jávea (Alicante), España";
+
 export const COMPANY = {
   name: process.env.COMPANY_NAME ?? "Habitat One",
   wordmark1: "HABITAT",
@@ -10,9 +16,9 @@ export const COMPANY = {
   // Legal / contact
   legalName: process.env.COMPANY_LEGAL_NAME ?? "Habitat One & One SL",
   vatNumber: process.env.COMPANY_VAT ?? "ESB24855603", // CIF officieel (uit DUA's)
-  address:
-    process.env.COMPANY_ADDRESS ??
-    "Camí de la Fontana 3, Locales 2, 3 en 5, 03730 Jávea (Alicante), España",
+  addressStreet,
+  addressRegion,
+  address: process.env.COMPANY_ADDRESS ?? `${addressStreet}, ${addressRegion}`,
   email: process.env.COMPANY_EMAIL ?? "hi@habitat-one.com",
   phone: process.env.COMPANY_PHONE ?? "+34 965 00 11 22",
   website: process.env.COMPANY_WEBSITE ?? "habitat-one.com",
