@@ -80,6 +80,31 @@ export async function createContact(formData: FormData) {
   redirect(`/contacts/${row.id}`);
 }
 
+export async function updateContact(id: string, formData: FormData) {
+  const session = await auth();
+  if (!session?.user) redirect("/login");
+
+  const parsed = contactSchema.safeParse(Object.fromEntries(formData));
+  if (!parsed.success) {
+    redirect(`/contacts/${id}/edit?error=validation`);
+  }
+  const v = parsed.data;
+  const displayName =
+    v.name?.trim() ||
+    [v.firstName, v.lastName].filter(Boolean).join(" ").trim() ||
+    v.email ||
+    "(naamloos)";
+
+  await db
+    .update(contacts)
+    .set(clean({ ...v, name: displayName }))
+    .where(eq(contacts.id, id));
+
+  revalidatePath(`/contacts/${id}`);
+  revalidatePath("/contacts");
+  redirect(`/contacts/${id}`);
+}
+
 export async function addContactNote(contactId: string, body: string) {
   const session = await auth();
   if (!session?.user) redirect("/login");

@@ -17,6 +17,7 @@ import {
   type DocKind,
 } from "@/lib/documents";
 import { offerteEmail, sendEmail } from "@/lib/email";
+import { renderDocumentPdf } from "@/lib/document-pdf";
 
 function newToken(): string {
   return (crypto.randomUUID() + crypto.randomUUID()).replace(/-/g, "");
@@ -275,7 +276,16 @@ export async function sendDocument(id: string) {
   const doc = await db.query.documents.findFirst({
     where: eq(documents.id, id),
     with: {
-      contact: { columns: { email: true, name: true, preferredLanguage: true } },
+      contact: {
+        columns: {
+          email: true,
+          name: true,
+          preferredLanguage: true,
+          addressLine: true,
+          postalCode: true,
+          city: true,
+        },
+      },
     },
   });
   if (!doc) return;
@@ -306,7 +316,44 @@ export async function sendDocument(id: string) {
       contactName: doc.contact.name,
       url,
     });
-    const res = await sendEmail({ to: doc.contact.email, ...mail });
+    // Genereer de PDF en stuur 'm als bijlage mee (i.p.v. alleen een link).
+    let attachments:
+      | { filename: string; content: Uint8Array; contentType: string }[]
+      | undefined;
+    try {
+      const addr =
+        [
+          doc.contact.addressLine,
+          [doc.contact.postalCode, doc.contact.city].filter(Boolean).join(" "),
+        ]
+          .filter((p) => p && p.trim())
+          .join(", ") || null;
+      const buf = await renderDocumentPdf({
+        kind: doc.kind,
+        docNumber: doc.docNumber,
+        title: doc.title,
+        issueDate: doc.issueDate,
+        dueDate: doc.dueDate,
+        subtotalEur: doc.subtotalEur,
+        taxEur: doc.taxEur,
+        totalEur: doc.totalEur,
+        items: doc.items ?? [],
+        notes: doc.notes,
+        contactName: doc.contact.name ?? null,
+        contactAddress: addr,
+        locale: doc.contact.preferredLanguage ?? "es",
+      });
+      attachments = [
+        {
+          filename: `${kindLabel}-${doc.docNumber ?? doc.id.slice(0, 8)}.pdf`,
+          content: new Uint8Array(buf),
+          contentType: "application/pdf",
+        },
+      ];
+    } catch (err) {
+      console.warn("[habitat-crm] kon PDF niet genereren voor mail:", err);
+    }
+    const res = await sendEmail({ to: doc.contact.email, ...mail, attachments });
     if (!res.sent) emailNote += " (mail nog niet ingesteld — link handmatig versturen)";
   }
 

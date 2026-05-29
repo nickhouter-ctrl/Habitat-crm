@@ -149,9 +149,14 @@ export default async function ContactDetailPage({
           </>
         }
         actions={
-          <Link href="/contacts" className="text-sm text-muted hover:underline">
-            ← Contacten
-          </Link>
+          <>
+            <Link href="/contacts" className="text-sm text-muted hover:underline">
+              ← Contacten
+            </Link>
+            <LinkButton href={`/contacts/${id}/edit`} variant="secondary">
+              Bewerken
+            </LinkButton>
+          </>
         }
       />
 

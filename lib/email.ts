@@ -96,6 +96,7 @@ const T: Record<
     hi: string;
     intro: (kind: string) => string;
     review: (kind: string) => string;
+    accept: string;
     pdf: string;
     regards: string;
   }
@@ -103,32 +104,36 @@ const T: Record<
   nl: {
     subject: (nr, k) => `${cap(kindNL(k))} ${nr} van ${COMPANY.name}`,
     hi: "Beste",
-    intro: (k) => `Hierbij ontvangt u onze ${kindNL(k)}. U kunt deze online bekijken en — als het een offerte is — direct akkoord geven of afwijzen:`,
+    intro: (k) => `Hierbij ontvangt u onze ${kindNL(k)} (zie ook de PDF-bijlage). U kunt deze online bekijken en — als het een offerte is — direct akkoord geven of afwijzen:`,
     review: (k) => `Bekijk de ${kindNL(k)}`,
+    accept: "Offerte accepteren",
     pdf: "PDF downloaden",
     regards: "Met vriendelijke groet,",
   },
   en: {
     subject: (nr, k) => `${cap(kindEN(k))} ${nr} from ${COMPANY.name}`,
     hi: "Dear",
-    intro: (k) => `Please find our ${kindEN(k)} below. You can review it online and — for a quote — approve or decline it:`,
+    intro: (k) => `Please find our ${kindEN(k)} below (also attached as PDF). You can review it online and — for a quote — approve or decline it:`,
     review: (k) => `View the ${kindEN(k)}`,
+    accept: "Accept quote",
     pdf: "Download PDF",
     regards: "Kind regards,",
   },
   es: {
     subject: (nr, k) => `${cap(kindES(k))} ${nr} de ${COMPANY.name}`,
     hi: "Estimado/a",
-    intro: (k) => `Le enviamos nuestro/a ${kindES(k)}. Puede revisarlo en línea y — si es un presupuesto — aprobarlo o rechazarlo:`,
+    intro: (k) => `Le enviamos nuestro/a ${kindES(k)} (también adjunto en PDF). Puede revisarlo en línea y — si es un presupuesto — aprobarlo o rechazarlo:`,
     review: (k) => `Ver el/la ${kindES(k)}`,
+    accept: "Aceptar presupuesto",
     pdf: "Descargar PDF",
     regards: "Un saludo,",
   },
   de: {
     subject: (nr, k) => `${cap(kindDE(k))} ${nr} von ${COMPANY.name}`,
     hi: "Sehr geehrte/r",
-    intro: (k) => `Anbei unser/e ${kindDE(k)}. Sie können es online ansehen und — bei einem Angebot — direkt annehmen oder ablehnen:`,
+    intro: (k) => `Anbei unser/e ${kindDE(k)} (auch als PDF im Anhang). Sie können es online ansehen und — bei einem Angebot — direkt annehmen oder ablehnen:`,
     review: (k) => `${cap(kindDE(k))} ansehen`,
+    accept: "Angebot annehmen",
     pdf: "PDF herunterladen",
     regards: "Mit freundlichen Grüßen,",
   },
@@ -172,9 +177,16 @@ export function offerteEmail(args: {
       <p style="margin:0">${greeting}</p>
       <p>${t.intro(kind)}</p>
       ${title}
-      <p style="margin:24px 0">
+      <p style="margin:24px 0 12px">
         <a href="${args.url}" style="background:${COMPANY.accent};color:#fff;text-decoration:none;padding:11px 20px;border-radius:8px;display:inline-block;font-weight:600">${t.review(kind)} (${nr})</a>
       </p>
+      ${
+        kind === "estimate"
+          ? `<p style="margin:0 0 20px">
+        <a href="${args.url}?actie=accepteren" style="background:#2e7d32;color:#fff;text-decoration:none;padding:11px 20px;border-radius:8px;display:inline-block;font-weight:600">✓ ${t.accept}</a>
+      </p>`
+          : ""
+      }
       <p style="font-size:13px"><a href="${args.url}/pdf" style="color:${COMPANY.accent}">${t.pdf}</a></p>
       <p style="font-size:12px;color:#aaa;word-break:break-all">${escapeHtml(args.url)}</p>
       <p style="margin-top:28px">${t.regards}</p>

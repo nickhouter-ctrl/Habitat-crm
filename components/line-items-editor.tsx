@@ -215,8 +215,8 @@ export function LineItemsEditor({
               <th className="w-36 px-1 py-1.5">Categorie</th>
               <th className="w-16 px-1 py-1.5 text-right">Aantal</th>
               <th className="w-24 px-1 py-1.5 text-right">Prijs (ex.)</th>
-              <th className="w-16 px-1 py-1.5 text-right">Korting%</th>
-              <th className="w-14 px-1 py-1.5 text-right">BTW%</th>
+              <th className="w-20 px-1 py-1.5 text-right">Korting%</th>
+              <th className="w-20 px-1 py-1.5 text-right">BTW%</th>
               <th className="w-28 px-1 py-1.5 text-right">Netto</th>
               <th className="w-8 px-1 py-1.5" />
             </tr>
