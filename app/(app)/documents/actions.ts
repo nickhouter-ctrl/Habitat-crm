@@ -499,10 +499,26 @@ export async function sendDocumentCustom(id: string, formData: FormData) {
 }
 
 /** Create a draft invoice copied from an (accepted) estimate. */
-export async function createInvoiceFromEstimate(estimateId: string) {
+export async function createInvoiceFromEstimate(estimateId: string, formData?: FormData) {
   await requireUser();
   const est = await db.query.documents.findFirst({ where: eq(documents.id, estimateId) });
   if (!est) return;
+
+  // Percentage voor termijn-/deelfacturen (bv. 50% aanbetaling). Default 100%.
+  const rawPct = Number(formData?.get("percentage") ?? 100);
+  const pct = Number.isFinite(rawPct) && rawPct > 0 && rawPct <= 100 ? rawPct : 100;
+  const factor = pct / 100;
+
+  const baseItems = est.items ?? [];
+  const items =
+    pct === 100
+      ? baseItems
+      : baseItems.map((it) => ({
+          ...it,
+          price: Math.round(Number(it.price) * factor * 100) / 100,
+        }));
+  const totals = computeTotals(items);
+  const round2 = (n: number) => (Math.round(n * 100) / 100).toFixed(2);
 
   const [{ n }] = await db.select({ n: count() }).from(documents).where(eq(documents.kind, "invoice"));
   const today = new Date();
@@ -515,7 +531,10 @@ export async function createInvoiceFromEstimate(estimateId: string) {
       kind: "invoice",
       status: "draft",
       docNumber: suggestDocNumber("invoice", n),
-      title: est.title,
+      title:
+        pct === 100
+          ? est.title
+          : `${est.title ?? "Factuur"} — ${pct}% van ${est.docNumber ?? "offerte"}`,
       contactId: est.contactId,
       companyId: est.companyId,
       dealId: est.dealId,
@@ -523,10 +542,10 @@ export async function createInvoiceFromEstimate(estimateId: string) {
       issueDate: today.toISOString().slice(0, 10),
       dueDate: due.toISOString().slice(0, 10),
       currency: est.currency,
-      subtotalEur: est.subtotalEur,
-      taxEur: est.taxEur,
-      totalEur: est.totalEur,
-      items: est.items,
+      subtotalEur: round2(totals.subtotal),
+      taxEur: round2(totals.tax),
+      totalEur: round2(totals.total),
+      items,
       notes: est.notes,
     })
     .returning({ id: documents.id });

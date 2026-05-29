@@ -11,6 +11,7 @@ import {
   CardContent,
   CardHeader,
   CardTitle,
+  Input,
   LinkButton,
   PageHeader,
   Select,
@@ -265,10 +266,26 @@ export default async function DocumentDetailPage({
               )}
 
               {doc.kind === "estimate" && doc.acceptedAt && (
-                <form action={makeInvoice}>
-                  <Button type="submit" size="sm" variant="secondary">
-                    → Maak factuur van deze offerte
-                  </Button>
+                <form action={makeInvoice} className="space-y-2 rounded-md bg-background px-3 py-2.5">
+                  <p className="text-xs font-medium text-muted">Factuur maken van deze offerte</p>
+                  <div className="flex items-center gap-2">
+                    <Input
+                      type="number"
+                      name="percentage"
+                      defaultValue="100"
+                      min="1"
+                      max="100"
+                      step="1"
+                      className="w-20 text-right"
+                    />
+                    <span className="text-sm text-muted">%</span>
+                    <Button type="submit" size="sm" variant="secondary">
+                      → Maak factuur
+                    </Button>
+                  </div>
+                  <p className="text-xs text-muted">
+                    Bijv. 50 voor een aanbetaling; maak daarna een tweede factuur voor het restant.
+                  </p>
                 </form>
               )}
               {doc.kind !== "deliverynote" && (
