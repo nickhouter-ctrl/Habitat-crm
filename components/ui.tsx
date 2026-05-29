@@ -133,9 +133,13 @@ export function Badge({
 
 /* ------------------------------------------------------------------ Table */
 
-export function Table({ className, ...props }: ComponentProps<"table">) {
+export function Table({
+  className,
+  wrapperClassName,
+  ...props
+}: ComponentProps<"table"> & { wrapperClassName?: string }) {
   return (
-    <div className="overflow-x-auto">
+    <div className={cn("overflow-x-auto", wrapperClassName)}>
       <table className={cn("w-full text-sm", className)} {...props} />
     </div>
   );

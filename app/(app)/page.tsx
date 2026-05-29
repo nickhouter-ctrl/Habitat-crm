@@ -335,7 +335,7 @@ export default async function DashboardPage() {
             Naar deals
           </Link>
         </CardHeader>
-        <CardContent className="space-y-2.5">
+        <CardContent className="max-h-72 space-y-2.5 overflow-y-auto">
           {pipeline.map((p) => (
             <div key={p.stage} className="flex items-center gap-3">
               <span className="w-36 shrink-0">
@@ -364,7 +364,7 @@ export default async function DashboardPage() {
               Alle inkooporders
             </Link>
           </CardHeader>
-          <Table>
+          <Table wrapperClassName="max-h-80 overflow-y-auto">
             <THead>
               <tr>
                 <Th>Leverancier</Th>
@@ -413,7 +413,7 @@ export default async function DashboardPage() {
               Alle inkooporders
             </Link>
           </CardHeader>
-          <Table>
+          <Table wrapperClassName="max-h-80 overflow-y-auto">
             <THead>
               <tr>
                 <Th>Leverancier</Th>
@@ -466,7 +466,7 @@ export default async function DashboardPage() {
             <EmptyState title="Alles betaald ✓" description="Geen openstaande inkoopfacturen." />
           </CardContent>
         ) : (
-          <Table>
+          <Table wrapperClassName="max-h-80 overflow-y-auto">
             <THead>
               <tr>
                 <Th>Leverancier</Th>
@@ -526,7 +526,7 @@ export default async function DashboardPage() {
             {recentActivity.length === 0 ? (
               <EmptyState title="Nog geen activiteit" />
             ) : (
-              <ol className="space-y-3">
+              <ol className="max-h-80 space-y-3 overflow-y-auto pr-1">
                 {recentActivity.map((a) => {
                   const link = a.document
                     ? { href: `/documents/${a.document.id}`, label: `${documentKindMeta[a.document.kind]} ${a.document.docNumber ?? ""}`.trim() }
@@ -582,7 +582,7 @@ export default async function DashboardPage() {
               <EmptyState title="Nog geen deals" />
             </CardContent>
           ) : (
-            <Table>
+            <Table wrapperClassName="max-h-80 overflow-y-auto">
               <THead>
                 <tr>
                   <Th>Deal</Th>
