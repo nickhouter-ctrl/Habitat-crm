@@ -1,4 +1,5 @@
 import { desc, eq, inArray } from "drizzle-orm";
+import { Trash2 } from "lucide-react";
 import Link from "next/link";
 
 import {
@@ -20,6 +21,8 @@ import { db } from "@/lib/db";
 import { documents } from "@/lib/db/schema";
 import { formatDate, formatEUR } from "@/lib/utils";
 import { documentKindMeta, documentStatusMeta } from "./_meta";
+import { ConfirmSubmit } from "@/components/confirm-submit";
+import { deleteDocument } from "./documents/actions";
 
 type Kind =
   | "estimate"
@@ -105,6 +108,7 @@ export async function DocumentsList({
                 <Th className="text-right">Subtotaal</Th>
                 <Th className="text-right">Totaal</Th>
                 <Th className="text-right">Betaald</Th>
+                <Th />
               </tr>
             </THead>
             <TBody>
@@ -149,6 +153,18 @@ export async function DocumentsList({
                     </Td>
                     <Td className="text-right tabular-nums text-muted">
                       {formatEUR(d.paidEur)}
+                    </Td>
+                    <Td className="text-right">
+                      {(d.kind === "estimate" || d.status === "draft") && (
+                        <form action={deleteDocument.bind(null, d.id)}>
+                          <ConfirmSubmit
+                            message={`${documentKindMeta[d.kind]} ${d.docNumber ?? ""} definitief verwijderen?`}
+                            className="rounded p-1 text-muted transition-colors hover:bg-danger/10 hover:text-danger"
+                          >
+                            <Trash2 className="size-4" />
+                          </ConfirmSubmit>
+                        </form>
+                      )}
                     </Td>
                   </Tr>
                 );
