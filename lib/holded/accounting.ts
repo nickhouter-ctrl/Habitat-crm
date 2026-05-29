@@ -123,7 +123,7 @@ export async function expensesYTD(): Promise<number> {
  */
 type DocsCache = { fetchedAt: number; subtotal: number; byMonth: Record<string, number> };
 let _docsCache: DocsCache | null = null;
-const DOCS_TIMEOUT_MS = 5000;
+const DOCS_TIMEOUT_MS = 2000;
 
 async function fetchPurchaseDocs(): Promise<DocsCache> {
   if (_docsCache && Date.now() - _docsCache.fetchedAt < TTL_MS) return _docsCache;
