@@ -1,5 +1,6 @@
 import { and, count, desc, eq, inArray, isNull, sql } from "drizzle-orm";
 import Link from "next/link";
+import type { ReactNode } from "react";
 
 import {
   Badge,
@@ -40,6 +41,38 @@ const ACTIVITY_LABEL: Record<string, string> = {
   task: "Taak",
 };
 
+/** Eén regel in het "Wat moet er gebeuren"-paneel. */
+function ActionRow({
+  href,
+  emoji,
+  tone = "accent",
+  children,
+}: {
+  href: string;
+  emoji: string;
+  tone?: "accent" | "warning" | "danger" | "success";
+  children: ReactNode;
+}) {
+  const toneText =
+    tone === "danger"
+      ? "text-danger"
+      : tone === "warning"
+        ? "text-warning"
+        : tone === "success"
+          ? "text-success"
+          : "text-accent";
+  return (
+    <Link
+      href={href}
+      className="-mx-2 flex items-center gap-3 rounded-md px-2 py-2.5 text-sm text-foreground transition-colors hover:bg-background"
+    >
+      <span className="text-base leading-none">{emoji}</span>
+      <span className="flex-1">{children}</span>
+      <span className={`shrink-0 font-medium ${toneText}`}>→</span>
+    </Link>
+  );
+}
+
 export default async function DashboardPage() {
   const now = new Date();
   const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0, 10);
@@ -47,7 +80,7 @@ export default async function DashboardPage() {
 
   const openExpr = sql`${documents.status} not in ('paid', 'void', 'draft')`;
 
-  const [[contactsTotal], pipelineRows, [docAgg], [creditAgg], [purchaseAgg], [productsAgg], openPurchaseOrders, recentDeals, recentActivity, holdedExpensesYTD, [openRequestsAgg], [invoiceReviewAgg], unpaidInvoices, proformas] =
+  const [[contactsTotal], pipelineRows, [docAgg], [creditAgg], [purchaseAgg], [productsAgg], openPurchaseOrders, recentDeals, recentActivity, holdedExpensesYTD, [openRequestsAgg], [invoiceReviewAgg], unpaidInvoices, proformas, [acceptedAgg]] =
     await Promise.all([
       db.select({ n: count() }).from(contacts),
       db
@@ -152,6 +185,11 @@ export default async function DashboardPage() {
         .from(purchaseOrders)
         .where(eq(purchaseOrders.status, "draft"))
         .orderBy(desc(purchaseOrders.createdAt)),
+      // Geaccepteerde offertes die klaarstaan om gefactureerd te worden.
+      db
+        .select({ n: sql<number>`count(*)::int` })
+        .from(documents)
+        .where(and(eq(documents.kind, "estimate"), eq(documents.status, "accepted"))),
     ]);
 
   const byStage = new Map(pipelineRows.map((r) => [r.stage, r]));
@@ -171,6 +209,23 @@ export default async function DashboardPage() {
   const unpushedPurchase = Number(purchaseAgg.totalEur);
   const totalPurchase = Number(holdedExpensesYTD) + unpushedPurchase;
   const unpaidPurchaseTotal = unpaidInvoices.reduce((s, p) => s + Number(p.total ?? 0), 0);
+  const acceptedN = acceptedAgg?.n ?? 0;
+  const poSoon = openPurchaseOrders.filter((po) => {
+    if (!po.expectedDate) return false;
+    const diff = (new Date(po.expectedDate).getTime() - Date.now()) / (1000 * 60 * 60 * 24);
+    return diff <= 7 && diff >= -1;
+  }).length;
+  const anyActions =
+    acceptedN > 0 ||
+    (openRequestsAgg?.n ?? 0) > 0 ||
+    docAgg.overdueN > 0 ||
+    unpaidInvoices.length > 0 ||
+    proformas.length > 0 ||
+    (invoiceReviewAgg?.n ?? 0) > 0 ||
+    poSoon > 0 ||
+    productsAgg.lowStock > 0 ||
+    productsAgg.stockNoPhoto > 0 ||
+    productsAgg.noBarcode > 0;
 
   return (
     <>
@@ -180,129 +235,98 @@ export default async function DashboardPage() {
         actions={<LinkButton href="/contacts/new">Nieuw contact</LinkButton>}
       />
 
-      {((openRequestsAgg?.n ?? 0) > 0 || (invoiceReviewAgg?.n ?? 0) > 0 || productsAgg.noBarcode > 0 || productsAgg.lowStock > 0 || productsAgg.stockNoPhoto > 0 || docAgg.overdueN > 0 || openPurchaseOrders.length > 0 || proformas.length > 0 || unpaidInvoices.length > 0) && (
-        <div className="mb-4 space-y-2">
-          {proformas.length > 0 && (
-            <div className="flex items-center justify-between gap-3 rounded-md border border-accent/40 bg-accent/10 px-4 py-3 text-sm text-foreground">
-              <span>
-                ✅ <strong>{proformas.length}</strong> proforma{proformas.length === 1 ? "" : "'s"} wacht{proformas.length === 1 ? "" : "en"} op goedkeuring — zie hieronder.
-              </span>
-            </div>
-          )}
-          {unpaidInvoices.length > 0 && (
-            <div className="flex items-center justify-between gap-3 rounded-md border border-warning/40 bg-warning/10 px-4 py-3 text-sm text-foreground">
-              <span>
-                💶 <strong>{unpaidInvoices.length}</strong> inkoopfactu{unpaidInvoices.length === 1 ? "ur" : "ren"} nog te betalen — {formatEUR(unpaidPurchaseTotal)}.
-              </span>
-            </div>
-          )}
-          {(openRequestsAgg?.n ?? 0) > 0 && (
-            <Link
-              href="/aanvragen?status=pending"
-              className="flex items-center justify-between gap-3 rounded-md border border-accent/40 bg-accent/10 px-4 py-3 text-sm text-foreground transition-colors hover:bg-accent/15"
-            >
-              <span>
-                📩 <strong>{openRequestsAgg!.n}</strong> open offerte-aanvra{openRequestsAgg!.n === 1 ? "ag" : "gen"} via de website — even bekijken en accepteren/afwijzen.
-              </span>
-              <span className="font-medium text-accent">Naar inbox →</span>
-            </Link>
-          )}
-          {(invoiceReviewAgg?.n ?? 0) > 0 && (
-            <Link
-              href="/inbox?status=new"
-              className="flex items-center justify-between gap-3 rounded-md border border-warning/40 bg-warning/10 px-4 py-3 text-sm text-foreground transition-colors hover:bg-warning/15"
-            >
-              <span>
-                🧾 <strong>{invoiceReviewAgg!.n}</strong> mail{invoiceReviewAgg!.n === 1 ? "" : "s"} met factuurbijlage{invoiceReviewAgg!.n === 1 ? "" : "n"} wacht{invoiceReviewAgg!.n === 1 ? "" : "en"} op review — automatische inkoopfactuur kon niet aangemaakt worden (bedrag of leverancier onbekend).
-              </span>
-              <span className="font-medium text-warning">Bekijk →</span>
-            </Link>
-          )}
-          {productsAgg.stockNoPhoto > 0 && (
-            <Link
-              href="/products?nofoto=1"
-              className="flex items-center justify-between gap-3 rounded-md border border-warning/40 bg-warning/10 px-4 py-3 text-sm text-foreground transition-colors hover:bg-warning/15"
-            >
-              <span>
-                📸 <strong>{productsAgg.stockNoPhoto}</strong> actieve producten zonder foto — vul aan en push naar de website.
-              </span>
-              <span className="font-medium text-warning">Bekijk →</span>
-            </Link>
-          )}
-          {productsAgg.lowStock > 0 && (
-            <Link
-              href="/products?lowstock=1"
-              className="flex items-center justify-between gap-3 rounded-md border border-danger/40 bg-danger/10 px-4 py-3 text-sm text-foreground transition-colors hover:bg-danger/15"
-            >
-              <span>
-                🔻 <strong>{productsAgg.lowStock}</strong> producten staan onder de voorraaddrempel — bijbestellen voordat het op is.
-              </span>
-              <span className="font-medium text-danger">Bekijk →</span>
-            </Link>
-          )}
-          {docAgg.overdueN > 0 && (
-            <Link
-              href="/invoices"
-              className="flex items-center justify-between gap-3 rounded-md border border-danger/40 bg-danger/10 px-4 py-3 text-sm text-foreground transition-colors hover:bg-danger/15"
-            >
-              <span>
-                ⏰ <strong>{docAgg.overdueN}</strong> factu{docAgg.overdueN === 1 ? "ur is" : "ren zijn"} vervallen ({formatEUR(docAgg.overdueV)} openstaand) — verstuur herinnering.
-              </span>
-              <span className="font-medium text-danger">Open facturen →</span>
-            </Link>
-          )}
-          {(() => {
-            const soon = openPurchaseOrders.filter((po) => {
-              if (!po.expectedDate) return false;
-              const d = new Date(po.expectedDate).getTime();
-              const diff = (d - Date.now()) / (1000 * 60 * 60 * 24);
-              return diff <= 7 && diff >= -1;
-            });
-            return soon.length > 0 ? (
-              <Link
-                href="/inkooporders"
-                className="flex items-center justify-between gap-3 rounded-md border border-accent/40 bg-accent/10 px-4 py-3 text-sm text-foreground transition-colors hover:bg-accent/15"
-              >
-                <span>
-                  📦 <strong>{soon.length}</strong> inkooporder{soon.length === 1 ? "" : "s"} komen deze week binnen — voorraad klaarzetten.
-                </span>
-                <span className="font-medium text-accent">Open inkooporders →</span>
-              </Link>
-            ) : null;
-          })()}
-          {productsAgg.noBarcode > 0 && (
-            <Link
-              href="/products?nobarcode=1"
-              className="flex items-center justify-between gap-3 rounded-md border border-warning/40 bg-warning/10 px-4 py-3 text-sm text-foreground transition-colors hover:bg-warning/15"
-            >
-              <span>
-                🏷️ <strong>{productsAgg.noBarcode}</strong> producten hebben nog geen barcode — labels kunnen niet geprint worden.
-              </span>
-              <span className="font-medium text-warning">Bekijk →</span>
-            </Link>
-          )}
+      {anyActions ? (
+        <Card className="mb-6 border-accent/30">
+          <CardHeader>
+            <CardTitle>Wat moet er gebeuren</CardTitle>
+          </CardHeader>
+          <CardContent className="divide-y divide-border/70">
+            {acceptedN > 0 && (
+              <ActionRow href="/quotes" emoji="✅" tone="success">
+                <strong>{acceptedN}</strong> geaccepteerde offerte{acceptedN === 1 ? "" : "s"} — klaar om te factureren.
+              </ActionRow>
+            )}
+            {(openRequestsAgg?.n ?? 0) > 0 && (
+              <ActionRow href="/aanvragen?status=pending" emoji="📩" tone="accent">
+                <strong>{openRequestsAgg!.n}</strong> open offerte-aanvra{openRequestsAgg!.n === 1 ? "ag" : "gen"} via de website.
+              </ActionRow>
+            )}
+            {docAgg.overdueN > 0 && (
+              <ActionRow href="/invoices" emoji="⏰" tone="danger">
+                <strong>{docAgg.overdueN}</strong> vervallen factu{docAgg.overdueN === 1 ? "ur" : "ren"} ({formatEUR(docAgg.overdueV)}) — verstuur herinnering.
+              </ActionRow>
+            )}
+            {unpaidInvoices.length > 0 && (
+              <ActionRow href="/inkooporders" emoji="💶" tone="warning">
+                <strong>{unpaidInvoices.length}</strong> inkoopfactu{unpaidInvoices.length === 1 ? "ur" : "ren"} te betalen — {formatEUR(unpaidPurchaseTotal)}.
+              </ActionRow>
+            )}
+            {proformas.length > 0 && (
+              <ActionRow href="/inkooporders" emoji="🗂️" tone="accent">
+                <strong>{proformas.length}</strong> proforma{proformas.length === 1 ? "" : "'s"} wacht{proformas.length === 1 ? "" : "en"} op goedkeuring.
+              </ActionRow>
+            )}
+            {(invoiceReviewAgg?.n ?? 0) > 0 && (
+              <ActionRow href="/inbox?status=new" emoji="🧾" tone="warning">
+                <strong>{invoiceReviewAgg!.n}</strong> mail{invoiceReviewAgg!.n === 1 ? "" : "s"} met factuurbijlage wacht{invoiceReviewAgg!.n === 1 ? "" : "en"} op review.
+              </ActionRow>
+            )}
+            {poSoon > 0 && (
+              <ActionRow href="/inkooporders" emoji="📦" tone="accent">
+                <strong>{poSoon}</strong> inkooporder{poSoon === 1 ? "" : "s"} kom{poSoon === 1 ? "t" : "en"} deze week binnen.
+              </ActionRow>
+            )}
+            {productsAgg.lowStock > 0 && (
+              <ActionRow href="/products?lowstock=1" emoji="🔻" tone="danger">
+                <strong>{productsAgg.lowStock}</strong> producten onder de voorraaddrempel — bijbestellen.
+              </ActionRow>
+            )}
+            {productsAgg.stockNoPhoto > 0 && (
+              <ActionRow href="/products?nofoto=1" emoji="📸" tone="warning">
+                <strong>{productsAgg.stockNoPhoto}</strong> actieve producten zonder foto.
+              </ActionRow>
+            )}
+            {productsAgg.noBarcode > 0 && (
+              <ActionRow href="/products?nobarcode=1" emoji="🏷️" tone="warning">
+                <strong>{productsAgg.noBarcode}</strong> producten zonder barcode.
+              </ActionRow>
+            )}
+          </CardContent>
+        </Card>
+      ) : (
+        <div className="mb-6 rounded-lg border border-success/30 bg-success/5 px-4 py-3 text-sm font-medium text-success">
+          ✓ Niets dringends — alles is bij.
         </div>
       )}
 
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
-        <StatTile label="Totale omzet" value={formatEUR(revenueAll)} hint="ex. BTW · facturen − creditnota's" />
-        <StatTile
-          label="Totale inkoop"
-          value={formatEUR(totalPurchase)}
-          hint={
-            unpushedPurchase > 0
-              ? `ex. BTW · Holded ${formatEUR(holdedExpensesYTD)} + ${purchaseAgg.n} nog-niet-gepushte PO's`
-              : "ex. BTW · uit Holded aankoopfacturen"
-          }
-        />
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
         <StatTile label="Omzet deze maand" value={formatEUR(revenueMonth)} hint="ex. BTW" />
         <StatTile label="Openstaande facturen" value={docAgg.outstandingN} hint={formatEUR(docAgg.outstandingV)} />
         <StatTile label="Vervallen facturen" value={docAgg.overdueN} hint={formatEUR(docAgg.overdueV)} />
-        <StatTile label="Pijplijnwaarde" value={formatEUR(openDeals.value)} hint={`${openDeals.n} open deals`} />
-        <StatTile label="Inkooporders onderweg" value={openPurchaseOrders.length} hint="aankomende voorraad" />
-        <StatTile label="Te betalen (inkoop)" value={unpaidInvoices.length} hint={formatEUR(unpaidPurchaseTotal)} />
-        <StatTile label="Contacten" value={contactsTotal.n} />
+        <StatTile label="Geaccepteerde offertes" value={acceptedN} hint="klaar om te factureren" />
+        <StatTile label="Totale omzet" value={formatEUR(revenueAll)} hint="ex. BTW · dit jaar" />
       </div>
+
+      <details className="mt-3">
+        <summary className="cursor-pointer select-none text-xs text-muted transition-colors hover:text-foreground">
+          Meer cijfers — inkoop, pijplijn, contacten
+        </summary>
+        <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+          <StatTile
+            label="Totale inkoop"
+            value={formatEUR(totalPurchase)}
+            hint={
+              unpushedPurchase > 0
+                ? `ex. BTW · Holded ${formatEUR(holdedExpensesYTD)} + ${purchaseAgg.n} PO's`
+                : "ex. BTW · uit Holded"
+            }
+          />
+          <StatTile label="Te betalen (inkoop)" value={unpaidInvoices.length} hint={formatEUR(unpaidPurchaseTotal)} />
+          <StatTile label="Inkooporders onderweg" value={openPurchaseOrders.length} hint="aankomende voorraad" />
+          <StatTile label="Pijplijnwaarde" value={formatEUR(openDeals.value)} hint={`${openDeals.n} open deals`} />
+          <StatTile label="Contacten" value={contactsTotal.n} />
+        </div>
+      </details>
 
       <Card className="mt-6">
         <CardHeader>
