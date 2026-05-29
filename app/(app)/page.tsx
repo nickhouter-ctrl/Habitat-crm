@@ -1,6 +1,8 @@
-import { and, count, desc, eq, inArray, isNull, sql } from "drizzle-orm";
+import { and, count, desc, eq, gte, inArray, isNull, sql } from "drizzle-orm";
 import Link from "next/link";
 import type { ReactNode } from "react";
+
+import { MonthlyAmountChart } from "@/components/rapporten-charts";
 
 import {
   Badge,
@@ -32,6 +34,20 @@ export const metadata = { title: "Dashboard" };
 export const maxDuration = 60;
 
 const PIPELINE_STAGES = ["lead", "qualified", "proposal", "negotiation", "won"] as const;
+
+const MONTHS_NL = ["jan", "feb", "mrt", "apr", "mei", "jun", "jul", "aug", "sep", "okt", "nov", "dec"];
+
+/** Bouw een doorlopende reeks van de laatste 12 maanden uit DB-rijen (ym → waarde). */
+function monthSeries(now: Date, rows: { ym: string; value: string | number }[]) {
+  const map = new Map(rows.map((r) => [r.ym, Number(r.value)]));
+  const out: { month: string; value: number }[] = [];
+  for (let i = 11; i >= 0; i--) {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    const ym = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+    out.push({ month: MONTHS_NL[d.getMonth()], value: map.get(ym) ?? 0 });
+  }
+  return out;
+}
 
 const ACTIVITY_LABEL: Record<string, string> = {
   note: "Notitie",
@@ -227,6 +243,39 @@ export default async function DashboardPage() {
     productsAgg.stockNoPhoto > 0 ||
     productsAgg.noBarcode > 0;
 
+  // --- Grafieken: omzet & offerte-waarde per maand (12 mnd) + conversie ---
+  const since12 = new Date(now.getFullYear(), now.getMonth() - 11, 1).toISOString().slice(0, 10);
+  const [revByMonthRows, estByMonthRows, [estConv]] = await Promise.all([
+    db
+      .select({
+        ym: sql<string>`to_char(${documents.issueDate}, 'YYYY-MM')`,
+        value: sql<string>`coalesce(sum(${documents.subtotalEur}), 0)`,
+      })
+      .from(documents)
+      .where(and(eq(documents.kind, "invoice"), gte(documents.issueDate, since12)))
+      .groupBy(sql`to_char(${documents.issueDate}, 'YYYY-MM')`),
+    db
+      .select({
+        ym: sql<string>`to_char(${documents.issueDate}, 'YYYY-MM')`,
+        value: sql<string>`coalesce(sum(${documents.subtotalEur}), 0)`,
+      })
+      .from(documents)
+      .where(and(eq(documents.kind, "estimate"), gte(documents.issueDate, since12)))
+      .groupBy(sql`to_char(${documents.issueDate}, 'YYYY-MM')`),
+    db
+      .select({
+        total: sql<number>`count(*)::int`,
+        accepted: sql<number>`count(case when ${documents.status} = 'accepted' then 1 end)::int`,
+        acceptedValue: sql<string>`coalesce(sum(case when ${documents.status} = 'accepted' then ${documents.subtotalEur} else 0 end), 0)`,
+      })
+      .from(documents)
+      .where(eq(documents.kind, "estimate")),
+  ]);
+  const revSeries = monthSeries(now, revByMonthRows);
+  const estSeries = monthSeries(now, estByMonthRows);
+  const convPct = estConv && estConv.total > 0 ? Math.round((estConv.accepted / estConv.total) * 100) : 0;
+  const acceptedOfferteValue = Number(estConv?.acceptedValue ?? 0);
+
   return (
     <>
       <PageHeader
@@ -327,6 +376,40 @@ export default async function DashboardPage() {
           <StatTile label="Contacten" value={contactsTotal.n} />
         </div>
       </details>
+
+      <div className="mt-6 grid gap-4 lg:grid-cols-2">
+        <Card>
+          <CardHeader>
+            <CardTitle>Omzet per maand</CardTitle>
+            <span className="text-xs text-muted">facturen · ex. BTW</span>
+          </CardHeader>
+          <CardContent>
+            <MonthlyAmountChart data={revSeries} />
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader>
+            <CardTitle>Offerte-waarde per maand</CardTitle>
+            <span className="text-xs text-muted">uitgebracht · ex. BTW</span>
+          </CardHeader>
+          <CardContent>
+            <MonthlyAmountChart data={estSeries} color="#a98a4b" />
+          </CardContent>
+        </Card>
+      </div>
+
+      <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-4">
+        <StatTile
+          label="Offerte-conversie"
+          value={`${convPct}%`}
+          hint={`${estConv?.accepted ?? 0} van ${estConv?.total ?? 0} geaccepteerd`}
+        />
+        <StatTile
+          label="Geaccepteerde offerte-omzet"
+          value={formatEUR(acceptedOfferteValue)}
+          hint="ex. BTW"
+        />
+      </div>
 
       <Card className="mt-6">
         <CardHeader>
