@@ -79,6 +79,13 @@ export default async function ProductsPage({
     })
     .from(products);
 
+  // Totale brutomarge op de huidige voorraad (verkoopwaarde − kostprijs-waarde).
+  const totalMargin = Number(agg.stockSaleValue) - Number(agg.stockCostValue);
+  const totalMarginPct =
+    Number(agg.stockSaleValue) > 0
+      ? Math.round((totalMargin / Number(agg.stockSaleValue)) * 100)
+      : null;
+
   // Producten die nu onderweg/besteld zijn (open inkooporders).
   const onOrderRows = (await db.execute(sql`
     select
@@ -172,10 +179,15 @@ export default async function ProductsPage({
         }
       />
 
-      <div className="mb-5 grid grid-cols-2 gap-3 sm:grid-cols-4">
+      <div className="mb-5 grid grid-cols-2 gap-3 sm:grid-cols-5">
         <StatTile label="Producten (totaal)" value={agg.n} />
         <StatTile label="Voorraadwaarde (kostprijs)" value={formatEUR(agg.stockCostValue)} hint="kostprijs × voorraad" />
         <StatTile label="Voorraadwaarde (verkoop)" value={formatEUR(agg.stockSaleValue)} hint="verkoopprijs × voorraad" />
+        <StatTile
+          label="Totale marge (voorraad)"
+          value={formatEUR(totalMargin)}
+          hint={totalMarginPct != null ? `${totalMarginPct}% · verkoop − kostprijs` : "verkoop − kostprijs"}
+        />
         <Link href="/products?nofoto=1" className="block">
           <StatTile label="Zonder foto" value={agg.noPhoto} hint="actieve producten · ontbreekt op de site" />
         </Link>
@@ -270,6 +282,11 @@ export default async function ProductsPage({
                     const cost = Number(p.costEur ?? 0);
                     const margin = price > 0 && cost > 0 ? price - cost : null;
                     const marginPct = margin != null && price > 0 ? Math.round((margin / price) * 100) : null;
+                    const m2 =
+                      p.widthMm && p.heightMm
+                        ? (Number(p.widthMm) * Number(p.heightMm)) / 1_000_000
+                        : null;
+                    const pricePerM2 = m2 && m2 > 0 && price > 0 ? price / m2 : null;
                     const kitComponents = (p.components as KitComponent[] | null) ?? null;
                     const isKit = !!kitComponents && kitComponents.length > 0;
                     const stock = isKit
@@ -333,7 +350,12 @@ export default async function ProductsPage({
                           })()}
                         </Td>
                         <Td className="text-muted">{p.unit ?? "—"}</Td>
-                        <Td className="text-right tabular-nums">{p.priceEur ? formatEUR(p.priceEur) : "—"}</Td>
+                        <Td className="text-right tabular-nums">
+                          {p.priceEur ? formatEUR(p.priceEur) : "—"}
+                          {pricePerM2 != null && (
+                            <span className="block text-xs text-muted">{formatEUR(pricePerM2)}/m²</span>
+                          )}
+                        </Td>
                         <Td className="text-right tabular-nums text-muted">{p.vatRate}%</Td>
                         <Td className="text-right tabular-nums text-muted">
                           {p.purchaseCostEur ? formatEUR(p.purchaseCostEur) : "—"}
