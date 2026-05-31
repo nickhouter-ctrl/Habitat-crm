@@ -120,6 +120,15 @@ export async function addDealNote(dealId: string, body: string) {
   revalidatePath(`/deals/${dealId}`);
 }
 
+export async function deleteDeal(id: string) {
+  const session = await auth();
+  if (!session?.user) redirect("/login");
+  await db.delete(deals).where(eq(deals.id, id));
+  revalidatePath("/deals");
+  revalidatePath("/");
+  redirect("/deals");
+}
+
 const DEAL_STAGES = [
   "lead",
   "qualified",

@@ -23,7 +23,8 @@ import {
 import { db } from "@/lib/db";
 import { activities, deals, documents } from "@/lib/db/schema";
 import { formatDate, formatEUR } from "@/lib/utils";
-import { addDealNote } from "../actions";
+import { ConfirmSubmit } from "@/components/confirm-submit";
+import { addDealNote, deleteDeal } from "../actions";
 import {
   dealStageMeta,
   dealTypeMeta,
@@ -99,6 +100,14 @@ export default async function DealDetailPage({
             <LinkButton href={`/deals/${id}/edit`} variant="secondary">
               Bewerken
             </LinkButton>
+            <form action={deleteDeal.bind(null, id)} className="contents">
+              <ConfirmSubmit
+                message={`Deal "${deal.title}" definitief verwijderen?`}
+                className="rounded-md px-3 py-2 text-sm font-medium text-danger transition-colors hover:bg-danger/10"
+              >
+                Verwijderen
+              </ConfirmSubmit>
+            </form>
           </>
         }
       />
