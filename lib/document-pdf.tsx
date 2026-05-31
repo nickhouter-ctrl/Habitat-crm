@@ -8,15 +8,20 @@ import {
   View,
   renderToBuffer,
 } from "@react-pdf/renderer";
-import { and, eq, isNotNull, like } from "drizzle-orm";
 
 import { COMPANY } from "@/lib/company";
-import { db } from "@/lib/db";
-import { products, type DocumentLineItem } from "@/lib/db/schema";
+import type { DocumentLineItem } from "@/lib/db/schema";
 import { lineNet } from "@/lib/documents";
 import type { Locale } from "@/lib/translate";
 
 type ExampleImage = { data: Buffer; format: "jpg" | "png" };
+
+/** Curated luxe sfeerfoto's (interieur/exterieur, van de website) voor voor-/eindblad. */
+const SFEER_IMAGES = [
+  "https://habitat-one-ecru.vercel.app/products/magic/huge-travertine-beige-interior.png",
+  "https://habitat-one-ecru.vercel.app/products/magic/roman-huge-travertine-white-golden-interior.png",
+  "https://habitat-one-ecru.vercel.app/products/magic/ms-travertino-light-grey-interior.png",
+];
 
 /* ---------------------------------------------------------------- i18n */
 
@@ -447,7 +452,7 @@ const cs = StyleSheet.create({
   endHeading: { fontFamily: "Times-Bold", fontSize: 24, letterSpacing: 3, color: C.brown, textAlign: "center" },
   endSub: { fontSize: 10, color: C.muted, textAlign: "center", marginTop: 7, marginBottom: 24 },
   grid: { flexDirection: "row", flexWrap: "wrap", justifyContent: "space-between" },
-  gridImg: { width: "31.5%", height: 150, objectFit: "cover", borderRadius: 4, marginBottom: 14 },
+  gridImg: { width: "48.5%", height: 210, objectFit: "cover", borderRadius: 5, marginBottom: 14 },
   endFooter: { marginTop: 22, borderTopWidth: 1, borderColor: C.sand, paddingTop: 18, alignItems: "center" },
   endThanks: { fontSize: 12, color: C.brown, fontFamily: "Helvetica-Bold", marginBottom: 10, textAlign: "center" },
   endContact: { fontSize: 8.5, color: C.muted, textAlign: "center", lineHeight: 1.7 },
@@ -645,12 +650,12 @@ function DocumentPdf({ doc }: { doc: PdfDoc }) {
         />
       </Page>
 
-      {showExtras && images.length > 0 ? (
+      {showExtras && images.length > 1 ? (
         <Page size="A4" style={cs.endPage}>
           <Text style={cs.endHeading}>MAGIC STONE</Text>
           <Text style={cs.endSub}>{endTxt.sub}</Text>
           <View style={cs.grid}>
-            {images.slice(0, 6).map((img, i) => (
+            {images.slice(1, 5).map((img, i) => (
               <Image key={i} src={img} style={cs.gridImg} />
             ))}
           </View>
@@ -674,27 +679,10 @@ function DocumentPdf({ doc }: { doc: PdfDoc }) {
   );
 }
 
-/** Haalt een paar Magic Stone-productfoto's op en pre-fetcht ze (faalt nooit de PDF). */
-async function fetchMagicStoneExamples(): Promise<ExampleImage[]> {
-  let urls: string[] = [];
-  try {
-    const rows = await db
-      .select({ url: products.imageUrl })
-      .from(products)
-      .where(
-        and(
-          eq(products.collection, "Wandpanelen"),
-          like(products.sku, "MS-%"),
-          isNotNull(products.imageUrl),
-        ),
-      )
-      .limit(6);
-    urls = rows.map((r) => r.url).filter((u): u is string => !!u);
-  } catch {
-    return [];
-  }
+/** Pre-fetcht de curated sfeerfoto's (een onbereikbare foto laat de PDF nooit falen). */
+async function fetchSfeerImages(): Promise<ExampleImage[]> {
   const out: ExampleImage[] = [];
-  for (const u of urls) {
+  for (const u of SFEER_IMAGES) {
     try {
       const r = await fetch(u, { cache: "no-store" });
       if (!r.ok) continue;
@@ -710,6 +698,6 @@ async function fetchMagicStoneExamples(): Promise<ExampleImage[]> {
 }
 
 export async function renderDocumentPdf(doc: PdfDoc): Promise<Buffer> {
-  const exampleImages = doc.exampleImages ?? (await fetchMagicStoneExamples());
+  const exampleImages = doc.exampleImages ?? (await fetchSfeerImages());
   return renderToBuffer(<DocumentPdf doc={{ ...doc, exampleImages }} />);
 }
