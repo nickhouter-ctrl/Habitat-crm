@@ -15,6 +15,7 @@ import {
 } from "@/components/ui";
 import { Combobox } from "@/components/combobox";
 import { LineItemsEditor } from "@/components/line-items-editor";
+import { deliveryDistanceKm } from "@/app/(app)/documents/actions";
 import type { ProductOption } from "@/app/(app)/_options";
 import type { DocKind } from "@/lib/documents";
 import { cn } from "@/lib/utils";
@@ -274,7 +275,10 @@ export function DocumentWizard({
 
         <Card>
           <CardContent>
-            <LineItemsEditor products={products} />
+            <LineItemsEditor
+              products={products}
+              onDistance={kind === "deliverynote" ? undefined : deliveryDistanceKm}
+            />
           </CardContent>
         </Card>
 
