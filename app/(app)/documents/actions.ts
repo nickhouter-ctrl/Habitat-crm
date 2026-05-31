@@ -112,6 +112,48 @@ async function requireUser() {
   return session.user;
 }
 
+/** Bezorgafstand (km) van de showroom naar het adres van het contact (OpenRouteService). */
+export async function deliveryDistanceKm(contactId: string): Promise<number | null> {
+  if (!contactId) return null;
+  const key = process.env.ORS_API_KEY;
+  if (!key) return null;
+  const c = await db.query.contacts.findFirst({
+    where: eq(contacts.id, contactId),
+    columns: { addressLine: true, postalCode: true, city: true, province: true, country: true },
+  });
+  if (!c || (!c.addressLine && !c.city && !c.postalCode)) return null;
+  const addr = [
+    c.addressLine,
+    [c.postalCode, c.city].filter(Boolean).join(" "),
+    c.province,
+    c.country ?? "Spain",
+  ]
+    .filter((p) => p && p.trim())
+    .join(", ");
+  // Showroom Camí de la Fontana 3, Jávea — vast vertrekpunt (lng,lat).
+  const SHOWROOM = "0.150464,38.785694";
+  try {
+    const g = await fetch(
+      `https://api.openrouteservice.org/geocode/search?api_key=${key}&size=1&text=${encodeURIComponent(addr)}`,
+      { cache: "no-store" },
+    );
+    const gj = await g.json();
+    const dest = gj?.features?.[0]?.geometry?.coordinates as [number, number] | undefined;
+    if (!dest) return null;
+    const r = await fetch(
+      `https://api.openrouteservice.org/v2/directions/driving-car?api_key=${key}&start=${SHOWROOM}&end=${dest[0]},${dest[1]}`,
+      { cache: "no-store" },
+    );
+    const rj = await r.json();
+    const meters = rj?.features?.[0]?.properties?.summary?.distance;
+    if (typeof meters !== "number") return null;
+    return Math.round((meters / 1000) * 10) / 10;
+  } catch (err) {
+    console.warn("[habitat-crm] bezorgafstand mislukt:", err);
+    return null;
+  }
+}
+
 export async function createDocument(formData: FormData) {
   await requireUser();
   const parsed = docSchema.safeParse(Object.fromEntries(formData));

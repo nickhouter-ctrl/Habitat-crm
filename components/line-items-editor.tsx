@@ -58,10 +58,13 @@ export function LineItemsEditor({
   name = "items",
   initialItems,
   products = [],
+  onDistance,
 }: {
   name?: string;
   initialItems?: DocumentLineItem[] | null;
   products?: ProductOption[];
+  /** Server-action: berekent km showroom → adres van het gekozen contact. */
+  onDistance?: (contactId: string) => Promise<number | null>;
 }) {
   const [rows, setRows] = useState<Row[]>(() =>
     initialItems && initialItems.length > 0
@@ -119,6 +122,50 @@ export function LineItemsEditor({
     setRows((rs) =>
       rs.length === 1 && !rs[0].name.trim() && !rs[0].productId ? [row] : [...rs, row],
     );
+  };
+
+  // --- Bezorgkosten: afstand showroom → klantadres × tarief, als regel ---
+  const [deliveryKm, setDeliveryKm] = useState("");
+  const [deliveryRate, setDeliveryRate] = useState("0.50");
+  const [calcBusy, setCalcBusy] = useState(false);
+  const [calcMsg, setCalcMsg] = useState<string | null>(null);
+  const deliveryFee = round2((Number(deliveryKm) || 0) * (Number(deliveryRate) || 0));
+
+  const calcDistance = async () => {
+    if (!onDistance) return;
+    const cid =
+      (typeof document !== "undefined"
+        ? (document.querySelector('input[name="contactId"]') as HTMLInputElement | null)?.value
+        : "") ?? "";
+    if (!cid) {
+      setCalcMsg("Kies eerst een klant met adres.");
+      return;
+    }
+    setCalcBusy(true);
+    setCalcMsg(null);
+    try {
+      const km = await onDistance(cid);
+      if (km == null) setCalcMsg("Afstand niet gevonden — vul de km handmatig in.");
+      else setDeliveryKm(String(km));
+    } finally {
+      setCalcBusy(false);
+    }
+  };
+
+  const addDeliveryLine = () => {
+    const km = Number(deliveryKm) || 0;
+    const line: Row = {
+      name: km > 0 ? `Bezorgkosten (${deliveryKm} km)` : "Bezorgkosten",
+      description: "",
+      units: "1",
+      price: String(deliveryFee),
+      discount: "0",
+      taxRate: "21",
+      category: "materiaal",
+      productId: "",
+    };
+    // Vervang een eventuele bestaande bezorgregel (geen dubbeltelling).
+    setRows((rs) => [...rs.filter((r) => !r.name.startsWith("Bezorgkosten")), line]);
   };
 
   const setCategory = (i: number, category: string) => {
@@ -348,6 +395,44 @@ export function LineItemsEditor({
         <p className="flex items-center gap-1.5 rounded-md bg-danger/10 px-3 py-2 text-sm font-medium text-danger">
           <AlertTriangle className="size-4" /> Eén of meer regels staan onder de kostprijs — controleer de korting.
         </p>
+      )}
+
+      {onDistance && (
+        <div className="flex flex-wrap items-end gap-2 rounded-md border border-border bg-background-soft px-3 py-2.5">
+          <span className="mb-1.5 text-xs font-medium text-muted">🚚 Bezorgkosten</span>
+          <div>
+            <label className="block text-[11px] text-muted">Afstand (km)</label>
+            <Input
+              type="number"
+              step="0.1"
+              min="0"
+              value={deliveryKm}
+              onChange={(e) => setDeliveryKm(e.target.value)}
+              className="w-24 text-right"
+            />
+          </div>
+          <Button type="button" variant="secondary" size="sm" onClick={calcDistance} disabled={calcBusy}>
+            {calcBusy ? "Berekenen…" : "Bereken uit adres"}
+          </Button>
+          <div>
+            <label className="block text-[11px] text-muted">€ / km</label>
+            <Input
+              type="number"
+              step="0.01"
+              min="0"
+              value={deliveryRate}
+              onChange={(e) => setDeliveryRate(e.target.value)}
+              className="w-20 text-right"
+            />
+          </div>
+          <span className="mb-1.5 text-sm text-muted">
+            = <strong className="text-foreground">{formatEUR(deliveryFee)}</strong>
+          </span>
+          <Button type="button" size="sm" onClick={addDeliveryLine} className="mb-0.5">
+            Als regel toevoegen
+          </Button>
+          {calcMsg && <span className="w-full text-xs text-warning">{calcMsg}</span>}
+        </div>
       )}
 
       <div className="ml-auto w-full max-w-xs space-y-1 border-t pt-3 text-sm">
