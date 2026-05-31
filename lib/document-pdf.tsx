@@ -1,17 +1,22 @@
 /* Server-only: renders a CRM document (offerte / factuur) to a PDF via @react-pdf/renderer. */
 import {
   Document,
+  Image,
   Page,
   StyleSheet,
   Text,
   View,
   renderToBuffer,
 } from "@react-pdf/renderer";
+import { and, eq, isNotNull, like } from "drizzle-orm";
 
 import { COMPANY } from "@/lib/company";
-import type { DocumentLineItem } from "@/lib/db/schema";
+import { db } from "@/lib/db";
+import { products, type DocumentLineItem } from "@/lib/db/schema";
 import { lineNet } from "@/lib/documents";
 import type { Locale } from "@/lib/translate";
+
+type ExampleImage = { data: Buffer; format: "jpg" | "png" };
 
 /* ---------------------------------------------------------------- i18n */
 
@@ -386,7 +391,67 @@ export type PdfDoc = {
   contactAddress?: string | null;
   /** Taal van het document — volgt de voorkeurstaal van het contact. Default es. */
   locale?: Locale;
+  /** Voorbeeldfoto's (Magic Stone) voor het voor- en eindblad. */
+  exampleImages?: ExampleImage[];
 };
+
+/** Teksten voor het voor- en eindblad, per taal. */
+const COVER_TXT: Record<Locale, { for: string; date: string }> = {
+  nl: { for: "Voor", date: "Datum" },
+  de: { for: "Für", date: "Datum" },
+  en: { for: "For", date: "Date" },
+  es: { for: "Para", date: "Fecha" },
+};
+const ENDPAGE_TXT: Record<Locale, { sub: string; thanks: string }> = {
+  nl: { sub: "Eindeloze mogelijkheden in kleur en structuur", thanks: "Bedankt voor uw interesse" },
+  de: { sub: "Unendliche Möglichkeiten in Farbe und Struktur", thanks: "Vielen Dank für Ihr Interesse" },
+  en: { sub: "Endless possibilities in colour and texture", thanks: "Thank you for your interest" },
+  es: { sub: "Posibilidades infinitas en color y textura", thanks: "Gracias por su interés" },
+};
+
+const cs = StyleSheet.create({
+  cover: {
+    backgroundColor: C.cream,
+    paddingTop: 64,
+    paddingHorizontal: 54,
+    paddingBottom: 50,
+    fontFamily: "Helvetica",
+    color: C.charcoal,
+  },
+  coverWordmark: { alignItems: "center", marginBottom: 26 },
+  coverBrand1: { fontFamily: "Times-Bold", fontSize: 30, letterSpacing: 8, color: C.brown },
+  coverBrand2: { fontFamily: "Times-Bold", fontSize: 30, letterSpacing: 8, color: C.brown, marginTop: -4 },
+  coverTagline: { fontSize: 9, color: C.muted, marginTop: 8, letterSpacing: 2 },
+  coverHero: { width: "100%", height: 300, objectFit: "cover", borderRadius: 6, marginBottom: 28 },
+  coverTitle: { fontFamily: "Helvetica-Bold", fontSize: 34, letterSpacing: 2, color: C.terracotta },
+  coverNumber: { fontFamily: "Helvetica-Bold", fontSize: 13, color: C.brown, marginTop: 6 },
+  coverSubject: { fontSize: 12, color: C.charcoal, marginTop: 10, lineHeight: 1.4 },
+  coverMetaRow: {
+    marginTop: 24,
+    flexDirection: "row",
+    justifyContent: "space-between",
+    borderTopWidth: 1,
+    borderColor: C.sand,
+    paddingTop: 14,
+  },
+  coverMetaLabel: { fontSize: 7, letterSpacing: 1.5, color: C.muted },
+  coverMetaValue: { fontSize: 11, fontFamily: "Helvetica-Bold", color: C.brown, marginTop: 3 },
+  endPage: {
+    backgroundColor: "#ffffff",
+    paddingTop: 56,
+    paddingHorizontal: 54,
+    paddingBottom: 50,
+    fontFamily: "Helvetica",
+    color: C.charcoal,
+  },
+  endHeading: { fontFamily: "Times-Bold", fontSize: 24, letterSpacing: 3, color: C.brown, textAlign: "center" },
+  endSub: { fontSize: 10, color: C.muted, textAlign: "center", marginTop: 7, marginBottom: 24 },
+  grid: { flexDirection: "row", flexWrap: "wrap", justifyContent: "space-between" },
+  gridImg: { width: "31.5%", height: 150, objectFit: "cover", borderRadius: 4, marginBottom: 14 },
+  endFooter: { marginTop: 22, borderTopWidth: 1, borderColor: C.sand, paddingTop: 18, alignItems: "center" },
+  endThanks: { fontSize: 12, color: C.brown, fontFamily: "Helvetica-Bold", marginBottom: 10, textAlign: "center" },
+  endContact: { fontSize: 8.5, color: C.muted, textAlign: "center", lineHeight: 1.7 },
+});
 
 function DocumentPdf({ doc }: { doc: PdfDoc }) {
   const locale: Locale = doc.locale ?? "es";
@@ -399,12 +464,42 @@ function DocumentPdf({ doc }: { doc: PdfDoc }) {
   const isDelivery = doc.kind === "deliverynote";
   const isInvoice = doc.kind === "invoice";
 
+  // Voor-/eindblad met Magic Stone-sfeerimpressie (niet op pakbonnen).
+  const images = doc.exampleImages ?? [];
+  const hero = images[0];
+  const showExtras = !isDelivery;
+  const coverTxt = COVER_TXT[locale];
+  const endTxt = ENDPAGE_TXT[locale];
+
   const footerLine =
     `${C.legalName}${C.vatNumber ? ` · NIF ${C.vatNumber}` : ""} · ${C.address}\n` +
     `${C.email}${C.phone ? ` · ${C.phone}` : ""} · ${C.website}${C.iban ? ` · IBAN ${C.iban}` : ""}`;
 
   return (
     <Document>
+      {showExtras && (
+        <Page size="A4" style={cs.cover}>
+          <View style={cs.coverWordmark}>
+            <Text style={cs.coverBrand1}>{C.wordmark1}</Text>
+            <Text style={cs.coverBrand2}>{C.wordmark2}</Text>
+            <Text style={cs.coverTagline}>{C.tagline}</Text>
+          </View>
+          {hero ? <Image src={hero} style={cs.coverHero} /> : null}
+          <Text style={cs.coverTitle}>{kindLabels[doc.kind] ?? kindLabels.estimate}</Text>
+          {doc.docNumber ? <Text style={cs.coverNumber}>{doc.docNumber}</Text> : null}
+          {doc.title ? <Text style={cs.coverSubject}>{doc.title}</Text> : null}
+          <View style={cs.coverMetaRow}>
+            <View>
+              <Text style={cs.coverMetaLabel}>{coverTxt.for.toUpperCase()}</Text>
+              <Text style={cs.coverMetaValue}>{doc.contactName ?? "—"}</Text>
+            </View>
+            <View>
+              <Text style={[cs.coverMetaLabel, { textAlign: "right" }]}>{coverTxt.date.toUpperCase()}</Text>
+              <Text style={[cs.coverMetaValue, { textAlign: "right" }]}>{fdate(doc.issueDate)}</Text>
+            </View>
+          </View>
+        </Page>
+      )}
       <Page size="A4" style={s.page}>
         {/* ---- header band ---- */}
         <View style={s.headerBand} fixed>
@@ -549,10 +644,72 @@ function DocumentPdf({ doc }: { doc: PdfDoc }) {
           }
         />
       </Page>
+
+      {showExtras && images.length > 0 ? (
+        <Page size="A4" style={cs.endPage}>
+          <Text style={cs.endHeading}>MAGIC STONE</Text>
+          <Text style={cs.endSub}>{endTxt.sub}</Text>
+          <View style={cs.grid}>
+            {images.slice(0, 6).map((img, i) => (
+              <Image key={i} src={img} style={cs.gridImg} />
+            ))}
+          </View>
+          <View style={cs.endFooter}>
+            <Text style={cs.endThanks}>{endTxt.thanks}</Text>
+            <Text style={cs.endContact}>
+              {C.legalName}
+              {"\n"}
+              {C.address}
+              {"\n"}
+              {C.phone} · {C.email} · {C.website}
+            </Text>
+            <View style={{ marginTop: 14, alignItems: "center" }}>
+              <Text style={cs.coverBrand1}>{C.wordmark1}</Text>
+              <Text style={cs.coverBrand2}>{C.wordmark2}</Text>
+            </View>
+          </View>
+        </Page>
+      ) : null}
     </Document>
   );
 }
 
+/** Haalt een paar Magic Stone-productfoto's op en pre-fetcht ze (faalt nooit de PDF). */
+async function fetchMagicStoneExamples(): Promise<ExampleImage[]> {
+  let urls: string[] = [];
+  try {
+    const rows = await db
+      .select({ url: products.imageUrl })
+      .from(products)
+      .where(
+        and(
+          eq(products.collection, "Wandpanelen"),
+          like(products.sku, "MS-%"),
+          isNotNull(products.imageUrl),
+        ),
+      )
+      .limit(6);
+    urls = rows.map((r) => r.url).filter((u): u is string => !!u);
+  } catch {
+    return [];
+  }
+  const out: ExampleImage[] = [];
+  for (const u of urls) {
+    try {
+      const r = await fetch(u, { cache: "no-store" });
+      if (!r.ok) continue;
+      out.push({
+        data: Buffer.from(await r.arrayBuffer()),
+        format: u.toLowerCase().endsWith(".png") ? "png" : "jpg",
+      });
+    } catch {
+      /* sla over */
+    }
+  }
+  return out;
+}
+
 export async function renderDocumentPdf(doc: PdfDoc): Promise<Buffer> {
-  return renderToBuffer(<DocumentPdf doc={doc} />);
+  const exampleImages = doc.exampleImages ?? (await fetchMagicStoneExamples());
+  return renderToBuffer(<DocumentPdf doc={{ ...doc, exampleImages }} />);
 }
