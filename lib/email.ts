@@ -268,6 +268,79 @@ export function offerteAcceptedEmail(args: {
   return { subject: ta.subject(nr), html, text };
 }
 
+/**
+ * Bevestigingsmail naar de klant nadat die via de website (habitat-one) een
+ * offerte-aanvraag heeft ingediend. Taal = de op de website gekozen taal;
+ * valt terug op Engels (niet Spaans) voor internationale aanvragen.
+ */
+const QR: Record<Lang, { subject: string; body: string; summary: string; followUp: string }> = {
+  nl: {
+    subject: "We hebben je offerte-aanvraag ontvangen",
+    body: "Bedankt voor je aanvraag bij Habitat One. We hebben je offerte-aanvraag in goede orde ontvangen en nemen binnen één werkdag contact met je op.",
+    summary: "Producten in je aanvraag",
+    followUp: "Heb je in de tussentijd een vraag? Beantwoord gerust deze e-mail.",
+  },
+  en: {
+    subject: "We've received your quote request",
+    body: "Thank you for your request to Habitat One. We've received your quote request and will get back to you within one business day.",
+    summary: "Products in your request",
+    followUp: "Have a question in the meantime? Just reply to this email.",
+  },
+  es: {
+    subject: "Hemos recibido su solicitud de presupuesto",
+    body: "Gracias por su solicitud a Habitat One. Hemos recibido su solicitud de presupuesto y le responderemos en un día laborable.",
+    summary: "Productos en su solicitud",
+    followUp: "¿Tiene alguna pregunta mientras tanto? Responda a este correo.",
+  },
+  de: {
+    subject: "Wir haben Ihre Angebotsanfrage erhalten",
+    body: "Vielen Dank für Ihre Anfrage bei Habitat One. Wir haben Ihre Angebotsanfrage erhalten und melden uns innerhalb eines Werktags bei Ihnen.",
+    summary: "Produkte in Ihrer Anfrage",
+    followUp: "Haben Sie in der Zwischenzeit eine Frage? Antworten Sie einfach auf diese E-Mail.",
+  },
+};
+
+export function quoteRequestReceivedEmail(args: {
+  lang?: string | null;
+  contactName?: string | null;
+  productNames?: string[] | null;
+}): { subject: string; html: string; text: string } {
+  const lang: Lang = (["en", "nl", "es", "de"] as const).includes(args.lang as Lang)
+    ? (args.lang as Lang)
+    : "en";
+  const q = QR[lang];
+  const t = T[lang];
+  const greeting = args.contactName ? `${t.hi} ${escapeHtml(args.contactName)},` : `${t.hi},`;
+  const summary = args.productNames?.length
+    ? `<p style="margin:22px 0 6px;font-weight:600;color:${COMPANY.brown}">${q.summary}</p>
+      <ul style="margin:0;padding-left:18px;font-size:14px;color:#1c1c1a">${args.productNames
+        .map((n) => `<li style="padding:2px 0">${escapeHtml(n)}</li>`)
+        .join("")}</ul>`
+    : "";
+  const html = `<div style="font-family:Helvetica,Arial,sans-serif;background:${COMPANY.cream};padding:24px 0">
+  <div style="max-width:560px;margin:0 auto;background:#fff;border-radius:12px;overflow:hidden;color:#1c1c1a">
+    <div style="background:${COMPANY.cream};padding:22px 28px">
+      <div style="font-family:Georgia,'Times New Roman',serif;font-size:22px;letter-spacing:4px;color:${COMPANY.brown};line-height:1.05">${COMPANY.wordmark1}<br/>${COMPANY.wordmark2}</div>
+      <div style="font-size:11px;color:#999;margin-top:4px">${escapeHtml(COMPANY.tagline)}</div>
+    </div>
+    <div style="padding:24px 28px">
+      <p style="margin:0">${greeting}</p>
+      <p>${q.body}</p>
+      ${summary}
+      <p style="font-size:13px;color:#888;margin-top:22px">${q.followUp}</p>
+      <hr style="border:none;border-top:1px solid ${COMPANY.sand};margin:24px 0 16px" />
+      <p style="margin:0 0 4px">${t.regards}</p>
+      <div style="font-size:13px;color:#888;line-height:1.7">${signatureHtml()}</div>
+    </div>
+  </div>
+</div>`;
+  const text =
+    `${greeting}\n\n${q.body}\n\n` +
+    (args.productNames?.length ? `${q.summary}:\n- ${args.productNames.join("\n- ")}\n\n` : "") +
+    `${q.followUp}\n\n${t.regards}\n${COMPANY.legalName}\n${COMPANY.address}\n${[COMPANY.phone, COMPANY.email].filter(Boolean).join(" · ")}`;
+  return { subject: q.subject, html, text };
+}
+
 function escapeHtml(s: string): string {
   return s.replace(/[&<>"']/g, (c) =>
     ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!,

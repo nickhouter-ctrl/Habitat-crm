@@ -4,6 +4,7 @@ import { z } from "zod";
 import { db } from "@/lib/db";
 import { quoteRequests } from "@/lib/db/schema";
 import { sendMail } from "@/lib/gmail";
+import { quoteRequestReceivedEmail } from "@/lib/email";
 
 /**
  * Publieke endpoint waar habitat-one (of een andere bron) een offerte-aanvraag
@@ -116,8 +117,29 @@ export async function POST(req: Request) {
     console.warn("[quote-requests] meldings-mail mislukt:", err);
   }
 
+  // Bevestigingsmail naar de klant, in de op de website gekozen taal (fallback
+  // Engels). Ook hier: een mail-fout mag de opgeslagen aanvraag nooit breken.
+  let confirmStatus = "skipped";
+  try {
+    const confirm = quoteRequestReceivedEmail({
+      lang: v.locale,
+      contactName: v.name,
+      productNames: v.productNames?.length ? v.productNames : null,
+    });
+    await sendMail({
+      to: v.email,
+      subject: confirm.subject,
+      html: confirm.html,
+      text: confirm.text,
+    });
+    confirmStatus = "sent";
+  } catch (err) {
+    confirmStatus = `failed: ${err instanceof Error ? err.message : String(err)}`;
+    console.warn("[quote-requests] klant-bevestiging mislukt:", err);
+  }
+
   return NextResponse.json(
-    { ok: true, id: row.id, mail: mailStatus },
+    { ok: true, id: row.id, mail: mailStatus, confirm: confirmStatus },
     { status: 201, headers: corsHeaders(origin) },
   );
 }
