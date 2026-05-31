@@ -21,6 +21,7 @@ import {
   deliveryDistanceKm,
 } from "@/app/(app)/documents/actions";
 import type { ProductOption } from "@/app/(app)/_options";
+import type { DocumentLineItem } from "@/lib/db/schema";
 import type { DocKind } from "@/lib/documents";
 import { cn } from "@/lib/utils";
 
@@ -52,6 +53,7 @@ export function DocumentWizard({
   projects = [],
   products = [],
   defaults,
+  initialItems,
 }: {
   action: (formData: FormData) => void | Promise<void>;
   kind: DocKind;
@@ -62,6 +64,7 @@ export function DocumentWizard({
   projects?: Option[];
   products?: ProductOption[];
   defaults?: { contactId?: string; dealId?: string; propertyId?: string; projectId?: string };
+  initialItems?: DocumentLineItem[] | null;
 }) {
   const [step, setStep] = useState<1 | 2>(1);
   const [mode, setMode] = useState<"existing" | "new">(
@@ -281,6 +284,7 @@ export function DocumentWizard({
           <CardContent>
             <LineItemsEditor
               products={products}
+              initialItems={initialItems}
               onDistance={kind === "deliverynote" ? undefined : deliveryDistanceKm}
               onSuggest={kind === "deliverynote" ? undefined : addressSuggestions}
               onDistanceCoords={kind === "deliverynote" ? undefined : deliveryDistanceFromCoords}

@@ -176,11 +176,15 @@ export default async function QuoteRequestDetailPage({ params }: { params: Promi
                 <CardTitle>Volgende stap</CardTitle>
               </CardHeader>
               <CardContent>
-                <LinkButton href={`/documents/new?kind=estimate&contactId=${req.contactId}`} variant="primary" className="w-full">
+                <LinkButton
+                  href={`/documents/new?kind=estimate&contactId=${req.contactId}&fromAanvraag=${req.id}`}
+                  variant="primary"
+                  className="w-full"
+                >
                   + Offerte opstellen
                 </LinkButton>
                 <p className="mt-2 text-xs text-muted">
-                  Wordt geopend in de wizard met dit contact alvast ingevuld.
+                  Opent de wizard met dit contact én de aangevraagde producten alvast ingevuld.
                 </p>
               </CardContent>
             </Card>
