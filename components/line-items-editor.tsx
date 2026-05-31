@@ -20,7 +20,7 @@ const round2 = (n: number) => Math.round((n + Number.EPSILON) * 100) / 100;
 /**
  * Bezorgtarief op basis van de enkele-reis afstand (km):
  * - €2,50/km tot 25 km, daarboven €1,80/km (oplopend/getrapt)
- * - heen + terug → ×2
+ * - enkele reis (roundTripFactor 1; zet op 2 voor heen + terug)
  * - starttarief €50 (minimum); pas als het km-bedrag hoger is, tellen de km
  */
 const DELIVERY_PRICING = {
@@ -28,7 +28,7 @@ const DELIVERY_PRICING = {
   ratePerKmUpTo25: 2.5,
   ratePerKmBeyond25: 1.8,
   tierKm: 25,
-  roundTripFactor: 2,
+  roundTripFactor: 1,
 };
 
 function deliveryCostForKm(km: number): number {
@@ -538,7 +538,7 @@ export function LineItemsEditor({
             <span className="mb-1 text-sm text-muted">
               Bezorgkosten: <strong className="text-foreground">{formatEUR(deliveryFee)}</strong>
               <span className="block text-[11px]">
-                €2,50/km tot 25 km, daarna €1,80 · ×2 (heen + terug) · min. €50
+                €2,50/km tot 25 km, daarna €1,80 · enkele reis · min. €50
               </span>
             </span>
             <Button
