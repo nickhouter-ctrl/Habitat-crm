@@ -1,7 +1,7 @@
 "use client";
 
 import { AlertTriangle, Plus, Trash2 } from "lucide-react";
-import { useState } from "react";
+import { useRef, useState } from "react";
 
 import { Combobox, type ComboOption } from "@/components/combobox";
 import { Button, Input, Select } from "@/components/ui";
@@ -59,12 +59,18 @@ export function LineItemsEditor({
   initialItems,
   products = [],
   onDistance,
+  onSuggest,
+  onDistanceCoords,
 }: {
   name?: string;
   initialItems?: DocumentLineItem[] | null;
   products?: ProductOption[];
-  /** Server-action: berekent km showroom → het ingevulde leveradres. */
+  /** Server-action: berekent km showroom → het ingevulde leveradres (tekst). */
   onDistance?: (address: string) => Promise<number | null>;
+  /** Server-action: adres-suggesties (autocomplete). */
+  onSuggest?: (query: string) => Promise<{ label: string; lng: number; lat: number }[]>;
+  /** Server-action: km showroom → exacte coördinaten van een gekozen suggestie. */
+  onDistanceCoords?: (lng: number, lat: number) => Promise<number | null>;
 }) {
   const [rows, setRows] = useState<Row[]>(() =>
     initialItems && initialItems.length > 0
@@ -131,6 +137,30 @@ export function LineItemsEditor({
   const [calcBusy, setCalcBusy] = useState(false);
   const [calcMsg, setCalcMsg] = useState<string | null>(null);
   const deliveryFee = round2((Number(deliveryKm) || 0) * (Number(deliveryRate) || 0));
+  const [suggestions, setSuggestions] = useState<{ label: string; lng: number; lat: number }[]>([]);
+  const [selectedCoords, setSelectedCoords] = useState<{ lng: number; lat: number } | null>(null);
+  const suggTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const onAddressChange = (v: string) => {
+    setDeliveryAddress(v);
+    setSelectedCoords(null);
+    setCalcMsg(null);
+    if (suggTimer.current) clearTimeout(suggTimer.current);
+    if (!onSuggest || v.trim().length < 3) {
+      setSuggestions([]);
+      return;
+    }
+    suggTimer.current = setTimeout(async () => {
+      const list = await onSuggest(v).catch(() => []);
+      setSuggestions(list);
+    }, 300);
+  };
+
+  const pickSuggestion = (s: { label: string; lng: number; lat: number }) => {
+    setDeliveryAddress(s.label);
+    setSelectedCoords({ lng: s.lng, lat: s.lat });
+    setSuggestions([]);
+  };
 
   // Zet (of vervang) de bezorgregel op basis van een aantal km.
   const setDeliveryLine = (km: number) => {
@@ -152,16 +182,20 @@ export function LineItemsEditor({
   // Bereken de afstand uit het leveradres (indien ingevuld) en zet meteen de regel.
   const calcAndAdd = async () => {
     let km = Number(deliveryKm) || 0;
-    if (onDistance && deliveryAddress.trim()) {
+    const useCoords = selectedCoords && onDistanceCoords;
+    const useText = !useCoords && onDistance && deliveryAddress.trim();
+    if (useCoords || useText) {
       setCalcBusy(true);
       setCalcMsg(null);
-      const got = await onDistance(deliveryAddress).catch(() => null);
+      const got = useCoords
+        ? await onDistanceCoords!(selectedCoords!.lng, selectedCoords!.lat).catch(() => null)
+        : await onDistance!(deliveryAddress).catch(() => null);
       setCalcBusy(false);
       if (got != null) {
         km = got;
         setDeliveryKm(String(got));
       } else if (km <= 0) {
-        setCalcMsg("Afstand niet gevonden — controleer het adres of vul de km handmatig in.");
+        setCalcMsg("Afstand niet gevonden — kies een adres uit de lijst of vul de km handmatig in.");
         return;
       }
     }
@@ -410,17 +444,38 @@ export function LineItemsEditor({
               Leveradres (mag afwijken van het klantadres)
             </label>
             <div className="flex gap-2">
-              <Input
-                id="leveradres"
-                value={deliveryAddress}
-                onChange={(e) => setDeliveryAddress(e.target.value)}
-                placeholder="bv. Carrer Major 12, 03700 Dénia"
-                className="flex-1"
-              />
+              <div className="relative flex-1">
+                <Input
+                  id="leveradres"
+                  value={deliveryAddress}
+                  onChange={(e) => onAddressChange(e.target.value)}
+                  placeholder="Begin te typen, bv. Carrer Major…"
+                  autoComplete="off"
+                />
+                {suggestions.length > 0 && (
+                  <ul className="absolute z-20 mt-1 max-h-56 w-full overflow-auto rounded-md border border-border bg-surface text-sm shadow-lg">
+                    {suggestions.map((s, i) => (
+                      <li key={i}>
+                        <button
+                          type="button"
+                          onMouseDown={(e) => e.preventDefault()}
+                          onClick={() => pickSuggestion(s)}
+                          className="block w-full px-3 py-2 text-left hover:bg-background"
+                        >
+                          {s.label}
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
               <Button type="button" size="sm" onClick={calcAndAdd} disabled={calcBusy}>
                 {calcBusy ? "Berekenen…" : "Bereken & voeg toe"}
               </Button>
             </div>
+            {selectedCoords && (
+              <p className="text-[11px] text-success">✓ Adres uit de lijst gekozen (exacte locatie)</p>
+            )}
           </div>
           <div className="flex flex-wrap items-end gap-2">
             <div>

@@ -11,7 +11,11 @@ import {
 } from "@/components/ui";
 import { Combobox } from "@/components/combobox";
 import { LineItemsEditor } from "@/components/line-items-editor";
-import { deliveryDistanceKm } from "@/app/(app)/documents/actions";
+import {
+  addressSuggestions,
+  deliveryDistanceFromCoords,
+  deliveryDistanceKm,
+} from "@/app/(app)/documents/actions";
 import type { ProductOption } from "@/app/(app)/_options";
 import type { DocumentLineItem } from "@/lib/db/schema";
 import type { DocKind } from "@/lib/documents";
@@ -183,6 +187,8 @@ export function DocumentForm({
             initialItems={doc?.items}
             products={products}
             onDistance={kind === "deliverynote" ? undefined : deliveryDistanceKm}
+            onSuggest={kind === "deliverynote" ? undefined : addressSuggestions}
+            onDistanceCoords={kind === "deliverynote" ? undefined : deliveryDistanceFromCoords}
           />
         </CardContent>
       </Card>

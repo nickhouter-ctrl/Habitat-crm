@@ -122,7 +122,7 @@ export async function deliveryDistanceKm(address: string): Promise<number | null
   const SHOWROOM = "0.150464,38.785694";
   try {
     const g = await fetch(
-      `https://api.openrouteservice.org/geocode/search?api_key=${key}&size=1&text=${encodeURIComponent(addr)}`,
+      `https://api.openrouteservice.org/geocode/search?api_key=${key}&size=1&boundary.country=ES&focus.point.lon=0.150464&focus.point.lat=38.785694&text=${encodeURIComponent(addr)}`,
       { cache: "no-store" },
     );
     const gj = await g.json();
@@ -138,6 +138,48 @@ export async function deliveryDistanceKm(address: string): Promise<number | null
     return Math.round((meters / 1000) * 10) / 10;
   } catch (err) {
     console.warn("[habitat-crm] bezorgafstand mislukt:", err);
+    return null;
+  }
+}
+
+/** Adres-suggesties (autocomplete) via ORS — beperkt tot Spanje. */
+export async function addressSuggestions(
+  query: string,
+): Promise<{ label: string; lng: number; lat: number }[]> {
+  const key = process.env.ORS_API_KEY;
+  if (!key || !query || query.trim().length < 3) return [];
+  try {
+    const r = await fetch(
+      `https://api.openrouteservice.org/geocode/autocomplete?api_key=${key}&size=6&boundary.country=ES&focus.point.lon=0.150464&focus.point.lat=38.785694&text=${encodeURIComponent(query)}`,
+      { cache: "no-store" },
+    );
+    const j = await r.json();
+    return (j?.features ?? [])
+      .map((f: { properties?: { label?: string }; geometry?: { coordinates?: [number, number] } }) => ({
+        label: f.properties?.label ?? "",
+        lng: f.geometry?.coordinates?.[0] ?? NaN,
+        lat: f.geometry?.coordinates?.[1] ?? NaN,
+      }))
+      .filter((s: { label: string; lng: number }) => s.label && Number.isFinite(s.lng));
+  } catch {
+    return [];
+  }
+}
+
+/** Bezorgafstand (km) showroom → exacte coördinaten van een gekozen adres. */
+export async function deliveryDistanceFromCoords(lng: number, lat: number): Promise<number | null> {
+  const key = process.env.ORS_API_KEY;
+  if (!key || !Number.isFinite(lng) || !Number.isFinite(lat)) return null;
+  const SHOWROOM = "0.150464,38.785694";
+  try {
+    const r = await fetch(
+      `https://api.openrouteservice.org/v2/directions/driving-car?api_key=${key}&start=${SHOWROOM}&end=${lng},${lat}`,
+      { cache: "no-store" },
+    );
+    const j = await r.json();
+    const meters = j?.features?.[0]?.properties?.summary?.distance;
+    return typeof meters === "number" ? Math.round((meters / 1000) * 10) / 10 : null;
+  } catch {
     return null;
   }
 }
