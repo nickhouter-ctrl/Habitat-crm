@@ -25,7 +25,11 @@ const contactSchema = z.object({
     .default("new"),
   preferredLanguage: z.enum(["en", "nl", "es", "de"]).default("es"),
   source: z.string().trim().max(80).optional().or(z.literal("")),
+  addressLine: z.string().trim().max(200).optional().or(z.literal("")),
+  postalCode: z.string().trim().max(20).optional().or(z.literal("")),
   city: z.string().trim().max(120).optional().or(z.literal("")),
+  province: z.string().trim().max(120).optional().or(z.literal("")),
+  country: z.string().trim().max(120).optional().or(z.literal("")),
   notes: z.string().trim().max(5000).optional().or(z.literal("")),
 });
 

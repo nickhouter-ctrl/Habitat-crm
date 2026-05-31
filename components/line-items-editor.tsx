@@ -63,8 +63,8 @@ export function LineItemsEditor({
   name?: string;
   initialItems?: DocumentLineItem[] | null;
   products?: ProductOption[];
-  /** Server-action: berekent km showroom → adres van het gekozen contact. */
-  onDistance?: (contactId: string) => Promise<number | null>;
+  /** Server-action: berekent km showroom → het ingevulde leveradres. */
+  onDistance?: (address: string) => Promise<number | null>;
 }) {
   const [rows, setRows] = useState<Row[]>(() =>
     initialItems && initialItems.length > 0
@@ -125,40 +125,21 @@ export function LineItemsEditor({
   };
 
   // --- Bezorgkosten: afstand showroom → klantadres × tarief, als regel ---
+  const [deliveryAddress, setDeliveryAddress] = useState("");
   const [deliveryKm, setDeliveryKm] = useState("");
   const [deliveryRate, setDeliveryRate] = useState("0.50");
   const [calcBusy, setCalcBusy] = useState(false);
   const [calcMsg, setCalcMsg] = useState<string | null>(null);
   const deliveryFee = round2((Number(deliveryKm) || 0) * (Number(deliveryRate) || 0));
 
-  const calcDistance = async () => {
-    if (!onDistance) return;
-    const cid =
-      (typeof document !== "undefined"
-        ? (document.querySelector('input[name="contactId"]') as HTMLInputElement | null)?.value
-        : "") ?? "";
-    if (!cid) {
-      setCalcMsg("Kies eerst een klant met adres.");
-      return;
-    }
-    setCalcBusy(true);
-    setCalcMsg(null);
-    try {
-      const km = await onDistance(cid);
-      if (km == null) setCalcMsg("Afstand niet gevonden — vul de km handmatig in.");
-      else setDeliveryKm(String(km));
-    } finally {
-      setCalcBusy(false);
-    }
-  };
-
-  const addDeliveryLine = () => {
-    const km = Number(deliveryKm) || 0;
+  // Zet (of vervang) de bezorgregel op basis van een aantal km.
+  const setDeliveryLine = (km: number) => {
+    const fee = round2(km * (Number(deliveryRate) || 0));
     const line: Row = {
-      name: km > 0 ? `Bezorgkosten (${deliveryKm} km)` : "Bezorgkosten",
-      description: "",
+      name: km > 0 ? `Bezorgkosten (${km} km)` : "Bezorgkosten",
+      description: deliveryAddress.trim() ? `Leveradres: ${deliveryAddress.trim()}` : "",
       units: "1",
-      price: String(deliveryFee),
+      price: String(fee),
       discount: "0",
       taxRate: "21",
       category: "materiaal",
@@ -166,6 +147,30 @@ export function LineItemsEditor({
     };
     // Vervang een eventuele bestaande bezorgregel (geen dubbeltelling).
     setRows((rs) => [...rs.filter((r) => !r.name.startsWith("Bezorgkosten")), line]);
+  };
+
+  // Bereken de afstand uit het leveradres (indien ingevuld) en zet meteen de regel.
+  const calcAndAdd = async () => {
+    let km = Number(deliveryKm) || 0;
+    if (onDistance && deliveryAddress.trim()) {
+      setCalcBusy(true);
+      setCalcMsg(null);
+      const got = await onDistance(deliveryAddress).catch(() => null);
+      setCalcBusy(false);
+      if (got != null) {
+        km = got;
+        setDeliveryKm(String(got));
+      } else if (km <= 0) {
+        setCalcMsg("Afstand niet gevonden — controleer het adres of vul de km handmatig in.");
+        return;
+      }
+    }
+    if (km <= 0) {
+      setCalcMsg("Vul een leveradres of de afstand (km) in.");
+      return;
+    }
+    setCalcMsg(null);
+    setDeliveryLine(km);
   };
 
   const setCategory = (i: number, category: string) => {
@@ -398,40 +403,62 @@ export function LineItemsEditor({
       )}
 
       {onDistance && (
-        <div className="flex flex-wrap items-end gap-2 rounded-md border border-border bg-background-soft px-3 py-2.5">
-          <span className="mb-1.5 text-xs font-medium text-muted">🚚 Bezorgkosten</span>
+        <div className="space-y-2.5 rounded-md border border-border bg-background-soft px-3 py-3">
+          <p className="text-xs font-medium text-muted">🚚 Bezorgkosten</p>
           <div>
-            <label className="block text-[11px] text-muted">Afstand (km)</label>
-            <Input
-              type="number"
-              step="0.1"
-              min="0"
-              value={deliveryKm}
-              onChange={(e) => setDeliveryKm(e.target.value)}
-              className="w-24 text-right"
-            />
+            <label htmlFor="leveradres" className="block text-[11px] text-muted">
+              Leveradres (mag afwijken van het klantadres)
+            </label>
+            <div className="flex gap-2">
+              <Input
+                id="leveradres"
+                value={deliveryAddress}
+                onChange={(e) => setDeliveryAddress(e.target.value)}
+                placeholder="bv. Carrer Major 12, 03700 Dénia"
+                className="flex-1"
+              />
+              <Button type="button" size="sm" onClick={calcAndAdd} disabled={calcBusy}>
+                {calcBusy ? "Berekenen…" : "Bereken & voeg toe"}
+              </Button>
+            </div>
           </div>
-          <Button type="button" variant="secondary" size="sm" onClick={calcDistance} disabled={calcBusy}>
-            {calcBusy ? "Berekenen…" : "Bereken uit adres"}
-          </Button>
-          <div>
-            <label className="block text-[11px] text-muted">€ / km</label>
-            <Input
-              type="number"
-              step="0.01"
-              min="0"
-              value={deliveryRate}
-              onChange={(e) => setDeliveryRate(e.target.value)}
-              className="w-20 text-right"
-            />
+          <div className="flex flex-wrap items-end gap-2">
+            <div>
+              <label className="block text-[11px] text-muted">Afstand (km)</label>
+              <Input
+                type="number"
+                step="0.1"
+                min="0"
+                value={deliveryKm}
+                onChange={(e) => setDeliveryKm(e.target.value)}
+                className="w-24 text-right"
+              />
+            </div>
+            <div>
+              <label className="block text-[11px] text-muted">€ / km</label>
+              <Input
+                type="number"
+                step="0.01"
+                min="0"
+                value={deliveryRate}
+                onChange={(e) => setDeliveryRate(e.target.value)}
+                className="w-20 text-right"
+              />
+            </div>
+            <span className="mb-1.5 text-sm text-muted">
+              = <strong className="text-foreground">{formatEUR(deliveryFee)}</strong>
+            </span>
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              onClick={() => setDeliveryLine(Number(deliveryKm) || 0)}
+              className="mb-0.5"
+            >
+              Bijwerken
+            </Button>
           </div>
-          <span className="mb-1.5 text-sm text-muted">
-            = <strong className="text-foreground">{formatEUR(deliveryFee)}</strong>
-          </span>
-          <Button type="button" size="sm" onClick={addDeliveryLine} className="mb-0.5">
-            Als regel toevoegen
-          </Button>
-          {calcMsg && <span className="w-full text-xs text-warning">{calcMsg}</span>}
+          {calcMsg && <p className="text-xs text-warning">{calcMsg}</p>}
         </div>
       )}
 

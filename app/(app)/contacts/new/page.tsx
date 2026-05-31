@@ -119,14 +119,26 @@ export default async function NewContactPage({
               </Field>
             </div>
 
-            <div className="grid gap-4 sm:grid-cols-2">
-              <Field label="Bron" htmlFor="source" hint="bv. website, doorverwijzing">
-                <Input id="source" name="source" />
+            <Field label="Adres (straat + nr.)" htmlFor="addressLine">
+              <Input id="addressLine" name="addressLine" placeholder="bv. Camí de la Fontana 3" />
+            </Field>
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+              <Field label="Postcode" htmlFor="postalCode">
+                <Input id="postalCode" name="postalCode" />
               </Field>
               <Field label="Plaats" htmlFor="city">
                 <Input id="city" name="city" />
               </Field>
+              <Field label="Provincie" htmlFor="province">
+                <Input id="province" name="province" />
+              </Field>
+              <Field label="Land" htmlFor="country">
+                <Input id="country" name="country" defaultValue="España" />
+              </Field>
             </div>
+            <Field label="Bron" htmlFor="source" hint="bv. website, doorverwijzing">
+              <Input id="source" name="source" />
+            </Field>
 
             <Field label="Notities" htmlFor="notes">
               <Textarea id="notes" name="notes" />

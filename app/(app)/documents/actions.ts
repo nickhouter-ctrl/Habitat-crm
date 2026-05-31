@@ -112,24 +112,12 @@ async function requireUser() {
   return session.user;
 }
 
-/** Bezorgafstand (km) van de showroom naar het adres van het contact (OpenRouteService). */
-export async function deliveryDistanceKm(contactId: string): Promise<number | null> {
-  if (!contactId) return null;
+/** Bezorgafstand (km) van de showroom naar een ingevuld adres (OpenRouteService). */
+export async function deliveryDistanceKm(address: string): Promise<number | null> {
   const key = process.env.ORS_API_KEY;
-  if (!key) return null;
-  const c = await db.query.contacts.findFirst({
-    where: eq(contacts.id, contactId),
-    columns: { addressLine: true, postalCode: true, city: true, province: true, country: true },
-  });
-  if (!c || (!c.addressLine && !c.city && !c.postalCode)) return null;
-  const addr = [
-    c.addressLine,
-    [c.postalCode, c.city].filter(Boolean).join(" "),
-    c.province,
-    c.country ?? "Spain",
-  ]
-    .filter((p) => p && p.trim())
-    .join(", ");
+  if (!key || !address || !address.trim()) return null;
+  // Land toevoegen helpt de geocoder als alleen straat+plaats is ingevuld.
+  const addr = /spain|españa|espana/i.test(address) ? address : `${address}, España`;
   // Showroom Camí de la Fontana 3, Jávea — vast vertrekpunt (lng,lat).
   const SHOWROOM = "0.150464,38.785694";
   try {

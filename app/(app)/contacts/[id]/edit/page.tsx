@@ -144,14 +144,35 @@ export default async function EditContactPage({
               </Field>
             </div>
 
-            <div className="grid gap-4 sm:grid-cols-2">
-              <Field label="Bron" htmlFor="source" hint="bv. website, doorverwijzing">
-                <Input id="source" name="source" defaultValue={contact.source ?? ""} />
+            <Field label="Adres (straat + nr.)" htmlFor="addressLine">
+              <Input
+                id="addressLine"
+                name="addressLine"
+                defaultValue={contact.addressLine ?? ""}
+                placeholder="bv. Camí de la Fontana 3"
+              />
+            </Field>
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+              <Field label="Postcode" htmlFor="postalCode">
+                <Input id="postalCode" name="postalCode" defaultValue={contact.postalCode ?? ""} />
               </Field>
               <Field label="Plaats" htmlFor="city">
                 <Input id="city" name="city" defaultValue={contact.city ?? ""} />
               </Field>
+              <Field label="Provincie" htmlFor="province">
+                <Input id="province" name="province" defaultValue={contact.province ?? ""} />
+              </Field>
+              <Field label="Land" htmlFor="country">
+                <Input
+                  id="country"
+                  name="country"
+                  defaultValue={contact.country ?? "España"}
+                />
+              </Field>
             </div>
+            <Field label="Bron" htmlFor="source" hint="bv. website, doorverwijzing">
+              <Input id="source" name="source" defaultValue={contact.source ?? ""} />
+            </Field>
 
             <Field label="Notities" htmlFor="notes">
               <Textarea id="notes" name="notes" defaultValue={contact.notes ?? ""} />
