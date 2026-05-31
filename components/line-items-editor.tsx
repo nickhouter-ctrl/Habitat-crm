@@ -17,6 +17,31 @@ const LOW_MARGIN_PCT = 15;
 /** Rond een geldbedrag af op 2 decimalen (centen). */
 const round2 = (n: number) => Math.round((n + Number.EPSILON) * 100) / 100;
 
+/**
+ * Bezorgtarief op basis van de enkele-reis afstand (km):
+ * - €2,50/km tot 25 km, daarboven €1,80/km (oplopend/getrapt)
+ * - heen + terug → ×2
+ * - starttarief €50 (minimum); pas als het km-bedrag hoger is, tellen de km
+ */
+const DELIVERY_PRICING = {
+  baseFee: 50,
+  ratePerKmUpTo25: 2.5,
+  ratePerKmBeyond25: 1.8,
+  tierKm: 25,
+  roundTripFactor: 2,
+};
+
+function deliveryCostForKm(km: number): number {
+  if (!(km > 0)) return 0;
+  const oneWay =
+    km <= DELIVERY_PRICING.tierKm
+      ? km * DELIVERY_PRICING.ratePerKmUpTo25
+      : DELIVERY_PRICING.tierKm * DELIVERY_PRICING.ratePerKmUpTo25 +
+        (km - DELIVERY_PRICING.tierKm) * DELIVERY_PRICING.ratePerKmBeyond25;
+  const trip = oneWay * DELIVERY_PRICING.roundTripFactor;
+  return Math.max(DELIVERY_PRICING.baseFee, round2(trip));
+}
+
 type Row = {
   name: string;
   description: string;
@@ -133,10 +158,9 @@ export function LineItemsEditor({
   // --- Bezorgkosten: afstand showroom → klantadres × tarief, als regel ---
   const [deliveryAddress, setDeliveryAddress] = useState("");
   const [deliveryKm, setDeliveryKm] = useState("");
-  const [deliveryRate, setDeliveryRate] = useState("0.50");
   const [calcBusy, setCalcBusy] = useState(false);
   const [calcMsg, setCalcMsg] = useState<string | null>(null);
-  const deliveryFee = round2((Number(deliveryKm) || 0) * (Number(deliveryRate) || 0));
+  const deliveryFee = deliveryCostForKm(Number(deliveryKm) || 0);
   const [suggestions, setSuggestions] = useState<{ label: string; lng: number; lat: number }[]>([]);
   const [selectedCoords, setSelectedCoords] = useState<{ lng: number; lat: number } | null>(null);
   const [anchorLabel, setAnchorLabel] = useState<string | null>(null);
@@ -174,7 +198,7 @@ export function LineItemsEditor({
 
   // Zet (of vervang) de bezorgregel op basis van een aantal km.
   const setDeliveryLine = (km: number) => {
-    const fee = round2(km * (Number(deliveryRate) || 0));
+    const fee = deliveryCostForKm(km);
     const line: Row = {
       name: km > 0 ? `Bezorgkosten (${km} km)` : "Bezorgkosten",
       description: deliveryAddress.trim() ? `Leveradres: ${deliveryAddress.trim()}` : "",
@@ -499,31 +523,23 @@ export function LineItemsEditor({
               </p>
             )}
           </div>
-          <div className="flex flex-wrap items-end gap-2">
+          <div className="flex flex-wrap items-end gap-3">
             <div>
-              <label className="block text-[11px] text-muted">Afstand (km)</label>
+              <label className="block text-[11px] text-muted">Afstand (km, enkele reis)</label>
               <Input
                 type="number"
                 step="0.1"
                 min="0"
                 value={deliveryKm}
                 onChange={(e) => setDeliveryKm(e.target.value)}
-                className="w-24 text-right"
+                className="w-28 text-right"
               />
             </div>
-            <div>
-              <label className="block text-[11px] text-muted">€ / km</label>
-              <Input
-                type="number"
-                step="0.01"
-                min="0"
-                value={deliveryRate}
-                onChange={(e) => setDeliveryRate(e.target.value)}
-                className="w-20 text-right"
-              />
-            </div>
-            <span className="mb-1.5 text-sm text-muted">
-              = <strong className="text-foreground">{formatEUR(deliveryFee)}</strong>
+            <span className="mb-1 text-sm text-muted">
+              Bezorgkosten: <strong className="text-foreground">{formatEUR(deliveryFee)}</strong>
+              <span className="block text-[11px]">
+                €2,50/km tot 25 km, daarna €1,80 · ×2 (heen + terug) · min. €50
+              </span>
             </span>
             <Button
               type="button"
