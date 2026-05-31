@@ -1,6 +1,8 @@
 import { desc, eq, sql } from "drizzle-orm";
 import Link from "next/link";
 
+import { RowLink } from "@/components/row-link";
+
 import {
   Badge,
   Card,
@@ -13,7 +15,6 @@ import {
   Td,
   Th,
   THead,
-  Tr,
 } from "@/components/ui";
 import { db } from "@/lib/db";
 import { quoteRequests } from "@/lib/db/schema";
@@ -113,11 +114,9 @@ export default async function QuoteRequestsPage({
                 const meta = STATUS_META[r.status] ?? STATUS_META.pending;
                 const products = (r.productNames as string[] | null) ?? [];
                 return (
-                  <Tr key={r.id}>
+                  <RowLink key={r.id} href={`/aanvragen/${r.id}`}>
                     <Td>
-                      <Link href={`/aanvragen/${r.id}`} className="font-medium hover:underline">
-                        {r.name}
-                      </Link>
+                      <span className="font-medium">{r.name}</span>
                       <span className="block text-xs text-muted">{r.email}</span>
                     </Td>
                     <Td className="text-muted">{r.company ?? "—"}</Td>
@@ -136,7 +135,7 @@ export default async function QuoteRequestsPage({
                       <Badge tone={meta.tone}>{meta.label}</Badge>
                     </Td>
                     <Td className="text-xs text-muted">{formatDate(r.createdAt)}</Td>
-                  </Tr>
+                  </RowLink>
                 );
               })}
             </TBody>

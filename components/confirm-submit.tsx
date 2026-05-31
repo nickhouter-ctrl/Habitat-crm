@@ -20,6 +20,8 @@ export function ConfirmSubmit({
       type="submit"
       className={className}
       onClick={(e) => {
+        // Voorkom dat de klik de rij (RowLink) activeert.
+        e.stopPropagation();
         if (!window.confirm(message)) e.preventDefault();
       }}
     >

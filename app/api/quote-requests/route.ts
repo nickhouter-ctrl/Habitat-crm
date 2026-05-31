@@ -20,6 +20,8 @@ const schema = z.object({
   productSkus: z.array(z.string()).max(50).optional(),
   productNames: z.array(z.string()).max(50).optional(),
   productSlugs: z.array(z.string()).max(50).optional(),
+  // Absolute thumbnail-URL's per regel (voor mooiere bevestigingsmail).
+  productImages: z.array(z.string()).max(50).optional(),
   locale: z.enum(["nl", "de", "en", "es"]).optional(),
   source: z.string().trim().max(80).optional(),
   // Onderscheid offerte-aanvraag vs. algemeen contactbericht / afspraak.
@@ -137,7 +139,12 @@ export async function POST(req: Request) {
       const confirm = quoteRequestReceivedEmail({
         lang: v.locale,
         contactName: v.name,
-        productNames: v.productNames?.length ? v.productNames : null,
+        products: v.productNames?.length
+          ? v.productNames.map((name, idx) => ({
+              name,
+              image: v.productImages?.[idx] || null,
+            }))
+          : null,
       });
       await sendMail({
         to: v.email,

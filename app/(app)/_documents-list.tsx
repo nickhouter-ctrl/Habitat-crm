@@ -1,6 +1,5 @@
 import { desc, eq, inArray } from "drizzle-orm";
 import { Trash2 } from "lucide-react";
-import Link from "next/link";
 
 import {
   Badge,
@@ -22,6 +21,7 @@ import { documents } from "@/lib/db/schema";
 import { formatDate, formatEUR } from "@/lib/utils";
 import { documentKindMeta, documentStatusMeta } from "./_meta";
 import { ConfirmSubmit } from "@/components/confirm-submit";
+import { RowLink, StopLink } from "@/components/row-link";
 import { deleteDocument } from "./documents/actions";
 
 type Kind =
@@ -115,11 +115,9 @@ export async function DocumentsList({
               {rows.map((d) => {
                 const partyName = d.contact?.name ?? d.company?.name ?? "—";
                 return (
-                  <Tr key={d.id}>
+                  <RowLink key={d.id} href={`/documents/${d.id}`}>
                     <Td className="font-medium">
-                      <Link href={`/documents/${d.id}`} className="hover:underline">
-                        {d.docNumber ?? "(geen nr.)"}
-                      </Link>
+                      {d.docNumber ?? "(geen nr.)"}
                       {d.title && (
                         <span className="block text-xs text-muted">{d.title}</span>
                       )}
@@ -133,9 +131,9 @@ export async function DocumentsList({
                     )}
                     <Td>
                       {d.contact ? (
-                        <Link href={`/contacts/${d.contact.id}`} className="hover:underline">
+                        <StopLink href={`/contacts/${d.contact.id}`} className="hover:underline">
                           {partyName}
-                        </Link>
+                        </StopLink>
                       ) : (
                         <span className="text-muted">{partyName}</span>
                       )}
@@ -166,7 +164,7 @@ export async function DocumentsList({
                         </form>
                       )}
                     </Td>
-                  </Tr>
+                  </RowLink>
                 );
               })}
             </TBody>

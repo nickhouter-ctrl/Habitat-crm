@@ -78,6 +78,15 @@ function rowToItem(r: Row): DocumentLineItem {
   };
 }
 
+/** Volgorde van de hoofdgroepen (collecties) in de product-pop-up. */
+const COLLECTION_ORDER = [
+  "Wandpanelen",
+  "Badkamer",
+  "Badkamer accessoires",
+  "Binnen en buiten deuren",
+  "Tuinmeubilair",
+];
+
 export function LineItemsEditor({
   name = "items",
   initialItems,
@@ -122,25 +131,40 @@ export function LineItemsEditor({
   const priceFor = (p: { priceEur: string | null; tradePriceEur: string | null }) =>
     audience === "aannemer" && p.tradePriceEur ? p.tradePriceEur : p.priceEur;
 
-  // Productkeuze-scherm (pop-up): zoeken + filteren op categorie.
+  // Productkeuze-scherm (pop-up): zoeken + filteren op collectie (hoofdgroep).
   const [pickerOpen, setPickerOpen] = useState(false);
   const [pickerQuery, setPickerQuery] = useState("");
-  const [pickerCat, setPickerCat] = useState("all");
+  const [pickerCol, setPickerCol] = useState("all");
   const [addedIds, setAddedIds] = useState<Set<string>>(new Set());
-  const productCategories = Array.from(
-    new Set(products.map((p) => p.category?.trim() || "Overig")),
-  ).sort((a, b) => a.localeCompare(b));
+  const productCollections = Array.from(
+    new Set(products.map((p) => p.collection?.trim() || "Overig")),
+  ).sort((a, b) => {
+    const ia = COLLECTION_ORDER.indexOf(a);
+    const ib = COLLECTION_ORDER.indexOf(b);
+    if (ia === -1 && ib === -1) return a.localeCompare(b);
+    if (ia === -1) return 1;
+    if (ib === -1) return -1;
+    return ia - ib;
+  });
   const pickerProducts = products.filter((p) => {
-    const cat = p.category?.trim() || "Overig";
-    if (pickerCat !== "all" && cat !== pickerCat) return false;
+    const col = p.collection?.trim() || "Overig";
+    if (pickerCol !== "all" && col !== pickerCol) return false;
     const q = pickerQuery.trim().toLowerCase();
     if (!q) return true;
-    return `${p.name} ${p.sku ?? ""} ${cat}`.toLowerCase().includes(q);
+    return `${p.name} ${p.sku ?? ""} ${p.category ?? ""} ${col}`.toLowerCase().includes(q);
   });
+  // Binnen de resultaten groeperen op categorie (producten staan al op categorie gesorteerd).
+  const pickerGroups: { cat: string; items: typeof pickerProducts }[] = [];
+  for (const p of pickerProducts) {
+    const cat = p.category?.trim() || "Overig";
+    const last = pickerGroups[pickerGroups.length - 1];
+    if (!last || last.cat !== cat) pickerGroups.push({ cat, items: [p] });
+    else last.items.push(p);
+  }
   const openPicker = () => {
     setAddedIds(new Set());
     setPickerQuery("");
-    setPickerCat("all");
+    setPickerCol("all");
     setPickerOpen(true);
   };
 
@@ -611,13 +635,13 @@ export function LineItemsEditor({
                 placeholder="Zoek op naam of SKU…"
                 className="min-w-48 flex-1"
               />
-              <Select value={pickerCat} onChange={(e) => setPickerCat(e.target.value)} className="w-56">
-                <option value="all">Alle categorieën ({products.length})</option>
-                {productCategories.map((c) => (
+              <Select value={pickerCol} onChange={(e) => setPickerCol(e.target.value)} className="w-56">
+                {productCollections.map((c) => (
                   <option key={c} value={c}>
                     {c}
                   </option>
                 ))}
+                <option value="all">Alle producten ({products.length})</option>
               </Select>
             </div>
 
@@ -625,41 +649,48 @@ export function LineItemsEditor({
               {pickerProducts.length === 0 ? (
                 <p className="px-5 py-10 text-center text-sm text-muted">Geen producten gevonden.</p>
               ) : (
-                <ul className="divide-y">
-                  {pickerProducts.map((p) => {
-                    const price = priceFor(p);
-                    const added = addedIds.has(p.id);
-                    return (
-                      <li key={p.id}>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            addFromProduct(p.id);
-                            setAddedIds((prev) => new Set(prev).add(p.id));
-                          }}
-                          className="flex w-full items-center justify-between gap-3 px-5 py-2.5 text-left hover:bg-background"
-                        >
-                          <span className="min-w-0">
-                            <span className="font-medium">{p.name}</span>
-                            <span className="ml-2 text-xs text-muted">
-                              {p.sku ?? ""} · {p.category?.trim() || "Overig"}
-                            </span>
-                          </span>
-                          <span className="flex shrink-0 items-center gap-3">
-                            <span className="tabular-nums">{price ? formatEUR(price) : "—"}</span>
-                            <span
-                              className={cn(
-                                "rounded px-2 py-0.5 text-xs font-medium",
-                                added ? "bg-success/15 text-success" : "bg-accent/10 text-accent",
-                              )}
-                            >
-                              {added ? "✓ toegevoegd" : "+ toevoegen"}
-                            </span>
-                          </span>
-                        </button>
-                      </li>
-                    );
-                  })}
+                <ul>
+                  {pickerGroups.map((g) => (
+                    <li key={g.cat}>
+                      <p className="sticky top-0 z-10 bg-background px-5 py-1.5 text-xs font-semibold uppercase tracking-wide text-muted">
+                        {g.cat}
+                      </p>
+                      <ul className="divide-y">
+                        {g.items.map((p) => {
+                          const price = priceFor(p);
+                          const added = addedIds.has(p.id);
+                          return (
+                            <li key={p.id}>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  addFromProduct(p.id);
+                                  setAddedIds((prev) => new Set(prev).add(p.id));
+                                }}
+                                className="flex w-full items-center justify-between gap-3 px-5 py-2.5 text-left hover:bg-background"
+                              >
+                                <span className="min-w-0">
+                                  <span className="font-medium">{p.name}</span>
+                                  {p.sku && <span className="ml-2 text-xs text-muted">{p.sku}</span>}
+                                </span>
+                                <span className="flex shrink-0 items-center gap-3">
+                                  <span className="tabular-nums">{price ? formatEUR(price) : "—"}</span>
+                                  <span
+                                    className={cn(
+                                      "rounded px-2 py-0.5 text-xs font-medium",
+                                      added ? "bg-success/15 text-success" : "bg-accent/10 text-accent",
+                                    )}
+                                  >
+                                    {added ? "✓ toegevoegd" : "+ toevoegen"}
+                                  </span>
+                                </span>
+                              </button>
+                            </li>
+                          );
+                        })}
+                      </ul>
+                    </li>
+                  ))}
                 </ul>
               )}
             </div>

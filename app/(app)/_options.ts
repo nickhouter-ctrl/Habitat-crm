@@ -11,6 +11,7 @@ export type ProductOption = {
   name: string;
   sku: string | null;
   category: string | null;
+  collection: string | null;
   unit: string | null;
   priceEur: string | null;
   tradePriceEur: string | null;
@@ -65,7 +66,7 @@ async function listProjects(): Promise<SelectOption[]> {
 async function listActiveProducts(): Promise<ProductOption[]> {
   return db.query.products.findMany({
     where: eq(products.isActive, true),
-    columns: { id: true, name: true, sku: true, category: true, unit: true, priceEur: true, tradePriceEur: true, costEur: true, vatRate: true },
+    columns: { id: true, name: true, sku: true, category: true, collection: true, unit: true, priceEur: true, tradePriceEur: true, costEur: true, vatRate: true },
     orderBy: [asc(products.category), asc(products.name)],
     limit: 2000,
   });

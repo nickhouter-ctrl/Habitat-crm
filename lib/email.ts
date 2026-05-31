@@ -304,6 +304,8 @@ export function quoteRequestReceivedEmail(args: {
   lang?: string | null;
   contactName?: string | null;
   productNames?: string[] | null;
+  /** Optioneel met thumbnail per regel (absolute image-URL's van de website). */
+  products?: { name: string; image?: string | null }[] | null;
 }): { subject: string; html: string; text: string } {
   const lang: Lang = (["en", "nl", "es", "de"] as const).includes(args.lang as Lang)
     ? (args.lang as Lang)
@@ -311,11 +313,21 @@ export function quoteRequestReceivedEmail(args: {
   const q = QR[lang];
   const t = T[lang];
   const greeting = args.contactName ? `${t.hi} ${escapeHtml(args.contactName)},` : `${t.hi},`;
-  const summary = args.productNames?.length
-    ? `<p style="margin:22px 0 6px;font-weight:600;color:${COMPANY.brown}">${q.summary}</p>
-      <ul style="margin:0;padding-left:18px;font-size:14px;color:#1c1c1a">${args.productNames
-        .map((n) => `<li style="padding:2px 0">${escapeHtml(n)}</li>`)
-        .join("")}</ul>`
+  const lines: { name: string; image: string | null }[] = args.products?.length
+    ? args.products.map((p) => ({ name: p.name, image: p.image ?? null }))
+    : (args.productNames ?? []).map((n) => ({ name: n, image: null }));
+  const summary = lines.length
+    ? `<p style="margin:24px 0 8px;font-weight:600;color:${COMPANY.brown}">${q.summary}</p>
+      <table style="border-collapse:collapse;width:100%">${lines
+        .map(
+          (p) =>
+            `<tr><td style="padding:5px 0;width:60px;vertical-align:middle">${
+              p.image
+                ? `<img src="${p.image}" width="52" height="52" alt="" style="display:block;width:52px;height:52px;object-fit:cover;border-radius:8px;border:1px solid ${COMPANY.sand}" />`
+                : ""
+            }</td><td style="padding:5px 0 5px 12px;font-size:14px;color:#1c1c1a;vertical-align:middle">${escapeHtml(p.name)}</td></tr>`,
+        )
+        .join("")}</table>`
     : "";
   const html = `<div style="font-family:Helvetica,Arial,sans-serif;background:${COMPANY.cream};padding:24px 0">
   <div style="max-width:560px;margin:0 auto;background:#fff;border-radius:12px;overflow:hidden;color:#1c1c1a">
@@ -336,7 +348,7 @@ export function quoteRequestReceivedEmail(args: {
 </div>`;
   const text =
     `${greeting}\n\n${q.body}\n\n` +
-    (args.productNames?.length ? `${q.summary}:\n- ${args.productNames.join("\n- ")}\n\n` : "") +
+    (lines.length ? `${q.summary}:\n- ${lines.map((p) => p.name).join("\n- ")}\n\n` : "") +
     `${q.followUp}\n\n${t.regards}\n${COMPANY.legalName}\n${COMPANY.address}\n${[COMPANY.phone, COMPANY.email].filter(Boolean).join(" · ")}`;
   return { subject: q.subject, html, text };
 }
