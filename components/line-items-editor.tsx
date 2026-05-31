@@ -172,7 +172,7 @@ export function LineItemsEditor({
       price: String(fee),
       discount: "0",
       taxRate: "21",
-      category: "materiaal",
+      category: "transport",
       productId: "",
     };
     // Vervang een eventuele bestaande bezorgregel (geen dubbeltelling).
