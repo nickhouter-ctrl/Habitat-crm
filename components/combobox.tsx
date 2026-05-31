@@ -30,6 +30,7 @@ export function Combobox({
   resetOnSelect = false,
   emptyText = "Niets gevonden",
   className,
+  menuClassName,
   onSelect,
 }: {
   name?: string;
@@ -41,6 +42,8 @@ export function Combobox({
   resetOnSelect?: boolean;
   emptyText?: string;
   className?: string;
+  /** Extra classes voor het uitklapmenu (bv. een bredere breedte). */
+  menuClassName?: string;
   onSelect?: (value: string, option?: ComboOption) => void;
 }) {
   const initial = options.find((o) => o.value === defaultValue);
@@ -174,7 +177,12 @@ export function Combobox({
       </div>
 
       {open && (
-        <ul className="absolute z-20 mt-1 max-h-64 w-full overflow-auto rounded-md border bg-surface py-1 text-sm shadow-lg">
+        <ul
+          className={cn(
+            "absolute z-20 mt-1 max-h-72 w-full min-w-full overflow-auto rounded-md border bg-surface py-1 text-sm shadow-lg",
+            menuClassName,
+          )}
+        >
           {optionCount === 0 ? (
             <li className="px-3 py-2 text-muted">{emptyText}</li>
           ) : (
@@ -193,12 +201,12 @@ export function Combobox({
                     onMouseEnter={() => setHi(it.idx)}
                     onClick={() => pick(it.o)}
                     className={cn(
-                      "flex w-full items-center justify-between gap-2 px-3 py-1.5 text-left",
+                      "flex w-full items-start justify-between gap-3 px-3 py-2 text-left",
                       it.idx === hi ? "bg-accent/10 text-accent" : "hover:bg-background",
                       it.o.value === value && "font-medium",
                     )}
                   >
-                    <span className="truncate">{it.o.label}</span>
+                    <span className="min-w-0 flex-1">{it.o.label}</span>
                     {it.o.hint && (
                       <span className="shrink-0 text-xs text-muted">{it.o.hint}</span>
                     )}

@@ -1,9 +1,8 @@
 "use client";
 
-import { AlertTriangle, Plus, Trash2 } from "lucide-react";
+import { AlertTriangle, Plus, Trash2, X } from "lucide-react";
 import { useRef, useState } from "react";
 
-import { Combobox, type ComboOption } from "@/components/combobox";
 import { Button, Input, Select } from "@/components/ui";
 import type { ProductOption } from "@/app/(app)/_options";
 import type { DocumentLineItem } from "@/lib/db/schema";
@@ -123,13 +122,27 @@ export function LineItemsEditor({
   const priceFor = (p: { priceEur: string | null; tradePriceEur: string | null }) =>
     audience === "aannemer" && p.tradePriceEur ? p.tradePriceEur : p.priceEur;
 
-  const productOptions: ComboOption[] = products.map((p) => ({
-    value: p.id,
-    // SKU vooraan zodat je 'm kunt typen om te zoeken
-    label: p.sku ? `${p.sku} — ${p.name}` : p.name,
-    group: p.category?.trim() || "Overig",
-    hint: priceFor(p) ? formatEUR(priceFor(p)!) : undefined,
-  }));
+  // Productkeuze-scherm (pop-up): zoeken + filteren op categorie.
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const [pickerQuery, setPickerQuery] = useState("");
+  const [pickerCat, setPickerCat] = useState("all");
+  const [addedIds, setAddedIds] = useState<Set<string>>(new Set());
+  const productCategories = Array.from(
+    new Set(products.map((p) => p.category?.trim() || "Overig")),
+  ).sort((a, b) => a.localeCompare(b));
+  const pickerProducts = products.filter((p) => {
+    const cat = p.category?.trim() || "Overig";
+    if (pickerCat !== "all" && cat !== pickerCat) return false;
+    const q = pickerQuery.trim().toLowerCase();
+    if (!q) return true;
+    return `${p.name} ${p.sku ?? ""} ${cat}`.toLowerCase().includes(q);
+  });
+  const openPicker = () => {
+    setAddedIds(new Set());
+    setPickerQuery("");
+    setPickerCat("all");
+    setPickerOpen(true);
+  };
 
   const patchRow = (i: number, patch: Partial<Row>) =>
     setRows((rs) => rs.map((r, idx) => (idx === i ? { ...r, ...patch } : r)));
@@ -311,15 +324,9 @@ export function LineItemsEditor({
         </div>
         <div className="flex flex-wrap items-center gap-2">
           {products.length > 0 && (
-            <div className="w-64">
-              <Combobox
-                resetOnSelect
-                placeholder="+ product uit catalogus…"
-                options={productOptions}
-                onSelect={(v) => v && addFromProduct(v)}
-                emptyText="Geen producten — voeg ze toe onder Producten"
-              />
-            </div>
+            <Button type="button" size="sm" onClick={openPicker}>
+              <Plus className="size-4" /> Product uit catalogus
+            </Button>
           )}
           <Button type="button" variant="secondary" size="sm" onClick={addRow}>
             <Plus className="size-4" /> Lege regel
@@ -569,6 +576,107 @@ export function LineItemsEditor({
           <span className="tabular-nums">{formatEUR(totals.total)}</span>
         </div>
       </div>
+
+      {pickerOpen && (
+        <div
+          className="fixed inset-0 z-50 flex items-start justify-center bg-black/40 p-4 pt-[8vh]"
+          onClick={() => setPickerOpen(false)}
+        >
+          <div
+            className="flex max-h-[82vh] w-full max-w-3xl flex-col overflow-hidden rounded-xl bg-surface shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between border-b px-5 py-3">
+              <h3 className="text-sm font-semibold">
+                Product uit catalogus —{" "}
+                <span className="text-muted">
+                  {audience === "aannemer" ? "aannemersprijs" : "showroomprijs"}
+                </span>
+              </h3>
+              <button
+                type="button"
+                onClick={() => setPickerOpen(false)}
+                className="rounded p-1 text-muted hover:text-foreground"
+                title="Sluiten"
+              >
+                <X className="size-5" />
+              </button>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2 border-b px-5 py-3">
+              <Input
+                autoFocus
+                value={pickerQuery}
+                onChange={(e) => setPickerQuery(e.target.value)}
+                placeholder="Zoek op naam of SKU…"
+                className="min-w-48 flex-1"
+              />
+              <Select value={pickerCat} onChange={(e) => setPickerCat(e.target.value)} className="w-56">
+                <option value="all">Alle categorieën ({products.length})</option>
+                {productCategories.map((c) => (
+                  <option key={c} value={c}>
+                    {c}
+                  </option>
+                ))}
+              </Select>
+            </div>
+
+            <div className="min-h-0 flex-1 overflow-y-auto">
+              {pickerProducts.length === 0 ? (
+                <p className="px-5 py-10 text-center text-sm text-muted">Geen producten gevonden.</p>
+              ) : (
+                <ul className="divide-y">
+                  {pickerProducts.map((p) => {
+                    const price = priceFor(p);
+                    const added = addedIds.has(p.id);
+                    return (
+                      <li key={p.id}>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            addFromProduct(p.id);
+                            setAddedIds((prev) => new Set(prev).add(p.id));
+                          }}
+                          className="flex w-full items-center justify-between gap-3 px-5 py-2.5 text-left hover:bg-background"
+                        >
+                          <span className="min-w-0">
+                            <span className="font-medium">{p.name}</span>
+                            <span className="ml-2 text-xs text-muted">
+                              {p.sku ?? ""} · {p.category?.trim() || "Overig"}
+                            </span>
+                          </span>
+                          <span className="flex shrink-0 items-center gap-3">
+                            <span className="tabular-nums">{price ? formatEUR(price) : "—"}</span>
+                            <span
+                              className={cn(
+                                "rounded px-2 py-0.5 text-xs font-medium",
+                                added ? "bg-success/15 text-success" : "bg-accent/10 text-accent",
+                              )}
+                            >
+                              {added ? "✓ toegevoegd" : "+ toevoegen"}
+                            </span>
+                          </span>
+                        </button>
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+            </div>
+
+            <div className="flex items-center justify-between border-t px-5 py-3">
+              <span className="text-xs text-muted">
+                {addedIds.size > 0
+                  ? `${addedIds.size} product${addedIds.size === 1 ? "" : "en"} toegevoegd`
+                  : "Klik op een product om toe te voegen"}
+              </span>
+              <Button type="button" onClick={() => setPickerOpen(false)}>
+                Klaar
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
