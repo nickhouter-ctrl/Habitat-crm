@@ -139,27 +139,37 @@ export function LineItemsEditor({
   const deliveryFee = round2((Number(deliveryKm) || 0) * (Number(deliveryRate) || 0));
   const [suggestions, setSuggestions] = useState<{ label: string; lng: number; lat: number }[]>([]);
   const [selectedCoords, setSelectedCoords] = useState<{ lng: number; lat: number } | null>(null);
+  const [anchorLabel, setAnchorLabel] = useState<string | null>(null);
   const suggTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const onAddressChange = (v: string) => {
     setDeliveryAddress(v);
-    setSelectedCoords(null);
     setCalcMsg(null);
+    if (!v.trim()) {
+      setSelectedCoords(null);
+      setAnchorLabel(null);
+    }
     if (suggTimer.current) clearTimeout(suggTimer.current);
-    if (!onSuggest || v.trim().length < 3) {
+    // Huisnummer aan het eind weglaten voor de zoekopdracht — ORS vindt straten/plaatsen
+    // betrouwbaarder dan losse huisnummers.
+    const q = v.replace(/[\s,]+\d+[a-z]?\s*$/i, "").trim();
+    if (!onSuggest || q.length < 3) {
       setSuggestions([]);
       return;
     }
     suggTimer.current = setTimeout(async () => {
-      const list = await onSuggest(v).catch(() => []);
+      const list = await onSuggest(q).catch(() => []);
       setSuggestions(list);
     }, 300);
   };
 
+  // Een suggestie zet het afstand-ankerpunt (coördinaten). Je getypte adres
+  // (mét huisnummer) blijft staan en komt op de offerte.
   const pickSuggestion = (s: { label: string; lng: number; lat: number }) => {
-    setDeliveryAddress(s.label);
     setSelectedCoords({ lng: s.lng, lat: s.lat });
+    setAnchorLabel(s.label);
     setSuggestions([]);
+    setDeliveryAddress((cur) => (cur.trim() ? cur : s.label));
   };
 
   // Zet (of vervang) de bezorgregel op basis van een aantal km.
@@ -441,7 +451,7 @@ export function LineItemsEditor({
           <p className="text-xs font-medium text-muted">🚚 Bezorgkosten</p>
           <div>
             <label htmlFor="leveradres" className="block text-[11px] text-muted">
-              Leveradres (mag afwijken van het klantadres)
+              Leveradres — typ het volledige adres mét huisnummer; kies de juiste plaats uit de lijst
             </label>
             <div className="flex gap-2">
               <div className="relative flex-1">
@@ -449,7 +459,7 @@ export function LineItemsEditor({
                   id="leveradres"
                   value={deliveryAddress}
                   onChange={(e) => onAddressChange(e.target.value)}
-                  placeholder="Begin te typen, bv. Carrer Major…"
+                  placeholder="bv. Avenida de Alicante 5, Jávea"
                   autoComplete="off"
                 />
                 {suggestions.length > 0 && (
@@ -473,8 +483,20 @@ export function LineItemsEditor({
                 {calcBusy ? "Berekenen…" : "Bereken & voeg toe"}
               </Button>
             </div>
-            {selectedCoords && (
-              <p className="text-[11px] text-success">✓ Adres uit de lijst gekozen (exacte locatie)</p>
+            {anchorLabel && (
+              <p className="text-[11px] text-success">
+                📍 Afstand berekend t.o.v. <strong>{anchorLabel}</strong>{" "}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSelectedCoords(null);
+                    setAnchorLabel(null);
+                  }}
+                  className="text-muted underline"
+                >
+                  wissen
+                </button>
+              </p>
             )}
           </div>
           <div className="flex flex-wrap items-end gap-2">
