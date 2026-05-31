@@ -22,6 +22,8 @@ const schema = z.object({
   productSlugs: z.array(z.string()).max(50).optional(),
   locale: z.enum(["nl", "de", "en", "es"]).optional(),
   source: z.string().trim().max(80).optional(),
+  // Onderscheid offerte-aanvraag vs. algemeen contactbericht / afspraak.
+  kind: z.enum(["quote", "contact", "appointment"]).optional(),
 });
 
 function escapeHtml(s: string): string {
@@ -82,6 +84,12 @@ export async function POST(req: Request) {
   let mailStatus = "skipped";
   try {
     const crmUrl = process.env.APP_URL || "https://habitat-crm-delta.vercel.app";
+    const kindLabel =
+      v.kind === "contact"
+        ? "Nieuw contactbericht"
+        : v.kind === "appointment"
+          ? "Nieuwe afspraakaanvraag"
+          : "Nieuwe offerte-aanvraag";
     const rows: [string, string][] = [
       ["Naam", v.name],
       ["E-mail", v.email],
@@ -96,9 +104,9 @@ export async function POST(req: Request) {
         process.env.NOTIFY_EMAIL?.trim() ||
         "hi@habitat-one.com, purchase@habitat-one.com",
       replyTo: v.email,
-      subject: `Nieuwe offerte-aanvraag — ${v.name}`,
+      subject: `${kindLabel} — ${v.name}`,
       html: `<div style="font-family:Arial,Helvetica,sans-serif;color:#2a2620;max-width:560px">
-  <h2 style="color:#402419;margin:0 0 14px">Nieuwe offerte-aanvraag</h2>
+  <h2 style="color:#402419;margin:0 0 14px">${kindLabel}</h2>
   <table style="border-collapse:collapse;width:100%;font-size:14px">${rows
     .map(
       ([k, val]) =>
@@ -119,23 +127,29 @@ export async function POST(req: Request) {
 
   // Bevestigingsmail naar de klant, in de op de website gekozen taal (fallback
   // Engels). Ook hier: een mail-fout mag de opgeslagen aanvraag nooit breken.
+  // Klant-bevestiging alleen bij een echte offerte-aanvraag; een algemeen
+  // contactbericht / afspraak krijgt (nog) geen automatische bevestiging.
   let confirmStatus = "skipped";
-  try {
-    const confirm = quoteRequestReceivedEmail({
-      lang: v.locale,
-      contactName: v.name,
-      productNames: v.productNames?.length ? v.productNames : null,
-    });
-    await sendMail({
-      to: v.email,
-      subject: confirm.subject,
-      html: confirm.html,
-      text: confirm.text,
-    });
-    confirmStatus = "sent";
-  } catch (err) {
-    confirmStatus = `failed: ${err instanceof Error ? err.message : String(err)}`;
-    console.warn("[quote-requests] klant-bevestiging mislukt:", err);
+  if (v.kind === "contact" || v.kind === "appointment") {
+    confirmStatus = "n/a";
+  } else {
+    try {
+      const confirm = quoteRequestReceivedEmail({
+        lang: v.locale,
+        contactName: v.name,
+        productNames: v.productNames?.length ? v.productNames : null,
+      });
+      await sendMail({
+        to: v.email,
+        subject: confirm.subject,
+        html: confirm.html,
+        text: confirm.text,
+      });
+      confirmStatus = "sent";
+    } catch (err) {
+      confirmStatus = `failed: ${err instanceof Error ? err.message : String(err)}`;
+      console.warn("[quote-requests] klant-bevestiging mislukt:", err);
+    }
   }
 
   return NextResponse.json(
