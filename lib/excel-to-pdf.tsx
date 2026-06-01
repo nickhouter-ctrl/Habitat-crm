@@ -69,8 +69,7 @@ function sheetToGrid(ws: XLSX.WorkSheet, sheetName: string): Grid | null {
     const cells: string[] = [];
     let hasContent = false;
     for (let c = 0; c < colCount; c++) {
-      let v = r[c];
-      let s = v == null ? "" : String(v);
+      let s = r[c] == null ? "" : String(r[c]);
       s = s.replace(/\s+/g, " ").trim();
       if (s.length > MAX_CELL_CHARS) s = s.slice(0, MAX_CELL_CHARS) + "…";
       if (s) hasContent = true;
