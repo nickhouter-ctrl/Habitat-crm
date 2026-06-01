@@ -28,6 +28,50 @@ export interface AutoInvoiceResult {
   errors: string[];
 }
 
+/**
+ * Bouw een nette referentie "Fabrieksnaam Factuurnummer" uit het mail-onderwerp.
+ *
+ * Agent-facturen (Allpack) hebben onderwerpen als:
+ *   "PI +CI for PJ0050481-22044646 ,Factory:GEORGELIGHTING&ELECTRICITY"
+ * → wordt "Georgelighting PJ0050481-22044646".
+ *
+ * Valt terug op de bestandsnaam als het onderwerp geen herkenbaar patroon
+ * heeft, zodat leveranciers met een net factuurnummer in de bestandsnaam
+ * (SHN, Hollandse Meesters, ...) ongewijzigd blijven. Handling-cost-facturen
+ * krijgen een suffix zodat ze los van de goederenfactuur herkenbaar blijven.
+ */
+export function buildPurchaseReference(subject: string | null, filename: string): string {
+  const subj = (subject ?? "").trim();
+  // Factuurnummer: na "for " het eerste code-achtige token (bevat een cijfer).
+  const numMatch = subj.match(/\bfor\s+([A-Za-z0-9][\w./-]*\d[\w./-]*)/i);
+  // Fabriek: na "Factory:" tot komma/regeleinde.
+  const facMatch = subj.match(/Factory\s*[:：]\s*([^,\n]+)/i);
+
+  let base: string;
+  if (numMatch) {
+    const invoiceNo = numMatch[1].replace(/[.,;]+$/, "");
+    const factory = facMatch ? cleanFactoryName(facMatch[1]) : "";
+    base = factory ? `${factory} ${invoiceNo}` : invoiceNo;
+  } else {
+    // Nummer moet met een cijfer beginnen — voorkomt dat "factuur…" de
+    // "FAC"-prefix triggert en "tuur" oplevert.
+    const refMatch = filename.match(/(?:FAC[_-]?|Factura[_\s]*|Invoice[_\s]*)(\d[\w-]*)/i);
+    base = refMatch?.[1] ?? filename.replace(/\.[a-z]+$/i, "");
+  }
+
+  // Handling-cost-factuur apart herkenbaar maken (zelfde order, eigen regel).
+  if (/handling/i.test(filename)) base += " (handlingcost)";
+  return base.trim();
+}
+
+/** Maak een fabrieksnaam leesbaar: drop "&…"-staart en Co./Ltd, en title-case. */
+function cleanFactoryName(raw: string): string {
+  let s = raw.split("&")[0].trim();
+  s = s.replace(/[,\s]*\b(Co\.?,?\s*Ltd\.?|Limited|Inc\.?|Company|LLC)\b/gi, "").trim();
+  s = s.replace(/\s{2,}/g, " ").replace(/[.,\s]+$/, "");
+  return s.replace(/\S+/g, (w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase());
+}
+
 export async function tryAutoCreatePurchaseInvoice(emailId: string): Promise<AutoInvoiceResult> {
   const result: AutoInvoiceResult = { created: 0, needsReview: 0, errors: [] };
 
@@ -59,8 +103,7 @@ export async function tryAutoCreatePurchaseInvoice(emailId: string): Promise<Aut
   for (const a of candidates) {
     try {
       const total = Number(a.amountEur);
-      const refMatch = a.filename.match(/(?:FAC[_-]?|Factura[_\s]*|Invoice[_\s]*)([\w\d-]+)/i);
-      const reference = refMatch?.[1] ?? a.filename.replace(/\.[a-z]+$/i, "");
+      const reference = buildPurchaseReference(mail.subject, a.filename);
 
       // Dedupe: skip ALS er al een PO bestaat met deze reference (ongeacht
       // supplier-spelling). Bij conflict liever de bestaande PO linken aan
