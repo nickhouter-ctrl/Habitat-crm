@@ -3,7 +3,6 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import {
-  Button,
   Card,
   CardContent,
   Field,
@@ -11,6 +10,7 @@ import {
   PageHeader,
   Textarea,
 } from "@/components/ui";
+import { SubmitButton } from "@/components/submit-button";
 import { db } from "@/lib/db";
 import { documents } from "@/lib/db/schema";
 import { offerteDefaults } from "@/lib/email";
@@ -103,7 +103,7 @@ export default async function SendDocumentPage({
             </Field>
 
             <div className="flex flex-wrap items-center gap-3 pt-1">
-              <Button type="submit">Verstuur naar klant</Button>
+              <SubmitButton pendingLabel="Versturen…">Verstuur naar klant</SubmitButton>
               <a
                 href={`/documents/${id}/pdf`}
                 target="_blank"
