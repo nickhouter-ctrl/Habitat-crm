@@ -297,17 +297,29 @@ export default async function ProductsPage({
                     return (
                       <Tr key={p.id}>
                         <Td className="font-medium">
-                          <Link href={`/products/${p.id}/edit`} className="hover:underline">
-                            {p.name}
-                          </Link>
-                          {!p.imageUrl && p.isActive && (
-                            <Badge tone="warning" className="ml-2 align-middle text-[10px]">
-                              geen foto
-                            </Badge>
-                          )}
-                          {p.subcategory && (
-                            <span className="block text-xs text-muted">{p.subcategory}</span>
-                          )}
+                          <div className="flex items-center gap-2.5">
+                            {p.imageUrl ? (
+                              // eslint-disable-next-line @next/next/no-img-element
+                              <img
+                                src={p.imageUrl}
+                                alt=""
+                                loading="lazy"
+                                className="h-10 w-10 shrink-0 rounded border border-border object-cover"
+                              />
+                            ) : (
+                              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded border border-dashed border-border text-[9px] text-muted">
+                                {p.isActive ? "geen" : "—"}
+                              </span>
+                            )}
+                            <span className="min-w-0">
+                              <Link href={`/products/${p.id}/edit`} className="hover:underline">
+                                {p.name}
+                              </Link>
+                              {p.subcategory && (
+                                <span className="block text-xs text-muted">{p.subcategory}</span>
+                              )}
+                            </span>
+                          </div>
                         </Td>
                         <Td className="whitespace-nowrap text-xs">
                           {p.websiteProductId ? (
