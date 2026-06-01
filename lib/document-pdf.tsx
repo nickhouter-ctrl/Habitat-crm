@@ -1,6 +1,9 @@
 /* Server-only: renders a CRM document (offerte / factuur) to a PDF via @react-pdf/renderer. */
+import path from "node:path";
+
 import {
   Document,
+  Font,
   Image,
   Page,
   StyleSheet,
@@ -13,6 +16,20 @@ import { COMPANY } from "@/lib/company";
 import type { DocumentLineItem } from "@/lib/db/schema";
 import { lineNet } from "@/lib/documents";
 import type { Locale } from "@/lib/translate";
+
+// Habitat One huisstijl-lettertype (Sora) — zelfde als website + prijslijst-PDF.
+const FONT_DIR = path.join(process.cwd(), "public", "fonts", "sora");
+Font.register({
+  family: "Sora",
+  fonts: [
+    { src: path.join(FONT_DIR, "Sora-Light.ttf"), fontWeight: 300 },
+    { src: path.join(FONT_DIR, "Sora-Regular.ttf"), fontWeight: 400 },
+    { src: path.join(FONT_DIR, "Sora-Medium.ttf"), fontWeight: 500 },
+    { src: path.join(FONT_DIR, "Sora-SemiBold.ttf"), fontWeight: 600 },
+    { src: path.join(FONT_DIR, "Sora-Bold.ttf"), fontWeight: 700 },
+    { src: path.join(FONT_DIR, "Sora-ExtraBold.ttf"), fontWeight: 800 },
+  ],
+});
 
 type ExampleImage = { data: Buffer; format: "jpg" | "png" };
 
@@ -258,7 +275,7 @@ const s = StyleSheet.create({
     paddingBottom: 72,
     paddingHorizontal: 0,
     fontSize: 9,
-    fontFamily: "Helvetica",
+    fontFamily: "Sora",
     color: C.charcoal,
   },
   /* header band */
@@ -271,14 +288,14 @@ const s = StyleSheet.create({
     justifyContent: "space-between",
     alignItems: "flex-start",
   },
-  brand1: { fontFamily: "Times-Bold", fontSize: 23, letterSpacing: 5, color: C.brown },
-  brand2: { fontFamily: "Times-Bold", fontSize: 23, letterSpacing: 5, color: C.brown, marginTop: -3 },
+  brand1: { fontFamily: "Sora", fontWeight: 700, fontSize: 23, letterSpacing: 5, color: C.brown },
+  brand2: { fontFamily: "Sora", fontWeight: 700, fontSize: 23, letterSpacing: 5, color: C.brown, marginTop: -3 },
   tagline: { fontSize: 8, color: C.muted, marginTop: 5, letterSpacing: 1 },
   headerRight: { alignItems: "flex-end" },
-  docTitle: { fontFamily: "Helvetica-Bold", fontSize: 19, letterSpacing: 1.5, color: C.terracotta },
-  docNumber: { fontSize: 9, color: C.brown, fontFamily: "Helvetica-Bold", marginTop: 3 },
+  docTitle: { fontFamily: "Sora", fontWeight: 700, fontSize: 19, letterSpacing: 1.5, color: C.terracotta },
+  docNumber: { fontSize: 9, color: C.brown, fontFamily: "Sora", fontWeight: 700, marginTop: 3 },
   meta: { fontSize: 8.5, color: C.muted, textAlign: "right", marginTop: 4 },
-  metaStrong: { color: C.charcoal, fontFamily: "Helvetica-Bold" },
+  metaStrong: { color: C.charcoal, fontFamily: "Sora", fontWeight: 700 },
   accentRule: { height: 3, backgroundColor: C.terracotta },
   goldRule: { height: 1, backgroundColor: C.gold },
 
@@ -286,13 +303,13 @@ const s = StyleSheet.create({
 
   parties: { flexDirection: "row", justifyContent: "space-between", marginBottom: 20, gap: 28 },
   partyLabel: { fontSize: 7, color: C.muted, letterSpacing: 1.5, marginBottom: 4 },
-  partyName: { fontFamily: "Helvetica-Bold", color: C.brown, fontSize: 10 },
+  partyName: { fontFamily: "Sora", fontWeight: 700, color: C.brown, fontSize: 10 },
   muted: { color: C.muted },
 
   docSubject: {
     marginBottom: 12,
     fontSize: 11,
-    fontFamily: "Helvetica-Bold",
+    fontFamily: "Sora", fontWeight: 700,
     color: C.brown,
   },
 
@@ -304,7 +321,7 @@ const s = StyleSheet.create({
     borderBottomWidth: 1.5,
     borderColor: C.brown,
   },
-  thText: { fontFamily: "Helvetica-Bold", fontSize: 7, letterSpacing: 0.6, color: C.brown },
+  thText: { fontFamily: "Sora", fontWeight: 700, fontSize: 7, letterSpacing: 0.6, color: C.brown },
   tr: {
     flexDirection: "row",
     paddingVertical: 6,
@@ -318,7 +335,7 @@ const s = StyleSheet.create({
   cNum: { flex: 1, textAlign: "right" },
   cVat: { flex: 0.8, textAlign: "right" },
   cAmt: { flex: 1.3, textAlign: "right" },
-  itemName: { fontFamily: "Helvetica-Bold", color: C.charcoal },
+  itemName: { fontFamily: "Sora", fontWeight: 700, color: C.charcoal },
   itemDesc: { fontSize: 7.5, color: C.muted, marginTop: 1.5, lineHeight: 1.4 },
 
   bottomRow: { marginTop: 18, flexDirection: "row", justifyContent: "space-between", gap: 24 },
@@ -343,7 +360,7 @@ const s = StyleSheet.create({
     paddingHorizontal: 10,
     marginTop: 6,
   },
-  totalGrandText: { color: "#fff", fontFamily: "Helvetica-Bold", fontSize: 12 },
+  totalGrandText: { color: "#fff", fontFamily: "Sora", fontWeight: 700, fontSize: 12 },
 
   signatures: { marginTop: 34, flexDirection: "row", gap: 44 },
   signature: { flex: 1, borderTopWidth: 0.75, borderColor: C.muted, paddingTop: 5 },
@@ -420,16 +437,16 @@ const cs = StyleSheet.create({
     paddingTop: 64,
     paddingHorizontal: 54,
     paddingBottom: 50,
-    fontFamily: "Helvetica",
+    fontFamily: "Sora",
     color: C.charcoal,
   },
   coverWordmark: { alignItems: "center", marginBottom: 26 },
-  coverBrand1: { fontFamily: "Times-Bold", fontSize: 30, letterSpacing: 8, color: C.brown },
-  coverBrand2: { fontFamily: "Times-Bold", fontSize: 30, letterSpacing: 8, color: C.brown, marginTop: -4 },
+  coverBrand1: { fontFamily: "Sora", fontWeight: 700, fontSize: 30, letterSpacing: 8, color: C.brown },
+  coverBrand2: { fontFamily: "Sora", fontWeight: 700, fontSize: 30, letterSpacing: 8, color: C.brown, marginTop: -4 },
   coverTagline: { fontSize: 9, color: C.muted, marginTop: 8, letterSpacing: 2 },
   coverHero: { width: "100%", height: 300, objectFit: "cover", borderRadius: 6, marginBottom: 28 },
-  coverTitle: { fontFamily: "Helvetica-Bold", fontSize: 34, letterSpacing: 2, color: C.terracotta },
-  coverNumber: { fontFamily: "Helvetica-Bold", fontSize: 13, color: C.brown, marginTop: 6 },
+  coverTitle: { fontFamily: "Sora", fontWeight: 700, fontSize: 34, letterSpacing: 2, color: C.terracotta },
+  coverNumber: { fontFamily: "Sora", fontWeight: 700, fontSize: 13, color: C.brown, marginTop: 6 },
   coverSubject: { fontSize: 12, color: C.charcoal, marginTop: 10, lineHeight: 1.4 },
   coverMetaRow: {
     marginTop: 24,
@@ -440,21 +457,21 @@ const cs = StyleSheet.create({
     paddingTop: 14,
   },
   coverMetaLabel: { fontSize: 7, letterSpacing: 1.5, color: C.muted },
-  coverMetaValue: { fontSize: 11, fontFamily: "Helvetica-Bold", color: C.brown, marginTop: 3 },
+  coverMetaValue: { fontSize: 11, fontFamily: "Sora", fontWeight: 700, color: C.brown, marginTop: 3 },
   endPage: {
     backgroundColor: "#ffffff",
     paddingTop: 56,
     paddingHorizontal: 54,
     paddingBottom: 50,
-    fontFamily: "Helvetica",
+    fontFamily: "Sora",
     color: C.charcoal,
   },
-  endHeading: { fontFamily: "Times-Bold", fontSize: 24, letterSpacing: 3, color: C.brown, textAlign: "center" },
+  endHeading: { fontFamily: "Sora", fontWeight: 700, fontSize: 24, letterSpacing: 3, color: C.brown, textAlign: "center" },
   endSub: { fontSize: 10, color: C.muted, textAlign: "center", marginTop: 7, marginBottom: 24 },
   grid: { flexDirection: "row", flexWrap: "wrap", justifyContent: "space-between" },
   gridImg: { width: "48.5%", height: 210, objectFit: "cover", borderRadius: 5, marginBottom: 14 },
   endFooter: { marginTop: 22, borderTopWidth: 1, borderColor: C.sand, paddingTop: 18, alignItems: "center" },
-  endThanks: { fontSize: 12, color: C.brown, fontFamily: "Helvetica-Bold", marginBottom: 10, textAlign: "center" },
+  endThanks: { fontSize: 12, color: C.brown, fontFamily: "Sora", fontWeight: 700, marginBottom: 10, textAlign: "center" },
   endContact: { fontSize: 8.5, color: C.muted, textAlign: "center", lineHeight: 1.7 },
 });
 
@@ -652,7 +669,7 @@ function DocumentPdf({ doc }: { doc: PdfDoc }) {
 
       {showExtras && images.length > 1 ? (
         <Page size="A4" style={cs.endPage}>
-          <Text style={cs.endHeading}>MAGIC STONE</Text>
+          <Text style={cs.endHeading}>Magic Flexibel Stone</Text>
           <Text style={cs.endSub}>{endTxt.sub}</Text>
           <View style={cs.grid}>
             {images.slice(1, 5).map((img, i) => (
