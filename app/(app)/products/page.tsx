@@ -94,7 +94,7 @@ export default async function ProductsPage({
       max(po.expected_date) as next_date,
       string_agg(distinct po.supplier, ', ') as suppliers
     from purchase_orders po,
-      jsonb_array_elements(po.items) as item
+      jsonb_array_elements(case when jsonb_typeof(po.items) = 'array' then po.items else '[]'::jsonb end) as item
     where po.status in ('ordered', 'in_transit')
       and item->>'productId' is not null
     group by product_id

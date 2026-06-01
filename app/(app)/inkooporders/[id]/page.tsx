@@ -22,7 +22,13 @@ import {
 import { db } from "@/lib/db";
 import { products, purchaseOrders } from "@/lib/db/schema";
 import { nextSequentialSku } from "@/lib/products";
-import { formatMoney, poLineTotal, PO_STATUS_META } from "@/lib/purchase-orders";
+import {
+  formatMoney,
+  normalizePoAttachments,
+  parsePoLineItems,
+  poLineTotal,
+  PO_STATUS_META,
+} from "@/lib/purchase-orders";
 import { purchaseOrderFileUrl } from "@/lib/storage";
 import {
   createProductFromPoLine,
@@ -51,7 +57,7 @@ export default async function PurchaseOrderPage({ params }: { params: Promise<{ 
   const po = await db.query.purchaseOrders.findFirst({ where: eq(purchaseOrders.id, id) });
   if (!po) notFound();
 
-  const items = po.items ?? [];
+  const items = parsePoLineItems(po.items);
   const linkedIds = items.map((i) => i.productId).filter(Boolean) as string[];
   const linked = linkedIds.length
     ? await db
@@ -85,7 +91,10 @@ export default async function PurchaseOrderPage({ params }: { params: Promise<{ 
   }
 
   const attachments = await Promise.all(
-    (po.attachments ?? []).map(async (a) => ({ ...a, url: await purchaseOrderFileUrl(a.path) })),
+    normalizePoAttachments(po.attachments).map(async (a) => ({
+      ...a,
+      url: await purchaseOrderFileUrl(a.path),
+    })),
   );
 
   const meta = PO_STATUS_META[po.status];

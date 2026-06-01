@@ -8,9 +8,9 @@ import { z } from "zod";
 import { auth } from "@/auth";
 import { db } from "@/lib/db";
 import { activities, products, purchaseOrders } from "@/lib/db/schema";
-import type { PurchaseOrderAttachment, PurchaseOrderLineItem } from "@/lib/db/schema";
+import type { PurchaseOrderAttachment } from "@/lib/db/schema";
 import { nextSequentialSku } from "@/lib/products";
-import { parsePoLineItems, poTotal, PO_STATUSES } from "@/lib/purchase-orders";
+import { normalizePoAttachments, parsePoLineItems, poTotal, PO_STATUSES } from "@/lib/purchase-orders";
 import { deletePurchaseOrderFile, downloadPurchaseOrderBuffer } from "@/lib/storage";
 import { buildInvoicePdfAttachment, isExcelAttachment, pdfNameFor } from "@/lib/excel-to-pdf";
 import { holded } from "@/lib/holded/client";
@@ -116,7 +116,7 @@ export async function updatePurchaseOrder(id: string, formData: FormData) {
 
   // Delete storage files that were removed from the attachment list.
   const keptPaths = new Set(attachments.map((a) => a.path));
-  for (const a of existing.attachments ?? []) {
+  for (const a of normalizePoAttachments(existing.attachments)) {
     if (!keptPaths.has(a.path)) await deletePurchaseOrderFile(a.path);
   }
 
@@ -300,7 +300,7 @@ export async function createProductFromPoLine(
     where: eq(purchaseOrders.id, poId),
   });
   if (!po) throw new Error("Bestelling niet gevonden.");
-  const items = (po.items ?? []) as PurchaseOrderLineItem[];
+  const items = parsePoLineItems(po.items);
   const line = items[lineIndex];
   if (!line) throw new Error("Regel niet gevonden in deze bestelling.");
   if (line.productId) throw new Error("Deze regel is al aan een product gekoppeld.");
@@ -348,7 +348,7 @@ export async function deletePurchaseOrder(id: string) {
     where: eq(purchaseOrders.id, id),
     columns: { attachments: true },
   });
-  for (const a of existing?.attachments ?? []) await deletePurchaseOrderFile(a.path);
+  for (const a of normalizePoAttachments(existing?.attachments)) await deletePurchaseOrderFile(a.path);
   await db.delete(purchaseOrders).where(eq(purchaseOrders.id, id));
   revalidatePath("/inkooporders");
   revalidatePath("/");
@@ -363,7 +363,7 @@ async function applyStock(poId: string, userId?: string) {
   if (!po || po.stockAppliedAt) return;
 
   let applied = 0;
-  for (const it of po.items ?? []) {
+  for (const it of parsePoLineItems(po.items)) {
     if (!it.productId || !it.units) continue;
     const res = await db
       .update(products)
@@ -403,7 +403,7 @@ export async function regeneratePurchaseOrderPdfs(id: string) {
   });
   if (!po) return;
 
-  const current = (po.attachments ?? []) as PurchaseOrderAttachment[];
+  const current = normalizePoAttachments(po.attachments);
   const excels = current.filter((a) => isExcelAttachment(a.name));
   if (!excels.length) return;
 

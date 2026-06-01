@@ -1,6 +1,6 @@
 /** Helpers for purchase orders ("binnenkomende bestellingen" — supplier orders). */
 import type { BadgeTone } from "@/components/ui";
-import type { PurchaseOrderLineItem } from "@/lib/db/schema";
+import type { PurchaseOrderAttachment, PurchaseOrderLineItem } from "@/lib/db/schema";
 
 export const PO_STATUSES = [
   "draft",
@@ -41,11 +41,43 @@ export function formatMoney(amount: number | string | null | undefined, currency
 }
 
 /** Parse a JSON line-items payload coming from a form field. */
+/**
+ * Lees bijlagen robuust uit. Sommige oude rijen staan in de DB als (dubbel)
+ * ge-encode JSON-string i.p.v. een array — die zouden anders `.map` laten
+ * crashen op de detailpagina. Pelt tot 3 string-lagen af en valideert.
+ */
+export function normalizePoAttachments(raw: unknown): PurchaseOrderAttachment[] {
+  let val: unknown = raw;
+  for (let i = 0; i < 3 && typeof val === "string"; i++) {
+    try {
+      val = JSON.parse(val);
+    } catch {
+      return [];
+    }
+  }
+  if (!Array.isArray(val)) return [];
+  const out: PurchaseOrderAttachment[] = [];
+  for (const r of val) {
+    if (!r || typeof r !== "object") continue;
+    const o = r as Record<string, unknown>;
+    const path = String(o.path ?? "").trim();
+    if (!path) continue;
+    out.push({
+      name: String(o.name ?? "").trim() || path,
+      path,
+      size: typeof o.size === "number" ? o.size : undefined,
+      uploadedAt: o.uploadedAt ? String(o.uploadedAt) : undefined,
+    });
+  }
+  return out;
+}
+
 export function parsePoLineItems(raw: unknown): PurchaseOrderLineItem[] {
   let arr: unknown = raw;
-  if (typeof raw === "string") {
+  // Pel (dubbel) ge-encode JSON-strings af — sommige oude rijen staan zo opgeslagen.
+  for (let i = 0; i < 3 && typeof arr === "string"; i++) {
     try {
-      arr = JSON.parse(raw);
+      arr = JSON.parse(arr);
     } catch {
       return [];
     }
