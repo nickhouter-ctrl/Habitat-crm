@@ -4,6 +4,7 @@ import { and, count, eq, sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
+import { after } from "next/server";
 import { z } from "zod";
 
 import { auth } from "@/auth";
@@ -491,17 +492,47 @@ export async function sendDocumentCustom(id: string, formData: FormData) {
     })
     .where(eq(documents.id, id));
 
-  let result: "verzonden" | "geenmail" | "geenadres" = "geenadres";
-  if (to) {
+  // Extra bijlagen NU uitlezen — in de achtergrondtaak is formData niet meer betrouwbaar.
+  const extras: { filename: string; content: Uint8Array; contentType: string }[] = [];
+  for (const f of formData.getAll("extra")) {
+    if (f instanceof File && f.size > 0) {
+      extras.push({
+        filename: f.name,
+        content: new Uint8Array(await f.arrayBuffer()),
+        contentType: f.type || "application/octet-stream",
+      });
+    }
+  }
+
+  // Geen e-mailadres → niets te versturen; meteen afronden.
+  if (!to) {
+    await db.insert(activities).values({
+      type: "email",
+      subject: `${kindLabel} ${doc.docNumber ?? ""} verstuurd`,
+      body: `Klant-link: ${url}\nE-mail: geen e-mailadres bij het contact`,
+      documentId: id,
+      dealId: doc.dealId,
+      contactId: doc.contactId,
+      authorId: user.id,
+    });
+    await syncDealFromDocument(doc.dealId, { kind: doc.kind, status: "sent", totalEur: doc.totalEur });
+    revalidateAround(doc.kind as DocKind, id);
+    redirect(`/documents/${id}?verzonden=geenadres`);
+  }
+
+  const addr =
+    [
+      doc.contact?.addressLine,
+      [doc.contact?.postalCode, doc.contact?.city].filter(Boolean).join(" "),
+    ]
+      .filter((p) => p && p.trim())
+      .join(", ") || null;
+
+  // PDF genereren + mail versturen gebeurt ná de response (gebruiker keert meteen
+  // terug). Voorkomt het "er gebeurt niks"-gevoel en dus dubbele verzendingen.
+  after(async () => {
     const attachments: { filename: string; content: Uint8Array; contentType: string }[] = [];
     try {
-      const addr =
-        [
-          doc.contact?.addressLine,
-          [doc.contact?.postalCode, doc.contact?.city].filter(Boolean).join(" "),
-        ]
-          .filter((p) => p && p.trim())
-          .join(", ") || null;
       const buf = await renderDocumentPdf({
         kind: doc.kind,
         docNumber: doc.docNumber,
@@ -525,16 +556,8 @@ export async function sendDocumentCustom(id: string, formData: FormData) {
     } catch (err) {
       console.warn("[habitat-crm] kon PDF niet genereren voor mail:", err);
     }
-    // Extra bijlagen die in het previewscherm zijn toegevoegd.
-    for (const f of formData.getAll("extra")) {
-      if (f instanceof File && f.size > 0) {
-        attachments.push({
-          filename: f.name,
-          content: new Uint8Array(await f.arrayBuffer()),
-          contentType: f.type || "application/octet-stream",
-        });
-      }
-    }
+    attachments.push(...extras);
+
     const mail = offerteEmail({
       lang: doc.contact?.preferredLanguage,
       kind: doc.kind,
@@ -545,29 +568,29 @@ export async function sendDocumentCustom(id: string, formData: FormData) {
       subject: subject || null,
       message: message || null,
     });
-    const res = await sendEmail({ to, ...mail, attachments });
-    result = res.sent ? "verzonden" : "geenmail";
-  }
 
-  await db.insert(activities).values({
-    type: "email",
-    subject: `${kindLabel} ${doc.docNumber ?? ""} verstuurd`,
-    body: `Klant-link: ${url}\nE-mail: ${
-      result === "verzonden"
-        ? `verzonden naar ${to}`
-        : result === "geenmail"
-          ? `mislukt of niet ingesteld (${to})`
-          : "geen e-mailadres bij het contact"
-    }`,
-    documentId: id,
-    dealId: doc.dealId,
-    contactId: doc.contactId,
-    authorId: user.id,
+    let sent = false;
+    try {
+      const res = await sendEmail({ to, ...mail, attachments });
+      sent = res.sent;
+    } catch (err) {
+      console.error("[habitat-crm] achtergrond-verzending mislukt:", err);
+    }
+
+    await db.insert(activities).values({
+      type: "email",
+      subject: `${kindLabel} ${doc.docNumber ?? ""} verstuurd`,
+      body: `Klant-link: ${url}\nE-mail: ${sent ? `verzonden naar ${to}` : `mislukt of niet ingesteld (${to})`}`,
+      documentId: id,
+      dealId: doc.dealId,
+      contactId: doc.contactId,
+      authorId: user.id,
+    });
   });
 
   await syncDealFromDocument(doc.dealId, { kind: doc.kind, status: "sent", totalEur: doc.totalEur });
   revalidateAround(doc.kind as DocKind, id);
-  redirect(`/documents/${id}?verzonden=${result}`);
+  redirect(`/documents/${id}?verzonden=bezig`);
 }
 
 /** Create a draft invoice copied from an (accepted) estimate. */

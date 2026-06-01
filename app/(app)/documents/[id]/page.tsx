@@ -221,6 +221,12 @@ export default async function DocumentDetailPage({
                 {doc.sentAt ? "Opnieuw versturen" : "Versturen naar klant"}
               </LinkButton>
 
+              {sp.verzonden === "bezig" && (
+                <p className="rounded-md bg-accent/10 px-3 py-2 text-sm font-medium text-accent">
+                  📨 De mail wordt op de achtergrond verstuurd — je kunt gewoon verder. In de
+                  tijdlijn verschijnt zo de bevestiging.
+                </p>
+              )}
               {sp.verzonden === "verzonden" && (
                 <p className="rounded-md bg-success/10 px-3 py-2 text-sm font-medium text-success">
                   ✓ Mail verstuurd naar de klant.
