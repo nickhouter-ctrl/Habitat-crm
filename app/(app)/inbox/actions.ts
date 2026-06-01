@@ -116,6 +116,15 @@ export async function saveMailNotes(emailId: string, notes: string) {
  * - Linkt de mail aan deze PO
  * - Best-effort push naar Holded — laat lokale PO bestaan als push faalt
  */
+/** Leid een nette leveranciersnaam af uit een e-mailadres ("…@prosperplast.pl" → "Prosperplast"). */
+function supplierNameFromEmail(email: string | null | undefined): string | null {
+  const domain = email?.split("@")[1]?.trim();
+  if (!domain) return email?.trim() || null;
+  const main = domain.split(".").slice(-2, -1)[0] ?? domain.split(".")[0];
+  if (!main) return email?.trim() || null;
+  return main.charAt(0).toUpperCase() + main.slice(1);
+}
+
 export async function createPurchaseInvoiceFromMail(args: {
   emailId: string;
   attachmentId: string;
@@ -143,11 +152,13 @@ export async function createPurchaseInvoiceFromMail(args: {
     if (extracted && extracted > 0) total = extracted;
   }
 
+  // Let op: `||` i.p.v. `??` — een lege string ("") moet óók doorvallen,
+  // anders krijg je een lege leverancier als de mail geen afzendernaam heeft.
   const supplier =
-    args.override?.supplier ??
-    att.supplierTag ??
-    mail.fromName ??
-    mail.fromEmail ??
+    args.override?.supplier?.trim() ||
+    att.supplierTag?.trim() ||
+    mail.fromName?.trim() ||
+    supplierNameFromEmail(mail.fromEmail) ||
     "Onbekende leverancier";
 
   // Probeer factuurnummer uit filename te halen — anders fallback naar filename
