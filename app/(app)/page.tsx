@@ -180,7 +180,7 @@ export default async function DashboardPage() {
         .where(
           and(
             isNull(emailInbox.linkedPurchaseOrderId),
-            sql`${mailAttachments.category} IN ('supplier-invoice','freight-invoice','agent-fee-china','agent-fee-spain','opex','contractor')`,
+            sql`${mailAttachments.category} IN ('supplier-invoice','freight-invoice','agent-fee-china','agent-fee-spain','opex','contractor','quote-proforma')`,
             sql`${emailInbox.status} != 'archived'`,
           ),
         ),
@@ -317,7 +317,7 @@ export default async function DashboardPage() {
             )}
             {(invoiceReviewAgg?.n ?? 0) > 0 && (
               <ActionRow href="/inbox?status=new" emoji="🧾" tone="warning">
-                <strong>{invoiceReviewAgg!.n}</strong> mail{invoiceReviewAgg!.n === 1 ? "" : "s"} met factuurbijlage wacht{invoiceReviewAgg!.n === 1 ? "" : "en"} op review.
+                <strong>{invoiceReviewAgg!.n}</strong> mail{invoiceReviewAgg!.n === 1 ? "" : "s"} met factuur/proforma-bijlage — in inkoop zetten?
               </ActionRow>
             )}
             {poSoon > 0 && (
