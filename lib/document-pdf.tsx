@@ -31,6 +31,16 @@ Font.register({
   ],
 });
 
+// Cormorant Garamond — sierlijke serif voor de merknaam/wordmark (zoals het website-logo).
+const CORMORANT_DIR = path.join(process.cwd(), "public", "fonts", "cormorant");
+Font.register({
+  family: "Cormorant",
+  fonts: [
+    { src: path.join(CORMORANT_DIR, "CormorantGaramond-Medium.ttf"), fontWeight: 500 },
+    { src: path.join(CORMORANT_DIR, "CormorantGaramond-SemiBold.ttf"), fontWeight: 600 },
+  ],
+});
+
 type ExampleImage = { data: Buffer; format: "jpg" | "png" };
 
 /** Curated luxe sfeerfoto's (interieur/exterieur, van de website) voor voor-/eindblad. */
@@ -288,8 +298,8 @@ const s = StyleSheet.create({
     justifyContent: "space-between",
     alignItems: "flex-start",
   },
-  brand1: { fontFamily: "Sora", fontWeight: 700, fontSize: 23, letterSpacing: 5, color: C.brown },
-  brand2: { fontFamily: "Sora", fontWeight: 700, fontSize: 23, letterSpacing: 5, color: C.brown, marginTop: -3 },
+  brand1: { fontFamily: "Cormorant", fontWeight: 600, fontSize: 26, letterSpacing: 5, color: C.brown },
+  brand2: { fontFamily: "Cormorant", fontWeight: 600, fontSize: 26, letterSpacing: 5, color: C.brown, marginTop: -3 },
   tagline: { fontSize: 8, color: C.muted, marginTop: 5, letterSpacing: 1 },
   headerRight: { alignItems: "flex-end" },
   docTitle: { fontFamily: "Sora", fontWeight: 700, fontSize: 19, letterSpacing: 1.5, color: C.terracotta },
@@ -441,8 +451,8 @@ const cs = StyleSheet.create({
     color: C.charcoal,
   },
   coverWordmark: { alignItems: "center", marginBottom: 26 },
-  coverBrand1: { fontFamily: "Sora", fontWeight: 700, fontSize: 30, letterSpacing: 8, color: C.brown },
-  coverBrand2: { fontFamily: "Sora", fontWeight: 700, fontSize: 30, letterSpacing: 8, color: C.brown, marginTop: -4 },
+  coverBrand1: { fontFamily: "Cormorant", fontWeight: 600, fontSize: 34, letterSpacing: 8, color: C.brown },
+  coverBrand2: { fontFamily: "Cormorant", fontWeight: 600, fontSize: 34, letterSpacing: 8, color: C.brown, marginTop: -4 },
   coverTagline: { fontSize: 9, color: C.muted, marginTop: 8, letterSpacing: 2 },
   coverHero: { width: "100%", height: 300, objectFit: "cover", borderRadius: 6, marginBottom: 28 },
   coverTitle: { fontFamily: "Sora", fontWeight: 700, fontSize: 34, letterSpacing: 2, color: C.terracotta },
@@ -466,7 +476,7 @@ const cs = StyleSheet.create({
     fontFamily: "Sora",
     color: C.charcoal,
   },
-  endHeading: { fontFamily: "Sora", fontWeight: 700, fontSize: 24, letterSpacing: 3, color: C.brown, textAlign: "center" },
+  endHeading: { fontFamily: "Cormorant", fontWeight: 600, fontSize: 28, letterSpacing: 3, color: C.brown, textAlign: "center" },
   endSub: { fontSize: 10, color: C.muted, textAlign: "center", marginTop: 7, marginBottom: 24 },
   grid: { flexDirection: "row", flexWrap: "wrap", justifyContent: "space-between" },
   gridImg: { width: "48.5%", height: 210, objectFit: "cover", borderRadius: 5, marginBottom: 14 },
