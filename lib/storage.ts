@@ -213,6 +213,39 @@ export async function copyMailAttachmentToPoBucket(args: {
   return { name: args.filename, path, size: buf.length };
 }
 
+/** Download een mail-bijlage (bucket 'email-attachments') als buffer. */
+export async function downloadMailAttachmentBuffer(storagePath: string): Promise<Buffer | null> {
+  const { data, error } = await supabase().storage.from(MAIL_BUCKET).download(storagePath);
+  if (error || !data) return null;
+  return Buffer.from(await data.arrayBuffer());
+}
+
+/** Download een bestand uit de purchase-order-files bucket als buffer. */
+export async function downloadPurchaseOrderBuffer(path: string): Promise<Buffer | null> {
+  const { data, error } = await supabase().storage.from(PO_BUCKET).download(path);
+  if (error || !data) return null;
+  return Buffer.from(await data.arrayBuffer());
+}
+
+/** Upload ruwe bytes (bv. een gegenereerde PDF) naar de PO-bucket. */
+export async function uploadPurchaseOrderBytes(
+  name: string,
+  bytes: Buffer | Uint8Array,
+  contentType: string,
+): Promise<{ name: string; path: string; size: number } | null> {
+  await ensurePoBucket();
+  const buf = Buffer.isBuffer(bytes) ? bytes : Buffer.from(bytes);
+  const path = `${crypto.randomUUID()}-${safeName(name)}`;
+  const { error } = await supabase()
+    .storage.from(PO_BUCKET)
+    .upload(path, buf, { contentType, upsert: false });
+  if (error) {
+    console.error("PO-bucket bytes upload fail:", error.message);
+    return null;
+  }
+  return { name, path, size: buf.length };
+}
+
 /* --------------------------------------------------------------- catalogi */
 /* Publieke bucket — catalogus/brochure-PDF's, downloadbaar op /catalogi.       */
 

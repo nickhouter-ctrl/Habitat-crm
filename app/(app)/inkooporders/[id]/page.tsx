@@ -28,6 +28,7 @@ import {
   createProductFromPoLine,
   deletePurchaseOrder,
   pushPurchaseOrderToHolded,
+  regeneratePurchaseOrderPdfs,
   setPurchaseOrderStatus,
 } from "../actions";
 
@@ -218,6 +219,13 @@ export default async function PurchaseOrderPage({ params }: { params: Promise<{ 
                     )}
                   </div>
                 ))}
+                {attachments.some((a) => /\.(xlsx|xls|xlsm)$/i.test(a.name)) && (
+                  <form action={regeneratePurchaseOrderPdfs.bind(null, id)} className="pt-1.5">
+                    <button className={buttonClass({ variant: "secondary", size: "sm" })}>
+                      Nette PDF (opnieuw) maken
+                    </button>
+                  </form>
+                )}
               </CardContent>
             </Card>
           )}

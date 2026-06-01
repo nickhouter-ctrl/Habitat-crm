@@ -11,7 +11,8 @@ import { activities, products, purchaseOrders } from "@/lib/db/schema";
 import type { PurchaseOrderAttachment, PurchaseOrderLineItem } from "@/lib/db/schema";
 import { nextSequentialSku } from "@/lib/products";
 import { parsePoLineItems, poTotal, PO_STATUSES } from "@/lib/purchase-orders";
-import { deletePurchaseOrderFile } from "@/lib/storage";
+import { deletePurchaseOrderFile, downloadPurchaseOrderBuffer } from "@/lib/storage";
+import { buildInvoicePdfAttachment, isExcelAttachment, pdfNameFor } from "@/lib/excel-to-pdf";
 import { holded } from "@/lib/holded/client";
 import { pushPurchaseOrderToHolded as syncPushToHolded } from "@/lib/holded/sync";
 
@@ -386,4 +387,47 @@ async function applyStock(poId: string, userId?: string) {
     body: `${applied} productregel(s) toegevoegd aan de voorraad.`,
     authorId: userId ?? null,
   });
+}
+
+/**
+ * (Her)genereer leesbare PDF's van alle Excel-bijlagen op een inkooporder.
+ * Bestaande gegenereerde PDF's (zelfde naam) worden vervangen.
+ */
+export async function regeneratePurchaseOrderPdfs(id: string) {
+  const session = await auth();
+  if (!session?.user) redirect("/login");
+
+  const po = await db.query.purchaseOrders.findFirst({
+    where: eq(purchaseOrders.id, id),
+    columns: { attachments: true },
+  });
+  if (!po) return;
+
+  const current = (po.attachments ?? []) as PurchaseOrderAttachment[];
+  const excels = current.filter((a) => isExcelAttachment(a.name));
+  if (!excels.length) return;
+
+  // Oude gegenereerde PDF's (zelfde basisnaam) opruimen zodat we ze vervangen.
+  const generatedNames = new Set(excels.map((a) => pdfNameFor(a.name)));
+  const stale = current.filter((a) => generatedNames.has(a.name));
+  for (const s of stale) await deletePurchaseOrderFile(s.path);
+  const kept = current.filter((a) => !generatedNames.has(a.name));
+
+  const added: PurchaseOrderAttachment[] = [];
+  for (const x of excels) {
+    try {
+      const buf = await downloadPurchaseOrderBuffer(x.path);
+      const pdf = buf ? await buildInvoicePdfAttachment(buf, x.name) : null;
+      if (pdf) added.push(pdf);
+    } catch (e) {
+      console.error("Excel→PDF (knop) mislukt:", e instanceof Error ? e.message : e);
+    }
+  }
+
+  await db
+    .update(purchaseOrders)
+    .set({ attachments: [...kept, ...added], updatedAt: new Date() })
+    .where(eq(purchaseOrders.id, id));
+
+  revalidatePath(`/inkooporders/${id}`);
 }

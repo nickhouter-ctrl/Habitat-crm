@@ -12,7 +12,8 @@ import { eq } from "drizzle-orm";
 
 import { db } from "@/lib/db";
 import { activities, emailInbox, mailAttachments, purchaseOrders } from "@/lib/db/schema";
-import { copyMailAttachmentToPoBucket } from "@/lib/storage";
+import { buildInvoicePdfAttachment, isExcelAttachment } from "@/lib/excel-to-pdf";
+import { copyMailAttachmentToPoBucket, downloadMailAttachmentBuffer } from "@/lib/storage";
 
 const FINANCIAL_CATEGORIES = new Set([
   "supplier-invoice",
@@ -126,6 +127,21 @@ export async function tryAutoCreatePurchaseInvoice(emailId: string): Promise<Aut
         filename: a.filename,
       });
 
+      const poAttachments = copied
+        ? [{ name: copied.name, path: copied.path, size: copied.size, uploadedAt: new Date().toISOString() }]
+        : [];
+
+      // Excel-factuur → ook een leesbare PDF genereren en bijvoegen.
+      if (isExcelAttachment(a.filename, a.contentType)) {
+        try {
+          const xbuf = await downloadMailAttachmentBuffer(a.storagePath);
+          const pdfAtt = xbuf ? await buildInvoicePdfAttachment(xbuf, a.filename) : null;
+          if (pdfAtt) poAttachments.push(pdfAtt);
+        } catch (e) {
+          console.error("Excel→PDF (auto) mislukt:", e instanceof Error ? e.message : e);
+        }
+      }
+
       const [po] = await db
         .insert(purchaseOrders)
         .values({
@@ -144,9 +160,7 @@ export async function tryAutoCreatePurchaseInvoice(emailId: string): Promise<Aut
               note: `Bron: ${a.filename}`,
             },
           ],
-          attachments: copied
-            ? [{ name: copied.name, path: copied.path, size: copied.size, uploadedAt: new Date().toISOString() }]
-            : [],
+          attachments: poAttachments,
           notes: `Auto-aangemaakt uit mail "${mail.subject ?? ""}" (${mail.fromEmail ?? ""}). Bijlage: ${a.filename}`,
           stockAppliedAt: new Date(), // GEEN voorraadmutatie
         })
