@@ -679,7 +679,7 @@ function DocumentPdf({ doc }: { doc: PdfDoc }) {
 
       {showExtras && images.length > 1 ? (
         <Page size="A4" style={cs.endPage}>
-          <Text style={cs.endHeading}>Magic Flexibel Stone</Text>
+          <Text style={cs.endHeading}>Flexibel Stone</Text>
           <Text style={cs.endSub}>{endTxt.sub}</Text>
           <View style={cs.grid}>
             {images.slice(1, 5).map((img, i) => (
