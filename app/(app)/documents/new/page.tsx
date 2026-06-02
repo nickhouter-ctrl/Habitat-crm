@@ -5,7 +5,7 @@ import { DocumentWizard } from "@/components/document-wizard";
 import { PageHeader } from "@/components/ui";
 import { db } from "@/lib/db";
 import { documents, products, quoteRequests, type DocumentLineItem } from "@/lib/db/schema";
-import { suggestDocNumber, type DocKind } from "@/lib/documents";
+import { asStringArray, suggestDocNumber, type DocKind } from "@/lib/documents";
 import { getDocumentFormOptions } from "../../_options";
 import { createDocumentFromWizard } from "../actions";
 import { documentKindMeta } from "../../_meta";
@@ -50,8 +50,8 @@ export default async function NewDocumentPage({
       where: eq(quoteRequests.id, fromAanvraag),
       columns: { productSkus: true, productNames: true },
     });
-    const skus = req?.productSkus ?? [];
-    const names = req?.productNames ?? [];
+    const skus = asStringArray(req?.productSkus);
+    const names = asStringArray(req?.productNames);
     if (skus.length > 0) {
       const prods = await db.query.products.findMany({
         where: inArray(products.sku, skus),

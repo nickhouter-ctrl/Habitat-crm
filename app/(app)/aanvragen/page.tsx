@@ -2,6 +2,7 @@ import { desc, eq, sql } from "drizzle-orm";
 import Link from "next/link";
 
 import { RowLink } from "@/components/row-link";
+import { asStringArray } from "@/lib/documents";
 
 import {
   Badge,
@@ -112,7 +113,7 @@ export default async function QuoteRequestsPage({
             <TBody>
               {rows.map((r) => {
                 const meta = STATUS_META[r.status] ?? STATUS_META.pending;
-                const products = (r.productNames as string[] | null) ?? [];
+                const products = asStringArray(r.productNames);
                 return (
                   <RowLink key={r.id} href={`/aanvragen/${r.id}`}>
                     <Td>

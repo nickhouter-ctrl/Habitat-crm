@@ -1,6 +1,6 @@
 "use server";
 
-import { and, count, eq, sql } from "drizzle-orm";
+import { and, count, eq, isNotNull, isNull, sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
@@ -13,6 +13,7 @@ import { activities, contacts, deals, documents, holdedSyncMap, products } from 
 import { syncDealFromDocument } from "@/lib/deals";
 import {
   computeTotals,
+  normalizeDocItems,
   parseLineItems,
   suggestDocNumber,
   type DocKind,
@@ -421,7 +422,7 @@ export async function sendDocument(id: string) {
         subtotalEur: doc.subtotalEur,
         taxEur: doc.taxEur,
         totalEur: doc.totalEur,
-        items: doc.items ?? [],
+        items: normalizeDocItems(doc.items),
         notes: doc.notes,
         contactName: doc.contact.name ?? null,
         contactAddress: addr,
@@ -542,7 +543,7 @@ export async function sendDocumentCustom(id: string, formData: FormData) {
         subtotalEur: doc.subtotalEur,
         taxEur: doc.taxEur,
         totalEur: doc.totalEur,
-        items: doc.items ?? [],
+        items: normalizeDocItems(doc.items),
         notes: doc.notes,
         contactName: doc.contact?.name ?? null,
         contactAddress: addr,
@@ -604,7 +605,7 @@ export async function createInvoiceFromEstimate(estimateId: string, formData?: F
   const pct = Number.isFinite(rawPct) && rawPct > 0 && rawPct <= 100 ? rawPct : 100;
   const factor = pct / 100;
 
-  const baseItems = est.items ?? [];
+  const baseItems = normalizeDocItems(est.items);
   const items =
     pct === 100
       ? baseItems
@@ -702,13 +703,20 @@ export async function applyStockOutFromDocument(id: string) {
   const doc = await db.query.documents.findFirst({ where: eq(documents.id, id) });
   if (!doc) return;
   if (doc.kind !== "deliverynote") throw new Error("Voorraad afboeken kan alleen op een pakbon.");
-  if (doc.stockAppliedAt) {
+
+  // Atomair claimen: alleen de eerste klik (van evt. dubbele) boekt af.
+  const [claimed] = await db
+    .update(documents)
+    .set({ stockAppliedAt: new Date() })
+    .where(and(eq(documents.id, id), isNull(documents.stockAppliedAt)))
+    .returning({ id: documents.id });
+  if (!claimed) {
     revalidatePath(`/documents/${id}`);
     return;
   }
 
   let applied = 0;
-  for (const it of doc.items ?? []) {
+  for (const it of normalizeDocItems(doc.items)) {
     if (!it.productId || !it.units) continue;
     // Check of dit product een bundle/kit is — dan componenten aftrekken i.p.v. het set zelf
     const prod = await db.query.products.findFirst({ where: eq(products.id, it.productId) });
@@ -736,11 +744,6 @@ export async function applyStockOutFromDocument(id: string) {
     applied++;
   }
 
-  await db
-    .update(documents)
-    .set({ stockAppliedAt: new Date() })
-    .where(eq(documents.id, id));
-
   await db.insert(activities).values({
     type: "note",
     subject: `Voorraad afgeboekt — pakbon ${doc.docNumber ?? ""}`.trim(),
@@ -759,9 +762,17 @@ export async function applyStockOutFromDocument(id: string) {
 export async function reverseStockOutFromDocument(id: string) {
   const user = await requireUser();
   const doc = await db.query.documents.findFirst({ where: eq(documents.id, id) });
-  if (!doc || !doc.stockAppliedAt) return;
+  if (!doc) return;
 
-  for (const it of doc.items ?? []) {
+  // Atomair claimen: alleen één keer terugdraaien (voorkomt dubbel terugboeken).
+  const [claimed] = await db
+    .update(documents)
+    .set({ stockAppliedAt: null })
+    .where(and(eq(documents.id, id), isNotNull(documents.stockAppliedAt)))
+    .returning({ id: documents.id });
+  if (!claimed) return;
+
+  for (const it of normalizeDocItems(doc.items)) {
     if (!it.productId || !it.units) continue;
     const prod = await db.query.products.findFirst({ where: eq(products.id, it.productId) });
     const kit = (prod?.components as Array<{ sku: string; qty: number }> | null) ?? null;
@@ -786,10 +797,6 @@ export async function reverseStockOutFromDocument(id: string) {
         .where(eq(products.id, it.productId));
     }
   }
-  await db
-    .update(documents)
-    .set({ stockAppliedAt: null })
-    .where(eq(documents.id, id));
   await db.insert(activities).values({
     type: "note",
     subject: `Voorraad-afboeking teruggedraaid — pakbon ${doc.docNumber ?? ""}`.trim(),

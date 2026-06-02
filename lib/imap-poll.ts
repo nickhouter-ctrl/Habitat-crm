@@ -35,6 +35,8 @@ type IngestStats = {
   attachmentsStored: number;
   invoicesAutoCreated: number;
   invoicesNeedReview: number;
+  /** Laagste UID van een mislukte (niet-duplicate) mail — cursor mag hier niet voorbij. */
+  firstFailedUid: number | null;
 };
 
 /** Verwerk geparseerde mails: opslaan, bijlagen, bedrag-extractie, auto-link, auto-factuur. */
@@ -42,6 +44,7 @@ export async function ingestMails(mails: ParsedEmail[]): Promise<IngestStats> {
   const s: IngestStats = {
     inserted: 0, duplicates: 0, failed: 0,
     attachmentsStored: 0, invoicesAutoCreated: 0, invoicesNeedReview: 0,
+    firstFailedUid: null,
   };
   for (const m of mails) {
     try {
@@ -124,7 +127,12 @@ export async function ingestMails(mails: ParsedEmail[]): Promise<IngestStats> {
         s.duplicates++; // mail bestaat al (messageId-uniek)
       } else {
         // Eén kapotte mail mag de hele poll niet stoppen — log en ga door.
+        // Onthoud de laagste mislukte UID zodat de cursor er niet voorbij schuift
+        // (anders zou deze mail nooit meer opnieuw opgehaald worden).
         s.failed++;
+        if (m.imapUid && (s.firstFailedUid === null || m.imapUid < s.firstFailedUid)) {
+          s.firstFailedUid = m.imapUid;
+        }
         console.error(`Mail overgeslagen (${m.messageId}):`, e?.cause?.message ?? e?.message ?? e);
       }
     }
@@ -145,12 +153,17 @@ async function pollOneMailbox(account: MailAccount): Promise<IngestStats & { fet
   const { mails, maxUid } = await fetchNewMails(sinceUid, 100, account);
   const stats = await ingestMails(mails);
 
+  // Schuif de cursor niet voorbij een mislukte mail, anders gaat die voorgoed
+  // verloren. Reeds-verwerkte mails ervoor komen als duplicaat terug (geen schade).
+  const cursorUid =
+    stats.firstFailedUid != null ? Math.min(maxUid, stats.firstFailedUid - 1) : maxUid;
+
   await db
     .insert(emailSyncState)
-    .values({ id: stateId, lastImapUid: maxUid, lastPolledAt: new Date(), errorMessage: null })
+    .values({ id: stateId, lastImapUid: cursorUid, lastPolledAt: new Date(), errorMessage: null })
     .onConflictDoUpdate({
       target: emailSyncState.id,
-      set: { lastImapUid: maxUid, lastPolledAt: new Date(), errorMessage: null, updatedAt: new Date() },
+      set: { lastImapUid: cursorUid, lastPolledAt: new Date(), errorMessage: null, updatedAt: new Date() },
     });
 
   return { ...stats, fetched: mails.length };

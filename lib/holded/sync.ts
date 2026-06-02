@@ -24,6 +24,7 @@ import {
   type DocumentLineItem,
   type PurchaseOrderLineItem,
 } from "@/lib/db/schema";
+import { parsePoLineItems } from "@/lib/purchase-orders";
 
 import { holded, holdedListAll } from "./client";
 import type {
@@ -487,7 +488,7 @@ export async function pushPurchaseOrderToHolded(poId: string): Promise<string> {
   }
 
   // 2. Lijn-items: koppel onze productIds aan Holded-productIds waar mogelijk.
-  const items = (po.items ?? []) as PurchaseOrderLineItem[];
+  const items = parsePoLineItems(po.items);
   const localIds = items.map((i) => i.productId).filter(Boolean) as string[];
   const productLookup = localIds.length
     ? new Map(

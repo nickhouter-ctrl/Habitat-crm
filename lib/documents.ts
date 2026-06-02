@@ -58,6 +58,36 @@ export function computeTotals(items: DocumentLineItem[]): {
   return { subtotal, tax, total: round2(subtotal + tax) };
 }
 
+/**
+ * Lees document-regels robuust uit. Sommige (geïmporteerde/legacy) rijen staan
+ * als (dubbel) ge-encode JSON-string in de jsonb-kolom — die zouden `.map()`
+ * laten crashen. Pelt tot 3 string-lagen af en valideert dat het een array is.
+ */
+export function normalizeDocItems(raw: unknown): DocumentLineItem[] {
+  let val: unknown = raw;
+  for (let i = 0; i < 3 && typeof val === "string"; i++) {
+    try {
+      val = JSON.parse(val);
+    } catch {
+      return [];
+    }
+  }
+  return Array.isArray(val) ? (val as DocumentLineItem[]) : [];
+}
+
+/** Robuust een jsonb-stringlijst uitlezen (bv. quote_requests.productSkus). */
+export function asStringArray(raw: unknown): string[] {
+  let val: unknown = raw;
+  for (let i = 0; i < 3 && typeof val === "string"; i++) {
+    try {
+      val = JSON.parse(val);
+    } catch {
+      return [];
+    }
+  }
+  return Array.isArray(val) ? val.map((x) => String(x)) : [];
+}
+
 /** Suggest the next document number, e.g. "OFF-2026-0007". */
 export function suggestDocNumber(kind: DocKind, existingCount: number, year = new Date().getFullYear()): string {
   return `${DOC_KIND_PREFIX[kind]}-${year}-${String(existingCount + 1).padStart(4, "0")}`;

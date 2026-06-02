@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { and, eq, ilike, isNotNull, sql } from "drizzle-orm";
+import { and, eq, ilike, isNotNull, isNull, sql } from "drizzle-orm";
 import { z } from "zod";
 
 import { auth } from "@/auth";
@@ -360,7 +360,15 @@ async function applyStock(poId: string, userId?: string) {
   const po = await db.query.purchaseOrders.findFirst({
     where: eq(purchaseOrders.id, poId),
   });
-  if (!po || po.stockAppliedAt) return;
+  if (!po) return;
+
+  // Atomair claimen: voorkomt dubbel-bijboeken bij dubbel-klikken op "Ontvangen".
+  const [claimed] = await db
+    .update(purchaseOrders)
+    .set({ stockAppliedAt: new Date() })
+    .where(and(eq(purchaseOrders.id, poId), isNull(purchaseOrders.stockAppliedAt)))
+    .returning({ id: purchaseOrders.id });
+  if (!claimed) return;
 
   let applied = 0;
   for (const it of parsePoLineItems(po.items)) {
@@ -375,11 +383,6 @@ async function applyStock(poId: string, userId?: string) {
     void res;
     applied++;
   }
-
-  await db
-    .update(purchaseOrders)
-    .set({ stockAppliedAt: new Date() })
-    .where(eq(purchaseOrders.id, poId));
 
   await db.insert(activities).values({
     type: "note",

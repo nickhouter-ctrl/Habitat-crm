@@ -2,6 +2,8 @@ import { eq } from "drizzle-orm";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
+import { asStringArray } from "@/lib/documents";
+
 import {
   Badge,
   Button,
@@ -36,8 +38,8 @@ export default async function QuoteRequestDetailPage({ params }: { params: Promi
   if (!req) notFound();
 
   const meta = STATUS_META[req.status] ?? STATUS_META.pending;
-  const products = (req.productNames as string[] | null) ?? [];
-  const skus = (req.productSkus as string[] | null) ?? [];
+  const products = asStringArray(req.productNames);
+  const skus = asStringArray(req.productSkus);
 
   const accept = acceptQuoteRequest.bind(null, id);
   const reject = rejectQuoteRequest.bind(null, id);

@@ -6,7 +6,7 @@ import { DocumentForm } from "@/components/document-form";
 import { PageHeader } from "@/components/ui";
 import { db } from "@/lib/db";
 import { documents } from "@/lib/db/schema";
-import type { DocKind } from "@/lib/documents";
+import { normalizeDocItems, type DocKind } from "@/lib/documents";
 import { getDocumentFormOptions } from "../../../_options";
 import { updateDocument } from "../../actions";
 import { documentKindMeta } from "../../../_meta";
@@ -62,7 +62,7 @@ export default async function EditDocumentPage({
           issueDate: doc.issueDate,
           dueDate: doc.dueDate,
           notes: doc.notes,
-          items: doc.items,
+          items: normalizeDocItems(doc.items),
         }}
         contacts={options.contacts}
         deals={options.deals}

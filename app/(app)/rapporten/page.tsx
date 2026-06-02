@@ -1,5 +1,6 @@
 import { asc, desc, eq, sql } from "drizzle-orm";
 
+import { normalizeDocItems } from "@/lib/documents";
 import {
   Card,
   CardContent,
@@ -69,7 +70,7 @@ export default async function RapportenPage() {
         select item->>'name' as name,
                sum((item->>'units')::numeric) as units,
                sum((item->>'units')::numeric * (item->>'price')::numeric * (1 - coalesce((item->>'discount')::numeric,0)/100)) as revenue
-        from documents d, jsonb_array_elements(d.items) as item
+        from documents d, jsonb_array_elements(case when jsonb_typeof(d.items) = 'array' then d.items else '[]'::jsonb end) as item
         where d.kind='invoice' and item->>'name' is not null
         group by item->>'name'
         order by revenue desc nulls last
@@ -158,7 +159,7 @@ export default async function RapportenPage() {
     if (!bucket) continue;
     const sign = d.kind === "creditnote" ? -1 : 1;
     bucket.revenue += sign * Number(d.subtotalEur ?? 0);
-    for (const it of (d.items ?? []) as any[]) {
+    for (const it of normalizeDocItems(d.items)) {
       const c = it.productId ? productCost.get(it.productId) ?? 0 : 0;
       bucket.cost += sign * c * (Number(it.units) || 0);
     }

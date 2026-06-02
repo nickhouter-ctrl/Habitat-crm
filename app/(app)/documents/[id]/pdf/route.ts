@@ -4,6 +4,7 @@ import { auth } from "@/auth";
 import { db } from "@/lib/db";
 import { documents } from "@/lib/db/schema";
 import { renderDocumentPdf } from "@/lib/document-pdf";
+import { normalizeDocItems } from "@/lib/documents";
 
 export const dynamic = "force-dynamic";
 
@@ -48,7 +49,7 @@ export async function GET(
     subtotalEur: doc.subtotalEur,
     taxEur: doc.taxEur,
     totalEur: doc.totalEur,
-    items: doc.items ?? [],
+    items: normalizeDocItems(doc.items),
     notes: doc.notes,
     contactName: doc.contact?.name ?? null,
     contactAddress: addr,

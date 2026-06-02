@@ -24,7 +24,7 @@ import {
 } from "@/components/ui";
 import { db } from "@/lib/db";
 import { documents, holdedSyncMap } from "@/lib/db/schema";
-import { lineNet, lineTax } from "@/lib/documents";
+import { lineNet, lineTax, normalizeDocItems } from "@/lib/documents";
 import { labelForCategory } from "@/lib/products";
 import { formatDate, formatEUR } from "@/lib/utils";
 import {
@@ -97,7 +97,7 @@ export default async function DocumentDetailPage({
     where: and(eq(holdedSyncMap.entityType, "document"), eq(holdedSyncMap.localId, id)),
   });
 
-  const items = doc.items ?? [];
+  const items = normalizeDocItems(doc.items);
   const partyName = doc.contact?.name ?? doc.company?.name ?? null;
   const kindLabel = documentKindMeta[doc.kind];
 
