@@ -1,4 +1,4 @@
-import { asc, desc, eq } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, or } from "drizzle-orm";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
@@ -20,7 +20,8 @@ import {
 } from "@/components/ui";
 import { Combobox, type ComboOption } from "@/components/combobox";
 import { db } from "@/lib/db";
-import { contacts, documents, projects, properties, users } from "@/lib/db/schema";
+import { contacts, documents, products, projects, properties, users } from "@/lib/db/schema";
+import { normalizeDocItems } from "@/lib/documents";
 import { deleteProject, updateProject } from "../actions";
 
 export const metadata = { title: "Project" };
@@ -52,6 +53,48 @@ export default async function ProjectDetailPage({
       .where(eq(documents.projectId, id))
       .orderBy(desc(documents.issueDate), desc(documents.createdAt)),
   ]);
+
+  // Marge per project (intern): omzet − kostprijs van factuurregels (facturen − creditnota's).
+  const invoiceDocs = await db
+    .select({ kind: documents.kind, subtotalEur: documents.subtotalEur, items: documents.items })
+    .from(documents)
+    .where(and(eq(documents.projectId, id), inArray(documents.kind, ["invoice", "creditnote"])));
+  const allPids = new Set<string>();
+  const allSkus = new Set<string>();
+  for (const d of invoiceDocs) {
+    for (const it of normalizeDocItems(d.items)) {
+      if (it.productId) allPids.add(it.productId);
+      if (it.description?.trim()) allSkus.add(it.description.trim());
+    }
+  }
+  const projCostRows =
+    allPids.size || allSkus.size
+      ? await db.query.products.findMany({
+          where: or(
+            allPids.size ? inArray(products.id, [...allPids]) : undefined,
+            allSkus.size ? inArray(products.sku, [...allSkus]) : undefined,
+          ),
+          columns: { id: true, sku: true, costEur: true },
+        })
+      : [];
+  const pCostById = new Map(projCostRows.map((p) => [p.id, Number(p.costEur ?? 0)]));
+  const pCostBySku = new Map(
+    projCostRows.filter((p) => p.sku).map((p) => [p.sku as string, Number(p.costEur ?? 0)]),
+  );
+  let projRevenue = 0;
+  let projCost = 0;
+  for (const d of invoiceDocs) {
+    const sign = d.kind === "creditnote" ? -1 : 1;
+    projRevenue += sign * Number(d.subtotalEur ?? 0);
+    for (const it of normalizeDocItems(d.items)) {
+      const cost =
+        (it.productId ? pCostById.get(it.productId) : undefined) ??
+        (it.description ? pCostBySku.get(it.description.trim()) : undefined);
+      if (cost != null && cost > 0) projCost += sign * cost * (Number(it.units) || 0);
+    }
+  }
+  const projMargin = projRevenue - projCost;
+  const projMarginPct = projRevenue > 0 ? Math.round((projMargin / projRevenue) * 100) : null;
 
   const contactOptions: ComboOption[] = contactOpts.map((c) => ({ value: c.id, label: c.name }));
   const ownerOptions: ComboOption[] = ownerOpts.map((u) => ({ value: u.id, label: u.name ?? u.email }));
@@ -194,6 +237,21 @@ export default async function ProjectDetailPage({
               <span className="text-xs text-muted">{linkedDocs.length}</span>
             </CardHeader>
             <CardContent className="space-y-2 text-sm">
+              {invoiceDocs.length > 0 && (
+                <div className="flex items-center justify-between rounded-md bg-background px-3 py-2 text-xs">
+                  <span className="text-muted">Marge (intern · gefactureerd)</span>
+                  <span
+                    className={`tabular-nums font-medium ${projMargin < 0 ? "text-danger" : "text-foreground"}`}
+                  >
+                    €{" "}
+                    {projMargin.toLocaleString("nl-NL", {
+                      minimumFractionDigits: 2,
+                      maximumFractionDigits: 2,
+                    })}
+                    {projMarginPct != null ? ` · ${projMarginPct}%` : ""}
+                  </span>
+                </div>
+              )}
               <div className="flex flex-wrap gap-2">
                 <LinkButton
                   href={`/documents/new?kind=estimate&projectId=${id}${project.contactId ? `&contactId=${project.contactId}` : ""}${project.propertyId ? `&propertyId=${project.propertyId}` : ""}`}
