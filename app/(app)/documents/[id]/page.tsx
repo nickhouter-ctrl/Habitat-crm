@@ -5,7 +5,6 @@ import { notFound } from "next/navigation";
 
 import {
   Badge,
-  Button,
   buttonClass,
   Card,
   CardContent,
@@ -24,6 +23,7 @@ import {
 } from "@/components/ui";
 import { db } from "@/lib/db";
 import { documents, holdedSyncMap, products } from "@/lib/db/schema";
+import { SubmitButton } from "@/components/submit-button";
 import { lineNet, lineTax, normalizeDocItems } from "@/lib/documents";
 import { labelForCategory } from "@/lib/products";
 import { formatDate, formatEUR } from "@/lib/utils";
@@ -320,9 +320,9 @@ export default async function DocumentDetailPage({
                       className="w-20 text-right"
                     />
                     <span className="text-sm text-muted">%</span>
-                    <Button type="submit" size="sm" variant="secondary">
+                    <SubmitButton size="sm" variant="secondary" pendingLabel="Bezig…">
                       → Maak factuur
-                    </Button>
+                    </SubmitButton>
                   </div>
                   <p className="text-xs text-muted">
                     Bijv. 50 voor een aanbetaling; maak daarna een tweede factuur voor het restant.
@@ -331,9 +331,9 @@ export default async function DocumentDetailPage({
               )}
               {doc.kind !== "deliverynote" && (
                 <form action={makeDeliveryNote}>
-                  <Button type="submit" size="sm" variant="secondary">
+                  <SubmitButton size="sm" variant="secondary" pendingLabel="Bezig…">
                     → Maak pakbon
-                  </Button>
+                  </SubmitButton>
                 </form>
               )}
               {doc.kind === "deliverynote" && (
@@ -343,16 +343,16 @@ export default async function DocumentDetailPage({
                       ✓ Voorraad afgeboekt op {new Date(doc.stockAppliedAt).toLocaleDateString("nl-NL", { day: "numeric", month: "short", year: "numeric" })}
                     </p>
                     <form action={reverseStockOutFromDocument.bind(null, id)}>
-                      <Button type="submit" size="sm" variant="ghost" className="text-muted">
+                      <SubmitButton size="sm" variant="ghost" className="text-muted" pendingLabel="Bezig…">
                         Voorraad-afboeking ongedaan maken
-                      </Button>
+                      </SubmitButton>
                     </form>
                   </div>
                 ) : (
                   <form action={applyStockOutFromDocument.bind(null, id)}>
-                    <Button type="submit" size="sm" variant="primary">
+                    <SubmitButton size="sm" variant="primary" pendingLabel="Bezig…">
                       → Geleverd · voorraad afboeken
-                    </Button>
+                    </SubmitButton>
                   </form>
                 )
               )}
@@ -365,15 +365,15 @@ export default async function DocumentDetailPage({
                     </option>
                   ))}
                 </Select>
-                <Button type="submit" size="sm" variant="secondary">
+                <SubmitButton size="sm" variant="secondary" pendingLabel="Bezig…">
                   Status bijwerken
-                </Button>
+                </SubmitButton>
               </form>
               <form action={changeStatus}>
                 <input type="hidden" name="status" value="paid" />
-                <Button type="submit" size="sm" variant="ghost">
+                <SubmitButton size="sm" variant="ghost" pendingLabel="Bezig…">
                   Markeer betaald
-                </Button>
+                </SubmitButton>
               </form>
             </CardContent>
           </Card>
