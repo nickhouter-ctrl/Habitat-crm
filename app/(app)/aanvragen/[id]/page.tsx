@@ -204,13 +204,18 @@ export default async function QuoteRequestDetailPage({
                 <CardTitle>📅 Afspraak inplannen</CardTitle>
               </CardHeader>
               <CardContent>
+                {(req.appointmentDate || req.appointmentTime) && (
+                  <p className="mb-2 rounded-md bg-accent/10 px-3 py-2 text-xs text-accent">
+                    Voorkeur van de klant: <strong>{[req.appointmentDate, req.appointmentTime].filter(Boolean).join(" · ")}</strong> — al ingevuld hieronder.
+                  </p>
+                )}
                 <form action={schedule} className="space-y-2">
                   <div className="grid grid-cols-2 gap-2">
                     <Field label="Datum" htmlFor="date">
-                      <Input type="date" name="date" required />
+                      <Input type="date" name="date" required defaultValue={req.appointmentDate ?? ""} />
                     </Field>
                     <Field label="Tijd" htmlFor="time">
-                      <Input type="time" name="time" required />
+                      <Input type="time" name="time" required defaultValue={req.appointmentTime ?? ""} />
                     </Field>
                   </div>
                   <Field label="Locatie" htmlFor="location">

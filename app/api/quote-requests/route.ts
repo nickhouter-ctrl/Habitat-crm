@@ -26,6 +26,9 @@ const schema = z.object({
   source: z.string().trim().max(80).optional(),
   // Onderscheid offerte-aanvraag vs. algemeen contactbericht / afspraak.
   kind: z.enum(["quote", "contact", "appointment"]).optional(),
+  // Door de klant gekozen moment (alleen bij afspraak): "YYYY-MM-DD" / "HH:MM".
+  appointmentDate: z.string().trim().max(20).optional().or(z.literal("")),
+  appointmentTime: z.string().trim().max(10).optional().or(z.literal("")),
 });
 
 function escapeHtml(s: string): string {
@@ -79,6 +82,8 @@ export async function POST(req: Request) {
       locale: v.locale ?? null,
       source: v.source?.trim() || "website",
       kind: v.kind ?? "quote",
+      appointmentDate: v.appointmentDate || null,
+      appointmentTime: v.appointmentTime || null,
     })
     .returning({ id: quoteRequests.id });
 

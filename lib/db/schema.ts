@@ -621,6 +621,9 @@ export const quoteRequests = pgTable(
     source: text().notNull().default("website"),
     /** Soort aanvraag: quote (offerte) | appointment (showroombezoek) | contact. */
     kind: text().notNull().default("quote"),
+    /** Door de klant gekozen voorkeursmoment (afspraak) — "YYYY-MM-DD" / "HH:MM". */
+    appointmentDate: text(),
+    appointmentTime: text(),
     status: text().notNull().default("pending"), // pending|accepted|rejected
     /** Gekoppeld contact (gemaakt bij accepteren als nog niet bekend). */
     contactId: uuid().references((): AnyPgColumn => contacts.id, { onDelete: "set null" }),
