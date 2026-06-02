@@ -60,6 +60,9 @@ export default async function PurchaseOrdersPage() {
         actions={
           <>
             <SyncHoldedButton pendingCount={pendingHolded} />
+            <LinkButton href="/inkooporders/bestellen" variant="secondary">
+              Bijbestellen
+            </LinkButton>
             <LinkButton href="/inkooporders/new">Nieuwe bestelling</LinkButton>
           </>
         }

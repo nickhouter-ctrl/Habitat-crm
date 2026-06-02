@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { and, eq, ilike, isNotNull, isNull, sql } from "drizzle-orm";
+import { and, asc, eq, ilike, isNotNull, isNull, sql } from "drizzle-orm";
 import { z } from "zod";
 
 import { auth } from "@/auth";
@@ -433,4 +433,58 @@ export async function regeneratePurchaseOrderPdfs(id: string) {
     .where(eq(purchaseOrders.id, id));
 
   revalidatePath(`/inkooporders/${id}`);
+}
+
+/**
+ * Maak een concept-inkooporder voor alle lage-voorraad-producten in één
+ * groep (collectie/categorie). Voorgesteld aantal = drempel − huidige voorraad.
+ */
+export async function createReorderPurchaseOrder(group: string) {
+  await requireUser();
+  const lowStock = await db.query.products.findMany({
+    where: and(
+      eq(products.isActive, true),
+      isNotNull(products.stockMin),
+      sql`coalesce(${products.stockQty}, 0) < ${products.stockMin}`,
+      group === "__overig__"
+        ? sql`coalesce(nullif(trim(${products.collection}), ''), nullif(trim(${products.category}), '')) is null`
+        : sql`coalesce(nullif(trim(${products.collection}), ''), nullif(trim(${products.category}), '')) = ${group}`,
+    ),
+    columns: {
+      id: true,
+      name: true,
+      sku: true,
+      stockQty: true,
+      stockMin: true,
+      costEur: true,
+      purchaseCostEur: true,
+    },
+    orderBy: asc(products.name),
+  });
+  if (!lowStock.length) redirect("/inkooporders/bestellen");
+
+  const items = lowStock.map((p) => ({
+    name: p.name,
+    sku: p.sku ?? undefined,
+    productId: p.id,
+    units: Math.max(1, Math.ceil(Number(p.stockMin) - Number(p.stockQty ?? 0))),
+    unitPrice: Number(p.purchaseCostEur ?? p.costEur ?? 0),
+    note: `Bijbestellen — voorraad ${Number(p.stockQty ?? 0)} onder drempel ${Number(p.stockMin)}`,
+  }));
+
+  const [row] = await db
+    .insert(purchaseOrders)
+    .values({
+      supplier: group === "__overig__" ? "" : group,
+      status: "draft",
+      currency: "EUR",
+      orderDate: new Date().toISOString().slice(0, 10),
+      items,
+      total: String(poTotal(items)),
+      notes: "Automatisch voorgesteld op basis van lage voorraad — controleer aantallen en leverancier.",
+    })
+    .returning({ id: purchaseOrders.id });
+
+  revalidatePath("/inkooporders");
+  redirect(`/inkooporders/${row.id}`);
 }

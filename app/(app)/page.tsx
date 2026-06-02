@@ -326,7 +326,7 @@ export default async function DashboardPage() {
               </ActionRow>
             )}
             {productsAgg.lowStock > 0 && (
-              <ActionRow href="/products?lowstock=1" emoji="🔻" tone="danger">
+              <ActionRow href="/inkooporders/bestellen" emoji="🔻" tone="danger">
                 <strong>{productsAgg.lowStock}</strong> producten onder de voorraaddrempel — bijbestellen.
               </ActionRow>
             )}
