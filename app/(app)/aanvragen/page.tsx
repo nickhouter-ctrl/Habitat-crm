@@ -117,7 +117,10 @@ export default async function QuoteRequestsPage({
                 return (
                   <RowLink key={r.id} href={`/aanvragen/${r.id}`}>
                     <Td>
-                      <span className="font-medium">{r.name}</span>
+                      <span className="font-medium">
+                        {r.kind === "appointment" ? "📅 " : r.kind === "contact" ? "✉️ " : ""}
+                        {r.name}
+                      </span>
                       <span className="block text-xs text-muted">{r.email}</span>
                     </Td>
                     <Td className="text-muted">{r.company ?? "—"}</Td>

@@ -619,6 +619,8 @@ export const quoteRequests = pgTable(
     productSlugs: jsonb().$type<string[]>(),
     locale: text(), // nl/de/en/es waar request vandaan kwam
     source: text().notNull().default("website"),
+    /** Soort aanvraag: quote (offerte) | appointment (showroombezoek) | contact. */
+    kind: text().notNull().default("quote"),
     status: text().notNull().default("pending"), // pending|accepted|rejected
     /** Gekoppeld contact (gemaakt bij accepteren als nog niet bekend). */
     contactId: uuid().references((): AnyPgColumn => contacts.id, { onDelete: "set null" }),
@@ -635,6 +637,34 @@ export const quoteRequests = pgTable(
     index("quote_requests_created_idx").on(t.createdAt),
   ],
 );
+
+/**
+ * Afspraken / agenda — bv. een showroombezoek dat uit een aanvraag (kind=
+ * appointment) wordt ingepland. Verschijnt op /agenda.
+ */
+export const appointments = pgTable(
+  "appointments",
+  {
+    id: uuid().primaryKey().default(sql`gen_random_uuid()`),
+    title: text().notNull(),
+    contactId: uuid().references((): AnyPgColumn => contacts.id, { onDelete: "set null" }),
+    quoteRequestId: uuid().references((): AnyPgColumn => quoteRequests.id, { onDelete: "set null" }),
+    startsAt: timestamp({ withTimezone: true }).notNull(),
+    endsAt: timestamp({ withTimezone: true }),
+    location: text(),
+    notes: text(),
+    /** scheduled | completed | cancelled */
+    status: text().notNull().default("scheduled"),
+    createdBy: uuid().references((): AnyPgColumn => users.id, { onDelete: "set null" }),
+    ...timestamps,
+  },
+  (t) => [
+    index("appointments_starts_idx").on(t.startsAt),
+    index("appointments_contact_idx").on(t.contactId),
+  ],
+);
+export type Appointment = typeof appointments.$inferSelect;
+export type NewAppointment = typeof appointments.$inferInsert;
 
 export type QuoteRequest = typeof quoteRequests.$inferSelect;
 export type NewQuoteRequest = typeof quoteRequests.$inferInsert;

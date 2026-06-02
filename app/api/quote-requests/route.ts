@@ -78,6 +78,7 @@ export async function POST(req: Request) {
       productSlugs: v.productSlugs?.length ? v.productSlugs : null,
       locale: v.locale ?? null,
       source: v.source?.trim() || "website",
+      kind: v.kind ?? "quote",
     })
     .returning({ id: quoteRequests.id });
 

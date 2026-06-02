@@ -3,6 +3,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { ConfirmSubmit } from "@/components/confirm-submit";
+import { SubmitButton } from "@/components/submit-button";
 import { asStringArray } from "@/lib/documents";
 
 import {
@@ -12,6 +13,8 @@ import {
   CardContent,
   CardHeader,
   CardTitle,
+  Field,
+  Input,
   LinkButton,
   PageHeader,
   Textarea,
@@ -22,10 +25,18 @@ import { formatDate } from "@/lib/utils";
 import {
   acceptQuoteRequest,
   deleteQuoteRequest,
+  mailQuoteRequestCustomer,
   rejectQuoteRequest,
   reopenQuoteRequest,
   saveQuoteRequestNotes,
+  scheduleAppointment,
 } from "../actions";
+
+const KIND_META: Record<string, { label: string; emoji: string }> = {
+  quote: { label: "Offerte-aanvraag", emoji: "📝" },
+  appointment: { label: "Afspraak / showroombezoek", emoji: "📅" },
+  contact: { label: "Contactbericht", emoji: "✉️" },
+};
 
 const STATUS_META: Record<string, { label: string; tone: "info" | "success" | "warning" | "danger" | "neutral" }> = {
   pending: { label: "Open", tone: "info" },
@@ -33,12 +44,21 @@ const STATUS_META: Record<string, { label: string; tone: "info" | "success" | "w
   rejected: { label: "Afgewezen", tone: "neutral" },
 };
 
-export default async function QuoteRequestDetailPage({ params }: { params: Promise<{ id: string }> }) {
+export default async function QuoteRequestDetailPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ id: string }>;
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}) {
   const { id } = await params;
+  const sp = await searchParams;
   const req = await db.query.quoteRequests.findFirst({ where: eq(quoteRequests.id, id) });
   if (!req) notFound();
 
   const meta = STATUS_META[req.status] ?? STATUS_META.pending;
+  const kindMeta = KIND_META[req.kind] ?? KIND_META.quote;
+  const isAppointment = req.kind === "appointment";
   const products = asStringArray(req.productNames);
   const skus = asStringArray(req.productSkus);
 
@@ -47,17 +67,19 @@ export default async function QuoteRequestDetailPage({ params }: { params: Promi
   const reopen = reopenQuoteRequest.bind(null, id);
   const remove = deleteQuoteRequest.bind(null, id);
   const saveNotes = saveQuoteRequestNotes.bind(null, id);
+  const schedule = scheduleAppointment.bind(null, id);
+  const mailCustomer = mailQuoteRequestCustomer.bind(null, id);
 
   return (
     <>
       <PageHeader
         title={
           <span className="flex items-center gap-2">
-            Aanvraag — {req.name}
+            {kindMeta.emoji} {req.name}
             <Badge tone={meta.tone}>{meta.label}</Badge>
           </span>
         }
-        subtitle={`Ontvangen ${formatDate(req.createdAt)}${req.locale ? ` · taal: ${req.locale}` : ""}`}
+        subtitle={`${kindMeta.label} · ontvangen ${formatDate(req.createdAt)}${req.locale ? ` · taal: ${req.locale}` : ""}`}
         actions={
           <LinkButton href="/aanvragen" variant="ghost">
             ← Overzicht
@@ -172,6 +194,66 @@ export default async function QuoteRequestDetailPage({ params }: { params: Promi
                 >
                   Aanvraag verwijderen
                 </ConfirmSubmit>
+              </form>
+            </CardContent>
+          </Card>
+
+          {isAppointment && (
+            <Card>
+              <CardHeader>
+                <CardTitle>📅 Afspraak inplannen</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <form action={schedule} className="space-y-2">
+                  <div className="grid grid-cols-2 gap-2">
+                    <Field label="Datum" htmlFor="date">
+                      <Input type="date" name="date" required />
+                    </Field>
+                    <Field label="Tijd" htmlFor="time">
+                      <Input type="time" name="time" required />
+                    </Field>
+                  </div>
+                  <Field label="Locatie" htmlFor="location">
+                    <Input name="location" defaultValue="Showroom — Camí de la Fontana 3, Jávea" />
+                  </Field>
+                  <Textarea name="note" rows={2} placeholder="Opmerking voor de klant (optioneel)…" />
+                  <SubmitButton variant="primary" className="w-full" pendingLabel="Inplannen…">
+                    Inplannen + klant bevestigen
+                  </SubmitButton>
+                </form>
+                <p className="mt-2 text-xs text-muted">
+                  De klant krijgt direct een bevestigingsmail; de afspraak verschijnt in de agenda.
+                </p>
+              </CardContent>
+            </Card>
+          )}
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Mail de klant</CardTitle>
+            </CardHeader>
+            <CardContent>
+              {sp.gemaild === "1" && (
+                <p className="mb-2 rounded-md bg-success/10 px-3 py-2 text-xs text-success">
+                  ✓ Mail verstuurd naar de klant.
+                </p>
+              )}
+              {sp.gemaild === "0" && (
+                <p className="mb-2 rounded-md bg-warning/10 px-3 py-2 text-xs text-warning">
+                  Mail kon niet verstuurd worden.
+                </p>
+              )}
+              <form action={mailCustomer} className="space-y-2">
+                <Input name="subject" defaultValue="Je aanvraag bij Habitat One" />
+                <Textarea
+                  name="message"
+                  rows={4}
+                  required
+                  placeholder="Bijv. een extra vraag aan de klant…"
+                />
+                <SubmitButton variant="secondary" className="w-full" pendingLabel="Versturen…">
+                  Versturen naar {req.email}
+                </SubmitButton>
               </form>
             </CardContent>
           </Card>
