@@ -7,7 +7,7 @@ import { redirect } from "next/navigation";
 import { auth } from "@/auth";
 import { db } from "@/lib/db";
 import { activities, appointments, contacts, quoteRequests } from "@/lib/db/schema";
-import { sendEmail } from "@/lib/email";
+import { appointmentConfirmedEmail, sendEmail } from "@/lib/email";
 
 async function requireUser() {
   const session = await auth();
@@ -169,19 +169,14 @@ export async function scheduleAppointment(quoteRequestId: string, formData: Form
     minute: "2-digit",
   });
   try {
-    await sendEmail({
-      to: req.email,
-      subject: "Bevestiging afspraak — Habitat One",
-      html: `<div style="font-family:Arial,Helvetica,sans-serif;color:#2a2620;max-width:560px">
-  <h2 style="color:#402419;margin:0 0 12px">Je afspraak is bevestigd</h2>
-  <p>Beste ${escapeHtml(req.name)},</p>
-  <p>We kijken ernaar uit je te ontvangen:</p>
-  <p style="font-size:16px;margin:14px 0"><strong>${escapeHtml(when)}</strong><br/>${escapeHtml(location)}</p>
-  ${note ? `<p style="white-space:pre-wrap">${escapeHtml(note)}</p>` : ""}
-  <p style="margin-top:18px">Tot snel!<br/>Habitat One</p>
-</div>`,
-      text: `Je afspraak is bevestigd:\n${when}\n${location}${note ? `\n\n${note}` : ""}\n\nHabitat One`,
+    const mail = appointmentConfirmedEmail({
+      lang: req.locale,
+      contactName: req.name,
+      when,
+      location,
+      note: note || null,
     });
+    await sendEmail({ to: req.email, subject: mail.subject, html: mail.html, text: mail.text });
   } catch (err) {
     console.warn("[aanvragen] afspraak-bevestiging mislukt:", err);
   }

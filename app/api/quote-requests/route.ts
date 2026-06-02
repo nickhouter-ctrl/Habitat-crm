@@ -4,7 +4,7 @@ import { z } from "zod";
 import { db } from "@/lib/db";
 import { quoteRequests } from "@/lib/db/schema";
 import { sendMail } from "@/lib/gmail";
-import { quoteRequestReceivedEmail } from "@/lib/email";
+import { appointmentReceivedEmail, quoteRequestReceivedEmail } from "@/lib/email";
 
 /**
  * Publieke endpoint waar habitat-one (of een andere bron) een offerte-aanvraag
@@ -133,7 +133,19 @@ export async function POST(req: Request) {
   // Klant-bevestiging alleen bij een echte offerte-aanvraag; een algemeen
   // contactbericht / afspraak krijgt (nog) geen automatische bevestiging.
   let confirmStatus = "skipped";
-  if (v.kind === "contact" || v.kind === "appointment") {
+  if (v.kind === "appointment") {
+    // Showroom-afspraak → directe ontvangstbevestiging (afspraak nog te bevestigen).
+    try {
+      const firstLine = (v.message ?? "").split("\n")[0].trim();
+      const when = firstLine.includes(": ") ? firstLine.split(": ").slice(1).join(": ").trim() : "";
+      const ack = appointmentReceivedEmail({ lang: v.locale, contactName: v.name, when: when || null });
+      await sendMail({ to: v.email, subject: ack.subject, html: ack.html, text: ack.text });
+      confirmStatus = "sent";
+    } catch (err) {
+      confirmStatus = `failed: ${err instanceof Error ? err.message : String(err)}`;
+      console.warn("[quote-requests] afspraak-bevestiging mislukt:", err);
+    }
+  } else if (v.kind === "contact") {
     confirmStatus = "n/a";
   } else {
     try {

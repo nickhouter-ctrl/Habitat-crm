@@ -358,3 +358,133 @@ function escapeHtml(s: string): string {
     ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!,
   );
 }
+
+function pickLang(l?: string | null): Lang {
+  return (["en", "nl", "es", "de"] as const).includes(l as Lang) ? (l as Lang) : "en";
+}
+
+/** Gebrande e-mail-shell (cream achtergrond, wordmark-header). */
+function brandedEmail(inner: string): string {
+  return `<div style="font-family:Helvetica,Arial,sans-serif;background:${COMPANY.cream};padding:24px 0">
+  <div style="max-width:560px;margin:0 auto;background:#fff;border-radius:12px;overflow:hidden;color:#1c1c1a">
+    <div style="background:${COMPANY.cream};padding:22px 28px">
+      <div style="font-family:Georgia,'Times New Roman',serif;font-size:22px;letter-spacing:4px;color:${COMPANY.brown};line-height:1.05">${COMPANY.wordmark1}<br/>${COMPANY.wordmark2}</div>
+      <div style="font-size:11px;color:#999;margin-top:4px">${escapeHtml(COMPANY.tagline)}</div>
+    </div>
+    <div style="padding:24px 28px">${inner}</div>
+  </div>
+</div>`;
+}
+
+const APPT: Record<
+  Lang,
+  {
+    recvSubject: string;
+    recvBody: string;
+    recvConfirm: string;
+    whenLabel: string;
+    confSubject: string;
+    confBody: string;
+    locationLabel: string;
+  }
+> = {
+  nl: {
+    recvSubject: "We hebben je afspraakverzoek ontvangen",
+    recvBody: "Bedankt voor je verzoek voor een bezoek aan onze showroom.",
+    recvConfirm:
+      "We bevestigen je afspraak zo snel mogelijk per e-mail — of stellen een alternatieve datum voor als het gekozen moment bij ons niet uitkomt.",
+    whenLabel: "Voorkeursmoment",
+    confSubject: "Je afspraak is bevestigd",
+    confBody: "We kijken ernaar uit je te ontvangen in onze showroom:",
+    locationLabel: "Locatie",
+  },
+  en: {
+    recvSubject: "We've received your appointment request",
+    recvBody: "Thank you for requesting a visit to our showroom.",
+    recvConfirm:
+      "We'll confirm your appointment by email as soon as possible — or suggest an alternative date if the chosen time doesn't suit us.",
+    whenLabel: "Preferred time",
+    confSubject: "Your appointment is confirmed",
+    confBody: "We look forward to welcoming you to our showroom:",
+    locationLabel: "Location",
+  },
+  es: {
+    recvSubject: "Hemos recibido tu solicitud de cita",
+    recvBody: "Gracias por solicitar una visita a nuestro showroom.",
+    recvConfirm:
+      "Confirmaremos tu cita por correo lo antes posible, o te propondremos una fecha alternativa si la hora elegida no nos viene bien.",
+    whenLabel: "Hora preferida",
+    confSubject: "Tu cita está confirmada",
+    confBody: "Estaremos encantados de recibirte en nuestro showroom:",
+    locationLabel: "Ubicación",
+  },
+  de: {
+    recvSubject: "Wir haben deine Terminanfrage erhalten",
+    recvBody: "Vielen Dank für deine Anfrage für einen Besuch in unserem Showroom.",
+    recvConfirm:
+      "Wir bestätigen deinen Termin so schnell wie möglich per E-Mail – oder schlagen einen alternativen Termin vor, falls der gewählte Zeitpunkt nicht passt.",
+    whenLabel: "Wunschtermin",
+    confSubject: "Dein Termin ist bestätigt",
+    confBody: "Wir freuen uns, dich in unserem Showroom begrüßen zu dürfen:",
+    locationLabel: "Standort",
+  },
+};
+
+/** Ontvangstbevestiging van een showroom-afspraakverzoek (de afspraak is nog niet vast). */
+export function appointmentReceivedEmail(args: {
+  lang?: string | null;
+  contactName?: string | null;
+  when?: string | null;
+}): { subject: string; html: string; text: string } {
+  const lang = pickLang(args.lang);
+  const a = APPT[lang];
+  const t = T[lang];
+  const greeting = args.contactName ? `${t.hi} ${escapeHtml(args.contactName)},` : `${t.hi},`;
+  const whenBlock = args.when
+    ? `<p style="margin:16px 0 4px;font-weight:600;color:${COMPANY.brown}">${a.whenLabel}</p>
+      <p style="font-size:16px;margin:0 0 14px"><strong>${escapeHtml(args.when)}</strong></p>`
+    : "";
+  const html = brandedEmail(`
+      <p style="margin:0">${greeting}</p>
+      <p>${a.recvBody}</p>
+      ${whenBlock}
+      <p>${a.recvConfirm}</p>
+      <hr style="border:none;border-top:1px solid ${COMPANY.sand};margin:24px 0 16px" />
+      <p style="margin:0 0 4px">${t.regards}</p>
+      <div style="font-size:13px;color:#888;line-height:1.7">${signatureHtml()}</div>`);
+  const text =
+    `${greeting}\n\n${a.recvBody}\n` +
+    (args.when ? `\n${a.whenLabel}: ${args.when}\n` : "") +
+    `\n${a.recvConfirm}\n\n${t.regards}\n${COMPANY.legalName}`;
+  return { subject: a.recvSubject, html, text };
+}
+
+/** Definitieve bevestiging van een ingeplande showroom-afspraak. */
+export function appointmentConfirmedEmail(args: {
+  lang?: string | null;
+  contactName?: string | null;
+  when: string;
+  location: string;
+  note?: string | null;
+}): { subject: string; html: string; text: string } {
+  const lang = pickLang(args.lang);
+  const a = APPT[lang];
+  const t = T[lang];
+  const greeting = args.contactName ? `${t.hi} ${escapeHtml(args.contactName)},` : `${t.hi},`;
+  const html = brandedEmail(`
+      <p style="margin:0">${greeting}</p>
+      <p>${a.confBody}</p>
+      <div style="margin:16px 0;padding:14px 18px;background:${COMPANY.cream};border-radius:10px">
+        <div style="font-size:17px;font-weight:600;color:${COMPANY.brown}">${escapeHtml(args.when)}</div>
+        <div style="font-size:14px;color:#555;margin-top:3px">${escapeHtml(args.location)}</div>
+      </div>
+      ${args.note ? `<p style="white-space:pre-wrap">${escapeHtml(args.note)}</p>` : ""}
+      <hr style="border:none;border-top:1px solid ${COMPANY.sand};margin:24px 0 16px" />
+      <p style="margin:0 0 4px">${t.regards}</p>
+      <div style="font-size:13px;color:#888;line-height:1.7">${signatureHtml()}</div>`);
+  const text =
+    `${greeting}\n\n${a.confBody}\n\n${args.when}\n${args.location}` +
+    (args.note ? `\n\n${args.note}` : "") +
+    `\n\n${t.regards}\n${COMPANY.legalName}`;
+  return { subject: a.confSubject, html, text };
+}
