@@ -2,6 +2,8 @@ import { asc, desc, eq } from "drizzle-orm";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
+import { ConfirmSubmit } from "@/components/confirm-submit";
+
 import {
   Badge,
   Button,
@@ -144,9 +146,12 @@ export default async function ProjectDetailPage({
                 <Button type="submit">Opslaan</Button>
                 {!project.holdedProjectId && (
                   <form action={remove}>
-                    <Button type="submit" variant="ghost" className="text-danger hover:bg-danger/10">
+                    <ConfirmSubmit
+                      message="Dit project definitief verwijderen?"
+                      className="rounded-md px-3 py-2 text-sm font-medium text-danger transition-colors hover:bg-danger/10"
+                    >
                       Project verwijderen
-                    </Button>
+                    </ConfirmSubmit>
                   </form>
                 )}
               </div>

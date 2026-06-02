@@ -2,6 +2,7 @@ import { eq } from "drizzle-orm";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
+import { ConfirmSubmit } from "@/components/confirm-submit";
 import { asStringArray } from "@/lib/documents";
 
 import {
@@ -165,9 +166,12 @@ export default async function QuoteRequestDetailPage({ params }: { params: Promi
                 </>
               )}
               <form action={remove}>
-                <Button type="submit" variant="ghost" size="sm" className="w-full text-danger hover:bg-danger/10">
+                <ConfirmSubmit
+                  message="Deze aanvraag definitief verwijderen?"
+                  className="w-full rounded-md px-3 py-2 text-sm font-medium text-danger transition-colors hover:bg-danger/10"
+                >
                   Aanvraag verwijderen
-                </Button>
+                </ConfirmSubmit>
               </form>
             </CardContent>
           </Card>

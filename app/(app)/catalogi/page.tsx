@@ -1,5 +1,6 @@
 import { BookOpen, Download, Trash2, Upload } from "lucide-react";
 
+import { ConfirmSubmit } from "@/components/confirm-submit";
 import { Card, CardContent, CardHeader, CardTitle, EmptyState, PageHeader, buttonClass } from "@/components/ui";
 import { listCatalogFiles } from "@/lib/storage";
 import { formatDate } from "@/lib/utils";
@@ -82,13 +83,12 @@ export default async function CatalogiPage() {
                     await deleteCatalog(f.path);
                   }}
                 >
-                  <button
-                    type="submit"
+                  <ConfirmSubmit
+                    message={`Catalogus "${f.name}" verwijderen?`}
                     className="rounded-md p-1.5 text-muted transition-colors hover:bg-danger/10 hover:text-danger"
-                    title="Verwijderen"
                   >
                     <Trash2 className="h-4 w-4" />
-                  </button>
+                  </ConfirmSubmit>
                 </form>
               </div>
             ))}

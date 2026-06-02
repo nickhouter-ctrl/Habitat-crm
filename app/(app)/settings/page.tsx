@@ -1,6 +1,7 @@
 import { asc, desc } from "drizzle-orm";
 
 import { auth } from "@/auth";
+import { ConfirmSubmit } from "@/components/confirm-submit";
 import {
   Badge,
   Button,
@@ -90,9 +91,12 @@ export default async function SettingsPage() {
                     <Td className="text-right">
                       {!isSelf && (
                         <form action={deleteTeamMember.bind(null, u.id)}>
-                          <button className="rounded p-1 text-xs text-muted transition-colors hover:bg-danger/10 hover:text-danger">
+                          <ConfirmSubmit
+                            message={`${u.name ?? u.email} uit het team verwijderen?`}
+                            className="rounded p-1 text-xs text-muted transition-colors hover:bg-danger/10 hover:text-danger"
+                          >
                             Verwijderen
-                          </button>
+                          </ConfirmSubmit>
                         </form>
                       )}
                     </Td>

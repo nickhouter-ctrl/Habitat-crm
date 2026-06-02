@@ -4,7 +4,6 @@ import { notFound } from "next/navigation";
 
 import {
   Badge,
-  Button,
   buttonClass,
   Card,
   CardContent,
@@ -30,6 +29,8 @@ import {
   PO_STATUS_META,
 } from "@/lib/purchase-orders";
 import { purchaseOrderFileUrl } from "@/lib/storage";
+import { ConfirmSubmit } from "@/components/confirm-submit";
+import { SubmitButton } from "@/components/submit-button";
 import {
   createProductFromPoLine,
   deletePurchaseOrder,
@@ -102,7 +103,9 @@ export default async function PurchaseOrderPage({ params }: { params: Promise<{ 
 
   const Action = ({ status, label, variant = "secondary" }: { status: Parameters<typeof setPurchaseOrderStatus>[1]; label: string; variant?: "primary" | "secondary" }) => (
     <form action={setPurchaseOrderStatus.bind(null, id, status)}>
-      <button className={buttonClass({ variant, size: "sm" })}>{label}</button>
+      <SubmitButton variant={variant} size="sm" pendingLabel="Bezig…">
+        {label}
+      </SubmitButton>
     </form>
   );
 
@@ -272,9 +275,9 @@ export default async function PurchaseOrderPage({ params }: { params: Promise<{ 
               ) : (
                 <>
                   <form action={pushPurchaseOrderToHolded.bind(null, id)}>
-                    <button className={buttonClass({ variant: "secondary", size: "sm" })}>
+                    <SubmitButton variant="secondary" size="sm" pendingLabel="Bezig…">
                       Push naar Holded
-                    </button>
+                    </SubmitButton>
                   </form>
                   <p className="text-xs text-muted">
                     Maakt deze bestelling als concept-aankoopfactuur in Holded en koppelt 'm.
@@ -287,9 +290,12 @@ export default async function PurchaseOrderPage({ params }: { params: Promise<{ 
           <Card>
             <CardContent className="pt-5">
               <form action={remove}>
-                <Button type="submit" variant="ghost" className="text-danger hover:bg-danger/10">
+                <ConfirmSubmit
+                  message={`Inkooporder ${po.supplier} definitief verwijderen?`}
+                  className="rounded-md px-3 py-2 text-sm font-medium text-danger transition-colors hover:bg-danger/10"
+                >
                   Bestelling verwijderen
-                </Button>
+                </ConfirmSubmit>
               </form>
             </CardContent>
           </Card>

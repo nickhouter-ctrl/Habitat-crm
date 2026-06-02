@@ -3,6 +3,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { Barcode } from "@/components/barcode";
+import { ConfirmSubmit } from "@/components/confirm-submit";
 import { ProductForm } from "@/components/product-form";
 import {
   Badge,
@@ -202,9 +203,12 @@ export default async function EditProductPage({
         submitLabel="Wijzigingen opslaan"
       />
       <form action={remove} className="mt-4 max-w-2xl">
-        <Button type="submit" variant="ghost" size="sm" className="text-danger">
+        <ConfirmSubmit
+          message={`Product "${product.name}" definitief verwijderen?`}
+          className="rounded-md px-3 py-2 text-sm font-medium text-danger transition-colors hover:bg-danger/10"
+        >
           Product verwijderen
-        </Button>
+        </ConfirmSubmit>
       </form>
     </>
   );

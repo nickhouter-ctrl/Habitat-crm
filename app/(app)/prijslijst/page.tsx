@@ -11,6 +11,7 @@ import {
   Select,
 } from "@/components/ui";
 import { Combobox } from "@/components/combobox";
+import { SubmitButton } from "@/components/submit-button";
 import { db } from "@/lib/db";
 import { contacts, products } from "@/lib/db/schema";
 import { mailPricelist } from "./actions";
@@ -99,7 +100,7 @@ export default async function PrijslijstPage({
                   placeholder="Beste …, hierbij onze prijslijst. …"
                 />
               </Field>
-              <Button type="submit">Verstuur per e-mail</Button>
+              <SubmitButton pendingLabel="Versturen…">Verstuur per e-mail</SubmitButton>
             </form>
           </CardContent>
         </Card>
