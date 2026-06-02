@@ -299,6 +299,23 @@ export function LineItemsEditor({
     return m != null && m.pct < 0;
   });
 
+  // Totale (interne) marge over de regels met een bekende kostprijs.
+  let marginRevenue = 0;
+  let marginCost = 0;
+  let costedCount = 0;
+  let productLineCount = 0;
+  for (const r of rows) {
+    if (!r.productId) continue;
+    productLineCount++;
+    const cost = costById.get(r.productId) ?? null;
+    if (cost == null || cost <= 0) continue;
+    marginRevenue += lineNet(rowToItem(r));
+    marginCost += cost * (Number(r.units) || 0);
+    costedCount++;
+  }
+  const totalMargin = marginRevenue - marginCost;
+  const totalMarginPct = marginRevenue > 0 ? (totalMargin / marginRevenue) * 100 : null;
+
   return (
     <div className="space-y-3">
       <input
@@ -599,6 +616,25 @@ export function LineItemsEditor({
           <span>Totaal</span>
           <span className="tabular-nums">{formatEUR(totals.total)}</span>
         </div>
+        {costedCount > 0 && (
+          <div
+            className={cn(
+              "mt-1 flex justify-between border-t pt-1 text-xs",
+              totalMargin < 0
+                ? "text-danger"
+                : totalMarginPct != null && totalMarginPct < LOW_MARGIN_PCT
+                  ? "text-warning"
+                  : "text-muted",
+            )}
+            title="Interne brutomarge — niet zichtbaar voor de klant"
+          >
+            <span>Marge (intern){costedCount < productLineCount ? ` · ${costedCount}/${productLineCount} regels` : ""}</span>
+            <span className="tabular-nums font-medium">
+              {formatEUR(totalMargin)}
+              {totalMarginPct != null ? ` · ${totalMarginPct.toFixed(0)}%` : ""}
+            </span>
+          </div>
+        )}
       </div>
 
       {pickerOpen && (
