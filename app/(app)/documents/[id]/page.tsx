@@ -1,4 +1,4 @@
-import { and, eq } from "drizzle-orm";
+import { and, eq, inArray, or } from "drizzle-orm";
 import { headers } from "next/headers";
 import Link from "next/link";
 import { notFound } from "next/navigation";
@@ -23,7 +23,7 @@ import {
   Tr,
 } from "@/components/ui";
 import { db } from "@/lib/db";
-import { documents, holdedSyncMap } from "@/lib/db/schema";
+import { documents, holdedSyncMap, products } from "@/lib/db/schema";
 import { lineNet, lineTax, normalizeDocItems } from "@/lib/documents";
 import { labelForCategory } from "@/lib/products";
 import { formatDate, formatEUR } from "@/lib/utils";
@@ -98,6 +98,41 @@ export default async function DocumentDetailPage({
   });
 
   const items = normalizeDocItems(doc.items);
+
+  // Marge (intern): kostprijs per regel via gekoppeld product (id of SKU). Komt
+  // NIET op de klant-PDF — alleen zichtbaar voor jullie op deze pagina.
+  const itemProductIds = [...new Set(items.map((it) => it.productId).filter(Boolean) as string[])];
+  const itemSkus = [...new Set(items.map((it) => it.description?.trim()).filter(Boolean) as string[])];
+  const costRows =
+    itemProductIds.length || itemSkus.length
+      ? await db.query.products.findMany({
+          where: or(
+            itemProductIds.length ? inArray(products.id, itemProductIds) : undefined,
+            itemSkus.length ? inArray(products.sku, itemSkus) : undefined,
+          ),
+          columns: { id: true, sku: true, costEur: true },
+        })
+      : [];
+  const costById = new Map(costRows.map((p) => [p.id, Number(p.costEur ?? 0)]));
+  const costBySku = new Map(
+    costRows.filter((p) => p.sku).map((p) => [p.sku as string, Number(p.costEur ?? 0)]),
+  );
+  let docCost = 0;
+  let costedLines = 0;
+  for (const it of items) {
+    const cost =
+      (it.productId ? costById.get(it.productId) : undefined) ??
+      (it.description ? costBySku.get(it.description.trim()) : undefined);
+    if (cost != null && cost > 0) {
+      docCost += cost * (Number(it.units) || 0);
+      costedLines++;
+    }
+  }
+  const docRevenue = items.reduce((s, it) => s + lineNet(it), 0);
+  const docMargin = docRevenue - docCost;
+  const docMarginPct = docRevenue > 0 ? Math.round((docMargin / docRevenue) * 100) : null;
+  const marginComplete = items.length > 0 && costedLines === items.length;
+
   const partyName = doc.contact?.name ?? doc.company?.name ?? null;
   const kindLabel = documentKindMeta[doc.kind];
 
@@ -437,6 +472,20 @@ export default async function DocumentDetailPage({
                       <span>Totaal</span>
                       <span className="tabular-nums">{formatEUR(doc.totalEur)}</span>
                     </div>
+                    {docRevenue > 0 && (
+                      <div
+                        className={`mt-2 flex justify-between border-t pt-2 text-xs ${docMargin < 0 ? "text-danger" : "text-muted"}`}
+                      >
+                        <span title="Interne brutomarge — staat niet op de klant-PDF">
+                          Marge (intern)
+                          {!marginComplete ? ` · ${costedLines}/${items.length} regels` : ""}
+                        </span>
+                        <span className="tabular-nums font-medium">
+                          {formatEUR(docMargin)}
+                          {docMarginPct != null ? ` · ${docMarginPct}%` : ""}
+                        </span>
+                      </div>
+                    )}
                   </div>
                 </div>
               </>
