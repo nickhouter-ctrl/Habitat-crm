@@ -65,7 +65,19 @@ export default async function InboxPage({
 
   const [rows, state, counts, mailboxCounts] = await Promise.all([
     db
-      .select()
+      .select({
+        id: emailInbox.id,
+        receivedAt: emailInbox.receivedAt,
+        fromName: emailInbox.fromName,
+        fromEmail: emailInbox.fromEmail,
+        subject: emailInbox.subject,
+        status: emailInbox.status,
+        attachments: emailInbox.attachments,
+        // Alleen een korte preview — de volledige body_html (tot 11MB per mail!)
+        // nooit meeladen in de lijst. Dat maakte deze query >1s en blokkeerde
+        // verbindingen voor de rest van de app. Volledige body staat op /inbox/[id].
+        bodyText: sql<string | null>`left(${emailInbox.bodyText}, 200)`,
+      })
       .from(emailInbox)
       .where(
         and(
