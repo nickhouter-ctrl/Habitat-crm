@@ -1,6 +1,6 @@
 import { and, count, desc, eq, gte, inArray, isNull, sql } from "drizzle-orm";
 import Link from "next/link";
-import type { ReactNode } from "react";
+import { Suspense, type ReactNode } from "react";
 
 import { MonthlyAmountChart } from "@/components/rapporten-charts";
 
@@ -89,6 +89,27 @@ function ActionRow({
   );
 }
 
+/**
+ * "Totale inkoop" leunt op een live Holded-fetch (tot 2s op een koude cache).
+ * Apart als async-component achter een Suspense-grens, zodat de rest van het
+ * dashboard direct rendert en deze tegel los nastroomt.
+ */
+async function TotalPurchaseTile({ unpushed, poCount }: { unpushed: number; poCount: number }) {
+  const holdedExpensesYTD = await purchaseDocsTotalExBTW();
+  const totalPurchase = Number(holdedExpensesYTD) + unpushed;
+  return (
+    <StatTile
+      label="Totale inkoop"
+      value={formatEUR(totalPurchase)}
+      hint={
+        unpushed > 0
+          ? `ex. BTW · Holded ${formatEUR(holdedExpensesYTD)} + ${poCount} PO's`
+          : "ex. BTW · uit Holded"
+      }
+    />
+  );
+}
+
 export default async function DashboardPage() {
   const now = new Date();
   const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0, 10);
@@ -96,7 +117,7 @@ export default async function DashboardPage() {
 
   const openExpr = sql`${documents.status} not in ('paid', 'void', 'draft')`;
 
-  const [[contactsTotal], pipelineRows, [docAgg], [creditAgg], [purchaseAgg], [productsAgg], openPurchaseOrders, recentDeals, recentActivity, holdedExpensesYTD, [openRequestsAgg], [invoiceReviewAgg], unpaidInvoices, proformas, [acceptedAgg]] =
+  const [[contactsTotal], pipelineRows, [docAgg], [creditAgg], [purchaseAgg], [productsAgg], openPurchaseOrders, recentDeals, recentActivity, [openRequestsAgg], [invoiceReviewAgg], unpaidInvoices, proformas, [acceptedAgg]] =
     await Promise.all([
       db.select({ n: count() }).from(contacts),
       db
@@ -164,7 +185,6 @@ export default async function DashboardPage() {
           document: { columns: { id: true, docNumber: true, kind: true } },
         },
       }),
-      purchaseDocsTotalExBTW(),
       db
         .select({ n: sql<number>`count(*)::int` })
         .from(quoteRequests)
@@ -223,7 +243,6 @@ export default async function DashboardPage() {
   const revenueAll = Number(docAgg.revenueAll) - Number(creditAgg.paidAll);
   const revenueMonth = Number(docAgg.revenueMonth) - Number(creditAgg.revenueMonth);
   const unpushedPurchase = Number(purchaseAgg.totalEur);
-  const totalPurchase = Number(holdedExpensesYTD) + unpushedPurchase;
   const unpaidPurchaseTotal = unpaidInvoices.reduce((s, p) => s + Number(p.total ?? 0), 0);
   const acceptedN = acceptedAgg?.n ?? 0;
   const poSoon = openPurchaseOrders.filter((po) => {
@@ -361,15 +380,11 @@ export default async function DashboardPage() {
           Meer cijfers — inkoop, pijplijn, contacten
         </summary>
         <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
-          <StatTile
-            label="Totale inkoop"
-            value={formatEUR(totalPurchase)}
-            hint={
-              unpushedPurchase > 0
-                ? `ex. BTW · Holded ${formatEUR(holdedExpensesYTD)} + ${purchaseAgg.n} PO's`
-                : "ex. BTW · uit Holded"
-            }
-          />
+          <Suspense
+            fallback={<StatTile label="Totale inkoop" value="…" hint="ex. BTW · Holded laden…" />}
+          >
+            <TotalPurchaseTile unpushed={unpushedPurchase} poCount={purchaseAgg.n} />
+          </Suspense>
           <StatTile label="Te betalen (inkoop)" value={unpaidInvoices.length} hint={formatEUR(unpaidPurchaseTotal)} />
           <StatTile label="Inkooporders onderweg" value={openPurchaseOrders.length} hint="aankomende voorraad" />
           <StatTile label="Pijplijnwaarde" value={formatEUR(openDeals.value)} hint={`${openDeals.n} open deals`} />
