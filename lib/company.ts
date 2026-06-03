@@ -20,7 +20,7 @@ export const COMPANY = {
   addressRegion,
   address: process.env.COMPANY_ADDRESS ?? `${addressStreet}, ${addressRegion}`,
   email: process.env.COMPANY_EMAIL ?? "hi@habitat-one.com",
-  phone: process.env.COMPANY_PHONE ?? "+34 965 00 11 22",
+  phone: process.env.COMPANY_PHONE ?? "+31 6 51170545",
   website: process.env.COMPANY_WEBSITE ?? "habitat-one.com",
   iban: process.env.COMPANY_IBAN ?? "", // not provided yet
   // Luxe-mediterraanse palet — gebruikt op PDFs en e-mails.
