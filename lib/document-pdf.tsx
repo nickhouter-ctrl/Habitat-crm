@@ -43,11 +43,17 @@ Font.register({
 
 type ExampleImage = { data: Buffer; format: "jpg" | "png" };
 
-/** Curated luxe sfeerfoto's (interieur/exterieur, van de website) voor voor-/eindblad. */
+/**
+ * Curated luxe sfeerfoto's voor het voor- en eindblad. Vaste, eigen /pdf/-set op
+ * de website (los van de product-beeldbibliotheek, zodat hernoemingen daar deze
+ * nooit meer breken). Volgorde telt: [exterieur, exterieur] → voorblad,
+ * [interieur, interieur] → eindblad.
+ */
 const SFEER_IMAGES = [
-  "https://habitat-one-ecru.vercel.app/products/magic/huge-travertine-beige-interior.png",
-  "https://habitat-one-ecru.vercel.app/products/magic/roman-huge-travertine-white-golden-interior.png",
-  "https://habitat-one-ecru.vercel.app/products/magic/ms-travertino-light-grey-interior.png",
+  "https://habitat-one-ecru.vercel.app/pdf/ext-1.jpg",
+  "https://habitat-one-ecru.vercel.app/pdf/ext-2.jpg",
+  "https://habitat-one-ecru.vercel.app/pdf/int-1.jpg",
+  "https://habitat-one-ecru.vercel.app/pdf/int-2.jpg",
 ];
 
 /* ---------------------------------------------------------------- i18n */
@@ -428,17 +434,17 @@ export type PdfDoc = {
 };
 
 /** Teksten voor het voor- en eindblad, per taal. */
-const COVER_TXT: Record<Locale, { for: string; date: string }> = {
-  nl: { for: "Voor", date: "Datum" },
-  de: { for: "Für", date: "Datum" },
-  en: { for: "For", date: "Date" },
-  es: { for: "Para", date: "Fecha" },
+const COVER_TXT: Record<Locale, { for: string; date: string; intro: string }> = {
+  nl: { for: "Voor", date: "Datum", intro: "Echte natuursteen die meebuigt met uw ontwerp — warm, tijdloos en gemaakt voor de kust." },
+  de: { for: "Für", date: "Datum", intro: "Echter Naturstein, der sich Ihrem Entwurf anpasst — warm, zeitlos und für die Küste gemacht." },
+  en: { for: "For", date: "Date", intro: "Real natural stone that bends to your design — warm, timeless and made for the coast." },
+  es: { for: "Para", date: "Fecha", intro: "Piedra natural real que se adapta a su diseño — cálida, atemporal y hecha para la costa." },
 };
-const ENDPAGE_TXT: Record<Locale, { sub: string; thanks: string }> = {
-  nl: { sub: "Eindeloze mogelijkheden in kleur en structuur", thanks: "Bedankt voor uw interesse" },
-  de: { sub: "Unendliche Möglichkeiten in Farbe und Struktur", thanks: "Vielen Dank für Ihr Interesse" },
-  en: { sub: "Endless possibilities in colour and texture", thanks: "Thank you for your interest" },
-  es: { sub: "Posibilidades infinitas en color y textura", thanks: "Gracias por su interés" },
+const ENDPAGE_TXT: Record<Locale, { sub: string; thanks: string; body: string }> = {
+  nl: { sub: "Eindeloze mogelijkheden in kleur en structuur", thanks: "Bedankt voor uw interesse", body: "Elke kleur en structuur is met zorg gekozen. We helpen u graag de juiste afwerking voor uw project te vinden." },
+  de: { sub: "Unendliche Möglichkeiten in Farbe und Struktur", thanks: "Vielen Dank für Ihr Interesse", body: "Jede Farbe und Struktur ist mit Sorgfalt gewählt. Gerne helfen wir Ihnen, die richtige Oberfläche für Ihr Projekt zu finden." },
+  en: { sub: "Endless possibilities in colour and texture", thanks: "Thank you for your interest", body: "Every colour and texture is chosen with care. We would love to help you find the right finish for your project." },
+  es: { sub: "Posibilidades infinitas en color y textura", thanks: "Gracias por su interés", body: "Cada color y textura se elige con cuidado. Estaremos encantados de ayudarle a encontrar el acabado perfecto para su proyecto." },
 };
 
 const cs = StyleSheet.create({
@@ -455,6 +461,9 @@ const cs = StyleSheet.create({
   coverBrand2: { fontFamily: "Cormorant", fontWeight: 600, fontSize: 34, letterSpacing: 8, color: C.brown, marginTop: -4 },
   coverTagline: { fontSize: 9, color: C.muted, marginTop: 8, letterSpacing: 2 },
   coverHero: { width: "100%", height: 300, objectFit: "cover", borderRadius: 6, marginBottom: 28 },
+  coverHeroPair: { flexDirection: "row", justifyContent: "space-between", marginBottom: 24 },
+  coverHeroHalf: { width: "48.5%", height: 215, objectFit: "cover", borderRadius: 6 },
+  coverIntro: { fontFamily: "Cormorant", fontWeight: 600, fontSize: 14, color: C.brown, marginTop: 14, lineHeight: 1.45 },
   coverTitle: { fontFamily: "Sora", fontWeight: 700, fontSize: 34, letterSpacing: 2, color: C.terracotta },
   coverNumber: { fontFamily: "Sora", fontWeight: 700, fontSize: 13, color: C.brown, marginTop: 6 },
   coverSubject: { fontSize: 12, color: C.charcoal, marginTop: 10, lineHeight: 1.4 },
@@ -478,6 +487,7 @@ const cs = StyleSheet.create({
   },
   endHeading: { fontFamily: "Cormorant", fontWeight: 600, fontSize: 28, letterSpacing: 3, color: C.brown, textAlign: "center" },
   endSub: { fontSize: 10, color: C.muted, textAlign: "center", marginTop: 7, marginBottom: 24 },
+  endBody: { fontFamily: "Cormorant", fontWeight: 600, fontSize: 13, color: C.brown, textAlign: "center", lineHeight: 1.45, marginTop: 18, paddingHorizontal: 36 },
   grid: { flexDirection: "row", flexWrap: "wrap", justifyContent: "space-between" },
   gridImg: { width: "48.5%", height: 210, objectFit: "cover", borderRadius: 5, marginBottom: 14 },
   endFooter: { marginTop: 22, borderTopWidth: 1, borderColor: C.sand, paddingTop: 18, alignItems: "center" },
@@ -497,8 +507,10 @@ function DocumentPdf({ doc }: { doc: PdfDoc }) {
   const isInvoice = doc.kind === "invoice";
 
   // Voor-/eindblad met Magic Stone-sfeerimpressie (niet op pakbonnen).
+  // [ext, ext] op het voorblad, [int, int] op het eindblad.
   const images = doc.exampleImages ?? [];
-  const hero = images[0];
+  const coverImgs = images.slice(0, 2);
+  const endImgs = images.slice(2, 4);
   const showExtras = !isDelivery;
   const coverTxt = COVER_TXT[locale];
   const endTxt = ENDPAGE_TXT[locale];
@@ -516,10 +528,17 @@ function DocumentPdf({ doc }: { doc: PdfDoc }) {
             <Text style={cs.coverBrand2}>{C.wordmark2}</Text>
             <Text style={cs.coverTagline}>{C.tagline}</Text>
           </View>
-          {hero ? <Image src={hero} style={cs.coverHero} /> : null}
+          {coverImgs.length > 0 ? (
+            <View style={cs.coverHeroPair}>
+              {coverImgs.map((img, i) => (
+                <Image key={i} src={img} style={cs.coverHeroHalf} />
+              ))}
+            </View>
+          ) : null}
           <Text style={cs.coverTitle}>{kindLabels[doc.kind] ?? kindLabels.estimate}</Text>
           {doc.docNumber ? <Text style={cs.coverNumber}>{doc.docNumber}</Text> : null}
           {doc.title ? <Text style={cs.coverSubject}>{doc.title}</Text> : null}
+          <Text style={cs.coverIntro}>{coverTxt.intro}</Text>
           <View style={cs.coverMetaRow}>
             <View>
               <Text style={cs.coverMetaLabel}>{coverTxt.for.toUpperCase()}</Text>
@@ -677,15 +696,16 @@ function DocumentPdf({ doc }: { doc: PdfDoc }) {
         />
       </Page>
 
-      {showExtras && images.length > 1 ? (
+      {showExtras && endImgs.length > 0 ? (
         <Page size="A4" style={cs.endPage}>
           <Text style={cs.endHeading}>Flexibel Stone</Text>
           <Text style={cs.endSub}>{endTxt.sub}</Text>
           <View style={cs.grid}>
-            {images.slice(1, 5).map((img, i) => (
+            {endImgs.map((img, i) => (
               <Image key={i} src={img} style={cs.gridImg} />
             ))}
           </View>
+          <Text style={cs.endBody}>{endTxt.body}</Text>
           <View style={cs.endFooter}>
             <Text style={cs.endThanks}>{endTxt.thanks}</Text>
             <Text style={cs.endContact}>
