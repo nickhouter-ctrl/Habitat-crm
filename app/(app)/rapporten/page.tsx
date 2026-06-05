@@ -6,6 +6,7 @@ import {
   CardContent,
   CardHeader,
   CardTitle,
+  LinkButton,
   PageHeader,
   StatTile,
   TBody,
@@ -203,7 +204,15 @@ export default async function RapportenPage() {
 
   return (
     <>
-      <PageHeader title="Rapporten" subtitle="Alle bedragen ex. BTW, laatste 12 maanden. Inkoop komt direct uit Holded's grootboek." />
+      <PageHeader
+        title="Rapporten"
+        subtitle="Alle bedragen ex. BTW, laatste 12 maanden. Inkoop komt direct uit Holded's grootboek."
+        actions={
+          <LinkButton href="/rapporten/data-check" variant="secondary">
+            🩺 Data-gezondheid
+          </LinkButton>
+        }
+      />
 
       <div className="mb-5 grid grid-cols-2 gap-3 sm:grid-cols-4">
         <StatTile label="Omzet (12 mnd)" value={formatEUR(totalRev)} hint="ex. BTW · facturen − creditnota's" />
