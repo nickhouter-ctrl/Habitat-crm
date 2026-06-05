@@ -20,7 +20,7 @@ import {
 } from "@/components/ui";
 import { db } from "@/lib/db";
 import { products } from "@/lib/db/schema";
-import { resolveKitStocks, type KitComponent } from "@/lib/stock";
+import { getReservedStockByProduct, resolveKitStocks, type KitComponent } from "@/lib/stock";
 import { cn, formatEUR } from "@/lib/utils";
 import { getProductCollections } from "../_options";
 import { Gs1ExcelDownload } from "./gs1-download";
@@ -110,6 +110,9 @@ export default async function ProductsPage({
   const kitStocks = await resolveKitStocks(
     rows.map((r) => ({ sku: r.sku, components: r.components as KitComponent[] | null })),
   );
+
+  // Gereserveerde stuks per product (uit geaccepteerde, nog niet afgeboekte offertes).
+  const reservedByProduct = await getReservedStockByProduct();
 
   // Group by category for the display (skip when sorting flat by onderweg).
   const groups = new Map<string, typeof rows>();
@@ -350,6 +353,22 @@ export default async function ProductsPage({
                           )}
                         >
                           {stock != null ? stock.toLocaleString("nl-NL") : "—"}
+                          {(() => {
+                            const reserved = reservedByProduct.get(p.id) ?? 0;
+                            if (reserved <= 0) return null;
+                            const free = (stock ?? 0) - reserved;
+                            return (
+                              <span
+                                className="block text-[10px] font-normal text-warning"
+                                title="Gereserveerd in geaccepteerde offertes · vrij = fysiek − gereserveerd"
+                              >
+                                {reserved.toLocaleString("nl-NL")} geres. ·{" "}
+                                <span className={cn(free < 0 && "font-semibold text-danger")}>
+                                  {free.toLocaleString("nl-NL")} vrij
+                                </span>
+                              </span>
+                            );
+                          })()}
                         </Td>
                         <Td className="text-right tabular-nums">
                           {(() => {

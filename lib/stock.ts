@@ -6,11 +6,48 @@
  * 1 deur + 4 hinges + 1 slot kan maximaal min(deuren, hinges/4, sloten)
  * keer verkocht worden.
  */
-import { inArray } from "drizzle-orm";
+import { and, eq, inArray, isNotNull } from "drizzle-orm";
 import { db } from "@/lib/db";
-import { products } from "@/lib/db/schema";
+import { documents, products } from "@/lib/db/schema";
+import { normalizeDocItems } from "@/lib/documents";
 
 export type KitComponent = { sku: string; qty: number };
+
+/**
+ * Gereserveerde voorraad per product-id: stuks uit **geaccepteerde offertes**
+ * waarvan de bijbehorende verkoop nog niet fysiek is afgeboekt. Zodra een
+ * document in dezelfde deal de voorraad afboekt (stockAppliedAt), is de
+ * reservering "vervuld" — de fysieke voorraad is dan al gedaald, dus die offerte
+ * telt niet meer als reservering (anders zou je dubbel aftrekken).
+ *
+ * Bewust in JS gesommeerd (niet in SQL) omdat `items` jsonb soms dubbel-encoded
+ * is; `normalizeDocItems` pelt dat veilig af.
+ */
+export async function getReservedStockByProduct(): Promise<Map<string, number>> {
+  const [bookedRows, estimates] = await Promise.all([
+    db
+      .select({ dealId: documents.dealId })
+      .from(documents)
+      .where(isNotNull(documents.stockAppliedAt)),
+    db.query.documents.findMany({
+      where: and(eq(documents.kind, "estimate"), eq(documents.status, "accepted")),
+      columns: { items: true, dealId: true },
+    }),
+  ]);
+  const fulfilledDeals = new Set(
+    bookedRows.map((r) => r.dealId).filter((d): d is string => !!d),
+  );
+
+  const reserved = new Map<string, number>();
+  for (const est of estimates) {
+    if (est.dealId && fulfilledDeals.has(est.dealId)) continue; // al afgeboekt
+    for (const it of normalizeDocItems(est.items)) {
+      if (!it.productId || !it.units) continue;
+      reserved.set(it.productId, (reserved.get(it.productId) ?? 0) + Number(it.units));
+    }
+  }
+  return reserved;
+}
 
 /** Effectieve voorraad voor één set, gegeven een lookup-map van component-SKU → stockQty. */
 export function computeKitStock(
