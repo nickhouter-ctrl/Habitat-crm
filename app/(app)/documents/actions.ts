@@ -1,6 +1,6 @@
 "use server";
 
-import { and, count, eq, isNotNull, isNull, sql } from "drizzle-orm";
+import { and, count, eq, isNotNull, isNull, ne, sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
@@ -310,7 +310,7 @@ export async function updateDocument(id: string, formData: FormData) {
 }
 
 export async function setDocumentStatus(id: string, formData: FormData) {
-  await requireUser();
+  const user = await requireUser();
   const status = String(formData.get("status") ?? "");
   if (!(STATUSES as readonly string[]).includes(status)) return;
 
@@ -330,6 +330,14 @@ export async function setDocumentStatus(id: string, formData: FormData) {
 
   await db.update(documents).set(patch).where(eq(documents.id, id));
   await syncDealFromDocument(doc.dealId, { kind: doc.kind, status, totalEur: doc.totalEur });
+
+  // Voorraad sluitend: een factuur boekt de voorraad automatisch af zodra hij
+  // verzonden of betaald is. Idempotent + per-deal-bescherming zit in de helper,
+  // dus dubbel aanroepen (sent → later paid) is veilig.
+  if (doc.kind === "invoice" && (status === "sent" || status === "paid")) {
+    await bookStockOutInternal(id, user.id, { auto: true });
+  }
+
   revalidateAround(doc.kind as DocKind, id);
 }
 
@@ -388,6 +396,12 @@ export async function sendDocument(id: string) {
       status: doc.status === "draft" || doc.status === "void" ? "sent" : doc.status,
     })
     .where(eq(documents.id, id));
+
+  // Voorraad sluitend: een verstuurde factuur boekt de voorraad af (idempotent
+  // + per-deal-bescherming in de helper, dus veilig als 'ie al geboekt was).
+  if (doc.kind === "invoice") {
+    await bookStockOutInternal(id, user.id, { auto: true });
+  }
 
   let emailNote = doc.contact?.email
     ? `naar ${doc.contact.email}`
@@ -694,68 +708,115 @@ export async function createDeliveryNoteFromDocument(sourceId: string) {
   if (id) redirect(`/documents/${sourceId}?pakbon=${id}`);
 }
 
-/**
- * Voorraad **afboeken** voor een pakbon. Idempotent: alleen de eerste keer.
- * Per regel: als er een productId aan hangt, trek de aantallen af van de voorraad.
- */
-export async function applyStockOutFromDocument(id: string) {
-  const user = await requireUser();
-  const doc = await db.query.documents.findFirst({ where: eq(documents.id, id) });
-  if (!doc) return;
-  if (doc.kind !== "deliverynote") throw new Error("Voorraad afboeken kan alleen op een pakbon.");
+type StockOutResult =
+  | { ok: true; applied: number; negatives: string[] }
+  | {
+      ok: false;
+      reason: "not-found" | "wrong-kind" | "no-products" | "already-booked" | "deal-already-booked";
+      otherDoc?: string | null;
+    };
 
-  // Atomair claimen: alleen de eerste klik (van evt. dubbele) boekt af.
+/**
+ * Voorraad **afboeken** voor een verkoopdocument (factuur óf pakbon). Idempotent
+ * op twee niveaus:
+ *   1. per document — atomaire claim op stockAppliedAt (geen dubbele klik),
+ *   2. per deal — een aanbetalings- + restfactuur op dezelfde deal boekt samen
+ *      maar één keer af (anders zou je dubbel afboeken).
+ * Kit/sets worden op componentniveau afgeboekt. Negatieve voorraad wordt niet
+ * geblokkeerd (backorders bestaan), maar wél gesignaleerd in de activiteit en
+ * het data-gezondheidsrapport.
+ */
+async function bookStockOutInternal(
+  docId: string,
+  userId: string,
+  opts: { auto?: boolean } = {},
+): Promise<StockOutResult> {
+  const doc = await db.query.documents.findFirst({ where: eq(documents.id, docId) });
+  if (!doc) return { ok: false, reason: "not-found" };
+  if (doc.kind !== "invoice" && doc.kind !== "deliverynote")
+    return { ok: false, reason: "wrong-kind" };
+
+  const lines = normalizeDocItems(doc.items).filter((it) => it.productId && it.units);
+  if (lines.length === 0) return { ok: false, reason: "no-products" };
+
+  // Dubbel-boeking-bescherming: is er al afgeboekt op een ander document in deze deal?
+  if (doc.dealId) {
+    const already = await db.query.documents.findFirst({
+      where: and(
+        eq(documents.dealId, doc.dealId),
+        isNotNull(documents.stockAppliedAt),
+        ne(documents.id, docId),
+      ),
+      columns: { docNumber: true },
+    });
+    if (already) return { ok: false, reason: "deal-already-booked", otherDoc: already.docNumber };
+  }
+
+  // Atomair claimen: alleen de eerste boekt af.
   const [claimed] = await db
     .update(documents)
     .set({ stockAppliedAt: new Date() })
-    .where(and(eq(documents.id, id), isNull(documents.stockAppliedAt)))
+    .where(and(eq(documents.id, docId), isNull(documents.stockAppliedAt)))
     .returning({ id: documents.id });
-  if (!claimed) {
-    revalidatePath(`/documents/${id}`);
-    return;
-  }
+  if (!claimed) return { ok: false, reason: "already-booked" };
 
   let applied = 0;
-  for (const it of normalizeDocItems(doc.items)) {
-    if (!it.productId || !it.units) continue;
-    // Check of dit product een bundle/kit is — dan componenten aftrekken i.p.v. het set zelf
-    const prod = await db.query.products.findFirst({ where: eq(products.id, it.productId) });
+  const negatives: string[] = [];
+  for (const it of lines) {
+    const prod = await db.query.products.findFirst({ where: eq(products.id, it.productId!) });
     const kit = (prod?.components as Array<{ sku: string; qty: number }> | null) ?? null;
     if (kit && kit.length > 0) {
       for (const comp of kit) {
         const deductQty = Number(it.units) * Number(comp.qty);
-        await db
+        const [u] = await db
           .update(products)
           .set({
             stockQty: sql`coalesce(${products.stockQty}, 0) - ${String(deductQty)}`,
             updatedAt: new Date(),
           })
-          .where(eq(products.sku, comp.sku));
+          .where(eq(products.sku, comp.sku))
+          .returning({ sku: products.sku, stockQty: products.stockQty });
+        if (u && Number(u.stockQty) < 0) negatives.push(u.sku ?? comp.sku);
       }
     } else {
-      await db
+      const [u] = await db
         .update(products)
         .set({
           stockQty: sql`coalesce(${products.stockQty}, 0) - ${String(it.units)}`,
           updatedAt: new Date(),
         })
-        .where(eq(products.id, it.productId));
+        .where(eq(products.id, it.productId!))
+        .returning({ sku: products.sku, stockQty: products.stockQty });
+      if (u && Number(u.stockQty) < 0) negatives.push(u.sku ?? prod?.sku ?? "?");
     }
     applied++;
   }
 
   await db.insert(activities).values({
     type: "note",
-    subject: `Voorraad afgeboekt — pakbon ${doc.docNumber ?? ""}`.trim(),
-    body: `${applied} productregel(s) van de voorraad afgehaald.`,
-    documentId: id,
+    subject: `Voorraad afgeboekt — ${doc.kind === "invoice" ? "factuur" : "pakbon"} ${doc.docNumber ?? ""}`.trim(),
+    body:
+      `${applied} productregel(s) van de voorraad afgehaald${opts.auto ? " (automatisch bij statuswijziging)" : ""}.` +
+      (negatives.length ? ` ⚠ Voorraad nu negatief voor: ${negatives.join(", ")}.` : ""),
+    documentId: docId,
     contactId: doc.contactId,
-    authorId: user.id,
+    authorId: userId,
   });
 
-  revalidatePath(`/documents/${id}`);
+  revalidatePath(`/documents/${docId}`);
   revalidatePath("/products");
   revalidatePath("/pakbonnen");
+  return { ok: true, applied, negatives };
+}
+
+/** Handmatige knop "Voorraad afboeken" op een factuur of pakbon. */
+export async function applyStockOutFromDocument(id: string) {
+  const user = await requireUser();
+  const res = await bookStockOutInternal(id, user.id);
+  if (!res.ok && res.reason === "deal-already-booked") {
+    redirect(`/documents/${id}?voorraad=dubbel&doc=${encodeURIComponent(res.otherDoc ?? "")}`);
+  }
+  revalidatePath(`/documents/${id}`);
 }
 
 /** Voorraad-afboeken ongedaan maken (bv. pakbon terug-getrokken). */
@@ -799,7 +860,7 @@ export async function reverseStockOutFromDocument(id: string) {
   }
   await db.insert(activities).values({
     type: "note",
-    subject: `Voorraad-afboeking teruggedraaid — pakbon ${doc.docNumber ?? ""}`.trim(),
+    subject: `Voorraad-afboeking teruggedraaid — ${doc.kind === "invoice" ? "factuur" : "pakbon"} ${doc.docNumber ?? ""}`.trim(),
     documentId: id,
     contactId: doc.contactId,
     authorId: user.id,

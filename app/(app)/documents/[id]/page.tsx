@@ -189,6 +189,34 @@ export default async function DocumentDetailPage({
         </div>
       )}
 
+      {sp.voorraad === "dubbel" && (
+        <div className="mb-4 rounded-md border border-warning/40 bg-warning/10 px-3 py-2 text-sm text-warning">
+          ⚠ Voorraad is voor deze deal al afgeboekt
+          {typeof sp.doc === "string" && sp.doc ? (
+            <> op <strong>{sp.doc}</strong></>
+          ) : (
+            " op een ander document"
+          )}{" "}
+          — niet nogmaals afgeboekt, zodat je niet dubbel telt.
+        </div>
+      )}
+
+      {doc.kind === "invoice" &&
+        !doc.stockAppliedAt &&
+        items.some((it) => it.productId && it.units) && (
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-md border border-warning/40 bg-warning/10 px-3 py-2 text-sm">
+            <span className="text-warning">
+              ⚠ Voorraad voor deze factuur is nog niet afgeboekt. Dit gebeurt automatisch zodra
+              de factuur verzonden of betaald is — of doe het nu meteen:
+            </span>
+            <form action={applyStockOutFromDocument.bind(null, id)}>
+              <SubmitButton size="sm" variant="primary" pendingLabel="Bezig…">
+                → Voorraad afboeken
+              </SubmitButton>
+            </form>
+          </div>
+        )}
+
       <div className="grid gap-4 lg:grid-cols-3">
         <div className="space-y-4">
           <Card>
@@ -336,25 +364,24 @@ export default async function DocumentDetailPage({
                   </SubmitButton>
                 </form>
               )}
-              {doc.kind === "deliverynote" && (
-                doc.stockAppliedAt ? (
-                  <div className="space-y-1">
-                    <p className="text-xs text-success">
-                      ✓ Voorraad afgeboekt op {new Date(doc.stockAppliedAt).toLocaleDateString("nl-NL", { day: "numeric", month: "short", year: "numeric" })}
-                    </p>
-                    <form action={reverseStockOutFromDocument.bind(null, id)}>
-                      <SubmitButton size="sm" variant="ghost" className="text-muted" pendingLabel="Bezig…">
-                        Voorraad-afboeking ongedaan maken
-                      </SubmitButton>
-                    </form>
-                  </div>
-                ) : (
-                  <form action={applyStockOutFromDocument.bind(null, id)}>
-                    <SubmitButton size="sm" variant="primary" pendingLabel="Bezig…">
-                      → Geleverd · voorraad afboeken
+              {(doc.kind === "deliverynote" || doc.kind === "invoice") && doc.stockAppliedAt && (
+                <div className="space-y-1">
+                  <p className="text-xs text-success">
+                    ✓ Voorraad afgeboekt op {new Date(doc.stockAppliedAt).toLocaleDateString("nl-NL", { day: "numeric", month: "short", year: "numeric" })}
+                  </p>
+                  <form action={reverseStockOutFromDocument.bind(null, id)}>
+                    <SubmitButton size="sm" variant="ghost" className="text-muted" pendingLabel="Bezig…">
+                      Voorraad-afboeking ongedaan maken
                     </SubmitButton>
                   </form>
-                )
+                </div>
+              )}
+              {doc.kind === "deliverynote" && !doc.stockAppliedAt && (
+                <form action={applyStockOutFromDocument.bind(null, id)}>
+                  <SubmitButton size="sm" variant="primary" pendingLabel="Bezig…">
+                    → Geleverd · voorraad afboeken
+                  </SubmitButton>
+                </form>
               )}
 
               <form action={changeStatus} className="flex items-center gap-2 pt-1">
