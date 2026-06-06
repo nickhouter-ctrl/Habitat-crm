@@ -342,7 +342,7 @@ const s = StyleSheet.create({
   photoBox: {
     width: 70,
     height: 70,
-    backgroundColor: COMPANY.sand,
+    backgroundColor: "#ffffff",
     justifyContent: "center",
     alignItems: "center",
     overflow: "hidden",
@@ -597,7 +597,7 @@ function PricelistPdf({
                   <View style={s.cPhoto}>
                     <View style={s.photoBox}>
                       {it.imageUrl ? (
-                        <PdfImage src={it.imageUrl} style={{ width: 78, height: 78, objectFit: "cover" }} />
+                        <PdfImage src={it.imageUrl} style={{ width: 70, height: 70, objectFit: "contain" }} />
                       ) : (
                         <Text style={s.photoEmpty}>{L.noPhoto}</Text>
                       )}
