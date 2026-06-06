@@ -150,6 +150,10 @@ function FiltersInputs({ collections, categories }: { collections: string[]; cat
         <input type="checkbox" name="onlyWithPrice" defaultChecked className="size-4 rounded border-border" />
         Alleen producten met verkoopprijs
       </label>
+      <label className="flex items-center gap-2 text-sm">
+        <input type="checkbox" name="onlyInStock" className="size-4 rounded border-border" />
+        Alleen producten op voorraad
+      </label>
     </>
   );
 }

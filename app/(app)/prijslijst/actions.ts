@@ -1,6 +1,6 @@
 "use server";
 
-import { and, asc, eq, isNotNull } from "drizzle-orm";
+import { and, asc, eq, isNotNull, sql } from "drizzle-orm";
 import { redirect } from "next/navigation";
 
 import { auth } from "@/auth";
@@ -23,6 +23,7 @@ export async function mailPricelist(formData: FormData) {
   const category = String(formData.get("category") ?? "");
   const onlyActive = formData.get("onlyActive") === "on";
   const onlyWithPrice = formData.get("onlyWithPrice") === "on";
+  const onlyInStock = formData.get("onlyInStock") === "on";
   const audience = String(formData.get("audience") ?? "") === "trade" ? "trade" : "particulier";
   const langParam = String(formData.get("lang") ?? "nl");
   const locale: PricelistLocale = LOCALES.includes(langParam as PricelistLocale) ? (langParam as PricelistLocale) : "nl";
@@ -40,6 +41,7 @@ export async function mailPricelist(formData: FormData) {
     category ? eq(products.category, category) : undefined,
     onlyActive ? eq(products.isActive, true) : undefined,
     onlyWithPrice ? isNotNull(products.priceEur) : undefined,
+    onlyInStock ? sql`coalesce(${products.stockQty}, 0) > 0` : undefined,
   ].filter(Boolean) as never[];
 
   const rows = await db

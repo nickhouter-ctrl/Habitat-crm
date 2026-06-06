@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { and, asc, eq, isNotNull } from "drizzle-orm";
+import { and, asc, eq, isNotNull, sql } from "drizzle-orm";
 
 import { auth } from "@/auth";
 import { db } from "@/lib/db";
@@ -18,6 +18,7 @@ export async function GET(req: Request) {
   const category = url.searchParams.get("category") || "";
   const onlyActive = url.searchParams.get("onlyActive") === "on";
   const onlyWithPrice = url.searchParams.get("onlyWithPrice") === "on";
+  const onlyInStock = url.searchParams.get("onlyInStock") === "on";
   const audience = url.searchParams.get("audience") === "trade" ? "trade" : "particulier";
   const langParam = url.searchParams.get("lang") ?? "nl";
   const locale: PricelistLocale = LOCALES.includes(langParam as PricelistLocale)
@@ -29,6 +30,7 @@ export async function GET(req: Request) {
     category ? eq(products.category, category) : undefined,
     onlyActive ? eq(products.isActive, true) : undefined,
     onlyWithPrice ? isNotNull(products.priceEur) : undefined,
+    onlyInStock ? sql`coalesce(${products.stockQty}, 0) > 0` : undefined,
   ].filter(Boolean) as never[];
 
   const rows = await db
