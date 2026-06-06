@@ -23,6 +23,7 @@ import {
 } from "@/components/ui";
 import { db } from "@/lib/db";
 import { activities, contacts, deals, documents, emailInbox, mailAttachments, products, purchaseOrders, quoteRequests } from "@/lib/db/schema";
+import { normalizeDocItems } from "@/lib/documents";
 import { purchaseDocsTotalExBTW } from "@/lib/holded/accounting";
 import { formatMoney, PO_OPEN_STATUSES, PO_STATUS_META } from "@/lib/purchase-orders";
 import { formatDate, formatEUR } from "@/lib/utils";
@@ -96,7 +97,7 @@ export default async function DashboardPage() {
 
   const openExpr = sql`${documents.status} not in ('paid', 'void', 'draft')`;
 
-  const [[contactsTotal], pipelineRows, [docAgg], [creditAgg], [purchaseAgg], [productsAgg], openPurchaseOrders, recentDeals, recentActivity, holdedExpensesYTD, [openRequestsAgg], [invoiceReviewAgg], unpaidInvoices, proformas, [acceptedAgg]] =
+  const [[contactsTotal], pipelineRows, [docAgg], [creditAgg], [purchaseAgg], [productsAgg], openPurchaseOrders, recentDeals, recentActivity, holdedExpensesYTD, [openRequestsAgg], [invoiceReviewAgg], unpaidInvoices, proformas, [acceptedAgg], unbookedStockRows] =
     await Promise.all([
       db.select({ n: count() }).from(contacts),
       db
@@ -206,7 +207,22 @@ export default async function DashboardPage() {
         .select({ n: sql<number>`count(*)::int` })
         .from(documents)
         .where(and(eq(documents.kind, "estimate"), eq(documents.status, "accepted"))),
+      // Verstuurde/betaalde facturen met productregels waarvan de voorraad nog
+      // niet is afgeboekt — productregels checken we in JS (jsonb-veilig).
+      db
+        .select({ id: documents.id, items: documents.items })
+        .from(documents)
+        .where(
+          and(
+            eq(documents.kind, "invoice"),
+            inArray(documents.status, ["sent", "paid", "partially_paid", "overdue"]),
+            isNull(documents.stockAppliedAt),
+          ),
+        ),
     ]);
+  const unbookedStockN = unbookedStockRows.filter((d) =>
+    normalizeDocItems(d.items).some((it) => it.productId && it.units),
+  ).length;
 
   const byStage = new Map(pipelineRows.map((r) => [r.stage, r]));
   const openDeals = pipelineRows
@@ -235,6 +251,7 @@ export default async function DashboardPage() {
     acceptedN > 0 ||
     (openRequestsAgg?.n ?? 0) > 0 ||
     docAgg.overdueN > 0 ||
+    unbookedStockN > 0 ||
     unpaidInvoices.length > 0 ||
     proformas.length > 0 ||
     (invoiceReviewAgg?.n ?? 0) > 0 ||
@@ -303,6 +320,11 @@ export default async function DashboardPage() {
             {docAgg.overdueN > 0 && (
               <ActionRow href="/invoices" emoji="⏰" tone="danger">
                 <strong>{docAgg.overdueN}</strong> vervallen factu{docAgg.overdueN === 1 ? "ur" : "ren"} ({formatEUR(docAgg.overdueV)}) — verstuur herinnering.
+              </ActionRow>
+            )}
+            {unbookedStockN > 0 && (
+              <ActionRow href="/invoices" emoji="📦" tone="warning">
+                <strong>{unbookedStockN}</strong> verstuurde/betaalde factu{unbookedStockN === 1 ? "ur" : "ren"} met productregels — voorraad nog niet afgeboekt.
               </ActionRow>
             )}
             {unpaidInvoices.length > 0 && (
