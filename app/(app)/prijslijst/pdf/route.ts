@@ -9,6 +9,10 @@ import { renderPricelistPdf, translateGroup, type PricelistItem, type PricelistL
 
 const LOCALES: PricelistLocale[] = ["nl", "de", "en", "es"];
 
+// PDF-generatie haalt elke productfoto op; bij een volledige lijst (100+ foto's)
+// mag dat wat langer duren dan de standaard-timeout.
+export const maxDuration = 60;
+
 export async function GET(req: Request) {
   const session = await auth();
   if (!session?.user) return NextResponse.json({ error: "unauth" }, { status: 401 });
