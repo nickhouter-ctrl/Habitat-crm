@@ -23,6 +23,16 @@ const FINANCIAL_CATEGORIES = new Set([
   "opex",
 ]);
 
+/**
+ * Proforma's / offertes zijn NOOIT een te-betalen post: bij Allpack-orders is
+ * hún factuur leidend (handling + goederen), de leverancier-proforma sturen ze
+ * alleen mee ter controle. Zulke bijlages mogen dus geen inkoopfactuur worden,
+ * ook niet als er per ongeluk een bedrag uit te lezen valt.
+ */
+function isProformaOrQuote(filename: string): boolean {
+  return /\bproforma\b|\bquotation\b|\bquote\b|^PI[\s._-]|\bPI\s+for\b/i.test(filename);
+}
+
 export interface AutoInvoiceResult {
   created: number;
   needsReview: number;
@@ -80,18 +90,29 @@ export async function tryAutoCreatePurchaseInvoice(emailId: string): Promise<Aut
   if (!mail) return result;
   if (mail.linkedPurchaseOrderId) return result; // al gelinkt
 
+  // Alleen mails aan het Purchase-postvak (purchase@habitat-one.com) worden
+  // automatisch in de inkoop gezet. Mails aan hi@ blijven puur in de inbox/het
+  // archief — die zet je desgewenst handmatig in inkoop.
+  const toPurchase = /purchase@habitat-one\.com/i.test(
+    `${mail.toEmail ?? ""} ${mail.ccEmail ?? ""}`,
+  );
+  if (!toPurchase) return result;
+
   const atts = await db
     .select()
     .from(mailAttachments)
     .where(eq(mailAttachments.emailId, emailId));
 
-  // Vind kandidaten: financiële bijlages met bedrag + supplier
+  // Vind kandidaten: financiële bijlages met bedrag + supplier.
+  // Proforma's/offertes uitgesloten — die zijn ter controle (Allpack's eigen
+  // factuur is leidend), nooit een aparte te-betalen post.
   const candidates = atts.filter(
     (a) =>
       FINANCIAL_CATEGORIES.has(a.category) &&
       a.amountEur != null &&
       Number(a.amountEur) > 0 &&
-      a.supplierTag != null,
+      a.supplierTag != null &&
+      !isProformaOrQuote(a.filename),
   );
 
   // Heeft de mail financiële bijlagen maar onvoldoende data? → needs review
