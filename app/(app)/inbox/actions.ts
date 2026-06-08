@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import { eq, sql } from "drizzle-orm";
 
 import { auth } from "@/auth";
+import { extractInvoiceFieldsWithAI } from "@/lib/ai-invoice-extract";
 import { extractAttachmentAmount } from "@/lib/amount-extract";
 import { db } from "@/lib/db";
 import { activities, emailInbox, mailAttachments, purchaseOrders, quoteRequests } from "@/lib/db/schema";
@@ -152,18 +153,46 @@ export async function createPurchaseInvoiceFromMail(args: {
     if (extracted && extracted > 0) total = extracted;
   }
 
+  // AI-fallback wanneer de regels het bedrag of de leverancier niet vonden — bv.
+  // facturen die Creadores alleen dóórstuurt: de échte leverancier staat in de
+  // PDF/Excel, niet in de mail. Draait alleen als er nog data ontbreekt.
+  const ruleSupplier = args.override?.supplier?.trim() || att.supplierTag?.trim();
+  let aiSupplier: string | null = null;
+  let aiInvoiceNumber: string | null = null;
+  let aiCurrency: string | null = null;
+  if (!args.override?.supplier && (total <= 0 || !ruleSupplier)) {
+    const ai = await extractInvoiceFieldsWithAI({
+      storagePath: att.storagePath,
+      filename: att.filename,
+      contentType: att.contentType ?? "",
+    });
+    if (ai) {
+      if (total <= 0 && ai.total != null && ai.total > 0) total = ai.total;
+      aiSupplier = ai.supplier;
+      aiInvoiceNumber = ai.invoiceNumber;
+      aiCurrency = ai.currency;
+    }
+  }
+
   // Let op: `||` i.p.v. `??` — een lege string ("") moet óók doorvallen,
   // anders krijg je een lege leverancier als de mail geen afzendernaam heeft.
+  // AI-leverancier gaat vóór de mail-afzender (die is bij doorgestuurde
+  // facturen de doorstuurder, niet de echte leverancier).
   const supplier =
     args.override?.supplier?.trim() ||
     att.supplierTag?.trim() ||
+    aiSupplier?.trim() ||
     mail.fromName?.trim() ||
     supplierNameFromEmail(mail.fromEmail) ||
     "Onbekende leverancier";
 
-  // Probeer factuurnummer uit filename te halen — anders fallback naar filename
+  // Probeer factuurnummer uit filename te halen — anders AI-factuurnummer, anders filename
   const refMatch = att.filename.match(/(?:FAC[_-]?|Factura[_\s]*|Invoice[_\s]*)([\w\d-]+)/i);
-  const reference = args.override?.reference ?? (refMatch?.[1] ?? att.filename.replace(/\.[a-z]+$/i, ""));
+  const reference =
+    args.override?.reference ??
+    (aiInvoiceNumber
+      ? `${supplier} ${aiInvoiceNumber}`.replace(/\s+/g, " ").trim()
+      : (refMatch?.[1] ?? att.filename.replace(/\.[a-z]+$/i, "")));
 
   // Dedup: bestaat er al een inkooporder met dit factuurnummer? Dezelfde factuur
   // komt soms via beide mailboxen (hi@ + purchase@) binnen — dan koppelen we de
@@ -213,7 +242,7 @@ export async function createPurchaseInvoiceFromMail(args: {
       supplier,
       reference,
       status: isProforma ? "draft" : "received",
-      currency: "EUR",
+      currency: aiCurrency || "EUR",
       orderDate,
       dueDate,
       receivedAt: isProforma ? null : baseDate,
