@@ -10,6 +10,7 @@
  */
 import { eq } from "drizzle-orm";
 
+import { extractInvoiceFieldsWithAI } from "@/lib/ai-invoice-extract";
 import { db } from "@/lib/db";
 import { activities, emailInbox, mailAttachments, purchaseOrders } from "@/lib/db/schema";
 import { buildInvoicePdfAttachment, isExcelAttachment } from "@/lib/excel-to-pdf";
@@ -103,6 +104,48 @@ export async function tryAutoCreatePurchaseInvoice(emailId: string): Promise<Aut
     .from(mailAttachments)
     .where(eq(mailAttachments.emailId, emailId));
 
+  // AI-fallback: financiële, niet-proforma factuur-bijlages die de regels niet
+  // konden duiden (geen leverancier óf geen bedrag) — bv. facturen die Creadores
+  // alleen dóórstuurt — laten we Claude uitlezen. De échte leverancier + bedrag
+  // staan dan in de PDF/Excel zelf. Draait dus alleen voor wat de regels missen.
+  const aiMeta = new Map<string, { invoiceNumber: string | null; currency: string | null }>();
+  for (const a of atts) {
+    if (!FINANCIAL_CATEGORIES.has(a.category)) continue;
+    if (isProformaOrQuote(a.filename)) continue;
+    const isDoc =
+      a.contentType === "application/pdf" ||
+      /\.pdf$/i.test(a.filename) ||
+      isExcelAttachment(a.filename, a.contentType);
+    if (!isDoc) continue;
+    const needsSupplier = a.supplierTag == null;
+    const needsAmount = a.amountEur == null || Number(a.amountEur) <= 0;
+    if (!needsSupplier && !needsAmount) continue;
+
+    try {
+      const ai = await extractInvoiceFieldsWithAI({
+        storagePath: a.storagePath,
+        filename: a.filename,
+        contentType: a.contentType ?? "",
+      });
+      if (!ai) continue;
+      const patch: { supplierTag?: string; amountEur?: string } = {};
+      if (needsSupplier && ai.supplier) {
+        a.supplierTag = ai.supplier;
+        patch.supplierTag = ai.supplier;
+      }
+      if (needsAmount && ai.total != null && ai.total > 0) {
+        a.amountEur = String(ai.total);
+        patch.amountEur = String(ai.total);
+      }
+      aiMeta.set(a.id, { invoiceNumber: ai.invoiceNumber, currency: ai.currency });
+      if (Object.keys(patch).length > 0) {
+        await db.update(mailAttachments).set(patch).where(eq(mailAttachments.id, a.id));
+      }
+    } catch (e) {
+      console.warn("AI-factuuruitlezing mislukt:", e instanceof Error ? e.message : e);
+    }
+  }
+
   // Vind kandidaten: financiële bijlages met bedrag + supplier.
   // Proforma's/offertes uitgesloten — die zijn ter controle (Allpack's eigen
   // factuur is leidend), nooit een aparte te-betalen post.
@@ -125,7 +168,12 @@ export async function tryAutoCreatePurchaseInvoice(emailId: string): Promise<Aut
   for (const a of candidates) {
     try {
       const total = Number(a.amountEur);
-      const reference = buildPurchaseReference(mail.subject, a.filename);
+      const ai = aiMeta.get(a.id);
+      // Bij AI-uitgelezen facturen een nette referentie "Leverancier factuurnr".
+      const reference = ai?.invoiceNumber
+        ? `${a.supplierTag} ${ai.invoiceNumber}`.replace(/\s+/g, " ").trim()
+        : buildPurchaseReference(mail.subject, a.filename);
+      const currency = ai?.currency || "EUR";
 
       // Dedupe: skip ALS er al een PO bestaat met deze reference (ongeacht
       // supplier-spelling). Bij conflict liever de bestaande PO linken aan
@@ -169,7 +217,7 @@ export async function tryAutoCreatePurchaseInvoice(emailId: string): Promise<Aut
           supplier: a.supplierTag!,
           reference,
           status: "received",
-          currency: "EUR",
+          currency,
           orderDate: (a.receivedAt ?? mail.receivedAt ?? new Date()).toISOString().slice(0, 10),
           receivedAt: a.receivedAt ?? mail.receivedAt ?? new Date(),
           total: String(total.toFixed(2)),
