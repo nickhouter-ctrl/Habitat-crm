@@ -14,7 +14,7 @@
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 
-import { and, gte, isNotNull, sql } from "drizzle-orm";
+import { and, gte, isNotNull, like, sql } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import * as XLSX from "xlsx";
 
@@ -36,6 +36,11 @@ export async function GET(req: Request) {
   const since = url.searchParams.get("since");
 
   const conditions = [isNotNull(products.barcode)];
+  // Alleen onze EIGEN GS1-GTIN's exporteren. Vreemde fabrikant-barcodes (bv.
+  // Prosperplast `5905197…` op de bloempotten) kunnen niet onder ons eigen
+  // GS1-account geregistreerd worden en laten AECOC de hele import afkeuren.
+  const ownPrefix = (process.env.GS1_COMPANY_PREFIX ?? "8436633").replace(/\D/g, "");
+  conditions.push(like(products.barcode, `${ownPrefix}%`));
   if (since) conditions.push(gte(products.updatedAt, new Date(since)));
 
   const rows = await db
@@ -72,10 +77,10 @@ export async function GET(req: Request) {
   //   AR=gpc, AS=contenido_neto, AT=unidad_contenido_neto, AU=tipo_peso,
   //   AV=url_website_producto, ... AY=gtin_multipack, AZ=unidades_multipack
   // (zie tab "Importación con GTIN" rij 3)
-  // Alleen producten die op de site staan — elke GS1-regel moet een product-URL
-  // hebben (zonder link faalt de "importeer producten vanaf je web"-flow).
+  // De productpagina-link (url_website_producto) is OPTIONEEL voor de GTIN-
+  // registratie — we vullen 'm alleen waar het product op de site staat.
   const SITE = "https://habitat-one.com";
-  const exportable = rows.filter((r) => productSlug(r.sku));
+  const exportable = rows;
 
   const startRow = 5;
   for (let i = 0; i < exportable.length; i++) {
@@ -102,7 +107,7 @@ export async function GET(req: Request) {
     writeCell(44, gpc.netContent);                // contenido_neto
     writeCell(45, gpc.uom);                       // unidad_contenido_neto
     writeCell(46, "Fijo");                        // tipo_peso
-    writeCell(47, `${SITE}/es/products/${slug}`); // url_website_producto (AV)
+    if (slug) writeCell(47, `${SITE}/es/products/${slug}`); // url_website_producto (AV), optioneel
   }
 
   // Update sheet range zodat Excel/MijnGS1 alle rijen ziet
