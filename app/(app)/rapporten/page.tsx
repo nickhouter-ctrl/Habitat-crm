@@ -20,6 +20,7 @@ import { HorizontalBarChart, MonthlyAmountChart } from "@/components/rapporten-c
 import { db } from "@/lib/db";
 import { contacts, documents, products, purchaseOrders } from "@/lib/db/schema";
 import { purchaseDocsByMonth } from "@/lib/holded/accounting";
+import { prettySupplierName } from "@/lib/supplier-name";
 import { formatEUR } from "@/lib/utils";
 
 export const metadata = { title: "Rapporten" };
@@ -179,7 +180,7 @@ export default async function RapportenPage() {
     .map((r) => ({ name: r.name as string, value: Number(r.revenue) }));
   const supplierData = (supplierRows as any[])
     .filter((r) => r.supplier && Number(r.spend) > 0)
-    .map((r) => ({ name: r.supplier as string, value: Number(r.spend) }));
+    .map((r) => ({ name: prettySupplierName(r.supplier as string), value: Number(r.spend) }));
   const leadSourceData = (leadSourceRows as any[])
     .filter((r) => r.source)
     .map((r) => ({ name: r.source as string, value: Number(r.n) }));
