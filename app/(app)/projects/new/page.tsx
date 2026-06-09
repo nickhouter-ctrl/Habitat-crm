@@ -1,7 +1,6 @@
 import { asc } from "drizzle-orm";
 
 import {
-  Button,
   Card,
   CardContent,
   Field,
@@ -10,6 +9,7 @@ import {
   PageHeader,
   Textarea,
 } from "@/components/ui";
+import { SubmitButton } from "@/components/submit-button";
 import { Combobox, type ComboOption } from "@/components/combobox";
 import { db } from "@/lib/db";
 import { contacts, properties, users } from "@/lib/db/schema";
@@ -71,7 +71,7 @@ export default async function NewProjectPage() {
             <Field label="Omschrijving" htmlFor="description">
               <Textarea id="description" name="description" rows={4} placeholder="Korte omschrijving van de klus…" />
             </Field>
-            <Button type="submit">Project aanmaken</Button>
+            <SubmitButton pendingLabel="Aanmaken…">Project aanmaken</SubmitButton>
           </form>
         </CardContent>
       </Card>

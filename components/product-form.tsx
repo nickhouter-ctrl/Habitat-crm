@@ -1,7 +1,6 @@
 import { Combobox } from "@/components/combobox";
 import { CostBreakdown } from "@/components/cost-breakdown";
 import {
-  Button,
   Card,
   CardContent,
   Field,
@@ -9,6 +8,7 @@ import {
   Select,
   Textarea,
 } from "@/components/ui";
+import { SubmitButton } from "@/components/submit-button";
 import type { Product } from "@/lib/db/schema";
 import { PRODUCT_UNITS } from "@/lib/products";
 
@@ -308,7 +308,7 @@ export function ProductForm({
           </div>
 
           <div className="pt-1">
-            <Button type="submit">{submitLabel}</Button>
+            <SubmitButton pendingLabel="Opslaan…">{submitLabel}</SubmitButton>
           </div>
         </form>
       </CardContent>

@@ -8,7 +8,6 @@ import { asStringArray } from "@/lib/documents";
 
 import {
   Badge,
-  Button,
   Card,
   CardContent,
   CardHeader,
@@ -141,7 +140,7 @@ export default async function QuoteRequestDetailPage({
             <CardContent>
               <form action={saveNotes} className="space-y-2">
                 <Textarea name="notes" rows={3} defaultValue={req.notes ?? ""} placeholder="Notitie alleen zichtbaar voor jullie team…" />
-                <Button type="submit" size="sm" variant="secondary">Notitie opslaan</Button>
+                <SubmitButton size="sm" variant="secondary" pendingLabel="Opslaan…">Notitie opslaan</SubmitButton>
               </form>
             </CardContent>
           </Card>
@@ -156,17 +155,17 @@ export default async function QuoteRequestDetailPage({
               {req.status === "pending" && (
                 <>
                   <form action={accept}>
-                    <Button type="submit" variant="primary" className="w-full">
+                    <SubmitButton variant="primary" className="w-full" pendingLabel="Accepteren…">
                       ✓ Accepteren
-                    </Button>
+                    </SubmitButton>
                   </form>
                   <p className="text-xs text-muted">
                     Bij accepteren wordt automatisch een contact aangemaakt (als nog niet bekend). Mailen naar klant komt in een latere release.
                   </p>
                   <form action={reject}>
-                    <Button type="submit" variant="ghost" className="w-full text-danger hover:bg-danger/10">
+                    <SubmitButton variant="ghost" className="w-full text-danger hover:bg-danger/10" pendingLabel="Afwijzen…">
                       Afwijzen
-                    </Button>
+                    </SubmitButton>
                   </form>
                 </>
               )}
@@ -181,9 +180,9 @@ export default async function QuoteRequestDetailPage({
                     )}
                   </div>
                   <form action={reopen}>
-                    <Button type="submit" size="sm" variant="ghost" className="w-full">
+                    <SubmitButton size="sm" variant="ghost" className="w-full" pendingLabel="Heropenen…">
                       Heropenen
-                    </Button>
+                    </SubmitButton>
                   </form>
                 </>
               )}

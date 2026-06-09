@@ -5,6 +5,7 @@ import { useMemo, useRef, useState } from "react";
 
 import { Combobox, type ComboOption } from "@/components/combobox";
 import { Button, Field, Input, Select, Textarea } from "@/components/ui";
+import { SubmitButton } from "@/components/submit-button";
 import type {
   PurchaseOrder,
   PurchaseOrderAttachment,
@@ -365,7 +366,7 @@ export function PurchaseOrderForm({
       </Field>
 
       <div className="flex gap-2">
-        <Button type="submit">{order ? "Opslaan" : "Bestelling aanmaken"}</Button>
+        <SubmitButton pendingLabel="Opslaan…">{order ? "Opslaan" : "Bestelling aanmaken"}</SubmitButton>
       </div>
     </form>
   );

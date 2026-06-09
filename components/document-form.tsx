@@ -1,7 +1,6 @@
 "use client";
 
 import {
-  Button,
   Card,
   CardContent,
   Field,
@@ -9,6 +8,7 @@ import {
   Select,
   Textarea,
 } from "@/components/ui";
+import { SubmitButton } from "@/components/submit-button";
 import { Combobox } from "@/components/combobox";
 import { LineItemsEditor } from "@/components/line-items-editor";
 import {
@@ -202,7 +202,7 @@ export function DocumentForm({
       </Card>
 
       <div>
-        <Button type="submit">{submitLabel}</Button>
+        <SubmitButton pendingLabel="Opslaan…">{submitLabel}</SubmitButton>
       </div>
     </form>
   );

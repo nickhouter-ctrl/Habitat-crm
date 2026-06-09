@@ -3,7 +3,6 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import {
-  Button,
   Card,
   CardContent,
   Field,
@@ -12,6 +11,7 @@ import {
   Select,
   Textarea,
 } from "@/components/ui";
+import { SubmitButton } from "@/components/submit-button";
 import { db } from "@/lib/db";
 import { contacts } from "@/lib/db/schema";
 import { updateContact } from "../../actions";
@@ -179,7 +179,7 @@ export default async function EditContactPage({
             </Field>
 
             <div className="flex items-center gap-2 pt-1">
-              <Button type="submit">Wijzigingen opslaan</Button>
+              <SubmitButton pendingLabel="Opslaan…">Wijzigingen opslaan</SubmitButton>
               <Link
                 href={`/contacts/${id}`}
                 className="rounded-md px-3 py-2 text-sm text-muted hover:underline"
