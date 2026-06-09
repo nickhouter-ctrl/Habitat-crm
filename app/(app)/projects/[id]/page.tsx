@@ -3,10 +3,10 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { ConfirmSubmit } from "@/components/confirm-submit";
+import { SubmitButton } from "@/components/submit-button";
 
 import {
   Badge,
-  Button,
   Card,
   CardContent,
   CardHeader,
@@ -186,16 +186,16 @@ export default async function ProjectDetailPage({
                 <Textarea id="description" name="description" rows={4} defaultValue={project.description ?? ""} />
               </Field>
               <div className="flex flex-wrap items-center justify-between gap-2 border-t pt-4">
-                <Button type="submit">Opslaan</Button>
+                <SubmitButton pendingLabel="Opslaan…">Opslaan</SubmitButton>
                 {!project.holdedProjectId && (
-                  <form action={remove}>
-                    <ConfirmSubmit
-                      message="Dit project definitief verwijderen?"
-                      className="rounded-md px-3 py-2 text-sm font-medium text-danger transition-colors hover:bg-danger/10"
-                    >
-                      Project verwijderen
-                    </ConfirmSubmit>
-                  </form>
+                  <ConfirmSubmit
+                    formAction={remove}
+                    message="Dit project definitief verwijderen?"
+                    pendingLabel="Verwijderen…"
+                    className="rounded-md px-3 py-2 text-sm font-medium text-danger transition-colors hover:bg-danger/10"
+                  >
+                    Project verwijderen
+                  </ConfirmSubmit>
                 )}
               </div>
             </form>
