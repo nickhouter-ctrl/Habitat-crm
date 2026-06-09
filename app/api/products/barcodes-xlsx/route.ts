@@ -22,6 +22,7 @@ import { auth } from "@/auth";
 import { COMPANY } from "@/lib/company";
 import { db } from "@/lib/db";
 import { products } from "@/lib/db/schema";
+import { localizeEthick } from "@/lib/ethick-i18n";
 import { resolveGpc } from "@/lib/gs1/gpc-map";
 import { productSlug } from "@/lib/gs1/product-urls";
 
@@ -100,7 +101,13 @@ export async function GET(req: Request) {
     writeCell(3, "Inglés");                       // idioma1 — productnamen staan in EN
     writeCell(4, COMPANY.name);                   // marca1
     // submarca1 leeg
-    writeCell(6, r.name ?? "");                   // nombre1 (Engels)
+    // nombre1 in het Engels (idioma1 = Inglés). ETHICK-bloempotten/-loungers
+    // staan met NL-naam in het CRM → via localizeEthick naar Engels.
+    const enName =
+      localizeEthick({ name: r.name ?? "", sku: r.sku, collection: r.collection }, "en")?.name ??
+      r.name ??
+      "";
+    writeCell(6, enName);                         // nombre1 (Engels)
     // talla1/color1/variante1 leeg
     writeCell(38, "España");                      // pais1
     writeCell(43, gpc.gpc);                       // gpc
