@@ -23,6 +23,7 @@ import { COMPANY } from "@/lib/company";
 import { db } from "@/lib/db";
 import { products } from "@/lib/db/schema";
 import { resolveGpc } from "@/lib/gs1/gpc-map";
+import { productSlug } from "@/lib/gs1/product-urls";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -71,11 +72,17 @@ export async function GET(req: Request) {
   //   AR=gpc, AS=contenido_neto, AT=unidad_contenido_neto, AU=tipo_peso,
   //   AV=url_website_producto, ... AY=gtin_multipack, AZ=unidades_multipack
   // (zie tab "Importación con GTIN" rij 3)
+  // Alleen producten die op de site staan — elke GS1-regel moet een product-URL
+  // hebben (zonder link faalt de "importeer producten vanaf je web"-flow).
+  const SITE = "https://habitat-one.com";
+  const exportable = rows.filter((r) => productSlug(r.sku));
+
   const startRow = 5;
-  for (let i = 0; i < rows.length; i++) {
-    const r = rows[i];
+  for (let i = 0; i < exportable.length; i++) {
+    const r = exportable[i];
     const rowIdx = startRow + i;
     const gpc = resolveGpc(r.collection, r.category);
+    const slug = productSlug(r.sku);
 
     const writeCell = (col: number, value: string | number) => {
       const ref = XLSX.utils.encode_cell({ r: rowIdx, c: col });
@@ -95,10 +102,11 @@ export async function GET(req: Request) {
     writeCell(44, gpc.netContent);                // contenido_neto
     writeCell(45, gpc.uom);                       // unidad_contenido_neto
     writeCell(46, "Fijo");                        // tipo_peso
+    writeCell(47, `${SITE}/es/products/${slug}`); // url_website_producto (AV)
   }
 
   // Update sheet range zodat Excel/MijnGS1 alle rijen ziet
-  const lastRow = startRow + rows.length - 1;
+  const lastRow = startRow + exportable.length - 1;
   const lastCol = 59; // 60 kolommen totaal (A..BH)
   ws["!ref"] = XLSX.utils.encode_range({ s: { r: 0, c: 0 }, e: { r: Math.max(lastRow, 5), c: lastCol } });
 
