@@ -13,13 +13,13 @@ type ButtonVariant = "primary" | "secondary" | "ghost" | "danger";
 type ButtonSize = "sm" | "md";
 
 const buttonBase =
-  "inline-flex items-center justify-center gap-2 rounded-md font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/30 disabled:pointer-events-none disabled:opacity-50 whitespace-nowrap";
+  "inline-flex items-center justify-center gap-2 rounded-md font-medium transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 focus-visible:ring-offset-1 focus-visible:ring-offset-surface active:translate-y-px disabled:pointer-events-none disabled:opacity-50 whitespace-nowrap";
 
 const buttonVariants: Record<ButtonVariant, string> = {
-  primary: "bg-accent text-accent-foreground hover:opacity-90",
-  secondary: "border bg-surface hover:bg-background",
-  ghost: "hover:bg-background text-foreground",
-  danger: "bg-danger text-white hover:opacity-90",
+  primary: "bg-accent text-accent-foreground shadow-sm hover:brightness-95 active:brightness-90",
+  secondary: "border bg-surface shadow-sm hover:bg-background",
+  ghost: "text-foreground hover:bg-background",
+  danger: "bg-danger text-white shadow-sm hover:brightness-95 active:brightness-90",
 };
 
 const buttonSizes: Record<ButtonSize, string> = {
@@ -262,20 +262,53 @@ export function EmptyState({
   );
 }
 
+const statBar: Record<BadgeTone, string> = {
+  neutral: "bg-border",
+  accent: "bg-accent",
+  success: "bg-success",
+  warning: "bg-warning",
+  danger: "bg-danger",
+  info: "bg-sky-500",
+};
+const statIcon: Record<BadgeTone, string> = {
+  neutral: "bg-background text-muted",
+  accent: "bg-accent/10 text-accent",
+  success: "bg-success/10 text-success",
+  warning: "bg-warning/10 text-warning",
+  danger: "bg-danger/10 text-danger",
+  info: "bg-sky-50 text-sky-600",
+};
+
 export function StatTile({
   label,
   value,
   hint,
+  tone = "neutral",
+  icon,
 }: {
   label: string;
   value: ReactNode;
   hint?: ReactNode;
+  /** Kleur-accent (linker rand + icoon-achtergrond). */
+  tone?: BadgeTone;
+  /** Optioneel icoon rechtsboven (bv. een lucide-icoon). */
+  icon?: ReactNode;
 }) {
   return (
-    <Card className="p-4">
-      <p className="text-xs font-medium uppercase tracking-wide text-muted">{label}</p>
-      <p className="mt-1 text-2xl font-semibold tabular-nums">{value}</p>
-      {hint && <p className="mt-0.5 text-xs text-muted">{hint}</p>}
+    <Card className="relative overflow-hidden p-4 pl-5 transition-shadow hover:shadow-md">
+      <span className={cn("absolute inset-y-0 left-0 w-1.5", statBar[tone])} aria-hidden />
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="text-xs font-medium uppercase tracking-wide text-muted">{label}</p>
+          <p className="mt-1 text-2xl font-semibold tabular-nums">{value}</p>
+          {hint && <p className="mt-0.5 text-xs text-muted">{hint}</p>}
+        </div>
+        {icon && (
+          <span className={cn("flex size-10 shrink-0 items-center justify-center rounded-full", statIcon[tone])}>
+            {icon}
+          </span>
+        )}
+      </div>
     </Card>
   );
 }

@@ -1,6 +1,7 @@
 import { and, count, desc, eq, gte, inArray, isNull, sql } from "drizzle-orm";
 import Link from "next/link";
 import type { ReactNode } from "react";
+import { AlertTriangle, CheckCircle2, Clock, TrendingUp, Wallet } from "lucide-react";
 
 import { MonthlyAmountChart } from "@/components/rapporten-charts";
 
@@ -349,11 +350,11 @@ export default async function DashboardPage() {
       )}
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
-        <StatTile label="Omzet deze maand" value={formatEUR(revenueMonth)} hint="ex. BTW" />
-        <StatTile label="Openstaande facturen" value={docAgg.outstandingN} hint={formatEUR(docAgg.outstandingV)} />
-        <StatTile label="Vervallen facturen" value={docAgg.overdueN} hint={formatEUR(docAgg.overdueV)} />
-        <StatTile label="Geaccepteerde offertes" value={acceptedN} hint="klaar om te factureren" />
-        <StatTile label="Totale omzet" value={formatEUR(revenueAll)} hint="ex. BTW · dit jaar" />
+        <StatTile label="Omzet deze maand" value={formatEUR(revenueMonth)} hint="ex. BTW" tone="success" icon={<TrendingUp className="size-5" />} />
+        <StatTile label="Openstaande facturen" value={docAgg.outstandingN} hint={formatEUR(docAgg.outstandingV)} tone="warning" icon={<Clock className="size-5" />} />
+        <StatTile label="Vervallen facturen" value={docAgg.overdueN} hint={formatEUR(docAgg.overdueV)} tone="danger" icon={<AlertTriangle className="size-5" />} />
+        <StatTile label="Geaccepteerde offertes" value={acceptedN} hint="klaar om te factureren" tone="accent" icon={<CheckCircle2 className="size-5" />} />
+        <StatTile label="Totale omzet" value={formatEUR(revenueAll)} hint="ex. BTW · dit jaar" tone="info" icon={<Wallet className="size-5" />} />
       </div>
 
       <details className="mt-3">
