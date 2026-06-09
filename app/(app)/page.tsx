@@ -22,19 +22,17 @@ import {
   Tr,
 } from "@/components/ui";
 import { db } from "@/lib/db";
-import { activities, contacts, deals, documents, emailInbox, mailAttachments, products, purchaseOrders, quoteRequests } from "@/lib/db/schema";
+import { activities, contacts, documents, emailInbox, mailAttachments, products, projects, purchaseOrders, quoteRequests } from "@/lib/db/schema";
 import { normalizeDocItems } from "@/lib/documents";
 import { purchaseDocsTotalExBTW } from "@/lib/holded/accounting";
 import { formatMoney, PO_OPEN_STATUSES, PO_STATUS_META } from "@/lib/purchase-orders";
 import { formatDate, formatEUR } from "@/lib/utils";
-import { dealStageMeta, documentKindMeta } from "./_meta";
+import { documentKindMeta } from "./_meta";
 import { approveProforma, markPurchaseOrderPaid } from "./inkooporders/actions";
 
 export const metadata = { title: "Dashboard" };
 // Cold start mag tot 60s, ruim voor de eerste Holded-fetch; warm is dit 1–2s.
 export const maxDuration = 60;
-
-const PIPELINE_STAGES = ["lead", "qualified", "proposal", "negotiation", "won"] as const;
 
 const MONTHS_NL = ["jan", "feb", "mrt", "apr", "mei", "jun", "jul", "aug", "sep", "okt", "nov", "dec"];
 
@@ -97,17 +95,14 @@ export default async function DashboardPage() {
 
   const openExpr = sql`${documents.status} not in ('paid', 'void', 'draft')`;
 
-  const [[contactsTotal], pipelineRows, [docAgg], [creditAgg], [purchaseAgg], [productsAgg], openPurchaseOrders, recentDeals, recentActivity, holdedExpensesYTD, [openRequestsAgg], [invoiceReviewAgg], unpaidInvoices, proformas, [acceptedAgg], unbookedStockRows] =
+  const [[contactsTotal], recentProjects, [docAgg], [creditAgg], [purchaseAgg], [productsAgg], openPurchaseOrders, [activeProjectsAgg], recentActivity, holdedExpensesYTD, [openRequestsAgg], [invoiceReviewAgg], unpaidInvoices, proformas, [acceptedAgg], unbookedStockRows] =
     await Promise.all([
       db.select({ n: count() }).from(contacts),
-      db
-        .select({
-          stage: deals.stage,
-          n: count(),
-          value: sql<string>`coalesce(sum(${deals.valueEur}), 0)`,
-        })
-        .from(deals)
-        .groupBy(deals.stage),
+      db.query.projects.findMany({
+        orderBy: desc(projects.updatedAt),
+        limit: 7,
+        with: { contact: { columns: { name: true } } },
+      }),
       db
         .select({
           // Ex BTW: omzet = subtotaal van facturen
@@ -150,18 +145,13 @@ export default async function DashboardPage() {
         .from(purchaseOrders)
         .where(inArray(purchaseOrders.status, PO_OPEN_STATUSES))
         .orderBy(purchaseOrders.expectedDate),
-      db.query.deals.findMany({
-        orderBy: desc(deals.updatedAt),
-        limit: 7,
-        with: { contact: { columns: { name: true } } },
-      }),
+      db.select({ n: count() }).from(projects).where(eq(projects.status, "active")),
       db.query.activities.findMany({
         orderBy: desc(activities.createdAt),
         limit: 10,
         with: {
           author: { columns: { name: true } },
           contact: { columns: { id: true, name: true } },
-          deal: { columns: { id: true, title: true } },
           document: { columns: { id: true, docNumber: true, kind: true } },
         },
       }),
@@ -224,18 +214,6 @@ export default async function DashboardPage() {
     normalizeDocItems(d.items).some((it) => it.productId && it.units),
   ).length;
 
-  const byStage = new Map(pipelineRows.map((r) => [r.stage, r]));
-  const openDeals = pipelineRows
-    .filter((r) => r.stage !== "won" && r.stage !== "lost")
-    .reduce(
-      (acc, r) => ({ n: acc.n + r.n, value: acc.value + Number(r.value ?? 0) }),
-      { n: 0, value: 0 },
-    );
-  const pipeline = PIPELINE_STAGES.map((stage) => {
-    const r = byStage.get(stage);
-    return { stage, n: r?.n ?? 0, value: Number(r?.value ?? 0) };
-  });
-  const maxN = Math.max(1, ...pipeline.map((p) => p.n));
   const revenueAll = Number(docAgg.revenueAll) - Number(creditAgg.paidAll);
   const revenueMonth = Number(docAgg.revenueMonth) - Number(creditAgg.revenueMonth);
   const unpushedPurchase = Number(purchaseAgg.totalEur);
@@ -394,7 +372,7 @@ export default async function DashboardPage() {
           />
           <StatTile label="Te betalen (inkoop)" value={unpaidInvoices.length} hint={formatEUR(unpaidPurchaseTotal)} />
           <StatTile label="Inkooporders onderweg" value={openPurchaseOrders.length} hint="aankomende voorraad" />
-          <StatTile label="Pijplijnwaarde" value={formatEUR(openDeals.value)} hint={`${openDeals.n} open deals`} />
+          <StatTile label="Actieve projecten" value={activeProjectsAgg?.n ?? 0} hint="lopende klussen" />
           <StatTile label="Contacten" value={contactsTotal.n} />
         </div>
       </details>
@@ -432,34 +410,6 @@ export default async function DashboardPage() {
           hint="ex. BTW"
         />
       </div>
-
-      <Card className="mt-6">
-        <CardHeader>
-          <CardTitle>Pijplijn</CardTitle>
-          <Link href="/deals" className="text-xs text-accent hover:underline">
-            Naar deals
-          </Link>
-        </CardHeader>
-        <CardContent className="max-h-72 space-y-2.5 overflow-y-auto">
-          {pipeline.map((p) => (
-            <div key={p.stage} className="flex items-center gap-3">
-              <span className="w-36 shrink-0">
-                <Badge tone={dealStageMeta[p.stage].tone}>{dealStageMeta[p.stage].label}</Badge>
-              </span>
-              <div className="h-5 flex-1 overflow-hidden rounded bg-background">
-                <div
-                  className="h-full rounded bg-accent/70"
-                  style={{ width: `${Math.max(p.n > 0 ? 6 : 0, (p.n / maxN) * 100)}%` }}
-                />
-              </div>
-              <span className="w-10 shrink-0 text-right text-sm tabular-nums">{p.n}</span>
-              <span className="w-28 shrink-0 text-right text-sm tabular-nums text-muted">
-                {p.value > 0 ? formatEUR(p.value) : ""}
-              </span>
-            </div>
-          ))}
-        </CardContent>
-      </Card>
 
       {openPurchaseOrders.length > 0 && (
         <Card className="mt-6">
@@ -635,11 +585,9 @@ export default async function DashboardPage() {
                 {recentActivity.map((a) => {
                   const link = a.document
                     ? { href: `/documents/${a.document.id}`, label: `${documentKindMeta[a.document.kind]} ${a.document.docNumber ?? ""}`.trim() }
-                    : a.deal
-                      ? { href: `/deals/${a.deal.id}`, label: a.deal.title }
-                      : a.contact
-                        ? { href: `/contacts/${a.contact.id}`, label: a.contact.name }
-                        : null;
+                    : a.contact
+                      ? { href: `/contacts/${a.contact.id}`, label: a.contact.name }
+                      : null;
                   return (
                     <li key={a.id} className="border-l-2 border-border pl-3">
                       <div className="flex flex-wrap items-center gap-x-2 text-xs text-muted">
@@ -677,39 +625,38 @@ export default async function DashboardPage() {
 
         <Card>
           <CardHeader>
-            <CardTitle>Recente deals</CardTitle>
-            <Link href="/deals" className="text-xs text-accent hover:underline">
+            <CardTitle>Recente projecten</CardTitle>
+            <Link href="/projects" className="text-xs text-accent hover:underline">
               Alles bekijken
             </Link>
           </CardHeader>
-          {recentDeals.length === 0 ? (
+          {recentProjects.length === 0 ? (
             <CardContent>
-              <EmptyState title="Nog geen deals" />
+              <EmptyState title="Nog geen projecten" />
             </CardContent>
           ) : (
             <Table wrapperClassName="max-h-80 overflow-y-auto">
               <THead>
                 <tr>
-                  <Th>Deal</Th>
-                  <Th>Fase</Th>
-                  <Th className="text-right">Waarde</Th>
+                  <Th>Project</Th>
+                  <Th>Klant</Th>
+                  <Th className="text-right">Status</Th>
                 </tr>
               </THead>
               <TBody>
-                {recentDeals.map((d) => (
-                  <Tr key={d.id}>
+                {recentProjects.map((p) => (
+                  <Tr key={p.id}>
                     <Td>
-                      <Link href={`/deals/${d.id}`} className="font-medium hover:underline">
-                        {d.title}
+                      <Link href={`/projects/${p.id}`} className="font-medium hover:underline">
+                        {p.name}
                       </Link>
-                      {d.contact?.name && (
-                        <span className="block text-xs text-muted">{d.contact.name}</span>
-                      )}
                     </Td>
-                    <Td>
-                      <Badge tone={dealStageMeta[d.stage].tone}>{dealStageMeta[d.stage].label}</Badge>
+                    <Td className="text-muted">{p.contact?.name ?? "—"}</Td>
+                    <Td className="text-right">
+                      <Badge tone={p.status === "active" ? "success" : "neutral"}>
+                        {p.status === "active" ? "Actief" : "Gearchiveerd"}
+                      </Badge>
                     </Td>
-                    <Td className="text-right tabular-nums">{formatEUR(d.valueEur)}</Td>
                   </Tr>
                 ))}
               </TBody>
