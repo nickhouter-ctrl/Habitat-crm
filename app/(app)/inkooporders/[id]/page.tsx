@@ -34,6 +34,7 @@ import { SubmitButton } from "@/components/submit-button";
 import {
   createProductFromPoLine,
   deletePurchaseOrder,
+  markPurchaseOrderPaid,
   pushPurchaseOrderToHolded,
   regeneratePurchaseOrderPdfs,
   setPurchaseOrderStatus,
@@ -101,6 +102,21 @@ export default async function PurchaseOrderPage({ params }: { params: Promise<{ 
   const meta = PO_STATUS_META[po.status];
   const remove = deletePurchaseOrder.bind(null, id);
 
+  // Betaalstatus: "ontvangen" gaat over de goederen — dit gaat over de factuur.
+  // Komt automatisch binnen via de Holded-sync (Holded ↔ bank); lokaal kun je 'm
+  // handmatig op betaald zetten.
+  const poTotal = Number(po.total ?? 0);
+  const poPaid = Number(po.paidEur ?? 0);
+  const poPaidFull = !!po.paidAt || (poTotal > 0 && poPaid >= poTotal - 0.01);
+  const payBadge =
+    po.status === "draft"
+      ? null
+      : poPaidFull
+        ? { tone: "success" as const, label: "Betaald" }
+        : poPaid > 0
+          ? { tone: "warning" as const, label: "Deels betaald" }
+          : { tone: "danger" as const, label: "Openstaand" };
+
   const Action = ({ status, label, variant = "secondary" }: { status: Parameters<typeof setPurchaseOrderStatus>[1]; label: string; variant?: "primary" | "secondary" }) => (
     <form action={setPurchaseOrderStatus.bind(null, id, status)}>
       <SubmitButton variant={variant} size="sm" pendingLabel="Bezig…">
@@ -116,6 +132,7 @@ export default async function PurchaseOrderPage({ params }: { params: Promise<{ 
           <span className="flex items-center gap-2">
             {po.supplier}
             <Badge tone={meta.tone}>{meta.label}</Badge>
+            {payBadge && <Badge tone={payBadge.tone}>{payBadge.label}</Badge>}
           </span>
         }
         subtitle={po.reference ? `Referentie ${po.reference}` : undefined}
@@ -124,6 +141,13 @@ export default async function PurchaseOrderPage({ params }: { params: Promise<{ 
             <LinkButton href="/inkooporders" variant="ghost">
               ← Overzicht
             </LinkButton>
+            {payBadge && !poPaidFull && (
+              <form action={markPurchaseOrderPaid.bind(null, id)}>
+                <SubmitButton variant="primary" pendingLabel="Bezig…">
+                  Markeer als betaald
+                </SubmitButton>
+              </form>
+            )}
             <LinkButton href={`/inkooporders/${id}/edit`} variant="secondary">
               Bewerken
             </LinkButton>
