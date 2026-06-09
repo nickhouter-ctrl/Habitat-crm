@@ -24,7 +24,6 @@ import { db } from "@/lib/db";
 import { products } from "@/lib/db/schema";
 import { localizeEthick } from "@/lib/ethick-i18n";
 import { resolveGpc } from "@/lib/gs1/gpc-map";
-import { productSlug } from "@/lib/gs1/product-urls";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -78,9 +77,6 @@ export async function GET(req: Request) {
   //   AR=gpc, AS=contenido_neto, AT=unidad_contenido_neto, AU=tipo_peso,
   //   AV=url_website_producto, ... AY=gtin_multipack, AZ=unidades_multipack
   // (zie tab "Importación con GTIN" rij 3)
-  // De productpagina-link (url_website_producto) is OPTIONEEL voor de GTIN-
-  // registratie — we vullen 'm alleen waar het product op de site staat.
-  const SITE = "https://habitat-one.com";
   const exportable = rows;
 
   const startRow = 5;
@@ -88,7 +84,6 @@ export async function GET(req: Request) {
     const r = exportable[i];
     const rowIdx = startRow + i;
     const gpc = resolveGpc(r.collection, r.category);
-    const slug = productSlug(r.sku);
 
     const writeCell = (col: number, value: string | number) => {
       const ref = XLSX.utils.encode_cell({ r: rowIdx, c: col });
@@ -114,7 +109,6 @@ export async function GET(req: Request) {
     writeCell(44, gpc.netContent);                // contenido_neto
     writeCell(45, gpc.uom);                       // unidad_contenido_neto
     writeCell(46, "Fijo");                        // tipo_peso
-    if (slug) writeCell(47, `${SITE}/es/products/${slug}`); // url_website_producto (AV), optioneel
   }
 
   // Update sheet range zodat Excel/MijnGS1 alle rijen ziet
