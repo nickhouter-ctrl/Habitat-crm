@@ -16,6 +16,24 @@ const BY_COLLECTION_CATEGORY: Record<string, GpcMapping> = {
   "Wandpanelen|XPS montageplaten": { gpc: "10007958", uom: "Unidad", netContent: 1 },
   "Wandpanelen|*":                  { gpc: "10002431", uom: "Metro cuadrado", netContent: 1 },
 
+  // XPS montageplaten — eigen collectie sinds 2026-06 (was onder Wandpanelen)
+  "XPS montageplaten|*": { gpc: "10007958", uom: "Unidad", netContent: 1 },
+
+  // Acrylpanelen — solid-surface acrylplaten, eigen collectie sinds 2026-06 (was Badkamer)
+  "Acrylpanelen|*": { gpc: "10006720", uom: "Metro cuadrado", netContent: 1 },
+
+  // Verlichting (George Lighting)
+  "Verlichting|Rail-verlichting": { gpc: "10008403", uom: "Unidad", netContent: 1 }, // iluminación montada
+  "Verlichting|Wandspots":        { gpc: "10005215", uom: "Unidad", netContent: 1 }, // exterior (eléctrica)
+  "Verlichting|Grondspots":       { gpc: "10005218", uom: "Unidad", netContent: 1 }, // iluminación jardín/césped
+  "Verlichting|*":                { gpc: "10008403", uom: "Unidad", netContent: 1 },
+
+  // Schakelaars, stopcontacten & dimmers (RVS) — overwegend interruptores
+  "Schakelaars & stopcontacten|*": { gpc: "10005586", uom: "Unidad", netContent: 1 },
+
+  // Tuinmeubilair — tumbonas de jardín
+  "Tuinmeubilair|*": { gpc: "10003243", uom: "Unidad", netContent: 1 },
+
   // Deuren
   "Binnen en buiten deuren|Binnendeuren": { gpc: "10002567", uom: "Unidad", netContent: 1 },
   "Binnen en buiten deuren|Buitendeuren": { gpc: "10002570", uom: "Unidad", netContent: 1 },
