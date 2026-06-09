@@ -48,7 +48,6 @@ export function DocumentWizard({
   kind,
   defaultDocNumber,
   contacts,
-  deals,
   properties,
   projects = [],
   products = [],
@@ -59,7 +58,8 @@ export function DocumentWizard({
   kind: DocKind;
   defaultDocNumber: string;
   contacts: Option[];
-  deals: Option[];
+  /** @deprecated 'deals' is uit het CRM gehaald — niet meer renderen. */
+  deals?: Option[];
   properties: Option[];
   projects?: Option[];
   products?: ProductOption[];
@@ -239,15 +239,6 @@ export function DocumentWizard({
               </Field>
               <Field label="Vervaldatum" htmlFor="dueDate">
                 <Input id="dueDate" name="dueDate" type="date" defaultValue={defaultDue} />
-              </Field>
-              <Field label="Deal (optioneel)">
-                <Combobox
-                  name="dealId"
-                  clearable
-                  defaultValue={defaults?.dealId ?? ""}
-                  placeholder="— geen — / zoek een deal"
-                  options={deals.map((d) => ({ value: d.id, label: d.name }))}
-                />
               </Field>
             </div>
             <Field label="Onderwerp / titel" htmlFor="title">

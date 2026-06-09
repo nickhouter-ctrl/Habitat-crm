@@ -36,7 +36,7 @@ const NAV = [
   { href: "/agenda", label: "Agenda", icon: CalendarDays },
   { href: "/inbox", label: "Mail-inbox", icon: Mail },
   { href: "/archief", label: "Archief", icon: FileText },
-  { href: "/deals", label: "Deals & projecten", icon: Briefcase },
+  { href: "/projects", label: "Projecten", icon: Briefcase },
   { href: "/properties", label: "Panden", icon: Building2 },
   { href: "/products", label: "Producten", icon: Boxes },
   { href: "/prijslijst", label: "Prijslijst", icon: Tag },

@@ -48,7 +48,6 @@ export function DocumentForm({
   doc,
   defaultDocNumber,
   contacts,
-  deals,
   properties,
   projects = [],
   products = [],
@@ -72,7 +71,8 @@ export function DocumentForm({
   };
   defaultDocNumber?: string;
   contacts: Option[];
-  deals: Option[];
+  /** @deprecated 'deals' is uit het CRM gehaald — niet meer renderen. */
+  deals?: Option[];
   properties: Option[];
   projects?: Option[];
   products?: ProductOption[];
@@ -148,15 +148,6 @@ export function DocumentForm({
                 defaultValue={doc?.contactId ?? defaults?.contactId ?? ""}
                 placeholder="— geen — / zoek een contact"
                 options={contacts.map((c) => ({ value: c.id, label: c.name }))}
-              />
-            </Field>
-            <Field label="Deal">
-              <Combobox
-                name="dealId"
-                clearable
-                defaultValue={doc?.dealId ?? defaults?.dealId ?? ""}
-                placeholder="— geen — / zoek een deal"
-                options={deals.map((d) => ({ value: d.id, label: d.name }))}
               />
             </Field>
             <Field label="Pand">
