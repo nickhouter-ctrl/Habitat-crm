@@ -16,6 +16,12 @@ import {
   LinkButton,
   PageHeader,
   Select,
+  TBody,
+  Table,
+  Td,
+  Th,
+  THead,
+  Tr,
   Textarea,
 } from "@/components/ui";
 import { Combobox, type ComboOption } from "@/components/combobox";
@@ -95,6 +101,30 @@ export default async function ProjectDetailPage({
   }
   const projMargin = projRevenue - projCost;
   const projMarginPct = projRevenue > 0 ? Math.round((projMargin / projRevenue) * 100) : null;
+
+  // Producten in dit project: gereserveerd (uit geaccepteerde offertes) vs.
+  // verkocht (uit facturen − creditnota's). Geeft inzicht in wat er naar de klus
+  // gaat én wat er voor het project is gereserveerd.
+  const projDocItems = await db
+    .select({ kind: documents.kind, status: documents.status, items: documents.items })
+    .from(documents)
+    .where(and(eq(documents.projectId, id), inArray(documents.kind, ["estimate", "invoice", "creditnote"])));
+  const prodAgg = new Map<string, { name: string; reserved: number; sold: number }>();
+  for (const d of projDocItems) {
+    for (const it of normalizeDocItems(d.items)) {
+      const key = it.productId || it.description?.trim() || it.name?.trim();
+      if (!key || !it.units) continue;
+      const entry = prodAgg.get(key) ?? { name: (it.name || it.description || "—").trim(), reserved: 0, sold: 0 };
+      const u = Number(it.units) || 0;
+      if (d.kind === "estimate" && d.status === "accepted") entry.reserved += u;
+      else if (d.kind === "invoice") entry.sold += u;
+      else if (d.kind === "creditnote") entry.sold -= u;
+      prodAgg.set(key, entry);
+    }
+  }
+  const projectProducts = [...prodAgg.values()]
+    .filter((p) => p.reserved > 0 || p.sold !== 0)
+    .sort((a, b) => b.reserved + b.sold - (a.reserved + a.sold));
 
   const contactOptions: ComboOption[] = contactOpts.map((c) => ({ value: c.id, label: c.name }));
   const ownerOptions: ComboOption[] = ownerOpts.map((u) => ({ value: u.id, label: u.name ?? u.email }));
@@ -295,6 +325,42 @@ export default async function ProjectDetailPage({
           </Card>
         </div>
       </div>
+
+      {projectProducts.length > 0 && (
+        <Card className="mt-5 overflow-hidden">
+          <CardHeader>
+            <CardTitle>Producten in dit project</CardTitle>
+            <span className="text-xs text-muted">
+              {projectProducts.length} {projectProducts.length === 1 ? "product" : "producten"}
+            </span>
+          </CardHeader>
+          <Table>
+            <THead>
+              <tr>
+                <Th>Product</Th>
+                <Th className="text-right">Gereserveerd</Th>
+                <Th className="text-right">Verkocht</Th>
+              </tr>
+            </THead>
+            <TBody>
+              {projectProducts.map((p, i) => (
+                <Tr key={i}>
+                  <Td className="font-medium">{p.name}</Td>
+                  <Td className="text-right tabular-nums">
+                    {p.reserved > 0 ? p.reserved : <span className="text-muted">—</span>}
+                  </Td>
+                  <Td className="text-right tabular-nums">
+                    {p.sold !== 0 ? p.sold : <span className="text-muted">—</span>}
+                  </Td>
+                </Tr>
+              ))}
+            </TBody>
+          </Table>
+          <p className="px-5 py-3 text-xs text-muted">
+            Gereserveerd = uit geaccepteerde offertes voor dit project; verkocht = uit facturen.
+          </p>
+        </Card>
+      )}
     </>
   );
 }
