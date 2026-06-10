@@ -382,7 +382,23 @@ export default async function ProductsPage({
                             "—"
                           )}
                         </Td>
-                        <Td className="text-muted">{p.sku ?? "—"}</Td>
+                        <Td className="text-muted">
+                          <span className="font-mono">{p.sku ?? "—"}</span>
+                          {(() => {
+                            const szs =
+                              (p.additionalSizes as Array<{ sku: string; label: string }> | null) ?? [];
+                            const withSku = szs.filter((s) => s.sku);
+                            return withSku.length > 0 ? (
+                              <div className="mt-0.5 space-y-px text-[10px] leading-tight text-muted/80">
+                                {withSku.map((s) => (
+                                  <div key={s.sku}>
+                                    <span className="font-mono">{s.sku}</span> · {s.label}
+                                  </div>
+                                ))}
+                              </div>
+                            ) : null;
+                          })()}
+                        </Td>
                         <Td
                           className={cn(
                             "text-right tabular-nums",
