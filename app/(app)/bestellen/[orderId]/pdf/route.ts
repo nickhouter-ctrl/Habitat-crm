@@ -5,7 +5,6 @@ import { auth } from "@/auth";
 import { db } from "@/lib/db";
 import { catalogVariants, products, supplierOrderItems, supplierOrders } from "@/lib/db/schema";
 import { renderSupplierOrderPdf } from "@/lib/supplier-order-pdf";
-import { formatDate } from "@/lib/utils";
 
 export const maxDuration = 30;
 
@@ -50,7 +49,11 @@ export async function GET(
 
   const pdf = await renderSupplierOrderPdf({
     orderNumber: order.id.slice(0, 8).toUpperCase(),
-    dateLabel: formatDate(order.createdAt),
+    dateLabel: new Date(order.createdAt).toLocaleDateString("en-GB", {
+      day: "2-digit",
+      month: "short",
+      year: "numeric",
+    }),
     supplierName: order.supplierName,
     supplierEmail: order.supplierEmail,
     customerRef: order.customerRef,

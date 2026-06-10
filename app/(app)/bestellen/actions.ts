@@ -142,7 +142,8 @@ export async function addToOrder(formData: FormData) {
     if (!p) throw new Error("Product niet gevonden.");
     productId = p.id;
     sku = p.sku ?? "—";
-    description = [p.collection, p.name].filter(Boolean).join(" · ");
+    // Engelse productnaam als omschrijving (de bestelbon gaat naar de leverancier).
+    description = p.name;
     // Gekozen maat → eigen SKU van die maat gebruiken (indien aanwezig).
     if (size && Array.isArray(p.additionalSizes)) {
       const match = p.additionalSizes.find((s) => s.label === size);
