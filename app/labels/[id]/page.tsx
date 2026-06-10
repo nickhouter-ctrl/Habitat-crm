@@ -54,9 +54,9 @@ export default async function ProductLabelPage({
         )}
         {product.priceEur && (
           <p className="mt-2 text-base font-semibold">
-            {formatEUR(product.priceEur)}
+            {formatEUR(Number(product.priceEur) * (1 + (product.vatRate ?? 21) / 100))}
             {product.unit ? <span className="text-xs font-normal text-muted"> / {product.unit}</span> : null}
-            <span className="text-xs font-normal text-muted"> excl. BTW</span>
+            <span className="text-xs font-normal text-muted"> incl. BTW</span>
           </p>
         )}
       </div>

@@ -156,9 +156,9 @@ export default async function PrintLabelsPage({
                 </div>
                 {p.priceEur && (
                   <p className="text-[10px] font-bold leading-none">
-                    {formatEUR(p.priceEur)}
+                    {formatEUR(Number(p.priceEur) * (1 + (p.vatRate ?? 21) / 100))}
                     {p.unit ? <span className="font-normal text-gray-500"> / {p.unit}</span> : null}
-                    <span className="font-normal text-gray-500"> excl. BTW</span>
+                    <span className="font-normal text-gray-500"> incl. BTW</span>
                   </p>
                 )}
               </div>
