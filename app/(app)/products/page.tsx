@@ -394,6 +394,7 @@ export default async function ProductsPage({
                                 inStock?: boolean;
                               }> | null) ?? [];
                             const withSku = szs.filter((s) => s.sku);
+                            const anyStock = withSku.some((s) => (s.stockQty ?? 0) > 0);
                             return withSku.length > 0 ? (
                               <div className="mt-1 border-l border-border/60 pl-2 text-[10px] leading-snug text-muted/70">
                                 {withSku.map((s) => (
@@ -405,8 +406,12 @@ export default async function ProductsPage({
                                         {formatEUR(s.priceEur)}
                                       </span>
                                     ) : null}
-                                    {(s.stockQty ?? 0) > 0 ? (
-                                      <span className="ml-1 tabular-nums text-success">· {s.stockQty} op vrd</span>
+                                    {anyStock ? (
+                                      (s.stockQty ?? 0) > 0 ? (
+                                        <span className="ml-1 tabular-nums text-success">· {s.stockQty} op vrd</span>
+                                      ) : (
+                                        <span className="ml-1 tabular-nums text-muted/60">· 0</span>
+                                      )
                                     ) : null}
                                   </div>
                                 ))}

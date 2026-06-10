@@ -228,6 +228,7 @@ export default async function SampleCatalogPage({
                         ((r.prodSizes as Array<{ label: string; stockQty?: number | null }> | null) ?? [])
                           .map((s) => [s.label.replace(/\*/g, "×"), s.stockQty ?? 0]),
                       );
+                      const anyStock = [...stockByLabel.values()].some((n) => n > 0);
                       return labels.length >= 2 ? (
                         <div className="mt-1 border-l border-border/60 pl-2 text-[10px] leading-snug text-muted/70">
                           {labels.map((lbl, i) => {
@@ -237,7 +238,13 @@ export default async function SampleCatalogPage({
                               <div key={i} className="whitespace-nowrap">
                                 <span className="font-mono">{`${base}-${i + 1}`}</span>
                                 <span className="ml-1 tabular-nums">{lab}</span>
-                                {st > 0 ? <span className="ml-1 tabular-nums text-success">· {st} op vrd</span> : null}
+                                {anyStock ? (
+                                  st > 0 ? (
+                                    <span className="ml-1 tabular-nums text-success">· {st} op vrd</span>
+                                  ) : (
+                                    <span className="ml-1 tabular-nums text-muted/60">· 0</span>
+                                  )
+                                ) : null}
                               </div>
                             );
                           })}
