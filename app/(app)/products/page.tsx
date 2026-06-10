@@ -1,4 +1,4 @@
-import { and, asc, eq, ilike, isNotNull, isNull, lt, or, sql } from "drizzle-orm";
+import { and, asc, eq, ilike, isNotNull, isNull, lt, ne, or, sql } from "drizzle-orm";
 import { Search } from "lucide-react";
 import Link from "next/link";
 
@@ -53,6 +53,7 @@ export default async function ProductsPage({
       lowStock
         ? and(
             eq(products.isActive, true),
+            ne(products.availability, "order_only"),
             isNotNull(products.stockMin),
             lt(sql<number>`coalesce(${products.stockQty}, 0)`, sql<number>`${products.stockMin}`),
           )
@@ -73,8 +74,8 @@ export default async function ProductsPage({
   const [agg] = await db
     .select({
       n: sql<number>`count(*)::int`,
-      stockCostValue: sql<string>`coalesce(sum(coalesce(${products.costEur},0) * coalesce(${products.stockQty},0)), 0)`,
-      stockSaleValue: sql<string>`coalesce(sum(coalesce(${products.priceEur},0) * coalesce(${products.stockQty},0)), 0)`,
+      stockCostValue: sql<string>`coalesce(sum(case when ${products.availability} <> 'order_only' then coalesce(${products.costEur},0) * coalesce(${products.stockQty},0) else 0 end), 0)`,
+      stockSaleValue: sql<string>`coalesce(sum(case when ${products.availability} <> 'order_only' then coalesce(${products.priceEur},0) * coalesce(${products.stockQty},0) else 0 end), 0)`,
       noPhoto: sql<number>`count(case when ${products.isActive} = true and ${products.imageUrl} is null then 1 end)::int`,
     })
     .from(products);
