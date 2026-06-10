@@ -345,6 +345,7 @@ export default async function ProductsPage({
                         stockQty?: number | null;
                       }> | null) ?? []
                     ).filter((s) => s.sku || s.label);
+                    const hasGrid = sizeRows.length >= 2;
                     return (
                       <Fragment key={p.id}>
                       <Tr>
@@ -433,18 +434,28 @@ export default async function ProductsPage({
                         </Td>
                         <Td className="text-muted">{p.unit ?? "—"}</Td>
                         <Td className="text-right tabular-nums">
-                          {p.priceEur ? formatEUR(p.priceEur) : "—"}
-                          {pricePerM2 != null && (
-                            <span className="block text-xs text-muted">{formatEUR(pricePerM2)}/m²</span>
+                          {hasGrid ? (
+                            <span className="text-muted/40">·</span>
+                          ) : (
+                            <>
+                              {p.priceEur ? formatEUR(p.priceEur) : "—"}
+                              {pricePerM2 != null && (
+                                <span className="block text-xs text-muted">{formatEUR(pricePerM2)}/m²</span>
+                              )}
+                            </>
                           )}
                         </Td>
                         <Td className="text-right tabular-nums text-muted">{p.vatRate}%</Td>
                         <Td className="text-right tabular-nums text-muted">
-                          {p.purchaseCostEur ? formatEUR(p.purchaseCostEur) : "—"}
+                          {hasGrid ? <span className="text-muted/40">·</span> : p.purchaseCostEur ? formatEUR(p.purchaseCostEur) : "—"}
                         </Td>
-                        <Td className="text-right tabular-nums text-muted">{p.costEur ? formatEUR(p.costEur) : "—"}</Td>
+                        <Td className="text-right tabular-nums text-muted">
+                          {hasGrid ? <span className="text-muted/40">·</span> : p.costEur ? formatEUR(p.costEur) : "—"}
+                        </Td>
                         <Td className="text-right tabular-nums">
-                          {margin != null ? (
+                          {hasGrid ? (
+                            <span className="text-muted/40">·</span>
+                          ) : margin != null ? (
                             <>
                               <span>{formatEUR(margin)}</span>
                               {marginPct != null && (

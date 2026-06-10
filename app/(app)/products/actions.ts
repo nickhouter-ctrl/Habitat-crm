@@ -74,6 +74,7 @@ const productSchema = z.object({
           label: z.string().trim().default(""),
           priceEur: z.number().nonnegative().nullable().optional(),
           purchaseEur: z.number().nonnegative().nullable().optional(),
+          costEur: z.number().nonnegative().nullable().optional(),
           stockQty: z.number().nonnegative().nullable().optional(),
           inStock: z.boolean().optional(),
         }),
