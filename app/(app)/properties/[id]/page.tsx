@@ -19,9 +19,9 @@ import {
 } from "@/components/ui";
 import { PropertyPhotos } from "@/components/property-photos";
 import { db } from "@/lib/db";
-import { deals, properties } from "@/lib/db/schema";
+import { projects, properties } from "@/lib/db/schema";
 import { formatDate, formatEUR } from "@/lib/utils";
-import { dealStageMeta, propertyStatusMeta, propertyTypeMeta } from "../../_meta";
+import { propertyStatusMeta, propertyTypeMeta } from "../../_meta";
 
 export async function generateMetadata({
   params,
@@ -52,9 +52,9 @@ export default async function PropertyDetailPage({
   });
   if (!property) notFound();
 
-  const relatedDeals = await db.query.deals.findMany({
-    where: eq(deals.propertyId, id),
-    orderBy: desc(deals.updatedAt),
+  const relatedProjects = await db.query.projects.findMany({
+    where: eq(projects.propertyId, id),
+    orderBy: desc(projects.updatedAt),
     with: { contact: { columns: { id: true, name: true } } },
   });
 
@@ -145,55 +145,46 @@ export default async function PropertyDetailPage({
         <div className="lg:col-span-2">
           <Card>
             <CardHeader>
-              <CardTitle>Deals bij dit pand</CardTitle>
-              <LinkButton
-                href={`/deals/new?propertyId=${property.id}`}
-                variant="secondary"
-                size="sm"
-              >
-                Nieuwe deal
+              <CardTitle>Projecten bij dit pand</CardTitle>
+              <LinkButton href="/projects/new" variant="secondary" size="sm">
+                Nieuw project
               </LinkButton>
             </CardHeader>
-            {relatedDeals.length === 0 ? (
+            {relatedProjects.length === 0 ? (
               <CardContent>
-                <p className="text-sm text-muted">Geen gekoppelde deals.</p>
+                <p className="text-sm text-muted">Geen gekoppelde projecten.</p>
               </CardContent>
             ) : (
               <Table>
                 <THead>
                   <tr>
-                    <Th>Deal</Th>
-                    <Th>Fase</Th>
+                    <Th>Project</Th>
                     <Th>Contact</Th>
-                    <Th className="text-right">Waarde</Th>
+                    <Th className="text-right">Status</Th>
                   </tr>
                 </THead>
                 <TBody>
-                  {relatedDeals.map((d) => (
-                    <Tr key={d.id}>
+                  {relatedProjects.map((p) => (
+                    <Tr key={p.id}>
                       <Td className="font-medium">
-                        <Link href={`/deals/${d.id}`} className="hover:underline">
-                          {d.title}
+                        <Link href={`/projects/${p.id}`} className="hover:underline">
+                          {p.name}
                         </Link>
                       </Td>
                       <Td>
-                        <Badge tone={dealStageMeta[d.stage].tone}>
-                          {dealStageMeta[d.stage].label}
-                        </Badge>
-                      </Td>
-                      <Td>
-                        {d.contact ? (
-                          <Link
-                            href={`/contacts/${d.contact.id}`}
-                            className="hover:underline"
-                          >
-                            {d.contact.name}
+                        {p.contact ? (
+                          <Link href={`/contacts/${p.contact.id}`} className="hover:underline">
+                            {p.contact.name}
                           </Link>
                         ) : (
                           <span className="text-muted">—</span>
                         )}
                       </Td>
-                      <Td className="text-right tabular-nums">{formatEUR(d.valueEur)}</Td>
+                      <Td className="text-right">
+                        <Badge tone={p.status === "active" ? "success" : "neutral"}>
+                          {p.status === "active" ? "Actief" : "Gearchiveerd"}
+                        </Badge>
+                      </Td>
                     </Tr>
                   ))}
                 </TBody>

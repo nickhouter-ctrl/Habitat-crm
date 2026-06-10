@@ -25,16 +25,15 @@ import { db } from "@/lib/db";
 import {
   activities,
   contacts,
-  deals,
   documents,
   holdedSyncMap,
+  projects,
 } from "@/lib/db/schema";
 import { formatDate, formatEUR } from "@/lib/utils";
 import { ConfirmSubmit } from "@/components/confirm-submit";
 import { addContactNote, deleteContact } from "../actions";
 import {
   contactTypeMeta,
-  dealStageMeta,
   documentKindMeta,
   documentStatusMeta,
   languageMeta,
@@ -88,10 +87,10 @@ export default async function ContactDetailPage({
   });
   if (!contact) notFound();
 
-  const [relatedDeals, relatedDocs, timeline, holdedMap] = await Promise.all([
-    db.query.deals.findMany({
-      where: eq(deals.contactId, id),
-      orderBy: desc(deals.updatedAt),
+  const [relatedProjects, relatedDocs, timeline, holdedMap] = await Promise.all([
+    db.query.projects.findMany({
+      where: eq(projects.contactId, id),
+      orderBy: desc(projects.updatedAt),
     }),
     db.query.documents.findMany({
       where: eq(documents.contactId, id),
@@ -265,43 +264,37 @@ export default async function ContactDetailPage({
         <div className="space-y-4 lg:col-span-2">
           <Card>
             <CardHeader>
-              <CardTitle>Deals & projecten</CardTitle>
-              <LinkButton
-                href={`/deals/new?contactId=${contact.id}`}
-                variant="secondary"
-                size="sm"
-              >
-                Nieuwe deal
+              <CardTitle>Projecten</CardTitle>
+              <LinkButton href="/projects/new" variant="secondary" size="sm">
+                Nieuw project
               </LinkButton>
             </CardHeader>
-            {relatedDeals.length === 0 ? (
+            {relatedProjects.length === 0 ? (
               <CardContent>
-                <p className="text-sm text-muted">Geen gekoppelde deals.</p>
+                <p className="text-sm text-muted">Geen gekoppelde projecten.</p>
               </CardContent>
             ) : (
               <Table>
                 <THead>
                   <tr>
-                    <Th>Deal</Th>
-                    <Th>Fase</Th>
-                    <Th className="text-right">Waarde</Th>
+                    <Th>Project</Th>
+                    <Th>Code</Th>
+                    <Th className="text-right">Status</Th>
                   </tr>
                 </THead>
                 <TBody>
-                  {relatedDeals.map((d) => (
-                    <Tr key={d.id}>
+                  {relatedProjects.map((p) => (
+                    <Tr key={p.id}>
                       <Td className="font-medium">
-                        <Link href={`/deals/${d.id}`} className="hover:underline">
-                          {d.title}
+                        <Link href={`/projects/${p.id}`} className="hover:underline">
+                          {p.name}
                         </Link>
                       </Td>
-                      <Td>
-                        <Badge tone={dealStageMeta[d.stage].tone}>
-                          {dealStageMeta[d.stage].label}
+                      <Td className="text-muted">{p.code ?? "—"}</Td>
+                      <Td className="text-right">
+                        <Badge tone={p.status === "active" ? "success" : "neutral"}>
+                          {p.status === "active" ? "Actief" : "Gearchiveerd"}
                         </Badge>
-                      </Td>
-                      <Td className="text-right tabular-nums">
-                        {formatEUR(d.valueEur)}
                       </Td>
                     </Tr>
                   ))}
