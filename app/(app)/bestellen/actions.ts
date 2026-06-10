@@ -149,7 +149,7 @@ export async function addToOrder(formData: FormData) {
     throw new Error("Ongeldig type.");
   }
 
-  if (!defaultSupplier) throw new Error("Kies een leverancier voor deze regel.");
+  if (!defaultSupplier) defaultSupplier = "Onbekende leverancier";
 
   const supplier = await resolveSupplier(defaultSupplier, supplierEmailInput);
   const orderId = await findOrCreateDraft(user.id, supplier, customerRef);

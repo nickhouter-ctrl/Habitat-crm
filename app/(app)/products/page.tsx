@@ -41,12 +41,24 @@ export default async function ProductsPage({
   const noPhoto = params.nofoto === "1";
   const sort = typeof params.sort === "string" ? params.sort : "";
   const sortByOnderweg = sort === "onderweg";
+  // Voorraad-weergave: standaard alleen op voorraad; 'te-bestellen' = niet op
+  // voorraad (incl. order_only samples); 'alle' = geen voorraadfilter. Bij een
+  // zoekopdracht laten we alles zien.
+  const view =
+    params.view === "te-bestellen" || params.view === "alle" ? params.view : "op-voorraad";
+  const stockFilter =
+    q || view === "alle"
+      ? undefined
+      : view === "te-bestellen"
+        ? sql`coalesce(${products.stockQty}, 0) <= 0`
+        : sql`coalesce(${products.stockQty}, 0) > 0`;
 
   const allCollections = await getProductCollections();
   const collection = allCollections.includes(collectionParam) ? collectionParam : "";
 
   const rows = await db.query.products.findMany({
     where: and(
+      stockFilter,
       collection ? eq(products.collection, collection) : undefined,
       noBarcode ? and(isNull(products.barcode), eq(products.isActive, true)) : undefined,
       noPhoto ? and(isNull(products.imageUrl), eq(products.isActive, true)) : undefined,
@@ -142,6 +154,7 @@ export default async function ProductsPage({
     if (noBarcode) sp.set("nobarcode", "1");
     if (lowStock) sp.set("lowstock", "1");
     if (noPhoto) sp.set("nofoto", "1");
+    if (view !== "op-voorraad") sp.set("view", view);
     for (const [k, v] of Object.entries(overrides)) {
       if (v === undefined || v === "") sp.delete(k);
       else sp.set(k, v);
@@ -226,11 +239,34 @@ export default async function ProductsPage({
             </Link>
           ))}
         </div>
-        <form className="relative max-w-xs flex-1 sm:flex-none" action="/products">
-          {collection && <input type="hidden" name="collection" value={collection} />}
-          <Search className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted" />
-          <Input name="q" defaultValue={q} placeholder="Zoek op naam, categorie of SKU…" className="w-64 pl-8" />
-        </form>
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="flex gap-1 rounded-md bg-surface p-0.5">
+            {([
+              ["op-voorraad", "Op voorraad"],
+              ["te-bestellen", "Te bestellen"],
+              ["alle", "Alle"],
+            ] as const).map(([v, label]) => (
+              <Link
+                key={v}
+                href={buildHref({ view: v === "op-voorraad" ? undefined : v })}
+                className={cn(
+                  "rounded px-2.5 py-1 text-xs transition-colors",
+                  view === v
+                    ? "bg-accent/10 font-medium text-accent"
+                    : "text-muted hover:text-foreground",
+                )}
+              >
+                {label}
+              </Link>
+            ))}
+          </div>
+          <form className="relative max-w-xs flex-1 sm:flex-none" action="/products">
+            {collection && <input type="hidden" name="collection" value={collection} />}
+            {view !== "op-voorraad" && <input type="hidden" name="view" value={view} />}
+            <Search className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted" />
+            <Input name="q" defaultValue={q} placeholder="Zoek op naam, categorie of SKU…" className="w-64 pl-8" />
+          </form>
+        </div>
       </div>
 
       {rows.length === 0 ? (

@@ -1,7 +1,17 @@
-/* Server-only: rendert een bestelbon (purchase request) naar PDF via @react-pdf/renderer. */
+/* Server-only: renders a purchase order (bestelbon) to PDF via @react-pdf/renderer.
+ * English text + product photos — these orders go to (foreign) suppliers. */
 import path from "node:path";
 
-import { Document, Font, Page, StyleSheet, Text, View, renderToBuffer } from "@react-pdf/renderer";
+import {
+  Document,
+  Font,
+  Image,
+  Page,
+  StyleSheet,
+  Text,
+  View,
+  renderToBuffer,
+} from "@react-pdf/renderer";
 
 import { COMPANY } from "@/lib/company";
 
@@ -16,7 +26,7 @@ Font.register({
   ],
 });
 
-const ACCENT = "#b15a3c"; // terracotta
+const ACCENT = "#b15a3c";
 const INK = "#2b2320";
 const MUTED = "#7a7068";
 
@@ -29,23 +39,15 @@ const s = StyleSheet.create({
   h1: { fontSize: 18, fontWeight: 700, marginBottom: 2 },
   label: { fontSize: 7, color: MUTED, textTransform: "uppercase", letterSpacing: 1, marginBottom: 2 },
   block: { marginTop: 18 },
-  th: {
-    flexDirection: "row",
-    borderBottomWidth: 1.5,
-    borderBottomColor: INK,
-    paddingBottom: 4,
-    marginTop: 14,
-  },
-  tr: {
-    flexDirection: "row",
-    borderBottomWidth: 0.5,
-    borderBottomColor: "#e4ded8",
-    paddingVertical: 5,
-  },
-  cSku: { width: "18%", fontWeight: 600 },
-  cDesc: { width: "57%", paddingRight: 6 },
-  cQty: { width: "25%", textAlign: "right" },
+  th: { flexDirection: "row", borderBottomWidth: 1.5, borderBottomColor: INK, paddingBottom: 4, marginTop: 14 },
+  tr: { flexDirection: "row", alignItems: "center", borderBottomWidth: 0.5, borderBottomColor: "#e4ded8", paddingVertical: 5 },
+  cPhoto: { width: 40 },
+  cSku: { width: "16%", fontWeight: 600 },
+  cDesc: { width: "52%", paddingRight: 6 },
+  cQty: { width: "22%", textAlign: "right" },
   thText: { fontSize: 7.5, fontWeight: 600, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5 },
+  photo: { width: 34, height: 34, borderRadius: 2, objectFit: "cover" },
+  photoEmpty: { width: 34, height: 34, borderRadius: 2, backgroundColor: "#efeae4" },
   notes: { marginTop: 20, fontSize: 8, color: MUTED, lineHeight: 1.5 },
   footer: { position: "absolute", bottom: 28, left: 40, right: 40, fontSize: 7, color: MUTED, textAlign: "center" },
 });
@@ -63,14 +65,15 @@ export type SupplierOrderPdfData = {
     size?: string | null;
     qty: string;
     unit: string;
+    image?: string | null;
   }>;
 };
 
-const UNIT_LABEL: Record<string, string> = { stuk: "st", doos: "doos", m2: "m²" };
+const UNIT_LABEL: Record<string, string> = { stuk: "pcs", doos: "box", m2: "m²" };
 
 function SupplierOrderDoc({ data }: { data: SupplierOrderPdfData }) {
   return (
-    <Document title={`Bestelbon ${data.orderNumber}`}>
+    <Document title={`Purchase Order ${data.orderNumber}`}>
       <Page size="A4" style={s.page}>
         <View style={s.rowBetween}>
           <View>
@@ -82,38 +85,41 @@ function SupplierOrderDoc({ data }: { data: SupplierOrderPdfData }) {
               {"\n"}
               {COMPANY.email} · {COMPANY.phone}
               {"\n"}
-              {COMPANY.vatNumber}
+              VAT {COMPANY.vatNumber}
             </Text>
           </View>
           <View style={{ alignItems: "flex-end" }}>
-            <Text style={s.h1}>Bestelbon</Text>
-            <Text style={s.small}>Nr. {data.orderNumber}</Text>
+            <Text style={s.h1}>Purchase Order</Text>
+            <Text style={s.small}>No. {data.orderNumber}</Text>
             <Text style={s.small}>{data.dateLabel}</Text>
           </View>
         </View>
 
         <View style={[s.rowBetween, s.block]}>
           <View style={{ width: "60%" }}>
-            <Text style={s.label}>Leverancier</Text>
+            <Text style={s.label}>Supplier</Text>
             <Text style={{ fontSize: 11, fontWeight: 600 }}>{data.supplierName}</Text>
             {data.supplierEmail ? <Text style={s.small}>{data.supplierEmail}</Text> : null}
           </View>
           {data.customerRef ? (
             <View style={{ alignItems: "flex-end" }}>
-              <Text style={s.label}>Referentie / klant</Text>
+              <Text style={s.label}>Reference</Text>
               <Text>{data.customerRef}</Text>
             </View>
           ) : null}
         </View>
 
-        {/* tabel */}
         <View style={s.th}>
+          <Text style={[s.cPhoto, s.thText]}> </Text>
           <Text style={[s.cSku, s.thText]}>SKU</Text>
-          <Text style={[s.cDesc, s.thText]}>Omschrijving</Text>
-          <Text style={[s.cQty, s.thText]}>Aantal</Text>
+          <Text style={[s.cDesc, s.thText]}>Description</Text>
+          <Text style={[s.cQty, s.thText]}>Quantity</Text>
         </View>
         {data.items.map((it, i) => (
           <View style={s.tr} key={i} wrap={false}>
+            <View style={s.cPhoto}>
+              {it.image ? <Image src={it.image} style={s.photo} /> : <View style={s.photoEmpty} />}
+            </View>
             <Text style={s.cSku}>{it.sku}</Text>
             <Text style={s.cDesc}>
               {it.description}
@@ -128,7 +134,7 @@ function SupplierOrderDoc({ data }: { data: SupplierOrderPdfData }) {
         {data.notes ? <Text style={s.notes}>{data.notes}</Text> : null}
 
         <Text style={s.footer}>
-          {COMPANY.name} · {COMPANY.email} · {COMPANY.vatNumber}
+          {COMPANY.name} · {COMPANY.email} · VAT {COMPANY.vatNumber}
         </Text>
       </Page>
     </Document>

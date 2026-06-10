@@ -31,6 +31,7 @@ import {
 import { displaySku } from "@/lib/catalog";
 import { supplierForSku } from "@/lib/suppliers";
 import { formatDate, formatEUR } from "@/lib/utils";
+import { getProductCollections } from "../_options";
 import {
   addToOrder,
   deleteOrder,
@@ -86,16 +87,10 @@ export default async function BestellenPage({
     new Set([...supplierCompanies, ...poSuppliers].map((s) => s.name).filter(Boolean)),
   ).sort() as string[];
 
-  // Bladerlijst: alle producten, optioneel op categorie gefilterd.
-  const cat = typeof sp.cat === "string" ? sp.cat.trim() : "";
-  const catRows = await db
-    .selectDistinct({ category: products.category })
-    .from(products)
-    .where(isNotNull(products.category));
-  const categories = catRows
-    .map((c) => c.category)
-    .filter((c): c is string => !!c && c.trim().length > 0)
-    .sort((a, b) => a.localeCompare(b));
+  // Bladerlijst met collectie-tabs (zoals de productenpagina) + actuele voorraad.
+  const collections = await getProductCollections();
+  const colParam = typeof sp.col === "string" ? sp.col.trim() : "";
+  const selectedCol = collections.includes(colParam) ? colParam : "";
 
   const browseProducts = await db
     .select({
@@ -107,9 +102,10 @@ export default async function BestellenPage({
       priceEur: products.priceEur,
       unit: products.unit,
       imageUrl: products.imageUrl,
+      stockQty: products.stockQty,
     })
     .from(products)
-    .where(cat ? eq(products.category, cat) : undefined)
+    .where(selectedCol ? eq(products.collection, selectedCol) : undefined)
     .orderBy(asc(products.category), asc(products.name))
     .limit(2000);
 
@@ -120,7 +116,6 @@ export default async function BestellenPage({
     arr.push(p);
     browseByCat.set(key, arr);
   }
-  // Groepen in categorie-volgorde (zoals de producten-query al sorteert).
   const browseGroups = Array.from(browseByCat.entries());
 
   // Concepten van deze gebruiker.
@@ -206,27 +201,31 @@ export default async function BestellenPage({
         </CardContent>
       </Card>
 
-      {/* alle producten — bladeren per categorie */}
+      {/* alle producten — bladeren per collectie (tabs) */}
       <Card>
-        <CardHeader className="flex flex-row items-center justify-between gap-3">
-          <CardTitle>Alle producten ({browseProducts.length})</CardTitle>
-          <form method="GET" className="flex items-center gap-2">
-            <select
-              name="cat"
-              defaultValue={cat}
-              className="h-8 rounded-md border border-border bg-background px-2 text-sm"
+        <CardHeader>
+          <CardTitle>Producten ({browseProducts.length})</CardTitle>
+          <div className="mt-2 flex flex-wrap gap-1">
+            <Link
+              href="/bestellen"
+              className={`rounded-md px-3 py-1.5 text-sm transition-colors ${
+                !selectedCol ? "bg-accent/10 font-medium text-accent" : "text-muted hover:bg-surface"
+              }`}
             >
-              <option value="">Alle categorieën</option>
-              {categories.map((c) => (
-                <option key={c} value={c}>
-                  {c}
-                </option>
-              ))}
-            </select>
-            <button type="submit" className={buttonClass({ variant: "secondary", size: "sm" })}>
-              Filter
-            </button>
-          </form>
+              Alle
+            </Link>
+            {collections.map((c) => (
+              <Link
+                key={c}
+                href={`/bestellen?col=${encodeURIComponent(c)}`}
+                className={`rounded-md px-3 py-1.5 text-sm transition-colors ${
+                  selectedCol === c ? "bg-accent/10 font-medium text-accent" : "text-muted hover:bg-surface"
+                }`}
+              >
+                {c}
+              </Link>
+            ))}
+          </div>
         </CardHeader>
         <CardContent className="p-0">
           <datalist id="browse-suppliers">
@@ -267,12 +266,24 @@ export default async function BestellenPage({
                               {p.unit ? ` / ${p.unit}` : ""}
                             </p>
                           </div>
+                          {(() => {
+                            const n = p.stockQty != null ? Number(p.stockQty) : 0;
+                            return (
+                              <span
+                                className={`hidden shrink-0 text-xs sm:inline ${
+                                  n > 0 ? "text-success" : "text-muted"
+                                }`}
+                                title="Actuele voorraad"
+                              >
+                                {n > 0 ? `${n}${p.unit ? " " + p.unit : ""} op voorraad` : "niet op voorraad"}
+                              </span>
+                            );
+                          })()}
                           <input
                             name="supplierName"
                             list="browse-suppliers"
                             placeholder="Leverancier"
                             defaultValue={supplierForSku(p.sku)}
-                            required
                             className="h-8 w-36 rounded-md border border-border bg-background px-2 text-sm"
                           />
                           <input

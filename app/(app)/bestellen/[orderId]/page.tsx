@@ -54,8 +54,8 @@ export default async function OrderDetailPage({
   const lines = items
     .map((it) => `• ${it.skuSnapshot}  —  ${it.description}${it.size ? ` · ${it.size}` : ""}  ×  ${Number(it.qty)} ${UNIT_LABEL[it.unit] ?? it.unit}`)
     .join("\n");
-  const subject = `Bestelling ${COMPANY.name} — ${orderNo}`;
-  const body = `Beste ${order.supplierName},\n\nGraag bestellen wij het volgende${order.customerRef ? ` (ref. ${order.customerRef})` : ""}:\n\n${lines}\n\n${order.notes ? order.notes + "\n\n" : ""}De volledige bestelbon zit als PDF bijgevoegd.\n\nMet vriendelijke groet,\n${COMPANY.name}\n${COMPANY.email} · ${COMPANY.phone}`;
+  const subject = `Purchase order ${COMPANY.name} — ${orderNo}`;
+  const body = `Dear ${order.supplierName},\n\nWe would like to order the following${order.customerRef ? ` (ref. ${order.customerRef})` : ""}:\n\n${lines}\n\n${order.notes ? order.notes + "\n\n" : ""}Please find the full purchase order attached as a PDF.\n\nKind regards,\n${COMPANY.name}\n${COMPANY.email} · ${COMPANY.phone}`;
   const mailto = `mailto:${order.supplierEmail ?? ""}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
 
   return (

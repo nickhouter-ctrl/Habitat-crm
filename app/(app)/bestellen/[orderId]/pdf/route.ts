@@ -1,9 +1,9 @@
 import { NextResponse } from "next/server";
-import { asc, eq } from "drizzle-orm";
+import { asc, eq, inArray } from "drizzle-orm";
 
 import { auth } from "@/auth";
 import { db } from "@/lib/db";
-import { supplierOrderItems, supplierOrders } from "@/lib/db/schema";
+import { catalogVariants, products, supplierOrderItems, supplierOrders } from "@/lib/db/schema";
 import { renderSupplierOrderPdf } from "@/lib/supplier-order-pdf";
 import { formatDate } from "@/lib/utils";
 
@@ -28,6 +28,26 @@ export async function GET(
     .where(eq(supplierOrderItems.orderId, orderId))
     .orderBy(asc(supplierOrderItems.skuSnapshot));
 
+  // Productfoto's per regel ophalen (product óf catalogusvariant).
+  const productIds = items.map((i) => i.productId).filter((v): v is string => !!v);
+  const variantIds = items.map((i) => i.catalogVariantId).filter((v): v is string => !!v);
+  const [prodImgs, varImgs] = await Promise.all([
+    productIds.length
+      ? db
+          .select({ id: products.id, image: products.imageUrl })
+          .from(products)
+          .where(inArray(products.id, productIds))
+      : Promise.resolve([] as { id: string; image: string | null }[]),
+    variantIds.length
+      ? db
+          .select({ id: catalogVariants.id, image: catalogVariants.imageUrl })
+          .from(catalogVariants)
+          .where(inArray(catalogVariants.id, variantIds))
+      : Promise.resolve([] as { id: string; image: string | null }[]),
+  ]);
+  const imgByProduct = new Map(prodImgs.map((r) => [r.id, r.image]));
+  const imgByVariant = new Map(varImgs.map((r) => [r.id, r.image]));
+
   const pdf = await renderSupplierOrderPdf({
     orderNumber: order.id.slice(0, 8).toUpperCase(),
     dateLabel: formatDate(order.createdAt),
@@ -41,6 +61,11 @@ export async function GET(
       size: it.size,
       qty: String(Number(it.qty)),
       unit: it.unit,
+      image: it.productId
+        ? imgByProduct.get(it.productId) ?? null
+        : it.catalogVariantId
+          ? imgByVariant.get(it.catalogVariantId) ?? null
+          : null,
     })),
   });
 
