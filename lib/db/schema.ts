@@ -1053,6 +1053,8 @@ export const catalogVariantSizes = pgTable(
     kgPerBox: text(), // range, bv. "18~22"
     salePrice: numeric({ precision: 14, scale: 2 }),
     supplierPrice: numeric({ precision: 14, scale: 2 }),
+    /** Hebben we deze specifieke maat fysiek op voorraad? */
+    inStock: boolean().notNull().default(false),
     sortOrder: integer().notNull().default(0),
     ...timestamps,
   },

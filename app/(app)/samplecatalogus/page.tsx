@@ -88,6 +88,7 @@ export default async function SampleCatalogPage({
       productName: catalogProducts.nameEn,
       collectionName: catalogCollections.nameEn,
       sizes: sql<number>`(select count(*)::int from catalog_variant_sizes s where s.variant_id = ${catalogVariants.id})`,
+      sizesInStock: sql<number>`(select count(*)::int from catalog_variant_sizes s where s.variant_id = ${catalogVariants.id} and s.in_stock)`,
     })
     .from(catalogVariants)
     .leftJoin(catalogProducts, eq(catalogVariants.productId, catalogProducts.id))
@@ -217,7 +218,12 @@ export default async function SampleCatalogPage({
                   <Td>
                     <span className="font-mono text-xs">{displaySku(r)}</span>
                   </Td>
-                  <Td className="text-sm">{r.sizes}</Td>
+                  <Td className="text-sm">
+                    {r.sizes}
+                    {r.sizesInStock > 0 && (
+                      <span className="ml-1 text-xs text-success">· {r.sizesInStock} op vrd</span>
+                    )}
+                  </Td>
                   <Td className="text-sm">
                     {r.salePrice ? formatEUR(r.salePrice) : <span className="text-muted">op aanvraag</span>}
                   </Td>

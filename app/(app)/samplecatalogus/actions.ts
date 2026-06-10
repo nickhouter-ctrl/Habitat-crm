@@ -276,6 +276,18 @@ export async function deleteSize(formData: FormData) {
   revalidatePath(`/samplecatalogus/${variantId}`);
 }
 
+/** Markeer/ontmarkeer een specifieke maat als op voorraad. */
+export async function toggleSizeStock(formData: FormData) {
+  await requireUser();
+  const id = String(formData.get("id") ?? "");
+  const variantId = String(formData.get("variantId") ?? "");
+  const value = String(formData.get("value") ?? "") === "true";
+  if (!id) throw new Error("Ontbrekende id.");
+  await db.update(catalogVariantSizes).set({ inStock: value }).where(eq(catalogVariantSizes.id, id));
+  revalidatePath(`/samplecatalogus/${variantId}`);
+  revalidatePath("/samplecatalogus");
+}
+
 /* ---------------------------------------------------------- matching met products */
 
 /**

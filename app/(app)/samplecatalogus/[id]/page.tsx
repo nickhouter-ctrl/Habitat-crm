@@ -33,6 +33,7 @@ import {
 import {
   addSize,
   deleteSize,
+  toggleSizeStock,
   toggleVariantFlag,
   unmatchVariant,
   updateSize,
@@ -234,21 +235,37 @@ export default async function VariantDetailPage({
                     {sizes.map((s) => (
                       <Tr key={s.id}>
                         <Td colSpan={7} className="p-0">
-                          <form action={updateSize} className="grid grid-cols-[1.4fr_1fr_0.9fr_0.8fr_1fr_1fr_auto] items-center gap-2 px-3 py-2">
-                            <input type="hidden" name="id" value={s.id} />
-                            <input type="hidden" name="variantId" value={id} />
-                            <Input name="productSize" defaultValue={s.productSize} className="h-8" />
-                            <Input name="thicknessMm" defaultValue={s.thicknessMm ?? ""} className="h-8" />
-                            <Input name="sqmPerBox" defaultValue={s.sqmPerBox ?? ""} className="h-8" />
-                            <Input name="pcsPerBox" defaultValue={s.pcsPerBox ?? ""} className="h-8" />
-                            <Input name="salePrice" defaultValue={s.salePrice ?? ""} className="h-8" />
-                            <Input name="supplierPrice" defaultValue={s.supplierPrice ?? ""} className="h-8" />
-                            <div className="flex gap-1">
+                          <div className="flex items-center gap-2 px-3 py-2">
+                            <form action={updateSize} className="grid flex-1 grid-cols-[1.4fr_1fr_0.9fr_0.8fr_1fr_1fr_auto] items-center gap-2">
+                              <input type="hidden" name="id" value={s.id} />
+                              <input type="hidden" name="variantId" value={id} />
+                              <Input name="productSize" defaultValue={s.productSize} className="h-8" />
+                              <Input name="thicknessMm" defaultValue={s.thicknessMm ?? ""} className="h-8" />
+                              <Input name="sqmPerBox" defaultValue={s.sqmPerBox ?? ""} className="h-8" />
+                              <Input name="pcsPerBox" defaultValue={s.pcsPerBox ?? ""} className="h-8" />
+                              <Input name="salePrice" defaultValue={s.salePrice ?? ""} className="h-8" />
+                              <Input name="supplierPrice" defaultValue={s.supplierPrice ?? ""} className="h-8" />
                               <SubmitButton size="sm" variant="secondary">
                                 ✓
                               </SubmitButton>
-                            </div>
-                          </form>
+                            </form>
+                            <form action={toggleSizeStock}>
+                              <input type="hidden" name="id" value={s.id} />
+                              <input type="hidden" name="variantId" value={id} />
+                              <input type="hidden" name="value" value={s.inStock ? "false" : "true"} />
+                              <button
+                                type="submit"
+                                className={`whitespace-nowrap rounded-full border px-2.5 py-1 text-xs ${
+                                  s.inStock
+                                    ? "border-green-200 bg-green-50 text-success"
+                                    : "border-border text-muted hover:bg-muted/50"
+                                }`}
+                                title="Klik om te wisselen"
+                              >
+                                {s.inStock ? "✓ Op voorraad" : "Niet op voorraad"}
+                              </button>
+                            </form>
+                          </div>
                         </Td>
                       </Tr>
                     ))}
