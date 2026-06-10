@@ -257,7 +257,16 @@ export default async function BestellenPage({
                             costEur?: number | null;
                             stockQty?: number | null;
                           }> | null) ?? [];
-                        const stock = p.stockQty != null ? Number(p.stockQty) : 0;
+                        const orderable = sizes.filter((sz) => sz.label);
+                        const multiSize = orderable.length >= 2;
+                        const single = orderable.length === 1 ? orderable[0] : null;
+                        const inkoop = single?.purchaseEur ?? (p.purchaseCostEur != null ? Number(p.purchaseCostEur) : null);
+                        const kostprijs = single?.costEur ?? (p.costEur != null ? Number(p.costEur) : null);
+                        const stock = single
+                          ? (single.stockQty ?? 0)
+                          : p.stockQty != null
+                            ? Number(p.stockQty)
+                            : 0;
                         return (
                           <li key={p.id} className="flex flex-wrap items-start gap-2 px-4 py-2">
                             <input type="hidden" name="productId" value={p.id} />
@@ -271,10 +280,10 @@ export default async function BestellenPage({
                               <p className="truncate text-sm">{p.name}</p>
                               <p className="truncate text-xs text-muted">
                                 {p.sku ? <span className="font-mono">{p.sku}</span> : null}
-                                {p.purchaseCostEur ? ` · inkoop ${formatEUR(p.purchaseCostEur)}` : ""}
-                                {p.costEur ? ` · kostprijs ${formatEUR(p.costEur)}` : ""}
+                                {inkoop != null ? ` · inkoop ${formatEUR(inkoop)}` : ""}
+                                {kostprijs != null ? ` · kostprijs ${formatEUR(kostprijs)}` : ""}
                               </p>
-                              {sizes.filter((sz) => sz.label).length > 0 && (
+                              {multiSize && (
                                 <div className="mt-1 overflow-hidden rounded border border-border/60 bg-muted/15 text-[10px]">
                                   <div className="grid grid-cols-[1.1fr_1.2fr_0.6fr_0.9fr_0.9fr] gap-x-2 border-b border-border bg-background/60 px-2 py-0.5 font-medium text-muted">
                                     <span>Afmeting</span>
@@ -324,14 +333,14 @@ export default async function BestellenPage({
                               defaultValue={supplierForSku(p.sku)}
                               className="h-8 w-32 rounded-md border border-border bg-background px-2 text-sm"
                             />
-                            {sizes.length > 0 ? (
+                            {multiSize ? (
                               <select
                                 name="size"
                                 className="h-8 w-36 rounded-md border border-border bg-background px-2 text-sm"
                                 title="Maat"
                               >
                                 <option value="">Standaardmaat</option>
-                                {sizes.map((sz) => (
+                                {orderable.map((sz) => (
                                   <option key={sz.sku || sz.label} value={sz.label}>
                                     {sz.label}
                                     {(sz.stockQty ?? 0) > 0 ? ` — ${sz.stockQty} op vrd` : ""}
@@ -339,7 +348,7 @@ export default async function BestellenPage({
                                 ))}
                               </select>
                             ) : (
-                              <input type="hidden" name="size" value="" />
+                              <input type="hidden" name="size" value={single?.label ?? ""} />
                             )}
                             <input
                               name="qty"

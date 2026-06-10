@@ -320,9 +320,6 @@ export default async function ProductsPage({
                 <TBody>
                   {items.map((p) => {
                     const price = Number(p.priceEur ?? 0);
-                    const cost = Number(p.costEur ?? 0);
-                    const margin = price > 0 && cost > 0 ? price - cost : null;
-                    const marginPct = margin != null && price > 0 ? Math.round((margin / price) * 100) : null;
                     const m2 =
                       p.widthMm && p.heightMm
                         ? (Number(p.widthMm) * Number(p.heightMm)) / 1_000_000
@@ -346,6 +343,15 @@ export default async function ProductsPage({
                       }> | null) ?? []
                     ).filter((s) => s.sku || s.label);
                     const hasGrid = sizeRows.length >= 2;
+                    const single = sizeRows.length === 1 ? sizeRows[0] : null;
+                    const dispPrice = single?.priceEur ?? (p.priceEur != null ? Number(p.priceEur) : null);
+                    const dispPurchase =
+                      single?.purchaseEur ?? (p.purchaseCostEur != null ? Number(p.purchaseCostEur) : null);
+                    const dispCost = single?.costEur ?? (p.costEur != null ? Number(p.costEur) : null);
+                    const dispStock = single ? (single.stockQty ?? 0) : stock;
+                    const dispMargin = dispPrice != null && dispCost != null ? dispPrice - dispCost : null;
+                    const dispMarginPct =
+                      dispMargin != null && dispPrice ? Math.round((dispMargin / dispPrice) * 100) : null;
                     return (
                       <Fragment key={p.id}>
                       <Tr>
@@ -401,14 +407,14 @@ export default async function ProductsPage({
                         <Td
                           className={cn(
                             "align-top text-right tabular-nums",
-                            stock != null && stock <= 0 && "font-medium text-danger",
+                            dispStock != null && dispStock <= 0 && "font-medium text-danger",
                           )}
                         >
-                          {stock != null ? stock.toLocaleString("nl-NL") : "—"}
+                          {dispStock != null ? dispStock.toLocaleString("nl-NL") : "—"}
                           {(() => {
                             const reserved = reservedByProduct.get(p.id) ?? 0;
                             if (reserved <= 0) return null;
-                            const free = (stock ?? 0) - reserved;
+                            const free = (dispStock ?? 0) - reserved;
                             return (
                               <span
                                 className="block text-[10px] font-normal text-warning"
@@ -438,8 +444,8 @@ export default async function ProductsPage({
                             <span className="text-muted/40">·</span>
                           ) : (
                             <>
-                              {p.priceEur ? formatEUR(p.priceEur) : "—"}
-                              {pricePerM2 != null && (
+                              {dispPrice != null ? formatEUR(dispPrice) : "—"}
+                              {!single && pricePerM2 != null && (
                                 <span className="block text-xs text-muted">{formatEUR(pricePerM2)}/m²</span>
                               )}
                             </>
@@ -447,23 +453,23 @@ export default async function ProductsPage({
                         </Td>
                         <Td className="text-right tabular-nums text-muted">{p.vatRate}%</Td>
                         <Td className="text-right tabular-nums text-muted">
-                          {hasGrid ? <span className="text-muted/40">·</span> : p.purchaseCostEur ? formatEUR(p.purchaseCostEur) : "—"}
+                          {hasGrid ? <span className="text-muted/40">·</span> : dispPurchase != null ? formatEUR(dispPurchase) : "—"}
                         </Td>
                         <Td className="text-right tabular-nums text-muted">
-                          {hasGrid ? <span className="text-muted/40">·</span> : p.costEur ? formatEUR(p.costEur) : "—"}
+                          {hasGrid ? <span className="text-muted/40">·</span> : dispCost != null ? formatEUR(dispCost) : "—"}
                         </Td>
                         <Td className="text-right tabular-nums">
                           {hasGrid ? (
                             <span className="text-muted/40">·</span>
-                          ) : margin != null ? (
+                          ) : dispMargin != null ? (
                             <>
-                              <span>{formatEUR(margin)}</span>
-                              {marginPct != null && (
+                              <span>{formatEUR(dispMargin)}</span>
+                              {dispMarginPct != null && (
                                 <span className={cn(
                                   "ml-1 text-xs",
-                                  marginPct < 0 ? "text-danger" : marginPct < 15 ? "text-warning" : "text-muted",
+                                  dispMarginPct < 0 ? "text-danger" : dispMarginPct < 15 ? "text-warning" : "text-muted",
                                 )}>
-                                  ({marginPct}%)
+                                  ({dispMarginPct}%)
                                 </span>
                               )}
                             </>
@@ -479,7 +485,7 @@ export default async function ProductsPage({
                           )}
                         </Td>
                       </Tr>
-                      {sizeRows.length > 0 && (
+                      {hasGrid && (
                         <Tr>
                           <Td colSpan={13} className="p-0">
                             <div className="mx-3 mb-2 overflow-hidden rounded-md border border-border/60 bg-muted/15 text-[11px]">
