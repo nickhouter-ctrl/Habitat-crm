@@ -89,6 +89,7 @@ export default async function SampleCatalogPage({
       collectionName: catalogCollections.nameEn,
       sizes: sql<number>`(select count(*)::int from catalog_variant_sizes s where s.variant_id = ${catalogVariants.id})`,
       sizesInStock: sql<number>`(select count(*)::int from catalog_variant_sizes s where s.variant_id = ${catalogVariants.id} and s.in_stock)`,
+      sizeLabels: sql<string | null>`(select string_agg(s.product_size, '|' order by s.sort_order) from catalog_variant_sizes s where s.variant_id = ${catalogVariants.id})`,
     })
     .from(catalogVariants)
     .leftJoin(catalogProducts, eq(catalogVariants.productId, catalogProducts.id))
@@ -215,8 +216,22 @@ export default async function SampleCatalogPage({
                     </Link>
                   </Td>
                   <Td className="text-sm text-muted">{r.collectionName}</Td>
-                  <Td>
+                  <Td className="align-top">
                     <span className="font-mono text-xs">{displaySku(r)}</span>
+                    {(() => {
+                      const labels = (r.sizeLabels ?? "").split("|").filter(Boolean);
+                      const base = displaySku(r);
+                      return labels.length >= 2 ? (
+                        <div className="mt-1 border-l border-border/60 pl-2 text-[10px] leading-snug text-muted/70">
+                          {labels.map((lbl, i) => (
+                            <div key={i} className="whitespace-nowrap">
+                              <span className="font-mono">{`${base}-${i + 1}`}</span>
+                              <span className="ml-1 tabular-nums">{lbl.replace(/\*/g, "×")}</span>
+                            </div>
+                          ))}
+                        </div>
+                      ) : null;
+                    })()}
                   </Td>
                   <Td className="text-sm">
                     {r.sizes}

@@ -368,7 +368,18 @@ export const products = pgTable(
      *    { sku: "MS-168", label: "1200 × 190 mm" }]
      */
     additionalSizes: jsonb().$type<
-      Array<{ sku: string; label: string; priceEur?: number | null; inStock?: boolean }>
+      Array<{
+        sku: string;
+        label: string;
+        /** Verkoopprijs (particulier, ex. BTW) voor deze maat. */
+        priceEur?: number | null;
+        /** Inkoopprijs voor deze maat. */
+        purchaseEur?: number | null;
+        /** Voorraad-aantal van deze maat. */
+        stockQty?: number | null;
+        /** Afgeleid: stockQty > 0 (voor snelle weergave/filter). */
+        inStock?: boolean;
+      }>
     >(),
     /**
      * Bundle-componenten voor set/kit-producten. Per regel een component-SKU

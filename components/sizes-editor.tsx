@@ -3,11 +3,20 @@
 import { useState } from "react";
 import { Plus, Trash2 } from "lucide-react";
 
-type Size = { sku: string; label: string; priceEur?: number | null; inStock?: boolean };
+type Size = {
+  sku: string;
+  label: string;
+  priceEur?: number | null;
+  purchaseEur?: number | null;
+  stockQty?: number | null;
+  inStock?: boolean;
+};
+
+const numOrNull = (v: string) => (v === "" ? null : Number(v));
 
 /**
  * Bewerkt de beschikbare maten van een product (products.additionalSizes).
- * Per maat: afmeting, eigen SKU, prijs (ex. BTW) en of die maat op voorraad is.
+ * Per maat: afmeting, eigen SKU, inkoop- en verkoopprijs (ex. BTW) en voorraad-aantal.
  * Serialiseert naar een hidden input "additionalSizes" (JSON) voor de server action.
  */
 export function SizesEditor({ initial }: { initial?: Size[] | null }) {
@@ -16,7 +25,8 @@ export function SizesEditor({ initial }: { initial?: Size[] | null }) {
       sku: s.sku ?? "",
       label: s.label ?? "",
       priceEur: s.priceEur ?? null,
-      inStock: !!s.inStock,
+      purchaseEur: s.purchaseEur ?? null,
+      stockQty: s.stockQty ?? null,
     })),
   );
 
@@ -24,29 +34,34 @@ export function SizesEditor({ initial }: { initial?: Size[] | null }) {
     setRows((r) => r.map((row, j) => (j === i ? { ...row, ...patch } : row)));
   }
   function add() {
-    setRows((r) => [...r, { sku: "", label: "", priceEur: null, inStock: false }]);
+    setRows((r) => [...r, { sku: "", label: "", priceEur: null, purchaseEur: null, stockQty: null }]);
   }
   function remove(i: number) {
     setRows((r) => r.filter((_, j) => j !== i));
   }
 
-  // Lege rijen (zonder afmeting) niet meesturen.
-  const clean = rows.filter((r) => r.label.trim() || r.sku.trim());
+  // Lege rijen niet meesturen; inStock afleiden uit voorraad.
+  const clean = rows
+    .filter((r) => r.label.trim() || r.sku.trim())
+    .map((r) => ({ ...r, inStock: (r.stockQty ?? 0) > 0 }));
+
+  const cols = "grid-cols-[1.2fr_1.2fr_0.9fr_0.9fr_0.8fr_auto]";
 
   return (
     <div className="space-y-2">
       <input type="hidden" name="additionalSizes" value={JSON.stringify(clean)} />
       {rows.length > 0 && (
-        <div className="grid grid-cols-[1.3fr_1.3fr_1fr_auto_auto] items-center gap-2 px-1 text-[11px] font-medium text-muted">
+        <div className={`grid ${cols} items-center gap-1.5 px-1 text-[11px] font-medium text-muted`}>
           <span>Afmeting</span>
           <span>SKU</span>
-          <span>Prijs € (ex.)</span>
+          <span>Inkoop €</span>
+          <span>Verkoop €</span>
           <span>Voorraad</span>
           <span></span>
         </div>
       )}
       {rows.map((row, i) => (
-        <div key={i} className="grid grid-cols-[1.3fr_1.3fr_1fr_auto_auto] items-center gap-2">
+        <div key={i} className={`grid ${cols} items-center gap-1.5`}>
           <input
             value={row.label}
             onChange={(e) => update(i, { label: e.target.value })}
@@ -60,24 +75,32 @@ export function SizesEditor({ initial }: { initial?: Size[] | null }) {
             className="h-9 rounded-md border border-border bg-background px-2 font-mono text-xs"
           />
           <input
-            value={row.priceEur ?? ""}
-            onChange={(e) =>
-              update(i, { priceEur: e.target.value === "" ? null : Number(e.target.value) })
-            }
+            value={row.purchaseEur ?? ""}
+            onChange={(e) => update(i, { purchaseEur: numOrNull(e.target.value) })}
             type="number"
             step="0.01"
             min={0}
             placeholder="—"
-            className="h-9 rounded-md border border-border bg-background px-2 text-sm"
+            className="h-9 rounded-md border border-border bg-background px-2 text-right text-sm tabular-nums"
           />
-          <label className="flex items-center justify-center">
-            <input
-              type="checkbox"
-              checked={!!row.inStock}
-              onChange={(e) => update(i, { inStock: e.target.checked })}
-              className="size-4 rounded border-border"
-            />
-          </label>
+          <input
+            value={row.priceEur ?? ""}
+            onChange={(e) => update(i, { priceEur: numOrNull(e.target.value) })}
+            type="number"
+            step="0.01"
+            min={0}
+            placeholder="—"
+            className="h-9 rounded-md border border-border bg-background px-2 text-right text-sm tabular-nums"
+          />
+          <input
+            value={row.stockQty ?? ""}
+            onChange={(e) => update(i, { stockQty: numOrNull(e.target.value) })}
+            type="number"
+            step="1"
+            min={0}
+            placeholder="0"
+            className="h-9 rounded-md border border-border bg-background px-2 text-right text-sm tabular-nums"
+          />
           <button
             type="button"
             onClick={() => remove(i)}
