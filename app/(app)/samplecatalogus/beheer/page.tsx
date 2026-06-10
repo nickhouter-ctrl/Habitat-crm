@@ -1,4 +1,5 @@
-import { asc, sql } from "drizzle-orm";
+import { asc, eq, sql } from "drizzle-orm";
+import Link from "next/link";
 import { Trash2 } from "lucide-react";
 
 import { ConfirmSubmit } from "@/components/confirm-submit";
@@ -14,7 +15,7 @@ import {
   PageHeader,
 } from "@/components/ui";
 import { db } from "@/lib/db";
-import { catalogCollections, catalogProducts } from "@/lib/db/schema";
+import { catalogCollections, catalogProducts, catalogVariants } from "@/lib/db/schema";
 import {
   createCatalogProduct,
   createCollection,
