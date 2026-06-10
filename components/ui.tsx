@@ -248,16 +248,24 @@ export function EmptyState({
   title,
   description,
   action,
+  icon,
 }: {
   title: string;
   description?: string;
   action?: ReactNode;
+  /** Optioneel icoon in een cirkel boven de titel. */
+  icon?: ReactNode;
 }) {
   return (
     <div className="flex flex-col items-center justify-center gap-2 rounded-xl border border-dashed bg-surface px-6 py-14 text-center">
-      <p className="text-sm font-medium">{title}</p>
+      {icon && (
+        <span className="mb-1 flex size-12 items-center justify-center rounded-full bg-background text-muted [&_svg]:size-6">
+          {icon}
+        </span>
+      )}
+      <p className="text-base font-semibold tracking-tight">{title}</p>
       {description && <p className="max-w-sm text-sm text-muted">{description}</p>}
-      {action && <div className="mt-2">{action}</div>}
+      {action && <div className="mt-3">{action}</div>}
     </div>
   );
 }
