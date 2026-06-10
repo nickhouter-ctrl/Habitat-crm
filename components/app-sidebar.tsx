@@ -51,10 +51,11 @@ const NAV = [
 
 export function AppSidebar({
   user,
-  pendingCount = 0,
+  badges = {},
 }: {
   user: { name?: string | null; email?: string | null; role?: string };
-  pendingCount?: number;
+  /** Per nav-href een teller; toont een badge als > 0. */
+  badges?: Record<string, number>;
 }) {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
@@ -87,10 +88,10 @@ export function AppSidebar({
               )}
             >
               <item.icon className="size-4 shrink-0" />
-              {item.label}
-              {item.href === "/aanvragen" && pendingCount > 0 && (
-                <span className="ml-auto grid h-5 min-w-5 place-items-center rounded-full bg-red-500 px-1.5 text-xs font-semibold text-white">
-                  {pendingCount}
+              <span className="truncate">{item.label}</span>
+              {(badges[item.href] ?? 0) > 0 && (
+                <span className="ml-auto grid h-5 min-w-5 shrink-0 place-items-center rounded-full bg-red-500 px-1.5 text-xs font-semibold text-white">
+                  {badges[item.href] > 99 ? "99+" : badges[item.href]}
                 </span>
               )}
             </Link>
