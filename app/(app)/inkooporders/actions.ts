@@ -444,6 +444,7 @@ export async function createReorderPurchaseOrder(group: string) {
   const lowStock = await db.query.products.findMany({
     where: and(
       eq(products.isActive, true),
+      sql`${products.availability} <> 'order_only'`,
       isNotNull(products.stockMin),
       sql`coalesce(${products.stockQty}, 0) < ${products.stockMin}`,
       group === "__overig__"
