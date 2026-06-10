@@ -23,7 +23,6 @@ export async function GET(req: Request) {
   const onlyActive = url.searchParams.get("onlyActive") === "on";
   const onlyWithPrice = url.searchParams.get("onlyWithPrice") === "on";
   const onlyInStock = url.searchParams.get("onlyInStock") === "on";
-  const avail = url.searchParams.get("avail") ?? "all";
   const audience = url.searchParams.get("audience") === "trade" ? "trade" : "particulier";
   const langParam = url.searchParams.get("lang") ?? "nl";
   const locale: PricelistLocale = LOCALES.includes(langParam as PricelistLocale)
@@ -38,11 +37,6 @@ export async function GET(req: Request) {
     onlyInStock
       ? sql`coalesce(${products.stockQty}, 0) > 0 and ${products.availability} <> 'order_only'`
       : undefined,
-    avail === "stock"
-      ? sql`${products.availability} <> 'order_only'`
-      : avail === "order"
-        ? sql`${products.availability} = 'order_only'`
-        : undefined,
   ].filter(Boolean) as never[];
 
   const rows = await db
