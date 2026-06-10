@@ -174,14 +174,24 @@ export function LineItemsEditor({
   const removeRow = (i: number) =>
     setRows((rs) => (rs.length > 1 ? rs.filter((_, idx) => idx !== i) : rs));
 
-  const addFromProduct = (productId: string) => {
+  const addFromProduct = (productId: string, sizeIndex?: number) => {
     const p = products.find((x) => x.id === productId);
     if (!p) return;
+    const size =
+      sizeIndex != null ? (p.additionalSizes ?? [])[sizeIndex] : undefined;
+    // Maat-prijs heeft voorrang; anders de productprijs.
+    const basePrice = priceFor(p);
+    const sizePrice =
+      size && size.priceEur != null && size.priceEur !== undefined
+        ? Number(size.priceEur)
+        : basePrice
+          ? Number(basePrice)
+          : null;
     const row: Row = {
-      name: p.name,
-      description: p.category ? p.category : "",
+      name: size ? `${p.name} — ${size.label}` : p.name,
+      description: size ? size.label : p.category ? p.category : "",
       units: "1",
-      price: priceFor(p) ? String(round2(Number(priceFor(p)))) : "",
+      price: sizePrice != null ? String(round2(sizePrice)) : "",
       discount: "0",
       taxRate: String(p.vatRate ?? 21),
       category: "materiaal",
@@ -721,6 +731,44 @@ export function LineItemsEditor({
                                   </span>
                                 </span>
                               </button>
+                              {(p.additionalSizes ?? []).filter((s) => s.label).length > 0 && (
+                                <ul className="border-t bg-background/40 pl-8">
+                                  {(p.additionalSizes ?? []).map((s, si) =>
+                                    s.label ? (
+                                      <li key={s.sku || si}>
+                                        <button
+                                          type="button"
+                                          onClick={() => {
+                                            addFromProduct(p.id, si);
+                                            setAddedIds((prev) => new Set(prev).add(p.id));
+                                          }}
+                                          className="flex w-full items-center justify-between gap-3 px-5 py-1.5 text-left text-sm hover:bg-background"
+                                        >
+                                          <span className="flex items-center gap-2">
+                                            {s.inStock ? (
+                                              <span className="text-success" title="op voorraad">
+                                                ●
+                                              </span>
+                                            ) : null}
+                                            <span className="tabular-nums">{s.label.replace(/\*/g, "×")}</span>
+                                            {s.sku ? (
+                                              <span className="font-mono text-xs text-muted">{s.sku}</span>
+                                            ) : null}
+                                          </span>
+                                          <span className="flex shrink-0 items-center gap-3 text-xs">
+                                            <span className="tabular-nums">
+                                              {s.priceEur != null ? formatEUR(s.priceEur) : "—"}
+                                            </span>
+                                            <span className="rounded bg-accent/10 px-2 py-0.5 font-medium text-accent">
+                                              + maat
+                                            </span>
+                                          </span>
+                                        </button>
+                                      </li>
+                                    ) : null,
+                                  )}
+                                </ul>
+                              )}
                             </li>
                           );
                         })}
