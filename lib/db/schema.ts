@@ -373,8 +373,10 @@ export const products = pgTable(
         label: string;
         /** Verkoopprijs (particulier, ex. BTW) voor deze maat. */
         priceEur?: number | null;
-        /** Inkoopprijs voor deze maat. */
+        /** Inkoopprijs (raw, leverancier) voor deze maat. */
         purchaseEur?: number | null;
+        /** Kostprijs (landed: inkoop + vracht/invoer/kosten) voor deze maat. */
+        costEur?: number | null;
         /** Voorraad-aantal van deze maat. */
         stockQty?: number | null;
         /** Afgeleid: stockQty > 0 (voor snelle weergave/filter). */

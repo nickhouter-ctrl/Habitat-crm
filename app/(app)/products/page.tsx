@@ -1,6 +1,7 @@
 import { and, asc, eq, ilike, isNotNull, isNull, lt, ne, or, sql } from "drizzle-orm";
 import { Search } from "lucide-react";
 import Link from "next/link";
+import { Fragment } from "react";
 
 import {
   Badge,
@@ -334,8 +335,19 @@ export default async function ProductsPage({
                       : p.stockQty != null
                         ? Number(p.stockQty)
                         : null;
+                    const sizeRows = (
+                      (p.additionalSizes as Array<{
+                        sku: string;
+                        label: string;
+                        priceEur?: number | null;
+                        purchaseEur?: number | null;
+                        costEur?: number | null;
+                        stockQty?: number | null;
+                      }> | null) ?? []
+                    ).filter((s) => s.sku || s.label);
                     return (
-                      <Tr key={p.id}>
+                      <Fragment key={p.id}>
+                      <Tr>
                         <Td className="font-medium">
                           <div className="flex items-center gap-2.5">
                             {p.imageUrl ? (
@@ -384,34 +396,6 @@ export default async function ProductsPage({
                         </Td>
                         <Td className="align-top text-muted">
                           <span className="font-mono">{p.sku ?? "—"}</span>
-                          {(() => {
-                            const szs =
-                              (p.additionalSizes as Array<{
-                                sku: string;
-                                label: string;
-                                priceEur?: number | null;
-                                stockQty?: number | null;
-                                inStock?: boolean;
-                              }> | null) ?? [];
-                            const withSku = szs.filter((s) => s.sku);
-                            return withSku.length > 0 ? (
-                              <div className="mt-1 border-l border-border/60 pl-2 text-[10px] leading-snug text-muted/70">
-                                {withSku.map((s) => {
-                                  return (
-                                    <div key={s.sku} className="whitespace-nowrap">
-                                      <span className="font-mono">{s.sku}</span>
-                                      <span className="ml-1 tabular-nums">{s.label.replace(/\*/g, "×")}</span>
-                                      {s.priceEur != null ? (
-                                        <span className="ml-1 tabular-nums text-foreground/70">
-                                          {formatEUR(s.priceEur)}
-                                        </span>
-                                      ) : null}
-                                    </div>
-                                  );
-                                })}
-                              </div>
-                            ) : null;
-                          })()}
                         </Td>
                         <Td
                           className={cn(
@@ -435,24 +419,6 @@ export default async function ProductsPage({
                                 </span>
                               </span>
                             );
-                          })()}
-                          {(() => {
-                            const sizeRows = (
-                              (p.additionalSizes as Array<{ sku: string; stockQty?: number | null }> | null) ??
-                              []
-                            ).filter((s) => s.sku);
-                            return sizeRows.length > 0 ? (
-                              <div className="mt-1 text-[10px] leading-snug">
-                                {sizeRows.map((s) => {
-                                  const st = s.stockQty ?? 0;
-                                  return (
-                                    <div key={s.sku} className={st > 0 ? "text-success" : "text-muted/60"}>
-                                      {st}
-                                    </div>
-                                  );
-                                })}
-                              </div>
-                            ) : null;
                           })()}
                         </Td>
                         <Td className="text-right tabular-nums">
@@ -502,6 +468,56 @@ export default async function ProductsPage({
                           )}
                         </Td>
                       </Tr>
+                      {sizeRows.length > 0 && (
+                        <Tr>
+                          <Td colSpan={13} className="p-0">
+                            <div className="mx-3 mb-2 overflow-hidden rounded-md border border-border/60 bg-muted/15 text-[11px]">
+                              <div className="grid grid-cols-[1.2fr_1.4fr_0.7fr_1fr_1fr_1fr_1.1fr] gap-x-2 border-b border-border bg-background/60 px-3 py-1 font-medium text-muted">
+                                <span>Afmeting</span>
+                                <span>SKU</span>
+                                <span className="text-right">Voorraad</span>
+                                <span className="text-right">Verkoop</span>
+                                <span className="text-right">Inkoop</span>
+                                <span className="text-right">Kostprijs</span>
+                                <span className="text-right">Marge</span>
+                              </div>
+                              {sizeRows.map((s, i) => {
+                                const st = s.stockQty ?? 0;
+                                const v = s.priceEur ?? null;
+                                const k = s.costEur ?? null;
+                                const mrg = v != null && k != null ? v - k : null;
+                                const mrgPct = mrg != null && v ? Math.round((mrg / v) * 100) : null;
+                                return (
+                                  <div
+                                    key={s.sku || i}
+                                    className="grid grid-cols-[1.2fr_1.4fr_0.7fr_1fr_1fr_1fr_1.1fr] gap-x-2 border-b border-border/30 px-3 py-1 last:border-b-0"
+                                  >
+                                    <span className="tabular-nums">{s.label.replace(/\*/g, "×")}</span>
+                                    <span className="font-mono text-muted">{s.sku}</span>
+                                    <span className={cn("text-right tabular-nums", st > 0 ? "text-success" : "text-muted/60")}>
+                                      {st}
+                                    </span>
+                                    <span className="text-right tabular-nums">{v != null ? formatEUR(v) : "—"}</span>
+                                    <span className="text-right tabular-nums text-muted">{s.purchaseEur != null ? formatEUR(s.purchaseEur) : "—"}</span>
+                                    <span className="text-right tabular-nums text-muted">{k != null ? formatEUR(k) : "—"}</span>
+                                    <span className="text-right tabular-nums">
+                                      {mrg != null ? (
+                                        <>
+                                          {formatEUR(mrg)}
+                                          {mrgPct != null ? <span className="ml-1 text-muted">({mrgPct}%)</span> : null}
+                                        </>
+                                      ) : (
+                                        "—"
+                                      )}
+                                    </span>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </Td>
+                        </Tr>
+                      )}
+                      </Fragment>
                     );
                   })}
                 </TBody>
