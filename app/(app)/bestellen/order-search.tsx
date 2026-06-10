@@ -13,6 +13,7 @@ type Prod = {
   sku: string | null;
   collection: string | null;
   imageUrl: string | null;
+  additionalSizes: Array<{ sku: string; label: string }> | null;
 };
 type Var = {
   id: string;
@@ -81,6 +82,7 @@ export function OrderSearch({ suppliers }: { suppliers: string[] }) {
               tag="Product"
               defaultSupplier={supplierForSku(p.sku)}
               imageUrl={p.imageUrl}
+              sizes={p.additionalSizes ?? []}
               suppliers={suppliers}
             />
           ))}
@@ -98,6 +100,7 @@ function AddRow({
   tag,
   defaultSupplier,
   imageUrl,
+  sizes = [],
   suppliers,
 }: {
   kind: "catalog" | "product";
@@ -107,6 +110,7 @@ function AddRow({
   tag: string;
   defaultSupplier: string;
   imageUrl?: string | null;
+  sizes?: Array<{ sku: string; label: string }>;
   suppliers: string[];
 }) {
   return (
@@ -138,6 +142,20 @@ function AddRow({
           <option key={s} value={s} />
         ))}
       </datalist>
+      {sizes.length > 0 && (
+        <select
+          name="size"
+          title="Maat"
+          className="h-8 w-40 rounded-md border border-border bg-background px-2 text-sm"
+        >
+          <option value="">Standaardmaat</option>
+          {sizes.map((sz) => (
+            <option key={sz.sku || sz.label} value={sz.label}>
+              {sz.label}
+            </option>
+          ))}
+        </select>
+      )}
       <input
         name="qty"
         type="number"

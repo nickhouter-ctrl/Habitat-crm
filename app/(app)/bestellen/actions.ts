@@ -137,12 +137,17 @@ export async function addToOrder(formData: FormData) {
   } else if (kind === "product") {
     const p = await db.query.products.findFirst({
       where: eq(products.id, refId),
-      columns: { id: true, name: true, sku: true, collection: true },
+      columns: { id: true, name: true, sku: true, collection: true, additionalSizes: true },
     });
     if (!p) throw new Error("Product niet gevonden.");
     productId = p.id;
     sku = p.sku ?? "—";
     description = [p.collection, p.name].filter(Boolean).join(" · ");
+    // Gekozen maat → eigen SKU van die maat gebruiken (indien aanwezig).
+    if (size && Array.isArray(p.additionalSizes)) {
+      const match = p.additionalSizes.find((s) => s.label === size);
+      if (match?.sku) sku = match.sku;
+    }
     // Leverancier afleiden uit de SKU-prefix als die niet is opgegeven.
     if (!defaultSupplier) defaultSupplier = supplierForSku(p.sku);
   } else {
@@ -255,6 +260,7 @@ export async function searchOrderable(term: string) {
         sku: products.sku,
         collection: products.collection,
         imageUrl: products.imageUrl,
+        additionalSizes: products.additionalSizes,
       })
       .from(products)
       .where(

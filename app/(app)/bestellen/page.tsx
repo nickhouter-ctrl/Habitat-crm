@@ -103,6 +103,7 @@ export default async function BestellenPage({
       unit: products.unit,
       imageUrl: products.imageUrl,
       stockQty: products.stockQty,
+      additionalSizes: products.additionalSizes,
     })
     .from(products)
     .where(selectedCol ? eq(products.collection, selectedCol) : undefined)
@@ -286,6 +287,23 @@ export default async function BestellenPage({
                             defaultValue={supplierForSku(p.sku)}
                             className="h-8 w-36 rounded-md border border-border bg-background px-2 text-sm"
                           />
+                          {(() => {
+                            const sizes = (p.additionalSizes as Array<{ sku: string; label: string }> | null) ?? [];
+                            return sizes.length > 0 ? (
+                              <select
+                                name="size"
+                                className="h-8 w-40 rounded-md border border-border bg-background px-2 text-sm"
+                                title="Maat"
+                              >
+                                <option value="">Standaardmaat</option>
+                                {sizes.map((sz) => (
+                                  <option key={sz.sku || sz.label} value={sz.label}>
+                                    {sz.label}
+                                  </option>
+                                ))}
+                              </select>
+                            ) : null;
+                          })()}
                           <input
                             name="qty"
                             type="number"
