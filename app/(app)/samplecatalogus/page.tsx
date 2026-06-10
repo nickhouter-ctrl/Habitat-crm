@@ -2,6 +2,7 @@ import { and, asc, eq, ilike, isNotNull, or, sql } from "drizzle-orm";
 import { Search, QrCode } from "lucide-react";
 import Link from "next/link";
 import { redirect } from "next/navigation";
+import { Fragment } from "react";
 
 import {
   Badge,
@@ -22,7 +23,7 @@ import {
 import { db } from "@/lib/db";
 import { catalogCollections, catalogProducts, catalogVariants, products } from "@/lib/db/schema";
 import { displaySku } from "@/lib/catalog";
-import { formatEUR } from "@/lib/utils";
+import { cn, formatEUR } from "@/lib/utils";
 
 export const metadata = { title: "Samplecatalogus" };
 export const dynamic = "force-dynamic";
@@ -198,8 +199,20 @@ export default async function SampleCatalogPage({
               </Tr>
             </THead>
             <TBody>
-              {rows.map((r) => (
-                <Tr key={r.id} className="hover:bg-muted/40">
+              {rows.map((r) => {
+                const sizeRows = (
+                  (r.prodSizes as Array<{
+                    sku: string;
+                    label: string;
+                    priceEur?: number | null;
+                    purchaseEur?: number | null;
+                    costEur?: number | null;
+                    stockQty?: number | null;
+                  }> | null) ?? []
+                ).filter((s) => s.label);
+                return (
+                <Fragment key={r.id}>
+                <Tr className="hover:bg-muted/40">
                   <Td>
                     <Link href={`/samplecatalogus/${r.id}`} className="flex items-center gap-3">
                       {r.imageUrl ? (
@@ -219,68 +232,16 @@ export default async function SampleCatalogPage({
                     </Link>
                   </Td>
                   <Td className="text-sm text-muted">{r.collectionName}</Td>
-                  <Td className="align-top">
+                  <Td>
                     <span className="font-mono text-xs">{displaySku(r)}</span>
-                    {(() => {
-                      const labels = (r.sizeLabels ?? "").split("|").filter(Boolean);
-                      const base = displaySku(r);
-                      const priceByLabel = new Map(
-                        ((r.prodSizes as Array<{ label: string; priceEur?: number | null }> | null) ?? []).map(
-                          (s) => [s.label.replace(/\*/g, "×"), s.priceEur],
-                        ),
-                      );
-                      return labels.length >= 2 ? (
-                        <div className="mt-1 border-l border-border/60 pl-2 text-[10px] leading-snug text-muted/70">
-                          {labels.map((lbl, i) => {
-                            const lab = lbl.replace(/\*/g, "×");
-                            const pr = priceByLabel.get(lab);
-                            return (
-                              <div key={i} className="whitespace-nowrap">
-                                <span className="font-mono">{`${base}-${i + 1}`}</span>
-                                <span className="ml-1 tabular-nums">{lab}</span>
-                                {pr != null ? (
-                                  <span className="ml-1 tabular-nums text-foreground/70">{formatEUR(pr)}</span>
-                                ) : null}
-                              </div>
-                            );
-                          })}
-                        </div>
-                      ) : null;
-                    })()}
                   </Td>
-                  <Td className="align-top text-sm">
-                    {(() => {
-                      const labels = (r.sizeLabels ?? "").split("|").filter(Boolean);
-                      const stockByLabel = new Map(
-                        ((r.prodSizes as Array<{ label: string; stockQty?: number | null }> | null) ?? [])
-                          .map((s) => [s.label.replace(/\*/g, "×"), s.stockQty ?? 0]),
-                      );
-                      const ps = r.prodStock != null ? Number(r.prodStock) : 0;
-                      return (
-                        <>
-                          <span className="text-muted">{r.sizes} mt</span>
-                          {labels.length >= 2 ? (
-                            <div className="mt-1 text-[10px] leading-snug">
-                              {labels.map((lbl, i) => {
-                                const st = stockByLabel.get(lbl.replace(/\*/g, "×")) ?? 0;
-                                return (
-                                  <div key={i} className={st > 0 ? "text-success" : "text-muted/60"}>
-                                    {st} op vrd
-                                  </div>
-                                );
-                              })}
-                            </div>
-                          ) : ps > 0 ? (
-                            <div className="text-xs font-medium text-success">{ps} op voorraad</div>
-                          ) : null}
-                          {labels.length >= 2 &&
-                          ps > 0 &&
-                          ![...stockByLabel.values()].some((n) => n > 0) ? (
-                            <div className="mt-0.5 text-[10px] text-muted/70">{ps} totaal · verdeel ↑</div>
-                          ) : null}
-                        </>
-                      );
-                    })()}
+                  <Td className="text-sm">
+                    <span className="text-muted">{r.sizes} mt</span>
+                    {(r.prodStock != null ? Number(r.prodStock) : 0) > 0 ? (
+                      <span className="ml-1 text-xs font-medium text-success">
+                        · {Number(r.prodStock)} op vrd
+                      </span>
+                    ) : null}
                   </Td>
                   <Td className="text-sm">
                     {r.salePrice ? formatEUR(r.salePrice) : <span className="text-muted">op aanvraag</span>}
@@ -295,7 +256,58 @@ export default async function SampleCatalogPage({
                     </div>
                   </Td>
                 </Tr>
-              ))}
+                {sizeRows.length >= 2 && (
+                  <Tr>
+                    <Td colSpan={6} className="p-0">
+                      <div className="mx-3 mb-2 overflow-hidden rounded-md border border-border/60 bg-muted/15 text-[11px]">
+                        <div className="grid grid-cols-[1.2fr_1.4fr_0.7fr_1fr_1fr_1fr_1.1fr] gap-x-2 border-b border-border bg-background/60 px-3 py-1 font-medium text-muted">
+                          <span>Afmeting</span>
+                          <span>SKU</span>
+                          <span className="text-right">Voorraad</span>
+                          <span className="text-right">Verkoop</span>
+                          <span className="text-right">Inkoop</span>
+                          <span className="text-right">Kostprijs</span>
+                          <span className="text-right">Marge</span>
+                        </div>
+                        {sizeRows.map((s, i) => {
+                          const st = s.stockQty ?? 0;
+                          const v = s.priceEur ?? null;
+                          const k = s.costEur ?? null;
+                          const mrg = v != null && k != null ? v - k : null;
+                          const mrgPct = mrg != null && v ? Math.round((mrg / v) * 100) : null;
+                          return (
+                            <div
+                              key={s.sku || i}
+                              className="grid grid-cols-[1.2fr_1.4fr_0.7fr_1fr_1fr_1fr_1.1fr] gap-x-2 border-b border-border/30 px-3 py-1 last:border-b-0"
+                            >
+                              <span className="tabular-nums">{s.label.replace(/\*/g, "×")}</span>
+                              <span className="font-mono text-muted">{s.sku}</span>
+                              <span className={cn("text-right tabular-nums", st > 0 ? "text-success" : "text-muted/60")}>
+                                {st}
+                              </span>
+                              <span className="text-right tabular-nums">{v != null ? formatEUR(v) : "—"}</span>
+                              <span className="text-right tabular-nums text-muted">{s.purchaseEur != null ? formatEUR(s.purchaseEur) : "—"}</span>
+                              <span className="text-right tabular-nums text-muted">{k != null ? formatEUR(k) : "—"}</span>
+                              <span className="text-right tabular-nums">
+                                {mrg != null ? (
+                                  <>
+                                    {formatEUR(mrg)}
+                                    {mrgPct != null ? <span className="ml-1 text-muted">({mrgPct}%)</span> : null}
+                                  </>
+                                ) : (
+                                  "—"
+                                )}
+                              </span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </Td>
+                  </Tr>
+                )}
+                </Fragment>
+                );
+              })}
             </TBody>
           </Table>
         </Card>

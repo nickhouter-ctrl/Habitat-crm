@@ -101,6 +101,8 @@ export default async function BestellenPage({
       category: products.category,
       collection: products.collection,
       priceEur: products.priceEur,
+      purchaseCostEur: products.purchaseCostEur,
+      costEur: products.costEur,
       unit: products.unit,
       imageUrl: products.imageUrl,
       stockQty: products.stockQty,
@@ -251,7 +253,8 @@ export default async function BestellenPage({
                           (p.additionalSizes as Array<{
                             sku: string;
                             label: string;
-                            priceEur?: number | null;
+                            purchaseEur?: number | null;
+                            costEur?: number | null;
                             stockQty?: number | null;
                           }> | null) ?? [];
                         const stock = p.stockQty != null ? Number(p.stockQty) : 0;
@@ -268,28 +271,37 @@ export default async function BestellenPage({
                               <p className="truncate text-sm">{p.name}</p>
                               <p className="truncate text-xs text-muted">
                                 {p.sku ? <span className="font-mono">{p.sku}</span> : null}
-                                {p.priceEur ? ` · ${formatEUR(p.priceEur)}` : ""}
-                                {p.unit ? ` / ${p.unit}` : ""}
+                                {p.purchaseCostEur ? ` · inkoop ${formatEUR(p.purchaseCostEur)}` : ""}
+                                {p.costEur ? ` · kostprijs ${formatEUR(p.costEur)}` : ""}
                               </p>
                               {sizes.filter((sz) => sz.label).length > 0 && (
-                                <div className="mt-0.5 border-l border-border/60 pl-2 text-[10px] leading-snug text-muted/70">
+                                <div className="mt-1 overflow-hidden rounded border border-border/60 bg-muted/15 text-[10px]">
+                                  <div className="grid grid-cols-[1.1fr_1.2fr_0.6fr_0.9fr_0.9fr] gap-x-2 border-b border-border bg-background/60 px-2 py-0.5 font-medium text-muted">
+                                    <span>Afmeting</span>
+                                    <span>SKU</span>
+                                    <span className="text-right">Vrd</span>
+                                    <span className="text-right">Inkoop</span>
+                                    <span className="text-right">Kostprijs</span>
+                                  </div>
                                   {sizes
                                     .filter((sz) => sz.label)
                                     .map((sz, i) => {
                                       const st = sz.stockQty ?? 0;
                                       return (
-                                        <div key={i} className="whitespace-nowrap">
-                                          {sz.sku ? <span className="font-mono">{sz.sku}</span> : null}
-                                          <span className="ml-1 tabular-nums">{sz.label.replace(/\*/g, "×")}</span>
-                                          {sz.priceEur != null ? (
-                                            <span className="ml-1 tabular-nums text-foreground/70">
-                                              {formatEUR(sz.priceEur)}
-                                            </span>
-                                          ) : null}
-                                          <span
-                                            className={`ml-1 tabular-nums ${st > 0 ? "text-success" : "text-muted/60"}`}
-                                          >
-                                            · {st} op vrd
+                                        <div
+                                          key={i}
+                                          className="grid grid-cols-[1.1fr_1.2fr_0.6fr_0.9fr_0.9fr] gap-x-2 border-b border-border/30 px-2 py-0.5 last:border-b-0"
+                                        >
+                                          <span className="tabular-nums">{sz.label.replace(/\*/g, "×")}</span>
+                                          <span className="truncate font-mono text-muted">{sz.sku}</span>
+                                          <span className={`text-right tabular-nums ${st > 0 ? "text-success" : "text-muted/60"}`}>
+                                            {st}
+                                          </span>
+                                          <span className="text-right tabular-nums text-muted">
+                                            {sz.purchaseEur != null ? formatEUR(sz.purchaseEur) : "—"}
+                                          </span>
+                                          <span className="text-right tabular-nums text-muted">
+                                            {sz.costEur != null ? formatEUR(sz.costEur) : "—"}
                                           </span>
                                         </div>
                                       );
