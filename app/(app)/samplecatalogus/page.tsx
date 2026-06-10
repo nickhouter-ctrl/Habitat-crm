@@ -228,7 +228,6 @@ export default async function SampleCatalogPage({
                         ((r.prodSizes as Array<{ label: string; stockQty?: number | null }> | null) ?? [])
                           .map((s) => [s.label.replace(/\*/g, "×"), s.stockQty ?? 0]),
                       );
-                      const anyStock = [...stockByLabel.values()].some((n) => n > 0);
                       return labels.length >= 2 ? (
                         <div className="mt-1 border-l border-border/60 pl-2 text-[10px] leading-snug text-muted/70">
                           {labels.map((lbl, i) => {
@@ -238,13 +237,9 @@ export default async function SampleCatalogPage({
                               <div key={i} className="whitespace-nowrap">
                                 <span className="font-mono">{`${base}-${i + 1}`}</span>
                                 <span className="ml-1 tabular-nums">{lab}</span>
-                                {anyStock ? (
-                                  st > 0 ? (
-                                    <span className="ml-1 tabular-nums text-success">· {st} op vrd</span>
-                                  ) : (
-                                    <span className="ml-1 tabular-nums text-muted/60">· 0</span>
-                                  )
-                                ) : null}
+                                <span className={`ml-1 tabular-nums ${st > 0 ? "text-success" : "text-muted/60"}`}>
+                                  · {st} op vrd
+                                </span>
                               </div>
                             );
                           })}
@@ -256,9 +251,19 @@ export default async function SampleCatalogPage({
                     {r.sizes}
                     {(() => {
                       const ps = r.prodStock != null ? Number(r.prodStock) : 0;
-                      return ps > 0 ? (
-                        <div className="text-xs font-medium text-success">{ps} op voorraad</div>
-                      ) : null;
+                      if (ps <= 0) return null;
+                      // Is de voorraad al per maat verdeeld? Dan staat het bij de maten.
+                      const split = ((r.prodSizes as Array<{ stockQty?: number | null }> | null) ?? []).some(
+                        (s) => (s.stockQty ?? 0) > 0,
+                      );
+                      return (
+                        <div className="text-xs font-medium text-success">
+                          {ps} {split ? "op voorraad" : "totaal"}
+                          {!split && (
+                            <span className="block font-normal text-muted/70">verdeel per maat ↓</span>
+                          )}
+                        </div>
+                      );
                     })()}
                   </Td>
                   <Td className="text-sm">

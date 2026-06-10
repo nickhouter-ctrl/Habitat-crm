@@ -394,27 +394,27 @@ export default async function ProductsPage({
                                 inStock?: boolean;
                               }> | null) ?? [];
                             const withSku = szs.filter((s) => s.sku);
-                            const anyStock = withSku.some((s) => (s.stockQty ?? 0) > 0);
                             return withSku.length > 0 ? (
                               <div className="mt-1 border-l border-border/60 pl-2 text-[10px] leading-snug text-muted/70">
-                                {withSku.map((s) => (
-                                  <div key={s.sku} className="whitespace-nowrap">
-                                    <span className="font-mono">{s.sku}</span>
-                                    <span className="ml-1 tabular-nums">{s.label.replace(/\*/g, "×")}</span>
-                                    {s.priceEur != null ? (
-                                      <span className="ml-1 tabular-nums text-foreground/70">
-                                        {formatEUR(s.priceEur)}
+                                {withSku.map((s) => {
+                                  const st = s.stockQty ?? 0;
+                                  return (
+                                    <div key={s.sku} className="whitespace-nowrap">
+                                      <span className="font-mono">{s.sku}</span>
+                                      <span className="ml-1 tabular-nums">{s.label.replace(/\*/g, "×")}</span>
+                                      {s.priceEur != null ? (
+                                        <span className="ml-1 tabular-nums text-foreground/70">
+                                          {formatEUR(s.priceEur)}
+                                        </span>
+                                      ) : null}
+                                      <span
+                                        className={`ml-1 tabular-nums ${st > 0 ? "text-success" : "text-muted/60"}`}
+                                      >
+                                        · {st} op vrd
                                       </span>
-                                    ) : null}
-                                    {anyStock ? (
-                                      (s.stockQty ?? 0) > 0 ? (
-                                        <span className="ml-1 tabular-nums text-success">· {s.stockQty} op vrd</span>
-                                      ) : (
-                                        <span className="ml-1 tabular-nums text-muted/60">· 0</span>
-                                      )
-                                    ) : null}
-                                  </div>
-                                ))}
+                                    </div>
+                                  );
+                                })}
                               </div>
                             ) : null;
                           })()}
