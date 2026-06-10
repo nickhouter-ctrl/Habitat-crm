@@ -142,6 +142,13 @@ function FiltersInputs({ collections, categories }: { collections: string[]; cat
           ))}
         </Select>
       </Field>
+      <Field label="Leverbaarheid" htmlFor="avail">
+        <Select id="avail" name="avail" defaultValue="all">
+          <option value="all">Compleet — voorraad + op bestelling</option>
+          <option value="stock">Alleen voorraadproducten</option>
+          <option value="order">Alleen op bestelling</option>
+        </Select>
+      </Field>
       <label className="flex items-center gap-2 text-sm">
         <input type="checkbox" name="onlyActive" defaultChecked className="size-4 rounded border-border" />
         Alleen actieve producten

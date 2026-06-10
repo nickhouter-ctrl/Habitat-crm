@@ -24,6 +24,7 @@ export async function mailPricelist(formData: FormData) {
   const onlyActive = formData.get("onlyActive") === "on";
   const onlyWithPrice = formData.get("onlyWithPrice") === "on";
   const onlyInStock = formData.get("onlyInStock") === "on";
+  const avail = String(formData.get("avail") ?? "all");
   const audience = String(formData.get("audience") ?? "") === "trade" ? "trade" : "particulier";
   const langParam = String(formData.get("lang") ?? "nl");
   const locale: PricelistLocale = LOCALES.includes(langParam as PricelistLocale) ? (langParam as PricelistLocale) : "nl";
@@ -44,6 +45,11 @@ export async function mailPricelist(formData: FormData) {
     onlyInStock
       ? sql`coalesce(${products.stockQty}, 0) > 0 and ${products.availability} <> 'order_only'`
       : undefined,
+    avail === "stock"
+      ? sql`${products.availability} <> 'order_only'`
+      : avail === "order"
+        ? sql`${products.availability} = 'order_only'`
+        : undefined,
   ].filter(Boolean) as never[];
 
   const rows = await db
