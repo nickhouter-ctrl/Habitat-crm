@@ -170,8 +170,8 @@ export async function addToOrder(formData: FormData) {
     description,
   });
 
+  // Geen redirect: zo blijft de gebruiker op dezelfde collectie-tab en plek.
   revalidatePath("/bestellen");
-  redirect("/bestellen");
 }
 
 export async function updateOrderItem(formData: FormData) {
