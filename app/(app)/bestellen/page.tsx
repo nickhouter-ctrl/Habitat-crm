@@ -251,6 +251,7 @@ export default async function BestellenPage({
                           (p.additionalSizes as Array<{
                             sku: string;
                             label: string;
+                            priceEur?: number | null;
                             stockQty?: number | null;
                           }> | null) ?? [];
                         const stock = p.stockQty != null ? Number(p.stockQty) : 0;
@@ -271,14 +272,20 @@ export default async function BestellenPage({
                                 {p.unit ? ` / ${p.unit}` : ""}
                               </p>
                               {sizes.filter((sz) => sz.label).length > 0 && (
-                                <div className="mt-0.5 text-[10px] leading-snug text-muted/70">
+                                <div className="mt-0.5 border-l border-border/60 pl-2 text-[10px] leading-snug text-muted/70">
                                   {sizes
                                     .filter((sz) => sz.label)
                                     .map((sz, i) => {
                                       const st = sz.stockQty ?? 0;
                                       return (
                                         <div key={i} className="whitespace-nowrap">
-                                          <span className="tabular-nums">{sz.label.replace(/\*/g, "×")}</span>
+                                          {sz.sku ? <span className="font-mono">{sz.sku}</span> : null}
+                                          <span className="ml-1 tabular-nums">{sz.label.replace(/\*/g, "×")}</span>
+                                          {sz.priceEur != null ? (
+                                            <span className="ml-1 tabular-nums text-foreground/70">
+                                              {formatEUR(sz.priceEur)}
+                                            </span>
+                                          ) : null}
                                           <span
                                             className={`ml-1 tabular-nums ${st > 0 ? "text-success" : "text-muted/60"}`}
                                           >

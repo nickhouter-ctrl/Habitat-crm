@@ -224,14 +224,26 @@ export default async function SampleCatalogPage({
                     {(() => {
                       const labels = (r.sizeLabels ?? "").split("|").filter(Boolean);
                       const base = displaySku(r);
+                      const priceByLabel = new Map(
+                        ((r.prodSizes as Array<{ label: string; priceEur?: number | null }> | null) ?? []).map(
+                          (s) => [s.label.replace(/\*/g, "×"), s.priceEur],
+                        ),
+                      );
                       return labels.length >= 2 ? (
                         <div className="mt-1 border-l border-border/60 pl-2 text-[10px] leading-snug text-muted/70">
-                          {labels.map((lbl, i) => (
-                            <div key={i} className="whitespace-nowrap">
-                              <span className="font-mono">{`${base}-${i + 1}`}</span>
-                              <span className="ml-1 tabular-nums">{lbl.replace(/\*/g, "×")}</span>
-                            </div>
-                          ))}
+                          {labels.map((lbl, i) => {
+                            const lab = lbl.replace(/\*/g, "×");
+                            const pr = priceByLabel.get(lab);
+                            return (
+                              <div key={i} className="whitespace-nowrap">
+                                <span className="font-mono">{`${base}-${i + 1}`}</span>
+                                <span className="ml-1 tabular-nums">{lab}</span>
+                                {pr != null ? (
+                                  <span className="ml-1 tabular-nums text-foreground/70">{formatEUR(pr)}</span>
+                                ) : null}
+                              </div>
+                            );
+                          })}
                         </div>
                       ) : null;
                     })()}
