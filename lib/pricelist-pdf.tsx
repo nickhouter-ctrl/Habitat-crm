@@ -45,6 +45,17 @@ const GROUP_TRANSLATIONS: Record<string, Record<PricelistLocale, string>> = {
   "Bloempotten": { nl: "Bloempotten", de: "Blumentöpfe", en: "Flower Pots", es: "Macetas" },
   "Tuinmeubilair": { nl: "Tuinmeubilair", de: "Gartenmöbel", en: "Garden Furniture", es: "Mobiliario de Jardín" },
   "Loungers": { nl: "Loungers", de: "Sonnenliegen", en: "Loungers", es: "Tumbonas" },
+  // Nieuwe collecties (2026-06)
+  "Verlichting": { nl: "Verlichting", de: "Beleuchtung", en: "Lighting", es: "Iluminación" },
+  "Rail-verlichting": { nl: "Rail-verlichting", de: "Schienenbeleuchtung", en: "Track Lighting", es: "Iluminación de Carril" },
+  "Wandspots": { nl: "Wandspots", de: "Wandstrahler", en: "Wall Spots", es: "Focos de Pared" },
+  "Grondspots": { nl: "Grondspots", de: "Bodenstrahler", en: "Ground Spots", es: "Focos de Suelo" },
+  "Schakelaars & stopcontacten": { nl: "Schakelaars & stopcontacten", de: "Schalter & Steckdosen", en: "Switches & Sockets", es: "Interruptores y Enchufes" },
+  "Schakelaars, stopcontacten & dimmers": { nl: "Schakelaars, stopcontacten & dimmers", de: "Schalter, Steckdosen & Dimmer", en: "Switches, Sockets & Dimmers", es: "Interruptores, Enchufes y Reguladores" },
+  "Sfeerhaarden": { nl: "Sfeerhaarden", de: "Wasserdampf-Kamine", en: "Fireplaces", es: "Chimeneas" },
+  "Waterdamphaard": { nl: "Waterdamphaard", de: "Wasserdampf-Kamin", en: "Water Vapour Fireplace", es: "Chimenea de Vapor de Agua" },
+  "XPS montageplaten": { nl: "XPS montageplaten", de: "XPS-Montageplatten", en: "XPS Backer Boards", es: "Placas de Montaje XPS" },
+  "Acrylpanelen": { nl: "Acrylpanelen", de: "Acrylplatten", en: "Acrylic Panels", es: "Paneles Acrílicos" },
 };
 
 export function translateGroup(name: string, locale: PricelistLocale): string {
