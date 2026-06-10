@@ -4,9 +4,16 @@ import { useState, useTransition } from "react";
 import { Plus, Search } from "lucide-react";
 
 import { buttonClass, Input } from "@/components/ui";
+import { supplierForSku } from "@/lib/suppliers";
 import { addToOrder, searchOrderable } from "./actions";
 
-type Prod = { id: string; name: string; sku: string | null; collection: string | null };
+type Prod = {
+  id: string;
+  name: string;
+  sku: string | null;
+  collection: string | null;
+  imageUrl: string | null;
+};
 type Var = {
   id: string;
   sku: string;
@@ -72,7 +79,8 @@ export function OrderSearch({ suppliers }: { suppliers: string[] }) {
               title={p.name}
               subtitle={[p.collection, p.sku].filter(Boolean).join(" · ")}
               tag="Product"
-              defaultSupplier=""
+              defaultSupplier={supplierForSku(p.sku)}
+              imageUrl={p.imageUrl}
               suppliers={suppliers}
             />
           ))}
@@ -89,6 +97,7 @@ function AddRow({
   subtitle,
   tag,
   defaultSupplier,
+  imageUrl,
   suppliers,
 }: {
   kind: "catalog" | "product";
@@ -97,12 +106,19 @@ function AddRow({
   subtitle: string;
   tag: string;
   defaultSupplier: string;
+  imageUrl?: string | null;
   suppliers: string[];
 }) {
   return (
     <form action={addToOrder} className="flex flex-wrap items-center gap-2 px-3 py-2">
       <input type="hidden" name="kind" value={kind} />
       <input type="hidden" name="refId" value={refId} />
+      {imageUrl ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={imageUrl} alt="" className="h-9 w-9 shrink-0 rounded object-cover" />
+      ) : (
+        <div className="h-9 w-9 shrink-0 rounded bg-muted" />
+      )}
       <div className="min-w-0 flex-1">
         <p className="truncate text-sm font-medium">{title}</p>
         <p className="truncate text-xs text-muted">

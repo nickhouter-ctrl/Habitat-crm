@@ -29,6 +29,7 @@ import {
   supplierOrders,
 } from "@/lib/db/schema";
 import { displaySku } from "@/lib/catalog";
+import { supplierForSku } from "@/lib/suppliers";
 import { formatDate, formatEUR } from "@/lib/utils";
 import {
   addToOrder,
@@ -90,7 +91,7 @@ export default async function BestellenPage({
   const catRows = await db
     .selectDistinct({ category: products.category })
     .from(products)
-    .where(and(eq(products.isActive, true), isNotNull(products.category)));
+    .where(isNotNull(products.category));
   const categories = catRows
     .map((c) => c.category)
     .filter((c): c is string => !!c && c.trim().length > 0)
@@ -105,27 +106,22 @@ export default async function BestellenPage({
       collection: products.collection,
       priceEur: products.priceEur,
       unit: products.unit,
+      imageUrl: products.imageUrl,
     })
     .from(products)
-    .where(
-      and(
-        eq(products.isActive, true),
-        cat ? eq(products.category, cat) : undefined,
-      ),
-    )
+    .where(cat ? eq(products.category, cat) : undefined)
     .orderBy(asc(products.category), asc(products.name))
-    .limit(1000);
+    .limit(2000);
 
   const browseByCat = new Map<string, typeof browseProducts>();
   for (const p of browseProducts) {
-    const key = (p.category ?? p.collection ?? "Overige").trim() || "Overige";
+    const key = p.category?.trim() || "Zonder categorie";
     const arr = browseByCat.get(key) ?? [];
     arr.push(p);
     browseByCat.set(key, arr);
   }
-  const browseGroups = Array.from(browseByCat.entries()).sort((a, b) =>
-    a[0].localeCompare(b[0]),
-  );
+  // Groepen in categorie-volgorde (zoals de producten-query al sorteert).
+  const browseGroups = Array.from(browseByCat.entries());
 
   // Concepten van deze gebruiker.
   const drafts = await db
@@ -253,6 +249,16 @@ export default async function BestellenPage({
                         <form action={addToOrder} className="flex flex-wrap items-center gap-2 px-4 py-1.5">
                           <input type="hidden" name="kind" value="product" />
                           <input type="hidden" name="refId" value={p.id} />
+                          {p.imageUrl ? (
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img
+                              src={p.imageUrl}
+                              alt=""
+                              className="h-9 w-9 shrink-0 rounded object-cover"
+                            />
+                          ) : (
+                            <div className="h-9 w-9 shrink-0 rounded bg-muted" />
+                          )}
                           <div className="min-w-0 flex-1">
                             <p className="truncate text-sm">{p.name}</p>
                             <p className="truncate text-xs text-muted">
@@ -265,6 +271,7 @@ export default async function BestellenPage({
                             name="supplierName"
                             list="browse-suppliers"
                             placeholder="Leverancier"
+                            defaultValue={supplierForSku(p.sku)}
                             required
                             className="h-8 w-36 rounded-md border border-border bg-background px-2 text-sm"
                           />

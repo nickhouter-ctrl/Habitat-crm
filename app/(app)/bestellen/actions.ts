@@ -16,6 +16,7 @@ import {
   supplierOrders,
 } from "@/lib/db/schema";
 import { displaySku, variantDescription } from "@/lib/catalog";
+import { supplierForSku } from "@/lib/suppliers";
 
 async function requireUser() {
   const session = await auth();
@@ -142,6 +143,8 @@ export async function addToOrder(formData: FormData) {
     productId = p.id;
     sku = p.sku ?? "—";
     description = [p.collection, p.name].filter(Boolean).join(" · ");
+    // Leverancier afleiden uit de SKU-prefix als die niet is opgegeven.
+    if (!defaultSupplier) defaultSupplier = supplierForSku(p.sku);
   } else {
     throw new Error("Ongeldig type.");
   }
@@ -251,13 +254,11 @@ export async function searchOrderable(term: string) {
         name: products.name,
         sku: products.sku,
         collection: products.collection,
+        imageUrl: products.imageUrl,
       })
       .from(products)
       .where(
-        and(
-          eq(products.isActive, true),
-          sql`(${products.name} ilike ${"%" + q + "%"} or ${products.sku} ilike ${"%" + q + "%"})`,
-        ),
+        sql`(${products.name} ilike ${"%" + q + "%"} or ${products.sku} ilike ${"%" + q + "%"})`,
       )
       .limit(15),
     db
