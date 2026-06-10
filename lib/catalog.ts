@@ -10,7 +10,7 @@
  *    gewone productentabel als de al bestaande catalogusvarianten heen, zodat
  *    er nooit een botsing ontstaat.
  */
-import { ilike, isNotNull } from "drizzle-orm";
+import { ilike } from "drizzle-orm";
 
 import { db } from "@/lib/db";
 import { catalogVariants, products } from "@/lib/db/schema";
