@@ -34,6 +34,9 @@ const BY_COLLECTION_CATEGORY: Record<string, GpcMapping> = {
   // Tuinmeubilair — tumbonas de jardín
   "Tuinmeubilair|*": { gpc: "10003243", uom: "Unidad", netContent: 1 },
 
+  // Sfeerhaarden — waterdamp-sfeerhaarden (chimeneas decorativas)
+  "Sfeerhaarden|*": { gpc: "10005478", uom: "Unidad", netContent: 1 },
+
   // Deuren
   "Binnen en buiten deuren|Binnendeuren": { gpc: "10002567", uom: "Unidad", netContent: 1 },
   "Binnen en buiten deuren|Buitendeuren": { gpc: "10002570", uom: "Unidad", netContent: 1 },
