@@ -20,7 +20,7 @@ import {
   Tr,
 } from "@/components/ui";
 import { db } from "@/lib/db";
-import { catalogCollections, catalogProducts, catalogVariants } from "@/lib/db/schema";
+import { catalogCollections, catalogProducts, catalogVariants, products } from "@/lib/db/schema";
 import { displaySku } from "@/lib/catalog";
 import { formatEUR } from "@/lib/utils";
 
@@ -90,10 +90,12 @@ export default async function SampleCatalogPage({
       sizes: sql<number>`(select count(*)::int from catalog_variant_sizes s where s.variant_id = ${catalogVariants.id})`,
       sizesInStock: sql<number>`(select count(*)::int from catalog_variant_sizes s where s.variant_id = ${catalogVariants.id} and s.in_stock)`,
       sizeLabels: sql<string | null>`(select string_agg(s.product_size, '|' order by s.sort_order) from catalog_variant_sizes s where s.variant_id = ${catalogVariants.id})`,
+      prodSizes: products.additionalSizes,
     })
     .from(catalogVariants)
     .leftJoin(catalogProducts, eq(catalogVariants.productId, catalogProducts.id))
     .leftJoin(catalogCollections, eq(catalogProducts.collectionId, catalogCollections.id))
+    .leftJoin(products, eq(catalogVariants.existingProductId, products.id))
     .where(filters.length ? and(...filters) : undefined)
     .orderBy(
       asc(catalogCollections.sortOrder),
@@ -221,14 +223,23 @@ export default async function SampleCatalogPage({
                     {(() => {
                       const labels = (r.sizeLabels ?? "").split("|").filter(Boolean);
                       const base = displaySku(r);
+                      const stockByLabel = new Map(
+                        ((r.prodSizes as Array<{ label: string; stockQty?: number | null }> | null) ?? [])
+                          .map((s) => [s.label.replace(/\*/g, "×"), s.stockQty ?? 0]),
+                      );
                       return labels.length >= 2 ? (
                         <div className="mt-1 border-l border-border/60 pl-2 text-[10px] leading-snug text-muted/70">
-                          {labels.map((lbl, i) => (
-                            <div key={i} className="whitespace-nowrap">
-                              <span className="font-mono">{`${base}-${i + 1}`}</span>
-                              <span className="ml-1 tabular-nums">{lbl.replace(/\*/g, "×")}</span>
-                            </div>
-                          ))}
+                          {labels.map((lbl, i) => {
+                            const lab = lbl.replace(/\*/g, "×");
+                            const st = stockByLabel.get(lab) ?? 0;
+                            return (
+                              <div key={i} className="whitespace-nowrap">
+                                <span className="font-mono">{`${base}-${i + 1}`}</span>
+                                <span className="ml-1 tabular-nums">{lab}</span>
+                                {st > 0 ? <span className="ml-1 tabular-nums text-success">· {st} op vrd</span> : null}
+                              </div>
+                            );
+                          })}
                         </div>
                       ) : null;
                     })()}

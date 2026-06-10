@@ -13,7 +13,7 @@ type Prod = {
   sku: string | null;
   collection: string | null;
   imageUrl: string | null;
-  additionalSizes: Array<{ sku: string; label: string }> | null;
+  additionalSizes: Array<{ sku: string; label: string; stockQty?: number | null }> | null;
 };
 type Var = {
   id: string;
@@ -110,7 +110,7 @@ function AddRow({
   tag: string;
   defaultSupplier: string;
   imageUrl?: string | null;
-  sizes?: Array<{ sku: string; label: string }>;
+  sizes?: Array<{ sku: string; label: string; stockQty?: number | null }>;
   suppliers: string[];
 }) {
   return (
@@ -152,6 +152,7 @@ function AddRow({
           {sizes.map((sz) => (
             <option key={sz.sku || sz.label} value={sz.label}>
               {sz.label}
+              {(sz.stockQty ?? 0) > 0 ? ` — ${sz.stockQty} op vrd` : ""}
             </option>
           ))}
         </select>

@@ -248,7 +248,11 @@ export default async function BestellenPage({
                     <ul className="divide-y divide-border">
                       {list.map((p) => {
                         const sizes =
-                          (p.additionalSizes as Array<{ sku: string; label: string }> | null) ?? [];
+                          (p.additionalSizes as Array<{
+                            sku: string;
+                            label: string;
+                            stockQty?: number | null;
+                          }> | null) ?? [];
                         const stock = p.stockQty != null ? Number(p.stockQty) : 0;
                         return (
                           <li key={p.id} className="flex flex-wrap items-center gap-2 px-4 py-1.5">
@@ -292,6 +296,7 @@ export default async function BestellenPage({
                                 {sizes.map((sz) => (
                                   <option key={sz.sku || sz.label} value={sz.label}>
                                     {sz.label}
+                                    {(sz.stockQty ?? 0) > 0 ? ` — ${sz.stockQty} op vrd` : ""}
                                   </option>
                                 ))}
                               </select>
