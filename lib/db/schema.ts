@@ -367,7 +367,9 @@ export const products = pgTable(
      *   [{ sku: "MS-167", label: "2400 × 590 mm" },
      *    { sku: "MS-168", label: "1200 × 190 mm" }]
      */
-    additionalSizes: jsonb().$type<Array<{ sku: string; label: string }>>(),
+    additionalSizes: jsonb().$type<
+      Array<{ sku: string; label: string; priceEur?: number | null; inStock?: boolean }>
+    >(),
     /**
      * Bundle-componenten voor set/kit-producten. Per regel een component-SKU
      * en hoeveel-stuks-per-set. Stock van de set = min(component.stockQty / qty).

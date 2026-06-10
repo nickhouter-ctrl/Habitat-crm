@@ -386,14 +386,29 @@ export default async function ProductsPage({
                           <span className="font-mono">{p.sku ?? "—"}</span>
                           {(() => {
                             const szs =
-                              (p.additionalSizes as Array<{ sku: string; label: string }> | null) ?? [];
+                              (p.additionalSizes as Array<{
+                                sku: string;
+                                label: string;
+                                priceEur?: number | null;
+                                inStock?: boolean;
+                              }> | null) ?? [];
                             const withSku = szs.filter((s) => s.sku);
                             return withSku.length > 0 ? (
                               <div className="mt-1 border-l border-border/60 pl-2 text-[10px] leading-snug text-muted/70">
                                 {withSku.map((s) => (
                                   <div key={s.sku} className="whitespace-nowrap">
+                                    {s.inStock ? (
+                                      <span className="mr-0.5 text-success" title="op voorraad">
+                                        ●
+                                      </span>
+                                    ) : null}
                                     <span className="font-mono">{s.sku}</span>
                                     <span className="ml-1 tabular-nums">{s.label.replace(/\*/g, "×")}</span>
+                                    {s.priceEur != null ? (
+                                      <span className="ml-1 tabular-nums text-foreground/70">
+                                        {formatEUR(s.priceEur)}
+                                      </span>
+                                    ) : null}
                                   </div>
                                 ))}
                               </div>

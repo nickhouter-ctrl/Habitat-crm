@@ -8,6 +8,7 @@ import {
   Select,
   Textarea,
 } from "@/components/ui";
+import { SizesEditor } from "@/components/sizes-editor";
 import { SubmitButton } from "@/components/submit-button";
 import type { Product } from "@/lib/db/schema";
 import { PRODUCT_UNITS } from "@/lib/products";
@@ -49,6 +50,7 @@ export function ProductForm({
     | "isActive"
     | "pushToWebsite"
     | "websiteProductId"
+    | "additionalSizes"
   >;
   collections: string[];
   categories: string[];
@@ -259,6 +261,14 @@ export function ProductForm({
               </Field>
             </div>
           </fieldset>
+
+          <Field
+            label="Beschikbare maten"
+            htmlFor="additionalSizes"
+            hint="Per maat: afmeting, eigen SKU, prijs (ex. BTW) en of die maat op voorraad is. Kiesbaar bij offertes/bestellen."
+          >
+            <SizesEditor initial={product?.additionalSizes ?? null} />
+          </Field>
 
           <Field
             label="Omschrijving"

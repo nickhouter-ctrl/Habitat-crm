@@ -57,6 +57,27 @@ const productSchema = z.object({
   imageUrl: z.string().trim().url().optional().or(z.literal("")),
   isActive: z.preprocess((v) => v === "on" || v === "true" || v === true, z.boolean()),
   pushToWebsite: z.preprocess((v) => v === "on" || v === "true" || v === true, z.boolean()),
+  additionalSizes: z.preprocess(
+    (v) => {
+      if (typeof v !== "string" || !v.trim()) return [];
+      try {
+        const a = JSON.parse(v);
+        return Array.isArray(a) ? a : [];
+      } catch {
+        return [];
+      }
+    },
+    z
+      .array(
+        z.object({
+          sku: z.string().trim().default(""),
+          label: z.string().trim().default(""),
+          priceEur: z.number().nonnegative().nullable().optional(),
+          inStock: z.boolean().optional(),
+        }),
+      )
+      .default([]),
+  ),
 });
 
 const dec = (v: number | undefined) => (v === undefined ? null : String(v));
@@ -98,6 +119,7 @@ function toValues(v: z.infer<typeof productSchema>) {
     imageUrl: v.imageUrl || null,
     isActive: v.isActive,
     pushToWebsite: v.pushToWebsite,
+    additionalSizes: v.additionalSizes.length ? v.additionalSizes : null,
   };
 }
 
