@@ -33,6 +33,7 @@ import { supplierForSku } from "@/lib/suppliers";
 import { formatDate, formatEUR } from "@/lib/utils";
 import { getProductCollections } from "../_options";
 import {
+  addManyToOrder,
   addToOrder,
   deleteOrder,
   markOrderSent,
@@ -237,62 +238,54 @@ export default async function BestellenPage({
           {browseGroups.length === 0 ? (
             <p className="p-4 text-sm text-muted">Geen producten gevonden.</p>
           ) : (
-            <div className="max-h-[32rem] overflow-y-auto">
-              {browseGroups.map(([group, list]) => (
-                <div key={group}>
-                  <div className="sticky top-0 bg-muted/60 px-4 py-1.5 text-xs font-semibold uppercase tracking-wide text-muted backdrop-blur">
-                    {group} ({list.length})
-                  </div>
-                  <ul className="divide-y divide-border">
-                    {list.map((p) => (
-                      <li key={p.id}>
-                        <form action={addToOrder} className="flex flex-wrap items-center gap-2 px-4 py-1.5">
-                          <input type="hidden" name="kind" value="product" />
-                          <input type="hidden" name="refId" value={p.id} />
-                          {p.imageUrl ? (
-                            // eslint-disable-next-line @next/next/no-img-element
-                            <img
-                              src={p.imageUrl}
-                              alt=""
-                              className="h-9 w-9 shrink-0 rounded object-cover"
+            <form action={addManyToOrder}>
+              <div className="max-h-[32rem] overflow-y-auto">
+                {browseGroups.map(([group, list]) => (
+                  <div key={group}>
+                    <div className="sticky top-0 z-10 bg-muted/60 px-4 py-1.5 text-xs font-semibold uppercase tracking-wide text-muted backdrop-blur">
+                      {group} ({list.length})
+                    </div>
+                    <ul className="divide-y divide-border">
+                      {list.map((p) => {
+                        const sizes =
+                          (p.additionalSizes as Array<{ sku: string; label: string }> | null) ?? [];
+                        const stock = p.stockQty != null ? Number(p.stockQty) : 0;
+                        return (
+                          <li key={p.id} className="flex flex-wrap items-center gap-2 px-4 py-1.5">
+                            <input type="hidden" name="productId" value={p.id} />
+                            {p.imageUrl ? (
+                              // eslint-disable-next-line @next/next/no-img-element
+                              <img src={p.imageUrl} alt="" className="h-9 w-9 shrink-0 rounded object-cover" />
+                            ) : (
+                              <div className="h-9 w-9 shrink-0 rounded bg-muted" />
+                            )}
+                            <div className="min-w-0 flex-1">
+                              <p className="truncate text-sm">{p.name}</p>
+                              <p className="truncate text-xs text-muted">
+                                {p.sku ? <span className="font-mono">{p.sku}</span> : null}
+                                {p.priceEur ? ` · ${formatEUR(p.priceEur)}` : ""}
+                                {p.unit ? ` / ${p.unit}` : ""}
+                              </p>
+                            </div>
+                            <span
+                              className={`hidden shrink-0 text-xs sm:inline ${
+                                stock > 0 ? "text-success" : "text-muted"
+                              }`}
+                              title="Actuele voorraad"
+                            >
+                              {stock > 0 ? `${stock}${p.unit ? " " + p.unit : ""} op voorraad` : "niet op voorraad"}
+                            </span>
+                            <input
+                              name="supplierName"
+                              list="browse-suppliers"
+                              placeholder="Leverancier"
+                              defaultValue={supplierForSku(p.sku)}
+                              className="h-8 w-32 rounded-md border border-border bg-background px-2 text-sm"
                             />
-                          ) : (
-                            <div className="h-9 w-9 shrink-0 rounded bg-muted" />
-                          )}
-                          <div className="min-w-0 flex-1">
-                            <p className="truncate text-sm">{p.name}</p>
-                            <p className="truncate text-xs text-muted">
-                              {p.sku ? <span className="font-mono">{p.sku}</span> : null}
-                              {p.priceEur ? ` · ${formatEUR(p.priceEur)}` : ""}
-                              {p.unit ? ` / ${p.unit}` : ""}
-                            </p>
-                          </div>
-                          {(() => {
-                            const n = p.stockQty != null ? Number(p.stockQty) : 0;
-                            return (
-                              <span
-                                className={`hidden shrink-0 text-xs sm:inline ${
-                                  n > 0 ? "text-success" : "text-muted"
-                                }`}
-                                title="Actuele voorraad"
-                              >
-                                {n > 0 ? `${n}${p.unit ? " " + p.unit : ""} op voorraad` : "niet op voorraad"}
-                              </span>
-                            );
-                          })()}
-                          <input
-                            name="supplierName"
-                            list="browse-suppliers"
-                            placeholder="Leverancier"
-                            defaultValue={supplierForSku(p.sku)}
-                            className="h-8 w-36 rounded-md border border-border bg-background px-2 text-sm"
-                          />
-                          {(() => {
-                            const sizes = (p.additionalSizes as Array<{ sku: string; label: string }> | null) ?? [];
-                            return sizes.length > 0 ? (
+                            {sizes.length > 0 ? (
                               <select
                                 name="size"
-                                className="h-8 w-40 rounded-md border border-border bg-background px-2 text-sm"
+                                className="h-8 w-36 rounded-md border border-border bg-background px-2 text-sm"
                                 title="Maat"
                               >
                                 <option value="">Standaardmaat</option>
@@ -302,35 +295,40 @@ export default async function BestellenPage({
                                   </option>
                                 ))}
                               </select>
-                            ) : null;
-                          })()}
-                          <input
-                            name="qty"
-                            type="number"
-                            min={1}
-                            step="any"
-                            defaultValue={1}
-                            className="h-8 w-16 rounded-md border border-border bg-background px-2 text-sm"
-                          />
-                          <select
-                            name="unit"
-                            defaultValue="stuk"
-                            className="h-8 rounded-md border border-border bg-background px-2 text-sm"
-                          >
-                            <option value="stuk">stuk</option>
-                            <option value="doos">doos</option>
-                            <option value="m2">m²</option>
-                          </select>
-                          <SubmitButton size="sm" variant="secondary">
-                            + Bestel
-                          </SubmitButton>
-                        </form>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              ))}
-            </div>
+                            ) : (
+                              <input type="hidden" name="size" value="" />
+                            )}
+                            <input
+                              name="qty"
+                              type="number"
+                              min={0}
+                              step="any"
+                              placeholder="0"
+                              className="h-8 w-16 rounded-md border border-border bg-background px-2 text-sm"
+                            />
+                            <select
+                              name="unit"
+                              defaultValue="stuk"
+                              className="h-8 rounded-md border border-border bg-background px-2 text-sm"
+                            >
+                              <option value="stuk">stuk</option>
+                              <option value="doos">doos</option>
+                              <option value="m2">m²</option>
+                            </select>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  </div>
+                ))}
+              </div>
+              <div className="flex flex-wrap items-center justify-between gap-2 border-t border-border bg-surface px-4 py-3">
+                <p className="text-xs text-muted">
+                  Vul aantallen in bij de producten die je wilt bestellen en voeg ze in één keer toe.
+                </p>
+                <SubmitButton>Toevoegen aan bestelbon</SubmitButton>
+              </div>
+            </form>
           )}
         </CardContent>
       </Card>

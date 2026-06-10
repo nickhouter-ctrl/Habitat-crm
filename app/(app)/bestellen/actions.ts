@@ -175,6 +175,50 @@ export async function addToOrder(formData: FormData) {
   revalidatePath("/bestellen");
 }
 
+/**
+ * Voeg meerdere producten in één keer toe (bulk). Leest parallelle arrays uit de
+ * bladerlijst (productId[], qty[], unit[], size[], supplierName[]) en voegt elke
+ * regel met een ingevuld aantal toe aan het juiste leverancier-concept.
+ */
+export async function addManyToOrder(formData: FormData) {
+  const user = await requireUser();
+  const ids = formData.getAll("productId").map(String);
+  const qtys = formData.getAll("qty").map(String);
+  const units = formData.getAll("unit").map(String);
+  const sizes = formData.getAll("size").map(String);
+  const sups = formData.getAll("supplierName").map(String);
+  const customerRef = String(formData.get("customerRef") ?? "").trim() || null;
+
+  for (let i = 0; i < ids.length; i++) {
+    const n = Number(qtys[i]);
+    if (!ids[i] || !Number.isFinite(n) || n <= 0) continue;
+    const p = await db.query.products.findFirst({
+      where: eq(products.id, ids[i]),
+      columns: { id: true, name: true, sku: true, additionalSizes: true },
+    });
+    if (!p) continue;
+    const size = (sizes[i] ?? "").trim() || null;
+    let sku = p.sku ?? "—";
+    if (size && Array.isArray(p.additionalSizes)) {
+      const m = p.additionalSizes.find((s) => s.label === size);
+      if (m?.sku) sku = m.sku;
+    }
+    const supplierName = (sups[i] ?? "").trim() || supplierForSku(p.sku) || "Onbekende leverancier";
+    const supplier = await resolveSupplier(supplierName);
+    const orderId = await findOrCreateDraft(user.id, supplier, customerRef);
+    await db.insert(supplierOrderItems).values({
+      orderId,
+      productId: p.id,
+      size,
+      qty: String(n),
+      unit: parseUnit(units[i] ?? "stuk"),
+      skuSnapshot: sku,
+      description: p.name,
+    });
+  }
+  revalidatePath("/bestellen");
+}
+
 export async function updateOrderItem(formData: FormData) {
   await requireUser();
   const id = String(formData.get("id") ?? "");
