@@ -4,11 +4,9 @@ import Link from "next/link";
 
 import { Badge, Card, CardHeader, CardTitle, EmptyState, Input, PageHeader } from "@/components/ui";
 import { db } from "@/lib/db";
-import { contacts, deals, documents, products, properties } from "@/lib/db/schema";
-import { formatEUR } from "@/lib/utils";
+import { contacts, documents, products, projects, properties } from "@/lib/db/schema";
 import {
   contactTypeMeta,
-  dealStageMeta,
   documentKindMeta,
   documentStatusMeta,
   leadStageMeta,
@@ -59,7 +57,7 @@ export default async function SearchPage({
   const searchForm = (
     <form className="relative mb-6 max-w-md" action="/search">
       <Search className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted" />
-      <Input name="q" defaultValue={q} autoFocus placeholder="Zoek in contacten, deals, panden, producten, documenten…" className="pl-8" />
+      <Input name="q" defaultValue={q} autoFocus placeholder="Zoek in contacten, projecten, panden, producten, documenten…" className="pl-8" />
     </form>
   );
 
@@ -73,17 +71,17 @@ export default async function SearchPage({
   }
 
   const like = `%${q}%`;
-  const [cs, ds, ps, prs, docs] = await Promise.all([
+  const [cs, prjs, ps, prs, docs] = await Promise.all([
     db.query.contacts.findMany({
       where: or(ilike(contacts.name, like), ilike(contacts.email, like)),
       orderBy: contacts.name,
       limit: 12,
       columns: { id: true, name: true, email: true, type: true, stage: true },
     }),
-    db.query.deals.findMany({
-      where: ilike(deals.title, like),
+    db.query.projects.findMany({
+      where: or(ilike(projects.name, like), ilike(projects.code, like)),
       limit: 12,
-      columns: { id: true, title: true, stage: true, valueEur: true },
+      columns: { id: true, name: true, status: true, code: true },
     }),
     db.query.properties.findMany({
       where: or(ilike(properties.title, like), ilike(properties.reference, like), ilike(properties.location, like)),
@@ -103,7 +101,7 @@ export default async function SearchPage({
     }),
   ]);
 
-  const total = cs.length + ds.length + ps.length + prs.length + docs.length;
+  const total = cs.length + prjs.length + ps.length + prs.length + docs.length;
 
   return (
     <>
@@ -128,14 +126,16 @@ export default async function SearchPage({
             ))}
           </ResultSection>
 
-          <ResultSection title="Deals & projecten" count={ds.length}>
-            {ds.map((d) => (
-              <Row key={d.id} href={`/deals/${d.id}`}>
-                <span className="font-medium">{d.title}</span>
-                <span className="flex items-center gap-2">
-                  {d.valueEur && <span className="text-xs tabular-nums text-muted">{formatEUR(d.valueEur)}</span>}
-                  <Badge tone={dealStageMeta[d.stage].tone}>{dealStageMeta[d.stage].label}</Badge>
+          <ResultSection title="Projecten" count={prjs.length}>
+            {prjs.map((p) => (
+              <Row key={p.id} href={`/projects/${p.id}`}>
+                <span>
+                  <span className="font-medium">{p.name}</span>
+                  {p.code && <span className="ml-2 text-xs text-muted">{p.code}</span>}
                 </span>
+                <Badge tone={p.status === "active" ? "success" : "neutral"}>
+                  {p.status === "active" ? "Actief" : "Gearchiveerd"}
+                </Badge>
               </Row>
             ))}
           </ResultSection>
