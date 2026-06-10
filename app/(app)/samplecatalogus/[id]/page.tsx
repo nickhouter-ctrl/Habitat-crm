@@ -30,8 +30,6 @@ import {
   catalogVariantSizes,
   products,
 } from "@/lib/db/schema";
-import { displaySku } from "@/lib/catalog";
-import { formatEUR } from "@/lib/utils";
 import {
   addSize,
   deleteSize,
