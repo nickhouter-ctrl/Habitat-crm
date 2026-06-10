@@ -1,4 +1,4 @@
-import { and, desc, eq, inArray, isNotNull, ne } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, isNotNull, ne } from "drizzle-orm";
 import { FileDown, Send, Trash2 } from "lucide-react";
 import Link from "next/link";
 
@@ -23,12 +23,13 @@ import {
   catalogProducts,
   catalogVariants,
   companies,
+  products,
   purchaseOrders,
   supplierOrderItems,
   supplierOrders,
 } from "@/lib/db/schema";
 import { displaySku } from "@/lib/catalog";
-import { formatDate } from "@/lib/utils";
+import { formatDate, formatEUR } from "@/lib/utils";
 import {
   addToOrder,
   deleteOrder,
@@ -83,6 +84,48 @@ export default async function BestellenPage({
   const suppliers = Array.from(
     new Set([...supplierCompanies, ...poSuppliers].map((s) => s.name).filter(Boolean)),
   ).sort() as string[];
+
+  // Bladerlijst: alle producten, optioneel op categorie gefilterd.
+  const cat = typeof sp.cat === "string" ? sp.cat.trim() : "";
+  const catRows = await db
+    .selectDistinct({ category: products.category })
+    .from(products)
+    .where(and(eq(products.isActive, true), isNotNull(products.category)));
+  const categories = catRows
+    .map((c) => c.category)
+    .filter((c): c is string => !!c && c.trim().length > 0)
+    .sort((a, b) => a.localeCompare(b));
+
+  const browseProducts = await db
+    .select({
+      id: products.id,
+      name: products.name,
+      sku: products.sku,
+      category: products.category,
+      collection: products.collection,
+      priceEur: products.priceEur,
+      unit: products.unit,
+    })
+    .from(products)
+    .where(
+      and(
+        eq(products.isActive, true),
+        cat ? eq(products.category, cat) : undefined,
+      ),
+    )
+    .orderBy(asc(products.category), asc(products.name))
+    .limit(1000);
+
+  const browseByCat = new Map<string, typeof browseProducts>();
+  for (const p of browseProducts) {
+    const key = (p.category ?? p.collection ?? "Overige").trim() || "Overige";
+    const arr = browseByCat.get(key) ?? [];
+    arr.push(p);
+    browseByCat.set(key, arr);
+  }
+  const browseGroups = Array.from(browseByCat.entries()).sort((a, b) =>
+    a[0].localeCompare(b[0]),
+  );
 
   // Concepten van deze gebruiker.
   const drafts = await db
@@ -164,6 +207,95 @@ export default async function BestellenPage({
         </CardHeader>
         <CardContent>
           <OrderSearch suppliers={suppliers} />
+        </CardContent>
+      </Card>
+
+      {/* alle producten — bladeren per categorie */}
+      <Card>
+        <CardHeader className="flex flex-row items-center justify-between gap-3">
+          <CardTitle>Alle producten ({browseProducts.length})</CardTitle>
+          <form method="GET" className="flex items-center gap-2">
+            <select
+              name="cat"
+              defaultValue={cat}
+              className="h-8 rounded-md border border-border bg-background px-2 text-sm"
+            >
+              <option value="">Alle categorieën</option>
+              {categories.map((c) => (
+                <option key={c} value={c}>
+                  {c}
+                </option>
+              ))}
+            </select>
+            <button type="submit" className={buttonClass({ variant: "secondary", size: "sm" })}>
+              Filter
+            </button>
+          </form>
+        </CardHeader>
+        <CardContent className="p-0">
+          <datalist id="browse-suppliers">
+            {suppliers.map((s) => (
+              <option key={s} value={s} />
+            ))}
+          </datalist>
+          {browseGroups.length === 0 ? (
+            <p className="p-4 text-sm text-muted">Geen producten gevonden.</p>
+          ) : (
+            <div className="max-h-[32rem] overflow-y-auto">
+              {browseGroups.map(([group, list]) => (
+                <div key={group}>
+                  <div className="sticky top-0 bg-muted/60 px-4 py-1.5 text-xs font-semibold uppercase tracking-wide text-muted backdrop-blur">
+                    {group} ({list.length})
+                  </div>
+                  <ul className="divide-y divide-border">
+                    {list.map((p) => (
+                      <li key={p.id}>
+                        <form action={addToOrder} className="flex flex-wrap items-center gap-2 px-4 py-1.5">
+                          <input type="hidden" name="kind" value="product" />
+                          <input type="hidden" name="refId" value={p.id} />
+                          <div className="min-w-0 flex-1">
+                            <p className="truncate text-sm">{p.name}</p>
+                            <p className="truncate text-xs text-muted">
+                              {p.sku ? <span className="font-mono">{p.sku}</span> : null}
+                              {p.priceEur ? ` · ${formatEUR(p.priceEur)}` : ""}
+                              {p.unit ? ` / ${p.unit}` : ""}
+                            </p>
+                          </div>
+                          <input
+                            name="supplierName"
+                            list="browse-suppliers"
+                            placeholder="Leverancier"
+                            required
+                            className="h-8 w-36 rounded-md border border-border bg-background px-2 text-sm"
+                          />
+                          <input
+                            name="qty"
+                            type="number"
+                            min={1}
+                            step="any"
+                            defaultValue={1}
+                            className="h-8 w-16 rounded-md border border-border bg-background px-2 text-sm"
+                          />
+                          <select
+                            name="unit"
+                            defaultValue="stuk"
+                            className="h-8 rounded-md border border-border bg-background px-2 text-sm"
+                          >
+                            <option value="stuk">stuk</option>
+                            <option value="doos">doos</option>
+                            <option value="m2">m²</option>
+                          </select>
+                          <SubmitButton size="sm" variant="secondary">
+                            + Bestel
+                          </SubmitButton>
+                        </form>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ))}
+            </div>
+          )}
         </CardContent>
       </Card>
 
