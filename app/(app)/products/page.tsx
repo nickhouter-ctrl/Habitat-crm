@@ -397,7 +397,6 @@ export default async function ProductsPage({
                             return withSku.length > 0 ? (
                               <div className="mt-1 border-l border-border/60 pl-2 text-[10px] leading-snug text-muted/70">
                                 {withSku.map((s) => {
-                                  const st = s.stockQty ?? 0;
                                   return (
                                     <div key={s.sku} className="whitespace-nowrap">
                                       <span className="font-mono">{s.sku}</span>
@@ -407,11 +406,6 @@ export default async function ProductsPage({
                                           {formatEUR(s.priceEur)}
                                         </span>
                                       ) : null}
-                                      <span
-                                        className={`ml-1 tabular-nums ${st > 0 ? "text-success" : "text-muted/60"}`}
-                                      >
-                                        · {st} op vrd
-                                      </span>
                                     </div>
                                   );
                                 })}
@@ -421,7 +415,7 @@ export default async function ProductsPage({
                         </Td>
                         <Td
                           className={cn(
-                            "text-right tabular-nums",
+                            "align-top text-right tabular-nums",
                             stock != null && stock <= 0 && "font-medium text-danger",
                           )}
                         >
@@ -441,6 +435,24 @@ export default async function ProductsPage({
                                 </span>
                               </span>
                             );
+                          })()}
+                          {(() => {
+                            const sizeRows = (
+                              (p.additionalSizes as Array<{ sku: string; stockQty?: number | null }> | null) ??
+                              []
+                            ).filter((s) => s.sku);
+                            return sizeRows.length > 0 ? (
+                              <div className="mt-1 text-[10px] leading-snug">
+                                {sizeRows.map((s) => {
+                                  const st = s.stockQty ?? 0;
+                                  return (
+                                    <div key={s.sku} className={st > 0 ? "text-success" : "text-muted/60"}>
+                                      {st}
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            ) : null;
                           })()}
                         </Td>
                         <Td className="text-right tabular-nums">

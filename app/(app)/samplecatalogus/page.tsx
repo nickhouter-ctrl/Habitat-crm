@@ -224,45 +224,49 @@ export default async function SampleCatalogPage({
                     {(() => {
                       const labels = (r.sizeLabels ?? "").split("|").filter(Boolean);
                       const base = displaySku(r);
-                      const stockByLabel = new Map(
-                        ((r.prodSizes as Array<{ label: string; stockQty?: number | null }> | null) ?? [])
-                          .map((s) => [s.label.replace(/\*/g, "×"), s.stockQty ?? 0]),
-                      );
                       return labels.length >= 2 ? (
                         <div className="mt-1 border-l border-border/60 pl-2 text-[10px] leading-snug text-muted/70">
-                          {labels.map((lbl, i) => {
-                            const lab = lbl.replace(/\*/g, "×");
-                            const st = stockByLabel.get(lab) ?? 0;
-                            return (
-                              <div key={i} className="whitespace-nowrap">
-                                <span className="font-mono">{`${base}-${i + 1}`}</span>
-                                <span className="ml-1 tabular-nums">{lab}</span>
-                                <span className={`ml-1 tabular-nums ${st > 0 ? "text-success" : "text-muted/60"}`}>
-                                  · {st} op vrd
-                                </span>
-                              </div>
-                            );
-                          })}
+                          {labels.map((lbl, i) => (
+                            <div key={i} className="whitespace-nowrap">
+                              <span className="font-mono">{`${base}-${i + 1}`}</span>
+                              <span className="ml-1 tabular-nums">{lbl.replace(/\*/g, "×")}</span>
+                            </div>
+                          ))}
                         </div>
                       ) : null;
                     })()}
                   </Td>
-                  <Td className="text-sm">
-                    {r.sizes}
+                  <Td className="align-top text-sm">
                     {(() => {
-                      const ps = r.prodStock != null ? Number(r.prodStock) : 0;
-                      if (ps <= 0) return null;
-                      // Is de voorraad al per maat verdeeld? Dan staat het bij de maten.
-                      const split = ((r.prodSizes as Array<{ stockQty?: number | null }> | null) ?? []).some(
-                        (s) => (s.stockQty ?? 0) > 0,
+                      const labels = (r.sizeLabels ?? "").split("|").filter(Boolean);
+                      const stockByLabel = new Map(
+                        ((r.prodSizes as Array<{ label: string; stockQty?: number | null }> | null) ?? [])
+                          .map((s) => [s.label.replace(/\*/g, "×"), s.stockQty ?? 0]),
                       );
+                      const ps = r.prodStock != null ? Number(r.prodStock) : 0;
                       return (
-                        <div className="text-xs font-medium text-success">
-                          {ps} {split ? "op voorraad" : "totaal"}
-                          {!split && (
-                            <span className="block font-normal text-muted/70">verdeel per maat ↓</span>
-                          )}
-                        </div>
+                        <>
+                          <span className="text-muted">{r.sizes} mt</span>
+                          {labels.length >= 2 ? (
+                            <div className="mt-1 text-[10px] leading-snug">
+                              {labels.map((lbl, i) => {
+                                const st = stockByLabel.get(lbl.replace(/\*/g, "×")) ?? 0;
+                                return (
+                                  <div key={i} className={st > 0 ? "text-success" : "text-muted/60"}>
+                                    {st} op vrd
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          ) : ps > 0 ? (
+                            <div className="text-xs font-medium text-success">{ps} op voorraad</div>
+                          ) : null}
+                          {labels.length >= 2 &&
+                          ps > 0 &&
+                          ![...stockByLabel.values()].some((n) => n > 0) ? (
+                            <div className="mt-0.5 text-[10px] text-muted/70">{ps} totaal · verdeel ↑</div>
+                          ) : null}
+                        </>
                       );
                     })()}
                   </Td>

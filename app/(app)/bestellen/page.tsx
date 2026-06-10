@@ -255,7 +255,7 @@ export default async function BestellenPage({
                           }> | null) ?? [];
                         const stock = p.stockQty != null ? Number(p.stockQty) : 0;
                         return (
-                          <li key={p.id} className="flex flex-wrap items-center gap-2 px-4 py-1.5">
+                          <li key={p.id} className="flex flex-wrap items-start gap-2 px-4 py-2">
                             <input type="hidden" name="productId" value={p.id} />
                             {p.imageUrl ? (
                               // eslint-disable-next-line @next/next/no-img-element
@@ -270,6 +270,25 @@ export default async function BestellenPage({
                                 {p.priceEur ? ` · ${formatEUR(p.priceEur)}` : ""}
                                 {p.unit ? ` / ${p.unit}` : ""}
                               </p>
+                              {sizes.filter((sz) => sz.label).length > 0 && (
+                                <div className="mt-0.5 text-[10px] leading-snug text-muted/70">
+                                  {sizes
+                                    .filter((sz) => sz.label)
+                                    .map((sz, i) => {
+                                      const st = sz.stockQty ?? 0;
+                                      return (
+                                        <div key={i} className="whitespace-nowrap">
+                                          <span className="tabular-nums">{sz.label.replace(/\*/g, "×")}</span>
+                                          <span
+                                            className={`ml-1 tabular-nums ${st > 0 ? "text-success" : "text-muted/60"}`}
+                                          >
+                                            · {st} op vrd
+                                          </span>
+                                        </div>
+                                      );
+                                    })}
+                                </div>
+                              )}
                             </div>
                             <span
                               className={`hidden shrink-0 text-xs sm:inline ${
