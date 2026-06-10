@@ -33,7 +33,6 @@ import {
 import {
   addSize,
   deleteSize,
-  toggleSizeStock,
   toggleVariantFlag,
   unmatchVariant,
   updateSize,
@@ -93,9 +92,13 @@ export default async function VariantDetailPage({
   const linked = v.existingProductId
     ? await db.query.products.findFirst({
         where: eq(products.id, v.existingProductId),
-        columns: { id: true, name: true, sku: true },
+        columns: { id: true, name: true, sku: true, stockQty: true, additionalSizes: true },
       })
     : null;
+  const linkedStock = linked?.stockQty != null ? Number(linked.stockQty) : 0;
+  const linkedSizes =
+    (linked?.additionalSizes as Array<{ label: string; stockQty?: number | null }> | null) ?? [];
+  const stockBySize = new Map(linkedSizes.map((s) => [s.label.replace(/\*/g, "×"), s.stockQty ?? 0]));
 
   return (
     <div className="space-y-6">
@@ -170,6 +173,20 @@ export default async function VariantDetailPage({
                     </Link>{" "}
                     <span className="font-mono text-xs text-muted">{linked.sku}</span>
                   </p>
+                  <p className="text-sm">
+                    Voorraad:{" "}
+                    {linkedStock > 0 ? (
+                      <span className="font-medium text-success">{linkedStock} op voorraad</span>
+                    ) : (
+                      <span className="text-muted">niet op voorraad</span>
+                    )}
+                  </p>
+                  <Link
+                    href={`/products/${linked.id}/edit`}
+                    className="text-xs text-muted underline hover:text-foreground"
+                  >
+                    Voorraad/prijs per maat beheren op het product →
+                  </Link>
                   <form action={unmatchVariant}>
                     <input type="hidden" name="variantId" value={id} />
                     <SubmitButton variant="ghost" size="sm">
@@ -249,22 +266,19 @@ export default async function VariantDetailPage({
                                 ✓
                               </SubmitButton>
                             </form>
-                            <form action={toggleSizeStock}>
-                              <input type="hidden" name="id" value={s.id} />
-                              <input type="hidden" name="variantId" value={id} />
-                              <input type="hidden" name="value" value={s.inStock ? "false" : "true"} />
-                              <button
-                                type="submit"
-                                className={`whitespace-nowrap rounded-full border px-2.5 py-1 text-xs ${
-                                  s.inStock
-                                    ? "border-green-200 bg-green-50 text-success"
-                                    : "border-border text-muted hover:bg-muted/50"
-                                }`}
-                                title="Klik om te wisselen"
-                              >
-                                {s.inStock ? "✓ Op voorraad" : "Niet op voorraad"}
-                              </button>
-                            </form>
+                            {(() => {
+                              const st = stockBySize.get(s.productSize.replace(/\*/g, "×")) ?? 0;
+                              return (
+                                <span
+                                  className={`w-24 shrink-0 whitespace-nowrap text-right text-xs ${
+                                    st > 0 ? "font-medium text-success" : "text-muted"
+                                  }`}
+                                  title="Voorraad van deze maat (beheer op het product)"
+                                >
+                                  {st > 0 ? `${st} op vrd` : "—"}
+                                </span>
+                              );
+                            })()}
                           </div>
                         </Td>
                       </Tr>
