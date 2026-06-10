@@ -1,3 +1,0 @@
-CREATE TYPE "public"."product_availability" AS ENUM('stock', 'order_only');--> statement-breakpoint
-ALTER TABLE "products" ADD COLUMN "availability" "product_availability" DEFAULT 'stock' NOT NULL;--> statement-breakpoint
-ALTER TABLE "supplier_order_items" ADD CONSTRAINT "supplier_order_items_one_target" CHECK (num_nonnulls("supplier_order_items"."catalog_variant_id", "supplier_order_items"."product_id") = 1);

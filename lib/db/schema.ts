@@ -301,15 +301,6 @@ export const properties = pgTable(
 /* --------------------------------------------------------------- products */
 
 /**
- * Leverbaarheid van een product:
- *  - "stock"      = telt mee in voorraad/voorraadwaarde (default).
- *  - "order_only" = leveren we alleen op bestelling; telt NOOIT mee in
- *                   voorraadtellingen/-waarde/low-stock/rapporten, maar mag wel
- *                   in de complete prijslijst en op een bestelbon.
- */
-export const productAvailability = pgEnum("product_availability", ["stock", "order_only"]);
-
-/**
  * Product / material catalogue. For now maintained in the CRM; once the Holded
  * API key is supplied this becomes a mirror of Holded's products (linked via
  * `holdedProductId`). `category` groups items (e.g. "Magic Stone", with each
@@ -379,8 +370,6 @@ export const products = pgTable(
     components: jsonb().$type<Array<{ sku: string; qty: number }>>(),
     imageUrl: text(),
     isActive: boolean().notNull().default(true),
-    /** Voorraad-product (default) of alleen-op-bestelling — order_only telt nooit mee in voorraad. */
-    availability: productAvailability().notNull().default("stock"),
     /** Aan = mag op de website. De sync-actie creëert dan een entry op habitat-one (matched op SKU); bestaande entries worden altijd bijgewerkt, los van deze vlag. */
     pushToWebsite: boolean().notNull().default(false),
     /** Habitat-one product-id, ingevuld door de sync zodra een match (of nieuwe entry) is gemaakt. */

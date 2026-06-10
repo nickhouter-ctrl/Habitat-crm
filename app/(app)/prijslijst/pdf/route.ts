@@ -34,9 +34,7 @@ export async function GET(req: Request) {
     category ? eq(products.category, category) : undefined,
     onlyActive ? eq(products.isActive, true) : undefined,
     onlyWithPrice ? isNotNull(products.priceEur) : undefined,
-    onlyInStock
-      ? sql`coalesce(${products.stockQty}, 0) > 0 and ${products.availability} <> 'order_only'`
-      : undefined,
+    onlyInStock ? sql`coalesce(${products.stockQty}, 0) > 0` : undefined,
   ].filter(Boolean) as never[];
 
   const rows = await db
