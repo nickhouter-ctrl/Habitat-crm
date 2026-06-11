@@ -43,6 +43,11 @@ const GS1_ALREADY_REGISTERED = new Set<string>([
   "KKR-M8807", "KKR-PD032", "KKR-PU005", "KKR-PU217", "KKR-PU9", "KKR-PU9-RESIN",
   "MS-165", "MS-166",
   "WB-001", "WB-002", "WB-003", "WB-004", "WB-005", "WB-006", "WB-007",
+  // Tweede ronde: KKR-badkamerproducten die ook al geregistreerd bleken (de
+  // naam-in-SKU-fout maskeerde dat in de vorige import).
+  "KKR-1169", "KKR-1261-1", "KKR-1264-1", "KKR-1507", "KKR-1908", "KKR-2124",
+  "KKR-B-RACK09", "KKR-B008-B", "KKR-B051", "KKR-B051-A",
+  "KKR-H5060-D", "KKR-H7036", "KKR-H7072-D", "KKR-CT11023",
 ]);
 const NAME_ABBR: [RegExp, string][] = [
   [/\bRammed Earth Board\b/gi, "RE Board"],
