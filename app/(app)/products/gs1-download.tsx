@@ -79,6 +79,11 @@ export function Gs1ExcelDownload() {
               )}
             </div>
 
+            <p className="mt-2 text-[11px] leading-snug text-muted">
+              Zonder productfoto&apos;s — onze website-crops zijn vaak te klein/bannervormig en
+              laten AECOC de import afkeuren. Foto&apos;s kun je later in MijnGS1 toevoegen.
+            </p>
+
             <a
               href={url}
               download
