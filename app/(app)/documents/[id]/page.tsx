@@ -111,13 +111,45 @@ export default async function DocumentDetailPage({
             itemProductIds.length ? inArray(products.id, itemProductIds) : undefined,
             itemSkus.length ? inArray(products.sku, itemSkus) : undefined,
           ),
-          columns: { id: true, sku: true, costEur: true },
+          columns: { id: true, sku: true, name: true, costEur: true, stockQty: true, stockMin: true },
         })
       : [];
   const costById = new Map(costRows.map((p) => [p.id, Number(p.costEur ?? 0)]));
   const costBySku = new Map(
     costRows.filter((p) => p.sku).map((p) => [p.sku as string, Number(p.costEur ?? 0)]),
   );
+  // Voorraad per product (op id én sku) — voor de tekort-waarschuwing.
+  type StockInfo = { sku: string | null; name: string; stock: number; min: number };
+  const stockByKey = new Map<string, StockInfo>();
+  for (const p of costRows) {
+    const info: StockInfo = {
+      sku: p.sku,
+      name: p.name,
+      stock: Number(p.stockQty ?? 0),
+      min: Number(p.stockMin ?? 0),
+    };
+    stockByKey.set(p.id, info);
+    if (p.sku) stockByKey.set(p.sku, info);
+  }
+  // Regels met te weinig / (bijna) geen voorraad t.o.v. het bestelde aantal.
+  const lowStock = items
+    .map((it) => {
+      const info = it.productId
+        ? stockByKey.get(it.productId)
+        : it.description
+          ? stockByKey.get(it.description.trim())
+          : undefined;
+      if (!info || !info.sku) return null;
+      const units = Number(it.units) || 0;
+      const short = info.stock <= 0 || info.stock < units || (info.min > 0 && info.stock <= info.min);
+      if (!short) return null;
+      // Minimaal in te kopen: genoeg voor deze order én terug op het minimum.
+      const toOrder = Math.max(units - info.stock, info.min - info.stock, 0);
+      return { name: (it.name || info.name).trim(), sku: info.sku, stock: info.stock, units, toOrder };
+    })
+    .filter(
+      (x): x is { name: string; sku: string; stock: number; units: number; toOrder: number } => !!x,
+    );
   let docCost = 0;
   let costedLines = 0;
   for (const it of items) {
@@ -178,6 +210,39 @@ export default async function DocumentDetailPage({
           </>
         }
       />
+
+      {lowStock.length > 0 && (
+        <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 p-4">
+          <div className="mb-2 flex items-center justify-between gap-3">
+            <p className="text-sm font-medium text-amber-900">
+              ⚠️ {lowStock.length} product{lowStock.length === 1 ? "" : "en"} (bijna) niet op voorraad
+            </p>
+            <LinkButton
+              href={`/bestellen?q=${encodeURIComponent(lowStock[0].sku)}`}
+              variant="primary"
+              className="text-xs"
+            >
+              → Bestellen
+            </LinkButton>
+          </div>
+          <ul className="space-y-1 text-xs text-amber-900">
+            {lowStock.map((p) => (
+              <li key={p.sku} className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
+                <span className="font-medium">{p.name}</span>
+                <span className="font-mono text-amber-700">{p.sku}</span>
+                <span className="text-amber-700">
+                  · voorraad {p.stock}, nodig {p.units}
+                </span>
+                {p.toOrder > 0 && (
+                  <span className="rounded bg-amber-200 px-1.5 py-0.5 font-medium">
+                    minimaal bestellen: {p.toOrder}
+                  </span>
+                )}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
 
       {pakbonDoc && (
         <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-md border border-accent/40 bg-accent/10 px-3 py-2 text-sm">

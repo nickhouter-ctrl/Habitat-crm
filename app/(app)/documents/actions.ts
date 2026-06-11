@@ -873,7 +873,13 @@ export async function pushDocumentToHoldedAction(id: string) {
     const hid = await pushDocumentToHolded(id);
     target = `/documents/${id}?holded=ok&hid=${encodeURIComponent(hid)}`;
   } catch (err) {
-    const msg = err instanceof Error ? err.message : "push naar Holded mislukt";
+    let msg = err instanceof Error ? err.message : "push naar Holded mislukt";
+    // Holded-foutdetail (body) meesturen zodat de gebruiker de echte oorzaak ziet.
+    const body = (err as { body?: unknown })?.body;
+    if (body) {
+      const detail = typeof body === "string" ? body : JSON.stringify(body);
+      msg += ` — ${detail.slice(0, 300)}`;
+    }
     target = `/documents/${id}?holdedError=${encodeURIComponent(msg)}`;
   }
   revalidatePath(`/documents/${id}`);

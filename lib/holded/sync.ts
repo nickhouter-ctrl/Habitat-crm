@@ -624,16 +624,18 @@ export async function pushDocumentToHolded(docId: string): Promise<string> {
         ).map((p) => [p.id, p.holdedProductId]),
       )
     : new Map<string, string | null>();
-  const productsBody = items.map((it) => {
+  // Holded's create-API verwacht `items` met `subtotal` (stuksprijs ex. BTW) en
+  // `tax` als getal. (Bij het uitlezen heet ditzelfde veld `products`/`price`.)
+  const itemsBody = items.map((it) => {
     const hid = it.productId ? productLookup.get(it.productId) : null;
     return {
       name: it.name,
       ...(it.description ? { desc: it.description } : {}),
       ...(hid ? { productId: hid } : {}),
-      units: it.units,
-      price: it.price,
-      tax: it.taxRate ?? 21,
-      ...(it.discount ? { discount: it.discount } : {}),
+      units: Number(it.units) || 0,
+      subtotal: Number(it.price) || 0,
+      tax: Number(it.taxRate ?? 21),
+      ...(it.discount ? { discount: Number(it.discount) } : {}),
     };
   });
 
@@ -648,11 +650,11 @@ export async function pushDocumentToHolded(docId: string): Promise<string> {
     ...(dueUnix ? { dueDate: dueUnix } : {}),
     currency: (doc.currency ?? "EUR").toLowerCase(),
     notes: doc.notes ?? "",
-    products: productsBody,
+    items: itemsBody,
     ...(doc.docNumber ? { docNumber: doc.docNumber } : {}),
-    draft: doc.status === "draft",
   };
-  if (contactRef) body.contact = contactRef;
+  // Holded wil een geldig contact — id als we het hebben, anders naam (auto-aanmaak).
+  if (contactRef) body.contactId = contactRef;
   else if (contactName) body.contactName = contactName;
 
   const result = await holded.documents.create(docType, body);
