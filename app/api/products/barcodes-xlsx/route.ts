@@ -79,6 +79,12 @@ export async function GET(req: Request) {
 
   const url = new URL(req.url);
   const since = url.searchParams.get("since");
+  // Batch-download: AECOC/MijnGS1 kan een maximum aantal regels per importbestand
+  // hanteren. Met ?limit=N (&offset=M) download je de lijst in stukjes.
+  const limitParam = Number(url.searchParams.get("limit"));
+  const offsetParam = Number(url.searchParams.get("offset"));
+  const batchLimit = Number.isFinite(limitParam) && limitParam > 0 ? Math.floor(limitParam) : null;
+  const batchOffset = Number.isFinite(offsetParam) && offsetParam > 0 ? Math.floor(offsetParam) : 0;
 
   const conditions = [isNotNull(products.barcode)];
   // Alleen onze EIGEN GS1-GTIN's exporteren. Vreemde fabrikant-barcodes (bv.
@@ -88,7 +94,7 @@ export async function GET(req: Request) {
   conditions.push(like(products.barcode, `${ownPrefix}%`));
   if (since) conditions.push(gte(products.updatedAt, new Date(since)));
 
-  const rows = await db
+  const allRows = await db
     .select({
       barcode: products.barcode,
       sku: products.sku,
@@ -101,6 +107,9 @@ export async function GET(req: Request) {
     .from(products)
     .where(and(...conditions))
     .orderBy(products.barcode);
+  // Elke batch wordt los geüpload, dus naam-uniciteit binnen de batch volstaat
+  // (gs1FunctionalName dedupliceert per bestand).
+  const rows = batchLimit ? allRows.slice(batchOffset, batchOffset + batchLimit) : allRows;
 
   // Lees template
   const templatePath = join(process.cwd(), "lib", "gs1", "template.xlsx");
@@ -163,7 +172,8 @@ export async function GET(req: Request) {
   ws["!ref"] = XLSX.utils.encode_range({ s: { r: 0, c: 0 }, e: { r: Math.max(lastRow, 5), c: lastCol } });
 
   const out = XLSX.write(wb, { type: "buffer", bookType: "xlsx", cellStyles: true });
-  const filename = `habitat-one-gs1${since ? `-vanaf-${since}` : ""}.xlsx`;
+  const batchSuffix = batchLimit ? `-deel-${Math.floor(batchOffset / batchLimit) + 1}` : "";
+  const filename = `habitat-one-gs1${since ? `-vanaf-${since}` : ""}${batchSuffix}.xlsx`;
 
   return new NextResponse(out as unknown as BodyInit, {
     headers: {
