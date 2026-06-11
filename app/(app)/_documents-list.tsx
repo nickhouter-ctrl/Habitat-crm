@@ -1,4 +1,4 @@
-import { desc, eq, inArray } from "drizzle-orm";
+import { desc, eq, inArray, sql } from "drizzle-orm";
 import { Trash2 } from "lucide-react";
 
 import {

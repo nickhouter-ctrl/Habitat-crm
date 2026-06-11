@@ -1,6 +1,6 @@
 "use server";
 
-import { and, count, eq, inArray, isNotNull, isNull, ne, sql } from "drizzle-orm";
+import { and, eq, inArray, isNotNull, isNull, ne, sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
@@ -15,9 +15,9 @@ import {
   computeTotals,
   normalizeDocItems,
   parseLineItems,
-  suggestDocNumber,
   type DocKind,
 } from "@/lib/documents";
+import { nextDocNumber } from "@/lib/doc-number";
 import { offerteEmail, sendEmail } from "@/lib/email";
 import { renderDocumentPdf } from "@/lib/document-pdf";
 import { pushDocumentToHolded } from "@/lib/holded/sync";
@@ -631,7 +631,7 @@ export async function createInvoiceFromEstimate(estimateId: string, formData?: F
   const totals = computeTotals(items);
   const round2 = (n: number) => (Math.round(n * 100) / 100).toFixed(2);
 
-  const [{ n }] = await db.select({ n: count() }).from(documents).where(eq(documents.kind, "invoice"));
+  const docNumber = await nextDocNumber("invoice");
   const today = new Date();
   const due = new Date(today);
   due.setDate(due.getDate() + 30);
@@ -641,7 +641,7 @@ export async function createInvoiceFromEstimate(estimateId: string, formData?: F
     .values({
       kind: "invoice",
       status: "draft",
-      docNumber: suggestDocNumber("invoice", n),
+      docNumber,
       title:
         pct === 100
           ? est.title
@@ -688,7 +688,7 @@ export async function approveEstimateToInvoice(estimateId: string) {
   const items = normalizeDocItems(est.items);
   const totals = computeTotals(items);
   const round2 = (n: number) => (Math.round(n * 100) / 100).toFixed(2);
-  const [{ n }] = await db.select({ n: count() }).from(documents).where(eq(documents.kind, "invoice"));
+  const docNumber = await nextDocNumber("invoice");
   const today = new Date();
   const due = new Date(today);
   due.setDate(due.getDate() + 30);
@@ -698,7 +698,7 @@ export async function approveEstimateToInvoice(estimateId: string) {
     .values({
       kind: "invoice",
       status: "draft",
-      docNumber: suggestDocNumber("invoice", n),
+      docNumber,
       title: est.title,
       contactId: est.contactId,
       companyId: est.companyId,
@@ -727,17 +727,14 @@ async function createDeliveryNoteInternal(sourceId: string): Promise<string | nu
   const src = await db.query.documents.findFirst({ where: eq(documents.id, sourceId) });
   if (!src) return null;
 
-  const [{ n }] = await db
-    .select({ n: count() })
-    .from(documents)
-    .where(eq(documents.kind, "deliverynote"));
+  const docNumber = await nextDocNumber("deliverynote");
 
   const [row] = await db
     .insert(documents)
     .values({
       kind: "deliverynote",
       status: "draft",
-      docNumber: suggestDocNumber("deliverynote", n),
+      docNumber,
       title: src.title,
       contactId: src.contactId,
       companyId: src.companyId,

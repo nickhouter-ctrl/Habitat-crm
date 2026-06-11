@@ -1,11 +1,12 @@
-import { count, eq, inArray } from "drizzle-orm";
+import { eq, inArray } from "drizzle-orm";
 import Link from "next/link";
 
 import { DocumentWizard } from "@/components/document-wizard";
 import { PageHeader } from "@/components/ui";
 import { db } from "@/lib/db";
-import { documents, products, quoteRequests, type DocumentLineItem } from "@/lib/db/schema";
-import { asStringArray, suggestDocNumber, type DocKind } from "@/lib/documents";
+import { products, quoteRequests, type DocumentLineItem } from "@/lib/db/schema";
+import { asStringArray, type DocKind } from "@/lib/documents";
+import { nextDocNumber } from "@/lib/doc-number";
 import { getDocumentFormOptions } from "../../_options";
 import { createDocumentFromWizard } from "../actions";
 import { documentKindMeta } from "../../_meta";
@@ -31,9 +32,9 @@ export default async function NewDocumentPage({
   const kind = (VALID_KINDS.includes(kindParam as DocKind) ? kindParam : "estimate") as DocKind;
   const kindLabel = documentKindMeta[kind];
 
-  const [options, [{ n }]] = await Promise.all([
+  const [options, defaultDocNumber] = await Promise.all([
     getDocumentFormOptions(),
-    db.select({ n: count() }).from(documents).where(eq(documents.kind, kind)),
+    nextDocNumber(kind),
   ]);
 
   const defaults = {
@@ -103,7 +104,7 @@ export default async function NewDocumentPage({
       <DocumentWizard
         action={createDocumentFromWizard}
         kind={kind}
-        defaultDocNumber={suggestDocNumber(kind, n)}
+        defaultDocNumber={defaultDocNumber}
         contacts={options.contacts}
         deals={options.deals}
         properties={options.properties}
