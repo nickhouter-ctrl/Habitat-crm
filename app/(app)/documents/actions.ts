@@ -649,6 +649,7 @@ export async function createInvoiceFromEstimate(estimateId: string, formData?: F
       companyId: est.companyId,
       dealId: est.dealId,
       propertyId: est.propertyId,
+      projectId: est.projectId,
       issueDate: today.toISOString().slice(0, 10),
       dueDate: due.toISOString().slice(0, 10),
       currency: est.currency,
@@ -662,6 +663,60 @@ export async function createInvoiceFromEstimate(estimateId: string, formData?: F
 
   revalidateAround("invoice");
   revalidatePath(`/documents/${estimateId}`);
+  redirect(`/documents/${row.id}/edit`);
+}
+
+/**
+ * Vanuit het projectscherm: keur een offerte goed → markeer 'accepted' én maak
+ * direct een (concept) factuur met dezelfde regels, gekoppeld aan hetzelfde
+ * project. De gereserveerde producten gaan zo van "gereserveerd" naar "verkocht".
+ * Landt op de nieuwe factuur zodat die meteen verstuurd kan worden.
+ */
+export async function approveEstimateToInvoice(estimateId: string) {
+  await requireUser();
+  const est = await db.query.documents.findFirst({ where: eq(documents.id, estimateId) });
+  if (!est || est.kind !== "estimate") return;
+
+  // 1. Offerte goedkeuren.
+  await db
+    .update(documents)
+    .set({ status: "accepted", acceptedAt: new Date(), updatedAt: new Date() })
+    .where(eq(documents.id, estimateId));
+
+  // 2. Factuur aanmaken met dezelfde regels + projectkoppeling.
+  const items = normalizeDocItems(est.items);
+  const totals = computeTotals(items);
+  const round2 = (n: number) => (Math.round(n * 100) / 100).toFixed(2);
+  const [{ n }] = await db.select({ n: count() }).from(documents).where(eq(documents.kind, "invoice"));
+  const today = new Date();
+  const due = new Date(today);
+  due.setDate(due.getDate() + 30);
+
+  const [row] = await db
+    .insert(documents)
+    .values({
+      kind: "invoice",
+      status: "draft",
+      docNumber: suggestDocNumber("invoice", n),
+      title: est.title,
+      contactId: est.contactId,
+      companyId: est.companyId,
+      dealId: est.dealId,
+      propertyId: est.propertyId,
+      projectId: est.projectId,
+      issueDate: today.toISOString().slice(0, 10),
+      dueDate: due.toISOString().slice(0, 10),
+      currency: est.currency,
+      subtotalEur: round2(totals.subtotal),
+      taxEur: round2(totals.tax),
+      totalEur: round2(totals.total),
+      items,
+      notes: est.notes,
+    })
+    .returning({ id: documents.id });
+
+  revalidateAround("invoice");
+  if (est.projectId) revalidatePath(`/projects/${est.projectId}`);
   redirect(`/documents/${row.id}/edit`);
 }
 

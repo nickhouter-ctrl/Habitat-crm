@@ -32,6 +32,7 @@ import { normalizeDocItems } from "@/lib/documents";
 import { attachDocumentToProject, deleteProject, setProjectStatus, updateProject } from "../actions";
 import {
   applyStockOutFromDocument,
+  approveEstimateToInvoice,
   cancelSaleReturnStock,
   reverseStockOutFromDocument,
 } from "../../documents/actions";
@@ -142,9 +143,16 @@ export default async function ProjectDetailPage({
       prodAgg.set(key, entry);
     }
   }
-  const projectProducts = [...prodAgg.values()]
-    .filter((p) => p.reserved > 0 || p.sold !== 0)
-    .sort((a, b) => b.reserved + b.sold - (a.reserved + a.sold));
+  // Gereserveerd telt alleen wat nog niet verkocht is (reservering − verkocht).
+  const aggList = [...prodAgg.values()].map((p) => ({
+    ...p,
+    reservedNet: Math.max(0, p.reserved - p.sold),
+  }));
+  const reservedProducts = aggList
+    .filter((p) => p.reservedNet > 0)
+    .sort((a, b) => b.reservedNet - a.reservedNet);
+  const soldProducts = aggList.filter((p) => p.sold !== 0).sort((a, b) => b.sold - a.sold);
+  const projectProducts = aggList.filter((p) => p.reservedNet > 0 || p.sold !== 0);
 
   const contactOptions: ComboOption[] = contactOpts.map((c) => ({ value: c.id, label: c.name }));
   const ownerOptions: ComboOption[] = ownerOpts.map((u) => ({ value: u.id, label: u.name ?? u.email }));
@@ -439,6 +447,22 @@ export default async function ProjectDetailPage({
                             )}
                           </div>
                         )}
+                        {d.kind === "estimate" && d.status !== "rejected" && (
+                          <div className="mt-1.5 flex flex-wrap items-center gap-1.5 text-[11px]">
+                            {d.status === "accepted" ? (
+                              <Badge tone="info">Goedgekeurd</Badge>
+                            ) : (
+                              <ConfirmSubmit
+                                formAction={approveEstimateToInvoice.bind(null, d.id)}
+                                message="Offerte goedkeuren en direct een factuur aanmaken? De gereserveerde producten gaan naar verkocht; je belandt op de nieuwe factuur om te versturen."
+                                pendingLabel="Goedkeuren…"
+                                className="rounded bg-primary/10 px-2 py-0.5 text-[11px] font-medium text-primary transition-colors hover:bg-primary/20"
+                              >
+                                ✓ Goedkeuren → factuur
+                              </ConfirmSubmit>
+                            )}
+                          </div>
+                        )}
                       </li>
                     );
                   })}
@@ -449,40 +473,70 @@ export default async function ProjectDetailPage({
         </div>
       </div>
 
-      {projectProducts.length > 0 && (
-        <Card className="mt-5 overflow-hidden">
-          <CardHeader>
-            <CardTitle>Producten in dit project</CardTitle>
-            <span className="text-xs text-muted">
-              {projectProducts.length} {projectProducts.length === 1 ? "product" : "producten"}
-            </span>
-          </CardHeader>
-          <Table>
-            <THead>
-              <tr>
-                <Th>Product</Th>
-                <Th className="text-right">Gereserveerd</Th>
-                <Th className="text-right">Verkocht</Th>
-              </tr>
-            </THead>
-            <TBody>
-              {projectProducts.map((p, i) => (
-                <Tr key={i}>
-                  <Td className="font-medium">{p.name}</Td>
-                  <Td className="text-right tabular-nums">
-                    {p.reserved > 0 ? p.reserved : <span className="text-muted">—</span>}
-                  </Td>
-                  <Td className="text-right tabular-nums">
-                    {p.sold !== 0 ? p.sold : <span className="text-muted">—</span>}
-                  </Td>
-                </Tr>
-              ))}
-            </TBody>
-          </Table>
-          <p className="px-5 py-3 text-xs text-muted">
-            Gereserveerd = uit geaccepteerde offertes voor dit project; verkocht = uit facturen.
-          </p>
-        </Card>
+      {(reservedProducts.length > 0 || soldProducts.length > 0) && (
+        <div className="mt-5 grid gap-5 lg:grid-cols-2">
+          <Card className="overflow-hidden">
+            <CardHeader>
+              <CardTitle>Gereserveerd</CardTitle>
+              <span className="text-xs text-muted">
+                {reservedProducts.length} {reservedProducts.length === 1 ? "product" : "producten"}
+              </span>
+            </CardHeader>
+            {reservedProducts.length === 0 ? (
+              <p className="px-5 py-4 text-sm text-muted">Niets gereserveerd — uit geaccepteerde offertes.</p>
+            ) : (
+              <Table>
+                <THead>
+                  <tr>
+                    <Th>Product</Th>
+                    <Th className="text-right">Aantal</Th>
+                  </tr>
+                </THead>
+                <TBody>
+                  {reservedProducts.map((p, i) => (
+                    <Tr key={i}>
+                      <Td className="font-medium">{p.name}</Td>
+                      <Td className="text-right tabular-nums text-warning">{p.reservedNet}</Td>
+                    </Tr>
+                  ))}
+                </TBody>
+              </Table>
+            )}
+            <p className="border-t px-5 py-3 text-xs text-muted">
+              Uit geaccepteerde offertes; keur een offerte goed om naar verkocht te boeken.
+            </p>
+          </Card>
+
+          <Card className="overflow-hidden">
+            <CardHeader>
+              <CardTitle>Verkocht</CardTitle>
+              <span className="text-xs text-muted">
+                {soldProducts.length} {soldProducts.length === 1 ? "product" : "producten"}
+              </span>
+            </CardHeader>
+            {soldProducts.length === 0 ? (
+              <p className="px-5 py-4 text-sm text-muted">Nog niets verkocht — uit facturen.</p>
+            ) : (
+              <Table>
+                <THead>
+                  <tr>
+                    <Th>Product</Th>
+                    <Th className="text-right">Aantal</Th>
+                  </tr>
+                </THead>
+                <TBody>
+                  {soldProducts.map((p, i) => (
+                    <Tr key={i}>
+                      <Td className="font-medium">{p.name}</Td>
+                      <Td className="text-right tabular-nums text-success">{p.sold}</Td>
+                    </Tr>
+                  ))}
+                </TBody>
+              </Table>
+            )}
+            <p className="border-t px-5 py-3 text-xs text-muted">Uit facturen (minus creditnota's).</p>
+          </Card>
+        </div>
       )}
     </>
   );
