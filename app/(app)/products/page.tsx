@@ -47,12 +47,15 @@ export default async function ProductsPage({
   // zoekopdracht laten we alles zien.
   const view =
     params.view === "te-bestellen" || params.view === "alle" ? params.view : "op-voorraad";
+  // Sets/kits hebben geen eigen voorraad (die volgt uit de componenten), dus
+  // tellen we ze bij 'op voorraad' altijd mee en sluiten we ze uit van 'te
+  // bestellen' — anders zouden de deur-sets nergens zichtbaar zijn.
   const stockFilter =
     q || view === "alle"
       ? undefined
       : view === "te-bestellen"
-        ? sql`coalesce(${products.stockQty}, 0) <= 0`
-        : sql`coalesce(${products.stockQty}, 0) > 0`;
+        ? sql`(coalesce(${products.stockQty}, 0) <= 0 and ${products.components} is null)`
+        : sql`(coalesce(${products.stockQty}, 0) > 0 or ${products.components} is not null)`;
 
   const allCollections = await getProductCollections();
   const collection = allCollections.includes(collectionParam) ? collectionParam : "";

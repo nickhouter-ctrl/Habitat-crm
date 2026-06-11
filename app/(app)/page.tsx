@@ -230,11 +230,26 @@ export default async function DashboardPage() {
     .orderBy(products.stockQty)
     .limit(50);
 
-  // Facturen waar de deur-draairichting (S1–S4) nog aangegeven moet worden.
-  const [doorOrientationTodo] = await db
-    .select({ n: count() })
+  // Facturen met een deur/deur-set-regel waarvan de draairichting (S1–S4) nog
+  // niet gekozen is — zodat je een set kunt factureren en de richting later
+  // aangeeft. We detecteren het direct uit de regels (geen losse notitie nodig).
+  const doorProductIds = new Set(
+    (await db.select({ id: products.id }).from(products).where(sql`${products.sku} like 'DR-00%'`)).map(
+      (r) => r.id,
+    ),
+  );
+  const doorInvoiceRows = await db
+    .select({ id: documents.id, items: documents.items })
     .from(documents)
-    .where(and(eq(documents.kind, "invoice"), sql`${documents.notes} ilike '%draairichting%'`));
+    .where(and(eq(documents.kind, "invoice"), sql`${documents.items}::text like '%DR-00%'`));
+  const doorOrientationN = doorInvoiceRows.filter((d) =>
+    normalizeDocItems(d.items).some(
+      (it) =>
+        it.productId &&
+        doorProductIds.has(it.productId) &&
+        !/\bS[1-4]\b/.test(`${it.name ?? ""} ${it.description ?? ""}`),
+    ),
+  ).length;
 
   const revenueAll = Number(docAgg.revenueAll) - Number(creditAgg.paidAll);
   const revenueMonth = Number(docAgg.revenueMonth) - Number(creditAgg.revenueMonth);
@@ -260,7 +275,7 @@ export default async function DashboardPage() {
     productsAgg.stockNoPhoto > 0 ||
     productsAgg.noBarcode > 0 ||
     reorderProducts.length > 0 ||
-    (doorOrientationTodo?.n ?? 0) > 0;
+    doorOrientationN > 0;
 
   // --- Grafieken: omzet & offerte-waarde per maand (12 mnd) + conversie ---
   const since12 = new Date(now.getFullYear(), now.getMonth() - 11, 1).toISOString().slice(0, 10);
@@ -382,9 +397,9 @@ export default async function DashboardPage() {
                 <strong>{poSoon}</strong> inkooporder{poSoon === 1 ? "" : "s"} kom{poSoon === 1 ? "t" : "en"} deze week binnen.
               </ActionRow>
             )}
-            {(doorOrientationTodo?.n ?? 0) > 0 && (
+            {doorOrientationN > 0 && (
               <ActionRow href="/invoices" emoji="🚪" tone="warning">
-                <strong>{doorOrientationTodo!.n}</strong> factu{doorOrientationTodo!.n === 1 ? "ur" : "ren"} waar de deur-draairichting (S1–S4) nog aangegeven moet worden.
+                <strong>{doorOrientationN}</strong> factu{doorOrientationN === 1 ? "ur" : "ren"} met deuren waar de draairichting (S1–S4) nog gekozen moet worden.
               </ActionRow>
             )}
             {productsAgg.lowStock > 0 && (
