@@ -230,6 +230,12 @@ export default async function DashboardPage() {
     .orderBy(products.stockQty)
     .limit(50);
 
+  // Facturen waar de deur-draairichting (S1–S4) nog aangegeven moet worden.
+  const [doorOrientationTodo] = await db
+    .select({ n: count() })
+    .from(documents)
+    .where(and(eq(documents.kind, "invoice"), sql`${documents.notes} ilike '%draairichting%'`));
+
   const revenueAll = Number(docAgg.revenueAll) - Number(creditAgg.paidAll);
   const revenueMonth = Number(docAgg.revenueMonth) - Number(creditAgg.revenueMonth);
   const unpushedPurchase = Number(purchaseAgg.totalEur);
@@ -253,7 +259,8 @@ export default async function DashboardPage() {
     productsAgg.lowStock > 0 ||
     productsAgg.stockNoPhoto > 0 ||
     productsAgg.noBarcode > 0 ||
-    reorderProducts.length > 0;
+    reorderProducts.length > 0 ||
+    (doorOrientationTodo?.n ?? 0) > 0;
 
   // --- Grafieken: omzet & offerte-waarde per maand (12 mnd) + conversie ---
   const since12 = new Date(now.getFullYear(), now.getMonth() - 11, 1).toISOString().slice(0, 10);
@@ -373,6 +380,11 @@ export default async function DashboardPage() {
             {poSoon > 0 && (
               <ActionRow href="/inkooporders" emoji="📦" tone="accent">
                 <strong>{poSoon}</strong> inkooporder{poSoon === 1 ? "" : "s"} kom{poSoon === 1 ? "t" : "en"} deze week binnen.
+              </ActionRow>
+            )}
+            {(doorOrientationTodo?.n ?? 0) > 0 && (
+              <ActionRow href="/invoices" emoji="🚪" tone="warning">
+                <strong>{doorOrientationTodo!.n}</strong> factu{doorOrientationTodo!.n === 1 ? "ur" : "ren"} waar de deur-draairichting (S1–S4) nog aangegeven moet worden.
               </ActionRow>
             )}
             {productsAgg.lowStock > 0 && (

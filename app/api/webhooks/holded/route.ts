@@ -45,7 +45,12 @@ export async function POST(request: Request) {
     .returning({ id: webhookEvents.id });
 
   try {
-    await handleHoldedWebhook(payload);
+    // Pull vanuit Holded is uitgeschakeld — we synchroniseren alleen CRM → Holded
+    // (push). Inkomende events loggen we wél (replaybaar), maar passen we niet
+    // meer toe; dit voorkwam dubbele projecten/facturen. Zet de regel terug om
+    // het pullen weer aan te zetten.
+    // await handleHoldedWebhook(payload);
+    void handleHoldedWebhook;
     await db
       .update(webhookEvents)
       .set({ processedAt: new Date() })

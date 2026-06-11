@@ -22,35 +22,20 @@ export async function syncHoldedNow(): Promise<{ ok: boolean; message: string }>
     return { ok: false, message: "HOLDED_API_KEY is niet ingesteld (.env.local)." };
   }
 
-  try {
-    const products = await pullProductsFromHolded();
-    const contacts = await pullContactsFromHolded();
-    const docs = await pullDocumentsFromHolded(["estimate", "invoice", "creditnote", "deliverynote"]);
-    const purchases = await pullPurchaseOrdersFromHolded();
-    const projects = await pullProjectsFromHolded();
-
-    for (const path of [
-      "/",
-      "/contacts",
-      "/products",
-      "/quotes",
-      "/invoices",
-      "/pakbonnen",
-      "/inkooporders",
-      "/projects",
-      "/settings",
-    ]) {
-      revalidatePath(path);
-    }
-
-    return {
-      ok: true,
-      message: `Producten +${products.created}/~${products.updated} · contacten +${contacts.created}/~${contacts.updated} · documenten +${docs.created}/~${docs.updated} · aankopen +${purchases.created}/~${purchases.updated} · projecten +${projects.created}/~${projects.updated}.`,
-    };
-  } catch (err) {
-    return {
-      ok: false,
-      message: err instanceof Error ? err.message : "Sync met Holded mislukt.",
-    };
-  }
+  // Pull vanuit Holded is op verzoek uitgeschakeld — we synchroniseren alleen
+  // CRM → Holded (push via de 'Push naar Holded'-knop op documenten). Dit
+  // voorkwam dubbele projecten/facturen die eerder via de pull binnenkwamen.
+  // De pull-functies blijven beschikbaar voor wie 'm later weer wil aanzetten.
+  void [
+    pullProductsFromHolded,
+    pullContactsFromHolded,
+    pullDocumentsFromHolded,
+    pullPurchaseOrdersFromHolded,
+    pullProjectsFromHolded,
+    revalidatePath,
+  ];
+  return {
+    ok: true,
+    message: "Pull vanuit Holded staat uit — alleen CRM → Holded (push) is actief.",
+  };
 }
