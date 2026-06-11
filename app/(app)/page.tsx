@@ -241,7 +241,7 @@ export default async function DashboardPage() {
   const doorInvoiceRows = await db
     .select({ id: documents.id, items: documents.items })
     .from(documents)
-    .where(and(eq(documents.kind, "invoice"), sql`${documents.items}::text like '%DR-00%'`));
+    .where(eq(documents.kind, "invoice"));
   const doorOrientationN = doorInvoiceRows.filter((d) =>
     normalizeDocItems(d.items).some(
       (it) =>
@@ -398,7 +398,7 @@ export default async function DashboardPage() {
               </ActionRow>
             )}
             {doorOrientationN > 0 && (
-              <ActionRow href="/invoices" emoji="🚪" tone="warning">
+              <ActionRow href="/draairichtingen" emoji="🚪" tone="warning">
                 <strong>{doorOrientationN}</strong> factu{doorOrientationN === 1 ? "ur" : "ren"} met deuren waar de draairichting (S1–S4) nog gekozen moet worden.
               </ActionRow>
             )}
