@@ -215,6 +215,21 @@ export default async function DashboardPage() {
     normalizeDocItems(d.items).some((it) => it.productId && it.units),
   ).length;
 
+  // Producten onder 0 (oversold) — moeten bijbesteld worden. Order-only (op
+  // bestelling gemaakt) tellen niet mee.
+  const reorderProducts = await db
+    .select({ sku: products.sku, name: products.name, stockQty: products.stockQty })
+    .from(products)
+    .where(
+      and(
+        eq(products.isActive, true),
+        sql`${products.availability} <> 'order_only'`,
+        sql`coalesce(${products.stockQty}, 0) < 0`,
+      ),
+    )
+    .orderBy(products.stockQty)
+    .limit(50);
+
   const revenueAll = Number(docAgg.revenueAll) - Number(creditAgg.paidAll);
   const revenueMonth = Number(docAgg.revenueMonth) - Number(creditAgg.revenueMonth);
   const unpushedPurchase = Number(purchaseAgg.totalEur);
@@ -237,7 +252,8 @@ export default async function DashboardPage() {
     poSoon > 0 ||
     productsAgg.lowStock > 0 ||
     productsAgg.stockNoPhoto > 0 ||
-    productsAgg.noBarcode > 0;
+    productsAgg.noBarcode > 0 ||
+    reorderProducts.length > 0;
 
   // --- Grafieken: omzet & offerte-waarde per maand (12 mnd) + conversie ---
   const since12 = new Date(now.getFullYear(), now.getMonth() - 11, 1).toISOString().slice(0, 10);
@@ -279,6 +295,39 @@ export default async function DashboardPage() {
         subtitle="Overzicht van de pijplijn, facturen en activiteit"
         actions={<LinkButton href="/contacts/new">Nieuw contact</LinkButton>}
       />
+
+      {reorderProducts.length > 0 && (
+        <Card className="mb-6 border-red-200 bg-red-50/40">
+          <CardHeader>
+            <CardTitle>
+              🛒 {reorderProducts.length} product{reorderProducts.length === 1 ? "" : "en"} onder 0 — bijbestellen
+            </CardTitle>
+            <LinkButton href={`/bestellen?q=${encodeURIComponent(reorderProducts[0].sku ?? "")}`} className="text-xs">
+              → Bestellen
+            </LinkButton>
+          </CardHeader>
+          <CardContent>
+            <ul className="grid gap-1.5 text-sm sm:grid-cols-2">
+              {reorderProducts.map((p) => {
+                const stock = Number(p.stockQty ?? 0);
+                const order = Math.ceil(Math.abs(stock) * 100) / 100;
+                return (
+                  <li key={p.sku ?? p.name} className="flex items-center justify-between gap-2 rounded-md bg-background px-3 py-1.5">
+                    <span className="truncate">
+                      <span className="font-medium">{p.name}</span>{" "}
+                      <span className="font-mono text-xs text-muted">{p.sku}</span>
+                    </span>
+                    <span className="shrink-0 text-xs tabular-nums">
+                      <span className="text-danger">{stock}</span>{" "}
+                      <span className="rounded bg-red-100 px-1.5 py-0.5 font-medium text-red-800">bestel {order}</span>
+                    </span>
+                  </li>
+                );
+              })}
+            </ul>
+          </CardContent>
+        </Card>
+      )}
 
       {anyActions ? (
         <Card className="mb-6 border-accent/30">

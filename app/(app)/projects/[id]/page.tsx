@@ -196,6 +196,14 @@ export default async function ProjectDetailPage({
   const soldProducts = aggList.filter((p) => p.sold !== 0).sort((a, b) => b.sold - a.sold);
   const projectProducts = aggList.filter((p) => p.reservedNet > 0 || p.sold !== 0);
 
+  // Een offerte die al tot een factuur (zelfde bedrag) heeft geleid telt niet
+  // meer als reservering — toon 'm dan als "Gefactureerd" zonder omzet-knop.
+  const invoiceTotalsForConv = linkedDocs
+    .filter((d) => d.kind === "invoice" && d.status !== "void")
+    .map((d) => Number(d.totalEur ?? 0));
+  const isEstimateConverted = (total: number) =>
+    invoiceTotalsForConv.some((t) => Math.abs(t - total) <= 0.02);
+
   const contactOptions: ComboOption[] = contactOpts.map((c) => ({ value: c.id, label: c.name }));
   const ownerOptions: ComboOption[] = ownerOpts.map((u) => ({ value: u.id, label: u.name ?? u.email }));
   const propertyOptions: ComboOption[] = propertyOpts.map((p) => ({ value: p.id, label: p.title }));
@@ -500,15 +508,21 @@ export default async function ProjectDetailPage({
                         )}
                         {d.kind === "estimate" && d.status !== "rejected" && (
                           <div className="mt-1.5 flex flex-wrap items-center gap-1.5 text-[11px]">
-                            {d.status === "accepted" && <Badge tone="info">Gereserveerd</Badge>}
-                            <ConfirmSubmit
-                              formAction={approveEstimateToInvoice.bind(null, d.id)}
-                              message="Een factuur aanmaken van deze offerte? De gereserveerde producten gaan naar verkocht; je belandt op de nieuwe factuur om te versturen."
-                              pendingLabel="Bezig…"
-                              className="rounded bg-primary/10 px-2 py-0.5 text-[11px] font-medium text-primary transition-colors hover:bg-primary/20"
-                            >
-                              {d.status === "accepted" ? "→ Factuur maken (verkopen)" : "✓ Goedkeuren → factuur"}
-                            </ConfirmSubmit>
+                            {isEstimateConverted(Number(d.totalEur ?? 0)) ? (
+                              <Badge tone="success">Gefactureerd</Badge>
+                            ) : (
+                              <>
+                                {d.status === "accepted" && <Badge tone="info">Gereserveerd</Badge>}
+                                <ConfirmSubmit
+                                  formAction={approveEstimateToInvoice.bind(null, d.id)}
+                                  message="Een factuur aanmaken van deze offerte? De gereserveerde producten gaan naar verkocht; je belandt op de nieuwe factuur om te versturen."
+                                  pendingLabel="Bezig…"
+                                  className="rounded bg-primary/10 px-2 py-0.5 text-[11px] font-medium text-primary transition-colors hover:bg-primary/20"
+                                >
+                                  {d.status === "accepted" ? "→ Factuur maken (verkopen)" : "✓ Goedkeuren → factuur"}
+                                </ConfirmSubmit>
+                              </>
+                            )}
                           </div>
                         )}
                       </li>

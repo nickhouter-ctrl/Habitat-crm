@@ -143,10 +143,9 @@ export default async function DocumentDetailPage({
           : undefined;
       if (!info || !info.sku) return null;
       const units = Number(it.units) || 0;
-      const short = info.stock <= 0 || info.stock < units || (info.min > 0 && info.stock <= info.min);
-      if (!short) return null;
-      // Minimaal in te kopen: genoeg voor deze order én terug op het minimum.
-      const toOrder = Math.max(units - info.stock, info.min - info.stock, 0);
+      // Alleen melden als deze regel de voorraad onder 0 zou brengen.
+      if (info.stock - units >= 0) return null;
+      const toOrder = Math.round((units - info.stock) * 100) / 100; // tot terug op 0
       return { name: (it.name || info.name).trim(), sku: info.sku, stock: info.stock, units, toOrder };
     })
     .filter(
