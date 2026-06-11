@@ -49,7 +49,7 @@ export async function assignDoorOrientation(docId: string, productId: string, li
 
   // Voorraad-uitsplitsing per richting bijwerken (additionalSizes van het product).
   const prod = await db.query.products.findFirst({ where: eq(products.id, productId) });
-  const sizes = prod?.additionalSizes as Array<{ label?: string; stockQty?: number | null }> | null;
+  const sizes = prod?.additionalSizes;
   if (sizes?.length) {
     const updated = sizes.map((sz) => {
       const m = (sz.label ?? "").match(/\bS([1-4])\b/);
