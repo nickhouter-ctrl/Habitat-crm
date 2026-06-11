@@ -449,18 +449,15 @@ export default async function ProjectDetailPage({
                         )}
                         {d.kind === "estimate" && d.status !== "rejected" && (
                           <div className="mt-1.5 flex flex-wrap items-center gap-1.5 text-[11px]">
-                            {d.status === "accepted" ? (
-                              <Badge tone="info">Goedgekeurd</Badge>
-                            ) : (
-                              <ConfirmSubmit
-                                formAction={approveEstimateToInvoice.bind(null, d.id)}
-                                message="Offerte goedkeuren en direct een factuur aanmaken? De gereserveerde producten gaan naar verkocht; je belandt op de nieuwe factuur om te versturen."
-                                pendingLabel="Goedkeuren…"
-                                className="rounded bg-primary/10 px-2 py-0.5 text-[11px] font-medium text-primary transition-colors hover:bg-primary/20"
-                              >
-                                ✓ Goedkeuren → factuur
-                              </ConfirmSubmit>
-                            )}
+                            {d.status === "accepted" && <Badge tone="info">Gereserveerd</Badge>}
+                            <ConfirmSubmit
+                              formAction={approveEstimateToInvoice.bind(null, d.id)}
+                              message="Een factuur aanmaken van deze offerte? De gereserveerde producten gaan naar verkocht; je belandt op de nieuwe factuur om te versturen."
+                              pendingLabel="Bezig…"
+                              className="rounded bg-primary/10 px-2 py-0.5 text-[11px] font-medium text-primary transition-colors hover:bg-primary/20"
+                            >
+                              {d.status === "accepted" ? "→ Factuur maken (verkopen)" : "✓ Goedkeuren → factuur"}
+                            </ConfirmSubmit>
                           </div>
                         )}
                       </li>
