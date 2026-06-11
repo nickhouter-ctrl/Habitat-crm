@@ -7,7 +7,7 @@ import { z } from "zod";
 
 import { auth } from "@/auth";
 import { db } from "@/lib/db";
-import { projects } from "@/lib/db/schema";
+import { documents, projects } from "@/lib/db/schema";
 
 async function requireUser() {
   const session = await auth();
@@ -53,7 +53,7 @@ const updateSchema = z.object({
   name: z.string().trim().min(1, "Naam is verplicht"),
   description: z.string().trim().optional(),
   code: z.string().trim().optional(),
-  status: z.enum(["active", "archived"]).default("active"),
+  status: z.enum(["active", "completed", "archived"]).default("active"),
   contactId: z.string().trim().optional(),
   ownerId: z.string().trim().optional(),
   propertyId: z.string().trim().optional(),
@@ -97,4 +97,22 @@ export async function deleteProject(id: string) {
   await db.delete(projects).where(eq(projects.id, id));
   revalidatePath("/projects");
   redirect("/projects");
+}
+
+/** Markeer een project als afgerond (of heropen het). */
+export async function setProjectStatus(id: string, status: "active" | "completed" | "archived") {
+  await requireUser();
+  await db.update(projects).set({ status, updatedAt: new Date() }).where(eq(projects.id, id));
+  revalidatePath("/projects");
+  revalidatePath(`/projects/${id}`);
+}
+
+/** Koppel een bestaand document (factuur/offerte) aan dit project. */
+export async function attachDocumentToProject(projectId: string, formData: FormData) {
+  await requireUser();
+  const documentId = String(formData.get("documentId") ?? "").trim();
+  if (documentId.length !== 36) return;
+  await db.update(documents).set({ projectId, updatedAt: new Date() }).where(eq(documents.id, documentId));
+  revalidatePath(`/projects/${projectId}`);
+  revalidatePath(`/documents/${documentId}`);
 }

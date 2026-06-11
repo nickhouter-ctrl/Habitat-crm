@@ -868,3 +868,35 @@ export async function reverseStockOutFromDocument(id: string) {
   revalidatePath(`/documents/${id}`);
   revalidatePath("/products");
 }
+
+/**
+ * Annuleer een verkoop (factuur/pakbon): zet de status op `void` én boekt een
+ * eventueel afgeboekte voorraad terug, zodat de stuks weer beschikbaar komen.
+ * Gebruikt vanaf het projectscherm om een geannuleerde regel terug te draaien.
+ */
+export async function cancelSaleReturnStock(id: string) {
+  const user = await requireUser();
+  const doc = await db.query.documents.findFirst({ where: eq(documents.id, id) });
+  if (!doc) return;
+
+  // 1. Voorraad terugboeken als die was afgeboekt (idempotent via stockAppliedAt).
+  if (doc.stockAppliedAt) await reverseStockOutFromDocument(id);
+
+  // 2. Document op 'void' zetten (geannuleerd).
+  await db
+    .update(documents)
+    .set({ status: "void", updatedAt: new Date() })
+    .where(eq(documents.id, id));
+
+  await db.insert(activities).values({
+    type: "note",
+    subject: `Verkoop geannuleerd — ${doc.kind === "invoice" ? "factuur" : "pakbon"} ${doc.docNumber ?? doc.title ?? ""}`.trim(),
+    body: doc.stockAppliedAt ? "Voorraad is teruggeboekt." : undefined,
+    documentId: id,
+    contactId: doc.contactId,
+    authorId: user.id,
+  });
+
+  revalidatePath(`/documents/${id}`);
+  revalidatePath("/products");
+}

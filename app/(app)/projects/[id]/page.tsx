@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, inArray, or } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, isNull, or } from "drizzle-orm";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
@@ -16,6 +16,7 @@ import {
   LinkButton,
   PageHeader,
   Select,
+  StatTile,
   TBody,
   Table,
   Td,
@@ -28,7 +29,12 @@ import { Combobox, type ComboOption } from "@/components/combobox";
 import { db } from "@/lib/db";
 import { contacts, documents, products, projects, properties, users } from "@/lib/db/schema";
 import { normalizeDocItems } from "@/lib/documents";
-import { deleteProject, updateProject } from "../actions";
+import { attachDocumentToProject, deleteProject, setProjectStatus, updateProject } from "../actions";
+import {
+  applyStockOutFromDocument,
+  cancelSaleReturnStock,
+  reverseStockOutFromDocument,
+} from "../../documents/actions";
 
 export const metadata = { title: "Project" };
 
@@ -41,7 +47,7 @@ export default async function ProjectDetailPage({
   const project = await db.query.projects.findFirst({ where: eq(projects.id, id) });
   if (!project) notFound();
 
-  const [contactOpts, ownerOpts, propertyOpts, linkedDocs] = await Promise.all([
+  const [contactOpts, ownerOpts, propertyOpts, linkedDocs, unlinkedDocs] = await Promise.all([
     db.select({ id: contacts.id, name: contacts.name }).from(contacts).orderBy(asc(contacts.name)),
     db.select({ id: users.id, name: users.name, email: users.email }).from(users).orderBy(asc(users.email)),
     db.select({ id: properties.id, title: properties.title }).from(properties).orderBy(asc(properties.title)),
@@ -54,10 +60,24 @@ export default async function ProjectDetailPage({
         title: documents.title,
         totalEur: documents.totalEur,
         issueDate: documents.issueDate,
+        stockAppliedAt: documents.stockAppliedAt,
       })
       .from(documents)
       .where(eq(documents.projectId, id))
       .orderBy(desc(documents.issueDate), desc(documents.createdAt)),
+    // Documenten die nog niet aan een project hangen — om hier te koppelen.
+    db
+      .select({
+        id: documents.id,
+        kind: documents.kind,
+        docNumber: documents.docNumber,
+        title: documents.title,
+        totalEur: documents.totalEur,
+      })
+      .from(documents)
+      .where(and(isNull(documents.projectId), inArray(documents.kind, ["invoice", "estimate", "creditnote"])))
+      .orderBy(desc(documents.issueDate), desc(documents.createdAt))
+      .limit(500),
   ]);
 
   // Marge per project (intern): omzet − kostprijs van factuurregels (facturen − creditnota's).
@@ -149,17 +169,51 @@ export default async function ProjectDetailPage({
                 Holded
               </span>
             ) : null}
-            <Badge tone={project.status === "active" ? "success" : "neutral"}>
-              {project.status === "active" ? "Actief" : "Gearchiveerd"}
+            <Badge
+              tone={
+                project.status === "active" ? "success" : project.status === "completed" ? "info" : "neutral"
+              }
+            >
+              {project.status === "active" ? "Actief" : project.status === "completed" ? "Afgerond" : "Gearchiveerd"}
             </Badge>
           </span>
         }
         actions={
-          <LinkButton href="/projects" variant="ghost">
-            ← Overzicht
-          </LinkButton>
+          <div className="flex items-center gap-2">
+            {project.status === "completed" ? (
+              <form action={setProjectStatus.bind(null, id, "active")}>
+                <SubmitButton variant="secondary" pendingLabel="…">
+                  Heropenen
+                </SubmitButton>
+              </form>
+            ) : (
+              <form action={setProjectStatus.bind(null, id, "completed")}>
+                <SubmitButton variant="secondary" pendingLabel="Afronden…">
+                  ✓ Afronden
+                </SubmitButton>
+              </form>
+            )}
+            <LinkButton href="/projects" variant="ghost">
+              ← Overzicht
+            </LinkButton>
+          </div>
         }
       />
+
+      <div className="mb-5 grid grid-cols-2 gap-3 sm:grid-cols-4">
+        <StatTile
+          label="Omzet (gefactureerd)"
+          value={`€ ${projRevenue.toLocaleString("nl-NL", { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`}
+          tone="info"
+        />
+        <StatTile
+          label="Marge"
+          value={`€ ${projMargin.toLocaleString("nl-NL", { minimumFractionDigits: 0, maximumFractionDigits: 0 })}${projMarginPct != null ? ` · ${projMarginPct}%` : ""}`}
+          tone={projMargin < 0 ? "danger" : "success"}
+        />
+        <StatTile label="Documenten" value={String(linkedDocs.length)} tone="neutral" />
+        <StatTile label="Producten" value={String(projectProducts.length)} tone="neutral" />
+      </div>
 
       <div className="grid gap-5 lg:grid-cols-[1fr_18rem]">
         <Card>
@@ -175,6 +229,7 @@ export default async function ProjectDetailPage({
                 <Field label="Status" htmlFor="status">
                   <Select id="status" name="status" defaultValue={project.status}>
                     <option value="active">Actief</option>
+                    <option value="completed">Afgerond</option>
                     <option value="archived">Gearchiveerd</option>
                   </Select>
                 </Field>
@@ -298,24 +353,92 @@ export default async function ProjectDetailPage({
                   + Nieuwe factuur
                 </LinkButton>
               </div>
+
+              {/* Bestaand document (factuur/offerte) aan dit project koppelen. */}
+              {unlinkedDocs.length > 0 && (
+                <form action={attachDocumentToProject.bind(null, id)} className="flex items-center gap-2 rounded-md bg-background px-2 py-2">
+                  <Select name="documentId" defaultValue="" className="h-8 flex-1 text-xs" required>
+                    <option value="" disabled>
+                      Bestaande factuur/offerte koppelen…
+                    </option>
+                    {unlinkedDocs.map((d) => {
+                      const k = d.kind === "invoice" ? "Factuur" : d.kind === "estimate" ? "Offerte" : "Creditnota";
+                      return (
+                        <option key={d.id} value={d.id}>
+                          {k} {d.docNumber ?? "(geen nr.)"}
+                          {d.title ? ` — ${d.title}` : ""} · €{" "}
+                          {Number(d.totalEur ?? 0).toLocaleString("nl-NL", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        </option>
+                      );
+                    })}
+                  </Select>
+                  <SubmitButton pendingLabel="Koppelen…" className="h-8 px-3 text-xs">
+                    Koppel
+                  </SubmitButton>
+                </form>
+              )}
+
               {linkedDocs.length === 0 ? (
                 <p className="text-muted">
-                  Nog niets gekoppeld — gebruik de knop hierboven, of kies dit project in het projectveld bij het bewerken van een bestaand document.
+                  Nog niets gekoppeld — gebruik de knoppen hierboven, of kies dit project in het projectveld bij het bewerken van een bestaand document.
                 </p>
               ) : (
-                <ul className="space-y-1">
+                <ul className="space-y-2">
                   {linkedDocs.map((d) => {
                     const kindLabel = d.kind === "invoice" ? "Factuur" : d.kind === "estimate" ? "Offerte" : d.kind === "creditnote" ? "Creditnota" : d.kind === "deliverynote" ? "Pakbon" : d.kind;
+                    const isSale = d.kind === "invoice" || d.kind === "deliverynote";
+                    const voided = d.status === "void";
+                    const booked = !!d.stockAppliedAt;
                     return (
-                      <li key={d.id} className="flex items-center justify-between gap-2">
-                        <Link href={`/documents/${d.id}`} className="truncate hover:underline">
-                          <span className="font-medium">{kindLabel}</span>{" "}
-                          <span className="text-muted">{d.docNumber ?? "(geen nr.)"}</span>
-                          {d.title && <span className="ml-1 text-xs text-muted">— {d.title}</span>}
-                        </Link>
-                        <span className="shrink-0 text-xs tabular-nums text-muted">
-                          € {Number(d.totalEur ?? 0).toLocaleString("nl-NL", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                        </span>
+                      <li key={d.id} className="rounded-md border border-border/60 px-3 py-2">
+                        <div className="flex items-center justify-between gap-2">
+                          <Link href={`/documents/${d.id}`} className="truncate hover:underline">
+                            <span className="font-medium">{kindLabel}</span>{" "}
+                            <span className="text-muted">{d.docNumber ?? "(geen nr.)"}</span>
+                            {d.title && <span className="ml-1 text-xs text-muted">— {d.title}</span>}
+                          </Link>
+                          <span className={`shrink-0 text-xs tabular-nums ${voided ? "text-muted line-through" : "text-muted"}`}>
+                            € {Number(d.totalEur ?? 0).toLocaleString("nl-NL", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                          </span>
+                        </div>
+                        {isSale && (
+                          <div className="mt-1.5 flex flex-wrap items-center gap-1.5 text-[11px]">
+                            {voided ? (
+                              <Badge tone="danger">Geannuleerd</Badge>
+                            ) : booked ? (
+                              <>
+                                <Badge tone="success">Voorraad afgeboekt</Badge>
+                                <ConfirmSubmit
+                                  formAction={reverseStockOutFromDocument.bind(null, d.id)}
+                                  message="Voorraad-afboeking terugdraaien? De stuks komen weer in voorraad."
+                                  pendingLabel="…"
+                                  className="rounded px-2 py-0.5 text-[11px] font-medium text-muted transition-colors hover:bg-muted/50"
+                                >
+                                  Terugdraaien
+                                </ConfirmSubmit>
+                              </>
+                            ) : (
+                              <ConfirmSubmit
+                                formAction={applyStockOutFromDocument.bind(null, d.id)}
+                                message="Voorraad van deze factuur nu afboeken?"
+                                pendingLabel="…"
+                                className="rounded px-2 py-0.5 text-[11px] font-medium text-foreground transition-colors hover:bg-muted/50"
+                              >
+                                Voorraad afboeken
+                              </ConfirmSubmit>
+                            )}
+                            {!voided && (
+                              <ConfirmSubmit
+                                formAction={cancelSaleReturnStock.bind(null, d.id)}
+                                message="Deze verkoop annuleren? De factuur wordt op 'geannuleerd' gezet en de voorraad komt terug."
+                                pendingLabel="Annuleren…"
+                                className="rounded px-2 py-0.5 text-[11px] font-medium text-danger transition-colors hover:bg-danger/10"
+                              >
+                                Annuleren
+                              </ConfirmSubmit>
+                            )}
+                          </div>
+                        )}
                       </li>
                     );
                   })}
