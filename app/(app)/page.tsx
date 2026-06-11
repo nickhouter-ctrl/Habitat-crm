@@ -239,20 +239,58 @@ export default async function DashboardPage() {
     ),
   );
   const doorInvoiceRows = await db
-    .select({ id: documents.id, items: documents.items })
+    .select({
+      id: documents.id,
+      docNumber: documents.docNumber,
+      items: documents.items,
+      projectName: projects.name,
+    })
     .from(documents)
+    .leftJoin(projects, eq(documents.projectId, projects.id))
     .where(eq(documents.kind, "invoice"));
-  const doorOrientationN = doorInvoiceRows.filter((d) =>
-    normalizeDocItems(d.items).some(
-      (it) =>
-        it.productId &&
-        doorProductIds.has(it.productId) &&
-        !/\bS[1-4]\b/.test(`${it.name ?? ""} ${it.description ?? ""}`),
-    ),
-  ).length;
+  const doorOrientationDocs = doorInvoiceRows
+    .map((d) => {
+      const units = normalizeDocItems(d.items)
+        .filter(
+          (it) =>
+            it.productId &&
+            doorProductIds.has(it.productId) &&
+            !/\bS[1-4]\b/.test(`${it.name ?? ""} ${it.description ?? ""}`),
+        )
+        .reduce((sum, it) => sum + (Number(it.units) || 0), 0);
+      return units > 0 ? { id: d.id, docNumber: d.docNumber, projectName: d.projectName, units } : null;
+    })
+    .filter((x): x is NonNullable<typeof x> => !!x);
+  const doorOrientationN = doorOrientationDocs.length;
 
   const revenueAll = Number(docAgg.revenueAll) - Number(creditAgg.paidAll);
   const revenueMonth = Number(docAgg.revenueMonth) - Number(creditAgg.revenueMonth);
+
+  // Marge = omzet − kostprijs van de verkochte producten (COGS uit de
+  // factuurregels × products.costEur). Creditnota's draaien de marge terug.
+  // Regels zonder gekoppeld product (bv. arbeid) tellen niet mee in de COGS.
+  const productCostRows = await db.select({ id: products.id, costEur: products.costEur }).from(products);
+  const costMap = new Map(productCostRows.map((p) => [p.id, Number(p.costEur) || 0]));
+  const cogsRows = await db
+    .select({ items: documents.items, issueDate: documents.issueDate, kind: documents.kind })
+    .from(documents)
+    .where(inArray(documents.kind, ["invoice", "creditnote"]));
+  let cogsAll = 0;
+  let cogsMonth = 0;
+  for (const d of cogsRows) {
+    const sign = d.kind === "creditnote" ? -1 : 1;
+    const inMonth = !!d.issueDate && String(d.issueDate).slice(0, 10) >= monthStart;
+    for (const it of normalizeDocItems(d.items)) {
+      if (!it.productId) continue;
+      const c = (costMap.get(it.productId) ?? 0) * (Number(it.units) || 0) * sign;
+      cogsAll += c;
+      if (inMonth) cogsMonth += c;
+    }
+  }
+  const marginAll = revenueAll - cogsAll;
+  const marginMonth = revenueMonth - cogsMonth;
+  const marginPctAll = revenueAll > 0 ? Math.round((marginAll / revenueAll) * 100) : 0;
+  const marginPctMonth = revenueMonth > 0 ? Math.round((marginMonth / revenueMonth) * 100) : 0;
   const unpushedPurchase = Number(purchaseAgg.totalEur);
   const totalPurchase = Number(holdedExpensesYTD) + unpushedPurchase;
   const unpaidPurchaseTotal = unpaidInvoices.reduce((s, p) => s + Number(p.total ?? 0), 0);
@@ -274,8 +312,7 @@ export default async function DashboardPage() {
     productsAgg.lowStock > 0 ||
     productsAgg.stockNoPhoto > 0 ||
     productsAgg.noBarcode > 0 ||
-    reorderProducts.length > 0 ||
-    doorOrientationN > 0;
+    reorderProducts.length > 0;
 
   // --- Grafieken: omzet & offerte-waarde per maand (12 mnd) + conversie ---
   const since12 = new Date(now.getFullYear(), now.getMonth() - 11, 1).toISOString().slice(0, 10);
@@ -317,6 +354,37 @@ export default async function DashboardPage() {
         subtitle="Overzicht van de pijplijn, facturen en activiteit"
         actions={<LinkButton href="/contacts/new">Nieuw contact</LinkButton>}
       />
+
+      {doorOrientationN > 0 && (
+        <Card className="mb-6 border-amber-300 bg-amber-50/50">
+          <CardHeader>
+            <CardTitle>
+              🚪 {doorOrientationN} factu{doorOrientationN === 1 ? "ur" : "ren"} — draairichting kiezen
+            </CardTitle>
+            <LinkButton href="/draairichtingen" className="text-xs">
+              → Toewijzen
+            </LinkButton>
+          </CardHeader>
+          <CardContent>
+            <p className="mb-3 text-sm text-muted">
+              Bij deze deur-facturen moet je nog per regel de draairichting (S1–S4) en het aantal per richting opgeven.
+            </p>
+            <ul className="grid gap-1.5 text-sm sm:grid-cols-2">
+              {doorOrientationDocs.map((d) => (
+                <li key={d.id} className="flex items-center justify-between gap-2 rounded-md bg-background px-3 py-1.5">
+                  <Link href={`/draairichtingen`} className="truncate font-medium hover:underline">
+                    {d.docNumber ?? "(geen nr.)"}
+                    {d.projectName && <span className="ml-1 font-normal text-muted">· {d.projectName}</span>}
+                  </Link>
+                  <span className="shrink-0 rounded bg-amber-100 px-1.5 py-0.5 text-xs font-medium text-amber-800 tabular-nums">
+                    {d.units} {d.units === 1 ? "deur" : "deuren"}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </CardContent>
+        </Card>
+      )}
 
       {reorderProducts.length > 0 && (
         <Card className="mb-6 border-red-200 bg-red-50/40">
@@ -397,11 +465,6 @@ export default async function DashboardPage() {
                 <strong>{poSoon}</strong> inkooporder{poSoon === 1 ? "" : "s"} kom{poSoon === 1 ? "t" : "en"} deze week binnen.
               </ActionRow>
             )}
-            {doorOrientationN > 0 && (
-              <ActionRow href="/draairichtingen" emoji="🚪" tone="warning">
-                <strong>{doorOrientationN}</strong> factu{doorOrientationN === 1 ? "ur" : "ren"} met deuren waar de draairichting (S1–S4) nog gekozen moet worden.
-              </ActionRow>
-            )}
             {productsAgg.lowStock > 0 && (
               <ActionRow href="/inkooporders/bestellen" emoji="🔻" tone="danger">
                 <strong>{productsAgg.lowStock}</strong> producten onder de voorraaddrempel — bijbestellen.
@@ -425,12 +488,19 @@ export default async function DashboardPage() {
         </div>
       )}
 
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
         <StatTile label="Omzet deze maand" value={formatEUR(revenueMonth)} hint="ex. BTW" tone="success" icon={<TrendingUp className="size-5" />} />
+        <StatTile
+          label="Marge deze maand"
+          value={formatEUR(marginMonth)}
+          hint={`${marginPctMonth}% marge · ex. BTW`}
+          tone="success"
+          icon={<Wallet className="size-5" />}
+        />
         <StatTile label="Openstaande facturen" value={docAgg.outstandingN} hint={formatEUR(docAgg.outstandingV)} tone="warning" icon={<Clock className="size-5" />} />
         <StatTile label="Vervallen facturen" value={docAgg.overdueN} hint={formatEUR(docAgg.overdueV)} tone="danger" icon={<AlertTriangle className="size-5" />} />
         <StatTile label="Geaccepteerde offertes" value={acceptedN} hint="klaar om te factureren" tone="accent" icon={<CheckCircle2 className="size-5" />} />
-        <StatTile label="Totale omzet" value={formatEUR(revenueAll)} hint="ex. BTW · dit jaar" tone="info" icon={<Wallet className="size-5" />} />
+        <StatTile label="Totale omzet" value={formatEUR(revenueAll)} hint={`${marginPctAll}% marge · ${formatEUR(marginAll)}`} tone="info" icon={<Wallet className="size-5" />} />
       </div>
 
       <details className="mt-3">

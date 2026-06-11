@@ -4,7 +4,7 @@ import Link from "next/link";
 import { SubmitButton } from "@/components/submit-button";
 import { Card, CardContent, EmptyState, Input, PageHeader } from "@/components/ui";
 import { db } from "@/lib/db";
-import { documents, products } from "@/lib/db/schema";
+import { documents, products, projects } from "@/lib/db/schema";
 import { normalizeDocItems } from "@/lib/documents";
 import { assignDoorOrientation } from "./actions";
 
@@ -32,8 +32,15 @@ export default async function DraairichtingenPage({
   const doorIds = new Set(doorProds.map((p) => p.id));
 
   const invoices = await db
-    .select({ id: documents.id, docNumber: documents.docNumber, title: documents.title, items: documents.items })
+    .select({
+      id: documents.id,
+      docNumber: documents.docNumber,
+      title: documents.title,
+      items: documents.items,
+      projectName: projects.name,
+    })
     .from(documents)
+    .leftJoin(projects, eq(documents.projectId, projects.id))
     .where(eq(documents.kind, "invoice"));
 
   // Per factuur de deurregels zonder gekozen draairichting (S1–S4).
@@ -79,11 +86,16 @@ export default async function DraairichtingenPage({
           {todo.map((d) => (
             <Card key={d.id}>
               <CardContent className="space-y-4 p-5">
-                <div className="flex items-center justify-between gap-2">
+                <div className="flex flex-wrap items-center justify-between gap-2">
                   <Link href={`/documents/${d.id}`} className="font-medium hover:underline">
                     Factuur <span className="text-muted">{d.docNumber ?? "(geen nr.)"}</span>
                     {d.title && <span className="ml-1 text-sm text-muted">— {d.title}</span>}
                   </Link>
+                  {d.projectName && (
+                    <span className="rounded-full bg-accent/10 px-2.5 py-0.5 text-xs font-medium text-accent">
+                      📁 {d.projectName}
+                    </span>
+                  )}
                 </div>
                 {d.lines.map(({ it, index }) => (
                   <form

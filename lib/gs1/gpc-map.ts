@@ -37,6 +37,12 @@ const BY_COLLECTION_CATEGORY: Record<string, GpcMapping> = {
   // Sfeerhaarden — waterdamp-sfeerhaarden (chimeneas decorativas)
   "Sfeerhaarden|*": { gpc: "10005478", uom: "Unidad", netContent: 1 },
 
+  // Railingen / balustrades (Taka) — sistemas de balaustrada/rieles (no de madera)
+  "Railingen|*": { gpc: "10003961", uom: "Unidad", netContent: 1 },
+
+  // PVC / vinyl vloeren — revestimiento para suelo (vinilo/goma/linóleo), per m²
+  "PVC Vloeren|*": { gpc: "10002448", uom: "Metro cuadrado", netContent: 1 },
+
   // Deuren
   "Binnen en buiten deuren|Binnendeuren": { gpc: "10002567", uom: "Unidad", netContent: 1 },
   "Binnen en buiten deuren|Buitendeuren": { gpc: "10002570", uom: "Unidad", netContent: 1 },
