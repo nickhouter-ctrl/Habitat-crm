@@ -1,5 +1,5 @@
 /** Shared helpers to populate pickers in the deal/property/document/product forms. */
-import { asc, desc, eq } from "drizzle-orm";
+import { and, asc, desc, eq, sql } from "drizzle-orm";
 
 import { db } from "@/lib/db";
 import { contacts, deals, products, projects, properties, users } from "@/lib/db/schema";
@@ -68,7 +68,12 @@ async function listProjects(): Promise<SelectOption[]> {
 
 async function listActiveProducts(): Promise<ProductOption[]> {
   return db.query.products.findMany({
-    where: eq(products.isActive, true),
+    // Losse deuren (leaf) niet direct verkoopbaar — alleen de SET-producten.
+    // De sets (sku …-SET) en het beslag (categorie Beslag) blijven gewoon kiesbaar.
+    where: and(
+      eq(products.isActive, true),
+      sql`not (${products.category} in ('Binnendeuren', 'Buitendeuren') and coalesce(${products.sku}, '') not like '%-SET')`,
+    ),
     columns: { id: true, name: true, sku: true, category: true, collection: true, unit: true, priceEur: true, tradePriceEur: true, costEur: true, vatRate: true, additionalSizes: true },
     orderBy: [asc(products.category), asc(products.name)],
     limit: 2000,

@@ -14,8 +14,10 @@ type Size = {
 };
 
 const numOrNull = (v: string) => (v === "" ? null : Number(v));
-const cols = "grid grid-cols-[1.1fr_1.1fr_0.9fr_0.9fr_0.9fr_0.7fr_auto] items-center gap-1.5";
-const cell = "h-8 rounded-md border border-border bg-background px-2 text-sm";
+// Brede Afmeting-kolom zodat lange labels (bv. draairichtingen) volledig passen;
+// horizontaal scrollbaar op smalle schermen i.p.v. ingedrukt.
+const cols = "grid grid-cols-[minmax(180px,2.4fr)_minmax(110px,1.4fr)_1fr_1fr_1fr_0.8fr_auto] items-center gap-2 min-w-[720px]";
+const cell = "h-8 w-full min-w-0 rounded-md border border-border bg-background px-2 text-sm";
 const num = `${cell} text-right tabular-nums`;
 
 /**
@@ -50,7 +52,7 @@ export function SizesEditor({ initial }: { initial?: Size[] | null }) {
     .map((r) => ({ ...r, inStock: (r.stockQty ?? 0) > 0 }));
 
   return (
-    <div className="overflow-hidden rounded-lg border border-border">
+    <div className="overflow-x-auto rounded-lg border border-border">
       <input type="hidden" name="additionalSizes" value={JSON.stringify(clean)} />
       {rows.length > 0 && (
         <div className={`${cols} border-b border-border bg-background/60 px-2 py-1.5 text-[11px] font-medium text-muted`}>
