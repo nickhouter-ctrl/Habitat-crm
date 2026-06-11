@@ -1,6 +1,6 @@
 "use server";
 
-import { and, count, eq, isNotNull, isNull, ne, sql } from "drizzle-orm";
+import { and, count, eq, inArray, isNotNull, isNull, ne, sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
@@ -802,6 +802,22 @@ async function bookStockOutInternal(
         eq(documents.dealId, doc.dealId),
         isNotNull(documents.stockAppliedAt),
         ne(documents.id, docId),
+      ),
+      columns: { docNumber: true },
+    });
+    if (already) return { ok: false, reason: "deal-already-booked", otherDoc: already.docNumber };
+  }
+
+  // Een pakbon hoort bij een factuur — niet nóg een keer afboeken als er binnen
+  // hetzelfde project al een factuur is afgeboekt (en andersom).
+  if (doc.projectId) {
+    const already = await db.query.documents.findFirst({
+      where: and(
+        eq(documents.projectId, doc.projectId),
+        inArray(documents.kind, ["invoice", "deliverynote"]),
+        isNotNull(documents.stockAppliedAt),
+        ne(documents.id, docId),
+        ne(documents.kind, doc.kind), // alleen factuur↔pakbon blokkeren, niet 2 facturen
       ),
       columns: { docNumber: true },
     });
