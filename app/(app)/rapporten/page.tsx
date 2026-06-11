@@ -112,7 +112,7 @@ export default async function RapportenPage() {
         .from(documents)
         .where(sql`${documents.kind} = 'invoice' and ${documents.status} not in ('paid','void','draft')`)
         .orderBy(asc(documents.dueDate)),
-      // Voor marge-per-maand: alle factuur-line-items + productkosten
+      // Voor marge-analyse: alle factuur-line-items + klant + productkosten
       db
         .select({
           id: documents.id,
@@ -120,8 +120,11 @@ export default async function RapportenPage() {
           issueDate: documents.issueDate,
           subtotalEur: documents.subtotalEur,
           items: documents.items,
+          contactId: documents.contactId,
+          contactName: contacts.name,
         })
         .from(documents)
+        .leftJoin(contacts, eq(contacts.id, documents.contactId))
         .where(sql`${documents.kind} in ('invoice','creditnote') and ${documents.issueDate} >= ${from}`),
     ]);
 
@@ -146,30 +149,96 @@ export default async function RapportenPage() {
   const totalRev = revenueChart.reduce((s, r) => s + r.value, 0);
   const grossMargin = totalRev > 0 ? Math.round(((totalRev - totalPur) / totalRev) * 100) : null;
 
-  // ──────────────── Marge per maand (omzet − kostprijs van regels) ─────────
-  const productCost = new Map<string, number>();
+  // ──────────────── Marge & winst (omzet − kostprijs van verkochte regels) ──
+  // Rijkere productinfo voor uitsplitsing per product/collectie.
+  type Prod = { name: string; cost: number; collection: string | null };
+  const prodInfo = new Map<string, Prod>();
   {
-    const ps = await db.select({ id: products.id, cost: products.costEur }).from(products);
-    for (const p of ps) productCost.set(p.id, Number(p.cost ?? 0));
+    const ps = await db
+      .select({ id: products.id, name: products.name, cost: products.costEur, collection: products.collection })
+      .from(products);
+    for (const p of ps) prodInfo.set(p.id, { name: p.name, cost: Number(p.cost ?? 0), collection: p.collection });
   }
-  const margeByMonth = new Map<string, { revenue: number; cost: number }>();
+  const lineRevenue = (it: { units?: unknown; price?: unknown; discount?: unknown }) =>
+    (Number(it.units) || 0) * (Number(it.price) || 0) * (1 - (Number(it.discount) || 0) / 100);
+
+  type Agg = { revenue: number; cost: number; units?: number; name?: string };
+  const margeByMonth = new Map<string, Agg>();
   for (const m of months) margeByMonth.set(m.key, { revenue: 0, cost: 0 });
+  const byProduct = new Map<string, Agg & { name: string; units: number; hasCost: boolean }>();
+  const byCollection = new Map<string, Agg>();
+  const byCustomer = new Map<string, Agg & { name: string }>();
+
   for (const d of allDocsForMargin) {
-    if (!d.issueDate) continue;
-    const ym = String(d.issueDate).slice(0, 7);
-    const bucket = margeByMonth.get(ym);
-    if (!bucket) continue;
     const sign = d.kind === "creditnote" ? -1 : 1;
-    bucket.revenue += sign * Number(d.subtotalEur ?? 0);
+    const ym = d.issueDate ? String(d.issueDate).slice(0, 7) : null;
+    const monthBucket = ym ? margeByMonth.get(ym) : null;
+    if (monthBucket) monthBucket.revenue += sign * Number(d.subtotalEur ?? 0);
+
+    const custKey = d.contactId ?? "—";
+    const cust = byCustomer.get(custKey) ?? { revenue: 0, cost: 0, name: d.contactName ?? "Onbekend" };
+
     for (const it of normalizeDocItems(d.items)) {
-      const c = it.productId ? productCost.get(it.productId) ?? 0 : 0;
-      bucket.cost += sign * c * (Number(it.units) || 0);
+      const info = it.productId ? prodInfo.get(it.productId) : undefined;
+      const units = Number(it.units) || 0;
+      const rev = sign * lineRevenue(it);
+      const cost = sign * (info?.cost ?? 0) * units;
+      if (monthBucket) monthBucket.cost += cost;
+      // Per product (alleen gekoppelde productregels)
+      if (it.productId && info) {
+        const p = byProduct.get(it.productId) ?? { revenue: 0, cost: 0, units: 0, name: info.name, hasCost: info.cost > 0 };
+        p.revenue += rev;
+        p.cost += cost;
+        p.units += sign * units;
+        byProduct.set(it.productId, p);
+        const colKey = info.collection ?? "Overig";
+        const col = byCollection.get(colKey) ?? { revenue: 0, cost: 0 };
+        col.revenue += rev;
+        col.cost += cost;
+        byCollection.set(colKey, col);
+      }
+      // Klant: omzet uit productregels + bijbehorende kostprijs
+      cust.revenue += rev;
+      cust.cost += cost;
     }
+    byCustomer.set(custKey, cust);
   }
+
   const margeChart = months.map((m) => {
     const b = margeByMonth.get(m.key)!;
     return { month: m.label, value: Math.round((b.revenue - b.cost) * 100) / 100 };
   });
+
+  // KPI's verkoopmarge (12 mnd)
+  const cogs12 = months.reduce((s, m) => s + margeByMonth.get(m.key)!.cost, 0);
+  const grossProfit12 = totalRev - cogs12;
+  const marginPct12 = totalRev > 0 ? Math.round((grossProfit12 / totalRev) * 100) : null;
+
+  const pct = (rev: number, profit: number) => (rev > 0 ? Math.round((profit / rev) * 100) : null);
+
+  // Winst per product (12 mnd) — gesorteerd op winst €
+  const productMargin = [...byProduct.values()]
+    .map((p) => ({ name: p.name, revenue: p.revenue, profit: p.revenue - p.cost, units: p.units, hasCost: p.hasCost }))
+    .filter((p) => p.revenue > 0 || p.profit !== 0);
+  const topProfitProducts = [...productMargin].sort((a, b) => b.profit - a.profit).slice(0, 12);
+  // Verlieslatend / laagste marge — alleen producten met kostprijs en omzet
+  const lowMarginProducts = productMargin
+    .filter((p) => p.hasCost && p.revenue > 0)
+    .map((p) => ({ ...p, mp: pct(p.revenue, p.profit)! }))
+    .sort((a, b) => a.mp - b.mp)
+    .slice(0, 8);
+
+  const collectionMargin = [...byCollection.entries()]
+    .map(([name, a]) => ({ name, revenue: a.revenue, profit: a.revenue - a.cost, mp: pct(a.revenue, a.revenue - a.cost) }))
+    .filter((c) => c.revenue > 0)
+    .sort((a, b) => b.profit - a.profit);
+  const collectionProfitData = collectionMargin.map((c) => ({ name: c.name, value: Math.round(c.profit) }));
+
+  const customerProfitData = [...byCustomer.values()]
+    .map((c) => ({ name: c.name, value: Math.round(c.revenue - c.cost) }))
+    .filter((c) => c.value > 0)
+    .sort((a, b) => b.value - a.value)
+    .slice(0, 10);
 
   // ──────────────── Top customers/products/suppliers/sources ───────────────
   const topCustData = (topCustomers as any[])
@@ -222,6 +291,171 @@ export default async function RapportenPage() {
         <StatTile label="Open facturen" value={openInvoices.length} hint={formatEUR(cashflowBuckets.reduce((s, b) => s + b.open, 0))} />
       </div>
 
+      {/* ─────────────── Marge & winst ─────────────── */}
+      <div className="mb-2 mt-7 flex items-baseline justify-between">
+        <h2 className="text-lg font-semibold">Marge &amp; winst</h2>
+        <span className="text-xs text-muted">
+          verkoopmarge = omzet − kostprijs van verkochte producten · ex BTW · 12 mnd
+        </span>
+      </div>
+
+      <div className="mb-5 grid grid-cols-2 gap-3 sm:grid-cols-4">
+        <StatTile label="Omzet" value={formatEUR(totalRev)} hint="ex. BTW · 12 mnd" tone="info" />
+        <StatTile label="Kostprijs verkocht" value={formatEUR(cogs12)} hint="COGS · kostprijs van verkochte regels" />
+        <StatTile
+          label="Brutowinst"
+          value={formatEUR(grossProfit12)}
+          hint={marginPct12 != null ? `${marginPct12}% marge` : undefined}
+          tone="success"
+        />
+        <StatTile
+          label="Gem. marge"
+          value={marginPct12 != null ? `${marginPct12}%` : "—"}
+          hint="winst / omzet"
+          tone="success"
+        />
+      </div>
+
+      <div className="mb-5 grid gap-5 lg:grid-cols-2">
+        <Card className="lg:col-span-2">
+          <CardHeader>
+            <CardTitle>Winst per maand</CardTitle>
+            <span className="text-xs text-muted">omzet − kostprijs van verkochte regels</span>
+          </CardHeader>
+          <CardContent>
+            <MonthlyAmountChart data={margeChart} color="#1f6f5c" />
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Winst per product</CardTitle>
+            <span className="text-xs text-muted">top 12 op winst € · op productregels</span>
+          </CardHeader>
+          {topProfitProducts.length === 0 ? (
+            <CardContent>
+              <p className="text-sm text-muted">Nog geen verkochte producten met kostprijs.</p>
+            </CardContent>
+          ) : (
+            <Table>
+              <THead>
+                <tr>
+                  <Th>Product</Th>
+                  <Th className="text-right">Omzet</Th>
+                  <Th className="text-right">Winst</Th>
+                  <Th className="text-right">Marge</Th>
+                </tr>
+              </THead>
+              <TBody>
+                {topProfitProducts.map((p) => {
+                  const mp = pct(p.revenue, p.profit);
+                  return (
+                    <Tr key={p.name}>
+                      <Td className="max-w-[220px] truncate" title={p.name}>{p.name}</Td>
+                      <Td className="text-right tabular-nums text-muted">{formatEUR(p.revenue)}</Td>
+                      <Td className="text-right font-medium tabular-nums">{formatEUR(p.profit)}</Td>
+                      <Td className="text-right tabular-nums">
+                        {!p.hasCost || mp == null ? (
+                          <span className="text-muted" title="Geen kostprijs ingevuld">n.v.t.</span>
+                        ) : (
+                          `${mp}%`
+                        )}
+                      </Td>
+                    </Tr>
+                  );
+                })}
+              </TBody>
+            </Table>
+          )}
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Winst per collectie</CardTitle>
+            <span className="text-xs text-muted">winst € · op productregels</span>
+          </CardHeader>
+          {collectionProfitData.length === 0 ? (
+            <CardContent>
+              <p className="text-sm text-muted">Nog geen data.</p>
+            </CardContent>
+          ) : (
+            <>
+              <CardContent className="pb-0">
+                <HorizontalBarChart data={collectionProfitData} height={Math.max(160, collectionProfitData.length * 28)} />
+              </CardContent>
+              <Table>
+                <THead>
+                  <tr>
+                    <Th>Collectie</Th>
+                    <Th className="text-right">Winst</Th>
+                    <Th className="text-right">Marge</Th>
+                  </tr>
+                </THead>
+                <TBody>
+                  {collectionMargin.map((c) => (
+                    <Tr key={c.name}>
+                      <Td>{c.name}</Td>
+                      <Td className="text-right tabular-nums">{formatEUR(c.profit)}</Td>
+                      <Td className="text-right tabular-nums text-muted">{c.mp != null ? `${c.mp}%` : "—"}</Td>
+                    </Tr>
+                  ))}
+                </TBody>
+              </Table>
+            </>
+          )}
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Top klanten — winst</CardTitle>
+            <span className="text-xs text-muted">omzet − kostprijs · op productregels</span>
+          </CardHeader>
+          <CardContent>
+            {customerProfitData.length === 0 ? (
+              <p className="text-sm text-muted">Nog geen klanten met winst.</p>
+            ) : (
+              <HorizontalBarChart data={customerProfitData} />
+            )}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Laagste marge / verlieslatend</CardTitle>
+            <span className="text-xs text-muted">producten met kostprijs, oplopende marge</span>
+          </CardHeader>
+          {lowMarginProducts.length === 0 ? (
+            <CardContent>
+              <p className="text-sm text-muted">Geen producten met kostprijs verkocht.</p>
+            </CardContent>
+          ) : (
+            <Table>
+              <THead>
+                <tr>
+                  <Th>Product</Th>
+                  <Th className="text-right">Winst</Th>
+                  <Th className="text-right">Marge</Th>
+                </tr>
+              </THead>
+              <TBody>
+                {lowMarginProducts.map((p) => (
+                  <Tr key={p.name}>
+                    <Td className="max-w-[220px] truncate" title={p.name}>{p.name}</Td>
+                    <Td className={`text-right tabular-nums ${p.profit < 0 ? "font-medium text-danger" : ""}`}>{formatEUR(p.profit)}</Td>
+                    <Td className={`text-right tabular-nums ${p.mp < 0 ? "font-medium text-danger" : p.mp < 15 ? "text-warning" : ""}`}>{p.mp}%</Td>
+                  </Tr>
+                ))}
+              </TBody>
+            </Table>
+          )}
+        </Card>
+      </div>
+
+      {/* ─────────────── Omzet, inkoop & cashflow ─────────────── */}
+      <div className="mb-2 mt-7">
+        <h2 className="text-lg font-semibold">Omzet, inkoop &amp; pijplijn</h2>
+      </div>
+
       <div className="grid gap-5 lg:grid-cols-2">
         <Card>
           <CardHeader>
@@ -240,16 +474,6 @@ export default async function RapportenPage() {
           </CardHeader>
           <CardContent>
             <MonthlyAmountChart data={purchaseChart} color="#3a2a20" />
-          </CardContent>
-        </Card>
-
-        <Card className="lg:col-span-2">
-          <CardHeader>
-            <CardTitle>Marge per maand</CardTitle>
-            <span className="text-xs text-muted">omzet − kostprijs van verkochte regels</span>
-          </CardHeader>
-          <CardContent>
-            <MonthlyAmountChart data={margeChart} color="#1f6f5c" />
           </CardContent>
         </Card>
 

@@ -488,20 +488,17 @@ export default async function DashboardPage() {
         </div>
       )}
 
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
-        <StatTile label="Omzet deze maand" value={formatEUR(revenueMonth)} hint="ex. BTW" tone="success" icon={<TrendingUp className="size-5" />} />
-        <StatTile
-          label="Marge deze maand"
-          value={formatEUR(marginMonth)}
-          hint={`${marginPctMonth}% marge · ex. BTW`}
-          tone="success"
-          icon={<Wallet className="size-5" />}
-        />
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+        <StatTile label="Omzet deze maand" value={formatEUR(revenueMonth)} hint={marginPctMonth != null ? `${marginPctMonth}% marge · ex. BTW` : "ex. BTW"} tone="success" icon={<TrendingUp className="size-5" />} />
         <StatTile label="Openstaande facturen" value={docAgg.outstandingN} hint={formatEUR(docAgg.outstandingV)} tone="warning" icon={<Clock className="size-5" />} />
         <StatTile label="Vervallen facturen" value={docAgg.overdueN} hint={formatEUR(docAgg.overdueV)} tone="danger" icon={<AlertTriangle className="size-5" />} />
         <StatTile label="Geaccepteerde offertes" value={acceptedN} hint="klaar om te factureren" tone="accent" icon={<CheckCircle2 className="size-5" />} />
-        <StatTile label="Totale omzet" value={formatEUR(revenueAll)} hint={`${marginPctAll}% marge · ${formatEUR(marginAll)}`} tone="info" icon={<Wallet className="size-5" />} />
+        <StatTile label="Totale omzet" value={formatEUR(revenueAll)} hint={marginPctAll != null ? `${marginPctAll}% marge · dit jaar` : "ex. BTW · dit jaar"} tone="info" icon={<Wallet className="size-5" />} />
       </div>
+      <p className="mt-2 text-xs text-muted">
+        Meer marge- en winstanalyses (per product, collectie, klant) staan in{" "}
+        <Link href="/rapporten" className="text-accent hover:underline">Rapporten</Link>.
+      </p>
 
       <details className="mt-3">
         <summary className="cursor-pointer select-none text-xs text-muted transition-colors hover:text-foreground">
