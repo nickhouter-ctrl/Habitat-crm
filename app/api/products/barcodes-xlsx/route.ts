@@ -32,6 +32,18 @@ export const runtime = "nodejs";
 // uniek zijn per product. Onze volledige productnamen zijn vaak langer; we korten
 // ze gericht in (afkortingen → woordgrens-truncatie) en maken ze daarna uniek.
 const GS1_NAME_MAX = 35;
+
+// Referencias internas (SKU's) die AL bij AECOC geregistreerd zijn via eerdere
+// (groene) imports. Opnieuw indienen geeft "La referencia interna ya existe para
+// otro producto" en keurt het hele bestand af. Daarom uitsluiten van de export.
+// (Bron: foutrapport MijnGS1 — uitbreiden als AECOC meer al-bestaande meldt.)
+const GS1_ALREADY_REGISTERED = new Set<string>([
+  "DR-001", "DR-002", "DR-003", "DR-004", "DR-005",
+  "KKR-A001", "KKR-A025", "KKR-A026", "KKR-A027", "KKR-A110",
+  "KKR-M8807", "KKR-PD032", "KKR-PU005", "KKR-PU217", "KKR-PU9", "KKR-PU9-RESIN",
+  "MS-165", "MS-166",
+  "WB-001", "WB-002", "WB-003", "WB-004", "WB-005", "WB-006", "WB-007",
+]);
 const NAME_ABBR: [RegExp, string][] = [
   [/\bRammed Earth Board\b/gi, "RE Board"],
   [/\bRammed Earth\b/gi, "RE"],
@@ -46,8 +58,23 @@ const NAME_ABBR: [RegExp, string][] = [
   [/\s+/g, " "],
 ];
 
-function gs1FunctionalName(name: string, used: Set<string>): string {
-  let s = name.trim();
+/** Verwijder de eigen SKU (referencia interna) uit een naam — AECOC verbiedt dat. */
+function stripOwnRef(name: string, sku: string | null): string {
+  if (!sku) return name;
+  const esc = sku.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  let s = name.replace(new RegExp(`\\s*[-–—]?\\s*${esc}`, "gi"), " ");
+  // Eventueel achtergebleven losse merk-token ("KKR") en losse scheidingstekens opruimen.
+  s = s
+    .replace(/\s*[-–—]\s*KKR\s*$/i, "")
+    .replace(/\s*[-–—]\s*$/g, "")
+    .replace(/^\s*[-–—]\s*/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+  return s || name;
+}
+
+function gs1FunctionalName(name: string, sku: string | null, used: Set<string>): string {
+  let s = stripOwnRef(name, sku).trim();
   if (s.length > GS1_NAME_MAX) {
     for (const [re, rep] of NAME_ABBR) {
       if (s.length <= GS1_NAME_MAX) break;
@@ -113,9 +140,11 @@ export async function GET(req: Request) {
     .from(products)
     .where(and(...conditions))
     .orderBy(products.barcode);
+  // Al bij AECOC geregistreerde referencias eruit filteren (anders "ya existe").
+  const newRows = allRows.filter((r) => !r.sku || !GS1_ALREADY_REGISTERED.has(r.sku));
   // Elke batch wordt los geüpload, dus naam-uniciteit binnen de batch volstaat
   // (gs1FunctionalName dedupliceert per bestand).
-  const rows = batchLimit ? allRows.slice(batchOffset, batchOffset + batchLimit) : allRows;
+  const rows = batchLimit ? newRows.slice(batchOffset, batchOffset + batchLimit) : newRows;
 
   // Lees template
   const templatePath = join(process.cwd(), "lib", "gs1", "template.xlsx");
@@ -163,7 +192,7 @@ export async function GET(req: Request) {
       localizeEthick({ name: r.name ?? "", sku: r.sku, collection: r.collection }, "en")?.name ??
       r.name ??
       "";
-    writeCell(6, gs1FunctionalName(enName, usedNames)); // nombre1 (Engels, ≤35, uniek)
+    writeCell(6, gs1FunctionalName(enName, r.sku, usedNames)); // nombre1 (Engels, ≤35, uniek, zonder SKU)
     // talla1/color1/variante1 leeg
     writeCell(38, "España");                      // pais1
     writeCell(43, gpc.gpc);                       // gpc
