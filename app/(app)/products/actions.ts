@@ -105,7 +105,11 @@ function toValues(v: z.infer<typeof productSchema>) {
     subcategory: v.subcategory || null,
     unit: v.unit || null,
     priceEur: dec(v.priceEur),
-    tradePriceEur: dec(v.tradePriceEur),
+    // Aannemersprijs = vaste regel: altijd 20% onder de verkoopprijs.
+    // Leeg gelaten → automatisch op showroom × 0,80 (afgerond op centen).
+    tradePriceEur:
+      dec(v.tradePriceEur) ??
+      (v.priceEur !== undefined ? String(Math.round(v.priceEur * 0.8 * 100) / 100) : null),
     vatRate: v.vatRate ?? 21,
     purchaseCostEur: dec(v.purchaseCostEur),
     freightCostEur: dec(v.freightCostEur),

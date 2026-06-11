@@ -191,8 +191,8 @@ export function ProductForm({
               htmlFor="tradePriceEur"
               hint={
                 product?.tradePriceEur && product?.vatRate
-                  ? `Incl ${product.vatRate}% BTW: € ${(Number(product.tradePriceEur) * (1 + Number(product.vatRate) / 100)).toFixed(2)} · leeg = particulier-prijs ook voor aannemer`
-                  : "Leeg = aannemer betaalt showroomprijs · typisch 80% van particulierprijs"
+                  ? `Incl ${product.vatRate}% BTW: € ${(Number(product.tradePriceEur) * (1 + Number(product.vatRate) / 100)).toFixed(2)} · leeg = automatisch 20% onder de verkoopprijs`
+                  : "Leeg = automatisch 20% onder de verkoopprijs (showroom × 0,80)"
               }
               className="sm:col-span-2"
             >
