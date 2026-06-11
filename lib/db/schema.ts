@@ -986,6 +986,8 @@ export const catalogCollections = pgTable(
       .default(sql`gen_random_uuid()`),
     nameEn: text().notNull(),
     nameCn: text(),
+    /** Bovenliggende groep voor de samplecatalogus-filter, bv. "Flexibel Stone" of "Vloeren". */
+    category: text(),
     sortOrder: integer().notNull().default(0),
     ...timestamps,
   },

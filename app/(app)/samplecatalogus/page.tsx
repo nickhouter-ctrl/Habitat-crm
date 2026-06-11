@@ -1,4 +1,4 @@
-import { and, asc, eq, ilike, isNotNull, or, sql } from "drizzle-orm";
+import { and, asc, eq, ilike, inArray, isNotNull, or, sql } from "drizzle-orm";
 import { Search, QrCode } from "lucide-react";
 import Link from "next/link";
 import { redirect } from "next/navigation";
@@ -42,6 +42,7 @@ export default async function SampleCatalogPage({
   const params = await searchParams;
   const q = typeof params.q === "string" ? params.q.trim() : "";
   const collection = typeof params.collection === "string" ? params.collection.trim() : "";
+  const group = typeof params.group === "string" ? params.group.trim() : "";
   const onlySample = params.sample === "1";
   const onlyRange = params.range === "1";
   const onlyPriced = params.priced === "1";
@@ -55,13 +56,24 @@ export default async function SampleCatalogPage({
     if (hit) redirect(`/samplecatalogus/${hit.id}`);
   }
 
-  const collections = await db
+  const allCollections = await db
     .select()
     .from(catalogCollections)
     .orderBy(asc(catalogCollections.sortOrder), asc(catalogCollections.nameEn));
 
+  // Bovenliggende groepen (Flexibel Stone / Vloeren) voor de filter-tabs.
+  const groups = [...new Set(allCollections.map((c) => c.category).filter(Boolean))] as string[];
+  // Bij een gekozen groep alleen de bijbehorende collecties in de dropdown tonen.
+  const collections = group ? allCollections.filter((c) => c.category === group) : allCollections;
+  const groupCollectionIds = group
+    ? allCollections.filter((c) => c.category === group).map((c) => c.id)
+    : [];
+
   const filters = [
     collection ? eq(catalogProducts.collectionId, collection) : undefined,
+    group && groupCollectionIds.length
+      ? inArray(catalogProducts.collectionId, groupCollectionIds)
+      : undefined,
     onlySample ? eq(catalogVariants.hasSample, true) : undefined,
     onlyRange ? eq(catalogVariants.inRange, true) : undefined,
     onlyPriced ? isNotNull(catalogVariants.salePrice) : undefined,
@@ -137,8 +149,18 @@ export default async function SampleCatalogPage({
         <StatTile label="Prijs bekend" value={String(agg?.priced ?? 0)} tone="warning" />
       </div>
 
+      {groups.length > 0 && (
+        <div className="flex flex-wrap gap-2">
+          <GroupTab label="Alle" active={!group} group="" />
+          {groups.map((g) => (
+            <GroupTab key={g} label={g} active={group === g} group={g} />
+          ))}
+        </div>
+      )}
+
       <Card className="p-4">
         <form method="GET" className="flex flex-col gap-3 sm:flex-row sm:items-end">
+          {group && <input type="hidden" name="group" value={group} />}
           <div className="flex-1">
             <label className="mb-1 flex items-center gap-1.5 text-xs font-medium text-muted">
               <QrCode className="h-3.5 w-3.5" /> Scan label of zoek (SKU, kleur, product)
@@ -167,13 +189,13 @@ export default async function SampleCatalogPage({
           </button>
         </form>
         <div className="mt-3 flex flex-wrap gap-2 text-xs">
-          <FilterChip param="sample" active={onlySample} q={q} collection={collection}>
+          <FilterChip param="sample" active={onlySample} q={q} collection={collection} group={group}>
             Alleen met sample
           </FilterChip>
-          <FilterChip param="range" active={onlyRange} q={q} collection={collection}>
+          <FilterChip param="range" active={onlyRange} q={q} collection={collection} group={group}>
             In assortiment
           </FilterChip>
-          <FilterChip param="priced" active={onlyPriced} q={q} collection={collection}>
+          <FilterChip param="priced" active={onlyPriced} q={q} collection={collection} group={group}>
             Prijs bekend
           </FilterChip>
         </div>
@@ -316,21 +338,40 @@ export default async function SampleCatalogPage({
   );
 }
 
+function GroupTab({ label, active, group }: { label: string; active: boolean; group: string }) {
+  const href = group ? `/samplecatalogus?group=${encodeURIComponent(group)}` : "/samplecatalogus";
+  return (
+    <Link
+      href={href}
+      className={`rounded-lg border px-4 py-2 text-sm font-medium transition ${
+        active
+          ? "border-primary bg-primary text-white"
+          : "border-border bg-background text-muted hover:bg-muted/50"
+      }`}
+    >
+      {label}
+    </Link>
+  );
+}
+
 function FilterChip({
   param,
   active,
   q,
   collection,
+  group,
   children,
 }: {
   param: string;
   active: boolean;
   q: string;
   collection: string;
+  group: string;
   children: React.ReactNode;
 }) {
   const sp = new URLSearchParams();
   if (q) sp.set("q", q);
+  if (group) sp.set("group", group);
   if (collection) sp.set("collection", collection);
   if (!active) sp.set(param, "1");
   const href = `/samplecatalogus${sp.toString() ? `?${sp.toString()}` : ""}`;
