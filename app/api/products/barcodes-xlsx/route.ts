@@ -28,6 +28,51 @@ import { resolveGpc } from "@/lib/gs1/gpc-map";
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
+// MijnGS1/AECOC: het "nombre funcional" (nombre1) mag max. 35 tekens zijn en moet
+// uniek zijn per product. Onze volledige productnamen zijn vaak langer; we korten
+// ze gericht in (afkortingen → woordgrens-truncatie) en maken ze daarna uniek.
+const GS1_NAME_MAX = 35;
+const NAME_ABBR: [RegExp, string][] = [
+  [/\bRammed Earth Board\b/gi, "RE Board"],
+  [/\bRammed Earth\b/gi, "RE"],
+  [/\bStainless Steel\b/gi, "SS"],
+  [/\bbrushed bronze\b/gi, "br. bronze"],
+  [/\bInterior Door Set\b/gi, "Int. Door Set"],
+  [/\bExterior Door Set\b/gi, "Ext. Door Set"],
+  [/\bTravertine\b/gi, "Travert."],
+  [/\bController\b/gi, "Ctrl"],
+  [/\bBoard\b/gi, "Bd"],
+  [/\s*[—-]\s*/g, " - "],
+  [/\s+/g, " "],
+];
+
+function gs1FunctionalName(name: string, used: Set<string>): string {
+  let s = name.trim();
+  if (s.length > GS1_NAME_MAX) {
+    for (const [re, rep] of NAME_ABBR) {
+      if (s.length <= GS1_NAME_MAX) break;
+      s = s.replace(re, rep);
+    }
+  }
+  if (s.length > GS1_NAME_MAX) {
+    // Tot op de laatste hele woordgrens binnen de limiet inkorten.
+    const cut = s.slice(0, GS1_NAME_MAX);
+    const sp = cut.lastIndexOf(" ");
+    s = (sp > 20 ? cut.slice(0, sp) : cut).trim();
+  }
+  // Uniek maken: bij botsing (door inkorten) een korte teller toevoegen.
+  let out = s;
+  let n = 2;
+  while (used.has(out.toLowerCase())) {
+    const suffix = ` ${n}`;
+    const base = s.length + suffix.length > GS1_NAME_MAX ? s.slice(0, GS1_NAME_MAX - suffix.length).trim() : s;
+    out = base + suffix;
+    n++;
+  }
+  used.add(out.toLowerCase());
+  return out;
+}
+
 export async function GET(req: Request) {
   const session = await auth();
   if (!session?.user) return NextResponse.json({ error: "unauth" }, { status: 401 });
@@ -80,6 +125,7 @@ export async function GET(req: Request) {
   const exportable = rows;
 
   const startRow = 5;
+  const usedNames = new Set<string>();
   for (let i = 0; i < exportable.length; i++) {
     const r = exportable[i];
     const rowIdx = startRow + i;
@@ -102,7 +148,7 @@ export async function GET(req: Request) {
       localizeEthick({ name: r.name ?? "", sku: r.sku, collection: r.collection }, "en")?.name ??
       r.name ??
       "";
-    writeCell(6, enName);                         // nombre1 (Engels)
+    writeCell(6, gs1FunctionalName(enName, usedNames)); // nombre1 (Engels, ≤35, uniek)
     // talla1/color1/variante1 leeg
     writeCell(38, "España");                      // pais1
     writeCell(43, gpc.gpc);                       // gpc
