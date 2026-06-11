@@ -24,27 +24,48 @@ export type KitComponent = { sku: string; qty: number };
  * is; `normalizeDocItems` pelt dat veilig af.
  */
 export async function getReservedStockByProduct(): Promise<Map<string, number>> {
-  const [bookedRows, estimates] = await Promise.all([
-    db
-      .select({ projectId: documents.projectId })
-      .from(documents)
-      .where(isNotNull(documents.stockAppliedAt)),
+  const [estimates, booked] = await Promise.all([
     db.query.documents.findMany({
       where: and(eq(documents.kind, "estimate"), eq(documents.status, "accepted")),
       columns: { items: true, projectId: true },
     }),
+    db.query.documents.findMany({
+      where: and(
+        inArray(documents.kind, ["invoice", "deliverynote"]),
+        isNotNull(documents.stockAppliedAt),
+      ),
+      columns: { items: true, projectId: true },
+    }),
   ]);
-  const fulfilledProjects = new Set(
-    bookedRows.map((r) => r.projectId).filter((d): d is string => !!d),
-  );
+
+  // Per (product, project) netto rekenen: een gereserveerde offerte die binnen
+  // hetzelfde project al is afgeboekt (factuur/pakbon) telt niet meer mee. Zo
+  // voorkomen we dubbeltelling bij multi-product-projecten (bv. vloer gereserveerd
+  // + deuren al verkocht in hetzelfde project).
+  const estByPP = new Map<string, number>();
+  const bookByPP = new Map<string, number>();
+  const productOfKey = new Map<string, string>();
+  const tally = (
+    map: Map<string, number>,
+    doc: { items: unknown; projectId: string | null },
+  ) => {
+    const proj = doc.projectId ?? "__none__";
+    for (const it of normalizeDocItems(doc.items)) {
+      if (!it.productId || !it.units) continue;
+      const key = `${it.productId}|${proj}`;
+      map.set(key, (map.get(key) ?? 0) + Number(it.units));
+      productOfKey.set(key, it.productId);
+    }
+  };
+  for (const e of estimates) tally(estByPP, e);
+  for (const b of booked) tally(bookByPP, b);
 
   const reserved = new Map<string, number>();
-  for (const est of estimates) {
-    if (est.projectId && fulfilledProjects.has(est.projectId)) continue; // al afgeboekt
-    for (const it of normalizeDocItems(est.items)) {
-      if (!it.productId || !it.units) continue;
-      reserved.set(it.productId, (reserved.get(it.productId) ?? 0) + Number(it.units));
-    }
+  for (const [key, est] of estByPP) {
+    const net = Math.max(0, est - (bookByPP.get(key) ?? 0));
+    if (net <= 0) continue;
+    const pid = productOfKey.get(key)!;
+    reserved.set(pid, (reserved.get(pid) ?? 0) + net);
   }
   return reserved;
 }

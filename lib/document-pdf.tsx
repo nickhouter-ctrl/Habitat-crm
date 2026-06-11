@@ -41,6 +41,9 @@ Font.register({
   ],
 });
 
+// Eigen logo (HABITAT ONE · JAVEA) voor de PDF-header.
+const LOGO_PATH = path.join(process.cwd(), "public", "brand", "habitat-one-logo.png");
+
 type ExampleImage = { data: Buffer; format: "jpg" | "png" };
 
 /**
@@ -304,6 +307,7 @@ const s = StyleSheet.create({
     justifyContent: "space-between",
     alignItems: "flex-start",
   },
+  logo: { width: 118, height: 70, objectFit: "contain", marginBottom: 2 },
   brand1: { fontFamily: "Cormorant", fontWeight: 600, fontSize: 26, letterSpacing: 5, color: C.brown },
   brand2: { fontFamily: "Cormorant", fontWeight: 600, fontSize: 26, letterSpacing: 5, color: C.brown, marginTop: -3 },
   tagline: { fontSize: 8, color: C.muted, marginTop: 5, letterSpacing: 1 },
@@ -352,7 +356,11 @@ const s = StyleSheet.create({
   cVat: { flex: 0.8, textAlign: "right" },
   cAmt: { flex: 1.3, textAlign: "right" },
   itemName: { fontFamily: "Sora", fontWeight: 700, color: C.charcoal },
+  itemSku: { fontFamily: "Sora", fontWeight: 500, fontSize: 7, color: C.brown, marginTop: 1 },
   itemDesc: { fontSize: 7.5, color: C.muted, marginTop: 1.5, lineHeight: 1.4 },
+  cPic: { width: 34, paddingRight: 6 },
+  lineImg: { width: 28, height: 28, objectFit: "cover", borderRadius: 2 },
+  lineImgEmpty: { width: 28, height: 28, borderRadius: 2, backgroundColor: "#f0eee9" },
 
   bottomRow: { marginTop: 18, flexDirection: "row", justifyContent: "space-between", gap: 24 },
   payBox: {
@@ -423,7 +431,7 @@ export type PdfDoc = {
   subtotalEur: string;
   taxEur: string;
   totalEur: string;
-  items: DocumentLineItem[];
+  items: Array<DocumentLineItem & { sku?: string | null }>;
   notes: string | null;
   contactName: string | null;
   contactAddress?: string | null;
@@ -431,6 +439,8 @@ export type PdfDoc = {
   locale?: Locale;
   /** Voorbeeldfoto's (Magic Stone) voor het voor- en eindblad. */
   exampleImages?: ExampleImage[];
+  /** Productfoto's per productId — getoond op de pakbon. */
+  lineImages?: Record<string, ExampleImage>;
 };
 
 /** Teksten voor het voor- en eindblad, per taal. */
@@ -555,8 +565,7 @@ function DocumentPdf({ doc }: { doc: PdfDoc }) {
         {/* ---- header band ---- */}
         <View style={s.headerBand} fixed>
           <View>
-            <Text style={s.brand1}>{C.wordmark1}</Text>
-            <Text style={s.brand2}>{C.wordmark2}</Text>
+            <Image src={LOGO_PATH} style={s.logo} />
             <Text style={s.tagline}>{C.tagline}</Text>
           </View>
           <View style={s.headerRight}>
@@ -600,6 +609,7 @@ function DocumentPdf({ doc }: { doc: PdfDoc }) {
 
           {/* ---- line items ---- */}
           <View style={s.th}>
+            {isDelivery && <Text style={[s.thText, s.cPic]} />}
             <Text style={[s.thText, s.cDesc]}>{t.description}</Text>
             <Text style={[s.thText, s.cCat]}>{t.category}</Text>
             <Text style={[s.thText, isDelivery ? s.cAmt : s.cNum]}>{t.qty}</Text>
@@ -614,28 +624,41 @@ function DocumentPdf({ doc }: { doc: PdfDoc }) {
           {items.length === 0 ? (
             <Text style={[s.tr, s.muted]}>{t.noLines}</Text>
           ) : (
-            items.map((it, i) => (
-              <View key={i} style={[s.tr, i % 2 === 1 ? s.trAlt : {}]} wrap={false}>
-                <View style={s.cDesc}>
-                  <Text style={s.itemName}>{it.name}</Text>
-                  {it.description ? <Text style={s.itemDesc}>{it.description}</Text> : null}
-                  {!isDelivery && it.discount ? (
-                    <Text style={s.itemDesc}>
-                      {t.discount} {it.discount}%
-                    </Text>
-                  ) : null}
+            items.map((it, i) => {
+              const img = it.productId ? doc.lineImages?.[it.productId] : undefined;
+              return (
+                <View key={i} style={[s.tr, i % 2 === 1 ? s.trAlt : {}]} wrap={false}>
+                  {isDelivery && (
+                    <View style={s.cPic}>
+                      {img ? (
+                        <Image src={img} style={s.lineImg} />
+                      ) : (
+                        <View style={s.lineImgEmpty} />
+                      )}
+                    </View>
+                  )}
+                  <View style={s.cDesc}>
+                    <Text style={s.itemName}>{it.name}</Text>
+                    {it.sku ? <Text style={s.itemSku}>{it.sku}</Text> : null}
+                    {it.description ? <Text style={s.itemDesc}>{it.description}</Text> : null}
+                    {!isDelivery && it.discount ? (
+                      <Text style={s.itemDesc}>
+                        {t.discount} {it.discount}%
+                      </Text>
+                    ) : null}
+                  </View>
+                  <Text style={s.cCat}>{catLabel(it.category, locale)}</Text>
+                  <Text style={isDelivery ? s.cAmt : s.cNum}>{it.units}</Text>
+                  {!isDelivery && (
+                    <>
+                      <Text style={s.cNum}>{eur(it.price)}</Text>
+                      <Text style={s.cVat}>{it.taxRate ?? 0}%</Text>
+                      <Text style={s.cAmt}>{eur(lineNet(it))}</Text>
+                    </>
+                  )}
                 </View>
-                <Text style={s.cCat}>{catLabel(it.category, locale)}</Text>
-                <Text style={isDelivery ? s.cAmt : s.cNum}>{it.units}</Text>
-                {!isDelivery && (
-                  <>
-                    <Text style={s.cNum}>{eur(it.price)}</Text>
-                    <Text style={s.cVat}>{it.taxRate ?? 0}%</Text>
-                    <Text style={s.cAmt}>{eur(lineNet(it))}</Text>
-                  </>
-                )}
-              </View>
-            ))
+              );
+            })
           )}
 
           {/* ---- payment block + totals ---- */}

@@ -132,7 +132,9 @@ export default async function DocumentDetailPage({
     if (p.sku) stockByKey.set(p.sku, info);
   }
   // Regels met te weinig / (bijna) geen voorraad t.o.v. het bestelde aantal.
-  const lowStock = items
+  // Niet tonen zodra de voorraad van dit document al is afgeboekt — dan is de
+  // verkoop al uit de voorraad gehaald en zou de melding dubbel tellen.
+  const lowStock = (doc.stockAppliedAt ? [] : items)
     .map((it) => {
       const info = it.productId
         ? stockByKey.get(it.productId)
