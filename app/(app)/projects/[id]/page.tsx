@@ -83,7 +83,7 @@ export default async function ProjectDetailPage({
 
   // Marge per project (intern): omzet − kostprijs van factuurregels (facturen − creditnota's).
   const invoiceDocs = await db
-    .select({ kind: documents.kind, subtotalEur: documents.subtotalEur, items: documents.items })
+    .select({ id: documents.id, kind: documents.kind, subtotalEur: documents.subtotalEur, items: documents.items })
     .from(documents)
     .where(and(eq(documents.projectId, id), inArray(documents.kind, ["invoice", "creditnote"])));
   const allPids = new Set<string>();
@@ -110,15 +110,21 @@ export default async function ProjectDetailPage({
   );
   let projRevenue = 0;
   let projCost = 0;
+  // Marge per factuur/creditnota (omzet ex. BTW − kostprijs van de regels).
+  const marginByDoc = new Map<string, { margin: number; pct: number | null }>();
   for (const d of invoiceDocs) {
-    const sign = d.kind === "creditnote" ? -1 : 1;
-    projRevenue += sign * Number(d.subtotalEur ?? 0);
+    const rev = Number(d.subtotalEur ?? 0);
+    let cost = 0;
     for (const it of normalizeDocItems(d.items)) {
-      const cost =
+      const c =
         (it.productId ? pCostById.get(it.productId) : undefined) ??
         (it.description ? pCostBySku.get(it.description.trim()) : undefined);
-      if (cost != null && cost > 0) projCost += sign * cost * (Number(it.units) || 0);
+      if (c != null && c > 0) cost += c * (Number(it.units) || 0);
     }
+    marginByDoc.set(d.id, { margin: rev - cost, pct: rev > 0 ? Math.round(((rev - cost) / rev) * 100) : null });
+    const sign = d.kind === "creditnote" ? -1 : 1;
+    projRevenue += sign * rev;
+    projCost += sign * cost;
   }
   const projMargin = projRevenue - projCost;
   const projMarginPct = projRevenue > 0 ? Math.round((projMargin / projRevenue) * 100) : null;
@@ -130,23 +136,59 @@ export default async function ProjectDetailPage({
     .select({ kind: documents.kind, status: documents.status, items: documents.items })
     .from(documents)
     .where(and(eq(documents.projectId, id), inArray(documents.kind, ["estimate", "invoice", "creditnote"])));
-  const prodAgg = new Map<string, { name: string; reserved: number; sold: number }>();
+  type Agg = {
+    name: string;
+    productId: string | null;
+    reserved: number;
+    sold: number;
+    reservedAmt: number;
+    soldAmt: number;
+  };
+  const prodAgg = new Map<string, Agg>();
   for (const d of projDocItems) {
     for (const it of normalizeDocItems(d.items)) {
       const key = it.productId || it.description?.trim() || it.name?.trim();
       if (!key || !it.units) continue;
-      const entry = prodAgg.get(key) ?? { name: (it.name || it.description || "—").trim(), reserved: 0, sold: 0 };
+      const entry =
+        prodAgg.get(key) ??
+        ({
+          name: (it.name || it.description || "—").trim(),
+          productId: it.productId ?? null,
+          reserved: 0,
+          sold: 0,
+          reservedAmt: 0,
+          soldAmt: 0,
+        } satisfies Agg);
       const u = Number(it.units) || 0;
-      if (d.kind === "estimate" && d.status === "accepted") entry.reserved += u;
-      else if (d.kind === "invoice") entry.sold += u;
-      else if (d.kind === "creditnote") entry.sold -= u;
+      const amt = (Number(it.price) || 0) * u;
+      if (d.kind === "estimate" && d.status === "accepted") {
+        entry.reserved += u;
+        entry.reservedAmt += amt;
+      } else if (d.kind === "invoice") {
+        entry.sold += u;
+        entry.soldAmt += amt;
+      } else if (d.kind === "creditnote") {
+        entry.sold -= u;
+        entry.soldAmt -= amt;
+      }
       prodAgg.set(key, entry);
     }
   }
+  // Foto's ophalen voor de gekoppelde producten.
+  const aggPids = [...prodAgg.values()].map((p) => p.productId).filter((x): x is string => !!x);
+  const imgRows = aggPids.length
+    ? await db
+        .select({ id: products.id, imageUrl: products.imageUrl })
+        .from(products)
+        .where(inArray(products.id, aggPids))
+    : [];
+  const imgById = new Map(imgRows.map((r) => [r.id, r.imageUrl]));
   // Gereserveerd telt alleen wat nog niet verkocht is (reservering − verkocht).
   const aggList = [...prodAgg.values()].map((p) => ({
     ...p,
+    image: p.productId ? (imgById.get(p.productId) ?? null) : null,
     reservedNet: Math.max(0, p.reserved - p.sold),
+    reservedNetAmt: p.reserved > 0 ? Math.max(0, p.reserved - p.sold) * (p.reservedAmt / p.reserved) : 0,
   }));
   const reservedProducts = aggList
     .filter((p) => p.reservedNet > 0)
@@ -409,6 +451,15 @@ export default async function ProjectDetailPage({
                             € {Number(d.totalEur ?? 0).toLocaleString("nl-NL", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                           </span>
                         </div>
+                        {(d.kind === "invoice" || d.kind === "creditnote") && marginByDoc.has(d.id) && (
+                          <div className="mt-0.5 text-[11px] text-muted">
+                            Marge:{" "}
+                            <span className={marginByDoc.get(d.id)!.margin < 0 ? "font-medium text-danger" : "font-medium text-foreground"}>
+                              € {marginByDoc.get(d.id)!.margin.toLocaleString("nl-NL", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                              {marginByDoc.get(d.id)!.pct != null ? ` · ${marginByDoc.get(d.id)!.pct}%` : ""}
+                            </span>
+                          </div>
+                        )}
                         {isSale && (
                           <div className="mt-1.5 flex flex-wrap items-center gap-1.5 text-[11px]">
                             {voided ? (
@@ -487,13 +538,17 @@ export default async function ProjectDetailPage({
                   <tr>
                     <Th>Product</Th>
                     <Th className="text-right">Aantal</Th>
+                    <Th className="text-right">Bedrag</Th>
                   </tr>
                 </THead>
                 <TBody>
                   {reservedProducts.map((p, i) => (
                     <Tr key={i}>
-                      <Td className="font-medium">{p.name}</Td>
+                      <Td>
+                        <ProductCell image={p.image} name={p.name} />
+                      </Td>
                       <Td className="text-right tabular-nums text-warning">{p.reservedNet}</Td>
+                      <Td className="text-right tabular-nums text-muted">{euro(p.reservedNetAmt)}</Td>
                     </Tr>
                   ))}
                 </TBody>
@@ -519,13 +574,17 @@ export default async function ProjectDetailPage({
                   <tr>
                     <Th>Product</Th>
                     <Th className="text-right">Aantal</Th>
+                    <Th className="text-right">Bedrag</Th>
                   </tr>
                 </THead>
                 <TBody>
                   {soldProducts.map((p, i) => (
                     <Tr key={i}>
-                      <Td className="font-medium">{p.name}</Td>
+                      <Td>
+                        <ProductCell image={p.image} name={p.name} />
+                      </Td>
                       <Td className="text-right tabular-nums text-success">{p.sold}</Td>
+                      <Td className="text-right tabular-nums text-muted">{euro(p.soldAmt)}</Td>
                     </Tr>
                   ))}
                 </TBody>
@@ -536,5 +595,23 @@ export default async function ProjectDetailPage({
         </div>
       )}
     </>
+  );
+}
+
+function euro(n: number): string {
+  return `€ ${n.toLocaleString("nl-NL", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+}
+
+function ProductCell({ image, name }: { image: string | null; name: string }) {
+  return (
+    <div className="flex items-center gap-2.5">
+      {image ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={image} alt="" className="h-9 w-9 shrink-0 rounded border border-border object-cover" />
+      ) : (
+        <div className="h-9 w-9 shrink-0 rounded border border-border bg-muted" />
+      )}
+      <span className="font-medium">{name}</span>
+    </div>
   );
 }
