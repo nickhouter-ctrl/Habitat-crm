@@ -85,6 +85,12 @@ export async function GET(req: Request) {
   const offsetParam = Number(url.searchParams.get("offset"));
   const batchLimit = Number.isFinite(limitParam) && limitParam > 0 ? Math.floor(limitParam) : null;
   const batchOffset = Number.isFinite(offsetParam) && offsetParam > 0 ? Math.floor(offsetParam) : 0;
+  // Afbeeldingen standaard WEGLATEN: de url_imagen-kolom is optioneel, maar AECOC
+  // valideert opgegeven afbeeldingen op minimumresolutie/-verhouding. Veel van onze
+  // website-crops zijn te klein (bv. 241×241, 256×256) of bannervormig (1400×294)
+  // en laten dan de hele import afkeuren. Met ?images=1 voeg je ze toch toe (alleen
+  // doen als je weet dat ze ≥500×500 px zijn).
+  const includeImages = url.searchParams.get("images") === "1";
 
   const conditions = [isNotNull(products.barcode)];
   // Alleen onze EIGEN GS1-GTIN's exporteren. Vreemde fabrikant-barcodes (bv.
@@ -147,7 +153,7 @@ export async function GET(req: Request) {
 
     writeCell(0, r.sku ?? "");                    // referencia_interna
     writeCell(1, r.barcode ?? "");                // gtin_unidad
-    writeCell(2, r.imageUrl ?? "");               // url_imagen_unidad
+    if (includeImages && r.imageUrl) writeCell(2, r.imageUrl); // url_imagen_unidad (optioneel)
     writeCell(3, "Inglés");                       // idioma1 — productnamen staan in EN
     writeCell(4, COMPANY.name);                   // marca1
     // submarca1 leeg
