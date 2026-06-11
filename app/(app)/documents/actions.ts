@@ -20,6 +20,7 @@ import {
 } from "@/lib/documents";
 import { offerteEmail, sendEmail } from "@/lib/email";
 import { renderDocumentPdf } from "@/lib/document-pdf";
+import { pushDocumentToHolded } from "@/lib/holded/sync";
 
 function newToken(): string {
   return (crypto.randomUUID() + crypto.randomUUID()).replace(/-/g, "");
@@ -862,6 +863,21 @@ async function bookStockOutInternal(
   revalidatePath("/products");
   revalidatePath("/pakbonnen");
   return { ok: true, applied, negatives };
+}
+
+/** Push dit verkoopdocument naar Holded (maakt/koppelt de Holded-factuur). */
+export async function pushDocumentToHoldedAction(id: string) {
+  await requireUser();
+  let target: string;
+  try {
+    const hid = await pushDocumentToHolded(id);
+    target = `/documents/${id}?holded=ok&hid=${encodeURIComponent(hid)}`;
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : "push naar Holded mislukt";
+    target = `/documents/${id}?holdedError=${encodeURIComponent(msg)}`;
+  }
+  revalidatePath(`/documents/${id}`);
+  redirect(target);
 }
 
 /** Handmatige knop "Voorraad afboeken" op een factuur of pakbon. */

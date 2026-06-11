@@ -32,6 +32,7 @@ import {
   createDeliveryNoteFromDocument,
   createInvoiceFromEstimate,
   deleteDocument,
+  pushDocumentToHoldedAction,
   reverseStockOutFromDocument,
   setDocumentStatus,
 } from "../actions";
@@ -408,8 +409,19 @@ export default async function DocumentDetailPage({
           <Card>
             <CardHeader>
               <CardTitle>Holded</CardTitle>
+              {(holdedMap || doc.holdedId) && <Badge tone="success">✓ gekoppeld</Badge>}
             </CardHeader>
-            <CardContent className="text-sm">
+            <CardContent className="space-y-3 text-sm">
+              {sp.holded === "ok" && (
+                <p className="rounded-md bg-green-50 px-3 py-2 text-sm text-success">
+                  Naar Holded gepusht{typeof sp.hid === "string" ? ` (id ${sp.hid})` : ""}.
+                </p>
+              )}
+              {typeof sp.holdedError === "string" && (
+                <p className="rounded-md bg-red-50 px-3 py-2 text-sm text-danger">
+                  Push mislukt: {sp.holdedError}
+                </p>
+              )}
               {holdedMap || doc.holdedId ? (
                 <dl className="grid grid-cols-2 gap-x-3 gap-y-1.5">
                   <dt className="text-muted">Holded-id</dt>
@@ -418,9 +430,19 @@ export default async function DocumentDetailPage({
                   <dd>{formatDate(holdedMap?.lastSyncedAt)}</dd>
                 </dl>
               ) : (
-                <p className="text-muted">
-                  Nog niet naar Holded gepusht. (Komt zodra de Holded-koppeling actief is.)
-                </p>
+                <>
+                  <p className="text-muted">Nog niet naar Holded gepusht.</p>
+                  {!process.env.HOLDED_API_KEY && (
+                    <p className="text-xs text-warning">
+                      ⚠️ HOLDED_API_KEY niet ingesteld — push faalt tot de sleutel op de server staat.
+                    </p>
+                  )}
+                  <form action={pushDocumentToHoldedAction.bind(null, id)}>
+                    <SubmitButton variant="primary" size="sm" pendingLabel="Pushen…">
+                      Push naar Holded
+                    </SubmitButton>
+                  </form>
+                </>
               )}
             </CardContent>
           </Card>

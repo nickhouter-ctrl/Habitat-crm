@@ -25,6 +25,7 @@ import {
   type PurchaseOrderLineItem,
 } from "@/lib/db/schema";
 import { parsePoLineItems } from "@/lib/purchase-orders";
+import { normalizeDocItems } from "@/lib/documents";
 
 import { holded, holdedListAll } from "./client";
 import type {
@@ -545,6 +546,122 @@ export async function pushPurchaseOrderToHolded(poId: string): Promise<string> {
     .set({ holdedId: result.id, updatedAt: new Date() })
     .where(eq(purchaseOrders.id, poId));
 
+  return result.id;
+}
+
+/* ----------------------------------------- push een verkoopdocument naar Holded */
+
+const DOC_KIND_TO_HOLDED: Record<string, HoldedDocType> = {
+  estimate: "estimate",
+  proforma: "proform",
+  invoice: "invoice",
+  creditnote: "creditnote",
+  salesreceipt: "salesreceipt",
+  deliverynote: "waybill",
+};
+
+/**
+ * Push een lokaal verkoopdocument (offerte/factuur/creditnota/pakbon) naar
+ * Holded. Zoekt eerst een bestaand Holded-doc met hetzelfde nummer (koppelen
+ * i.p.v. dupliceren), matcht het contact op naam en koppelt productregels aan
+ * Holded-product-id's waar mogelijk. Slaat de Holded-id op het document op.
+ */
+export async function pushDocumentToHolded(docId: string): Promise<string> {
+  const doc = await db.query.documents.findFirst({ where: eq(documents.id, docId) });
+  if (!doc) throw new Error("Document niet gevonden.");
+  if (doc.holdedId) return doc.holdedId; // al gekoppeld
+  const docType = DOC_KIND_TO_HOLDED[doc.kind];
+  if (!docType) throw new Error(`Documenttype "${doc.kind}" kan niet naar Holded.`);
+
+  // 0. Bestaand Holded-doc met dit nummer? Koppel i.p.v. dupliceren.
+  if (doc.docNumber) {
+    try {
+      const existing = await holded.documents.list(docType, { docNumber: doc.docNumber });
+      const match = existing.find((d) => d.docNumber === doc.docNumber);
+      if (match?.id) {
+        await db.update(documents).set({ holdedId: match.id, updatedAt: new Date() }).where(eq(documents.id, docId));
+        await upsertSyncMap({ entityType: "document", localId: docId, holdedId: match.id, direction: "push" });
+        return match.id;
+      }
+    } catch {
+      /* best-effort */
+    }
+  }
+
+  // 1. Contact: gekoppelde Holded-id, anders op naam zoeken, anders naam meesturen.
+  let contactRef: string | undefined;
+  let contactName = "";
+  if (doc.contactId) {
+    const c = await db.query.contacts.findFirst({ where: eq(contacts.id, doc.contactId) });
+    if (c) {
+      contactName = c.name;
+      const mapped = await getHoldedIdForLocal("contact", c.id);
+      if (mapped) contactRef = mapped;
+      else {
+        try {
+          const matches = await holded.contacts.list({ q: c.name });
+          const exact = matches.find(
+            (m) => (m.name ?? "").toLowerCase().trim() === c.name.toLowerCase().trim(),
+          );
+          contactRef = (exact ?? matches[0])?.id;
+        } catch {
+          /* zoeken is best-effort */
+        }
+      }
+    }
+  }
+
+  // 2. Regels — koppel productIds aan Holded-product-id's waar mogelijk.
+  const items = normalizeDocItems(doc.items);
+  const localIds = items.map((i) => i.productId).filter((x): x is string => !!x);
+  const productLookup = localIds.length
+    ? new Map(
+        (
+          await db
+            .select({ id: products.id, holdedProductId: products.holdedProductId })
+            .from(products)
+            .where(inArray(products.id, localIds))
+        ).map((p) => [p.id, p.holdedProductId]),
+      )
+    : new Map<string, string | null>();
+  const productsBody = items.map((it) => {
+    const hid = it.productId ? productLookup.get(it.productId) : null;
+    return {
+      name: it.name,
+      ...(it.description ? { desc: it.description } : {}),
+      ...(hid ? { productId: hid } : {}),
+      units: it.units,
+      price: it.price,
+      tax: it.taxRate ?? 21,
+      ...(it.discount ? { discount: it.discount } : {}),
+    };
+  });
+
+  // 3. Body.
+  const dateUnix = doc.issueDate
+    ? Math.floor(new Date(doc.issueDate).getTime() / 1000)
+    : Math.floor(Date.now() / 1000);
+  const dueUnix = doc.dueDate ? Math.floor(new Date(doc.dueDate).getTime() / 1000) : undefined;
+  const body: Record<string, unknown> = {
+    desc: doc.title ?? doc.docNumber ?? "",
+    date: dateUnix,
+    ...(dueUnix ? { dueDate: dueUnix } : {}),
+    currency: (doc.currency ?? "EUR").toLowerCase(),
+    notes: doc.notes ?? "",
+    products: productsBody,
+    ...(doc.docNumber ? { docNumber: doc.docNumber } : {}),
+    draft: doc.status === "draft",
+  };
+  if (contactRef) body.contact = contactRef;
+  else if (contactName) body.contactName = contactName;
+
+  const result = await holded.documents.create(docType, body);
+  if (!result?.id) {
+    throw new Error(`Holded gaf geen id terug — antwoord: ${JSON.stringify(result).slice(0, 200)}`);
+  }
+
+  await db.update(documents).set({ holdedId: result.id, updatedAt: new Date() }).where(eq(documents.id, docId));
+  await upsertSyncMap({ entityType: "document", localId: docId, holdedId: result.id, direction: "push" });
   return result.id;
 }
 
