@@ -401,7 +401,7 @@ export default async function DocumentDetailPage({
                 </div>
               )}
 
-              {doc.kind === "estimate" && doc.acceptedAt && (
+              {doc.kind === "estimate" && (
                 <form action={makeInvoice} className="space-y-2 rounded-md bg-background px-3 py-2.5">
                   <p className="text-xs font-medium text-muted">Factuur maken van deze offerte</p>
                   <div className="flex items-center gap-2">
