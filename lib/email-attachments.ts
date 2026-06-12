@@ -64,6 +64,13 @@ const CATEGORY_RULES: Array<{ cat: AttachmentCategory; test: (ctx: CategorizeCtx
       /\.xlsx?$/i.test(c.filename) &&
       /\b(kostprijs|inkoop[_\s-]*verkoop|verkoop[_\s-]*prijs|prijslijst|kalkulatie|berekening)\b/i.test(c.filename) },
 
+  // Piter Hoogendijk = boekhouder die Habitat-INKOOPfacturen doorstuurt
+  // ("factuur 2600xx inkoop Pedros/Obramat/Inwood/…"). Werden als 'other'
+  // geclassificeerd → niet opgepakt door de auto-inkoop. Nu als inkoopfactuur.
+  { cat: "supplier-invoice", test: (c) =>
+      /piterhoogendijk@|piter\s*hoogendijk/i.test(c.fromEmail + " " + c.fromName) &&
+      /\bfact(uu)?r\b|\binkoop\b|\binvoice\b/i.test(c.subject + " " + c.allText) },
+
   // DUA / douane — alleen wanneer FILENAME of strong signaal in TEKST matcht
   // (niet wanneer alleen het woord 'DUA' ergens in een mail-body voorkomt).
   { cat: "customs-dua", test: (c) =>
