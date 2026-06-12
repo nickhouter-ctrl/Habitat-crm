@@ -57,7 +57,7 @@ export function ProductForm({
   submitLabel?: string;
 }) {
   return (
-    <Card className="max-w-2xl">
+    <Card className="max-w-4xl">
       <CardContent>
         <form action={action} className="space-y-5">
           <Field label="Naam *" htmlFor="name">

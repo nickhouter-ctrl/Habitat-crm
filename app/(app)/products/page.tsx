@@ -355,6 +355,28 @@ export default async function ProductsPage({
                     const dispMargin = dispPrice != null && dispCost != null ? dispPrice - dispCost : null;
                     const dispMarginPct =
                       dispMargin != null && dispPrice ? Math.round((dispMargin / dispPrice) * 100) : null;
+                    // De maat die overeenkomt met de hoofdafmeting (breedte×hoogte) erft de
+                    // voorraad/prijs/kostprijs van het hoofdproduct als die op de maat zelf
+                    // ontbreken — anders staat de voorraad (bv. 208) nergens bij een maat.
+                    const parentDims =
+                      p.widthMm && p.heightMm
+                        ? [Number(p.widthMm), Number(p.heightMm)].sort((a, b) => a - b).join("x")
+                        : null;
+                    const sizeRowsDisp = sizeRows.map((s) => {
+                      const nums = (s.label.match(/\d+/g) ?? [])
+                        .map(Number)
+                        .sort((a, b) => a - b)
+                        .join("x");
+                      if (parentDims == null || nums !== parentDims) return s;
+                      return {
+                        ...s,
+                        stockQty: s.stockQty ?? stock,
+                        priceEur: s.priceEur ?? (p.priceEur != null ? Number(p.priceEur) : null),
+                        purchaseEur:
+                          s.purchaseEur ?? (p.purchaseCostEur != null ? Number(p.purchaseCostEur) : null),
+                        costEur: s.costEur ?? (p.costEur != null ? Number(p.costEur) : null),
+                      };
+                    });
                     return (
                       <Fragment key={p.id}>
                       <Tr>
@@ -501,7 +523,7 @@ export default async function ProductsPage({
                                 <span className="text-right">Kostprijs</span>
                                 <span className="text-right">Marge</span>
                               </div>
-                              {sizeRows.map((s, i) => {
+                              {sizeRowsDisp.map((s, i) => {
                                 const st = s.stockQty ?? 0;
                                 const v = s.priceEur ?? null;
                                 const k = s.costEur ?? null;
