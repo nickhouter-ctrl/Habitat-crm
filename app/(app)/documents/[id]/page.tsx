@@ -35,6 +35,7 @@ import {
   pushDocumentToHoldedAction,
   reverseStockOutFromDocument,
   setDocumentStatus,
+  toggleReserveEstimate,
 } from "../actions";
 import { documentKindMeta, documentStatusMeta } from "../../_meta";
 import { ConfirmSubmit } from "@/components/confirm-submit";
@@ -173,6 +174,7 @@ export default async function DocumentDetailPage({
   const changeStatus = setDocumentStatus.bind(null, id);
   const removeDoc = deleteDocument.bind(null, id);
   const makeInvoice = createInvoiceFromEstimate.bind(null, id);
+  const reserveAction = toggleReserveEstimate.bind(null, id);
   const makeDeliveryNote = createDeliveryNoteFromDocument.bind(null, id);
 
   const h = await headers();
@@ -399,6 +401,22 @@ export default async function DocumentDetailPage({
                     <p className="text-muted">Nog geen reactie van de klant.</p>
                   )}
                 </div>
+              )}
+
+              {doc.kind === "estimate" && (
+                <form action={reserveAction} className="rounded-md bg-background px-3 py-2.5">
+                  <p className="text-xs font-medium text-muted">
+                    {doc.reservedAt ? "✓ Producten gereserveerd" : "Producten reserveren"}
+                  </p>
+                  <p className="mb-2 text-[11px] text-muted">
+                    {doc.reservedAt
+                      ? `Sinds ${formatDate(doc.reservedAt)} — telt mee als gereserveerde voorraad op het dashboard.`
+                      : "Zet de producten alvast op gereserveerd, zodat je op het dashboard ziet wat besteld moet worden."}
+                  </p>
+                  <SubmitButton size="sm" variant={doc.reservedAt ? "ghost" : "secondary"} pendingLabel="Bezig…">
+                    {doc.reservedAt ? "Reservering opheffen" : "🔖 Reserveren"}
+                  </SubmitButton>
+                </form>
               )}
 
               {doc.kind === "estimate" && (

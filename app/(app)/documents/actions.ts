@@ -342,6 +342,27 @@ export async function setDocumentStatus(id: string, formData: FormData) {
   revalidateAround(doc.kind as DocKind, id);
 }
 
+/**
+ * Offerte-producten alvast (de)reserveren — zet/wist `reservedAt`. Gereserveerde
+ * offertes tellen mee als gereserveerde voorraad (lib/stock), zodat je op het
+ * dashboard ziet wat er besteld moet worden, ook vóór acceptatie.
+ */
+export async function toggleReserveEstimate(id: string) {
+  await requireUser();
+  const doc = await db.query.documents.findFirst({
+    where: eq(documents.id, id),
+    columns: { id: true, kind: true, reservedAt: true },
+  });
+  if (!doc || doc.kind !== "estimate") return;
+  await db
+    .update(documents)
+    .set({ reservedAt: doc.reservedAt ? null : new Date(), updatedAt: new Date() })
+    .where(eq(documents.id, id));
+  revalidatePath(`/documents/${id}`);
+  revalidatePath("/");
+  revalidatePath("/products");
+}
+
 export async function deleteDocument(id: string) {
   await requireUser();
   const doc = await db.query.documents.findFirst({

@@ -26,6 +26,7 @@ import { db } from "@/lib/db";
 import { activities, contacts, documents, emailInbox, mailAttachments, products, projects, purchaseOrders, quoteRequests } from "@/lib/db/schema";
 import { normalizeDocItems } from "@/lib/documents";
 import { purchaseDocsTotalExBTW } from "@/lib/holded/accounting";
+import { getReservedStockByProduct } from "@/lib/stock";
 import { formatMoney, PO_OPEN_STATUSES, PO_STATUS_META } from "@/lib/purchase-orders";
 import { formatDate, formatEUR } from "@/lib/utils";
 import { documentKindMeta } from "./_meta";
@@ -230,6 +231,24 @@ export default async function DashboardPage() {
     .orderBy(products.stockQty)
     .limit(50);
 
+  // Gereserveerde producten (uit geaccepteerde + handmatig gereserveerde offertes)
+  // waarvan er te weinig fysiek op voorraad is → moeten besteld worden.
+  const reservedByProduct = await getReservedStockByProduct();
+  const reservedShortfall = (
+    await db
+      .select({ id: products.id, sku: products.sku, name: products.name, stockQty: products.stockQty })
+      .from(products)
+      .where(and(eq(products.isActive, true), sql`${products.availability} <> 'order_only'`))
+  )
+    .map((p) => {
+      const reserved = reservedByProduct.get(p.id) ?? 0;
+      const stock = Number(p.stockQty ?? 0);
+      return { sku: p.sku, name: p.name, reserved, stock, tekort: reserved - stock };
+    })
+    .filter((p) => p.reserved > 0 && p.tekort > 0)
+    .sort((a, b) => b.tekort - a.tekort)
+    .slice(0, 50);
+
   // Facturen met een deur/deur-set-regel waarvan de draairichting (S1–S4) nog
   // niet gekozen is — zodat je een set kunt factureren en de richting later
   // aangeeft. We detecteren het direct uit de regels (geen losse notitie nodig).
@@ -378,6 +397,38 @@ export default async function DashboardPage() {
                   </Link>
                   <span className="shrink-0 rounded bg-amber-100 px-1.5 py-0.5 text-xs font-medium text-amber-800 tabular-nums">
                     {d.units} {d.units === 1 ? "deur" : "deuren"}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </CardContent>
+        </Card>
+      )}
+
+      {reservedShortfall.length > 0 && (
+        <Card className="mb-6 border-amber-300 bg-amber-50/50">
+          <CardHeader>
+            <CardTitle>
+              🔖 {reservedShortfall.length} gereserveerd product{reservedShortfall.length === 1 ? "" : "en"} — te weinig voorraad, bestellen
+            </CardTitle>
+            <LinkButton href={`/bestellen?q=${encodeURIComponent(reservedShortfall[0].sku ?? "")}`} className="text-xs">
+              → Bestellen
+            </LinkButton>
+          </CardHeader>
+          <CardContent>
+            <p className="mb-3 text-sm text-muted">
+              Gereserveerd in offertes, maar niet genoeg op voorraad. Bestel het tekort bij.
+            </p>
+            <ul className="grid gap-1.5 text-sm sm:grid-cols-2">
+              {reservedShortfall.map((p) => (
+                <li key={p.sku ?? p.name} className="flex items-center justify-between gap-2 rounded-md bg-background px-3 py-1.5">
+                  <span className="truncate">
+                    <span className="font-medium">{p.name}</span>{" "}
+                    <span className="font-mono text-xs text-muted">{p.sku}</span>
+                  </span>
+                  <span className="shrink-0 text-xs tabular-nums">
+                    <span className="text-muted">{p.reserved} geres. · {p.stock} voorr.</span>{" "}
+                    <span className="rounded bg-amber-100 px-1.5 py-0.5 font-medium text-amber-800">bestel {Math.ceil(p.tekort)}</span>
                   </span>
                 </li>
               ))}

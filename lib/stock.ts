@@ -6,7 +6,7 @@
  * 1 deur + 4 hinges + 1 slot kan maximaal min(deuren, hinges/4, sloten)
  * keer verkocht worden.
  */
-import { and, eq, inArray, isNotNull } from "drizzle-orm";
+import { and, eq, inArray, isNotNull, notInArray, or } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { documents, products } from "@/lib/db/schema";
 import { normalizeDocItems } from "@/lib/documents";
@@ -26,7 +26,13 @@ export type KitComponent = { sku: string; qty: number };
 export async function getReservedStockByProduct(): Promise<Map<string, number>> {
   const [estimates, booked] = await Promise.all([
     db.query.documents.findMany({
-      where: and(eq(documents.kind, "estimate"), eq(documents.status, "accepted")),
+      // Gereserveerd = geaccepteerde offertes, óf offertes die handmatig op
+      // 'gereserveerd' zijn gezet (reservedAt). Afgewezen/geannuleerde niet.
+      where: and(
+        eq(documents.kind, "estimate"),
+        notInArray(documents.status, ["rejected", "void"]),
+        or(eq(documents.status, "accepted"), isNotNull(documents.reservedAt)),
+      ),
       columns: { items: true, projectId: true },
     }),
     db.query.documents.findMany({
