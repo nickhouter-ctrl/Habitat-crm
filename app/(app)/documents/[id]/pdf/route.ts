@@ -40,6 +40,7 @@ export async function GET(
           preferredLanguage: true,
         },
       },
+      project: { columns: { name: true } },
     },
   });
   if (!doc) return new Response("Not found", { status: 404 });
@@ -92,6 +93,7 @@ export async function GET(
     notes: doc.notes,
     contactName: doc.contact?.name ?? null,
     contactAddress: addr,
+    projectName: doc.project?.name ?? null,
     locale: doc.contact?.preferredLanguage ?? "es",
     lineImages,
   });

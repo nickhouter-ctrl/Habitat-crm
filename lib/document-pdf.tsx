@@ -126,6 +126,7 @@ type Dict = {
   validUntil: string;
   from: string;
   to: string;
+  project: string;
   description: string;
   category: string;
   qty: string;
@@ -151,6 +152,7 @@ const DICT: Record<Locale, Dict> = {
     validUntil: "Geldig t/m",
     from: "VAN",
     to: "VOOR",
+    project: "Project",
     description: "OMSCHRIJVING",
     category: "CATEGORIE",
     qty: "AANTAL",
@@ -174,6 +176,7 @@ const DICT: Record<Locale, Dict> = {
     validUntil: "Gültig bis",
     from: "VON",
     to: "FÜR",
+    project: "Projekt",
     description: "BESCHREIBUNG",
     category: "KATEGORIE",
     qty: "MENGE",
@@ -197,6 +200,7 @@ const DICT: Record<Locale, Dict> = {
     validUntil: "Valid until",
     from: "FROM",
     to: "TO",
+    project: "Project",
     description: "DESCRIPTION",
     category: "CATEGORY",
     qty: "QTY",
@@ -220,6 +224,7 @@ const DICT: Record<Locale, Dict> = {
     validUntil: "Válido hasta",
     from: "DE",
     to: "PARA",
+    project: "Proyecto",
     description: "DESCRIPCIÓN",
     category: "CATEGORÍA",
     qty: "CANT.",
@@ -435,6 +440,8 @@ export type PdfDoc = {
   notes: string | null;
   contactName: string | null;
   contactAddress?: string | null;
+  /** Projectnaam — getoond op alle documenten zodat duidelijk is waar het voor is. */
+  projectName?: string | null;
   /** Taal van het document — volgt de voorkeurstaal van het contact. Default es. */
   locale?: Locale;
   /** Voorbeeldfoto's (Magic Stone) voor het voor- en eindblad. */
@@ -521,7 +528,9 @@ function DocumentPdf({ doc }: { doc: PdfDoc }) {
   const images = doc.exampleImages ?? [];
   const coverImgs = images.slice(0, 2);
   const endImgs = images.slice(2, 4);
-  const showExtras = !isDelivery;
+  // Geen cover/eindblad meer — alle documenten (offerte, factuur, pakbon) zijn
+  // clean en starten direct met de logo-header.
+  const showExtras = false;
   const coverTxt = COVER_TXT[locale];
   const endTxt = ENDPAGE_TXT[locale];
 
@@ -601,6 +610,11 @@ function DocumentPdf({ doc }: { doc: PdfDoc }) {
               <Text style={s.partyName}>{doc.contactName ?? "—"}</Text>
               {doc.contactAddress ? (
                 <Text style={[s.muted, { textAlign: "right" }]}>{doc.contactAddress}</Text>
+              ) : null}
+              {doc.projectName ? (
+                <Text style={[s.partyName, { textAlign: "right", marginTop: 6, color: C.terracotta }]}>
+                  {t.project}: {doc.projectName}
+                </Text>
               ) : null}
             </View>
           </View>
