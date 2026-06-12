@@ -278,9 +278,14 @@ export default async function RapportenPage() {
         title="Rapporten"
         subtitle="Alle bedragen ex. BTW, laatste 12 maanden. Inkoop komt direct uit Holded's grootboek."
         actions={
-          <LinkButton href="/rapporten/data-check" variant="secondary">
-            🩺 Data-gezondheid
-          </LinkButton>
+          <div className="flex gap-2">
+            <LinkButton href="/rapporten/inkoop-marge" variant="secondary">
+              📉 Inkoop-aandacht
+            </LinkButton>
+            <LinkButton href="/rapporten/data-check" variant="secondary">
+              🩺 Data-gezondheid
+            </LinkButton>
+          </div>
         }
       />
 
