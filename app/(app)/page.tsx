@@ -380,7 +380,7 @@ export default async function DashboardPage() {
   const acceptedN = acceptedAgg?.n ?? 0;
   const poSoon = openPurchaseOrders.filter((po) => {
     if (!po.expectedDate) return false;
-    const diff = (new Date(po.expectedDate).getTime() - Date.now()) / (1000 * 60 * 60 * 24);
+    const diff = (new Date(po.expectedDate).getTime() - now.getTime()) / (1000 * 60 * 60 * 24);
     return diff <= 7 && diff >= -1;
   }).length;
   const anyActions =
