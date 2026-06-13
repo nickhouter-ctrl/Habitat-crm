@@ -5,6 +5,7 @@ import { auth } from "@/auth";
 import { db } from "@/lib/db";
 import { emailInbox, purchaseOrders, quoteRequests } from "@/lib/db/schema";
 import { AppSidebar } from "@/components/app-sidebar";
+import { GlobalSearch } from "@/components/global-search";
 
 // The whole authenticated app is per-request (session + live data) — never
 // prerender it at build time.
@@ -37,7 +38,11 @@ export default async function AppLayout({
     <div className="flex min-h-dvh bg-background">
       <AppSidebar user={session.user} badges={badges} />
       <div className="min-w-0 flex-1">
-        <main className="mx-auto max-w-[96rem] px-4 pb-10 pt-20 sm:px-6 lg:pt-8">{children}</main>
+        {/* Desktop top-bar met globale zoekbalk (mobiel zit zoeken in de bovenbalk). */}
+        <header className="sticky top-0 z-20 hidden h-14 items-center border-b bg-surface/95 px-6 backdrop-blur lg:flex">
+          <GlobalSearch className="w-full max-w-xl" />
+        </header>
+        <main className="mx-auto max-w-[96rem] px-4 pb-10 pt-20 sm:px-6 lg:pt-6">{children}</main>
       </div>
     </div>
   );

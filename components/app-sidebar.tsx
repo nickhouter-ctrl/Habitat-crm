@@ -16,7 +16,6 @@ import {
   Receipt,
   Inbox,
   Layers,
-  Search,
   Settings,
   ShoppingCart,
   Tag,
@@ -29,6 +28,7 @@ import { usePathname } from "next/navigation";
 import { useState } from "react";
 
 import { signOutAction } from "@/lib/auth/actions";
+import { GlobalSearch } from "@/components/global-search";
 import { cn, initials } from "@/lib/utils";
 
 const NAV = [
@@ -69,16 +69,7 @@ export function AppSidebar({
 
   const navBody = (onNavigate?: () => void) => (
     <>
-      <form action="/search" className="relative px-2 pb-1 pt-2">
-        <Search className="pointer-events-none absolute left-4 top-1/2 size-4 -translate-y-1/2 text-muted" />
-        <input
-          name="q"
-          placeholder="Zoeken…"
-          className="w-full rounded-md border bg-background py-1.5 pl-8 pr-2 text-sm outline-none transition-colors focus:border-ring focus:ring-2 focus:ring-ring/20"
-        />
-      </form>
-
-      <nav className="flex-1 space-y-0.5 overflow-y-auto px-2 py-1">
+      <nav className="flex-1 space-y-0.5 overflow-y-auto px-2 py-1 pt-2">
         {NAV.map((item) => {
           const active = isActive(item.href, item.exact);
           return (
@@ -157,13 +148,13 @@ export function AppSidebar({
       </aside>
 
       {/* Mobile top bar */}
-      <header className="fixed inset-x-0 top-0 z-30 flex h-14 items-center justify-between border-b bg-surface px-3 lg:hidden">
-        <Link href="/" className="flex items-center gap-2">
+      <header className="fixed inset-x-0 top-0 z-30 flex h-14 items-center gap-2 border-b bg-surface px-3 lg:hidden">
+        <Link href="/" className="flex shrink-0 items-center gap-2">
           <span className="flex size-7 items-center justify-center rounded-lg bg-accent text-sm font-semibold text-accent-foreground">
             H
           </span>
-          <span className="text-sm font-semibold">Habitat CRM</span>
         </Link>
+        <GlobalSearch className="min-w-0 flex-1" />
         <button
           type="button"
           onClick={() => setOpen(true)}
