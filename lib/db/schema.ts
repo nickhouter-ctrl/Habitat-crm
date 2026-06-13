@@ -492,6 +492,11 @@ export const documents = pgTable(
     /** Offerte: producten alvast gereserveerd (vóór acceptatie) — telt mee als
      * gereserveerde voorraad zodat je ziet wat besteld moet worden. */
     reservedAt: timestamp({ withTimezone: true }),
+    /** Bron-offerte: op een factuur (of deelfactuur) verwijst dit naar de offerte
+     * waaruit hij is gemaakt. Zo weet een offerte welke factu(u)r(en) eraan hangen
+     * en kunnen we "Gefactureerd" tonen — ook bij deelfacturen. Geen harde FK
+     * (soft link) zodat verwijderen niet cascadeert. */
+    sourceDocumentId: uuid(),
     /** Convenience copy of the Holded id; the source of truth mapping lives in holded_sync_map. */
     holdedId: text(),
     ...timestamps,

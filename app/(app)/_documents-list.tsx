@@ -1,4 +1,4 @@
-import { desc, eq, inArray, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, isNotNull, ne } from "drizzle-orm";
 import { Trash2 } from "lucide-react";
 
 import {
@@ -13,7 +13,6 @@ import {
   Td,
   Th,
   THead,
-  Tr,
 } from "@/components/ui";
 import { SyncHoldedButton } from "@/components/sync-holded-button";
 import { db } from "@/lib/db";
@@ -56,6 +55,26 @@ export async function DocumentsList({
       company: { columns: { id: true, name: true } },
     },
   });
+
+  // Welke offertes zijn al gefactureerd? (factuur verwijst via source_document_id)
+  const invoicedEstimateIds = kinds.includes("estimate")
+    ? new Set(
+        (
+          await db
+            .select({ id: documents.sourceDocumentId })
+            .from(documents)
+            .where(
+              and(
+                eq(documents.kind, "invoice"),
+                ne(documents.status, "void"),
+                isNotNull(documents.sourceDocumentId),
+              ),
+            )
+        )
+          .map((r) => r.id)
+          .filter(Boolean) as string[],
+      )
+    : new Set<string>();
 
   const sign = (k: Kind) => (k === "creditnote" ? -1 : 1);
   const totalEx = rows.reduce((s, d) => s + sign(d.kind) * Number(d.subtotalEur ?? 0), 0);
@@ -139,9 +158,14 @@ export async function DocumentsList({
                       )}
                     </Td>
                     <Td>
-                      <Badge tone={documentStatusMeta[d.status].tone}>
-                        {documentStatusMeta[d.status].label}
-                      </Badge>
+                      <span className="flex flex-wrap items-center gap-1">
+                        <Badge tone={documentStatusMeta[d.status].tone}>
+                          {documentStatusMeta[d.status].label}
+                        </Badge>
+                        {d.kind === "estimate" && invoicedEstimateIds.has(d.id) && (
+                          <Badge tone="success">Gefactureerd</Badge>
+                        )}
+                      </span>
                     </Td>
                     <Td className="text-muted">{formatDate(d.issueDate)}</Td>
                     <Td className="text-muted">{formatDate(d.dueDate)}</Td>

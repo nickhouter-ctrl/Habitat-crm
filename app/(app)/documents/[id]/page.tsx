@@ -1,4 +1,4 @@
-import { and, eq, inArray, or } from "drizzle-orm";
+import { and, asc, eq, inArray, ne, or } from "drizzle-orm";
 import { headers } from "next/headers";
 import Link from "next/link";
 import { notFound } from "next/navigation";
@@ -99,6 +99,31 @@ export default async function DocumentDetailPage({
     where: and(eq(holdedSyncMap.entityType, "document"), eq(holdedSyncMap.localId, id)),
   });
 
+  // Offerte ↔ factuur-koppeling: welke facturen zijn van deze offerte gemaakt
+  // (incl. deelfacturen), en — voor een factuur — uit welke offerte komt hij.
+  const linkedInvoices =
+    doc.kind === "estimate"
+      ? await db.query.documents.findMany({
+          where: and(eq(documents.sourceDocumentId, id), ne(documents.status, "void")),
+          columns: {
+            id: true,
+            docNumber: true,
+            status: true,
+            totalEur: true,
+            paidEur: true,
+            issueDate: true,
+          },
+          orderBy: [asc(documents.issueDate)],
+        })
+      : [];
+  const sourceEstimate =
+    doc.kind === "invoice" && doc.sourceDocumentId
+      ? await db.query.documents.findFirst({
+          where: eq(documents.id, doc.sourceDocumentId),
+          columns: { id: true, docNumber: true, status: true },
+        })
+      : null;
+
   const items = normalizeDocItems(doc.items);
 
   // Marge (intern): kostprijs per regel via gekoppeld product (id of SKU). Komt
@@ -191,6 +216,7 @@ export default async function DocumentDetailPage({
             <Badge tone={documentStatusMeta[doc.status].tone}>
               {documentStatusMeta[doc.status].label}
             </Badge>
+            {linkedInvoices.length > 0 && <Badge tone="success">Gefactureerd</Badge>}
           </span>
         }
         subtitle={doc.title ?? (partyName ? `Voor ${partyName}` : undefined)}
@@ -254,6 +280,47 @@ export default async function DocumentDetailPage({
           </span>
           <Link href={`/documents/${pakbonDoc.id}`} className="font-medium text-accent hover:underline">
             Open pakbon →
+          </Link>
+        </div>
+      )}
+
+      {doc.kind === "estimate" && linkedInvoices.length > 0 && (
+        <div className="mb-4 rounded-lg border border-accent/40 bg-accent/10 p-4">
+          <p className="mb-2 text-sm font-medium">
+            Gefactureerd — {linkedInvoices.length} factu{linkedInvoices.length === 1 ? "ur" : "ren"} van deze offerte
+          </p>
+          <ul className="space-y-1.5 text-sm">
+            {linkedInvoices.map((inv) => {
+              const total = Number(inv.totalEur ?? 0);
+              const paid = Number(inv.paidEur ?? 0);
+              const betaling =
+                paid >= total && total > 0
+                  ? "✓ betaald"
+                  : paid > 0
+                    ? `deels betaald (${formatEUR(paid)})`
+                    : "nog niet betaald";
+              return (
+                <li key={inv.id} className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                  <Link href={`/documents/${inv.id}`} className="font-medium text-accent hover:underline">
+                    {inv.docNumber ?? "(concept)"}
+                  </Link>
+                  <Badge tone={documentStatusMeta[inv.status].tone}>
+                    {documentStatusMeta[inv.status].label}
+                  </Badge>
+                  <span className="tabular-nums">{formatEUR(total)}</span>
+                  <span className="text-muted">· {betaling}</span>
+                </li>
+              );
+            })}
+          </ul>
+        </div>
+      )}
+
+      {doc.kind === "invoice" && sourceEstimate && (
+        <div className="mb-4 flex flex-wrap items-center gap-2 rounded-md border border-border bg-muted/30 px-3 py-2 text-sm">
+          <span className="text-muted">Gemaakt van offerte</span>
+          <Link href={`/documents/${sourceEstimate.id}`} className="font-medium text-accent hover:underline">
+            {sourceEstimate.docNumber ?? "(offerte)"} →
           </Link>
         </div>
       )}

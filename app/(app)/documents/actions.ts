@@ -657,6 +657,7 @@ export async function createInvoiceFromEstimate(estimateId: string, formData?: F
   const { id } = await insertNumberedDocument("invoice", {
     kind: "invoice",
     status: "draft",
+    sourceDocumentId: est.id, // koppeling factuur → bron-offerte
     title:
       pct === 100
         ? est.title
@@ -709,6 +710,7 @@ export async function approveEstimateToInvoice(estimateId: string) {
   const { id } = await insertNumberedDocument("invoice", {
     kind: "invoice",
     status: "draft",
+    sourceDocumentId: est.id, // koppeling factuur → bron-offerte
     title: est.title,
     contactId: est.contactId,
     companyId: est.companyId,
