@@ -1,5 +1,5 @@
-import { and, desc, eq } from "drizzle-orm";
-import { Mail, MapPin, Phone } from "lucide-react";
+import { and, desc, eq, inArray } from "drizzle-orm";
+import { ChevronRight, Mail, MapPin, Phone } from "lucide-react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
@@ -30,7 +30,8 @@ import {
   holdedSyncMap,
   projects,
 } from "@/lib/db/schema";
-import { formatDate, formatEUR } from "@/lib/utils";
+import { cn, formatDate, formatEUR } from "@/lib/utils";
+import { normalizeDocItems } from "@/lib/documents";
 import { ConfirmSubmit } from "@/components/confirm-submit";
 import { addContactNote, deleteContact } from "../actions";
 import {
@@ -147,6 +148,62 @@ export default async function ContactDetailPage({
     : 0;
   const isZakelijk = !!contact.company;
 
+  const TABS = [
+    { key: "overzicht", label: "Overzicht" },
+    { key: "offertes", label: "Offertes" },
+    { key: "facturen", label: "Facturen" },
+    { key: "pakbonnen", label: "Pakbonnen" },
+    { key: "projecten", label: "Projecten" },
+  ] as const;
+  type Tab = (typeof TABS)[number]["key"];
+  const tab: Tab = TABS.some((t) => t.key === sp.tab) ? (sp.tab as Tab) : "overzicht";
+  const offertesList = relatedDocs.filter((d) => d.kind === "estimate");
+  const facturenList = relatedDocs.filter((d) => d.kind === "invoice" || d.kind === "creditnote");
+  const pakbonnenList = relatedDocs.filter((d) => d.kind === "deliverynote");
+
+  // Documenten per project (voor de uitklapbare Projecten-tab).
+  const projectIds = relatedProjects.map((p) => p.id);
+  const projectDocs = projectIds.length
+    ? await db.query.documents.findMany({
+        where: inArray(documents.projectId, projectIds),
+        columns: {
+          id: true,
+          projectId: true,
+          kind: true,
+          status: true,
+          docNumber: true,
+          totalEur: true,
+          issueDate: true,
+          items: true,
+        },
+        orderBy: desc(documents.issueDate),
+      })
+    : [];
+  const docsByProject = new Map<string, typeof projectDocs>();
+  for (const d of projectDocs) {
+    if (!d.projectId) continue;
+    const arr = docsByProject.get(d.projectId);
+    if (arr) arr.push(d);
+    else docsByProject.set(d.projectId, [d]);
+  }
+  // Producten per project (uit factuurregels − creditnota's).
+  const productsForProject = (pid: string) => {
+    const m = new Map<string, { name: string; units: number }>();
+    for (const d of docsByProject.get(pid) ?? []) {
+      if (d.kind !== "invoice" && d.kind !== "creditnote") continue;
+      const sign = d.kind === "creditnote" ? -1 : 1;
+      for (const it of normalizeDocItems(d.items)) {
+        const key = it.productId || it.description?.trim() || it.name?.trim();
+        if (!key || !it.units) continue;
+        const e = m.get(key) ?? { name: (it.name || it.description || "—").trim(), units: 0 };
+        e.units += sign * (Number(it.units) || 0);
+        m.set(key, e);
+      }
+    }
+    return [...m.values()].filter((p) => Math.abs(p.units) > 0.001);
+  };
+  const tabHref = (key: Tab) => (key === "overzicht" ? `/contacts/${id}` : `/contacts/${id}?tab=${key}`);
+
   return (
     <>
       <PageHeader
@@ -214,6 +271,257 @@ export default async function ContactDetailPage({
         <StatTile label="Conversie" value={`${conversie}%`} hint="offerte → factuur" tone="info" />
       </div>
 
+      <div className="mb-4 flex flex-wrap gap-1 border-b">
+        {TABS.map((t) => {
+          const cnt =
+            t.key === "offertes"
+              ? offertesList.length
+              : t.key === "facturen"
+                ? facturenList.length
+                : t.key === "pakbonnen"
+                  ? pakbonnenList.length
+                  : t.key === "projecten"
+                    ? relatedProjects.length
+                    : 0;
+          return (
+            <Link
+              key={t.key}
+              href={tabHref(t.key)}
+              className={cn(
+                "-mb-px border-b-2 px-4 py-2 text-sm font-medium transition-colors",
+                tab === t.key
+                  ? "border-accent text-accent"
+                  : "border-transparent text-muted hover:text-foreground",
+              )}
+            >
+              {t.label}
+              {cnt > 0 ? ` (${cnt})` : ""}
+            </Link>
+          );
+        })}
+      </div>
+
+      {tab === "offertes" && (
+        <Card className="overflow-hidden">
+          <CardHeader>
+            <CardTitle>Offertes</CardTitle>
+            <LinkButton href={`/documents/new?kind=estimate&contactId=${contact.id}`} variant="secondary" size="sm">
+              Nieuwe offerte
+            </LinkButton>
+          </CardHeader>
+          {offertesList.length === 0 ? (
+            <CardContent>
+              <p className="text-sm text-muted">Geen offertes voor deze klant.</p>
+            </CardContent>
+          ) : (
+            <Table>
+              <THead>
+                <tr>
+                  <Th>Nr.</Th>
+                  <Th>Status</Th>
+                  <Th>Datum</Th>
+                  <Th className="text-right">Totaal</Th>
+                </tr>
+              </THead>
+              <TBody>
+                {offertesList.map((doc) => (
+                  <Tr key={doc.id}>
+                    <Td className="font-medium">
+                      <Link href={`/documents/${doc.id}`} className="hover:underline">
+                        {doc.docNumber ?? "(geen nr.)"}
+                      </Link>
+                    </Td>
+                    <Td>
+                      <Badge tone={documentStatusMeta[doc.status].tone}>
+                        {documentStatusMeta[doc.status].label}
+                      </Badge>
+                    </Td>
+                    <Td className="text-muted">{formatDate(doc.issueDate)}</Td>
+                    <Td className="text-right tabular-nums">{formatEUR(doc.totalEur)}</Td>
+                  </Tr>
+                ))}
+              </TBody>
+            </Table>
+          )}
+        </Card>
+      )}
+
+      {tab === "facturen" && (
+        <Card className="overflow-hidden">
+          <CardHeader>
+            <CardTitle>Facturen</CardTitle>
+            <LinkButton href={`/documents/new?kind=invoice&contactId=${contact.id}`} variant="secondary" size="sm">
+              Nieuwe factuur
+            </LinkButton>
+          </CardHeader>
+          {facturenList.length === 0 ? (
+            <CardContent>
+              <p className="text-sm text-muted">Geen facturen voor deze klant.</p>
+            </CardContent>
+          ) : (
+            <Table>
+              <THead>
+                <tr>
+                  <Th>Nr.</Th>
+                  <Th>Type</Th>
+                  <Th>Status</Th>
+                  <Th>Datum</Th>
+                  <Th className="text-right">Totaal</Th>
+                  <Th className="text-right">Betaald</Th>
+                </tr>
+              </THead>
+              <TBody>
+                {facturenList.map((doc) => (
+                  <Tr key={doc.id}>
+                    <Td className="font-medium">
+                      <Link href={`/documents/${doc.id}`} className="hover:underline">
+                        {doc.docNumber ?? "(geen nr.)"}
+                      </Link>
+                    </Td>
+                    <Td>{documentKindMeta[doc.kind]}</Td>
+                    <Td>
+                      <Badge tone={documentStatusMeta[doc.status].tone}>
+                        {documentStatusMeta[doc.status].label}
+                      </Badge>
+                    </Td>
+                    <Td className="text-muted">{formatDate(doc.issueDate)}</Td>
+                    <Td className="text-right tabular-nums">{formatEUR(doc.totalEur)}</Td>
+                    <Td className="text-right tabular-nums text-muted">{formatEUR(doc.paidEur)}</Td>
+                  </Tr>
+                ))}
+              </TBody>
+            </Table>
+          )}
+        </Card>
+      )}
+
+      {tab === "pakbonnen" && (
+        <Card className="overflow-hidden">
+          <CardHeader>
+            <CardTitle>Pakbonnen</CardTitle>
+          </CardHeader>
+          {pakbonnenList.length === 0 ? (
+            <CardContent>
+              <p className="text-sm text-muted">Geen pakbonnen voor deze klant.</p>
+            </CardContent>
+          ) : (
+            <Table>
+              <THead>
+                <tr>
+                  <Th>Nr.</Th>
+                  <Th>Status</Th>
+                  <Th>Datum</Th>
+                  <Th className="text-right">Afgeleverd</Th>
+                </tr>
+              </THead>
+              <TBody>
+                {pakbonnenList.map((doc) => (
+                  <Tr key={doc.id}>
+                    <Td className="font-medium">
+                      <Link href={`/documents/${doc.id}`} className="hover:underline">
+                        {doc.docNumber ?? "(geen nr.)"}
+                      </Link>
+                    </Td>
+                    <Td>
+                      <Badge tone={documentStatusMeta[doc.status].tone}>
+                        {documentStatusMeta[doc.status].label}
+                      </Badge>
+                    </Td>
+                    <Td className="text-muted">{formatDate(doc.issueDate)}</Td>
+                    <Td className="text-right text-muted">
+                      {doc.stockAppliedAt ? formatDate(doc.stockAppliedAt) : "—"}
+                    </Td>
+                  </Tr>
+                ))}
+              </TBody>
+            </Table>
+          )}
+        </Card>
+      )}
+
+      {tab === "projecten" && (
+        <Card className="overflow-hidden">
+          <CardHeader>
+            <CardTitle>Projecten</CardTitle>
+            <LinkButton href="/projects/new" variant="secondary" size="sm">
+              Nieuw project
+            </LinkButton>
+          </CardHeader>
+          {relatedProjects.length === 0 ? (
+            <CardContent>
+              <p className="text-sm text-muted">Geen gekoppelde projecten.</p>
+            </CardContent>
+          ) : (
+            <div className="divide-y">
+              {relatedProjects.map((p) => {
+                const docs = docsByProject.get(p.id) ?? [];
+                const prods = productsForProject(p.id);
+                return (
+                  <details key={p.id} className="group">
+                    <summary className="flex cursor-pointer list-none items-center gap-2 px-5 py-3 hover:bg-background">
+                      <ChevronRight className="size-4 shrink-0 text-muted transition-transform group-open:rotate-90" />
+                      <span className="font-medium">{p.name}</span>
+                      {p.code ? <span className="text-xs text-muted">{p.code}</span> : null}
+                      <Badge tone={p.status === "active" ? "success" : "neutral"}>
+                        {p.status === "active" ? "Actief" : "Gearchiveerd"}
+                      </Badge>
+                      <span className="ml-auto text-xs text-muted">
+                        {docs.length} doc{docs.length === 1 ? "" : "en"}
+                      </span>
+                    </summary>
+                    <div className="space-y-3 bg-background/40 px-5 pb-4 pt-1">
+                      {docs.length > 0 && (
+                        <div>
+                          <p className="mb-1 text-xs font-medium uppercase tracking-wide text-muted">
+                            Documenten
+                          </p>
+                          <ul className="space-y-1 text-sm">
+                            {docs.map((d) => (
+                              <li key={d.id} className="flex flex-wrap items-center gap-2">
+                                <Link href={`/documents/${d.id}`} className="font-medium hover:underline">
+                                  {d.docNumber ?? documentKindMeta[d.kind]}
+                                </Link>
+                                <span className="text-muted">{documentKindMeta[d.kind]}</span>
+                                <Badge tone={documentStatusMeta[d.status].tone}>
+                                  {documentStatusMeta[d.status].label}
+                                </Badge>
+                                <span className="ml-auto tabular-nums">{formatEUR(d.totalEur)}</span>
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+                      {prods.length > 0 && (
+                        <div>
+                          <p className="mb-1 text-xs font-medium uppercase tracking-wide text-muted">
+                            Producten (verkocht)
+                          </p>
+                          <ul className="space-y-0.5 text-sm">
+                            {prods.map((pr, i) => (
+                              <li key={i} className="flex justify-between gap-2">
+                                <span className="truncate">{pr.name}</span>
+                                <span className="shrink-0 tabular-nums text-muted">{pr.units}</span>
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+                      <Link
+                        href={`/projects/${p.id}`}
+                        className="inline-block text-sm font-medium text-accent hover:underline"
+                      >
+                        Open project →
+                      </Link>
+                    </div>
+                  </details>
+                );
+              })}
+            </div>
+          )}
+        </Card>
+      )}
+
+      {tab === "overzicht" && (
       <div className="grid gap-4 lg:grid-cols-3">
         {/* Left: details */}
         <div className="space-y-4">
@@ -296,109 +604,8 @@ export default async function ContactDetailPage({
           </Card>
         </div>
 
-        {/* Right: deals, documents, timeline */}
+        {/* Right: timeline */}
         <div className="space-y-4 lg:col-span-2">
-          <Card>
-            <CardHeader>
-              <CardTitle>Projecten</CardTitle>
-              <LinkButton href="/projects/new" variant="secondary" size="sm">
-                Nieuw project
-              </LinkButton>
-            </CardHeader>
-            {relatedProjects.length === 0 ? (
-              <CardContent>
-                <p className="text-sm text-muted">Geen gekoppelde projecten.</p>
-              </CardContent>
-            ) : (
-              <Table>
-                <THead>
-                  <tr>
-                    <Th>Project</Th>
-                    <Th>Code</Th>
-                    <Th className="text-right">Status</Th>
-                  </tr>
-                </THead>
-                <TBody>
-                  {relatedProjects.map((p) => (
-                    <Tr key={p.id}>
-                      <Td className="font-medium">
-                        <Link href={`/projects/${p.id}`} className="hover:underline">
-                          {p.name}
-                        </Link>
-                      </Td>
-                      <Td className="text-muted">{p.code ?? "—"}</Td>
-                      <Td className="text-right">
-                        <Badge tone={p.status === "active" ? "success" : "neutral"}>
-                          {p.status === "active" ? "Actief" : "Gearchiveerd"}
-                        </Badge>
-                      </Td>
-                    </Tr>
-                  ))}
-                </TBody>
-              </Table>
-            )}
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <CardTitle>Offertes & facturen</CardTitle>
-              <div className="flex gap-1.5">
-                <LinkButton
-                  href={`/documents/new?kind=estimate&contactId=${contact.id}`}
-                  variant="secondary"
-                  size="sm"
-                >
-                  Nieuwe offerte
-                </LinkButton>
-                <LinkButton
-                  href={`/documents/new?kind=invoice&contactId=${contact.id}`}
-                  variant="secondary"
-                  size="sm"
-                >
-                  Nieuwe factuur
-                </LinkButton>
-              </div>
-            </CardHeader>
-            {relatedDocs.length === 0 ? (
-              <CardContent>
-                <p className="text-sm text-muted">Geen documenten.</p>
-              </CardContent>
-            ) : (
-              <Table>
-                <THead>
-                  <tr>
-                    <Th>Nr.</Th>
-                    <Th>Type</Th>
-                    <Th>Status</Th>
-                    <Th>Datum</Th>
-                    <Th className="text-right">Totaal</Th>
-                  </tr>
-                </THead>
-                <TBody>
-                  {relatedDocs.map((doc) => (
-                    <Tr key={doc.id}>
-                      <Td className="font-medium">
-                        <Link href={`/documents/${doc.id}`} className="hover:underline">
-                          {doc.docNumber ?? "(geen nr.)"}
-                        </Link>
-                      </Td>
-                      <Td>{documentKindMeta[doc.kind]}</Td>
-                      <Td>
-                        <Badge tone={documentStatusMeta[doc.status].tone}>
-                          {documentStatusMeta[doc.status].label}
-                        </Badge>
-                      </Td>
-                      <Td className="text-muted">{formatDate(doc.issueDate)}</Td>
-                      <Td className="text-right tabular-nums">
-                        {formatEUR(doc.totalEur)}
-                      </Td>
-                    </Tr>
-                  ))}
-                </TBody>
-              </Table>
-            )}
-          </Card>
-
           <Card>
             <CardHeader>
               <CardTitle>Tijdlijn</CardTitle>
@@ -449,6 +656,7 @@ export default async function ContactDetailPage({
           </Card>
         </div>
       </div>
+      )}
     </>
   );
 }
