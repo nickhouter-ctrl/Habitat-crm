@@ -124,6 +124,14 @@ export default async function DocumentDetailPage({
         })
       : null;
 
+  // Hoeveel van de offerte is al gefactureerd? (voor deelfacturen)
+  const invoicedTotal = linkedInvoices.reduce((s, inv) => s + Number(inv.totalEur ?? 0), 0);
+  const estimateTotal = Number(doc.totalEur ?? 0);
+  const invoicedPct = estimateTotal > 0 ? Math.round((invoicedTotal / estimateTotal) * 100) : 0;
+  const fullyInvoiced =
+    doc.kind === "estimate" && estimateTotal > 0 && invoicedTotal >= estimateTotal - 0.01;
+  const remainingPct = Math.min(100, Math.max(1, 100 - invoicedPct));
+
   const items = normalizeDocItems(doc.items);
 
   // Marge (intern): kostprijs per regel via gekoppeld product (id of SKU). Komt
@@ -486,14 +494,21 @@ export default async function DocumentDetailPage({
                 </form>
               )}
 
-              {doc.kind === "estimate" && (
+              {doc.kind === "estimate" && fullyInvoiced && (
+                <div className="rounded-md bg-background px-3 py-2.5 text-xs text-muted">
+                  ✓ Volledig gefactureerd ({invoicedPct}%). Zie de gekoppelde factu
+                  {linkedInvoices.length === 1 ? "ur" : "ren"} bovenaan.
+                </div>
+              )}
+
+              {doc.kind === "estimate" && !fullyInvoiced && (
                 <form action={makeInvoice} className="space-y-2 rounded-md bg-background px-3 py-2.5">
                   <p className="text-xs font-medium text-muted">Factuur maken van deze offerte</p>
                   <div className="flex items-center gap-2">
                     <Input
                       type="number"
                       name="percentage"
-                      defaultValue="100"
+                      defaultValue={String(remainingPct)}
                       min="1"
                       max="100"
                       step="1"
@@ -505,7 +520,9 @@ export default async function DocumentDetailPage({
                     </SubmitButton>
                   </div>
                   <p className="text-xs text-muted">
-                    Bijv. 50 voor een aanbetaling; maak daarna een tweede factuur voor het restant.
+                    {invoicedPct > 0
+                      ? `Al ${invoicedPct}% gefactureerd — dit maakt een factuur voor de rest.`
+                      : "Bijv. 50 voor een aanbetaling; maak daarna een tweede factuur voor het restant."}
                   </p>
                 </form>
               )}
