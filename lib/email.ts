@@ -488,3 +488,89 @@ export function appointmentConfirmedEmail(args: {
     `\n\n${t.regards}\n${COMPANY.legalName}`;
   return { subject: a.confSubject, html, text };
 }
+
+/** Klantmail: de levering/ophaling is ingepland op een datum. */
+type DelivCopy = { subject: string; intro: string; whenLabel: string };
+const DELIV: Record<Lang, { leveren: DelivCopy; ophalen: DelivCopy }> = {
+  nl: {
+    leveren: {
+      subject: "Uw levering is ingepland",
+      intro: `Goed nieuws — uw bestelling bij ${COMPANY.name} staat gepland voor levering.`,
+      whenLabel: "Geplande leverdatum",
+    },
+    ophalen: {
+      subject: "Uw bestelling staat klaar om op te halen",
+      intro: `Goed nieuws — uw bestelling bij ${COMPANY.name} staat klaar. U kunt deze ophalen.`,
+      whenLabel: "Ophaaldatum",
+    },
+  },
+  en: {
+    leveren: {
+      subject: "Your delivery is scheduled",
+      intro: `Good news — your order from ${COMPANY.name} is scheduled for delivery.`,
+      whenLabel: "Scheduled delivery date",
+    },
+    ophalen: {
+      subject: "Your order is ready for pickup",
+      intro: `Good news — your order from ${COMPANY.name} is ready for pickup.`,
+      whenLabel: "Pickup date",
+    },
+  },
+  es: {
+    leveren: {
+      subject: "Su entrega está programada",
+      intro: `Buenas noticias: su pedido de ${COMPANY.name} está programado para entrega.`,
+      whenLabel: "Fecha de entrega prevista",
+    },
+    ophalen: {
+      subject: "Su pedido está listo para recoger",
+      intro: `Buenas noticias: su pedido de ${COMPANY.name} está listo para recoger.`,
+      whenLabel: "Fecha de recogida",
+    },
+  },
+  de: {
+    leveren: {
+      subject: "Ihre Lieferung ist geplant",
+      intro: `Gute Nachrichten — Ihre Bestellung bei ${COMPANY.name} ist für die Lieferung geplant.`,
+      whenLabel: "Geplantes Lieferdatum",
+    },
+    ophalen: {
+      subject: "Ihre Bestellung ist zur Abholung bereit",
+      intro: `Gute Nachrichten — Ihre Bestellung bei ${COMPANY.name} ist abholbereit.`,
+      whenLabel: "Abholdatum",
+    },
+  },
+};
+
+export function deliveryPlannedEmail(args: {
+  lang?: string | null;
+  contactName?: string | null;
+  when: string;
+  method?: "leveren" | "ophalen" | string | null;
+  reference?: string | null;
+  note?: string | null;
+}): { subject: string; html: string; text: string } {
+  const lang = pickLang(args.lang);
+  const d = DELIV[lang][args.method === "ophalen" ? "ophalen" : "leveren"];
+  const t = T[lang];
+  const greeting = args.contactName ? `${t.hi} ${escapeHtml(args.contactName)},` : `${t.hi},`;
+  const ref = args.reference ? `<div style="font-size:14px;color:#555;margin-top:3px">${escapeHtml(args.reference)}</div>` : "";
+  const html = brandedEmail(`
+      <p style="margin:0">${greeting}</p>
+      <p>${escapeHtml(d.intro)}</p>
+      <div style="margin:16px 0;padding:14px 18px;background:${COMPANY.cream};border-radius:10px">
+        <div style="font-size:12px;text-transform:uppercase;letter-spacing:1px;color:#999">${escapeHtml(d.whenLabel)}</div>
+        <div style="font-size:17px;font-weight:600;color:${COMPANY.brown};margin-top:2px">${escapeHtml(args.when)}</div>
+        ${ref}
+      </div>
+      ${args.note ? `<p style="white-space:pre-wrap">${escapeHtml(args.note)}</p>` : ""}
+      <hr style="border:none;border-top:1px solid ${COMPANY.sand};margin:24px 0 16px" />
+      <p style="margin:0 0 4px">${t.regards}</p>
+      <div style="font-size:13px;color:#888;line-height:1.7">${signatureHtml()}</div>`);
+  const text =
+    `${greeting}\n\n${d.intro}\n\n${d.whenLabel}: ${args.when}` +
+    (args.reference ? ` (${args.reference})` : "") +
+    (args.note ? `\n\n${args.note}` : "") +
+    `\n\n${t.regards}\n${COMPANY.legalName}`;
+  return { subject: d.subject, html, text };
+}

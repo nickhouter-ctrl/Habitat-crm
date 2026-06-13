@@ -1,0 +1,116 @@
+"use server";
+
+import { and, eq } from "drizzle-orm";
+import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
+
+import { auth } from "@/auth";
+import { db } from "@/lib/db";
+import { deliveries, documents } from "@/lib/db/schema";
+import { deliveryPlannedEmail, sendEmail } from "@/lib/email";
+
+async function requireUser() {
+  const session = await auth();
+  if (!session?.user?.id) redirect("/login");
+  return session.user;
+}
+
+function formatNL(date: string): string {
+  // date = 'YYYY-MM-DD' → "13 juni 2026" (zonder new Date() in render).
+  const [y, m, d] = date.split("-").map(Number);
+  const months = [
+    "januari", "februari", "maart", "april", "mei", "juni",
+    "juli", "augustus", "september", "oktober", "november", "december",
+  ];
+  return `${d} ${months[(m ?? 1) - 1] ?? ""} ${y}`;
+}
+
+/**
+ * Plan (of herplan) een levering voor een document (meestal een factuur). Maakt de
+ * levering aan als die nog niet bestaat. Optioneel: informeer de klant per e-mail.
+ */
+export async function planDelivery(formData: FormData) {
+  await requireUser();
+  const documentId = String(formData.get("documentId") ?? "");
+  const plannedDate = String(formData.get("plannedDate") ?? "").trim();
+  const method = String(formData.get("method") ?? "leveren") === "ophalen" ? "ophalen" : "leveren";
+  const notify = String(formData.get("notify") ?? "") === "1";
+  const notes = String(formData.get("notes") ?? "").trim() || null;
+  if (!documentId || !plannedDate) return;
+
+  const doc = await db.query.documents.findFirst({
+    where: eq(documents.id, documentId),
+    columns: { id: true, docNumber: true, contactId: true, projectId: true },
+    with: { contact: { columns: { name: true, email: true, preferredLanguage: true } } },
+  });
+  if (!doc) return;
+
+  // Bestaande levering voor dit document hergebruiken (idempotent).
+  const existing = await db.query.deliveries.findFirst({
+    where: eq(deliveries.documentId, documentId),
+    columns: { id: true },
+  });
+
+  let notifiedAt: Date | null = null;
+  if (notify && doc.contact?.email) {
+    const mail = deliveryPlannedEmail({
+      lang: doc.contact.preferredLanguage,
+      contactName: doc.contact.name,
+      when: formatNL(plannedDate),
+      method,
+      reference: doc.docNumber,
+      note: notes,
+    });
+    const res = await sendEmail({ to: doc.contact.email, ...mail });
+    if (res.sent) notifiedAt = new Date();
+  }
+
+  if (existing) {
+    await db
+      .update(deliveries)
+      .set({
+        plannedDate,
+        method,
+        status: "gepland",
+        notes,
+        ...(notifiedAt ? { notifiedAt } : {}),
+        updatedAt: new Date(),
+      })
+      .where(eq(deliveries.id, existing.id));
+  } else {
+    await db.insert(deliveries).values({
+      documentId,
+      contactId: doc.contactId,
+      projectId: doc.projectId,
+      plannedDate,
+      method,
+      status: "gepland",
+      notes,
+      notifiedAt,
+    });
+  }
+
+  revalidatePath("/");
+  revalidatePath("/leveringen");
+}
+
+export async function setDeliveryStatus(id: string, status: "gepland" | "onderweg" | "geleverd") {
+  await requireUser();
+  await db
+    .update(deliveries)
+    .set({
+      status,
+      deliveredAt: status === "geleverd" ? new Date() : null,
+      updatedAt: new Date(),
+    })
+    .where(eq(deliveries.id, id));
+  revalidatePath("/");
+  revalidatePath("/leveringen");
+}
+
+export async function deleteDelivery(id: string) {
+  await requireUser();
+  await db.delete(deliveries).where(and(eq(deliveries.id, id)));
+  revalidatePath("/");
+  revalidatePath("/leveringen");
+}

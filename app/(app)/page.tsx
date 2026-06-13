@@ -23,7 +23,7 @@ import {
   Tr,
 } from "@/components/ui";
 import { db } from "@/lib/db";
-import { activities, contacts, documents, emailInbox, mailAttachments, products, projects, purchaseOrders, quoteRequests } from "@/lib/db/schema";
+import { activities, contacts, deliveries, documents, emailInbox, mailAttachments, products, projects, purchaseOrders, quoteRequests } from "@/lib/db/schema";
 import { normalizeDocItems } from "@/lib/documents";
 import { purchaseDocsTotalExBTW } from "@/lib/holded/accounting";
 import { getReservedStockByProduct } from "@/lib/stock";
@@ -33,6 +33,7 @@ import { documentKindMeta } from "./_meta";
 import { SubmitButton } from "@/components/submit-button";
 import { reorderShortagesToDrafts } from "./bestellen/actions";
 import { approveProforma, markPurchaseOrderPaid } from "./inkooporders/actions";
+import { planDelivery, setDeliveryStatus } from "./leveringen/actions";
 
 export const metadata = { title: "Dashboard" };
 // Cold start mag tot 60s, ruim voor de eerste Holded-fetch; warm is dit 1–2s.
@@ -313,6 +314,55 @@ export default async function DashboardPage() {
     .orderBy(documents.dueDate)
     .limit(50);
 
+  // Geplande leveringen (gepland/onderweg) — eerstvolgende bovenaan.
+  const plannedDeliveries = await db
+    .select({
+      id: deliveries.id,
+      plannedDate: deliveries.plannedDate,
+      method: deliveries.method,
+      status: deliveries.status,
+      notifiedAt: deliveries.notifiedAt,
+      docId: documents.id,
+      docNumber: documents.docNumber,
+      contactName: contacts.name,
+    })
+    .from(deliveries)
+    .leftJoin(documents, eq(documents.id, deliveries.documentId))
+    .leftJoin(contacts, eq(contacts.id, deliveries.contactId))
+    .where(inArray(deliveries.status, ["gepland", "onderweg"]))
+    .orderBy(deliveries.plannedDate);
+
+  // Te plannen: verkochte facturen met productregels die nog geen levering hebben.
+  const deliveredDocIds = new Set(
+    (await db.select({ id: deliveries.documentId }).from(deliveries))
+      .map((r) => r.id)
+      .filter(Boolean) as string[],
+  );
+  const toPlanRows = await db
+    .select({
+      id: documents.id,
+      docNumber: documents.docNumber,
+      items: documents.items,
+      issueDate: documents.issueDate,
+      contactName: contacts.name,
+    })
+    .from(documents)
+    .leftJoin(contacts, eq(contacts.id, documents.contactId))
+    .where(
+      and(
+        eq(documents.kind, "invoice"),
+        inArray(documents.status, ["sent", "paid", "partially_paid", "overdue"]),
+      ),
+    )
+    .orderBy(desc(documents.issueDate));
+  const toPlan = toPlanRows
+    .filter(
+      (d) =>
+        !deliveredDocIds.has(d.id) &&
+        normalizeDocItems(d.items).some((it) => it.productId && it.units),
+    )
+    .slice(0, 30);
+
   // Facturen met een deur/deur-set-regel waarvan de draairichting (S1–S4) nog
   // niet gekozen is — zodat je een set kunt factureren en de richting later
   // aangeeft. We detecteren het direct uit de regels (geen losse notitie nodig).
@@ -396,7 +446,8 @@ export default async function DashboardPage() {
     productsAgg.stockNoPhoto > 0 ||
     productsAgg.noBarcode > 0 ||
     toOrder.length > 0 ||
-    toSettle.length > 0;
+    toSettle.length > 0 ||
+    toPlan.length > 0;
 
   // --- Grafieken: omzet & offerte-waarde per maand (12 mnd) + conversie ---
   const since12 = new Date(now.getFullYear(), now.getMonth() - 11, 1).toISOString().slice(0, 10);
@@ -741,6 +792,117 @@ export default async function DashboardPage() {
                     </Tr>
                   );
                 })}
+              </TBody>
+            </Table>
+          )}
+        </Card>
+      </div>
+
+      {/* Leveringen: te plannen + ingepland */}
+      <div className="mb-6 grid gap-4 lg:grid-cols-2">
+        <Card>
+          <CardHeader>
+            <CardTitle>Te plannen leveringen{toPlan.length > 0 ? ` (${toPlan.length})` : ""}</CardTitle>
+          </CardHeader>
+          {toPlan.length === 0 ? (
+            <CardContent>
+              <p className="text-sm text-muted">Geen leveringen te plannen.</p>
+            </CardContent>
+          ) : (
+            <div className="max-h-96 divide-y overflow-y-auto">
+              {toPlan.map((d) => (
+                <form
+                  key={d.id}
+                  action={planDelivery}
+                  className="flex flex-wrap items-center gap-2 px-5 py-2.5 text-sm"
+                >
+                  <input type="hidden" name="documentId" value={d.id} />
+                  <Link href={`/documents/${d.id}`} className="font-medium hover:underline">
+                    {d.docNumber ?? "(factuur)"}
+                  </Link>
+                  <span className="min-w-0 flex-1 truncate text-muted">{d.contactName ?? ""}</span>
+                  <select
+                    name="method"
+                    defaultValue="leveren"
+                    className="rounded-md border bg-background px-2 py-1 text-sm outline-none focus:border-ring"
+                  >
+                    <option value="leveren">Leveren</option>
+                    <option value="ophalen">Ophalen</option>
+                  </select>
+                  <input
+                    type="date"
+                    name="plannedDate"
+                    required
+                    className="rounded-md border bg-background px-2 py-1 text-sm outline-none focus:border-ring"
+                  />
+                  <label className="flex items-center gap-1 text-xs text-muted">
+                    <input type="checkbox" name="notify" value="1" /> klant mailen
+                  </label>
+                  <SubmitButton size="sm" variant="secondary" pendingLabel="…">
+                    Plannen
+                  </SubmitButton>
+                </form>
+              ))}
+            </div>
+          )}
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>
+              Geplande leveringen{plannedDeliveries.length > 0 ? ` (${plannedDeliveries.length})` : ""}
+            </CardTitle>
+          </CardHeader>
+          {plannedDeliveries.length === 0 ? (
+            <CardContent>
+              <p className="text-sm text-muted">Nog niets ingepland.</p>
+            </CardContent>
+          ) : (
+            <Table wrapperClassName="max-h-96 overflow-y-auto">
+              <THead>
+                <tr>
+                  <Th>Datum</Th>
+                  <Th>Factuur</Th>
+                  <Th>Klant</Th>
+                  <Th className="text-right">Status</Th>
+                </tr>
+              </THead>
+              <TBody>
+                {plannedDeliveries.map((d) => (
+                  <Tr key={d.id}>
+                    <Td className="font-medium tabular-nums">
+                      {d.plannedDate ? formatDate(d.plannedDate) : "—"}
+                    </Td>
+                    <Td>
+                      {d.docId ? (
+                        <Link href={`/documents/${d.docId}`} className="hover:underline">
+                          {d.docNumber ?? "—"}
+                        </Link>
+                      ) : (
+                        "—"
+                      )}
+                    </Td>
+                    <Td className="text-muted">
+                      {d.contactName ?? "—"}
+                      {d.notifiedAt ? " · ✉ gemeld" : ""}
+                    </Td>
+                    <Td className="text-right">
+                      <div className="flex items-center justify-end gap-1.5">
+                        <span className="text-xs text-muted">
+                          {d.method === "ophalen" ? "🤝 ophalen" : "🚚 leveren"}
+                        </span>
+                        <Badge tone={d.status === "onderweg" ? "info" : "neutral"}>
+                          {d.status === "onderweg" ? "Onderweg" : "Gepland"}
+                        </Badge>
+                        <form action={setDeliveryStatus.bind(null, d.id, "geleverd")}>
+                          <SubmitButton size="sm" variant="ghost" className="text-muted" pendingLabel="…">
+                            Geleverd
+                          </SubmitButton>
+                        </form>
+                      </div>
+                    </Td>
+                  </Tr>
+                ))}
               </TBody>
             </Table>
           )}

@@ -778,6 +778,39 @@ export const webhookEvents = pgTable(
   (t) => [index("webhook_events_received_idx").on(t.receivedAt)],
 );
 
+/**
+ * Geplande leveringen. Een levering hoort bij een (verkoop)document — meestal een
+ * factuur — en houdt de planning bij: wanneer gaat het de deur uit, is de klant
+ * geïnformeerd, en is het geleverd. Soft links (geen harde FK) zodat verwijderen
+ * niet cascadeert.
+ */
+export const deliveries = pgTable(
+  "deliveries",
+  {
+    id: uuid()
+      .primaryKey()
+      .default(sql`gen_random_uuid()`),
+    documentId: uuid(),
+    contactId: uuid(),
+    projectId: uuid(),
+    plannedDate: date(),
+    /** leveren (wij bezorgen) | ophalen (klant haalt op) */
+    method: text().notNull().default("leveren"),
+    /** gepland | onderweg | geleverd */
+    status: text().notNull().default("gepland"),
+    notes: text(),
+    /** Moment waarop de klant per e-mail is geïnformeerd over de levering. */
+    notifiedAt: timestamp({ withTimezone: true }),
+    deliveredAt: timestamp({ withTimezone: true }),
+    ...timestamps,
+  },
+  (t) => [
+    index("deliveries_document_idx").on(t.documentId),
+    index("deliveries_status_idx").on(t.status),
+    index("deliveries_planned_idx").on(t.plannedDate),
+  ],
+);
+
 /* --------------------------------------------------------------- relations */
 
 export const usersRelations = relations(users, ({ many }) => ({
