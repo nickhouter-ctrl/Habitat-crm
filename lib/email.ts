@@ -491,7 +491,7 @@ export function appointmentConfirmedEmail(args: {
 
 /** Klantmail: de levering/ophaling is ingepland op een datum. */
 type DelivCopy = { subject: string; intro: string; whenLabel: string };
-const DELIV: Record<Lang, { leveren: DelivCopy; ophalen: DelivCopy }> = {
+const DELIV: Record<Lang, { leveren: DelivCopy; ophalen: DelivCopy; plaatsen: DelivCopy }> = {
   nl: {
     leveren: {
       subject: "Uw levering is ingepland",
@@ -502,6 +502,11 @@ const DELIV: Record<Lang, { leveren: DelivCopy; ophalen: DelivCopy }> = {
       subject: "Uw bestelling staat klaar om op te halen",
       intro: `Goed nieuws — uw bestelling bij ${COMPANY.name} staat klaar. U kunt deze ophalen.`,
       whenLabel: "Ophaaldatum",
+    },
+    plaatsen: {
+      subject: "Uw montage is ingepland",
+      intro: `Goed nieuws — wij komen uw bestelling bij ${COMPANY.name} leveren en plaatsen.`,
+      whenLabel: "Geplande montagedatum",
     },
   },
   en: {
@@ -515,6 +520,11 @@ const DELIV: Record<Lang, { leveren: DelivCopy; ophalen: DelivCopy }> = {
       intro: `Good news — your order from ${COMPANY.name} is ready for pickup.`,
       whenLabel: "Pickup date",
     },
+    plaatsen: {
+      subject: "Your installation is scheduled",
+      intro: `Good news — we will deliver and install your order from ${COMPANY.name}.`,
+      whenLabel: "Scheduled installation date",
+    },
   },
   es: {
     leveren: {
@@ -526,6 +536,11 @@ const DELIV: Record<Lang, { leveren: DelivCopy; ophalen: DelivCopy }> = {
       subject: "Su pedido está listo para recoger",
       intro: `Buenas noticias: su pedido de ${COMPANY.name} está listo para recoger.`,
       whenLabel: "Fecha de recogida",
+    },
+    plaatsen: {
+      subject: "Su instalación está programada",
+      intro: `Buenas noticias: entregaremos e instalaremos su pedido de ${COMPANY.name}.`,
+      whenLabel: "Fecha de instalación prevista",
     },
   },
   de: {
@@ -539,6 +554,11 @@ const DELIV: Record<Lang, { leveren: DelivCopy; ophalen: DelivCopy }> = {
       intro: `Gute Nachrichten — Ihre Bestellung bei ${COMPANY.name} ist abholbereit.`,
       whenLabel: "Abholdatum",
     },
+    plaatsen: {
+      subject: "Ihre Montage ist geplant",
+      intro: `Gute Nachrichten — wir liefern und montieren Ihre Bestellung bei ${COMPANY.name}.`,
+      whenLabel: "Geplantes Montagedatum",
+    },
   },
 };
 
@@ -546,12 +566,13 @@ export function deliveryPlannedEmail(args: {
   lang?: string | null;
   contactName?: string | null;
   when: string;
-  method?: "leveren" | "ophalen" | string | null;
+  method?: "leveren" | "ophalen" | "plaatsen" | string | null;
   reference?: string | null;
   note?: string | null;
 }): { subject: string; html: string; text: string } {
   const lang = pickLang(args.lang);
-  const d = DELIV[lang][args.method === "ophalen" ? "ophalen" : "leveren"];
+  const variant = args.method === "ophalen" ? "ophalen" : args.method === "plaatsen" ? "plaatsen" : "leveren";
+  const d = DELIV[lang][variant];
   const t = T[lang];
   const greeting = args.contactName ? `${t.hi} ${escapeHtml(args.contactName)},` : `${t.hi},`;
   const ref = args.reference ? `<div style="font-size:14px;color:#555;margin-top:3px">${escapeHtml(args.reference)}</div>` : "";

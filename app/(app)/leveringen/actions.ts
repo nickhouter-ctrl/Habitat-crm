@@ -33,7 +33,8 @@ export async function planDelivery(formData: FormData) {
   await requireUser();
   const documentId = String(formData.get("documentId") ?? "");
   const plannedDate = String(formData.get("plannedDate") ?? "").trim();
-  const method = String(formData.get("method") ?? "leveren") === "ophalen" ? "ophalen" : "leveren";
+  const methodRaw = String(formData.get("method") ?? "leveren");
+  const method = ["leveren", "ophalen", "plaatsen"].includes(methodRaw) ? methodRaw : "leveren";
   const notify = String(formData.get("notify") ?? "") === "1";
   const notes = String(formData.get("notes") ?? "").trim() || null;
   if (!documentId || !plannedDate) return;

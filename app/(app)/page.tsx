@@ -828,6 +828,7 @@ export default async function DashboardPage() {
                   >
                     <option value="leveren">Leveren</option>
                     <option value="ophalen">Ophalen</option>
+                    <option value="plaatsen">Leveren &amp; plaatsen</option>
                   </select>
                   <input
                     type="date"
@@ -898,7 +899,11 @@ export default async function DashboardPage() {
                     <Td className="text-right">
                       <div className="flex items-center justify-end gap-1.5">
                         <span className="text-xs text-muted">
-                          {d.method === "ophalen" ? "🤝 ophalen" : "🚚 leveren"}
+                          {d.method === "ophalen"
+                            ? "🤝 ophalen"
+                            : d.method === "plaatsen"
+                              ? "🔧 plaatsen"
+                              : "🚚 leveren"}
                         </span>
                         <Badge tone={d.status === "onderweg" ? "info" : "neutral"}>
                           {d.status === "onderweg" ? "Onderweg" : "Gepland"}
