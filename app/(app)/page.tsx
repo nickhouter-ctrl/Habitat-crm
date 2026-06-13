@@ -33,7 +33,7 @@ import { documentKindMeta } from "./_meta";
 import { SubmitButton } from "@/components/submit-button";
 import { reorderShortagesToDrafts } from "./bestellen/actions";
 import { approveProforma, markPurchaseOrderPaid } from "./inkooporders/actions";
-import { dismissDelivery, planDelivery, setDeliveryStatus } from "./leveringen/actions";
+import { setDeliveryStatus } from "./leveringen/actions";
 
 export const metadata = { title: "Dashboard" };
 // Cold start mag tot 60s, ruim voor de eerste Holded-fetch; warm is dit 1–2s.
@@ -342,12 +342,15 @@ export default async function DashboardPage() {
     .select({
       id: documents.id,
       docNumber: documents.docNumber,
+      title: documents.title,
       items: documents.items,
       issueDate: documents.issueDate,
       contactName: contacts.name,
+      projectName: projects.name,
     })
     .from(documents)
     .leftJoin(contacts, eq(contacts.id, documents.contactId))
+    .leftJoin(projects, eq(projects.id, documents.projectId))
     .where(
       and(
         eq(documents.kind, "invoice"),
@@ -803,57 +806,38 @@ export default async function DashboardPage() {
         <Card>
           <CardHeader>
             <CardTitle>Te plannen leveringen{toPlan.length > 0 ? ` (${toPlan.length})` : ""}</CardTitle>
+            <Link href="/leveringen" className="text-xs text-accent hover:underline">
+              Inplannen →
+            </Link>
           </CardHeader>
           {toPlan.length === 0 ? (
             <CardContent>
               <p className="text-sm text-muted">Geen leveringen te plannen.</p>
             </CardContent>
           ) : (
-            <div className="max-h-96 divide-y overflow-y-auto">
-              {toPlan.map((d) => (
-                <form
-                  key={d.id}
-                  action={planDelivery}
-                  className="flex flex-wrap items-center gap-2 px-5 py-2.5 text-sm"
-                >
-                  <input type="hidden" name="documentId" value={d.id} />
-                  <Link href={`/documents/${d.id}`} className="font-medium hover:underline">
-                    {d.docNumber ?? "(factuur)"}
+            <ul className="max-h-96 divide-y overflow-y-auto text-sm">
+              {toPlan.slice(0, 8).map((d) => (
+                <li key={d.id} className="flex items-center justify-between gap-2 px-5 py-2.5">
+                  <span className="min-w-0">
+                    <Link href={`/documents/${d.id}`} className="font-medium hover:underline">
+                      {d.docNumber ?? "(factuur)"}
+                    </Link>{" "}
+                    <span className="text-muted">{d.contactName ?? ""}</span>
+                    {(d.projectName || d.title) && (
+                      <span className="block truncate text-xs text-muted">
+                        {[d.projectName, d.title].filter(Boolean).join(" · ")}
+                      </span>
+                    )}
+                  </span>
+                  <Link
+                    href="/leveringen"
+                    className="shrink-0 text-xs font-medium text-accent hover:underline"
+                  >
+                    Plannen →
                   </Link>
-                  <span className="min-w-0 flex-1 truncate text-muted">{d.contactName ?? ""}</span>
-                  <select
-                    name="method"
-                    defaultValue="leveren"
-                    className="rounded-md border bg-background px-2 py-1 text-sm outline-none focus:border-ring"
-                  >
-                    <option value="leveren">Leveren</option>
-                    <option value="ophalen">Ophalen</option>
-                    <option value="plaatsen">Leveren &amp; plaatsen</option>
-                  </select>
-                  <input
-                    type="date"
-                    name="plannedDate"
-                    required
-                    className="rounded-md border bg-background px-2 py-1 text-sm outline-none focus:border-ring"
-                  />
-                  <label className="flex items-center gap-1 text-xs text-muted">
-                    <input type="checkbox" name="notify" value="1" /> klant mailen
-                  </label>
-                  <SubmitButton size="sm" variant="secondary" pendingLabel="…">
-                    Plannen
-                  </SubmitButton>
-                  <button
-                    type="submit"
-                    formAction={dismissDelivery.bind(null, d.id)}
-                    formNoValidate
-                    className="rounded-md px-2 py-1 text-xs text-muted transition-colors hover:bg-muted/50 hover:text-foreground"
-                    title="Geen levering nodig (bv. werkzaamheden)"
-                  >
-                    Geen levering
-                  </button>
-                </form>
+                </li>
               ))}
-            </div>
+            </ul>
           )}
         </Card>
 

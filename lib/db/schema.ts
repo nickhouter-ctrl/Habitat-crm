@@ -791,10 +791,12 @@ export const deliveries = pgTable(
       .primaryKey()
       .default(sql`gen_random_uuid()`),
     documentId: uuid(),
+    /** Gekoppelde pakbon (deliverynote) — klaargezet bij het inplannen. */
+    deliveryNoteId: uuid(),
     contactId: uuid(),
     projectId: uuid(),
     plannedDate: date(),
-    /** leveren (wij bezorgen) | ophalen (klant haalt op) */
+    /** leveren (wij bezorgen) | ophalen (klant haalt op) | plaatsen (wij monteren) */
     method: text().notNull().default("leveren"),
     /** gepland | onderweg | geleverd */
     status: text().notNull().default("gepland"),

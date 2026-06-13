@@ -8,6 +8,7 @@ import { auth } from "@/auth";
 import { db } from "@/lib/db";
 import { deliveries, documents } from "@/lib/db/schema";
 import { deliveryPlannedEmail, sendEmail } from "@/lib/email";
+import { createDeliveryNoteInternal } from "../documents/actions";
 
 async function requireUser() {
   const session = await auth();
@@ -49,8 +50,15 @@ export async function planDelivery(formData: FormData) {
   // Bestaande levering voor dit document hergebruiken (idempotent).
   const existing = await db.query.deliveries.findFirst({
     where: eq(deliveries.documentId, documentId),
-    columns: { id: true },
+    columns: { id: true, deliveryNoteId: true },
   });
+
+  // Pakbon klaarzetten en koppelen (één keer). De factuur boekt de voorraad af;
+  // de pakbon is het leverdocument dat met de levering meegaat.
+  let deliveryNoteId = existing?.deliveryNoteId ?? null;
+  if (!deliveryNoteId) {
+    deliveryNoteId = await createDeliveryNoteInternal(documentId);
+  }
 
   let notifiedAt: Date | null = null;
   if (notify && doc.contact?.email) {
@@ -74,6 +82,7 @@ export async function planDelivery(formData: FormData) {
         method,
         status: "gepland",
         notes,
+        deliveryNoteId,
         ...(notifiedAt ? { notifiedAt } : {}),
         updatedAt: new Date(),
       })
@@ -81,6 +90,7 @@ export async function planDelivery(formData: FormData) {
   } else {
     await db.insert(deliveries).values({
       documentId,
+      deliveryNoteId,
       contactId: doc.contactId,
       projectId: doc.projectId,
       plannedDate,

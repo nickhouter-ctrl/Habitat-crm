@@ -1,6 +1,7 @@
 CREATE TABLE IF NOT EXISTS "deliveries" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"document_id" uuid,
+	"delivery_note_id" uuid,
 	"contact_id" uuid,
 	"project_id" uuid,
 	"planned_date" date,

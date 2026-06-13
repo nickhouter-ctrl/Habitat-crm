@@ -12,6 +12,7 @@ import {
   LogOut,
   Mail,
   Menu,
+  PackageCheck,
   PackagePlus,
   Receipt,
   Inbox,
@@ -50,6 +51,7 @@ const NAV = [
   { href: "/quotes", label: "Offertes", icon: FileText },
   { href: "/invoices", label: "Facturen", icon: Receipt },
   { href: "/pakbonnen", label: "Pakbonnen", icon: Truck },
+  { href: "/leveringen", label: "Leveringen", icon: PackageCheck },
   { href: "/rapporten", label: "Rapporten", icon: BarChart3 },
 ];
 

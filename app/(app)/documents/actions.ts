@@ -734,7 +734,7 @@ export async function approveEstimateToInvoice(estimateId: string) {
 
 /** Create a draft delivery note (pakbon) copied from another document's lines. */
 /** Internal: clone a document as a pakbon and return the new id (no redirect). */
-async function createDeliveryNoteInternal(sourceId: string): Promise<string | null> {
+export async function createDeliveryNoteInternal(sourceId: string): Promise<string | null> {
   const src = await db.query.documents.findFirst({ where: eq(documents.id, sourceId) });
   if (!src) return null;
 
