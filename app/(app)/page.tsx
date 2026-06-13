@@ -275,6 +275,44 @@ export default async function DashboardPage() {
     .sort((a, b) => b.rest - a.rest)
     .slice(0, 50);
 
+  // Open offertes: uitgebracht (verstuurd) en wachtend op antwoord.
+  const openOffertes = await db
+    .select({
+      id: documents.id,
+      docNumber: documents.docNumber,
+      title: documents.title,
+      totalEur: documents.totalEur,
+      issueDate: documents.issueDate,
+      contactName: contacts.name,
+    })
+    .from(documents)
+    .leftJoin(contacts, eq(documents.contactId, contacts.id))
+    .where(and(eq(documents.kind, "estimate"), eq(documents.status, "sent")))
+    .orderBy(desc(documents.issueDate))
+    .limit(50);
+
+  // Openstaande verkoopfacturen — verzonden/deels betaald/vervallen, nog te ontvangen.
+  const openSalesInvoices = await db
+    .select({
+      id: documents.id,
+      docNumber: documents.docNumber,
+      totalEur: documents.totalEur,
+      paidEur: documents.paidEur,
+      dueDate: documents.dueDate,
+      status: documents.status,
+      contactName: contacts.name,
+    })
+    .from(documents)
+    .leftJoin(contacts, eq(documents.contactId, contacts.id))
+    .where(
+      and(
+        eq(documents.kind, "invoice"),
+        inArray(documents.status, ["sent", "partially_paid", "overdue"]),
+      ),
+    )
+    .orderBy(documents.dueDate)
+    .limit(50);
+
   // Facturen met een deur/deur-set-regel waarvan de draairichting (S1–S4) nog
   // niet gekozen is — zodat je een set kunt factureren en de richting later
   // aangeeft. We detecteren het direct uit de regels (geen losse notitie nodig).
@@ -400,6 +438,36 @@ export default async function DashboardPage() {
         subtitle="Overzicht van de pijplijn, facturen en activiteit"
         actions={<LinkButton href="/contacts/new">Nieuw contact</LinkButton>}
       />
+
+      {/* KPI's bovenaan — geen omzetdoelen, puur de stand van zaken. */}
+      <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+        <StatTile label="Omzet deze maand" value={formatEUR(revenueMonth)} hint={marginPctMonth != null ? `${marginPctMonth}% marge · ex. BTW` : "ex. BTW"} tone="success" icon={<TrendingUp className="size-5" />} />
+        <StatTile label="Openstaande facturen" value={docAgg.outstandingN} hint={formatEUR(docAgg.outstandingV)} tone="warning" icon={<Clock className="size-5" />} />
+        <StatTile label="Vervallen facturen" value={docAgg.overdueN} hint={formatEUR(docAgg.overdueV)} tone="danger" icon={<AlertTriangle className="size-5" />} />
+        <StatTile label="Geaccepteerde offertes" value={acceptedN} hint="klaar om te factureren" tone="accent" icon={<CheckCircle2 className="size-5" />} />
+        <StatTile label="Totale omzet" value={formatEUR(revenueAll)} hint={marginPctAll != null ? `${marginPctAll}% marge · dit jaar` : "ex. BTW · dit jaar"} tone="info" icon={<Wallet className="size-5" />} />
+      </div>
+
+      <details className="mb-6 -mt-3">
+        <summary className="cursor-pointer select-none text-xs text-muted transition-colors hover:text-foreground">
+          Meer cijfers — inkoop, projecten, contacten
+        </summary>
+        <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+          <StatTile
+            label="Totale inkoop"
+            value={formatEUR(totalPurchase)}
+            hint={
+              unpushedPurchase > 0
+                ? `ex. BTW · Holded ${formatEUR(holdedExpensesYTD)} + ${purchaseAgg.n} PO's`
+                : "ex. BTW · uit Holded"
+            }
+          />
+          <StatTile label="Te betalen (inkoop)" value={unpaidInvoices.length} hint={formatEUR(unpaidPurchaseTotal)} />
+          <StatTile label="Inkooporders onderweg" value={openPurchaseOrders.length} hint="aankomende voorraad" />
+          <StatTile label="Actieve projecten" value={activeProjectsAgg?.n ?? 0} hint="lopende klussen" />
+          <StatTile label="Contacten" value={contactsTotal.n} />
+        </div>
+      </details>
 
       {doorOrientationN > 0 && (
         <Card className="mb-6 border-amber-300 bg-amber-50/50">
@@ -584,38 +652,100 @@ export default async function DashboardPage() {
         </div>
       )}
 
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
-        <StatTile label="Omzet deze maand" value={formatEUR(revenueMonth)} hint={marginPctMonth != null ? `${marginPctMonth}% marge · ex. BTW` : "ex. BTW"} tone="success" icon={<TrendingUp className="size-5" />} />
-        <StatTile label="Openstaande facturen" value={docAgg.outstandingN} hint={formatEUR(docAgg.outstandingV)} tone="warning" icon={<Clock className="size-5" />} />
-        <StatTile label="Vervallen facturen" value={docAgg.overdueN} hint={formatEUR(docAgg.overdueV)} tone="danger" icon={<AlertTriangle className="size-5" />} />
-        <StatTile label="Geaccepteerde offertes" value={acceptedN} hint="klaar om te factureren" tone="accent" icon={<CheckCircle2 className="size-5" />} />
-        <StatTile label="Totale omzet" value={formatEUR(revenueAll)} hint={marginPctAll != null ? `${marginPctAll}% marge · dit jaar` : "ex. BTW · dit jaar"} tone="info" icon={<Wallet className="size-5" />} />
-      </div>
-      <p className="mt-2 text-xs text-muted">
-        Meer marge- en winstanalyses (per product, collectie, klant) staan in{" "}
-        <Link href="/rapporten" className="text-accent hover:underline">Rapporten</Link>.
-      </p>
+      {/* Open offertes + openstaande verkoopfacturen */}
+      <div className="mb-6 grid gap-4 lg:grid-cols-2">
+        <Card>
+          <CardHeader>
+            <CardTitle>Open offertes{openOffertes.length > 0 ? ` (${openOffertes.length})` : ""}</CardTitle>
+            <Link href="/quotes" className="text-xs text-accent hover:underline">
+              Alle offertes
+            </Link>
+          </CardHeader>
+          {openOffertes.length === 0 ? (
+            <CardContent>
+              <p className="text-sm text-muted">Geen openstaande offertes.</p>
+            </CardContent>
+          ) : (
+            <Table wrapperClassName="max-h-80 overflow-y-auto">
+              <THead>
+                <tr>
+                  <Th>Nr.</Th>
+                  <Th>Klant</Th>
+                  <Th className="text-right">Bedrag</Th>
+                  <Th className="text-right">Open</Th>
+                </tr>
+              </THead>
+              <TBody>
+                {openOffertes.map((o) => {
+                  const days = o.issueDate
+                    ? Math.max(0, Math.round((now.getTime() - new Date(o.issueDate).getTime()) / 86400000))
+                    : null;
+                  return (
+                    <Tr key={o.id}>
+                      <Td>
+                        <Link href={`/documents/${o.id}`} className="font-medium hover:underline">
+                          {o.docNumber ?? "(offerte)"}
+                        </Link>
+                      </Td>
+                      <Td className="text-muted">{o.contactName ?? o.title ?? "—"}</Td>
+                      <Td className="text-right tabular-nums">{formatEUR(o.totalEur)}</Td>
+                      <Td className="text-right text-muted">{days != null ? `${days}d` : "—"}</Td>
+                    </Tr>
+                  );
+                })}
+              </TBody>
+            </Table>
+          )}
+        </Card>
 
-      <details className="mt-3">
-        <summary className="cursor-pointer select-none text-xs text-muted transition-colors hover:text-foreground">
-          Meer cijfers — inkoop, pijplijn, contacten
-        </summary>
-        <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
-          <StatTile
-            label="Totale inkoop"
-            value={formatEUR(totalPurchase)}
-            hint={
-              unpushedPurchase > 0
-                ? `ex. BTW · Holded ${formatEUR(holdedExpensesYTD)} + ${purchaseAgg.n} PO's`
-                : "ex. BTW · uit Holded"
-            }
-          />
-          <StatTile label="Te betalen (inkoop)" value={unpaidInvoices.length} hint={formatEUR(unpaidPurchaseTotal)} />
-          <StatTile label="Inkooporders onderweg" value={openPurchaseOrders.length} hint="aankomende voorraad" />
-          <StatTile label="Actieve projecten" value={activeProjectsAgg?.n ?? 0} hint="lopende klussen" />
-          <StatTile label="Contacten" value={contactsTotal.n} />
-        </div>
-      </details>
+        <Card>
+          <CardHeader>
+            <CardTitle>
+              Openstaande facturen{openSalesInvoices.length > 0 ? ` (${openSalesInvoices.length})` : ""}
+            </CardTitle>
+            <Link href="/invoices" className="text-xs text-accent hover:underline">
+              Alle facturen
+            </Link>
+          </CardHeader>
+          {openSalesInvoices.length === 0 ? (
+            <CardContent>
+              <p className="text-sm text-muted">Geen openstaande facturen.</p>
+            </CardContent>
+          ) : (
+            <Table wrapperClassName="max-h-80 overflow-y-auto">
+              <THead>
+                <tr>
+                  <Th>Nr.</Th>
+                  <Th>Klant</Th>
+                  <Th>Vervalt</Th>
+                  <Th className="text-right">Open</Th>
+                </tr>
+              </THead>
+              <TBody>
+                {openSalesInvoices.map((inv) => {
+                  const open = Number(inv.totalEur ?? 0) - Number(inv.paidEur ?? 0);
+                  const overdue = !!inv.dueDate && inv.dueDate < today;
+                  return (
+                    <Tr key={inv.id}>
+                      <Td>
+                        <Link href={`/documents/${inv.id}`} className="font-medium hover:underline">
+                          {inv.docNumber ?? "(factuur)"}
+                        </Link>
+                      </Td>
+                      <Td className="text-muted">{inv.contactName ?? "—"}</Td>
+                      <Td className={overdue ? "font-medium text-danger" : "text-muted"}>
+                        {inv.dueDate ? formatDate(inv.dueDate) : "—"}
+                        {overdue ? " · vervallen" : ""}
+                      </Td>
+                      <Td className="text-right font-medium tabular-nums">{formatEUR(open)}</Td>
+                    </Tr>
+                  );
+                })}
+              </TBody>
+            </Table>
+          )}
+        </Card>
+      </div>
 
       <div className="mt-6 grid gap-4 lg:grid-cols-2">
         <Card>
