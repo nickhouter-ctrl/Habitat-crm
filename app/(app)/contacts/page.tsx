@@ -1,4 +1,4 @@
-import { and, desc, eq, ilike, or } from "drizzle-orm";
+import { and, desc, eq, ilike, isNotNull, isNull, or } from "drizzle-orm";
 import { Search } from "lucide-react";
 import Link from "next/link";
 
@@ -34,6 +34,12 @@ const TYPE_TABS = [
 
 type ContactType = keyof typeof contactTypeMeta;
 
+const SOORT_TABS = [
+  { key: "", label: "Alle soorten" },
+  { key: "zakelijk", label: "Zakelijk" },
+  { key: "particulier", label: "Particulier" },
+] as const;
+
 export default async function ContactsPage({
   searchParams,
 }: {
@@ -45,6 +51,8 @@ export default async function ContactsPage({
   const typeFilter = (TYPE_TABS.some((t) => t.key === typeParam) ? typeParam : "") as
     | ContactType
     | "";
+  const soortParam = typeof params.soort === "string" ? params.soort : "";
+  const soortFilter = SOORT_TABS.some((t) => t.key === soortParam) ? soortParam : "";
 
   const rows = await db.query.contacts.findMany({
     where: and(
@@ -52,6 +60,12 @@ export default async function ContactsPage({
         ? or(ilike(contacts.name, `%${q}%`), ilike(contacts.email, `%${q}%`))
         : undefined,
       typeFilter ? eq(contacts.type, typeFilter) : undefined,
+      // Zakelijk = gekoppeld aan een bedrijf; particulier = geen bedrijf.
+      soortFilter === "zakelijk"
+        ? isNotNull(contacts.companyId)
+        : soortFilter === "particulier"
+          ? isNull(contacts.companyId)
+          : undefined,
     ),
     orderBy: desc(contacts.updatedAt),
     limit: 200,
@@ -61,13 +75,17 @@ export default async function ContactsPage({
     },
   });
 
-  const tabHref = (key: string) => {
+  const filterHref = (next: { type?: string; soort?: string }) => {
     const sp = new URLSearchParams();
     if (q) sp.set("q", q);
-    if (key) sp.set("type", key);
-    const s = sp.toString();
-    return s ? `/contacts?${s}` : "/contacts";
+    const t = next.type ?? typeFilter;
+    const s = next.soort ?? soortFilter;
+    if (t) sp.set("type", t);
+    if (s) sp.set("soort", s);
+    const qs = sp.toString();
+    return qs ? `/contacts?${qs}` : "/contacts";
   };
+  const tabHref = (key: string) => filterHref({ type: key });
 
   return (
     <>
@@ -83,24 +101,44 @@ export default async function ContactsPage({
       />
 
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-        <div className="flex flex-wrap gap-1">
-          {TYPE_TABS.map((t) => (
-            <Link
-              key={t.key || "all"}
-              href={tabHref(t.key)}
-              className={cn(
-                "rounded-md px-3 py-1.5 text-sm transition-colors",
-                (typeFilter || "") === t.key
-                  ? "bg-accent/10 font-medium text-accent"
-                  : "text-muted hover:bg-surface hover:text-foreground",
-              )}
-            >
-              {t.label}
-            </Link>
-          ))}
+        <div className="flex flex-wrap items-center gap-3">
+          <div className="flex flex-wrap gap-1">
+            {TYPE_TABS.map((t) => (
+              <Link
+                key={t.key || "all"}
+                href={tabHref(t.key)}
+                className={cn(
+                  "rounded-md px-3 py-1.5 text-sm transition-colors",
+                  (typeFilter || "") === t.key
+                    ? "bg-accent/10 font-medium text-accent"
+                    : "text-muted hover:bg-surface hover:text-foreground",
+                )}
+              >
+                {t.label}
+              </Link>
+            ))}
+          </div>
+          <span className="hidden h-5 w-px bg-border sm:block" aria-hidden />
+          <div className="flex flex-wrap gap-1">
+            {SOORT_TABS.map((t) => (
+              <Link
+                key={t.key || "all-soort"}
+                href={filterHref({ soort: t.key })}
+                className={cn(
+                  "rounded-md px-3 py-1.5 text-sm transition-colors",
+                  (soortFilter || "") === t.key
+                    ? "bg-accent/10 font-medium text-accent"
+                    : "text-muted hover:bg-surface hover:text-foreground",
+                )}
+              >
+                {t.label}
+              </Link>
+            ))}
+          </div>
         </div>
         <form className="relative" action="/contacts">
           {typeFilter && <input type="hidden" name="type" value={typeFilter} />}
+          {soortFilter && <input type="hidden" name="soort" value={soortFilter} />}
           <Search className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted" />
           <Input
             name="q"

@@ -13,6 +13,7 @@ import {
   EmptyState,
   LinkButton,
   PageHeader,
+  StatTile,
   TBody,
   Table,
   Td,
@@ -122,6 +123,30 @@ export default async function ContactDetailPage({
     contact.country,
   ].filter(Boolean);
 
+  // KPI's uit de documenten van dit contact.
+  const num = (v: unknown) => Number(v ?? 0);
+  const estimates = relatedDocs.filter((d) => d.kind === "estimate");
+  const invoices = relatedDocs.filter((d) => d.kind === "invoice" && d.status !== "void");
+  const creditnotes = relatedDocs.filter((d) => d.kind === "creditnote" && d.status !== "void");
+  // Omzet = verstuurde/betaalde facturen − creditnota's (incl. BTW).
+  const omzet =
+    invoices.filter((d) => d.status !== "draft").reduce((s, d) => s + num(d.totalEur), 0) -
+    creditnotes.reduce((s, d) => s + num(d.totalEur), 0);
+  const openstaand = invoices
+    .filter((d) => d.status !== "paid")
+    .reduce((s, d) => s + (num(d.totalEur) - num(d.paidEur)), 0);
+  const geoffreerd = estimates
+    .filter((d) => d.status !== "rejected" && d.status !== "void")
+    .reduce((s, d) => s + num(d.totalEur), 0);
+  // Conversie: offertes die tot een factuur leidden (via bron-offerte-koppeling).
+  const invoicedEstimateIds = new Set(
+    invoices.map((d) => d.sourceDocumentId).filter(Boolean) as string[],
+  );
+  const conversie = estimates.length
+    ? Math.round((invoicedEstimateIds.size / estimates.length) * 100)
+    : 0;
+  const isZakelijk = !!contact.company;
+
   return (
     <>
       <PageHeader
@@ -137,6 +162,9 @@ export default async function ContactDetailPage({
                 {contactTypeMeta[contact.type].label}
               </Badge>
             )}
+            <Badge tone={isZakelijk ? "info" : "neutral"}>
+              {isZakelijk ? "Zakelijk" : "Particulier"}
+            </Badge>
           </span>
         }
         subtitle={
@@ -177,6 +205,14 @@ export default async function ContactDetailPage({
           facturen aan. Verwijder of ontkoppel die eerst.
         </p>
       )}
+
+      <div className="mb-4 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+        <StatTile label="Totale omzet" value={formatEUR(omzet)} hint="gefactureerd, incl. BTW" tone="success" />
+        <StatTile label="Openstaand" value={formatEUR(openstaand)} hint="te ontvangen" tone={openstaand > 0 ? "warning" : "neutral"} />
+        <StatTile label="Totaal geoffreerd" value={formatEUR(geoffreerd)} hint="lopende offertes" />
+        <StatTile label="Offertes" value={String(estimates.length)} hint={`${invoicedEstimateIds.size} gefactureerd`} />
+        <StatTile label="Conversie" value={`${conversie}%`} hint="offerte → factuur" tone="info" />
+      </div>
 
       <div className="grid gap-4 lg:grid-cols-3">
         {/* Left: details */}
