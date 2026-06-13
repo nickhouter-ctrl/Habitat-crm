@@ -545,14 +545,6 @@ export default async function DocumentDetailPage({
                   </form>
                 </div>
               )}
-              {doc.kind === "deliverynote" && !doc.stockAppliedAt && (
-                <form action={applyStockOutFromDocument.bind(null, id)}>
-                  <SubmitButton size="sm" variant="primary" pendingLabel="Bezig…">
-                    → Geleverd · voorraad afboeken
-                  </SubmitButton>
-                </form>
-              )}
-
               <form action={changeStatus} className="flex items-center gap-2 pt-1">
                 <Select name="status" defaultValue={doc.status} className="flex-1">
                   {STATUS_OPTIONS.map((s) => (

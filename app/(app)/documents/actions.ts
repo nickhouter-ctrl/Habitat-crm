@@ -1,6 +1,6 @@
 "use server";
 
-import { and, eq, inArray, isNotNull, isNull, ne, or, sql } from "drizzle-orm";
+import { and, eq, isNotNull, isNull, ne, or, sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
@@ -793,35 +793,30 @@ async function bookStockOutInternal(
 ): Promise<StockOutResult> {
   const doc = await db.query.documents.findFirst({ where: eq(documents.id, docId) });
   if (!doc) return { ok: false, reason: "not-found" };
-  if (doc.kind !== "invoice" && doc.kind !== "deliverynote")
-    return { ok: false, reason: "wrong-kind" };
+  // Alleen facturen boeken de voorraad definitief af. Offertes reserveren (apart),
+  // pakbonnen zijn enkel een leverdocument.
+  if (doc.kind !== "invoice") return { ok: false, reason: "wrong-kind" };
 
   const lines = normalizeDocItems(doc.items).filter((it) => it.productId && it.units);
   if (lines.length === 0) return { ok: false, reason: "no-products" };
 
-  // Dubbel-boeking-bescherming. Afboeken gebeurt per LOGISCHE VERKOOP, niet per los
-  // document: een offerte → factuur → pakbon hoort bij elkaar en mag samen maar
-  // ÉÉN keer afboeken. We blokkeren daarom als er binnen dezelfde deal/project al
-  // een ANDER documenttype (factuur ↔ pakbon) is afgeboekt. Twee documenten van
-  // hetzelfde type (bv. 2 facturen) mogen wél elk afboeken — dat is een aparte
-  // (bij)bestelling van dezelfde producten. De atomaire claim verderop zorgt dat
-  // één en hetzelfde document nooit twee keer afboekt.
-  const scopes = [
-    doc.projectId ? eq(documents.projectId, doc.projectId) : undefined,
-    doc.dealId ? eq(documents.dealId, doc.dealId) : undefined,
-  ].filter(Boolean);
-  if (scopes.length > 0) {
-    const already = await db.query.documents.findFirst({
-      where: and(
-        or(...scopes),
-        inArray(documents.kind, ["invoice", "deliverynote"]),
-        isNotNull(documents.stockAppliedAt),
-        ne(documents.id, docId),
-        ne(documents.kind, doc.kind), // alleen factuur ↔ pakbon blokkeren, niet 2 facturen
-      ),
-      columns: { docNumber: true },
-    });
-    if (already) return { ok: false, reason: "deal-already-booked", otherDoc: already.docNumber };
+  // Dubbel-boeking-bescherming per LOGISCHE VERKOOP (offerte-keten). Een offerte →
+  // factuur(en) → pakbon(nen) horen bij elkaar (zelfde "wortel") en mogen de
+  // voorraad samen maar ÉÉN keer afboeken — ook bij deelfacturen, want de goederen
+  // gaan één keer de deur uit. Een aparte verkoop (eigen/andere offerte, of een
+  // losse factuur) heeft een eigen wortel en boekt dus wél opnieuw af. De atomaire
+  // claim verderop borgt bovendien dat één document nooit twee keer afboekt.
+  const rootId = doc.sourceDocumentId ?? docId;
+  const alreadyBooked = await db.query.documents.findFirst({
+    where: and(
+      or(eq(documents.id, rootId), eq(documents.sourceDocumentId, rootId)),
+      isNotNull(documents.stockAppliedAt),
+      ne(documents.id, docId),
+    ),
+    columns: { docNumber: true },
+  });
+  if (alreadyBooked) {
+    return { ok: false, reason: "deal-already-booked", otherDoc: alreadyBooked.docNumber };
   }
 
   // Atomair claimen: alleen de eerste boekt af.
