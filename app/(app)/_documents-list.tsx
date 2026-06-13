@@ -17,7 +17,7 @@ import {
 import { SyncHoldedButton } from "@/components/sync-holded-button";
 import { db } from "@/lib/db";
 import { documents } from "@/lib/db/schema";
-import { formatDate, formatEUR } from "@/lib/utils";
+import { cn, formatDate, formatEUR } from "@/lib/utils";
 import { documentKindMeta, documentStatusMeta } from "./_meta";
 import { ConfirmSubmit } from "@/components/confirm-submit";
 import { RowLink, StopLink } from "@/components/row-link";
@@ -194,12 +194,19 @@ export async function DocumentsList({
                     </Td>
                     <Td className="text-muted">{formatDate(d.issueDate)}</Td>
                     <Td className="text-muted">{formatDate(d.dueDate)}</Td>
-                    <Td className="text-right tabular-nums">{formatEUR(d.subtotalEur)}</Td>
-                    <Td className="text-right tabular-nums font-medium">
-                      {formatEUR(d.totalEur)}
+                    <Td className="text-right tabular-nums">
+                      {formatEUR(sign(d.kind) * Number(d.subtotalEur ?? 0))}
+                    </Td>
+                    <Td
+                      className={cn(
+                        "text-right tabular-nums font-medium",
+                        d.kind === "creditnote" && "text-danger",
+                      )}
+                    >
+                      {formatEUR(sign(d.kind) * Number(d.totalEur ?? 0))}
                     </Td>
                     <Td className="text-right tabular-nums text-muted">
-                      {formatEUR(d.paidEur)}
+                      {formatEUR(sign(d.kind) * Number(d.paidEur ?? 0))}
                     </Td>
                     <Td className="text-right">
                       {(d.kind === "estimate" || d.status === "draft") && (
