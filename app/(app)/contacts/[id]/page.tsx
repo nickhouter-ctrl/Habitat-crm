@@ -175,6 +175,7 @@ export default async function ContactDetailPage({
           totalEur: true,
           issueDate: true,
           items: true,
+          sourceDocumentId: true,
         },
         orderBy: desc(documents.issueDate),
       })
@@ -455,6 +456,21 @@ export default async function ContactDetailPage({
             <div className="divide-y">
               {relatedProjects.map((p) => {
                 const docs = docsByProject.get(p.id) ?? [];
+                // Per bron-offerte: hoeveel is er al gefactureerd?
+                const invoicedByEst = new Map<string, number>();
+                for (const d of docs) {
+                  if (d.kind === "invoice" && d.status !== "void" && d.sourceDocumentId) {
+                    invoicedByEst.set(
+                      d.sourceDocumentId,
+                      (invoicedByEst.get(d.sourceDocumentId) ?? 0) + Number(d.totalEur ?? 0),
+                    );
+                  }
+                }
+                // Verberg offertes die al volledig gefactureerd zijn (de factuur staat er al).
+                const visibleDocs = docs.filter((d) => {
+                  if (d.kind !== "estimate") return true;
+                  return (invoicedByEst.get(d.id) ?? 0) < Number(d.totalEur ?? 0) - 0.01;
+                });
                 const prods = productsForProject(p.id);
                 return (
                   <details key={p.id} className="group">
@@ -466,17 +482,17 @@ export default async function ContactDetailPage({
                         {p.status === "active" ? "Actief" : "Gearchiveerd"}
                       </Badge>
                       <span className="ml-auto text-xs text-muted">
-                        {docs.length} doc{docs.length === 1 ? "" : "en"}
+                        {visibleDocs.length} doc{visibleDocs.length === 1 ? "" : "en"}
                       </span>
                     </summary>
                     <div className="space-y-3 bg-background/40 px-5 pb-4 pt-1">
-                      {docs.length > 0 && (
+                      {visibleDocs.length > 0 && (
                         <div>
                           <p className="mb-1 text-xs font-medium uppercase tracking-wide text-muted">
                             Documenten
                           </p>
                           <ul className="space-y-1 text-sm">
-                            {docs.map((d) => (
+                            {visibleDocs.map((d) => (
                               <li key={d.id} className="flex flex-wrap items-center gap-2">
                                 <Link href={`/documents/${d.id}`} className="font-medium hover:underline">
                                   {d.docNumber ?? documentKindMeta[d.kind]}
