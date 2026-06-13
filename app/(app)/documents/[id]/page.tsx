@@ -34,6 +34,7 @@ import {
   deleteDocument,
   pushDocumentToHoldedAction,
   reverseStockOutFromDocument,
+  setDeliveryNoteDelivered,
   setDocumentStatus,
   toggleReserveEstimate,
 } from "../actions";
@@ -123,6 +124,19 @@ export default async function DocumentDetailPage({
           columns: { id: true, docNumber: true, status: true },
         })
       : null;
+  // Pakbonnen die bij deze factuur horen (met afgeleverd-status).
+  const linkedDeliveryNotes =
+    doc.kind === "invoice"
+      ? await db.query.documents.findMany({
+          where: and(
+            eq(documents.sourceDocumentId, id),
+            eq(documents.kind, "deliverynote"),
+            ne(documents.status, "void"),
+          ),
+          columns: { id: true, docNumber: true, deliveredAt: true },
+          orderBy: [asc(documents.issueDate)],
+        })
+      : [];
 
   // Hoeveel van de offerte is al gefactureerd? (voor deelfacturen)
   const invoicedTotal = linkedInvoices.reduce((s, inv) => s + Number(inv.totalEur ?? 0), 0);
@@ -330,6 +344,22 @@ export default async function DocumentDetailPage({
           <Link href={`/documents/${sourceEstimate.id}`} className="font-medium text-accent hover:underline">
             {sourceEstimate.docNumber ?? "(offerte)"} →
           </Link>
+        </div>
+      )}
+
+      {doc.kind === "invoice" && linkedDeliveryNotes.length > 0 && (
+        <div className="mb-4 flex flex-wrap items-center gap-x-3 gap-y-1 rounded-md border border-border bg-muted/30 px-3 py-2 text-sm">
+          <span className="text-muted">Pakbon{linkedDeliveryNotes.length === 1 ? "" : "nen"}:</span>
+          {linkedDeliveryNotes.map((p) => (
+            <Link key={p.id} href={`/documents/${p.id}`} className="flex items-center gap-1.5 hover:underline">
+              <span className="font-medium">{p.docNumber ?? "pakbon"}</span>
+              {p.deliveredAt ? (
+                <Badge tone="success">Afgeleverd {formatDate(p.deliveredAt)}</Badge>
+              ) : (
+                <Badge tone="neutral">Niet afgeleverd</Badge>
+              )}
+            </Link>
+          ))}
         </div>
       )}
 
@@ -545,24 +575,50 @@ export default async function DocumentDetailPage({
                   </form>
                 </div>
               )}
-              <form action={changeStatus} className="flex items-center gap-2 pt-1">
-                <Select name="status" defaultValue={doc.status} className="flex-1">
-                  {STATUS_OPTIONS.map((s) => (
-                    <option key={s} value={s}>
-                      {documentStatusMeta[s].label}
-                    </option>
-                  ))}
-                </Select>
-                <SubmitButton size="sm" variant="secondary" pendingLabel="Bezig…">
-                  Status bijwerken
-                </SubmitButton>
-              </form>
-              <form action={changeStatus}>
-                <input type="hidden" name="status" value="paid" />
-                <SubmitButton size="sm" variant="ghost" pendingLabel="Bezig…">
-                  Markeer betaald
-                </SubmitButton>
-              </form>
+              {doc.kind === "deliverynote" ? (
+                // Een pakbon is een leverdocument: alleen klaargezet → afgeleverd.
+                <div className="pt-1">
+                  {doc.deliveredAt ? (
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-sm font-medium text-success">
+                        ✓ Afgeleverd op {formatDate(doc.deliveredAt)}
+                      </span>
+                      <form action={setDeliveryNoteDelivered.bind(null, id, false)}>
+                        <SubmitButton size="sm" variant="ghost" className="text-muted" pendingLabel="…">
+                          Ongedaan maken
+                        </SubmitButton>
+                      </form>
+                    </div>
+                  ) : (
+                    <form action={setDeliveryNoteDelivered.bind(null, id, true)}>
+                      <SubmitButton size="sm" variant="primary" pendingLabel="Bezig…">
+                        → Markeer als afgeleverd
+                      </SubmitButton>
+                    </form>
+                  )}
+                </div>
+              ) : (
+                <>
+                  <form action={changeStatus} className="flex items-center gap-2 pt-1">
+                    <Select name="status" defaultValue={doc.status} className="flex-1">
+                      {STATUS_OPTIONS.map((s) => (
+                        <option key={s} value={s}>
+                          {documentStatusMeta[s].label}
+                        </option>
+                      ))}
+                    </Select>
+                    <SubmitButton size="sm" variant="secondary" pendingLabel="Bezig…">
+                      Status bijwerken
+                    </SubmitButton>
+                  </form>
+                  <form action={changeStatus}>
+                    <input type="hidden" name="status" value="paid" />
+                    <SubmitButton size="sm" variant="ghost" pendingLabel="Bezig…">
+                      Markeer betaald
+                    </SubmitButton>
+                  </form>
+                </>
+              )}
             </CardContent>
           </Card>
 

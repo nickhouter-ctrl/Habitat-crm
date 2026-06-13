@@ -497,6 +497,9 @@ export const documents = pgTable(
      * en kunnen we "Gefactureerd" tonen — ook bij deelfacturen. Geen harde FK
      * (soft link) zodat verwijderen niet cascadeert. */
     sourceDocumentId: uuid(),
+    /** Pakbon: moment van afleveren. Een pakbon kent alleen klaargezet → afgeleverd
+     * (geen factuurstatussen). */
+    deliveredAt: timestamp({ withTimezone: true }),
     /** Convenience copy of the Holded id; the source of truth mapping lives in holded_sync_map. */
     holdedId: text(),
     ...timestamps,

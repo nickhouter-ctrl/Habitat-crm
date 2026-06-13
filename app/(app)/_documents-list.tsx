@@ -21,7 +21,7 @@ import { formatDate, formatEUR } from "@/lib/utils";
 import { documentKindMeta, documentStatusMeta } from "./_meta";
 import { ConfirmSubmit } from "@/components/confirm-submit";
 import { RowLink, StopLink } from "@/components/row-link";
-import { deleteDocument } from "./documents/actions";
+import { deleteDocument, setDeliveryNoteDelivered } from "./documents/actions";
 
 type Kind =
   | "estimate"
@@ -158,14 +158,39 @@ export async function DocumentsList({
                       )}
                     </Td>
                     <Td>
-                      <span className="flex flex-wrap items-center gap-1">
-                        <Badge tone={documentStatusMeta[d.status].tone}>
-                          {documentStatusMeta[d.status].label}
-                        </Badge>
-                        {d.kind === "estimate" && invoicedEstimateIds.has(d.id) && (
-                          <Badge tone="success">Gefactureerd</Badge>
-                        )}
-                      </span>
+                      {d.kind === "deliverynote" ? (
+                        d.deliveredAt ? (
+                          <span className="flex items-center gap-1">
+                            <Badge tone="success">Afgeleverd {formatDate(d.deliveredAt)}</Badge>
+                            <form action={setDeliveryNoteDelivered.bind(null, d.id, false)}>
+                              <ConfirmSubmit
+                                message="Afgeleverd ongedaan maken?"
+                                className="rounded p-1 text-muted transition-colors hover:bg-muted/50"
+                              >
+                                ↺
+                              </ConfirmSubmit>
+                            </form>
+                          </span>
+                        ) : (
+                          <form action={setDeliveryNoteDelivered.bind(null, d.id, true)}>
+                            <ConfirmSubmit
+                              message="Pakbon markeren als afgeleverd?"
+                              className="rounded bg-accent/10 px-2 py-0.5 text-xs font-medium text-accent transition-colors hover:bg-accent/20"
+                            >
+                              Markeer afgeleverd
+                            </ConfirmSubmit>
+                          </form>
+                        )
+                      ) : (
+                        <span className="flex flex-wrap items-center gap-1">
+                          <Badge tone={documentStatusMeta[d.status].tone}>
+                            {documentStatusMeta[d.status].label}
+                          </Badge>
+                          {d.kind === "estimate" && invoicedEstimateIds.has(d.id) && (
+                            <Badge tone="success">Gefactureerd</Badge>
+                          )}
+                        </span>
+                      )}
                     </Td>
                     <Td className="text-muted">{formatDate(d.issueDate)}</Td>
                     <Td className="text-muted">{formatDate(d.dueDate)}</Td>

@@ -9,7 +9,7 @@ import { z } from "zod";
 
 import { auth } from "@/auth";
 import { db } from "@/lib/db";
-import { activities, contacts, deals, documents, holdedSyncMap, products } from "@/lib/db/schema";
+import { activities, contacts, deals, deliveries, documents, holdedSyncMap, products } from "@/lib/db/schema";
 import { syncDealFromDocument } from "@/lib/deals";
 import {
   computeTotals,
@@ -305,6 +305,30 @@ export async function updateDocument(id: string, formData: FormData) {
   await syncDealFromDocument(values.dealId, values);
   revalidateAround(values.kind as DocKind, id);
   redirect(`/documents/${id}`);
+}
+
+/**
+ * Pakbon (de)markeren als afgeleverd. Een pakbon kent alleen klaargezet →
+ * afgeleverd. Werkt door op de gekoppelde levering, de bron-factuur en het project.
+ */
+export async function setDeliveryNoteDelivered(id: string, delivered: boolean) {
+  await requireUser();
+  const ts = delivered ? new Date() : null;
+  const doc = await db.query.documents.findFirst({
+    where: eq(documents.id, id),
+    columns: { sourceDocumentId: true, projectId: true },
+  });
+  await db.update(documents).set({ deliveredAt: ts, updatedAt: new Date() }).where(eq(documents.id, id));
+  // Houd de gekoppelde levering in sync.
+  await db
+    .update(deliveries)
+    .set({ status: delivered ? "geleverd" : "gepland", deliveredAt: ts, updatedAt: new Date() })
+    .where(eq(deliveries.deliveryNoteId, id));
+  revalidatePath(`/documents/${id}`);
+  revalidatePath("/pakbonnen");
+  revalidatePath("/leveringen");
+  if (doc?.sourceDocumentId) revalidatePath(`/documents/${doc.sourceDocumentId}`);
+  if (doc?.projectId) revalidatePath(`/projects/${doc.projectId}`);
 }
 
 export async function setDocumentStatus(id: string, formData: FormData) {
@@ -738,6 +762,21 @@ export async function createDeliveryNoteInternal(sourceId: string): Promise<stri
   const src = await db.query.documents.findFirst({ where: eq(documents.id, sourceId) });
   if (!src) return null;
 
+  // Idempotent: hergebruik een bestaande pakbon van dezelfde bron-factuur i.p.v.
+  // een tweede aan te maken (voorkomt dubbele pakbonnen).
+  const existingNote = await db.query.documents.findFirst({
+    where: and(
+      eq(documents.kind, "deliverynote"),
+      eq(documents.sourceDocumentId, sourceId),
+      ne(documents.status, "void"),
+    ),
+    columns: { id: true },
+  });
+  if (existingNote) {
+    revalidatePath(`/documents/${sourceId}`);
+    return existingNote.id;
+  }
+
   const { id } = await insertNumberedDocument("deliverynote", {
     kind: "deliverynote",
     status: "draft",
@@ -746,8 +785,12 @@ export async function createDeliveryNoteInternal(sourceId: string): Promise<stri
     companyId: src.companyId,
     dealId: src.dealId,
     propertyId: src.propertyId,
-    // Project meenemen zodat de pakbon-PDF "Project: …" toont (net als de factuur).
+    // Project meenemen zodat de pakbon-PDF "Project: …" toont (net als de factuur)
+    // en de pakbon onder het project verschijnt.
     projectId: src.projectId,
+    // Koppel de pakbon aan z'n bron (de factuur), zodat "afgeleverd" ook op de
+    // factuur te zien is.
+    sourceDocumentId: src.id,
     issueDate: new Date().toISOString().slice(0, 10),
     currency: src.currency,
     subtotalEur: src.subtotalEur,

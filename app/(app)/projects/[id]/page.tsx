@@ -64,6 +64,7 @@ export default async function ProjectDetailPage({
         issueDate: documents.issueDate,
         stockAppliedAt: documents.stockAppliedAt,
         reservedAt: documents.reservedAt,
+        deliveredAt: documents.deliveredAt,
       })
       .from(documents)
       .where(eq(documents.projectId, id))
@@ -479,7 +480,13 @@ export default async function ProjectDetailPage({
                         )}
                         {isSale && (
                           <div className="mt-1.5 flex flex-wrap items-center gap-1.5 text-[11px]">
-                            {voided ? (
+                            {d.kind === "deliverynote" ? (
+                              d.deliveredAt ? (
+                                <Badge tone="success">Afgeleverd</Badge>
+                              ) : (
+                                <Badge tone="neutral">Niet afgeleverd</Badge>
+                              )
+                            ) : voided ? (
                               <Badge tone="danger">Geannuleerd</Badge>
                             ) : booked ? (
                               <>
