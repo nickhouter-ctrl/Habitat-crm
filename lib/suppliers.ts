@@ -33,13 +33,27 @@ export const PREFIX_SUPPLIER: Record<string, string> = {
   // DR (deuren) bewust niet gemapt — leverancier handmatig kiezen.
 };
 
-/** Geef de leverancier voor een SKU, of "" als de prefix onbekend is. */
-export function supplierForSku(sku: string | null | undefined): string {
+/** De letter-prefix van een SKU (bv. "DR" uit "DR-006"), of "" als er geen is. */
+export function skuPrefix(sku: string | null | undefined): string {
   if (!sku) return "";
   const m = sku.match(/^([A-Za-z]+)/);
-  if (!m) return "";
-  const prefix = m[1].toUpperCase();
+  return m ? m[1].toUpperCase() : "";
+}
+
+/** Geef de leverancier voor een SKU, of "" als de prefix onbekend is. */
+export function supplierForSku(sku: string | null | undefined): string {
+  const prefix = skuPrefix(sku);
+  if (!prefix) return "";
   // Langste match eerst (bv. TMBO vóór T zou T niet bestaan, maar voor de
   // zekerheid exact op de volledige letter-prefix).
   return PREFIX_SUPPLIER[prefix] ?? "";
+}
+
+/**
+ * Leverancier-groep voor een SKU: de bekende leverancier, of anders de losse
+ * SKU-prefix (bv. "DR" voor deuren) zodat producten van dezelfde prefix samen op
+ * één bestelbon komen — ook als de leverancier (nog) niet in de mapping staat.
+ */
+export function supplierGroupForSku(sku: string | null | undefined): string {
+  return supplierForSku(sku) || skuPrefix(sku) || "Onbekende leverancier";
 }

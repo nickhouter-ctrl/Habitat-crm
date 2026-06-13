@@ -16,7 +16,8 @@ import {
   supplierOrders,
 } from "@/lib/db/schema";
 import { displaySku, variantDescription } from "@/lib/catalog";
-import { supplierForSku } from "@/lib/suppliers";
+import { getReservedStockByProduct } from "@/lib/stock";
+import { supplierForSku, supplierGroupForSku } from "@/lib/suppliers";
 
 async function requireUser() {
   const session = await auth();
@@ -217,6 +218,74 @@ export async function addManyToOrder(formData: FormData) {
     });
   }
   revalidatePath("/bestellen");
+}
+
+/**
+ * Dashboard "→ Bestellen": zet alle producten met te weinig VRIJE voorraad
+ * (fysiek − gereserveerd < 0) meteen als concept-bestelregels klaar, gesplitst per
+ * leverancier (op SKU-prefix — bv. KKR, MS, DR horen elk bij elkaar). Het te
+ * bestellen aantal = het tekort (gereserveerd − voorraad), wat zowel negatieve
+ * voorraad als reserveringen boven de voorraad dekt. Per leverancier wordt het
+ * lopende concept hergebruikt; producten die er al op staan worden niet nog eens
+ * toegevoegd, zodat nogmaals klikken geen dubbele regels oplevert.
+ */
+export async function reorderShortagesToDrafts() {
+  const user = await requireUser();
+  const reservedByProduct = await getReservedStockByProduct();
+  const shortages = (
+    await db
+      .select({
+        id: products.id,
+        name: products.name,
+        sku: products.sku,
+        stockQty: products.stockQty,
+      })
+      .from(products)
+      .where(and(eq(products.isActive, true), sql`${products.availability} <> 'order_only'`))
+  )
+    .map((p) => {
+      const reserved = reservedByProduct.get(p.id) ?? 0;
+      const stock = Number(p.stockQty ?? 0);
+      return { ...p, need: reserved - stock };
+    })
+    .filter((p) => p.need > 0);
+
+  if (!shortages.length) redirect("/bestellen");
+
+  // Groepeer de tekorten per leverancier(-prefix).
+  const byGroup = new Map<string, typeof shortages>();
+  for (const p of shortages) {
+    const group = supplierGroupForSku(p.sku);
+    const arr = byGroup.get(group);
+    if (arr) arr.push(p);
+    else byGroup.set(group, [p]);
+  }
+
+  for (const [groupName, items] of byGroup) {
+    const supplier = await resolveSupplier(groupName);
+    const orderId = await findOrCreateDraft(user.id, supplier, null);
+    // Welke producten staan al op dit concept? Idempotent: geen dubbele regels.
+    const present = await db
+      .select({ productId: supplierOrderItems.productId })
+      .from(supplierOrderItems)
+      .where(eq(supplierOrderItems.orderId, orderId));
+    const have = new Set(present.map((r) => r.productId).filter(Boolean));
+    for (const p of items) {
+      if (p.id && have.has(p.id)) continue;
+      const qty = Math.ceil(p.need);
+      await db.insert(supplierOrderItems).values({
+        orderId,
+        productId: p.id,
+        qty: String(qty > 0 ? qty : 1),
+        unit: "stuk",
+        skuSnapshot: p.sku ?? "—",
+        description: p.name,
+      });
+    }
+  }
+
+  revalidatePath("/bestellen");
+  redirect("/bestellen");
 }
 
 export async function updateOrderItem(formData: FormData) {

@@ -30,6 +30,8 @@ import { getReservedStockByProduct } from "@/lib/stock";
 import { formatMoney, PO_OPEN_STATUSES, PO_STATUS_META } from "@/lib/purchase-orders";
 import { formatDate, formatEUR } from "@/lib/utils";
 import { documentKindMeta } from "./_meta";
+import { SubmitButton } from "@/components/submit-button";
+import { reorderShortagesToDrafts } from "./bestellen/actions";
 import { approveProforma, markPurchaseOrderPaid } from "./inkooporders/actions";
 
 export const metadata = { title: "Dashboard" };
@@ -216,25 +218,12 @@ export default async function DashboardPage() {
     normalizeDocItems(d.items).some((it) => it.productId && it.units),
   ).length;
 
-  // Producten onder 0 (oversold) — moeten bijbesteld worden. Order-only (op
-  // bestelling gemaakt) tellen niet mee.
-  const reorderProducts = await db
-    .select({ sku: products.sku, name: products.name, stockQty: products.stockQty })
-    .from(products)
-    .where(
-      and(
-        eq(products.isActive, true),
-        sql`${products.availability} <> 'order_only'`,
-        sql`coalesce(${products.stockQty}, 0) < 0`,
-      ),
-    )
-    .orderBy(products.stockQty)
-    .limit(50);
-
-  // Gereserveerde producten (uit geaccepteerde + handmatig gereserveerde offertes)
-  // waarvan er te weinig fysiek op voorraad is → moeten besteld worden.
+  // Te bestellen: producten waarvan de VRIJE voorraad (fysiek − gereserveerd)
+  // onder 0 zit. Eén lijst dekt zowel negatieve voorraad als reserveringen boven
+  // de voorraad — het tekort = gereserveerd − voorraad. Order-only (op bestelling
+  // gemaakt) telt niet mee.
   const reservedByProduct = await getReservedStockByProduct();
-  const reservedShortfall = (
+  const toOrder = (
     await db
       .select({ id: products.id, sku: products.sku, name: products.name, stockQty: products.stockQty })
       .from(products)
@@ -243,11 +232,11 @@ export default async function DashboardPage() {
     .map((p) => {
       const reserved = reservedByProduct.get(p.id) ?? 0;
       const stock = Number(p.stockQty ?? 0);
-      return { sku: p.sku, name: p.name, reserved, stock, tekort: reserved - stock };
+      return { sku: p.sku, name: p.name, reserved, stock, need: reserved - stock };
     })
-    .filter((p) => p.reserved > 0 && p.tekort > 0)
-    .sort((a, b) => b.tekort - a.tekort)
-    .slice(0, 50);
+    .filter((p) => p.need > 0)
+    .sort((a, b) => b.need - a.need)
+    .slice(0, 100);
 
   // Facturen met een deur/deur-set-regel waarvan de draairichting (S1–S4) nog
   // niet gekozen is — zodat je een set kunt factureren en de richting later
@@ -331,7 +320,7 @@ export default async function DashboardPage() {
     productsAgg.lowStock > 0 ||
     productsAgg.stockNoPhoto > 0 ||
     productsAgg.noBarcode > 0 ||
-    reorderProducts.length > 0;
+    toOrder.length > 0;
 
   // --- Grafieken: omzet & offerte-waarde per maand (12 mnd) + conversie ---
   const since12 = new Date(now.getFullYear(), now.getMonth() - 11, 1).toISOString().slice(0, 10);
@@ -405,66 +394,44 @@ export default async function DashboardPage() {
         </Card>
       )}
 
-      {reservedShortfall.length > 0 && (
-        <Card className="mb-6 border-amber-300 bg-amber-50/50">
+      {toOrder.length > 0 && (
+        <Card className="mb-6 border-red-200 bg-red-50/40">
           <CardHeader>
             <CardTitle>
-              🔖 {reservedShortfall.length} gereserveerd product{reservedShortfall.length === 1 ? "" : "en"} — te weinig voorraad, bestellen
+              🛒 {toOrder.length} product{toOrder.length === 1 ? "" : "en"} bijbestellen — te weinig vrije voorraad
             </CardTitle>
-            <LinkButton href={`/bestellen?q=${encodeURIComponent(reservedShortfall[0].sku ?? "")}`} className="text-xs">
-              → Bestellen
-            </LinkButton>
+            <form action={reorderShortagesToDrafts}>
+              <SubmitButton size="sm" className="text-xs" pendingLabel="Bezig…">
+                → Bestellen
+              </SubmitButton>
+            </form>
           </CardHeader>
           <CardContent>
             <p className="mb-3 text-sm text-muted">
-              Gereserveerd in offertes, maar niet genoeg op voorraad. Bestel het tekort bij.
+              Onder 0 op voorraad óf gereserveerd boven de voorraad. Eén klik zet het tekort als
+              concept-bestelbon per leverancier klaar.
             </p>
             <ul className="grid gap-1.5 text-sm sm:grid-cols-2">
-              {reservedShortfall.map((p) => (
-                <li key={p.sku ?? p.name} className="flex items-center justify-between gap-2 rounded-md bg-background px-3 py-1.5">
+              {toOrder.map((p) => (
+                <li
+                  key={p.sku ?? p.name}
+                  className="flex items-center justify-between gap-2 rounded-md bg-background px-3 py-1.5"
+                >
                   <span className="truncate">
                     <span className="font-medium">{p.name}</span>{" "}
                     <span className="font-mono text-xs text-muted">{p.sku}</span>
                   </span>
                   <span className="shrink-0 text-xs tabular-nums">
-                    <span className="text-muted">{p.reserved} geres. · {p.stock} voorr.</span>{" "}
-                    <span className="rounded bg-amber-100 px-1.5 py-0.5 font-medium text-amber-800">bestel {Math.ceil(p.tekort)}</span>
+                    <span className="text-muted">
+                      {p.reserved > 0 ? `${p.reserved} geres. · ` : ""}
+                      <span className={p.stock < 0 ? "text-danger" : ""}>{p.stock} voorr.</span>
+                    </span>{" "}
+                    <span className="rounded bg-red-100 px-1.5 py-0.5 font-medium text-red-800">
+                      bestel {Math.ceil(p.need)}
+                    </span>
                   </span>
                 </li>
               ))}
-            </ul>
-          </CardContent>
-        </Card>
-      )}
-
-      {reorderProducts.length > 0 && (
-        <Card className="mb-6 border-red-200 bg-red-50/40">
-          <CardHeader>
-            <CardTitle>
-              🛒 {reorderProducts.length} product{reorderProducts.length === 1 ? "" : "en"} onder 0 — bijbestellen
-            </CardTitle>
-            <LinkButton href={`/bestellen?q=${encodeURIComponent(reorderProducts[0].sku ?? "")}`} className="text-xs">
-              → Bestellen
-            </LinkButton>
-          </CardHeader>
-          <CardContent>
-            <ul className="grid gap-1.5 text-sm sm:grid-cols-2">
-              {reorderProducts.map((p) => {
-                const stock = Number(p.stockQty ?? 0);
-                const order = Math.ceil(Math.abs(stock) * 100) / 100;
-                return (
-                  <li key={p.sku ?? p.name} className="flex items-center justify-between gap-2 rounded-md bg-background px-3 py-1.5">
-                    <span className="truncate">
-                      <span className="font-medium">{p.name}</span>{" "}
-                      <span className="font-mono text-xs text-muted">{p.sku}</span>
-                    </span>
-                    <span className="shrink-0 text-xs tabular-nums">
-                      <span className="text-danger">{stock}</span>{" "}
-                      <span className="rounded bg-red-100 px-1.5 py-0.5 font-medium text-red-800">bestel {order}</span>
-                    </span>
-                  </li>
-                );
-              })}
             </ul>
           </CardContent>
         </Card>

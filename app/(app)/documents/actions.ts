@@ -1,6 +1,6 @@
 "use server";
 
-import { and, eq, inArray, isNotNull, isNull, ne, sql } from "drizzle-orm";
+import { and, eq, inArray, isNotNull, isNull, ne, or, sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
@@ -17,7 +17,7 @@ import {
   parseLineItems,
   type DocKind,
 } from "@/lib/documents";
-import { nextDocNumber } from "@/lib/doc-number";
+import { insertNumberedDocument } from "@/lib/doc-number";
 import { offerteEmail, sendEmail } from "@/lib/email";
 import { renderDocumentPdf } from "@/lib/document-pdf";
 import { pushDocumentToHolded } from "@/lib/holded/sync";
@@ -195,11 +195,11 @@ export async function createDocument(formData: FormData) {
     redirect(`/documents/new?kind=${kind}&error=validation`);
   }
   const { values } = buildValues(parsed.data);
-  const [row] = await db.insert(documents).values(values).returning({ id: documents.id });
+  const { id } = await insertNumberedDocument(values.kind as DocKind, values);
 
   await syncDealFromDocument(values.dealId, values);
   revalidateAround(values.kind as DocKind);
-  redirect(`/documents/${row.id}`);
+  redirect(`/documents/${id}`);
 }
 
 /** Wizard flow: resolve/create the client (step 1), then create the document (step 2). */
@@ -258,10 +258,7 @@ export async function createDocumentFromWizard(formData: FormData) {
     contactId = cid.data;
   }
 
-  const [row] = await db
-    .insert(documents)
-    .values({ ...values, contactId, dealId, status: "draft" })
-    .returning({ id: documents.id });
+  const { id } = await insertNumberedDocument(kind, { ...values, contactId, dealId, status: "draft" });
 
   await syncDealFromDocument(dealId, { kind, status: "draft", totalEur: values.totalEur });
 
@@ -269,11 +266,11 @@ export async function createDocumentFromWizard(formData: FormData) {
   const alsoDelivery = String(raw.alsoDeliveryNote ?? "") === "1";
   let deliveryId: string | null = null;
   if (alsoDelivery && (kind === "invoice" || kind === "estimate")) {
-    deliveryId = await createDeliveryNoteInternal(row.id);
+    deliveryId = await createDeliveryNoteInternal(id);
   }
 
   revalidateAround(kind);
-  redirect(deliveryId ? `/documents/${row.id}?pakbon=${deliveryId}` : `/documents/${row.id}`);
+  redirect(deliveryId ? `/documents/${id}?pakbon=${deliveryId}` : `/documents/${id}`);
 }
 
 export async function updateDocument(id: string, formData: FormData) {
@@ -351,7 +348,7 @@ export async function toggleReserveEstimate(id: string) {
   await requireUser();
   const doc = await db.query.documents.findFirst({
     where: eq(documents.id, id),
-    columns: { id: true, kind: true, reservedAt: true },
+    columns: { id: true, kind: true, reservedAt: true, projectId: true },
   });
   if (!doc || doc.kind !== "estimate") return;
   await db
@@ -361,6 +358,7 @@ export async function toggleReserveEstimate(id: string) {
   revalidatePath(`/documents/${id}`);
   revalidatePath("/");
   revalidatePath("/products");
+  if (doc.projectId) revalidatePath(`/projects/${doc.projectId}`);
 }
 
 export async function deleteDocument(id: string) {
@@ -652,40 +650,35 @@ export async function createInvoiceFromEstimate(estimateId: string, formData?: F
   const totals = computeTotals(items);
   const round2 = (n: number) => (Math.round(n * 100) / 100).toFixed(2);
 
-  const docNumber = await nextDocNumber("invoice");
   const today = new Date();
   const due = new Date(today);
   due.setDate(due.getDate() + 30);
 
-  const [row] = await db
-    .insert(documents)
-    .values({
-      kind: "invoice",
-      status: "draft",
-      docNumber,
-      title:
-        pct === 100
-          ? est.title
-          : `${est.title ?? "Factuur"} — ${pct}% van ${est.docNumber ?? "offerte"}`,
-      contactId: est.contactId,
-      companyId: est.companyId,
-      dealId: est.dealId,
-      propertyId: est.propertyId,
-      projectId: est.projectId,
-      issueDate: today.toISOString().slice(0, 10),
-      dueDate: due.toISOString().slice(0, 10),
-      currency: est.currency,
-      subtotalEur: round2(totals.subtotal),
-      taxEur: round2(totals.tax),
-      totalEur: round2(totals.total),
-      items,
-      notes: est.notes,
-    })
-    .returning({ id: documents.id });
+  const { id } = await insertNumberedDocument("invoice", {
+    kind: "invoice",
+    status: "draft",
+    title:
+      pct === 100
+        ? est.title
+        : `${est.title ?? "Factuur"} — ${pct}% van ${est.docNumber ?? "offerte"}`,
+    contactId: est.contactId,
+    companyId: est.companyId,
+    dealId: est.dealId,
+    propertyId: est.propertyId,
+    projectId: est.projectId,
+    issueDate: today.toISOString().slice(0, 10),
+    dueDate: due.toISOString().slice(0, 10),
+    currency: est.currency,
+    subtotalEur: round2(totals.subtotal),
+    taxEur: round2(totals.tax),
+    totalEur: round2(totals.total),
+    items,
+    notes: est.notes,
+  });
 
   revalidateAround("invoice");
   revalidatePath(`/documents/${estimateId}`);
-  redirect(`/documents/${row.id}/edit`);
+  redirect(`/documents/${id}/edit`);
 }
 
 /**
@@ -709,37 +702,32 @@ export async function approveEstimateToInvoice(estimateId: string) {
   const items = normalizeDocItems(est.items);
   const totals = computeTotals(items);
   const round2 = (n: number) => (Math.round(n * 100) / 100).toFixed(2);
-  const docNumber = await nextDocNumber("invoice");
   const today = new Date();
   const due = new Date(today);
   due.setDate(due.getDate() + 30);
 
-  const [row] = await db
-    .insert(documents)
-    .values({
-      kind: "invoice",
-      status: "draft",
-      docNumber,
-      title: est.title,
-      contactId: est.contactId,
-      companyId: est.companyId,
-      dealId: est.dealId,
-      propertyId: est.propertyId,
-      projectId: est.projectId,
-      issueDate: today.toISOString().slice(0, 10),
-      dueDate: due.toISOString().slice(0, 10),
-      currency: est.currency,
-      subtotalEur: round2(totals.subtotal),
-      taxEur: round2(totals.tax),
-      totalEur: round2(totals.total),
-      items,
-      notes: est.notes,
-    })
-    .returning({ id: documents.id });
+  const { id } = await insertNumberedDocument("invoice", {
+    kind: "invoice",
+    status: "draft",
+    title: est.title,
+    contactId: est.contactId,
+    companyId: est.companyId,
+    dealId: est.dealId,
+    propertyId: est.propertyId,
+    projectId: est.projectId,
+    issueDate: today.toISOString().slice(0, 10),
+    dueDate: due.toISOString().slice(0, 10),
+    currency: est.currency,
+    subtotalEur: round2(totals.subtotal),
+    taxEur: round2(totals.tax),
+    totalEur: round2(totals.total),
+    items,
+    notes: est.notes,
+  });
 
   revalidateAround("invoice");
   if (est.projectId) revalidatePath(`/projects/${est.projectId}`);
-  redirect(`/documents/${row.id}/edit`);
+  redirect(`/documents/${id}/edit`);
 }
 
 /** Create a draft delivery note (pakbon) copied from another document's lines. */
@@ -748,32 +736,28 @@ async function createDeliveryNoteInternal(sourceId: string): Promise<string | nu
   const src = await db.query.documents.findFirst({ where: eq(documents.id, sourceId) });
   if (!src) return null;
 
-  const docNumber = await nextDocNumber("deliverynote");
-
-  const [row] = await db
-    .insert(documents)
-    .values({
-      kind: "deliverynote",
-      status: "draft",
-      docNumber,
-      title: src.title,
-      contactId: src.contactId,
-      companyId: src.companyId,
-      dealId: src.dealId,
-      propertyId: src.propertyId,
-      issueDate: new Date().toISOString().slice(0, 10),
-      currency: src.currency,
-      subtotalEur: src.subtotalEur,
-      taxEur: src.taxEur,
-      totalEur: src.totalEur,
-      items: src.items,
-      notes: src.notes,
-    })
-    .returning({ id: documents.id });
+  const { id } = await insertNumberedDocument("deliverynote", {
+    kind: "deliverynote",
+    status: "draft",
+    title: src.title,
+    contactId: src.contactId,
+    companyId: src.companyId,
+    dealId: src.dealId,
+    propertyId: src.propertyId,
+    // Project meenemen zodat de pakbon-PDF "Project: …" toont (net als de factuur).
+    projectId: src.projectId,
+    issueDate: new Date().toISOString().slice(0, 10),
+    currency: src.currency,
+    subtotalEur: src.subtotalEur,
+    taxEur: src.taxEur,
+    totalEur: src.totalEur,
+    items: src.items,
+    notes: src.notes,
+  });
 
   revalidateAround("deliverynote");
   revalidatePath(`/documents/${sourceId}`);
-  return row.id;
+  return id;
 }
 
 export async function createDeliveryNoteFromDocument(sourceId: string) {
@@ -813,29 +797,25 @@ async function bookStockOutInternal(
   const lines = normalizeDocItems(doc.items).filter((it) => it.productId && it.units);
   if (lines.length === 0) return { ok: false, reason: "no-products" };
 
-  // Dubbel-boeking-bescherming: is er al afgeboekt op een ander document in deze deal?
-  if (doc.dealId) {
+  // Dubbel-boeking-bescherming. Afboeken gebeurt per LOGISCHE VERKOOP, niet per los
+  // document: een offerte → factuur → pakbon hoort bij elkaar en mag samen maar
+  // ÉÉN keer afboeken. We blokkeren daarom als er binnen dezelfde deal/project al
+  // een ANDER documenttype (factuur ↔ pakbon) is afgeboekt. Twee documenten van
+  // hetzelfde type (bv. 2 facturen) mogen wél elk afboeken — dat is een aparte
+  // (bij)bestelling van dezelfde producten. De atomaire claim verderop zorgt dat
+  // één en hetzelfde document nooit twee keer afboekt.
+  const scopes = [
+    doc.projectId ? eq(documents.projectId, doc.projectId) : undefined,
+    doc.dealId ? eq(documents.dealId, doc.dealId) : undefined,
+  ].filter(Boolean);
+  if (scopes.length > 0) {
     const already = await db.query.documents.findFirst({
       where: and(
-        eq(documents.dealId, doc.dealId),
-        isNotNull(documents.stockAppliedAt),
-        ne(documents.id, docId),
-      ),
-      columns: { docNumber: true },
-    });
-    if (already) return { ok: false, reason: "deal-already-booked", otherDoc: already.docNumber };
-  }
-
-  // Een pakbon hoort bij een factuur — niet nóg een keer afboeken als er binnen
-  // hetzelfde project al een factuur is afgeboekt (en andersom).
-  if (doc.projectId) {
-    const already = await db.query.documents.findFirst({
-      where: and(
-        eq(documents.projectId, doc.projectId),
+        or(...scopes),
         inArray(documents.kind, ["invoice", "deliverynote"]),
         isNotNull(documents.stockAppliedAt),
         ne(documents.id, docId),
-        ne(documents.kind, doc.kind), // alleen factuur↔pakbon blokkeren, niet 2 facturen
+        ne(documents.kind, doc.kind), // alleen factuur ↔ pakbon blokkeren, niet 2 facturen
       ),
       columns: { docNumber: true },
     });

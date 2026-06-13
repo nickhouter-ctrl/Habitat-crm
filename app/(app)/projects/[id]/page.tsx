@@ -35,6 +35,7 @@ import {
   approveEstimateToInvoice,
   cancelSaleReturnStock,
   reverseStockOutFromDocument,
+  toggleReserveEstimate,
 } from "../../documents/actions";
 
 export const metadata = { title: "Project" };
@@ -62,6 +63,7 @@ export default async function ProjectDetailPage({
         totalEur: documents.totalEur,
         issueDate: documents.issueDate,
         stockAppliedAt: documents.stockAppliedAt,
+        reservedAt: documents.reservedAt,
       })
       .from(documents)
       .where(eq(documents.projectId, id))
@@ -133,7 +135,12 @@ export default async function ProjectDetailPage({
   // verkocht (uit facturen − creditnota's). Geeft inzicht in wat er naar de klus
   // gaat én wat er voor het project is gereserveerd.
   const projDocItems = await db
-    .select({ kind: documents.kind, status: documents.status, items: documents.items })
+    .select({
+      kind: documents.kind,
+      status: documents.status,
+      reservedAt: documents.reservedAt,
+      items: documents.items,
+    })
     .from(documents)
     .where(and(eq(documents.projectId, id), inArray(documents.kind, ["estimate", "invoice", "creditnote"])));
   type Agg = {
@@ -161,7 +168,9 @@ export default async function ProjectDetailPage({
         } satisfies Agg);
       const u = Number(it.units) || 0;
       const amt = (Number(it.price) || 0) * u;
-      if (d.kind === "estimate" && d.status === "accepted") {
+      // Gereserveerd = geaccepteerde offertes én offertes die handmatig op
+      // 'gereserveerd' zijn gezet (reservedAt) — gelijk aan lib/stock.
+      if (d.kind === "estimate" && (d.status === "accepted" || d.reservedAt)) {
         entry.reserved += u;
         entry.reservedAmt += amt;
       } else if (d.kind === "invoice") {
@@ -512,7 +521,23 @@ export default async function ProjectDetailPage({
                               <Badge tone="success">Gefactureerd</Badge>
                             ) : (
                               <>
-                                {d.status === "accepted" && <Badge tone="info">Gereserveerd</Badge>}
+                                {(d.status === "accepted" || d.reservedAt) && (
+                                  <Badge tone="info">Gereserveerd</Badge>
+                                )}
+                                {d.status !== "accepted" && (
+                                  <ConfirmSubmit
+                                    formAction={toggleReserveEstimate.bind(null, d.id)}
+                                    message={
+                                      d.reservedAt
+                                        ? "Reservering opheffen? De producten tellen dan niet meer als gereserveerd."
+                                        : "Deze offerte-producten reserveren? Ze tellen dan mee als gereserveerde voorraad (dashboard + bestellijst)."
+                                    }
+                                    pendingLabel="Bezig…"
+                                    className="rounded px-2 py-0.5 text-[11px] font-medium text-foreground transition-colors hover:bg-muted/50"
+                                  >
+                                    {d.reservedAt ? "Reservering opheffen" : "🔖 Reserveren"}
+                                  </ConfirmSubmit>
+                                )}
                                 <ConfirmSubmit
                                   formAction={approveEstimateToInvoice.bind(null, d.id)}
                                   message="Een factuur aanmaken van deze offerte? De gereserveerde producten gaan naar verkocht; je belandt op de nieuwe factuur om te versturen."
