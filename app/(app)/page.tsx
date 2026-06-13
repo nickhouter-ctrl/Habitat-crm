@@ -33,7 +33,7 @@ import { documentKindMeta } from "./_meta";
 import { SubmitButton } from "@/components/submit-button";
 import { reorderShortagesToDrafts } from "./bestellen/actions";
 import { approveProforma, markPurchaseOrderPaid } from "./inkooporders/actions";
-import { planDelivery, setDeliveryStatus } from "./leveringen/actions";
+import { dismissDelivery, planDelivery, setDeliveryStatus } from "./leveringen/actions";
 
 export const metadata = { title: "Dashboard" };
 // Cold start mag tot 60s, ruim voor de eerste Holded-fetch; warm is dit 1–2s.
@@ -841,6 +841,15 @@ export default async function DashboardPage() {
                   <SubmitButton size="sm" variant="secondary" pendingLabel="…">
                     Plannen
                   </SubmitButton>
+                  <button
+                    type="submit"
+                    formAction={dismissDelivery.bind(null, d.id)}
+                    formNoValidate
+                    className="rounded-md px-2 py-1 text-xs text-muted transition-colors hover:bg-muted/50 hover:text-foreground"
+                    title="Geen levering nodig (bv. werkzaamheden)"
+                  >
+                    Geen levering
+                  </button>
                 </form>
               ))}
             </div>

@@ -94,6 +94,30 @@ export async function planDelivery(formData: FormData) {
   revalidatePath("/leveringen");
 }
 
+/**
+ * "Geen levering nodig" — bv. een factuur voor werkzaamheden. Markeert het
+ * document zodat het niet meer in "te plannen leveringen" verschijnt, zonder een
+ * echte levering in te plannen.
+ */
+export async function dismissDelivery(documentId: string) {
+  await requireUser();
+  if (!documentId) return;
+  const existing = await db.query.deliveries.findFirst({
+    where: eq(deliveries.documentId, documentId),
+    columns: { id: true },
+  });
+  if (existing) {
+    await db
+      .update(deliveries)
+      .set({ status: "geen", updatedAt: new Date() })
+      .where(eq(deliveries.id, existing.id));
+  } else {
+    await db.insert(deliveries).values({ documentId, status: "geen" });
+  }
+  revalidatePath("/");
+  revalidatePath("/leveringen");
+}
+
 export async function setDeliveryStatus(id: string, status: "gepland" | "onderweg" | "geleverd") {
   await requireUser();
   await db
