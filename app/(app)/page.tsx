@@ -1,4 +1,4 @@
-import { and, count, desc, eq, gte, inArray, isNull, sql } from "drizzle-orm";
+import { and, count, desc, eq, gte, inArray, isNotNull, isNull, ne, notInArray, sql } from "drizzle-orm";
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { AlertTriangle, CheckCircle2, Clock, TrendingUp, Wallet } from "lucide-react";
@@ -238,6 +238,43 @@ export default async function DashboardPage() {
     .sort((a, b) => b.need - a.need)
     .slice(0, 100);
 
+  // Nog af te rekenen: offertes die deels gefactureerd zijn (gekoppelde facturen
+  // < offertebedrag) → er moet nog een eindafrekening komen.
+  const estimateRows = await db
+    .select({
+      id: documents.id,
+      docNumber: documents.docNumber,
+      title: documents.title,
+      totalEur: documents.totalEur,
+      contactName: contacts.name,
+    })
+    .from(documents)
+    .leftJoin(contacts, eq(documents.contactId, contacts.id))
+    .where(and(eq(documents.kind, "estimate"), notInArray(documents.status, ["rejected", "void"])));
+  const invoicedSumRows = await db
+    .select({
+      src: documents.sourceDocumentId,
+      invoiced: sql<number>`coalesce(sum(${documents.totalEur}), 0)::float8`,
+    })
+    .from(documents)
+    .where(
+      and(
+        eq(documents.kind, "invoice"),
+        ne(documents.status, "void"),
+        isNotNull(documents.sourceDocumentId),
+      ),
+    )
+    .groupBy(documents.sourceDocumentId);
+  const invoicedByEstimate = new Map(invoicedSumRows.map((r) => [r.src, Number(r.invoiced)]));
+  const toSettle = estimateRows
+    .map((e) => {
+      const invoiced = invoicedByEstimate.get(e.id) ?? 0;
+      return { ...e, invoiced, rest: Number(e.totalEur ?? 0) - invoiced };
+    })
+    .filter((e) => e.invoiced > 0.01 && e.rest > 0.01)
+    .sort((a, b) => b.rest - a.rest)
+    .slice(0, 50);
+
   // Facturen met een deur/deur-set-regel waarvan de draairichting (S1–S4) nog
   // niet gekozen is — zodat je een set kunt factureren en de richting later
   // aangeeft. We detecteren het direct uit de regels (geen losse notitie nodig).
@@ -320,7 +357,8 @@ export default async function DashboardPage() {
     productsAgg.lowStock > 0 ||
     productsAgg.stockNoPhoto > 0 ||
     productsAgg.noBarcode > 0 ||
-    toOrder.length > 0;
+    toOrder.length > 0 ||
+    toSettle.length > 0;
 
   // --- Grafieken: omzet & offerte-waarde per maand (12 mnd) + conversie ---
   const since12 = new Date(now.getFullYear(), now.getMonth() - 11, 1).toISOString().slice(0, 10);
@@ -386,6 +424,46 @@ export default async function DashboardPage() {
                   </Link>
                   <span className="shrink-0 rounded bg-amber-100 px-1.5 py-0.5 text-xs font-medium text-amber-800 tabular-nums">
                     {d.units} {d.units === 1 ? "deur" : "deuren"}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </CardContent>
+        </Card>
+      )}
+
+      {toSettle.length > 0 && (
+        <Card className="mb-6 border-blue-200 bg-blue-50/40">
+          <CardHeader>
+            <CardTitle>
+              🧾 {toSettle.length} offerte{toSettle.length === 1 ? "" : "s"} nog af te rekenen — deels gefactureerd
+            </CardTitle>
+            <LinkButton href="/quotes" className="text-xs">
+              Alle offertes
+            </LinkButton>
+          </CardHeader>
+          <CardContent>
+            <p className="mb-3 text-sm text-muted">
+              Hier is al een (deel)factuur van gemaakt, maar nog niet het volledige bedrag. Maak de
+              eindafrekening.
+            </p>
+            <ul className="grid gap-1.5 text-sm">
+              {toSettle.map((e) => (
+                <li
+                  key={e.id}
+                  className="flex flex-wrap items-center justify-between gap-2 rounded-md bg-background px-3 py-1.5"
+                >
+                  <span className="min-w-0 truncate">
+                    <Link href={`/documents/${e.id}`} className="font-medium hover:underline">
+                      {e.docNumber ?? "(offerte)"}
+                    </Link>{" "}
+                    <span className="text-muted">{e.contactName ?? e.title ?? ""}</span>
+                  </span>
+                  <span className="shrink-0 text-xs tabular-nums text-muted">
+                    {formatEUR(e.invoiced)} van {formatEUR(e.totalEur)} ·{" "}
+                    <span className="rounded bg-blue-100 px-1.5 py-0.5 font-medium text-blue-800">
+                      nog {formatEUR(e.rest)}
+                    </span>
                   </span>
                 </li>
               ))}
