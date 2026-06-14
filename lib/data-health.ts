@@ -65,7 +65,9 @@ export async function runDataHealth(): Promise<{ ok: boolean; findings: Finding[
   // 6. Inkooporders die mogelijk in een andere valuta zijn maar als EUR staan.
   const usdSuspect = await one(sql`
     SELECT count(*)::int AS n FROM purchase_orders
-    WHERE coalesce(currency,'EUR')='EUR' AND (reference ILIKE '%usd%' OR reference ILIKE '%dollar%' OR reference ILIKE '%（usd%')`);
+    WHERE coalesce(currency,'EUR')='EUR'
+      AND (reference ILIKE '%usd%' OR reference ILIKE '%dollar%' OR reference ILIKE '%（usd%')
+      AND coalesce(notes,'') NOT ILIKE '%omgerekend%'`);
   if (Number(usdSuspect.n) > 0)
     findings.push({ key: "usd_suspect", label: "Inkooporders mogelijk USD maar als EUR opgeslagen", count: Number(usdSuspect.n), severity: "warn" });
 

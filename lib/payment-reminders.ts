@@ -15,7 +15,14 @@ export async function runPaymentReminders(): Promise<{
   candidates: number;
   sent: number;
   skipped: number;
+  disabled?: boolean;
 }> {
+  // Veiligheids-schakelaar: betaalherinneringen versturen pas zodra dit expliciet
+  // aanstaat (env PAYMENT_REMINDERS_ENABLED=true). Tot die tijd: niets versturen.
+  if (process.env.PAYMENT_REMINDERS_ENABLED !== "true") {
+    return { ok: true, candidates: 0, sent: 0, skipped: 0, disabled: true };
+  }
+
   const rows = await db
     .select({
       id: documents.id,
