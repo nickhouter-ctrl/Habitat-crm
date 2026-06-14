@@ -96,6 +96,19 @@ export async function sendEmail(input: {
 
 import { COMPANY } from "@/lib/company";
 
+/**
+ * Logo voor in de mailheader: toont het logo-plaatje als `EMAIL_LOGO_URL` is gezet
+ * (een absolute URL naar /brand/habitat-one-logo.png op het CRM-domein), anders de
+ * tekst-wordmark als veilige terugval — zo nooit een gebroken afbeelding.
+ */
+function logoHeaderHtml(): string {
+  const url = process.env.EMAIL_LOGO_URL?.trim();
+  if (url) {
+    return `<img src="${url}" alt="${escapeHtml(COMPANY.name)}" height="46" style="display:block;height:46px;width:auto;border:0" />`;
+  }
+  return `<div style="font-family:Georgia,'Times New Roman',serif;font-size:22px;letter-spacing:4px;color:${COMPANY.brown};line-height:1.05">${COMPANY.wordmark1}<br/>${COMPANY.wordmark2}</div>`;
+}
+
 const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 const kindNL = (k: string) => (k === "invoice" ? "factuur" : k === "proforma" ? "pro-formafactuur" : k === "creditnote" ? "creditnota" : "offerte");
 const kindEN = (k: string) => (k === "invoice" ? "invoice" : k === "proforma" ? "pro-forma invoice" : k === "creditnote" ? "credit note" : "quote");
@@ -195,7 +208,7 @@ export function offerteEmail(args: {
   const html = `<div style="font-family:Helvetica,Arial,sans-serif;background:${COMPANY.cream};padding:24px 0">
   <div style="max-width:560px;margin:0 auto;background:#fff;border-radius:12px;overflow:hidden;color:#1c1c1a">
     <div style="background:${COMPANY.cream};padding:22px 28px">
-      <div style="font-family:Georgia,'Times New Roman',serif;font-size:22px;letter-spacing:4px;color:${COMPANY.brown};line-height:1.05">${COMPANY.wordmark1}<br/>${COMPANY.wordmark2}</div>
+      ${logoHeaderHtml()}
       <div style="font-size:11px;color:#999;margin-top:4px">${escapeHtml(COMPANY.tagline)}</div>
     </div>
     <div style="padding:24px 28px">
@@ -267,7 +280,7 @@ export function offerteAcceptedEmail(args: {
   const html = `<div style="font-family:Helvetica,Arial,sans-serif;background:${COMPANY.cream};padding:24px 0">
   <div style="max-width:560px;margin:0 auto;background:#fff;border-radius:12px;overflow:hidden;color:#1c1c1a">
     <div style="background:${COMPANY.cream};padding:22px 28px">
-      <div style="font-family:Georgia,'Times New Roman',serif;font-size:22px;letter-spacing:4px;color:${COMPANY.brown};line-height:1.05">${COMPANY.wordmark1}<br/>${COMPANY.wordmark2}</div>
+      ${logoHeaderHtml()}
     </div>
     <div style="padding:24px 28px">
       <p style="margin:0">${greeting}</p>
@@ -345,7 +358,7 @@ export function quoteRequestReceivedEmail(args: {
   const html = `<div style="font-family:Helvetica,Arial,sans-serif;background:${COMPANY.cream};padding:24px 0">
   <div style="max-width:560px;margin:0 auto;background:#fff;border-radius:12px;overflow:hidden;color:#1c1c1a">
     <div style="background:${COMPANY.cream};padding:22px 28px">
-      <div style="font-family:Georgia,'Times New Roman',serif;font-size:22px;letter-spacing:4px;color:${COMPANY.brown};line-height:1.05">${COMPANY.wordmark1}<br/>${COMPANY.wordmark2}</div>
+      ${logoHeaderHtml()}
       <div style="font-size:11px;color:#999;margin-top:4px">${escapeHtml(COMPANY.tagline)}</div>
     </div>
     <div style="padding:24px 28px">
@@ -494,7 +507,7 @@ function brandedEmail(inner: string): string {
   return `<div style="font-family:Helvetica,Arial,sans-serif;background:${COMPANY.cream};padding:24px 0">
   <div style="max-width:560px;margin:0 auto;background:#fff;border-radius:12px;overflow:hidden;color:#1c1c1a">
     <div style="background:${COMPANY.cream};padding:22px 28px">
-      <div style="font-family:Georgia,'Times New Roman',serif;font-size:22px;letter-spacing:4px;color:${COMPANY.brown};line-height:1.05">${COMPANY.wordmark1}<br/>${COMPANY.wordmark2}</div>
+      ${logoHeaderHtml()}
       <div style="font-size:11px;color:#999;margin-top:4px">${escapeHtml(COMPANY.tagline)}</div>
     </div>
     <div style="padding:24px 28px">${inner}</div>

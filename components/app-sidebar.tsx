@@ -24,6 +24,7 @@ import {
   Users,
   X,
 } from "lucide-react";
+import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
@@ -137,24 +138,30 @@ export function AppSidebar({
     <>
       {/* Desktop sidebar */}
       <aside className="hidden w-60 shrink-0 flex-col border-r bg-surface lg:flex">
-        <div className="flex items-center gap-2.5 px-4 py-4">
-          <span className="flex size-8 items-center justify-center rounded-lg bg-accent text-sm font-semibold text-accent-foreground">
-            H
-          </span>
-          <div className="leading-tight">
-            <p className="text-sm font-semibold">Habitat CRM</p>
-            <p className="text-xs text-muted">Xàbia</p>
-          </div>
+        <div className="px-4 py-4">
+          <Image
+            src="/brand/habitat-one-logo.png"
+            alt="Habitat One"
+            width={1000}
+            height={560}
+            priority
+            className="h-11 w-auto"
+          />
         </div>
         {navBody()}
       </aside>
 
       {/* Mobile top bar */}
       <header className="fixed inset-x-0 top-0 z-30 flex h-14 items-center gap-2 border-b bg-surface px-3 lg:hidden">
-        <Link href="/" className="flex shrink-0 items-center gap-2">
-          <span className="flex size-7 items-center justify-center rounded-lg bg-accent text-sm font-semibold text-accent-foreground">
-            H
-          </span>
+        <Link href="/" className="flex shrink-0 items-center">
+          <Image
+            src="/brand/habitat-one-logo.png"
+            alt="Habitat One"
+            width={1000}
+            height={560}
+            priority
+            className="h-8 w-auto"
+          />
         </Link>
         <GlobalSearch className="min-w-0 flex-1" />
         <button
@@ -173,12 +180,13 @@ export function AppSidebar({
           <div className="absolute inset-0 bg-black/30" onClick={() => setOpen(false)} aria-hidden />
           <div className="absolute inset-y-0 left-0 flex w-72 max-w-[85%] flex-col bg-surface shadow-2xl">
             <div className="flex items-center justify-between border-b px-4 py-3">
-              <span className="flex items-center gap-2 text-sm font-semibold">
-                <span className="flex size-7 items-center justify-center rounded-lg bg-accent text-sm font-semibold text-accent-foreground">
-                  H
-                </span>
-                Habitat CRM
-              </span>
+              <Image
+                src="/brand/habitat-one-logo.png"
+                alt="Habitat One"
+                width={1000}
+                height={560}
+                className="h-8 w-auto"
+              />
               <button
                 type="button"
                 onClick={() => setOpen(false)}
