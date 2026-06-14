@@ -445,9 +445,6 @@ export default async function DashboardPage() {
     proformas.length > 0 ||
     (invoiceReviewAgg?.n ?? 0) > 0 ||
     poSoon > 0 ||
-    productsAgg.lowStock > 0 ||
-    productsAgg.stockNoPhoto > 0 ||
-    productsAgg.noBarcode > 0 ||
     toOrder.length > 0 ||
     toSettle.length > 0 ||
     toPlan.length > 0;
@@ -520,8 +517,65 @@ export default async function DashboardPage() {
           <StatTile label="Inkooporders onderweg" value={openPurchaseOrders.length} hint="aankomende voorraad" />
           <StatTile label="Actieve projecten" value={activeProjectsAgg?.n ?? 0} hint="lopende klussen" />
           <StatTile label="Contacten" value={contactsTotal.n} />
+          <StatTile label="Onder voorraaddrempel" value={productsAgg.lowStock} hint="producten" />
+          <StatTile label="Producten zonder foto" value={productsAgg.stockNoPhoto} />
+          <StatTile label="Producten zonder barcode" value={productsAgg.noBarcode} />
         </div>
       </details>
+
+      {anyActions ? (
+        <Card className="mb-6 border-accent/30">
+          <CardHeader>
+            <CardTitle>Wat moet er gebeuren</CardTitle>
+          </CardHeader>
+          <CardContent className="divide-y divide-border/70">
+            {acceptedN > 0 && (
+              <ActionRow href="/quotes" emoji="✅" tone="success">
+                <strong>{acceptedN}</strong> geaccepteerde offerte{acceptedN === 1 ? "" : "s"} — klaar om te factureren.
+              </ActionRow>
+            )}
+            {(openRequestsAgg?.n ?? 0) > 0 && (
+              <ActionRow href="/aanvragen?status=pending" emoji="📩" tone="accent">
+                <strong>{openRequestsAgg!.n}</strong> open offerte-aanvra{openRequestsAgg!.n === 1 ? "ag" : "gen"} via de website.
+              </ActionRow>
+            )}
+            {docAgg.overdueN > 0 && (
+              <ActionRow href="/invoices" emoji="⏰" tone="danger">
+                <strong>{docAgg.overdueN}</strong> vervallen factu{docAgg.overdueN === 1 ? "ur" : "ren"} ({formatEUR(docAgg.overdueV)}) — verstuur herinnering.
+              </ActionRow>
+            )}
+            {unbookedStockN > 0 && (
+              <ActionRow href="/invoices" emoji="📦" tone="warning">
+                <strong>{unbookedStockN}</strong> verstuurde/betaalde factu{unbookedStockN === 1 ? "ur" : "ren"} met productregels — voorraad nog niet afgeboekt.
+              </ActionRow>
+            )}
+            {unpaidInvoices.length > 0 && (
+              <ActionRow href="/inkooporders" emoji="💶" tone="warning">
+                <strong>{unpaidInvoices.length}</strong> inkoopfactu{unpaidInvoices.length === 1 ? "ur" : "ren"} te betalen — {formatEUR(unpaidPurchaseTotal)}.
+              </ActionRow>
+            )}
+            {proformas.length > 0 && (
+              <ActionRow href="/inkooporders" emoji="🗂️" tone="accent">
+                <strong>{proformas.length}</strong> proforma{proformas.length === 1 ? "" : "'s"} wacht{proformas.length === 1 ? "" : "en"} op goedkeuring.
+              </ActionRow>
+            )}
+            {(invoiceReviewAgg?.n ?? 0) > 0 && (
+              <ActionRow href="/inbox?status=new" emoji="🧾" tone="warning">
+                <strong>{invoiceReviewAgg!.n}</strong> mail{invoiceReviewAgg!.n === 1 ? "" : "s"} met factuur/proforma-bijlage — in inkoop zetten?
+              </ActionRow>
+            )}
+            {poSoon > 0 && (
+              <ActionRow href="/inkooporders" emoji="📦" tone="accent">
+                <strong>{poSoon}</strong> inkooporder{poSoon === 1 ? "" : "s"} kom{poSoon === 1 ? "t" : "en"} deze week binnen.
+              </ActionRow>
+            )}
+          </CardContent>
+        </Card>
+      ) : (
+        <div className="mb-6 rounded-lg border border-success/30 bg-success/5 px-4 py-3 text-sm font-medium text-success">
+          ✓ Niets dringends — alles is bij.
+        </div>
+      )}
 
       {doorOrientationN > 0 && (
         <Card className="mb-6 border-amber-300 bg-amber-50/50">
@@ -635,75 +689,6 @@ export default async function DashboardPage() {
             </ul>
           </CardContent>
         </Card>
-      )}
-
-      {anyActions ? (
-        <Card className="mb-6 border-accent/30">
-          <CardHeader>
-            <CardTitle>Wat moet er gebeuren</CardTitle>
-          </CardHeader>
-          <CardContent className="divide-y divide-border/70">
-            {acceptedN > 0 && (
-              <ActionRow href="/quotes" emoji="✅" tone="success">
-                <strong>{acceptedN}</strong> geaccepteerde offerte{acceptedN === 1 ? "" : "s"} — klaar om te factureren.
-              </ActionRow>
-            )}
-            {(openRequestsAgg?.n ?? 0) > 0 && (
-              <ActionRow href="/aanvragen?status=pending" emoji="📩" tone="accent">
-                <strong>{openRequestsAgg!.n}</strong> open offerte-aanvra{openRequestsAgg!.n === 1 ? "ag" : "gen"} via de website.
-              </ActionRow>
-            )}
-            {docAgg.overdueN > 0 && (
-              <ActionRow href="/invoices" emoji="⏰" tone="danger">
-                <strong>{docAgg.overdueN}</strong> vervallen factu{docAgg.overdueN === 1 ? "ur" : "ren"} ({formatEUR(docAgg.overdueV)}) — verstuur herinnering.
-              </ActionRow>
-            )}
-            {unbookedStockN > 0 && (
-              <ActionRow href="/invoices" emoji="📦" tone="warning">
-                <strong>{unbookedStockN}</strong> verstuurde/betaalde factu{unbookedStockN === 1 ? "ur" : "ren"} met productregels — voorraad nog niet afgeboekt.
-              </ActionRow>
-            )}
-            {unpaidInvoices.length > 0 && (
-              <ActionRow href="/inkooporders" emoji="💶" tone="warning">
-                <strong>{unpaidInvoices.length}</strong> inkoopfactu{unpaidInvoices.length === 1 ? "ur" : "ren"} te betalen — {formatEUR(unpaidPurchaseTotal)}.
-              </ActionRow>
-            )}
-            {proformas.length > 0 && (
-              <ActionRow href="/inkooporders" emoji="🗂️" tone="accent">
-                <strong>{proformas.length}</strong> proforma{proformas.length === 1 ? "" : "'s"} wacht{proformas.length === 1 ? "" : "en"} op goedkeuring.
-              </ActionRow>
-            )}
-            {(invoiceReviewAgg?.n ?? 0) > 0 && (
-              <ActionRow href="/inbox?status=new" emoji="🧾" tone="warning">
-                <strong>{invoiceReviewAgg!.n}</strong> mail{invoiceReviewAgg!.n === 1 ? "" : "s"} met factuur/proforma-bijlage — in inkoop zetten?
-              </ActionRow>
-            )}
-            {poSoon > 0 && (
-              <ActionRow href="/inkooporders" emoji="📦" tone="accent">
-                <strong>{poSoon}</strong> inkooporder{poSoon === 1 ? "" : "s"} kom{poSoon === 1 ? "t" : "en"} deze week binnen.
-              </ActionRow>
-            )}
-            {productsAgg.lowStock > 0 && (
-              <ActionRow href="/inkooporders/bestellen" emoji="🔻" tone="danger">
-                <strong>{productsAgg.lowStock}</strong> producten onder de voorraaddrempel — bijbestellen.
-              </ActionRow>
-            )}
-            {productsAgg.stockNoPhoto > 0 && (
-              <ActionRow href="/products?nofoto=1" emoji="📸" tone="warning">
-                <strong>{productsAgg.stockNoPhoto}</strong> actieve producten zonder foto.
-              </ActionRow>
-            )}
-            {productsAgg.noBarcode > 0 && (
-              <ActionRow href="/products?nobarcode=1" emoji="🏷️" tone="warning">
-                <strong>{productsAgg.noBarcode}</strong> producten zonder barcode.
-              </ActionRow>
-            )}
-          </CardContent>
-        </Card>
-      ) : (
-        <div className="mb-6 rounded-lg border border-success/30 bg-success/5 px-4 py-3 text-sm font-medium text-success">
-          ✓ Niets dringends — alles is bij.
-        </div>
       )}
 
       {/* Open offertes + openstaande verkoopfacturen */}
