@@ -577,8 +577,10 @@ export default async function DashboardPage() {
         </div>
       )}
 
+      {(doorOrientationN > 0 || toSettle.length > 0 || toOrder.length > 0) && (
+        <div className="mb-6 flex flex-col gap-4 lg:flex-row lg:items-start">
       {doorOrientationN > 0 && (
-        <Card className="mb-6 border-amber-300 bg-amber-50/50">
+        <Card className="border-amber-300 bg-amber-50/50 lg:flex-1 lg:min-w-0">
           <CardHeader>
             <CardTitle>
               🚪 {doorOrientationN} factu{doorOrientationN === 1 ? "ur" : "ren"} — draairichting kiezen
@@ -591,7 +593,7 @@ export default async function DashboardPage() {
             <p className="mb-3 text-sm text-muted">
               Bij deze deur-facturen moet je nog per regel de draairichting (S1–S4) en het aantal per richting opgeven.
             </p>
-            <ul className="grid gap-1.5 text-sm sm:grid-cols-2">
+            <ul className="grid max-h-72 gap-1.5 overflow-y-auto text-sm">
               {doorOrientationDocs.map((d) => (
                 <li key={d.id} className="flex items-center justify-between gap-2 rounded-md bg-background px-3 py-1.5">
                   <Link href={`/draairichtingen`} className="truncate font-medium hover:underline">
@@ -609,7 +611,7 @@ export default async function DashboardPage() {
       )}
 
       {toSettle.length > 0 && (
-        <Card className="mb-6 border-blue-200 bg-blue-50/40">
+        <Card className="border-blue-200 bg-blue-50/40 lg:flex-1 lg:min-w-0">
           <CardHeader>
             <CardTitle>
               🧾 {toSettle.length} offerte{toSettle.length === 1 ? "" : "s"} nog af te rekenen — deels gefactureerd
@@ -623,7 +625,7 @@ export default async function DashboardPage() {
               Hier is al een (deel)factuur van gemaakt, maar nog niet het volledige bedrag. Maak de
               eindafrekening.
             </p>
-            <ul className="grid gap-1.5 text-sm">
+            <ul className="grid max-h-72 gap-1.5 overflow-y-auto text-sm">
               {toSettle.map((e) => (
                 <li
                   key={e.id}
@@ -649,7 +651,7 @@ export default async function DashboardPage() {
       )}
 
       {toOrder.length > 0 && (
-        <Card className="mb-6 border-red-200 bg-red-50/40">
+        <Card className="border-red-200 bg-red-50/40 lg:flex-1 lg:min-w-0">
           <CardHeader>
             <CardTitle>
               🛒 {toOrder.length} product{toOrder.length === 1 ? "" : "en"} bijbestellen — te weinig vrije voorraad
@@ -665,7 +667,7 @@ export default async function DashboardPage() {
               Onder 0 op voorraad óf gereserveerd boven de voorraad. Eén klik zet het tekort als
               concept-bestelbon per leverancier klaar.
             </p>
-            <ul className="grid gap-1.5 text-sm sm:grid-cols-2">
+            <ul className="grid max-h-72 gap-1.5 overflow-y-auto text-sm">
               {toOrder.map((p) => (
                 <li
                   key={p.sku ?? p.name}
@@ -689,6 +691,8 @@ export default async function DashboardPage() {
             </ul>
           </CardContent>
         </Card>
+      )}
+        </div>
       )}
 
       {/* Open offertes + openstaande verkoopfacturen */}
