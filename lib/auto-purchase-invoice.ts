@@ -12,6 +12,7 @@ import { eq } from "drizzle-orm";
 
 import { extractInvoiceFieldsWithAI } from "@/lib/ai-invoice-extract";
 import { db } from "@/lib/db";
+import { rateToEur } from "@/lib/fx";
 import { activities, emailInbox, mailAttachments, purchaseOrders } from "@/lib/db/schema";
 import { buildInvoicePdfAttachment, isExcelAttachment } from "@/lib/excel-to-pdf";
 import { copyMailAttachmentToPoBucket, downloadMailAttachmentBuffer } from "@/lib/storage";
@@ -108,7 +109,10 @@ export async function tryAutoCreatePurchaseInvoice(emailId: string): Promise<Aut
   // konden duiden (geen leverancier óf geen bedrag) — bv. facturen die Creadores
   // alleen dóórstuurt — laten we Claude uitlezen. De échte leverancier + bedrag
   // staan dan in de PDF/Excel zelf. Draait dus alleen voor wat de regels missen.
-  const aiMeta = new Map<string, { invoiceNumber: string | null; currency: string | null }>();
+  const aiMeta = new Map<
+    string,
+    { invoiceNumber: string | null; currency: string | null; total: number | null }
+  >();
   for (const a of atts) {
     if (!FINANCIAL_CATEGORIES.has(a.category)) continue;
     if (isProformaOrQuote(a.filename)) continue;
@@ -119,7 +123,9 @@ export async function tryAutoCreatePurchaseInvoice(emailId: string): Promise<Aut
     if (!isDoc) continue;
     const needsSupplier = a.supplierTag == null;
     const needsAmount = a.amountEur == null || Number(a.amountEur) <= 0;
-    if (!needsSupplier && !needsAmount) continue;
+    // We draaien de AI óók als leverancier/bedrag al bekend zijn, puur om de
+    // VALUTA betrouwbaar te detecteren — anders zou een USD-factuur als EUR
+    // worden opgeslagen.
 
     try {
       const ai = await extractInvoiceFieldsWithAI({
@@ -137,7 +143,7 @@ export async function tryAutoCreatePurchaseInvoice(emailId: string): Promise<Aut
         a.amountEur = String(ai.total);
         patch.amountEur = String(ai.total);
       }
-      aiMeta.set(a.id, { invoiceNumber: ai.invoiceNumber, currency: ai.currency });
+      aiMeta.set(a.id, { invoiceNumber: ai.invoiceNumber, currency: ai.currency, total: ai.total });
       if (Object.keys(patch).length > 0) {
         await db.update(mailAttachments).set(patch).where(eq(mailAttachments.id, a.id));
       }
@@ -167,13 +173,24 @@ export async function tryAutoCreatePurchaseInvoice(emailId: string): Promise<Aut
 
   for (const a of candidates) {
     try {
-      const total = Number(a.amountEur);
       const ai = aiMeta.get(a.id);
       // Bij AI-uitgelezen facturen een nette referentie "Leverancier factuurnr".
       const reference = ai?.invoiceNumber
         ? `${a.supplierTag} ${ai.invoiceNumber}`.replace(/\s+/g, " ").trim()
         : buildPurchaseReference(mail.subject, a.filename);
-      const currency = ai?.currency || "EUR";
+
+      // Valuta-agent: alles wordt in EUR opgeslagen. Detecteert de AI een vreemde
+      // valuta, dan rekenen we het AI-uitgelezen bedrag (in factuurvaluta) om naar
+      // EUR — zo wordt een USD-factuur nooit meer als EUR opgeslagen.
+      const detectedCur = (ai?.currency || "EUR").toUpperCase();
+      let total = Number(a.amountEur);
+      let originalNote = "";
+      if (detectedCur !== "EUR" && ai?.total != null && ai.total > 0) {
+        const rate = await rateToEur(detectedCur);
+        total = Math.round(ai.total * rate * 100) / 100;
+        originalNote = ` · origineel ${detectedCur} ${ai.total.toFixed(2)} (koers ${rate})`;
+      }
+      const currency = "EUR";
 
       // Dedupe: skip ALS er al een PO bestaat met deze reference (ongeacht
       // supplier-spelling). Bij conflict liever de bestaande PO linken aan
@@ -226,11 +243,11 @@ export async function tryAutoCreatePurchaseInvoice(emailId: string): Promise<Aut
               name: mail.subject ?? `Factuur ${reference}`,
               units: 1,
               unitPrice: total,
-              note: `Bron: ${a.filename}`,
+              note: `Bron: ${a.filename}${originalNote}`,
             },
           ],
           attachments: poAttachments,
-          notes: `Auto-aangemaakt uit mail "${mail.subject ?? ""}" (${mail.fromEmail ?? ""}). Bijlage: ${a.filename}`,
+          notes: `Auto-aangemaakt uit mail "${mail.subject ?? ""}" (${mail.fromEmail ?? ""}). Bijlage: ${a.filename}${originalNote}`,
           stockAppliedAt: new Date(), // GEEN voorraadmutatie
         })
         .returning({ id: purchaseOrders.id });
