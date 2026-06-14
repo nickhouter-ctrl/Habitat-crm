@@ -208,6 +208,7 @@ export async function fetchNewMails(
 /** Verstuur een mail vanuit hi@. */
 export async function sendMail(args: {
   to: string;
+  cc?: string;
   subject: string;
   text?: string;
   html?: string;
@@ -221,6 +222,7 @@ export async function sendMail(args: {
   const info = await t.sendMail({
     from: `Habitat One <${user}>`,
     to: args.to,
+    cc: args.cc,
     subject: args.subject,
     text: args.text,
     html: args.html,

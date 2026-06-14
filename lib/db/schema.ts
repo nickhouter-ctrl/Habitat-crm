@@ -500,6 +500,9 @@ export const documents = pgTable(
     /** Pakbon: moment van afleveren. Een pakbon kent alleen klaargezet → afgeleverd
      * (geen factuurstatussen). */
     deliveredAt: timestamp({ withTimezone: true }),
+    /** Factuur: moment waarop de laatste betaalherinnering is verstuurd (zodat we
+     * niet dagelijks blijven mailen). */
+    paymentReminderAt: timestamp({ withTimezone: true }),
     /** Convenience copy of the Holded id; the source of truth mapping lives in holded_sync_map. */
     holdedId: text(),
     ...timestamps,
@@ -806,6 +809,8 @@ export const deliveries = pgTable(
     notes: text(),
     /** Moment waarop de klant per e-mail is geïnformeerd over de levering. */
     notifiedAt: timestamp({ withTimezone: true }),
+    /** Moment waarop de "morgen wordt geleverd"-herinnering is verstuurd. */
+    reminderSentAt: timestamp({ withTimezone: true }),
     deliveredAt: timestamp({ withTimezone: true }),
     ...timestamps,
   },

@@ -18,7 +18,17 @@ export async function sendEmail(input: {
   html: string;
   text?: string;
   attachments?: EmailAttachment[];
+  /** Extra CC bovenop de standaard bedrijfs-CC. */
+  cc?: string;
 }): Promise<{ sent: boolean; reason?: string }> {
+  // Elke uitgaande mail krijgt een kopie naar het bedrijf (EMAIL_CC, anders
+  // NOTIFY_EMAIL of GMAIL_USER), zodat je altijd meeleest. Niet naar de ontvanger
+  // zelf cc'en.
+  const defaultCc = process.env.EMAIL_CC?.trim() || process.env.NOTIFY_EMAIL?.trim() || process.env.GMAIL_USER?.trim();
+  const cc = [defaultCc, input.cc]
+    .filter((a): a is string => !!a && a.toLowerCase() !== input.to.toLowerCase())
+    .join(", ") || undefined;
+
   // Voorkeur: Gmail (dezelfde route als de meldingsmails — verstuurt vanaf
   // GMAIL_USER, bv. hi@habitat-one.com). Valt terug op Resend; en als niets is
   // ingesteld een stub, zodat de accept-link altijd in het CRM blijft staan.
@@ -27,6 +37,7 @@ export async function sendEmail(input: {
       const { sendMail } = await import("@/lib/gmail");
       await sendMail({
         to: input.to,
+        cc,
         subject: input.subject,
         html: input.html,
         text: input.text,
@@ -50,6 +61,7 @@ export async function sendEmail(input: {
     const payload: Record<string, unknown> = {
       from,
       to: input.to,
+      ...(cc ? { cc } : {}),
       subject: input.subject,
       html: input.html,
       text: input.text,
@@ -351,6 +363,119 @@ export function quoteRequestReceivedEmail(args: {
     (lines.length ? `${q.summary}:\n- ${lines.map((p) => p.name).join("\n- ")}\n\n` : "") +
     `${q.followUp}\n\n${t.regards}\n${COMPANY.legalName}\n${COMPANY.address}\n${[COMPANY.phone, COMPANY.email].filter(Boolean).join(" · ")}`;
   return { subject: q.subject, html, text };
+}
+
+/** Betaalherinnering voor een vervallen factuur. */
+const PAY: Record<Lang, { subject: (nr: string) => string; intro: string; openLabel: string; dueLabel: string; ask: string }> = {
+  nl: {
+    subject: (nr) => `Herinnering: factuur ${nr} nog open`,
+    intro: "Volgens onze administratie staat onderstaande factuur nog open. Mogelijk is uw betaling onderweg — in dat geval kunt u deze mail als niet verzonden beschouwen.",
+    openLabel: "Openstaand bedrag",
+    dueLabel: "Vervaldatum",
+    ask: "Wilt u de betaling op korte termijn voldoen? Bij vragen of een afwijkende afspraak horen we het graag.",
+  },
+  en: {
+    subject: (nr) => `Reminder: invoice ${nr} still open`,
+    intro: "According to our records the invoice below is still outstanding. If your payment is already on its way, please disregard this message.",
+    openLabel: "Amount due",
+    dueLabel: "Due date",
+    ask: "Could you arrange payment soon? If you have any questions or a different arrangement, just let us know.",
+  },
+  es: {
+    subject: (nr) => `Recordatorio: factura ${nr} pendiente`,
+    intro: "Según nuestros registros, la siguiente factura sigue pendiente. Si su pago ya está en camino, puede ignorar este mensaje.",
+    openLabel: "Importe pendiente",
+    dueLabel: "Fecha de vencimiento",
+    ask: "¿Podría realizar el pago en breve? Si tiene alguna pregunta o un acuerdo distinto, díganoslo.",
+  },
+  de: {
+    subject: (nr) => `Erinnerung: Rechnung ${nr} noch offen`,
+    intro: "Nach unseren Unterlagen ist die folgende Rechnung noch offen. Sollte Ihre Zahlung bereits unterwegs sein, betrachten Sie diese Nachricht bitte als gegenstandslos.",
+    openLabel: "Offener Betrag",
+    dueLabel: "Fälligkeitsdatum",
+    ask: "Könnten Sie die Zahlung zeitnah veranlassen? Bei Fragen oder einer abweichenden Vereinbarung melden Sie sich gern.",
+  },
+};
+
+export function paymentReminderEmail(args: {
+  lang?: string | null;
+  contactName?: string | null;
+  docNumber: string;
+  amount: string;
+  dueDate: string;
+}): { subject: string; html: string; text: string } {
+  const lang = pickLang(args.lang);
+  const p = PAY[lang];
+  const t = T[lang];
+  const greeting = args.contactName ? `${t.hi} ${escapeHtml(args.contactName)},` : `${t.hi},`;
+  const html = brandedEmail(`
+      <p style="margin:0">${greeting}</p>
+      <p>${escapeHtml(p.intro)}</p>
+      <div style="margin:16px 0;padding:14px 18px;background:${COMPANY.cream};border-radius:10px">
+        <div style="font-weight:600;color:${COMPANY.brown}">${escapeHtml(args.docNumber)}</div>
+        <div style="font-size:14px;color:#555;margin-top:4px">${escapeHtml(p.openLabel)}: <strong>${escapeHtml(args.amount)}</strong></div>
+        <div style="font-size:14px;color:#555">${escapeHtml(p.dueLabel)}: ${escapeHtml(args.dueDate)}</div>
+      </div>
+      <p>${escapeHtml(p.ask)}</p>
+      <hr style="border:none;border-top:1px solid ${COMPANY.sand};margin:24px 0 16px" />
+      <p style="margin:0 0 4px">${t.regards}</p>
+      <div style="font-size:13px;color:#888;line-height:1.7">${signatureHtml()}</div>`);
+  const text =
+    `${greeting}\n\n${p.intro}\n\n${args.docNumber}\n${p.openLabel}: ${args.amount}\n${p.dueLabel}: ${args.dueDate}\n\n${p.ask}\n\n${t.regards}\n${COMPANY.legalName}`;
+  return { subject: p.subject(args.docNumber), html, text };
+}
+
+/** Herinnering aan de klant: levering/ophaling/montage is (morgen) gepland. */
+const REMIND: Record<Lang, Record<"leveren" | "ophalen" | "plaatsen", { subject: string; intro: string }>> = {
+  nl: {
+    leveren: { subject: "Herinnering: uw levering staat gepland", intro: "Een korte herinnering: uw bestelling wordt op onderstaande datum geleverd." },
+    ophalen: { subject: "Herinnering: uw bestelling kunt u ophalen", intro: "Een korte herinnering: uw bestelling staat klaar om op te halen op onderstaande datum." },
+    plaatsen: { subject: "Herinnering: uw montage staat gepland", intro: "Een korte herinnering: wij komen uw bestelling op onderstaande datum leveren en plaatsen." },
+  },
+  en: {
+    leveren: { subject: "Reminder: your delivery is scheduled", intro: "A quick reminder: your order will be delivered on the date below." },
+    ophalen: { subject: "Reminder: your order is ready for pickup", intro: "A quick reminder: your order is ready for pickup on the date below." },
+    plaatsen: { subject: "Reminder: your installation is scheduled", intro: "A quick reminder: we will deliver and install your order on the date below." },
+  },
+  es: {
+    leveren: { subject: "Recordatorio: su entrega está programada", intro: "Un recordatorio: su pedido se entregará en la fecha indicada a continuación." },
+    ophalen: { subject: "Recordatorio: su pedido está listo para recoger", intro: "Un recordatorio: su pedido estará listo para recoger en la fecha indicada." },
+    plaatsen: { subject: "Recordatorio: su instalación está programada", intro: "Un recordatorio: entregaremos e instalaremos su pedido en la fecha indicada." },
+  },
+  de: {
+    leveren: { subject: "Erinnerung: Ihre Lieferung ist geplant", intro: "Eine kurze Erinnerung: Ihre Bestellung wird am unten genannten Datum geliefert." },
+    ophalen: { subject: "Erinnerung: Ihre Bestellung ist abholbereit", intro: "Eine kurze Erinnerung: Ihre Bestellung ist am unten genannten Datum abholbereit." },
+    plaatsen: { subject: "Erinnerung: Ihre Montage ist geplant", intro: "Eine kurze Erinnerung: Wir liefern und montieren Ihre Bestellung am unten genannten Datum." },
+  },
+};
+
+export function deliveryReminderEmail(args: {
+  lang?: string | null;
+  contactName?: string | null;
+  when: string;
+  method?: "leveren" | "ophalen" | "plaatsen" | string | null;
+  reference?: string | null;
+}): { subject: string; html: string; text: string } {
+  const lang = pickLang(args.lang);
+  const variant = args.method === "ophalen" ? "ophalen" : args.method === "plaatsen" ? "plaatsen" : "leveren";
+  const r = REMIND[lang][variant];
+  const d = DELIV[lang][variant];
+  const t = T[lang];
+  const greeting = args.contactName ? `${t.hi} ${escapeHtml(args.contactName)},` : `${t.hi},`;
+  const ref = args.reference ? `<div style="font-size:14px;color:#555;margin-top:3px">${escapeHtml(args.reference)}</div>` : "";
+  const html = brandedEmail(`
+      <p style="margin:0">${greeting}</p>
+      <p>${escapeHtml(r.intro)}</p>
+      <div style="margin:16px 0;padding:14px 18px;background:${COMPANY.cream};border-radius:10px">
+        <div style="font-size:12px;text-transform:uppercase;letter-spacing:1px;color:#999">${escapeHtml(d.whenLabel)}</div>
+        <div style="font-size:17px;font-weight:600;color:${COMPANY.brown};margin-top:2px">${escapeHtml(args.when)}</div>
+        ${ref}
+      </div>
+      <hr style="border:none;border-top:1px solid ${COMPANY.sand};margin:24px 0 16px" />
+      <p style="margin:0 0 4px">${t.regards}</p>
+      <div style="font-size:13px;color:#888;line-height:1.7">${signatureHtml()}</div>`);
+  const text = `${greeting}\n\n${r.intro}\n\n${d.whenLabel}: ${args.when}${args.reference ? ` (${args.reference})` : ""}\n\n${t.regards}\n${COMPANY.legalName}`;
+  return { subject: r.subject, html, text };
 }
 
 function escapeHtml(s: string): string {

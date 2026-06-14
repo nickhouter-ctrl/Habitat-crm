@@ -1,0 +1,2 @@
+ALTER TABLE "deliveries" ADD COLUMN IF NOT EXISTS "reminder_sent_at" timestamp with time zone;--> statement-breakpoint
+ALTER TABLE "documents" ADD COLUMN IF NOT EXISTS "payment_reminder_at" timestamp with time zone;

@@ -225,6 +225,13 @@
       "when": 1781371032145,
       "tag": "0031_tiny_jane_foster",
       "breakpoints": true
+    },
+    {
+      "idx": 32,
+      "version": "7",
+      "when": 1781420328065,
+      "tag": "0032_perpetual_iron_fist",
+      "breakpoints": true
     }
   ]
 }
