@@ -1,4 +1,4 @@
-import { and, count, desc, eq, gte, inArray, isNotNull, isNull, ne, notInArray, sql } from "drizzle-orm";
+import { and, count, desc, eq, gte, inArray, isNotNull, isNull, ne, sql } from "drizzle-orm";
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { AlertTriangle, CheckCircle2, Clock, TrendingUp, Wallet } from "lucide-react";
@@ -251,7 +251,7 @@ export default async function DashboardPage() {
     })
     .from(documents)
     .leftJoin(contacts, eq(documents.contactId, contacts.id))
-    .where(and(eq(documents.kind, "estimate"), notInArray(documents.status, ["rejected", "void"])));
+    .where(and(eq(documents.kind, "estimate"), eq(documents.status, "accepted")));
   const invoicedSumRows = await db
     .select({
       src: documents.sourceDocumentId,

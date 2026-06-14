@@ -18,26 +18,27 @@ export async function sendEmail(input: {
   html: string;
   text?: string;
   attachments?: EmailAttachment[];
-  /** Extra CC bovenop de standaard bedrijfs-CC. */
-  cc?: string;
+  /** Extra BCC bovenop de standaard bedrijfs-BCC. */
+  bcc?: string;
 }): Promise<{ sent: boolean; reason?: string }> {
-  // Elke uitgaande mail krijgt een kopie naar het bedrijf (EMAIL_CC, anders
-  // NOTIFY_EMAIL of GMAIL_USER), zodat je altijd meeleest. Niet naar de ontvanger
-  // zelf cc'en.
-  const defaultCc = process.env.EMAIL_CC?.trim() || process.env.NOTIFY_EMAIL?.trim() || process.env.GMAIL_USER?.trim();
-  const cc = [defaultCc, input.cc]
+  // Elke uitgaande mail krijgt een VERBORGEN kopie (BCC) naar het bedrijf
+  // (EMAIL_BCC, anders NOTIFY_EMAIL of het verzendadres hi@habitat-one.com), zodat
+  // je altijd meeleest zonder dat de klant het meeziet. Niet naar de ontvanger
+  // zelf bcc'en.
+  const defaultBcc = process.env.EMAIL_BCC?.trim() || process.env.NOTIFY_EMAIL?.trim() || process.env.GMAIL_USER?.trim();
+  const bcc = [defaultBcc, input.bcc]
     .filter((a): a is string => !!a && a.toLowerCase() !== input.to.toLowerCase())
     .join(", ") || undefined;
 
-  // Voorkeur: Gmail (dezelfde route als de meldingsmails — verstuurt vanaf
-  // GMAIL_USER, bv. hi@habitat-one.com). Valt terug op Resend; en als niets is
-  // ingesteld een stub, zodat de accept-link altijd in het CRM blijft staan.
+  // Voorkeur: Gmail (verstuurt vanaf GMAIL_USER, bv. hi@habitat-one.com). Valt
+  // terug op Resend; en als niets is ingesteld een stub, zodat de accept-link
+  // altijd in het CRM blijft staan.
   if (process.env.GMAIL_USER && process.env.GMAIL_APP_PASSWORD) {
     try {
       const { sendMail } = await import("@/lib/gmail");
       await sendMail({
         to: input.to,
-        cc,
+        bcc,
         subject: input.subject,
         html: input.html,
         text: input.text,
@@ -61,7 +62,7 @@ export async function sendEmail(input: {
     const payload: Record<string, unknown> = {
       from,
       to: input.to,
-      ...(cc ? { cc } : {}),
+      ...(bcc ? { bcc } : {}),
       subject: input.subject,
       html: input.html,
       text: input.text,

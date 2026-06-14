@@ -79,7 +79,7 @@ export async function runDataHealth(): Promise<{ ok: boolean; findings: Finding[
   // 8. Offertes die deels gefactureerd zijn (eindafrekening staat open).
   const toSettle = await one(sql`
     SELECT count(*)::int AS n FROM documents est
-    WHERE est.kind='estimate' AND est.status NOT IN ('rejected','void')
+    WHERE est.kind='estimate' AND est.status = 'accepted'
       AND (SELECT coalesce(sum(coalesce(inv.total_eur,0)),0) FROM documents inv
            WHERE inv.kind='invoice' AND inv.status <> 'void' AND inv.source_document_id = est.id) > 0.01
       AND (SELECT coalesce(sum(coalesce(inv.total_eur,0)),0) FROM documents inv
