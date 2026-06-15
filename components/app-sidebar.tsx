@@ -9,6 +9,7 @@ import {
   CalendarDays,
   FileText,
   LayoutDashboard,
+  LineChart,
   LogOut,
   Mail,
   Menu,
@@ -56,6 +57,7 @@ const NAV = [
   { href: "/pakbonnen", label: "Pakbonnen", icon: Truck },
   { href: "/leveringen", label: "Leveringen", icon: PackageCheck },
   { href: "/rapporten", label: "Rapporten", icon: BarChart3 },
+  { href: "/rapporten/seo", label: "SEO", icon: LineChart },
 ];
 
 export function AppSidebar({
