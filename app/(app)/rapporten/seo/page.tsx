@@ -1,5 +1,6 @@
 import { Search } from "lucide-react";
 
+import { SeoTrendChart } from "@/components/seo-charts";
 import {
   Card,
   CardContent,
@@ -21,6 +22,26 @@ export const metadata = { title: "SEO" };
 
 const nf = (n: number) => Math.round(n).toLocaleString("nl-NL");
 const pf = (n: number) => `${(n * 100).toFixed(1)}%`;
+
+const COUNTRY: Record<string, string> = {
+  nld: "Nederland", esp: "Spanje", deu: "Duitsland", bel: "België", gbr: "VK",
+  usa: "VS", fra: "Frankrijk", ita: "Italië", che: "Zwitserland", aut: "Oostenrijk",
+};
+const cname = (c: string) => COUNTRY[(c || "").toLowerCase()] ?? (c ? c.toUpperCase() : "(onbekend)");
+
+function kpiDelta(
+  cur: number,
+  prev: number | undefined,
+  kind: "pct" | "position" = "pct",
+): { hint?: string; tone: "neutral" | "success" | "danger" } {
+  if (prev == null || prev === 0) return { tone: "neutral" };
+  if (kind === "position") {
+    const diff = cur - prev; // negatief = beter (lagere positie)
+    return { hint: `${diff >= 0 ? "+" : ""}${diff.toFixed(1)} vs vorige 28d`, tone: diff <= 0 ? "success" : "danger" };
+  }
+  const pct = ((cur - prev) / prev) * 100;
+  return { hint: `${pct >= 0 ? "+" : ""}${pct.toFixed(0)}% vs vorige 28d`, tone: pct >= 0 ? "success" : "danger" };
+}
 
 export default async function SeoPage() {
   if (!scConfigured()) {
@@ -44,15 +65,14 @@ export default async function SeoPage() {
     error = e instanceof Error ? e.message : String(e);
   }
 
+  const t = data?.totals;
+  const p = data?.prev ?? undefined;
+
   return (
     <>
       <PageHeader
         title="SEO"
-        subtitle={
-          data
-            ? `Google Search Console · ${data.range.start} t/m ${data.range.end}`
-            : "Google Search Console"
-        }
+        subtitle={data ? `Google Search Console · ${data.range.start} t/m ${data.range.end}` : "Google Search Console"}
       />
 
       {error && (
@@ -61,7 +81,7 @@ export default async function SeoPage() {
         </Card>
       )}
 
-      {data && !data.totals && (
+      {data && !t && (
         <EmptyState
           icon={<Search />}
           title="Nog geen data"
@@ -69,26 +89,39 @@ export default async function SeoPage() {
         />
       )}
 
-      {data?.totals && (
+      {data && t && (
         <>
           <div className="mb-5 grid grid-cols-2 gap-3 sm:grid-cols-4">
-            <StatTile label="Kliks" value={nf(data.totals.clicks)} hint="laatste 28 dagen" tone="success" />
-            <StatTile label="Vertoningen" value={nf(data.totals.impressions)} hint="laatste 28 dagen" tone="info" />
-            <StatTile label="CTR" value={pf(data.totals.ctr)} hint="klikfrequentie" />
-            <StatTile label="Gem. positie" value={data.totals.position.toFixed(1)} hint="lager = beter" tone="accent" />
+            {(() => {
+              const d1 = kpiDelta(t.clicks, p?.clicks);
+              const d2 = kpiDelta(t.impressions, p?.impressions);
+              const d3 = kpiDelta(t.ctr, p?.ctr);
+              const d4 = kpiDelta(t.position, p?.position, "position");
+              return [
+                <StatTile key="c" label="Kliks" value={nf(t.clicks)} hint={d1.hint} tone={d1.tone === "neutral" ? "success" : d1.tone} />,
+                <StatTile key="i" label="Vertoningen" value={nf(t.impressions)} hint={d2.hint} tone={d2.tone === "neutral" ? "info" : d2.tone} />,
+                <StatTile key="r" label="CTR" value={pf(t.ctr)} hint={d3.hint} tone={d3.tone} />,
+                <StatTile key="p" label="Gem. positie" value={t.position.toFixed(1)} hint={d4.hint ?? "lager = beter"} tone={d4.tone === "neutral" ? "accent" : d4.tone} />,
+              ];
+            })()}
           </div>
+
+          {data.trend.length > 0 && (
+            <Card className="mb-5">
+              <CardHeader>
+                <CardTitle>Kliks &amp; vertoningen per dag</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <SeoTrendChart data={data.trend} />
+              </CardContent>
+            </Card>
+          )}
 
           <div className="grid gap-5 lg:grid-cols-2">
             <SeoTable title="Top zoekwoorden" keyLabel="Zoekwoord" rows={data.queries} />
             <SeoTable title="Top pagina's" keyLabel="Pagina" rows={data.pages} strip />
-          </div>
-
-          <div className="mt-5">
-            <SeoTable
-              title="Kansen — positie 5 t/m 20 (net buiten pagina 1)"
-              keyLabel="Zoekwoord"
-              rows={data.opportunities}
-            />
+            <SeoTable title="Top landen" keyLabel="Land" rows={data.countries} country />
+            <SeoTable title="Kansen — positie 5 t/m 20" keyLabel="Zoekwoord" rows={data.opportunities} />
           </div>
         </>
       )}
@@ -101,11 +134,13 @@ function SeoTable({
   keyLabel,
   rows,
   strip,
+  country,
 }: {
   title: string;
   keyLabel: string;
   rows: ScRow[];
   strip?: boolean;
+  country?: boolean;
 }) {
   return (
     <Card>
@@ -129,7 +164,11 @@ function SeoTable({
             <TBody>
               {rows.map((r, i) => {
                 const key = r.keys?.[0] ?? "";
-                const label = strip ? key.replace("https://www.habitat-one.com", "") || "/" : key;
+                const label = country
+                  ? cname(key)
+                  : strip
+                    ? key.replace("https://www.habitat-one.com", "") || "/"
+                    : key;
                 return (
                   <Tr key={`${key}-${i}`}>
                     <Td className="max-w-[18rem] truncate">{label}</Td>

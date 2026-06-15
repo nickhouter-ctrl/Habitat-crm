@@ -1,6 +1,5 @@
 // Search Console-data ophalen voor het SEO-dashboard.
-// Auth: OAuth refresh-token (read-only). Geen sleutelbestand — de waarden komen
-// uit env-variabelen (in Vercel). Lichtgewicht: alleen fetch, geen libraries.
+// Auth: OAuth refresh-token (read-only) via env-variabelen. Alleen fetch.
 
 const SITE = process.env.SC_SITE_URL;
 const CLIENT_ID = process.env.SC_CLIENT_ID;
@@ -18,13 +17,17 @@ export type ScRow = {
   ctr: number;
   position: number;
 };
-
+export type ScTotals = { clicks: number; impressions: number; ctr: number; position: number };
+export type ScTrend = { label: string; clicks: number; impressions: number };
 export type SeoData = {
   range: { start: string; end: string };
-  totals: ScRow | null;
+  totals: ScTotals | null;
+  prev: ScTotals | null;
+  trend: ScTrend[];
   queries: ScRow[];
   pages: ScRow[];
   opportunities: ScRow[];
+  countries: ScRow[];
 };
 
 async function accessToken(): Promise<string> {
@@ -60,21 +63,35 @@ async function query(token: string, body: Record<string, unknown>): Promise<ScRo
   return json.rows ?? [];
 }
 
-function ymd(d: Date): string {
-  return d.toISOString().slice(0, 10);
+const ymd = (d: Date) => d.toISOString().slice(0, 10);
+const fmtDay = (iso: string) => {
+  const [, m, d] = iso.split("-");
+  return `${Number(d)}/${Number(m)}`;
+};
+
+function toTotals(rows: ScRow[]): ScTotals | null {
+  const r = rows[0];
+  if (!r) return null;
+  return { clicks: r.clicks, impressions: r.impressions, ctr: r.ctr, position: r.position };
 }
 
 export async function getSeoData(): Promise<SeoData> {
   const token = await accessToken();
-  // SC-data loopt ~3 dagen achter; laatste 28 dagen.
+  // SC-data loopt ~3 dagen achter; laatste 28 dagen + de 28 dagen ervoor.
   const end = new Date(Date.now() - 3 * 86_400_000);
   const start = new Date(end.getTime() - 27 * 86_400_000);
-  const base = { startDate: ymd(start), endDate: ymd(end) };
+  const prevEnd = new Date(start.getTime() - 86_400_000);
+  const prevStart = new Date(prevEnd.getTime() - 27 * 86_400_000);
+  const cur = { startDate: ymd(start), endDate: ymd(end) };
+  const prevR = { startDate: ymd(prevStart), endDate: ymd(prevEnd) };
 
-  const [totals, queries, pages] = await Promise.all([
-    query(token, { ...base, dimensions: [], rowLimit: 1 }),
-    query(token, { ...base, dimensions: ["query"], rowLimit: 100 }),
-    query(token, { ...base, dimensions: ["page"], rowLimit: 25 }),
+  const [totals, prev, trendRows, queries, pages, countries] = await Promise.all([
+    query(token, { ...cur, dimensions: [], rowLimit: 1 }),
+    query(token, { ...prevR, dimensions: [], rowLimit: 1 }),
+    query(token, { ...cur, dimensions: ["date"], rowLimit: 60 }),
+    query(token, { ...cur, dimensions: ["query"], rowLimit: 100 }),
+    query(token, { ...cur, dimensions: ["page"], rowLimit: 25 }),
+    query(token, { ...cur, dimensions: ["country"], rowLimit: 10 }),
   ]);
 
   const opportunities = queries
@@ -84,9 +101,14 @@ export async function getSeoData(): Promise<SeoData> {
 
   return {
     range: { start: ymd(start), end: ymd(end) },
-    totals: totals[0] ?? null,
+    totals: toTotals(totals),
+    prev: toTotals(prev),
+    trend: trendRows
+      .sort((a, b) => (a.keys?.[0] ?? "").localeCompare(b.keys?.[0] ?? ""))
+      .map((r) => ({ label: fmtDay(r.keys?.[0] ?? ""), clicks: r.clicks, impressions: r.impressions })),
     queries: queries.slice(0, 15),
     pages: pages.slice(0, 15),
     opportunities,
+    countries,
   };
 }
