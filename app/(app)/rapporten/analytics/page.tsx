@@ -127,8 +127,8 @@ export default async function AnalyticsPage() {
       {data && !t && (
         <EmptyState
           icon={<Activity />}
-          title="Nog geen bezoekersdata (28 dagen)"
-          description="Google Analytics meet pas zodra de meetcode actief op je site staat én er bezoekers zijn. De live-teller hierboven werkt wel direct."
+          title="Meten is actief — 28-daagse cijfers volgen"
+          description="Google Analytics meet nu (zie de live-teller). Deze sectie toont 28 dagen geleden t/m gisteren, maar het meten is vandaag gestart én GA4-standaardrapporten lopen ~1 dag achter — dus vanaf morgen vullen de cijfers, grafiek en tabellen zich hier vanzelf."
         />
       )}
 
