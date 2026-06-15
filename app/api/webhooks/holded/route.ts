@@ -3,7 +3,7 @@ import { NextResponse } from "next/server";
 
 import { db } from "@/lib/db";
 import { webhookEvents } from "@/lib/db/schema";
-import { handleHoldedWebhook } from "@/lib/holded/sync";
+import { refreshInvoicePaymentFromHolded } from "@/lib/holded/sync";
 import type { HoldedWebhookPayload } from "@/lib/holded/types";
 
 // Always run dynamically — this receives external POSTs.
@@ -45,12 +45,16 @@ export async function POST(request: Request) {
     .returning({ id: webhookEvents.id });
 
   try {
-    // Pull vanuit Holded is uitgeschakeld — we synchroniseren alleen CRM → Holded
-    // (push). Inkomende events loggen we wél (replaybaar), maar passen we niet
-    // meer toe; dit voorkwam dubbele projecten/facturen. Zet de regel terug om
-    // het pullen weer aan te zetten.
-    // await handleHoldedWebhook(payload);
-    void handleHoldedWebhook;
+    // Documenten/projecten PULLEN blijft uit (voorkomt dubbele facturen/projecten).
+    // We reageren alleen op betaal-/factuur-events: dan verversen we uitsluitend
+    // de BETAALSTAND van dat ene document (read-only, maakt niets aan).
+    const name = (eventType ?? "").toLowerCase();
+    if (name.includes("payment") || name.includes("invoice") || name.includes("document")) {
+      const p = payload as Record<string, unknown> & { data?: Record<string, unknown> };
+      const holdedDocId =
+        p?.resourceId ?? p?.id ?? p?.data?.documentId ?? p?.data?.id ?? null;
+      if (holdedDocId) await refreshInvoicePaymentFromHolded(String(holdedDocId));
+    }
     await db
       .update(webhookEvents)
       .set({ processedAt: new Date() })

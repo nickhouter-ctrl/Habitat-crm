@@ -912,6 +912,46 @@ export async function pushContactToHolded(
   return { holdedId };
 }
 
+/* ----------------------------------------------- betaalstatus (read-only) */
+
+/**
+ * Lees ALLEEN de betaalstand van één factuur uit Holded en werk de lokale
+ * factuur bij (paidEur + status → betaald/deels betaald). Maakt nooit
+ * documenten aan en pullt niets anders — veilig tegen dubbele facturen.
+ * Retourneert de nieuwe lokale status, of null als er niets te doen viel.
+ */
+export async function refreshInvoicePaymentFromHolded(
+  holdedId: string,
+): Promise<LocalDocStatus | null> {
+  const local = await db.query.documents.findFirst({
+    where: and(eq(documents.holdedId, holdedId), eq(documents.kind, "invoice")),
+    columns: { id: true, status: true },
+  });
+  if (!local) return null;
+  if (local.status === "void" || local.status === "draft") return null;
+
+  let d: HoldedDocument | undefined;
+  try {
+    d = await holded.documents.get("invoice", holdedId);
+  } catch {
+    return null;
+  }
+  if (!d) return null;
+
+  const paidEur = String(d.paymentsTotal ?? 0);
+  const payStatus = holdedDocStatus(d); // "paid" | "partially_paid" | "sent"
+  const patch: Partial<typeof documents.$inferInsert> = { paidEur, updatedAt: new Date() };
+  // Alleen vooruit schuiven op betaling — een 'overdue'/'sent' niet platslaan
+  // tenzij er nu (deels) betaald is.
+  if (payStatus === "paid") {
+    patch.status = "paid";
+  } else if (payStatus === "partially_paid") {
+    patch.status = "partially_paid";
+  }
+  await db.update(documents).set(patch).where(eq(documents.id, local.id));
+  return patch.status ?? local.status;
+}
+
 /* ------------------------------------------------------------- webhooks */
 
 /**

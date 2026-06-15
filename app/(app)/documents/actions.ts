@@ -981,10 +981,23 @@ async function bookStockOutInternal(
 
 /** Push dit verkoopdocument naar Holded (maakt/koppelt de Holded-factuur). */
 export async function pushDocumentToHoldedAction(id: string) {
-  await requireUser();
+  const user = await requireUser();
   let target: string;
   try {
     const hid = await pushDocumentToHolded(id);
+    // Push naar Holded = factuur is definitief in de boekhouding → status
+    // 'verstuurd' (alleen vanuit concept) en voorraad afboeken (idempotent).
+    const doc = await db.query.documents.findFirst({
+      where: eq(documents.id, id),
+      columns: { kind: true, status: true },
+    });
+    if (doc?.kind === "invoice" && doc.status === "draft") {
+      await db
+        .update(documents)
+        .set({ status: "sent", sentAt: new Date(), updatedAt: new Date() })
+        .where(and(eq(documents.id, id), eq(documents.status, "draft")));
+      await bookStockOutInternal(id, user.id, { auto: true });
+    }
     target = `/documents/${id}?holded=ok&hid=${encodeURIComponent(hid)}`;
   } catch (err) {
     let msg = err instanceof Error ? err.message : "push naar Holded mislukt";
