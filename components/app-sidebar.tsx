@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  Activity,
   BarChart3,
   BookOpen,
   Boxes,
@@ -58,6 +59,7 @@ const NAV = [
   { href: "/leveringen", label: "Leveringen", icon: PackageCheck },
   { href: "/rapporten", label: "Rapporten", icon: BarChart3 },
   { href: "/rapporten/seo", label: "SEO", icon: LineChart },
+  { href: "/rapporten/analytics", label: "Analytics", icon: Activity },
 ];
 
 export function AppSidebar({
