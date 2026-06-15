@@ -1,5 +1,6 @@
 import { Activity } from "lucide-react";
 
+import { AutoRefresh } from "@/components/auto-refresh";
 import {
   Card,
   CardContent,
@@ -15,7 +16,13 @@ import {
   THead,
   Tr,
 } from "@/components/ui";
-import { gaConfigured, getAnalyticsData, type GaRow } from "@/lib/analytics";
+import {
+  gaConfigured,
+  getAnalyticsData,
+  getRealtime,
+  type GaRealtime,
+  type GaRow,
+} from "@/lib/analytics";
 
 export const metadata = { title: "Analytics" };
 
@@ -36,8 +43,15 @@ export default async function AnalyticsPage() {
     );
   }
 
+  let realtime: GaRealtime | null = null;
+  let rtError: string | null = null;
   let data: Awaited<ReturnType<typeof getAnalyticsData>> | null = null;
   let error: string | null = null;
+  try {
+    realtime = await getRealtime();
+  } catch (e) {
+    rtError = e instanceof Error ? e.message : String(e);
+  }
   try {
     data = await getAnalyticsData();
   } catch (e) {
@@ -46,10 +60,45 @@ export default async function AnalyticsPage() {
 
   return (
     <>
+      <AutoRefresh seconds={30} />
       <PageHeader
         title="Analytics"
         subtitle={data ? `Google Analytics (GA4) · ${data.range.start} t/m ${data.range.end}` : "Google Analytics (GA4)"}
       />
+
+      {/* Live — nu actief (ververst elke 30s) */}
+      <Card className="mb-5 p-5">
+        <div className="flex items-center gap-2 text-sm font-medium text-muted">
+          <span className="relative flex size-2.5">
+            <span className="absolute inline-flex size-full animate-ping rounded-full bg-success opacity-75" />
+            <span className="relative inline-flex size-2.5 rounded-full bg-success" />
+          </span>
+          Live · nu actief (laatste 30 min)
+        </div>
+        {rtError ? (
+          <p className="mt-2 text-sm text-danger">{rtError}</p>
+        ) : (
+          <div className="mt-3 flex flex-wrap items-end gap-x-10 gap-y-4">
+            <div>
+              <p className="text-4xl font-semibold tabular-nums">{nf(realtime?.activeUsers ?? 0)}</p>
+              <p className="text-xs text-muted">actieve bezoekers</p>
+            </div>
+            {realtime && realtime.byPage.length > 0 && (
+              <div className="min-w-0 flex-1">
+                <p className="mb-1 text-xs font-medium uppercase tracking-wide text-muted">Actieve pagina&apos;s</p>
+                <ul className="space-y-0.5 text-sm">
+                  {realtime.byPage.slice(0, 5).map((p, i) => (
+                    <li key={i} className="flex justify-between gap-4">
+                      <span className="truncate text-muted">{p.label || "(onbekend)"}</span>
+                      <span className="tabular-nums">{nf(p.value)}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </div>
+        )}
+      </Card>
 
       {error && (
         <Card className="mb-5 border-danger/30 bg-danger/5 p-4 text-sm text-danger">
@@ -60,8 +109,8 @@ export default async function AnalyticsPage() {
       {data && !data.totals && (
         <EmptyState
           icon={<Activity />}
-          title="Nog geen bezoekersdata"
-          description="Google Analytics meet pas zodra de meetcode actief op je site staat én er bezoekers zijn. Kom binnenkort terug."
+          title="Nog geen bezoekersdata (28 dagen)"
+          description="Google Analytics meet pas zodra de meetcode actief op je site staat én er bezoekers zijn. De live-teller hierboven werkt wel direct."
         />
       )}
 

@@ -131,3 +131,41 @@ export async function getAnalyticsData(): Promise<GaData> {
     countries: toRows(countriesRep),
   };
 }
+
+async function runRealtime(token: string, body: Record<string, unknown>): Promise<GaReport> {
+  const res = await fetch(
+    `https://analyticsdata.googleapis.com/v1beta/properties/${PROPERTY}:runRealtimeReport`,
+    {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+      cache: "no-store",
+    },
+  );
+  if (!res.ok) throw new Error(`GA4-realtime mislukt (${res.status})`);
+  return (await res.json()) as GaReport;
+}
+
+export type GaRealtime = { activeUsers: number; byPage: GaRow[]; byCountry: GaRow[] };
+
+export async function getRealtime(): Promise<GaRealtime> {
+  const token = await accessToken();
+  const [totalRep, pagesRep, countriesRep] = await Promise.all([
+    runRealtime(token, { metrics: [{ name: "activeUsers" }] }),
+    runRealtime(token, {
+      dimensions: [{ name: "unifiedScreenName" }],
+      metrics: [{ name: "activeUsers" }],
+      limit: 8,
+    }),
+    runRealtime(token, {
+      dimensions: [{ name: "country" }],
+      metrics: [{ name: "activeUsers" }],
+      limit: 8,
+    }),
+  ]);
+  return {
+    activeUsers: num(totalRep.rows?.[0]?.metricValues?.[0]?.value),
+    byPage: toRows(pagesRep),
+    byCountry: toRows(countriesRep),
+  };
+}
