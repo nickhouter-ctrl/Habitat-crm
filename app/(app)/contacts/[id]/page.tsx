@@ -33,6 +33,7 @@ import {
 import { cn, formatDate, formatEUR } from "@/lib/utils";
 import { normalizeDocItems } from "@/lib/documents";
 import { ConfirmSubmit } from "@/components/confirm-submit";
+import { ReminderButton } from "@/components/reminder-button";
 import { addContactNote, deleteContact } from "../actions";
 import {
   contactTypeMeta,
@@ -369,6 +370,7 @@ export default async function ContactDetailPage({
                   <Th>Datum</Th>
                   <Th className="text-right">Totaal</Th>
                   <Th className="text-right">Betaald</Th>
+                  <Th />
                 </tr>
               </THead>
               <TBody>
@@ -388,6 +390,15 @@ export default async function ContactDetailPage({
                     <Td className="text-muted">{formatDate(doc.issueDate)}</Td>
                     <Td className="text-right tabular-nums">{formatEUR(doc.totalEur)}</Td>
                     <Td className="text-right tabular-nums text-muted">{formatEUR(doc.paidEur)}</Td>
+                    <Td className="text-right">
+                      {doc.kind === "invoice" &&
+                        doc.status !== "paid" &&
+                        doc.status !== "void" &&
+                        doc.status !== "draft" &&
+                        num(doc.totalEur) - num(doc.paidEur) > 0.01 && (
+                          <ReminderButton documentId={doc.id} />
+                        )}
+                    </Td>
                   </Tr>
                 ))}
               </TBody>

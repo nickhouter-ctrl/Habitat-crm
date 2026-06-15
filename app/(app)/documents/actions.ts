@@ -18,9 +18,10 @@ import {
   type DocKind,
 } from "@/lib/documents";
 import { insertNumberedDocument } from "@/lib/doc-number";
-import { offerteEmail, sendEmail } from "@/lib/email";
+import { offerteEmail, paymentReminderEmail, sendEmail } from "@/lib/email";
 import { renderDocumentPdf } from "@/lib/document-pdf";
 import { pushDocumentToHolded } from "@/lib/holded/sync";
+import { formatDate, formatEUR } from "@/lib/utils";
 
 function newToken(): string {
   return (crypto.randomUUID() + crypto.randomUUID()).replace(/-/g, "");
@@ -329,6 +330,65 @@ export async function setDeliveryNoteDelivered(id: string, delivered: boolean) {
   revalidatePath("/leveringen");
   if (doc?.sourceDocumentId) revalidatePath(`/documents/${doc.sourceDocumentId}`);
   if (doc?.projectId) revalidatePath(`/projects/${doc.projectId}`);
+}
+
+/**
+ * Stuur NU handmatig een betaalherinnering/aanmaning voor één factuur.
+ * Anders dan de automatische cron is dit altijd toegestaan (expliciete actie),
+ * ook als de auto-herinneringen uitstaan. Wel loggen we 'm en zetten we
+ * payment_reminder_at zodat de cron 'm niet meteen dubbel verstuurt.
+ */
+export async function sendPaymentReminderNow(
+  id: string,
+): Promise<{ ok: boolean; error?: string }> {
+  await requireUser();
+  const doc = await db.query.documents.findFirst({
+    where: and(eq(documents.id, id), eq(documents.kind, "invoice")),
+    columns: {
+      id: true,
+      docNumber: true,
+      dueDate: true,
+      totalEur: true,
+      paidEur: true,
+      status: true,
+      contactId: true,
+    },
+    with: { contact: { columns: { name: true, email: true, preferredLanguage: true } } },
+  });
+  if (!doc) return { ok: false, error: "Factuur niet gevonden." };
+  if (doc.status === "void") return { ok: false, error: "Factuur is geannuleerd." };
+  const open = Number(doc.totalEur ?? 0) - Number(doc.paidEur ?? 0);
+  if (open <= 0.01) return { ok: false, error: "Deze factuur is al volledig betaald." };
+  const email = doc.contact?.email;
+  if (!email) return { ok: false, error: "Geen e-mailadres bij de klant bekend." };
+
+  const mail = paymentReminderEmail({
+    lang: doc.contact?.preferredLanguage,
+    contactName: doc.contact?.name,
+    docNumber: doc.docNumber ?? "",
+    amount: formatEUR(open),
+    dueDate: doc.dueDate ? formatDate(doc.dueDate) : "—",
+  });
+  const res = await sendEmail({ to: email, ...mail });
+  if (!res.sent) return { ok: false, error: "Versturen mislukt — probeer het later opnieuw." };
+
+  await db
+    .update(documents)
+    .set({ paymentReminderAt: new Date(), updatedAt: new Date() })
+    .where(eq(documents.id, id));
+  await db.insert(activities).values({
+    type: "email",
+    subject: `Betaalherinnering verstuurd — ${doc.docNumber ?? ""}`,
+    body: `Handmatig verstuurd naar ${email}. Openstaand ${formatEUR(open)}${
+      doc.dueDate ? ` · vervallen op ${formatDate(doc.dueDate)}` : ""
+    }.`,
+    documentId: doc.id,
+    contactId: doc.contactId,
+  });
+  revalidatePath(`/documents/${id}`);
+  revalidatePath("/invoices");
+  if (doc.contactId) revalidatePath(`/contacts/${doc.contactId}`);
+  return { ok: true };
 }
 
 export async function setDocumentStatus(id: string, formData: FormData) {

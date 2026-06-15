@@ -15,6 +15,7 @@ import { and, eq, inArray } from "drizzle-orm";
 
 import { db } from "@/lib/db";
 import {
+  companies,
   contacts,
   documents,
   holdedSyncMap,
@@ -588,25 +589,65 @@ export async function pushDocumentToHolded(docId: string): Promise<string> {
     }
   }
 
-  // 1. Contact: gekoppelde Holded-id, anders op naam zoeken, anders naam meesturen.
+  // 1. Contact/bedrijf koppelen aan Holded. Eerst de vaste koppeling (sync-map);
+  //    anders zoeken op naam, maar ALLEEN een ondubbelzinnige match accepteren
+  //    (e-mail of NIF, of een uniek-exacte naam). Nooit blind de eerste treffer
+  //    pakken — dat koppelde voorheen soms de verkeerde klant.
   let contactRef: string | undefined;
   let contactName = "";
+  let contactEmail: string | undefined;
+  let contactVat: string | undefined;
+  let localParty: { type: "contact" | "company"; id: string } | undefined;
+
   if (doc.contactId) {
     const c = await db.query.contacts.findFirst({ where: eq(contacts.id, doc.contactId) });
     if (c) {
       contactName = c.name;
-      const mapped = await getHoldedIdForLocal("contact", c.id);
-      if (mapped) contactRef = mapped;
-      else {
-        try {
-          const matches = await holded.contacts.list({ q: c.name });
-          const exact = matches.find(
-            (m) => (m.name ?? "").toLowerCase().trim() === c.name.toLowerCase().trim(),
-          );
-          contactRef = (exact ?? matches[0])?.id;
-        } catch {
-          /* zoeken is best-effort */
+      contactEmail = c.email ?? undefined;
+      localParty = { type: "contact", id: c.id };
+    }
+  }
+  if (!localParty && doc.companyId) {
+    const co = await db.query.companies.findFirst({ where: eq(companies.id, doc.companyId) });
+    if (co) {
+      contactName = co.name;
+      contactEmail = co.email ?? undefined;
+      contactVat = co.vatNumber ?? undefined;
+      localParty = { type: "company", id: co.id };
+    }
+  }
+
+  if (localParty) {
+    const mapped = await getHoldedIdForLocal(localParty.type, localParty.id);
+    if (mapped) contactRef = mapped;
+    else if (contactName) {
+      try {
+        const matches = await holded.contacts.list({ q: contactName });
+        const norm = (s?: string | null) => (s ?? "").toLowerCase().trim();
+        let chosen: (typeof matches)[number] | undefined;
+        // Sterkste signaal eerst: e-mail, dan NIF/CIF.
+        if (contactEmail) chosen = matches.find((m) => norm(m.email) && norm(m.email) === norm(contactEmail));
+        if (!chosen && contactVat)
+          chosen = matches.find((m) => norm(m.vatnumber) && norm(m.vatnumber) === norm(contactVat));
+        // Anders alleen een exacte naam — en uitsluitend als die uniek is.
+        if (!chosen) {
+          const exacts = matches.filter((m) => norm(m.name) === norm(contactName));
+          if (exacts.length === 1) chosen = exacts[0];
         }
+        if (chosen?.id) {
+          contactRef = chosen.id;
+          // Vastleggen zodat dezelfde klant voortaan deterministisch koppelt.
+          await upsertSyncMap({
+            entityType: localParty.type,
+            localId: localParty.id,
+            holdedId: chosen.id,
+            direction: "push",
+          });
+        }
+        // Geen ondubbelzinnige match? Dan sturen we hieronder de naam mee en laat
+        // Holded zelf aanmaken/koppelen — beter dan een willekeurige bestaande klant.
+      } catch {
+        /* zoeken is best-effort */
       }
     }
   }

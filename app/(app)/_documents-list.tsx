@@ -21,6 +21,7 @@ import { cn, formatDate, formatEUR } from "@/lib/utils";
 import { documentKindMeta, documentStatusMeta } from "./_meta";
 import { ConfirmSubmit } from "@/components/confirm-submit";
 import { RowLink, StopLink } from "@/components/row-link";
+import { ReminderButton } from "@/components/reminder-button";
 import { deleteDocument, setDeliveryNoteDelivered } from "./documents/actions";
 
 type Kind =
@@ -209,16 +210,25 @@ export async function DocumentsList({
                       {formatEUR(sign(d.kind) * Number(d.paidEur ?? 0))}
                     </Td>
                     <Td className="text-right">
-                      {(d.kind === "estimate" || d.status === "draft") && (
-                        <form action={deleteDocument.bind(null, d.id)}>
-                          <ConfirmSubmit
-                            message={`${documentKindMeta[d.kind]} ${d.docNumber ?? ""} definitief verwijderen?`}
-                            className="rounded p-1 text-muted transition-colors hover:bg-danger/10 hover:text-danger"
-                          >
-                            <Trash2 className="size-4" />
-                          </ConfirmSubmit>
-                        </form>
-                      )}
+                      <span className="inline-flex items-center justify-end gap-1">
+                        {d.kind === "invoice" &&
+                          d.status !== "paid" &&
+                          d.status !== "void" &&
+                          d.status !== "draft" &&
+                          Number(d.totalEur ?? 0) - Number(d.paidEur ?? 0) > 0.01 && (
+                            <ReminderButton documentId={d.id} />
+                          )}
+                        {(d.kind === "estimate" || d.status === "draft") && (
+                          <form action={deleteDocument.bind(null, d.id)}>
+                            <ConfirmSubmit
+                              message={`${documentKindMeta[d.kind]} ${d.docNumber ?? ""} definitief verwijderen?`}
+                              className="rounded p-1 text-muted transition-colors hover:bg-danger/10 hover:text-danger"
+                            >
+                              <Trash2 className="size-4" />
+                            </ConfirmSubmit>
+                          </form>
+                        )}
+                      </span>
                     </Td>
                   </RowLink>
                 );
