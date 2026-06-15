@@ -1,8 +1,8 @@
 // Google Analytics 4 (GA Data API) ophalen voor het Analytics-dashboard.
-// Auth: dezelfde OAuth-credentials als Search Console (refresh-token), maar het
-// token moet óók de scope analytics.readonly hebben. Lichtgewicht: alleen fetch.
+// Auth: dezelfde OAuth-credentials als Search Console (refresh-token) met de
+// scope analytics.readonly. Lichtgewicht: alleen fetch.
 
-const PROPERTY = process.env.GA_PROPERTY_ID; // numeriek GA4 property-id (bv. 123456789)
+const PROPERTY = process.env.GA_PROPERTY_ID; // numeriek GA4 property-id
 const CLIENT_ID = process.env.SC_CLIENT_ID;
 const CLIENT_SECRET = process.env.SC_CLIENT_SECRET;
 const REFRESH = process.env.SC_REFRESH_TOKEN;
@@ -13,18 +13,26 @@ export function gaConfigured(): boolean {
 
 export type GaTotals = {
   users: number;
+  newUsers: number;
   sessions: number;
   views: number;
+  avgSessionDuration: number; // seconden
   engagementRate: number;
 };
 export type GaRow = { label: string; value: number };
 export type GaData = {
   range: { start: string; end: string };
   totals: GaTotals | null;
+  prev: GaTotals | null;
+  trend: GaRow[];
   topPages: GaRow[];
   channels: GaRow[];
+  sources: GaRow[];
   countries: GaRow[];
+  devices: GaRow[];
+  events: GaRow[];
 };
+export type GaRealtime = { activeUsers: number; byPage: GaRow[]; byCountry: GaRow[] };
 
 type GaReport = {
   rows?: { dimensionValues?: { value: string }[]; metricValues?: { value: string }[] }[];
@@ -48,9 +56,9 @@ async function accessToken(): Promise<string> {
   return json.access_token;
 }
 
-async function runReport(token: string, body: Record<string, unknown>): Promise<GaReport> {
+async function ga(token: string, method: "runReport" | "runRealtimeReport", body: Record<string, unknown>): Promise<GaReport> {
   const res = await fetch(
-    `https://analyticsdata.googleapis.com/v1beta/properties/${PROPERTY}:runReport`,
+    `https://analyticsdata.googleapis.com/v1beta/properties/${PROPERTY}:${method}`,
     {
       method: "POST",
       headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
@@ -60,7 +68,7 @@ async function runReport(token: string, body: Record<string, unknown>): Promise<
   );
   if (res.status === 403) {
     throw new Error(
-      "Geen toegang (403) — waarschijnlijk mist het OAuth-token de analytics.readonly-scope. Opnieuw inloggen met de Analytics-scope erbij.",
+      "Geen toegang (403) — het OAuth-token mist mogelijk de analytics.readonly-scope, of de Analytics Data API staat uit.",
     );
   }
   if (!res.ok) throw new Error(`GA4-query mislukt (${res.status})`);
@@ -76,88 +84,93 @@ function toRows(rep: GaReport): GaRow[] {
   }));
 }
 
+const TOTAL_METRICS = [
+  { name: "totalUsers" },
+  { name: "newUsers" },
+  { name: "sessions" },
+  { name: "screenPageViews" },
+  { name: "averageSessionDuration" },
+  { name: "engagementRate" },
+];
+
+function parseTotals(rep: GaReport): GaTotals | null {
+  const m = rep.rows?.[0]?.metricValues;
+  if (!m) return null;
+  const t: GaTotals = {
+    users: num(m[0]?.value),
+    newUsers: num(m[1]?.value),
+    sessions: num(m[2]?.value),
+    views: num(m[3]?.value),
+    avgSessionDuration: num(m[4]?.value),
+    engagementRate: num(m[5]?.value),
+  };
+  return t.users === 0 && t.sessions === 0 && t.views === 0 ? null : t;
+}
+
+function fmtDay(yyyymmdd: string): string {
+  // "20260615" -> "15/6"
+  if (yyyymmdd.length !== 8) return yyyymmdd;
+  return `${Number(yyyymmdd.slice(6, 8))}/${Number(yyyymmdd.slice(4, 6))}`;
+}
+
 export async function getAnalyticsData(): Promise<GaData> {
   const token = await accessToken();
-  const dateRanges = [{ startDate: "28daysAgo", endDate: "yesterday" }]; // GA4 is near-realtime
+  const cur = [{ startDate: "28daysAgo", endDate: "yesterday" }];
+  const prevRange = [{ startDate: "56daysAgo", endDate: "29daysAgo" }];
 
-  const [totalsRep, pagesRep, channelsRep, countriesRep] = await Promise.all([
-    runReport(token, {
-      dateRanges,
-      metrics: [
-        { name: "totalUsers" },
-        { name: "sessions" },
-        { name: "screenPageViews" },
-        { name: "engagementRate" },
-      ],
-    }),
-    runReport(token, {
-      dateRanges,
-      dimensions: [{ name: "pagePath" }],
-      metrics: [{ name: "screenPageViews" }],
-      orderBys: [{ metric: { metricName: "screenPageViews" }, desc: true }],
-      limit: 15,
-    }),
-    runReport(token, {
-      dateRanges,
-      dimensions: [{ name: "sessionDefaultChannelGroup" }],
-      metrics: [{ name: "sessions" }],
-      orderBys: [{ metric: { metricName: "sessions" }, desc: true }],
-      limit: 10,
-    }),
-    runReport(token, {
-      dateRanges,
-      dimensions: [{ name: "country" }],
-      metrics: [{ name: "totalUsers" }],
-      orderBys: [{ metric: { metricName: "totalUsers" }, desc: true }],
-      limit: 10,
-    }),
-  ]);
+  const top = (dim: string, metric: string, limit = 8) => ({
+    dateRanges: cur,
+    dimensions: [{ name: dim }],
+    metrics: [{ name: metric }],
+    orderBys: [{ metric: { metricName: metric }, desc: true }],
+    limit,
+  });
 
-  const t = totalsRep.rows?.[0]?.metricValues;
-  const totals: GaTotals | null = t
-    ? {
-        users: num(t[0]?.value),
-        sessions: num(t[1]?.value),
-        views: num(t[2]?.value),
-        engagementRate: num(t[3]?.value),
-      }
-    : null;
+  const [totalsR, prevR, trendR, pagesR, channelsR, sourcesR, countriesR, devicesR, eventsR] =
+    await Promise.all([
+      ga(token, "runReport", { dateRanges: cur, metrics: TOTAL_METRICS }),
+      ga(token, "runReport", { dateRanges: prevRange, metrics: TOTAL_METRICS }),
+      ga(token, "runReport", {
+        dateRanges: cur,
+        dimensions: [{ name: "date" }],
+        metrics: [{ name: "totalUsers" }],
+        orderBys: [{ dimension: { dimensionName: "date" } }],
+      }),
+      ga(token, "runReport", top("pagePath", "screenPageViews", 12)),
+      ga(token, "runReport", top("sessionDefaultChannelGroup", "sessions", 8)),
+      ga(token, "runReport", top("sessionSourceMedium", "sessions", 8)),
+      ga(token, "runReport", top("country", "totalUsers", 8)),
+      ga(token, "runReport", top("deviceCategory", "totalUsers", 5)),
+      ga(token, "runReport", top("eventName", "eventCount", 10)),
+    ]);
 
   return {
     range: { start: "28 dagen geleden", end: "gisteren" },
-    totals: totals && totals.users === 0 && totals.sessions === 0 ? null : totals,
-    topPages: toRows(pagesRep),
-    channels: toRows(channelsRep),
-    countries: toRows(countriesRep),
+    totals: parseTotals(totalsR),
+    prev: parseTotals(prevR),
+    trend: (trendR.rows ?? []).map((r) => ({
+      label: fmtDay(r.dimensionValues?.[0]?.value ?? ""),
+      value: num(r.metricValues?.[0]?.value),
+    })),
+    topPages: toRows(pagesR),
+    channels: toRows(channelsR),
+    sources: toRows(sourcesR),
+    countries: toRows(countriesR),
+    devices: toRows(devicesR),
+    events: toRows(eventsR),
   };
 }
-
-async function runRealtime(token: string, body: Record<string, unknown>): Promise<GaReport> {
-  const res = await fetch(
-    `https://analyticsdata.googleapis.com/v1beta/properties/${PROPERTY}:runRealtimeReport`,
-    {
-      method: "POST",
-      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-      body: JSON.stringify(body),
-      cache: "no-store",
-    },
-  );
-  if (!res.ok) throw new Error(`GA4-realtime mislukt (${res.status})`);
-  return (await res.json()) as GaReport;
-}
-
-export type GaRealtime = { activeUsers: number; byPage: GaRow[]; byCountry: GaRow[] };
 
 export async function getRealtime(): Promise<GaRealtime> {
   const token = await accessToken();
   const [totalRep, pagesRep, countriesRep] = await Promise.all([
-    runRealtime(token, { metrics: [{ name: "activeUsers" }] }),
-    runRealtime(token, {
+    ga(token, "runRealtimeReport", { metrics: [{ name: "activeUsers" }] }),
+    ga(token, "runRealtimeReport", {
       dimensions: [{ name: "unifiedScreenName" }],
       metrics: [{ name: "activeUsers" }],
       limit: 8,
     }),
-    runRealtime(token, {
+    ga(token, "runRealtimeReport", {
       dimensions: [{ name: "country" }],
       metrics: [{ name: "activeUsers" }],
       limit: 8,

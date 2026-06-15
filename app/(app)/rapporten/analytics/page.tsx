@@ -1,6 +1,7 @@
 import { Activity } from "lucide-react";
 
 import { AutoRefresh } from "@/components/auto-refresh";
+import { BreakdownBars, VisitorsAreaChart } from "@/components/analytics-charts";
 import {
   Card,
   CardContent,
@@ -28,6 +29,20 @@ export const metadata = { title: "Analytics" };
 
 const nf = (n: number) => Math.round(n).toLocaleString("nl-NL");
 const pf = (n: number) => `${(n * 100).toFixed(1)}%`;
+const dur = (s: number) => {
+  const m = Math.floor(s / 60);
+  const sec = Math.round(s % 60);
+  return m > 0 ? `${m}m ${sec}s` : `${sec}s`;
+};
+
+function deltaHint(cur: number, prev: number | undefined): { hint?: string; tone: "success" | "danger" | "neutral" } {
+  if (prev == null || prev === 0) return { tone: "neutral" };
+  const pct = ((cur - prev) / prev) * 100;
+  return {
+    hint: `${pct >= 0 ? "+" : ""}${pct.toFixed(0)}% vs vorige 28d`,
+    tone: pct >= 0 ? "success" : "danger",
+  };
+}
 
 export default async function AnalyticsPage() {
   if (!gaConfigured()) {
@@ -58,6 +73,9 @@ export default async function AnalyticsPage() {
     error = e instanceof Error ? e.message : String(e);
   }
 
+  const t = data?.totals;
+  const p = data?.prev ?? undefined;
+
   return (
     <>
       <AutoRefresh seconds={30} />
@@ -87,10 +105,10 @@ export default async function AnalyticsPage() {
               <div className="min-w-0 flex-1">
                 <p className="mb-1 text-xs font-medium uppercase tracking-wide text-muted">Actieve pagina&apos;s</p>
                 <ul className="space-y-0.5 text-sm">
-                  {realtime.byPage.slice(0, 5).map((p, i) => (
+                  {realtime.byPage.slice(0, 5).map((pg, i) => (
                     <li key={i} className="flex justify-between gap-4">
-                      <span className="truncate text-muted">{p.label || "(onbekend)"}</span>
-                      <span className="tabular-nums">{nf(p.value)}</span>
+                      <span className="truncate text-muted">{pg.label || "(onbekend)"}</span>
+                      <span className="tabular-nums">{nf(pg.value)}</span>
                     </li>
                   ))}
                 </ul>
@@ -106,7 +124,7 @@ export default async function AnalyticsPage() {
         </Card>
       )}
 
-      {data && !data.totals && (
+      {data && !t && (
         <EmptyState
           icon={<Activity />}
           title="Nog geen bezoekersdata (28 dagen)"
@@ -114,26 +132,71 @@ export default async function AnalyticsPage() {
         />
       )}
 
-      {data?.totals && (
+      {data && t && (
         <>
-          <div className="mb-5 grid grid-cols-2 gap-3 sm:grid-cols-4">
-            <StatTile label="Bezoekers" value={nf(data.totals.users)} hint="laatste 28 dagen" tone="success" />
-            <StatTile label="Sessies" value={nf(data.totals.sessions)} hint="laatste 28 dagen" tone="info" />
-            <StatTile label="Paginaweergaven" value={nf(data.totals.views)} hint="laatste 28 dagen" tone="accent" />
-            <StatTile label="Betrokkenheid" value={pf(data.totals.engagementRate)} hint="engagement rate" />
+          {/* KPI's met vergelijking t.o.v. vorige periode */}
+          <div className="mb-5 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+            {(() => {
+              const k = (label: string, value: string, cur: number, prev?: number) => {
+                const d = deltaHint(cur, prev);
+                return <StatTile key={label} label={label} value={value} hint={d.hint} tone={d.tone} />;
+              };
+              return [
+                k("Bezoekers", nf(t.users), t.users, p?.users),
+                k("Nieuwe bezoekers", nf(t.newUsers), t.newUsers, p?.newUsers),
+                k("Sessies", nf(t.sessions), t.sessions, p?.sessions),
+                k("Paginaweergaven", nf(t.views), t.views, p?.views),
+                k("Gem. sessieduur", dur(t.avgSessionDuration), t.avgSessionDuration, p?.avgSessionDuration),
+                k("Betrokkenheid", pf(t.engagementRate), t.engagementRate, p?.engagementRate),
+              ];
+            })()}
           </div>
 
+          {/* Trend */}
+          {data.trend.length > 0 && (
+            <Card className="mb-5">
+              <CardHeader>
+                <CardTitle>Bezoekers per dag</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <VisitorsAreaChart data={data.trend} />
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Apparaten + kanalen als grafiek */}
+          <div className="mb-5 grid gap-5 lg:grid-cols-2">
+            <ChartCard title="Apparaten" rows={data.devices} />
+            <ChartCard title="Kanalen (verkeersbron)" rows={data.channels} />
+          </div>
+
+          {/* Tabellen */}
           <div className="grid gap-5 lg:grid-cols-2">
             <GaTable title="Top pagina's" keyLabel="Pagina" valueLabel="Weergaven" rows={data.topPages} />
-            <GaTable title="Kanalen (verkeersbron)" keyLabel="Kanaal" valueLabel="Sessies" rows={data.channels} />
-          </div>
-
-          <div className="mt-5">
+            <GaTable title="Verkeersbronnen" keyLabel="Bron / medium" valueLabel="Sessies" rows={data.sources} />
             <GaTable title="Top landen" keyLabel="Land" valueLabel="Bezoekers" rows={data.countries} />
+            <GaTable title="Gebeurtenissen" keyLabel="Event" valueLabel="Aantal" rows={data.events} />
           </div>
         </>
       )}
     </>
+  );
+}
+
+function ChartCard({ title, rows }: { title: string; rows: GaRow[] }) {
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>{title}</CardTitle>
+      </CardHeader>
+      <CardContent>
+        {rows.length === 0 ? (
+          <p className="py-2 text-sm text-muted">Nog geen data.</p>
+        ) : (
+          <BreakdownBars data={rows.map((r) => ({ name: r.label || "(onbekend)", value: r.value }))} />
+        )}
+      </CardContent>
+    </Card>
   );
 }
 
