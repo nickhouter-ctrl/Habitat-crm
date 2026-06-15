@@ -141,7 +141,7 @@ export default async function DashboardPage() {
       db
         .select({
           noBarcode: sql<number>`count(case when ${products.isActive} = true and ${products.barcode} is null then 1 end)::int`,
-          lowStock: sql<number>`count(case when ${products.isActive} = true and ${products.availability} <> 'order_only' and ${products.stockMin} is not null and coalesce(${products.stockQty}, 0) < ${products.stockMin} then 1 end)::int`,
+          lowStock: sql<number>`count(case when ${products.isActive} = true and ${products.stockMin} is not null and coalesce(${products.stockQty}, 0) < ${products.stockMin} then 1 end)::int`,
           stockNoPhoto: sql<number>`count(case when ${products.isActive} = true and ${products.imageUrl} is null then 1 end)::int`,
         })
         .from(products),
@@ -228,7 +228,7 @@ export default async function DashboardPage() {
     await db
       .select({ id: products.id, sku: products.sku, name: products.name, stockQty: products.stockQty })
       .from(products)
-      .where(and(eq(products.isActive, true), sql`${products.availability} <> 'order_only'`))
+      .where(eq(products.isActive, true))
   )
     .map((p) => {
       const reserved = reservedByProduct.get(p.id) ?? 0;

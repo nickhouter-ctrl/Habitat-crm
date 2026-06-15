@@ -43,7 +43,7 @@ export async function runDataHealth(): Promise<{ ok: boolean; findings: Finding[
   // 3. Negatieve voorraad (niet op-bestelling).
   const negStock = await one(sql`
     SELECT count(*)::int AS n FROM products
-    WHERE coalesce(stock_qty,0) < 0 AND availability <> 'order_only' AND is_active = true`);
+    WHERE coalesce(stock_qty,0) < 0 AND is_active = true`);
   if (Number(negStock.n) > 0)
     findings.push({ key: "neg_stock", label: "Producten met negatieve voorraad — bijbestellen", count: Number(negStock.n), severity: "warn" });
 

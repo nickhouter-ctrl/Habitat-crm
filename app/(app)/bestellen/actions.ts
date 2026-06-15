@@ -241,7 +241,7 @@ export async function reorderShortagesToDrafts() {
         stockQty: products.stockQty,
       })
       .from(products)
-      .where(and(eq(products.isActive, true), sql`${products.availability} <> 'order_only'`))
+      .where(eq(products.isActive, true))
   )
     .map((p) => {
       const reserved = reservedByProduct.get(p.id) ?? 0;

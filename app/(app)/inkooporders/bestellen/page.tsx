@@ -25,7 +25,6 @@ export default async function ReorderPage() {
   const low = await db.query.products.findMany({
     where: and(
       eq(products.isActive, true),
-      sql`${products.availability} <> 'order_only'`,
       isNotNull(products.stockMin),
       sql`coalesce(${products.stockQty}, 0) < ${products.stockMin}`,
     ),
