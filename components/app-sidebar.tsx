@@ -14,6 +14,7 @@ import {
   Menu,
   PackageCheck,
   PackagePlus,
+  ScanLine,
   Receipt,
   Inbox,
   Layers,
@@ -35,6 +36,7 @@ import { cn, initials } from "@/lib/utils";
 
 const NAV = [
   { href: "/", label: "Dashboard", icon: LayoutDashboard, exact: true },
+  { href: "/scan", label: "Scannen", icon: ScanLine },
   { href: "/contacts", label: "Contacten", icon: Users },
   { href: "/aanvragen", label: "Aanvragen", icon: Inbox },
   { href: "/agenda", label: "Agenda", icon: CalendarDays },
