@@ -1,5 +1,14 @@
 import { and, desc, eq, inArray } from "drizzle-orm";
-import { ChevronRight, Mail, MapPin, Phone } from "lucide-react";
+import {
+  Bell,
+  CalendarClock,
+  ChevronRight,
+  FileText,
+  Mail,
+  MapPin,
+  Phone,
+  StickyNote,
+} from "lucide-react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
@@ -654,29 +663,60 @@ export default async function ContactDetailPage({
                 <EmptyState title="Nog geen activiteiten" />
               ) : (
                 <ol className="space-y-3">
-                  {timeline.map((a) => (
-                    <li key={a.id} className="border-l-2 border-border pl-3">
-                      <div className="flex items-center gap-2 text-xs text-muted">
-                        <span className="font-medium uppercase tracking-wide">
-                          {a.type}
+                  {timeline.map((a) => {
+                    const subject = a.subject ?? "";
+                    const isReminder =
+                      a.type === "email" && /herinner|aanmaning/i.test(subject);
+                    const meta = isReminder
+                      ? { label: "Betaalherinnering", Icon: Bell, tone: "bg-amber-500/10 text-amber-600" }
+                      : a.type === "email"
+                        ? { label: "E-mail", Icon: Mail, tone: "bg-blue-500/10 text-blue-600" }
+                        : a.type === "call"
+                          ? { label: "Telefoon", Icon: Phone, tone: "bg-muted/40 text-muted" }
+                          : a.type === "meeting"
+                            ? { label: "Afspraak", Icon: CalendarClock, tone: "bg-muted/40 text-muted" }
+                            : a.type === "task"
+                              ? { label: "Taak", Icon: CalendarClock, tone: "bg-muted/40 text-muted" }
+                              : { label: "Notitie", Icon: StickyNote, tone: "bg-muted/40 text-muted" };
+                    const Icon = meta.Icon;
+                    return (
+                      <li key={a.id} className="flex gap-3">
+                        <span
+                          className={cn(
+                            "mt-0.5 grid size-7 shrink-0 place-items-center rounded-full",
+                            meta.tone,
+                          )}
+                        >
+                          <Icon className="size-3.5" />
                         </span>
-                        <span>·</span>
-                        <span>{formatDate(a.createdAt)}</span>
-                        {a.author?.name && (
-                          <>
+                        <div className="min-w-0 flex-1">
+                          <div className="flex flex-wrap items-center gap-x-2 text-xs text-muted">
+                            <span className="font-medium text-foreground">{meta.label}</span>
                             <span>·</span>
-                            <span>{a.author.name}</span>
-                          </>
-                        )}
-                      </div>
-                      {a.subject && (
-                        <p className="text-sm font-medium">{a.subject}</p>
-                      )}
-                      {a.body && (
-                        <p className="whitespace-pre-wrap text-sm">{a.body}</p>
-                      )}
-                    </li>
-                  ))}
+                            <span>{formatDate(a.createdAt)}</span>
+                            {a.author?.name && (
+                              <>
+                                <span>·</span>
+                                <span>{a.author.name}</span>
+                              </>
+                            )}
+                          </div>
+                          {a.subject && <p className="text-sm font-medium">{a.subject}</p>}
+                          {a.body && (
+                            <p className="whitespace-pre-wrap text-sm text-muted">{a.body}</p>
+                          )}
+                          {a.documentId && (
+                            <Link
+                              href={`/documents/${a.documentId}`}
+                              className="mt-0.5 inline-flex items-center gap-1 text-xs text-accent hover:underline"
+                            >
+                              <FileText className="size-3" /> Bekijk document
+                            </Link>
+                          )}
+                        </div>
+                      </li>
+                    );
+                  })}
                 </ol>
               )}
             </CardContent>
