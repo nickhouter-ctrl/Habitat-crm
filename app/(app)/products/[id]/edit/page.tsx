@@ -22,7 +22,7 @@ import {
   Tr,
 } from "@/components/ui";
 import { db } from "@/lib/db";
-import { documents, products, projects } from "@/lib/db/schema";
+import { companies, contacts, documents, products, projects } from "@/lib/db/schema";
 import { normalizeDocItems } from "@/lib/documents";
 import { getProductCategories, getProductCollections } from "../../../_options";
 import {
@@ -53,6 +53,32 @@ export default async function EditProductPage({
   ]);
   if (!product) notFound();
 
+  // Onderdelen die bij deze set horen (met foto's) + de uitvoeringen/draairichtingen.
+  const componentDefs = (product.components as Array<{ sku: string; qty: number }> | null) ?? [];
+  const componentProducts = componentDefs.length
+    ? await db.query.products.findMany({
+        where: inArray(
+          products.sku,
+          componentDefs.map((c) => c.sku),
+        ),
+        columns: { id: true, sku: true, name: true, imageUrl: true },
+      })
+    : [];
+  const compBySku = new Map(componentProducts.map((p) => [p.sku as string, p]));
+  const setComponents = componentDefs.map((c) => ({
+    sku: c.sku,
+    qty: Number(c.qty) || 1,
+    id: compBySku.get(c.sku)?.id ?? null,
+    name: compBySku.get(c.sku)?.name ?? c.sku,
+    imageUrl: compBySku.get(c.sku)?.imageUrl ?? null,
+  }));
+  const variants =
+    (product.additionalSizes as Array<{
+      sku: string;
+      label: string;
+      stockQty?: number | null;
+    }> | null) ?? [];
+
   // Waar staat dit product gereserveerd (geaccepteerde offertes) of verkocht
   // (facturen − creditnota's)? Per project optellen.
   const refDocs = await db
@@ -62,21 +88,32 @@ export default async function EditProductPage({
       items: documents.items,
       projectId: documents.projectId,
       projectName: projects.name,
+      contactName: contacts.name,
+      companyName: companies.name,
     })
     .from(documents)
     .leftJoin(projects, eq(documents.projectId, projects.id))
+    .leftJoin(contacts, eq(documents.contactId, contacts.id))
+    .leftJoin(companies, eq(documents.companyId, companies.id))
     .where(
       and(
         inArray(documents.kind, ["estimate", "invoice", "creditnote"]),
         sql`${documents.items}::text like ${"%" + id + "%"}`,
       ),
     );
-  const perProject = new Map<string, { name: string; reserved: number; sold: number }>();
+  const perProject = new Map<
+    string,
+    { name: string; reserved: number; sold: number; clients: Set<string> }
+  >();
   for (const d of refDocs) {
     const key = d.projectId ?? "__none__";
     for (const it of normalizeDocItems(d.items)) {
       if (it.productId !== id || !it.units) continue;
-      const e = perProject.get(key) ?? { name: d.projectName ?? "(geen project)", reserved: 0, sold: 0 };
+      const e =
+        perProject.get(key) ??
+        { name: d.projectName ?? "(geen project)", reserved: 0, sold: 0, clients: new Set<string>() };
+      const client = d.companyName ?? d.contactName;
+      if (client) e.clients.add(client);
       const u = Number(it.units) || 0;
       if (d.kind === "estimate" && d.status === "accepted") e.reserved += u;
       else if (d.kind === "invoice") e.sold += u;
@@ -198,11 +235,18 @@ export default async function EditProductPage({
                 <Tr key={e.projectId}>
                   <Td className="font-medium">
                     {e.projectId === "__none__" ? (
-                      <span className="text-muted">{e.name}</span>
+                      <span className="text-muted">
+                        {e.clients.size > 0 ? [...e.clients].join(", ") : e.name}
+                      </span>
                     ) : (
                       <Link href={`/projects/${e.projectId}`} className="hover:underline">
                         {e.name}
                       </Link>
+                    )}
+                    {e.projectId !== "__none__" && e.clients.size > 0 && (
+                      <span className="block text-xs font-normal text-muted">
+                        {[...e.clients].join(", ")}
+                      </span>
                     )}
                   </Td>
                   <Td className="text-right tabular-nums">
@@ -224,8 +268,71 @@ export default async function EditProductPage({
             </TBody>
           </Table>
           <p className="px-5 py-3 text-xs text-muted">
-            Gereserveerd = uit geaccepteerde offertes; verkocht = uit facturen (− creditnota's). Voorraad nu: {product.stockQty != null ? `${Number(product.stockQty)} ${unit}` : "—"}.
+            Gereserveerd = uit geaccepteerde offertes; verkocht = uit facturen (− creditnota&apos;s). Voorraad nu: {product.stockQty != null ? `${Number(product.stockQty)} ${unit}` : "—"}.
           </p>
+        </Card>
+      )}
+
+      {(variants.length > 0 || setComponents.length > 0) && (
+        <Card className="mb-4 max-w-2xl overflow-hidden">
+          <CardHeader>
+            <CardTitle>Wat zit er in deze set</CardTitle>
+            <span className="text-xs text-muted">
+              voorraad {product.stockQty != null ? Number(product.stockQty) : "—"} {unit}
+            </span>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {variants.length > 0 && (
+              <div>
+                <p className="mb-1.5 text-xs font-medium uppercase tracking-wide text-muted">
+                  Uitvoeringen / draairichtingen (voorraad per stuk)
+                </p>
+                <ul className="divide-y rounded-md border">
+                  {variants.map((v, i) => (
+                    <li key={i} className="flex items-center gap-3 p-2 text-sm">
+                      {product.imageUrl ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={product.imageUrl} alt="" className="size-10 shrink-0 rounded object-cover" />
+                      ) : (
+                        <span className="size-10 shrink-0 rounded bg-background" />
+                      )}
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate">{v.label}</span>
+                        <span className="font-mono text-xs text-muted">{v.sku}</span>
+                      </span>
+                      <span className="shrink-0 tabular-nums">{Number(v.stockQty ?? 0)} stuks</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+            {setComponents.length > 0 && (
+              <div>
+                <p className="mb-1.5 text-xs font-medium uppercase tracking-wide text-muted">
+                  Bevat (onderdelen)
+                </p>
+                <ul className="divide-y rounded-md border">
+                  {setComponents.map((c, i) => (
+                    <li key={i} className="flex items-center gap-3 p-2 text-sm">
+                      {c.imageUrl ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={c.imageUrl} alt="" className="size-10 shrink-0 rounded object-cover" />
+                      ) : (
+                        <span className="grid size-10 shrink-0 place-items-center rounded bg-background text-muted">
+                          —
+                        </span>
+                      )}
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate">{c.name}</span>
+                        <span className="font-mono text-xs text-muted">{c.sku}</span>
+                      </span>
+                      <span className="shrink-0 text-muted">×{c.qty} per set</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </CardContent>
         </Card>
       )}
 
