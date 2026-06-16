@@ -476,6 +476,8 @@ const cs = StyleSheet.create({
   coverWordmark: { alignItems: "center", marginBottom: 26 },
   coverBrand1: { fontFamily: "Cormorant", fontWeight: 600, fontSize: 34, letterSpacing: 8, color: C.brown },
   coverBrand2: { fontFamily: "Cormorant", fontWeight: 600, fontSize: 34, letterSpacing: 8, color: C.brown, marginTop: -4 },
+  coverLogo: { width: 210, height: 94, objectFit: "contain", marginBottom: 6 },
+  coverLogoSmall: { width: 150, height: 67, objectFit: "contain" },
   coverTagline: { fontSize: 9, color: C.muted, marginTop: 8, letterSpacing: 2 },
   coverHero: { width: "100%", height: 300, objectFit: "cover", borderRadius: 6, marginBottom: 28 },
   coverHeroPair: { flexDirection: "row", justifyContent: "space-between", marginBottom: 24 },
@@ -543,8 +545,7 @@ function DocumentPdf({ doc }: { doc: PdfDoc }) {
       {showExtras && (
         <Page size="A4" style={cs.cover}>
           <View style={cs.coverWordmark}>
-            <Text style={cs.coverBrand1}>{C.wordmark1}</Text>
-            <Text style={cs.coverBrand2}>{C.wordmark2}</Text>
+            <Image src={LOGO_PATH} style={cs.coverLogo} />
             <Text style={cs.coverTagline}>{C.tagline}</Text>
           </View>
           {coverImgs.length > 0 ? (
@@ -753,8 +754,7 @@ function DocumentPdf({ doc }: { doc: PdfDoc }) {
               {C.phone} · {C.email} · {C.website}
             </Text>
             <View style={{ marginTop: 14, alignItems: "center" }}>
-              <Text style={cs.coverBrand1}>{C.wordmark1}</Text>
-              <Text style={cs.coverBrand2}>{C.wordmark2}</Text>
+              <Image src={LOGO_PATH} style={cs.coverLogoSmall} />
             </View>
           </View>
         </Page>

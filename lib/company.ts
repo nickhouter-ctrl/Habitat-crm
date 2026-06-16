@@ -12,6 +12,9 @@ export const COMPANY = {
   name: process.env.COMPANY_NAME ?? "Habitat One",
   wordmark1: "HABITAT",
   wordmark2: "ONE",
+  // Het echte beeldlogo van de website — gebruikt in álle mails en PDF's,
+  // zodat de huisstijl overal identiek is. Env override mogelijk.
+  logoUrl: process.env.EMAIL_LOGO_URL ?? "https://www.habitat-one.com/logo-habitat.png",
   tagline: process.env.COMPANY_TAGLINE ?? "Xàbia · Costa Blanca",
   // Legal / contact
   legalName: process.env.COMPANY_LEGAL_NAME ?? "Habitat One & One SL",

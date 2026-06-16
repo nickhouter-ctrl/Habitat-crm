@@ -17,6 +17,9 @@ import { COMPANY } from "@/lib/company";
 import { formatDimensions } from "@/lib/products";
 
 const FONT_DIR = path.join(process.cwd(), "public", "fonts", "sora");
+// Het echte website-logo: donkere versie voor lichte vlakken, cream voor donkere.
+const LOGO_DARK = path.join(process.cwd(), "public", "brand", "habitat-one-logo.png");
+const LOGO_CREAM = path.join(process.cwd(), "public", "brand", "habitat-one-logo-cream.png");
 
 Font.register({
   family: "Sora",
@@ -182,6 +185,8 @@ const s = StyleSheet.create({
     lineHeight: 1.0,
     letterSpacing: -0.5,
   },
+  coverLogo: { width: 200, height: 89, objectFit: "contain", marginBottom: 4 },
+  pageHeaderLogo: { width: 62, height: 28, objectFit: "contain" },
   coverHeadline: {
     fontFamily: "Sora",
     fontWeight: 300,
@@ -533,8 +538,7 @@ function PricelistPdf({
       <Page size="A4" style={s.cover}>
         <View style={s.coverInner}>
           <View>
-            <Text style={s.coverWordmark}>{COMPANY.wordmark1}</Text>
-            <Text style={s.coverWordmark}>{COMPANY.wordmark2}</Text>
+            <PdfImage src={LOGO_CREAM} style={s.coverLogo} />
 
             <Text style={s.coverHeadline}>{L.coverHeadline}</Text>
             <View style={s.coverHeadlineMark} />
@@ -574,7 +578,7 @@ function PricelistPdf({
       {/* -------- CONTENT PAGES -------- */}
       <Page size="A4" style={s.page}>
         <View style={s.pageHeader} fixed>
-          <Text style={s.pageHeaderBrand}>HABITAT ONE</Text>
+          <PdfImage src={LOGO_DARK} style={s.pageHeaderLogo} />
           <Text style={s.pageHeaderRight}>
             {L.docTitle} · {today(locale)}
           </Text>

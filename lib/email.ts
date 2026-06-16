@@ -97,16 +97,11 @@ export async function sendEmail(input: {
 import { COMPANY } from "@/lib/company";
 
 /**
- * Logo voor in de mailheader: toont het logo-plaatje als `EMAIL_LOGO_URL` is gezet
- * (een absolute URL naar /brand/habitat-one-logo.png op het CRM-domein), anders de
- * tekst-wordmark als veilige terugval — zo nooit een gebroken afbeelding.
+ * Logo voor in de mailheader: altijd het echte beeldlogo van de website
+ * (COMPANY.logoUrl), zodat de huisstijl in elke mail identiek is.
  */
 function logoHeaderHtml(): string {
-  const url = process.env.EMAIL_LOGO_URL?.trim();
-  if (url) {
-    return `<img src="${url}" alt="${escapeHtml(COMPANY.name)}" height="46" style="display:block;height:46px;width:auto;border:0" />`;
-  }
-  return `<div style="font-family:Georgia,'Times New Roman',serif;font-size:22px;letter-spacing:4px;color:${COMPANY.brown};line-height:1.05">${COMPANY.wordmark1}<br/>${COMPANY.wordmark2}</div>`;
+  return `<img src="${COMPANY.logoUrl}" alt="${escapeHtml(COMPANY.name)}" height="48" style="display:block;height:48px;width:auto;border:0" />`;
 }
 
 const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);

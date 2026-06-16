@@ -130,14 +130,10 @@ export default async function PublicOffertePage({
 
   return (
     <main className="mx-auto max-w-2xl px-4 py-10 sm:py-16">
-      <div className="mb-6 flex items-center gap-2.5">
-        <span className="flex size-9 items-center justify-center rounded-lg bg-accent text-base font-semibold text-accent-foreground">
-          H
-        </span>
-        <div className="leading-tight">
-          <p className="font-semibold">Habitat One</p>
-          <p className="text-xs text-muted">Xàbia · Costa Blanca</p>
-        </div>
+      <div className="mb-6">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src="/brand/habitat-one-logo.png" alt="Habitat One" className="h-10 w-auto" />
+        <p className="mt-1.5 text-xs text-muted">Xàbia · Costa Blanca</p>
       </div>
 
       <div className="rounded-xl border bg-surface p-6 shadow-sm">
