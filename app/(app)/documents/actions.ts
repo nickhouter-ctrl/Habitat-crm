@@ -311,9 +311,17 @@ export async function createDocumentFromWizard(formData: FormData) {
 }
 
 export async function updateDocument(id: string, formData: FormData) {
-  await requireUser();
+  const user = await requireUser();
   const parsed = docSchema.safeParse(Object.fromEntries(formData));
   if (!parsed.success) redirect(`/documents/${id}/edit?error=validation`);
+
+  // Oude staat onthouden: was de voorraad al afgeboekt? Dan moeten we 'm
+  // her-synchroniseren met de gewijzigde regels (product erbij, ander aantal).
+  const old = await db.query.documents.findFirst({
+    where: eq(documents.id, id),
+    columns: { kind: true, stockAppliedAt: true, items: true },
+  });
+  const wasBooked = old?.kind === "invoice" && !!old.stockAppliedAt;
 
   const { values } = buildValues(parsed.data);
   // Don't clobber paidEur on edit.
@@ -339,8 +347,18 @@ export async function updateDocument(id: string, formData: FormData) {
     })
     .where(eq(documents.id, id));
 
+  // Voorraad bijtrekken: oude afboeking terugdraaien en de NIEUWE regels opnieuw
+  // afboeken. Netto verandert de voorraad precies met het verschil (geen dubbele
+  // afboeking dankzij de atomaire claim in bookStockOutInternal).
+  if (wasBooked && values.kind === "invoice") {
+    await addBackStockForItems(old!.items); // oude aantallen terug op voorraad
+    await db.update(documents).set({ stockAppliedAt: null }).where(eq(documents.id, id));
+    await bookStockOutInternal(id, user.id, { auto: true }); // nieuwe aantallen afboeken
+  }
+
   await syncDealFromDocument(values.dealId, values);
   revalidateAround(values.kind as DocKind, id);
+  revalidatePath("/products");
   redirect(`/documents/${id}`);
 }
 
@@ -1243,6 +1261,38 @@ async function bookStockOutInternal(
   revalidatePath("/products");
   revalidatePath("/pakbonnen");
   return { ok: true, applied, negatives };
+}
+
+/**
+ * Boek de aantallen van een document-momentopname WEER BIJ op de voorraad
+ * (kit-aware). Geen atomaire claim/log — bedoeld als bouwsteen voor het
+ * her-synchroniseren bij een bewerking. Werkt op de meegegeven (oude) regels.
+ */
+async function addBackStockForItems(items: unknown): Promise<void> {
+  for (const it of normalizeDocItems(items)) {
+    if (!it.productId || !it.units) continue;
+    const prod = await db.query.products.findFirst({ where: eq(products.id, it.productId) });
+    const kit = (prod?.components as Array<{ sku: string; qty: number }> | null) ?? null;
+    if (kit && kit.length > 0) {
+      for (const comp of kit) {
+        await db
+          .update(products)
+          .set({
+            stockQty: sql`coalesce(${products.stockQty}, 0) + ${String(Number(it.units) * Number(comp.qty))}`,
+            updatedAt: new Date(),
+          })
+          .where(eq(products.sku, comp.sku));
+      }
+    } else {
+      await db
+        .update(products)
+        .set({
+          stockQty: sql`coalesce(${products.stockQty}, 0) + ${String(it.units)}`,
+          updatedAt: new Date(),
+        })
+        .where(eq(products.id, it.productId));
+    }
+  }
 }
 
 /** Push dit verkoopdocument naar Holded (maakt/koppelt de Holded-factuur). */
