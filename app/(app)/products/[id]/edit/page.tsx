@@ -285,7 +285,7 @@ export default async function EditProductPage({
             {variants.length > 0 && (
               <div>
                 <p className="mb-1.5 text-xs font-medium uppercase tracking-wide text-muted">
-                  Draairichtingen — ingekocht (Yohome)
+                  Voorraad per draairichting
                 </p>
                 <ul className="divide-y rounded-md border">
                   {variants.map((v, i) => (
