@@ -18,47 +18,43 @@ import {
 } from "@/components/ui";
 import { db } from "@/lib/db";
 import { contacts, documents, projects, users } from "@/lib/db/schema";
-import { normalizeDocItems } from "@/lib/documents";
 import { formatDate, formatEUR } from "@/lib/utils";
 
 export const metadata = { title: "Projecten" };
 
 /**
- * Netto gereserveerde waarde van een project — identiek aan de detailpagina:
- * gereserveerd = geaccepteerde óf gemarkeerd-gereserveerde offertes, per product
- * verminderd met wat al verkocht (gefactureerd − gecrediteerd) is.
+ * Gereserveerde waarde van een project = som van de offerte-totalen (incl. btw)
+ * van offertes die geaccepteerd óf op 'gereserveerd' gezet zijn, EXCLUSIEF
+ * offertes die al tot een factuur hebben geleid (gekoppeld via source-document of
+ * met een gelijk factuurbedrag in hetzelfde project).
  */
 type ReservedDoc = {
+  id: string;
   kind: string;
   status: string;
   reservedAt: Date | null;
-  items: unknown;
+  totalEur: string | null;
+  sourceDocumentId: string | null;
 };
 function computeReservedNet(docs: ReservedDoc[]): number {
-  const agg = new Map<string, { reserved: number; sold: number; reservedAmt: number }>();
-  for (const d of docs) {
-    for (const it of normalizeDocItems(d.items)) {
-      const key = it.productId || it.description?.trim() || it.name?.trim();
-      const u = Number(it.units) || 0;
-      if (!key || !u) continue;
-      const e = agg.get(key) ?? { reserved: 0, sold: 0, reservedAmt: 0 };
-      const amt = (Number(it.price) || 0) * u;
-      if (d.kind === "estimate" && (d.status === "accepted" || d.reservedAt)) {
-        e.reserved += u;
-        e.reservedAmt += amt;
-      } else if (d.kind === "invoice") {
-        e.sold += u;
-      } else if (d.kind === "creditnote") {
-        e.sold -= u;
-      }
-      agg.set(key, e);
-    }
-  }
+  const liveInvoices = docs.filter((d) => d.kind === "invoice" && d.status !== "void");
+  const invoicedEstimateIds = new Set(
+    liveInvoices.map((d) => d.sourceDocumentId).filter(Boolean) as string[],
+  );
+  const invoiceTotals = liveInvoices.map((d) => Number(d.totalEur ?? 0));
+
   let total = 0;
-  for (const e of agg.values()) {
-    if (e.reserved <= 0) continue;
-    const net = Math.max(0, e.reserved - e.sold);
-    total += net * (e.reservedAmt / e.reserved);
+  for (const d of docs) {
+    if (d.kind !== "estimate") continue;
+    if (d.status === "void" || d.status === "rejected") continue;
+    if (!(d.status === "accepted" || d.reservedAt)) continue;
+    const t = Number(d.totalEur ?? 0);
+    if (t <= 0) continue;
+    // Al gefactureerd? Dan is het geen reservering meer.
+    const converted =
+      invoicedEstimateIds.has(d.id) || invoiceTotals.some((it) => Math.abs(it - t) <= 0.02);
+    if (converted) continue;
+    total += t;
   }
   return total;
 }
@@ -131,17 +127,19 @@ export default async function ProjectsPage({
   const reservedDocs = projectIds.length
     ? await db
         .select({
+          id: documents.id,
           projectId: documents.projectId,
           kind: documents.kind,
           status: documents.status,
           reservedAt: documents.reservedAt,
-          items: documents.items,
+          totalEur: documents.totalEur,
+          sourceDocumentId: documents.sourceDocumentId,
         })
         .from(documents)
         .where(
           and(
             inArray(documents.projectId, projectIds),
-            inArray(documents.kind, ["estimate", "invoice", "creditnote"]),
+            inArray(documents.kind, ["estimate", "invoice"]),
           ),
         )
     : [];
