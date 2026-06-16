@@ -1,6 +1,6 @@
 "use server";
 
-import { and, eq, ilike, sql } from "drizzle-orm";
+import { and, eq, ilike, inArray, sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
@@ -239,6 +239,7 @@ export async function reorderShortagesToDrafts() {
         name: products.name,
         sku: products.sku,
         stockQty: products.stockQty,
+        components: products.components,
       })
       .from(products)
       .where(eq(products.isActive, true))
@@ -251,6 +252,23 @@ export async function reorderShortagesToDrafts() {
     .filter((p) => p.need > 0);
 
   if (!shortages.length) redirect("/bestellen");
+
+  // Set/kit-producten: zoek de onderdelen op zodat we ze als sub-regels kunnen
+  // meebestellen (de leverancier wil de set + de samenstelling zien).
+  const compSkus = [
+    ...new Set(
+      shortages.flatMap((p) =>
+        ((p.components as Array<{ sku: string; qty: number }> | null) ?? []).map((c) => c.sku),
+      ),
+    ),
+  ];
+  const compProds = compSkus.length
+    ? await db
+        .select({ id: products.id, sku: products.sku, name: products.name })
+        .from(products)
+        .where(inArray(products.sku, compSkus))
+    : [];
+  const compBySku = new Map(compProds.map((c) => [c.sku as string, c]));
 
   // Groepeer de tekorten per leverancier(-prefix).
   const byGroup = new Map<string, typeof shortages>();
@@ -271,16 +289,36 @@ export async function reorderShortagesToDrafts() {
       .where(eq(supplierOrderItems.orderId, orderId));
     const have = new Set(present.map((r) => r.productId).filter(Boolean));
     for (const p of items) {
-      if (p.id && have.has(p.id)) continue;
-      const qty = Math.ceil(p.need);
-      await db.insert(supplierOrderItems).values({
-        orderId,
-        productId: p.id,
-        qty: String(qty > 0 ? qty : 1),
-        unit: "stuk",
-        skuSnapshot: p.sku ?? "—",
-        description: p.name,
-      });
+      const setQty = Math.ceil(p.need);
+      if (!(p.id && have.has(p.id))) {
+        await db.insert(supplierOrderItems).values({
+          orderId,
+          productId: p.id,
+          qty: String(setQty > 0 ? setQty : 1),
+          unit: "stuk",
+          skuSnapshot: p.sku ?? "—",
+          description: p.name,
+        });
+        if (p.id) have.add(p.id);
+      }
+      // Set/kit → de bijbehorende onderdelen als sub-regels meebestellen
+      // (aantal = aantal sets × stuks-per-set).
+      const comps = (p.components as Array<{ sku: string; qty: number }> | null) ?? [];
+      for (const comp of comps) {
+        const cp = compBySku.get(comp.sku);
+        const cpId = cp?.id ?? null;
+        if (cpId && have.has(cpId)) continue;
+        const cqty = (setQty > 0 ? setQty : 1) * (Number(comp.qty) || 1);
+        await db.insert(supplierOrderItems).values({
+          orderId,
+          productId: cpId,
+          qty: String(cqty),
+          unit: "stuk",
+          skuSnapshot: cp?.sku ?? comp.sku,
+          description: `${cp?.name ?? comp.sku} — onderdeel van ${p.name}`,
+        });
+        if (cpId) have.add(cpId);
+      }
     }
   }
 
