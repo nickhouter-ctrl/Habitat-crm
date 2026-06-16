@@ -39,8 +39,15 @@ export type GaData = {
   cities: GaRow[];
   newVsReturning: GaRow[];
   devices: GaRow[];
+  browsers: GaRow[];
+  operatingSystems: GaRow[];
+  languages: GaRow[];
   events: GaRow[];
+  campaigns: GaRow[];
+  byHour: GaRow[];
   leads: GaLeads;
+  leadsTrend: GaRow[];
+  engagement: { bounceRate: number; engagedSessions: number; viewsPerSession: number };
 };
 export type GaRealtime = { activeUsers: number; byPage: GaRow[]; byCountry: GaRow[] };
 
@@ -175,6 +182,33 @@ export async function getAnalyticsData(): Promise<GaData> {
   const leadCount = (rep: GaReport, name: string) =>
     num((rep.rows ?? []).find((r) => r.dimensionValues?.[0]?.value === name)?.metricValues?.[0]?.value);
 
+  // Tweede batch: engagement, leads-per-dag, campagnes, uur-activiteit, tech, taal.
+  const [engR, leadsTrendR, campaignsR, hourR, browserR, osR, langR] = await Promise.all([
+    ga(token, "runReport", {
+      dateRanges: cur,
+      metrics: [{ name: "bounceRate" }, { name: "engagedSessions" }, { name: "screenPageViewsPerSession" }],
+    }),
+    ga(token, "runReport", {
+      dateRanges: cur,
+      dimensions: [{ name: "date" }],
+      metrics: [{ name: "eventCount" }],
+      dimensionFilter: { filter: { fieldName: "eventName", stringFilter: { value: "generate_lead" } } },
+      orderBys: [{ dimension: { dimensionName: "date" } }],
+    }),
+    ga(token, "runReport", top("sessionCampaignName", "sessions", 8)),
+    ga(token, "runReport", {
+      dateRanges: cur,
+      dimensions: [{ name: "hour" }],
+      metrics: [{ name: "sessions" }],
+      orderBys: [{ dimension: { dimensionName: "hour" } }],
+    }),
+    ga(token, "runReport", top("browser", "totalUsers", 6)),
+    ga(token, "runReport", top("operatingSystem", "totalUsers", 6)),
+    ga(token, "runReport", top("language", "totalUsers", 8)),
+  ]);
+
+  const engM = engR.rows?.[0]?.metricValues;
+
   return {
     range: { start: "28 dagen geleden", end: "gisteren" },
     totals: parseTotals(totalsR),
@@ -191,12 +225,29 @@ export async function getAnalyticsData(): Promise<GaData> {
     cities: toRows(citiesR),
     newVsReturning: toRows(nvrR),
     devices: toRows(devicesR),
+    browsers: toRows(browserR),
+    operatingSystems: toRows(osR),
+    languages: toRows(langR),
     events: toRows(eventsR),
+    campaigns: toRows(campaignsR),
+    byHour: (hourR.rows ?? []).map((r) => ({
+      label: `${Number(r.dimensionValues?.[0]?.value ?? 0)}u`,
+      value: num(r.metricValues?.[0]?.value),
+    })),
     leads: {
       generateLead: leadCount(leadsCurR, "generate_lead"),
       contactClick: leadCount(leadsCurR, "contact_click"),
       prevGenerateLead: leadCount(leadsPrevR, "generate_lead"),
       byMethod: [],
+    },
+    leadsTrend: (leadsTrendR.rows ?? []).map((r) => ({
+      label: fmtDay(r.dimensionValues?.[0]?.value ?? ""),
+      value: num(r.metricValues?.[0]?.value),
+    })),
+    engagement: {
+      bounceRate: num(engM?.[0]?.value),
+      engagedSessions: num(engM?.[1]?.value),
+      viewsPerSession: num(engM?.[2]?.value),
     },
   };
 }

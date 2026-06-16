@@ -154,6 +154,13 @@ export default async function AnalyticsPage() {
             })()}
           </div>
 
+          {/* Engagement KPI's */}
+          <div className="mb-5 grid grid-cols-2 gap-3 sm:grid-cols-3">
+            <StatTile label="Bouncepercentage" value={pf(data.engagement.bounceRate)} tone="neutral" />
+            <StatTile label="Betrokken sessies" value={nf(data.engagement.engagedSessions)} tone="neutral" />
+            <StatTile label="Weergaven / sessie" value={data.engagement.viewsPerSession.toFixed(1)} tone="neutral" />
+          </div>
+
           {/* Trend */}
           {data.trend.length > 0 && (
             <Card className="mb-5">
@@ -181,6 +188,17 @@ export default async function AnalyticsPage() {
             })()}
           </div>
           <p className="mb-5 text-xs text-muted">Leads = ingevulde contact-/offerteformulieren. Contactkliks = klikken op telefoon, e-mail of WhatsApp.</p>
+
+          {data.leadsTrend.some((d) => d.value > 0) && (
+            <Card className="mb-5">
+              <CardHeader>
+                <CardTitle>Leads per dag</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <VisitorsAreaChart data={data.leadsTrend} />
+              </CardContent>
+            </Card>
+          )}
 
           {/* ── Geografie ── */}
           <SectionTitle>Waar je bezoekers vandaan komen</SectionTitle>
@@ -213,6 +231,27 @@ export default async function AnalyticsPage() {
           <div className="mb-5 grid gap-5 lg:grid-cols-2">
             <GaTable title="Verkeersbronnen" keyLabel="Bron / medium" valueLabel="Sessies" rows={data.sources} />
             <GaTable title="Landingspagina's" keyLabel="Pagina" valueLabel="Sessies" rows={data.landingPages} />
+          </div>
+          <div className="mb-5">
+            <GaTable title="Campagnes (UTM)" keyLabel="Campagne" valueLabel="Sessies" rows={data.campaigns} />
+          </div>
+
+          {/* ── Techniek & timing ── */}
+          <SectionTitle>Techniek &amp; timing</SectionTitle>
+          {data.byHour.some((d) => d.value > 0) && (
+            <Card className="mb-5">
+              <CardHeader>
+                <CardTitle>Wanneer bezoekers actief zijn (per uur)</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <VisitorsAreaChart data={data.byHour} />
+              </CardContent>
+            </Card>
+          )}
+          <div className="mb-5 grid gap-5 lg:grid-cols-3">
+            <GaTable title="Browsers" keyLabel="Browser" valueLabel="Bezoekers" rows={data.browsers} />
+            <GaTable title="Besturingssystemen" keyLabel="OS" valueLabel="Bezoekers" rows={data.operatingSystems} />
+            <GaTable title="Talen" keyLabel="Taal" valueLabel="Bezoekers" rows={data.languages} />
           </div>
 
           {/* ── Gedrag ── */}
