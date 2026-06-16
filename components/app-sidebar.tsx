@@ -22,6 +22,7 @@ import {
   Layers,
   Settings,
   ShoppingCart,
+  Store,
   Tag,
   Truck,
   Users,
@@ -60,6 +61,7 @@ const NAV = [
   { href: "/rapporten", label: "Rapporten", icon: BarChart3 },
   { href: "/rapporten/seo", label: "SEO", icon: LineChart },
   { href: "/rapporten/analytics", label: "Analytics", icon: Activity },
+  { href: "/rapporten/business", label: "Bedrijfsprofiel", icon: Store },
 ];
 
 export function AppSidebar({
