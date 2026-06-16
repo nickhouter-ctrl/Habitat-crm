@@ -372,9 +372,14 @@ export default async function ContactDetailPage({
         <Card className="overflow-hidden">
           <CardHeader>
             <CardTitle>Facturen</CardTitle>
-            <LinkButton href={`/documents/new?kind=invoice&contactId=${contact.id}`} variant="secondary" size="sm">
-              Nieuwe factuur
-            </LinkButton>
+            <span className="flex flex-wrap items-center gap-2">
+              {hasOpenInvoices && contact.email && (
+                <AccountReminderButton contactId={contact.id} />
+              )}
+              <LinkButton href={`/documents/new?kind=invoice&contactId=${contact.id}`} variant="secondary" size="sm">
+                Nieuwe factuur
+              </LinkButton>
+            </span>
           </CardHeader>
           {facturenList.length === 0 ? (
             <CardContent>
