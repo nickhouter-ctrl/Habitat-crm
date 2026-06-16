@@ -7,7 +7,30 @@ import { z } from "zod";
 
 import { auth } from "@/auth";
 import { db } from "@/lib/db";
-import { activities, contacts, deals, documents, holdedSyncMap } from "@/lib/db/schema";
+import { activities, companies, contacts, documents, holdedSyncMap } from "@/lib/db/schema";
+
+/** Door de gebruiker gekozen klanttype → intern contacttype. */
+const KLANTTYPE_TO_TYPE = {
+  particulier: "customer",
+  zakelijk: "customer",
+  leverancier: "supplier",
+  partner: "partner",
+} as const;
+
+const newContactSchema = z.object({
+  klanttype: z.enum(["particulier", "zakelijk", "leverancier", "partner"]).default("particulier"),
+  firstName: z.string().trim().max(120).optional().or(z.literal("")),
+  lastName: z.string().trim().max(120).optional().or(z.literal("")),
+  companyName: z.string().trim().max(200).optional().or(z.literal("")),
+  email: z.string().trim().email().optional().or(z.literal("")),
+  phone: z.string().trim().max(40).optional().or(z.literal("")),
+  preferredLanguage: z.enum(["en", "nl", "es", "de"]).default("es"),
+  addressLine: z.string().trim().max(200).optional().or(z.literal("")),
+  postalCode: z.string().trim().max(20).optional().or(z.literal("")),
+  city: z.string().trim().max(120).optional().or(z.literal("")),
+  province: z.string().trim().max(120).optional().or(z.literal("")),
+  notes: z.string().trim().max(5000).optional().or(z.literal("")),
+});
 
 const contactSchema = z.object({
   firstName: z.string().trim().max(120).optional().or(z.literal("")),
@@ -45,39 +68,61 @@ export async function createContact(formData: FormData) {
   const session = await auth();
   if (!session?.user) redirect("/login");
 
-  const parsed = contactSchema.safeParse(Object.fromEntries(formData));
+  const parsed = newContactSchema.safeParse(Object.fromEntries(formData));
   if (!parsed.success) {
     redirect("/contacts/new?error=validation");
   }
   const v = parsed.data;
+  const type = KLANTTYPE_TO_TYPE[v.klanttype];
+  const personName = [v.firstName, v.lastName].filter(Boolean).join(" ").trim();
   const displayName =
-    v.name?.trim() ||
-    [v.firstName, v.lastName].filter(Boolean).join(" ").trim() ||
-    v.email ||
-    "(naamloos)";
+    personName || v.companyName?.trim() || (v.email || "").trim() || "(naamloos)";
+
+  // Zakelijk → bedrijf aanmaken en koppelen (zo blijft het zakelijk/particulier-filter kloppen).
+  let companyId: string | null = null;
+  if (v.klanttype === "zakelijk" && v.companyName?.trim()) {
+    const [co] = await db
+      .insert(companies)
+      .values(
+        clean({
+          name: v.companyName.trim(),
+          type: "client",
+          email: v.email || "",
+          phone: v.phone || "",
+          addressLine: v.addressLine || "",
+          postalCode: v.postalCode || "",
+          city: v.city || "",
+          province: v.province || "",
+          country: "ES",
+          ownerId: session.user.id,
+        }),
+      )
+      .returning({ id: companies.id });
+    companyId = co.id;
+  }
 
   const [row] = await db
     .insert(contacts)
     .values(
       clean({
-        ...v,
+        firstName: v.firstName || "",
+        lastName: v.lastName || "",
         name: displayName,
+        email: v.email || "",
+        phone: v.phone || "",
+        type,
+        preferredLanguage: v.preferredLanguage,
+        addressLine: v.addressLine || "",
+        postalCode: v.postalCode || "",
+        city: v.city || "",
+        province: v.province || "",
+        country: "ES",
+        notes: v.notes || "",
+        companyId,
         ownerId: session.user.id,
       }),
     )
     .returning({ id: contacts.id });
-
-  // New lead → start a deal so it's ready to pick up in the pipeline.
-  if (v.type === "lead") {
-    await db.insert(deals).values({
-      title: `Project — ${displayName}`,
-      type: "renovation",
-      stage: "lead",
-      contactId: row.id,
-      ownerId: session.user.id,
-    });
-    revalidatePath("/deals");
-  }
 
   revalidatePath("/contacts");
   revalidatePath("/");

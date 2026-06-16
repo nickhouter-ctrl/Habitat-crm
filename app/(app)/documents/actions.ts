@@ -146,10 +146,20 @@ export async function deliveryDistanceKm(address: string): Promise<number | null
   }
 }
 
+export type AddressSuggestion = {
+  label: string;
+  lng: number;
+  lat: number;
+  /** Gestructureerde delen (waar ORS ze geeft) om velden automatisch te vullen. */
+  street: string | null;
+  houseNumber: string | null;
+  postalCode: string | null;
+  city: string | null;
+  province: string | null;
+};
+
 /** Adres-suggesties (autocomplete) via ORS — beperkt tot Spanje. */
-export async function addressSuggestions(
-  query: string,
-): Promise<{ label: string; lng: number; lat: number }[]> {
+export async function addressSuggestions(query: string): Promise<AddressSuggestion[]> {
   const key = process.env.ORS_API_KEY;
   if (!key || !query || query.trim().length < 3) return [];
   try {
@@ -158,13 +168,30 @@ export async function addressSuggestions(
       { cache: "no-store" },
     );
     const j = await r.json();
+    type Props = {
+      label?: string;
+      street?: string;
+      housenumber?: string;
+      postalcode?: string;
+      locality?: string;
+      localadmin?: string;
+      region?: string;
+    };
     return (j?.features ?? [])
-      .map((f: { properties?: { label?: string }; geometry?: { coordinates?: [number, number] } }) => ({
-        label: f.properties?.label ?? "",
-        lng: f.geometry?.coordinates?.[0] ?? NaN,
-        lat: f.geometry?.coordinates?.[1] ?? NaN,
-      }))
-      .filter((s: { label: string; lng: number }) => s.label && Number.isFinite(s.lng));
+      .map((f: { properties?: Props; geometry?: { coordinates?: [number, number] } }) => {
+        const p = f.properties ?? {};
+        return {
+          label: p.label ?? "",
+          lng: f.geometry?.coordinates?.[0] ?? NaN,
+          lat: f.geometry?.coordinates?.[1] ?? NaN,
+          street: p.street ?? null,
+          houseNumber: p.housenumber ?? null,
+          postalCode: p.postalcode ?? null,
+          city: p.locality ?? p.localadmin ?? null,
+          province: p.region ?? null,
+        };
+      })
+      .filter((s: AddressSuggestion) => s.label && Number.isFinite(s.lng));
   } catch {
     return [];
   }
