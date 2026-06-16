@@ -1,4 +1,4 @@
-import { and, desc, eq, inArray } from "drizzle-orm";
+import { and, desc, eq, inArray, or } from "drizzle-orm";
 import {
   Bell,
   CalendarClock,
@@ -37,6 +37,7 @@ import {
   contacts,
   documents,
   holdedSyncMap,
+  products,
   projects,
   sentEmails,
 } from "@/lib/db/schema";
@@ -160,6 +161,48 @@ export default async function ContactDetailPage({
     ? Math.round((invoicedEstimateIds.size / estimates.length) * 100)
     : 0;
   const isZakelijk = !!contact.company;
+
+  // Marge (intern) over alle gefactureerde regels met bekende kostprijs — om te
+  // kunnen aantonen wat er werkelijk op deze klant verdiend is.
+  const marginDocs = relatedDocs.filter(
+    (d) => (d.kind === "invoice" || d.kind === "creditnote") && d.status !== "void" && d.status !== "draft",
+  );
+  const marginItems = marginDocs.flatMap((d) =>
+    normalizeDocItems(d.items).map((it) => ({ it, sign: d.kind === "creditnote" ? -1 : 1 })),
+  );
+  const mPids = [...new Set(marginItems.map((x) => x.it.productId).filter(Boolean) as string[])];
+  const mSkus = [...new Set(marginItems.map((x) => x.it.description?.trim()).filter(Boolean) as string[])];
+  const mCostRows =
+    mPids.length || mSkus.length
+      ? await db.query.products.findMany({
+          where: or(
+            mPids.length ? inArray(products.id, mPids) : undefined,
+            mSkus.length ? inArray(products.sku, mSkus) : undefined,
+          ),
+          columns: { id: true, sku: true, costEur: true },
+        })
+      : [];
+  const mCostById = new Map(mCostRows.map((p) => [p.id, Number(p.costEur ?? 0)]));
+  const mCostBySku = new Map(
+    mCostRows.filter((p) => p.sku).map((p) => [p.sku as string, Number(p.costEur ?? 0)]),
+  );
+  let margeRevenue = 0;
+  let margeCost = 0;
+  let margeCosted = 0;
+  for (const { it, sign } of marginItems) {
+    const cost =
+      (it.productId ? mCostById.get(it.productId) : undefined) ??
+      (it.description ? mCostBySku.get(it.description.trim()) : undefined);
+    if (cost != null && cost > 0) {
+      const net = (Number(it.price) || 0) * (Number(it.units) || 0) * (1 - (Number(it.discount) || 0) / 100);
+      margeRevenue += sign * net;
+      margeCost += sign * cost * (Number(it.units) || 0);
+      margeCosted++;
+    }
+  }
+  const klantMarge = margeRevenue - margeCost;
+  const klantMargePct = margeRevenue > 0 ? Math.round((klantMarge / margeRevenue) * 100) : null;
+  const margeTotalLines = marginItems.length;
 
   const TABS = [
     { key: "overzicht", label: "Overzicht" },
@@ -289,9 +332,21 @@ export default async function ContactDetailPage({
         </p>
       )}
 
-      <div className="mb-4 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+      <div className="mb-4 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
         <StatTile label="Totale omzet" value={formatEUR(omzet)} hint="gefactureerd, incl. BTW" tone="success" />
         <StatTile label="Openstaand" value={formatEUR(openstaand)} hint="te ontvangen" tone={openstaand > 0 ? "warning" : "neutral"} />
+        {margeCosted > 0 && (
+          <StatTile
+            label="Marge (intern)"
+            value={`${formatEUR(klantMarge)}${klantMargePct != null ? ` · ${klantMargePct}%` : ""}`}
+            hint={
+              margeCosted < margeTotalLines
+                ? `over ${margeCosted}/${margeTotalLines} regels met kostprijs`
+                : "verdiend op deze klant"
+            }
+            tone={klantMarge <= 0 ? "danger" : klantMargePct != null && klantMargePct < 15 ? "warning" : "neutral"}
+          />
+        )}
         <StatTile label="Totaal geoffreerd" value={formatEUR(geoffreerd)} hint="lopende offertes" />
         <StatTile label="Offertes" value={String(estimates.length)} hint={`${invoicedEstimateIds.size} gefactureerd`} />
         <StatTile label="Conversie" value={`${conversie}%`} hint="offerte → factuur" tone="info" />
