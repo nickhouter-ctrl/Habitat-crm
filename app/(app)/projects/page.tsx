@@ -1,4 +1,4 @@
-import { asc, desc, eq, isNotNull, ne, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, isNotNull, ne, sql } from "drizzle-orm";
 import Link from "next/link";
 
 import {
@@ -18,9 +18,50 @@ import {
 } from "@/components/ui";
 import { db } from "@/lib/db";
 import { contacts, documents, projects, users } from "@/lib/db/schema";
+import { normalizeDocItems } from "@/lib/documents";
 import { formatDate, formatEUR } from "@/lib/utils";
 
 export const metadata = { title: "Projecten" };
+
+/**
+ * Netto gereserveerde waarde van een project — identiek aan de detailpagina:
+ * gereserveerd = geaccepteerde óf gemarkeerd-gereserveerde offertes, per product
+ * verminderd met wat al verkocht (gefactureerd − gecrediteerd) is.
+ */
+type ReservedDoc = {
+  kind: string;
+  status: string;
+  reservedAt: Date | null;
+  items: unknown;
+};
+function computeReservedNet(docs: ReservedDoc[]): number {
+  const agg = new Map<string, { reserved: number; sold: number; reservedAmt: number }>();
+  for (const d of docs) {
+    for (const it of normalizeDocItems(d.items)) {
+      const key = it.productId || it.description?.trim() || it.name?.trim();
+      const u = Number(it.units) || 0;
+      if (!key || !u) continue;
+      const e = agg.get(key) ?? { reserved: 0, sold: 0, reservedAmt: 0 };
+      const amt = (Number(it.price) || 0) * u;
+      if (d.kind === "estimate" && (d.status === "accepted" || d.reservedAt)) {
+        e.reserved += u;
+        e.reservedAmt += amt;
+      } else if (d.kind === "invoice") {
+        e.sold += u;
+      } else if (d.kind === "creditnote") {
+        e.sold -= u;
+      }
+      agg.set(key, e);
+    }
+  }
+  let total = 0;
+  for (const e of agg.values()) {
+    if (e.reserved <= 0) continue;
+    const net = Math.max(0, e.reserved - e.sold);
+    total += net * (e.reservedAmt / e.reserved);
+  }
+  return total;
+}
 
 type Filter = "active" | "inactive" | "all";
 
@@ -76,10 +117,6 @@ export default async function ProjectsPage({
       invoiced: sql<number>`(coalesce(sum(case when ${documents.kind} = 'invoice' and ${documents.status} not in ('draft','void') then ${documents.totalEur} else 0 end), 0) - coalesce(sum(case when ${documents.kind} = 'creditnote' and ${documents.status} <> 'void' then ${documents.totalEur} else 0 end), 0))::float8`,
       outstanding: sql<number>`coalesce(sum(case when ${documents.kind} = 'invoice' and ${documents.status} not in ('draft','void','paid') then ${documents.totalEur} - ${documents.paidEur} else 0 end), 0)::float8`,
       openInvoices: sql<number>`count(*) filter (where ${documents.kind} = 'invoice' and ${documents.status} not in ('draft','void','paid') and ${documents.totalEur} > ${documents.paidEur})::int`,
-      // Gereserveerd = alleen offertes die expliciet als gereserveerd zijn
-      // gemarkeerd én nog NIET gefactureerd zijn. Geaccepteerde/gefactureerde
-      // offertes en facturen (al afgeboekt) tellen NIET mee.
-      reservedValue: sql<number>`coalesce(sum(case when ${documents.kind} = 'estimate' and ${documents.reservedAt} is not null and ${documents.status} not in ('rejected','void') and not exists (select 1 from documents inv where inv.kind = 'invoice' and inv.source_document_id = ${documents.id} and inv.status <> 'void') then ${documents.totalEur} else 0 end), 0)::float8`,
       lastDocAt: sql<string | null>`max(${documents.updatedAt})`,
     })
     .from(documents)
@@ -87,6 +124,38 @@ export default async function ProjectsPage({
     .groupBy(documents.projectId);
 
   const aggById = new Map(aggRows.map((a) => [a.projectId, a]));
+
+  // Gereserveerd per project: zelfde netto-berekening als de detailpagina
+  // (geaccepteerde/gereserveerde offertes minus wat al verkocht is).
+  const projectIds = projectRows.map((p) => p.id);
+  const reservedDocs = projectIds.length
+    ? await db
+        .select({
+          projectId: documents.projectId,
+          kind: documents.kind,
+          status: documents.status,
+          reservedAt: documents.reservedAt,
+          items: documents.items,
+        })
+        .from(documents)
+        .where(
+          and(
+            inArray(documents.projectId, projectIds),
+            inArray(documents.kind, ["estimate", "invoice", "creditnote"]),
+          ),
+        )
+    : [];
+  const docsByProject = new Map<string, ReservedDoc[]>();
+  for (const d of reservedDocs) {
+    if (!d.projectId) continue;
+    const list = docsByProject.get(d.projectId) ?? [];
+    list.push(d);
+    docsByProject.set(d.projectId, list);
+  }
+  const reservedByProject = new Map<string, number>();
+  for (const [pid, docs] of docsByProject) {
+    reservedByProject.set(pid, computeReservedNet(docs));
+  }
 
   // 3. Samenvoegen + sorteren op laatste activiteit (recentste bovenaan).
   const rows = projectRows
@@ -102,7 +171,7 @@ export default async function ProjectsPage({
         invoiced: Number(a?.invoiced ?? 0),
         outstanding: Number(a?.outstanding ?? 0),
         openInvoices: a?.openInvoices ?? 0,
-        reservedValue: Number(a?.reservedValue ?? 0),
+        reservedValue: reservedByProject.get(p.id) ?? 0,
         lastActivity,
       };
     })
@@ -162,7 +231,7 @@ export default async function ProjectsPage({
         <StatTile
           label="Gereserveerd"
           value={formatEUR(totals.reserved)}
-          hint="uit gemarkeerd-gereserveerde offertes (nog niet gefactureerd)"
+          hint="uit gereserveerde/geaccepteerde offertes, minus wat al verkocht is"
           tone="info"
         />
       </div>

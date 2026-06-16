@@ -169,10 +169,10 @@ export default async function ProjectDetailPage({
         } satisfies Agg);
       const u = Number(it.units) || 0;
       const amt = (Number(it.price) || 0) * u;
-      // Gereserveerd = alleen offertes die expliciet op 'gereserveerd' zijn gezet
-      // (reservedAt). Geaccepteerde/gefactureerde offertes tellen niet als
-      // reservering; wat verkocht is wordt hieronder via 'sold' weer afgetrokken.
-      if (d.kind === "estimate" && d.reservedAt) {
+      // Gereserveerd = geaccepteerde offertes én offertes die handmatig op
+      // 'gereserveerd' zijn gezet (reservedAt). Wat al verkocht (gefactureerd) is
+      // wordt hieronder via 'sold' weer afgetrokken (reservedNet).
+      if (d.kind === "estimate" && (d.status === "accepted" || d.reservedAt)) {
         entry.reserved += u;
         entry.reservedAmt += amt;
       } else if (d.kind === "invoice") {
