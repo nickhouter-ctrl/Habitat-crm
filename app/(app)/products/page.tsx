@@ -62,6 +62,8 @@ export default async function ProductsPage({
 
   const rows = await db.query.products.findMany({
     where: and(
+      // Gearchiveerde producten (bv. losse set-onderdelen) nooit in de lijst tonen.
+      eq(products.isActive, true),
       stockFilter,
       collection ? eq(products.collection, collection) : undefined,
       noBarcode ? and(isNull(products.barcode), eq(products.isActive, true)) : undefined,
