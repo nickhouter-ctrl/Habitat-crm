@@ -1,7 +1,9 @@
+import type { ReactNode } from "react";
 import { Activity } from "lucide-react";
 
 import { AutoRefresh } from "@/components/auto-refresh";
 import { BreakdownBars, VisitorsAreaChart } from "@/components/analytics-charts";
+import { WorldMap } from "@/components/analytics-map";
 import {
   Card,
   CardContent,
@@ -164,17 +166,59 @@ export default async function AnalyticsPage() {
             </Card>
           )}
 
-          {/* Apparaten + kanalen als grafiek */}
+          {/* ── Leads & conversies ── */}
+          <SectionTitle>Leads &amp; conversies</SectionTitle>
+          <div className="mb-2 grid grid-cols-2 gap-3 sm:grid-cols-4">
+            {(() => {
+              const d = deltaHint(data.leads.generateLead, data.leads.prevGenerateLead);
+              const keyTotal = data.leads.generateLead + data.leads.contactClick;
+              return [
+                <StatTile key="lead" label="Leads (formulier)" value={nf(data.leads.generateLead)} hint={d.hint} tone={d.tone} />,
+                <StatTile key="cc" label="Contactkliks" value={nf(data.leads.contactClick)} hint="telefoon · e-mail · WhatsApp" tone="neutral" />,
+                <StatTile key="cr" label="Conversieratio" value={t.sessions ? pf(data.leads.generateLead / t.sessions) : "—"} tone="neutral" />,
+                <StatTile key="kt" label="Sleutelgebeurtenissen" value={nf(keyTotal)} tone="neutral" />,
+              ];
+            })()}
+          </div>
+          <p className="mb-5 text-xs text-muted">Leads = ingevulde contact-/offerteformulieren. Contactkliks = klikken op telefoon, e-mail of WhatsApp.</p>
+
+          {/* ── Geografie ── */}
+          <SectionTitle>Waar je bezoekers vandaan komen</SectionTitle>
+          <div className="mb-5 grid gap-5 lg:grid-cols-3">
+            <Card className="lg:col-span-2">
+              <CardHeader>
+                <CardTitle>Landenkaart</CardTitle>
+              </CardHeader>
+              <CardContent>
+                {data.countries.length === 0 ? (
+                  <p className="py-2 text-sm text-muted">Nog geen data.</p>
+                ) : (
+                  <WorldMap data={data.countries} />
+                )}
+              </CardContent>
+            </Card>
+            <GaTable title="Top landen" keyLabel="Land" valueLabel="Bezoekers" rows={data.countries} />
+          </div>
           <div className="mb-5 grid gap-5 lg:grid-cols-2">
-            <ChartCard title="Apparaten" rows={data.devices} />
-            <ChartCard title="Kanalen (verkeersbron)" rows={data.channels} />
+            <GaTable title="Top steden" keyLabel="Stad" valueLabel="Bezoekers" rows={data.cities} />
+            <ChartCard title="Nieuw vs terugkerend" rows={data.newVsReturning} />
           </div>
 
-          {/* Tabellen */}
+          {/* ── Acquisitie ── */}
+          <SectionTitle>Hoe ze binnenkomen</SectionTitle>
+          <div className="mb-5 grid gap-5 lg:grid-cols-2">
+            <ChartCard title="Kanalen (verkeersbron)" rows={data.channels} />
+            <ChartCard title="Apparaten" rows={data.devices} />
+          </div>
+          <div className="mb-5 grid gap-5 lg:grid-cols-2">
+            <GaTable title="Verkeersbronnen" keyLabel="Bron / medium" valueLabel="Sessies" rows={data.sources} />
+            <GaTable title="Landingspagina's" keyLabel="Pagina" valueLabel="Sessies" rows={data.landingPages} />
+          </div>
+
+          {/* ── Gedrag ── */}
+          <SectionTitle>Gedrag op de site</SectionTitle>
           <div className="grid gap-5 lg:grid-cols-2">
             <GaTable title="Top pagina's" keyLabel="Pagina" valueLabel="Weergaven" rows={data.topPages} />
-            <GaTable title="Verkeersbronnen" keyLabel="Bron / medium" valueLabel="Sessies" rows={data.sources} />
-            <GaTable title="Top landen" keyLabel="Land" valueLabel="Bezoekers" rows={data.countries} />
             <GaTable title="Gebeurtenissen" keyLabel="Event" valueLabel="Aantal" rows={data.events} />
           </div>
         </>
@@ -198,6 +242,10 @@ function ChartCard({ title, rows }: { title: string; rows: GaRow[] }) {
       </CardContent>
     </Card>
   );
+}
+
+function SectionTitle({ children }: { children: ReactNode }) {
+  return <h2 className="mb-3 mt-9 text-xs font-semibold uppercase tracking-[0.16em] text-muted">{children}</h2>;
 }
 
 function GaTable({

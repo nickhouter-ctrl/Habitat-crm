@@ -20,17 +20,27 @@ export type GaTotals = {
   engagementRate: number;
 };
 export type GaRow = { label: string; value: number };
+export type GaLeads = {
+  generateLead: number;
+  contactClick: number;
+  prevGenerateLead: number;
+  byMethod: GaRow[]; // niet beschikbaar zonder custom dimension — blijft leeg, gereserveerd
+};
 export type GaData = {
   range: { start: string; end: string };
   totals: GaTotals | null;
   prev: GaTotals | null;
   trend: GaRow[];
   topPages: GaRow[];
+  landingPages: GaRow[];
   channels: GaRow[];
   sources: GaRow[];
   countries: GaRow[];
+  cities: GaRow[];
+  newVsReturning: GaRow[];
   devices: GaRow[];
   events: GaRow[];
+  leads: GaLeads;
 };
 export type GaRealtime = { activeUsers: number; byPage: GaRow[]; byCountry: GaRow[] };
 
@@ -126,23 +136,44 @@ export async function getAnalyticsData(): Promise<GaData> {
     limit,
   });
 
-  const [totalsR, prevR, trendR, pagesR, channelsR, sourcesR, countriesR, devicesR, eventsR] =
-    await Promise.all([
-      ga(token, "runReport", { dateRanges: cur, metrics: TOTAL_METRICS }),
-      ga(token, "runReport", { dateRanges: prevRange, metrics: TOTAL_METRICS }),
-      ga(token, "runReport", {
-        dateRanges: cur,
-        dimensions: [{ name: "date" }],
-        metrics: [{ name: "totalUsers" }],
-        orderBys: [{ dimension: { dimensionName: "date" } }],
-      }),
-      ga(token, "runReport", top("pagePath", "screenPageViews", 12)),
-      ga(token, "runReport", top("sessionDefaultChannelGroup", "sessions", 8)),
-      ga(token, "runReport", top("sessionSourceMedium", "sessions", 8)),
-      ga(token, "runReport", top("country", "totalUsers", 8)),
-      ga(token, "runReport", top("deviceCategory", "totalUsers", 5)),
-      ga(token, "runReport", top("eventName", "eventCount", 10)),
-    ]);
+  // Leads: tel de conversie-events (generate_lead, contact_click) in beide periodes.
+  const leadFilter = {
+    filter: { fieldName: "eventName", inListFilter: { values: ["generate_lead", "contact_click"] } },
+  };
+  const leadQuery = (range: typeof cur) => ({
+    dateRanges: range,
+    dimensions: [{ name: "eventName" }],
+    metrics: [{ name: "eventCount" }],
+    dimensionFilter: leadFilter,
+  });
+
+  const [
+    totalsR, prevR, trendR, pagesR, landingR, channelsR, sourcesR,
+    countriesR, citiesR, nvrR, devicesR, eventsR, leadsCurR, leadsPrevR,
+  ] = await Promise.all([
+    ga(token, "runReport", { dateRanges: cur, metrics: TOTAL_METRICS }),
+    ga(token, "runReport", { dateRanges: prevRange, metrics: TOTAL_METRICS }),
+    ga(token, "runReport", {
+      dateRanges: cur,
+      dimensions: [{ name: "date" }],
+      metrics: [{ name: "totalUsers" }],
+      orderBys: [{ dimension: { dimensionName: "date" } }],
+    }),
+    ga(token, "runReport", top("pagePath", "screenPageViews", 12)),
+    ga(token, "runReport", top("landingPage", "sessions", 10)),
+    ga(token, "runReport", top("sessionDefaultChannelGroup", "sessions", 8)),
+    ga(token, "runReport", top("sessionSourceMedium", "sessions", 8)),
+    ga(token, "runReport", top("country", "totalUsers", 12)),
+    ga(token, "runReport", top("city", "totalUsers", 10)),
+    ga(token, "runReport", { dateRanges: cur, dimensions: [{ name: "newVsReturning" }], metrics: [{ name: "totalUsers" }] }),
+    ga(token, "runReport", top("deviceCategory", "totalUsers", 5)),
+    ga(token, "runReport", top("eventName", "eventCount", 12)),
+    ga(token, "runReport", leadQuery(cur)),
+    ga(token, "runReport", leadQuery(prevRange)),
+  ]);
+
+  const leadCount = (rep: GaReport, name: string) =>
+    num((rep.rows ?? []).find((r) => r.dimensionValues?.[0]?.value === name)?.metricValues?.[0]?.value);
 
   return {
     range: { start: "28 dagen geleden", end: "gisteren" },
@@ -153,11 +184,20 @@ export async function getAnalyticsData(): Promise<GaData> {
       value: num(r.metricValues?.[0]?.value),
     })),
     topPages: toRows(pagesR),
+    landingPages: toRows(landingR),
     channels: toRows(channelsR),
     sources: toRows(sourcesR),
     countries: toRows(countriesR),
+    cities: toRows(citiesR),
+    newVsReturning: toRows(nvrR),
     devices: toRows(devicesR),
     events: toRows(eventsR),
+    leads: {
+      generateLead: leadCount(leadsCurR, "generate_lead"),
+      contactClick: leadCount(leadsCurR, "contact_click"),
+      prevGenerateLead: leadCount(leadsPrevR, "generate_lead"),
+      byMethod: [],
+    },
   };
 }
 
