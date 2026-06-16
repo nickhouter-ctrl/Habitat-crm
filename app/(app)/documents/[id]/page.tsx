@@ -29,6 +29,7 @@ import { labelForCategory } from "@/lib/products";
 import { formatDate, formatEUR } from "@/lib/utils";
 import {
   applyStockOutFromDocument,
+  createCreditNoteFromInvoice,
   createDeliveryNoteFromDocument,
   createInvoiceFromEstimate,
   deleteDocument,
@@ -226,6 +227,7 @@ export default async function DocumentDetailPage({
   const makeInvoice = createInvoiceFromEstimate.bind(null, id);
   const reserveAction = toggleReserveEstimate.bind(null, id);
   const makeDeliveryNote = createDeliveryNoteFromDocument.bind(null, id);
+  const makeCreditNote = createCreditNoteFromInvoice.bind(null, id);
 
   const h = await headers();
   const host = h.get("host") ?? "";
@@ -563,6 +565,13 @@ export default async function DocumentDetailPage({
                 <form action={makeDeliveryNote}>
                   <SubmitButton size="sm" variant="secondary" pendingLabel="Bezig…">
                     → Maak pakbon
+                  </SubmitButton>
+                </form>
+              )}
+              {doc.kind === "invoice" && (
+                <form action={makeCreditNote}>
+                  <SubmitButton size="sm" variant="secondary" pendingLabel="Bezig…">
+                    → Maak creditnota
                   </SubmitButton>
                 </form>
               )}

@@ -977,6 +977,62 @@ export async function createInvoiceFromEstimate(estimateId: string, formData?: F
 }
 
 /**
+ * Maak een creditnota die hoort bij een factuur. Het nummer is afgeleid van het
+ * factuurnummer (FAC-2026-0011 → CN-2026-0011), zodat je altijd ziet bij welke
+ * factuur de creditnota hoort. Gekoppeld via source_document_id. De regels worden
+ * gekopieerd (volledige creditering) — je kunt op de volgende pagina regels
+ * aanpassen of verwijderen voor een deel-creditnota.
+ */
+export async function createCreditNoteFromInvoice(invoiceId: string) {
+  await requireUser();
+  const inv = await db.query.documents.findFirst({ where: eq(documents.id, invoiceId) });
+  if (!inv || inv.kind !== "invoice") return;
+
+  // Nummer afleiden van de factuur: FAC-2026-0011 → CN-2026-0011; anders CN-<nr>.
+  const invNr = (inv.docNumber ?? "").trim();
+  const facMatch = invNr.match(/^FAC[-_ ]?(.+)$/i);
+  const base = invNr ? `CN-${facMatch ? facMatch[1] : invNr}` : "CN";
+  // Uniek houden (meerdere creditnota's bij dezelfde factuur → -2, -3, …).
+  let docNumber = base;
+  for (let i = 2; ; i++) {
+    const exists = await db.query.documents.findFirst({
+      where: eq(documents.docNumber, docNumber),
+      columns: { id: true },
+    });
+    if (!exists) break;
+    docNumber = `${base}-${i}`;
+  }
+
+  const today = new Date().toISOString().slice(0, 10);
+  const [row] = await db
+    .insert(documents)
+    .values({
+      kind: "creditnote",
+      status: "draft",
+      docNumber,
+      sourceDocumentId: inv.id, // koppeling creditnota → factuur
+      title: `Creditnota bij ${invNr || "factuur"}`,
+      contactId: inv.contactId,
+      companyId: inv.companyId,
+      dealId: inv.dealId,
+      propertyId: inv.propertyId,
+      projectId: inv.projectId,
+      issueDate: today,
+      currency: inv.currency,
+      subtotalEur: inv.subtotalEur,
+      taxEur: inv.taxEur,
+      totalEur: inv.totalEur,
+      items: normalizeDocItems(inv.items),
+      notes: inv.notes,
+    })
+    .returning({ id: documents.id });
+
+  revalidateAround("creditnote");
+  revalidatePath(`/documents/${invoiceId}`);
+  redirect(`/documents/${row.id}/edit`);
+}
+
+/**
  * Vanuit het projectscherm: keur een offerte goed → markeer 'accepted' én maak
  * direct een (concept) factuur met dezelfde regels, gekoppeld aan hetzelfde
  * project. De gereserveerde producten gaan zo van "gereserveerd" naar "verkocht".
