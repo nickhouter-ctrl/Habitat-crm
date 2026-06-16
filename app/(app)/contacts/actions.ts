@@ -32,30 +32,6 @@ const newContactSchema = z.object({
   notes: z.string().trim().max(5000).optional().or(z.literal("")),
 });
 
-const contactSchema = z.object({
-  firstName: z.string().trim().max(120).optional().or(z.literal("")),
-  lastName: z.string().trim().max(120).optional().or(z.literal("")),
-  name: z.string().trim().max(200).optional().or(z.literal("")),
-  email: z.string().trim().email().optional().or(z.literal("")),
-  phone: z.string().trim().max(40).optional().or(z.literal("")),
-  mobile: z.string().trim().max(40).optional().or(z.literal("")),
-  jobTitle: z.string().trim().max(160).optional().or(z.literal("")),
-  type: z
-    .enum(["lead", "customer", "owner", "partner", "supplier", "other"])
-    .default("lead"),
-  stage: z
-    .enum(["new", "contacted", "qualified", "proposal", "won", "lost"])
-    .default("new"),
-  preferredLanguage: z.enum(["en", "nl", "es", "de"]).default("es"),
-  source: z.string().trim().max(80).optional().or(z.literal("")),
-  addressLine: z.string().trim().max(200).optional().or(z.literal("")),
-  postalCode: z.string().trim().max(20).optional().or(z.literal("")),
-  city: z.string().trim().max(120).optional().or(z.literal("")),
-  province: z.string().trim().max(120).optional().or(z.literal("")),
-  country: z.string().trim().max(120).optional().or(z.literal("")),
-  notes: z.string().trim().max(5000).optional().or(z.literal("")),
-});
-
 function clean<T extends Record<string, unknown>>(obj: T): T {
   const out = {} as T;
   for (const [k, v] of Object.entries(obj)) {
@@ -133,20 +109,68 @@ export async function updateContact(id: string, formData: FormData) {
   const session = await auth();
   if (!session?.user) redirect("/login");
 
-  const parsed = contactSchema.safeParse(Object.fromEntries(formData));
+  const parsed = newContactSchema.safeParse(Object.fromEntries(formData));
   if (!parsed.success) {
     redirect(`/contacts/${id}/edit?error=validation`);
   }
   const v = parsed.data;
+  const type = KLANTTYPE_TO_TYPE[v.klanttype];
+  const personName = [v.firstName, v.lastName].filter(Boolean).join(" ").trim();
   const displayName =
-    v.name?.trim() ||
-    [v.firstName, v.lastName].filter(Boolean).join(" ").trim() ||
-    v.email ||
-    "(naamloos)";
+    personName || v.companyName?.trim() || (v.email || "").trim() || "(naamloos)";
+
+  const existing = await db.query.contacts.findFirst({
+    where: eq(contacts.id, id),
+    columns: { companyId: true },
+  });
+
+  // Zakelijk → gekoppeld bedrijf bijwerken (of aanmaken). Anders ontkoppelen.
+  let companyId: string | null = existing?.companyId ?? null;
+  if (v.klanttype === "zakelijk" && v.companyName?.trim()) {
+    const coData = clean({
+      name: v.companyName.trim(),
+      email: v.email || "",
+      phone: v.phone || "",
+      addressLine: v.addressLine || "",
+      postalCode: v.postalCode || "",
+      city: v.city || "",
+      province: v.province || "",
+      country: "ES",
+    });
+    if (companyId) {
+      await db.update(companies).set({ ...coData, updatedAt: new Date() }).where(eq(companies.id, companyId));
+    } else {
+      const [co] = await db
+        .insert(companies)
+        .values({ ...coData, type: "client", ownerId: session.user.id })
+        .returning({ id: companies.id });
+      companyId = co.id;
+    }
+  } else {
+    companyId = null;
+  }
 
   await db
     .update(contacts)
-    .set(clean({ ...v, name: displayName }))
+    .set(
+      clean({
+        firstName: v.firstName || "",
+        lastName: v.lastName || "",
+        name: displayName,
+        email: v.email || "",
+        phone: v.phone || "",
+        type,
+        preferredLanguage: v.preferredLanguage,
+        addressLine: v.addressLine || "",
+        postalCode: v.postalCode || "",
+        city: v.city || "",
+        province: v.province || "",
+        country: "ES",
+        companyId,
+        notes: v.notes || "",
+        updatedAt: new Date(),
+      }),
+    )
     .where(eq(contacts.id, id));
 
   revalidatePath(`/contacts/${id}`);

@@ -16,18 +16,37 @@ const TYPES = [
 
 type Klanttype = (typeof TYPES)[number]["id"];
 
+export type ContactFormInitial = {
+  klanttype?: Klanttype;
+  firstName?: string | null;
+  lastName?: string | null;
+  companyName?: string | null;
+  email?: string | null;
+  phone?: string | null;
+  addressLine?: string | null;
+  postalCode?: string | null;
+  city?: string | null;
+  province?: string | null;
+  preferredLanguage?: string | null;
+  notes?: string | null;
+};
+
 export function ContactCreateForm({
   action,
   onSuggest,
+  initial,
+  submitLabel = "Contact opslaan",
 }: {
   action: (formData: FormData) => void | Promise<void>;
   onSuggest: (query: string) => Promise<AddressSuggestion[]>;
+  initial?: ContactFormInitial;
+  submitLabel?: string;
 }) {
-  const [type, setType] = useState<Klanttype>("particulier");
-  const [addr, setAddr] = useState("");
-  const [postcode, setPostcode] = useState("");
-  const [city, setCity] = useState("");
-  const [province, setProvince] = useState("");
+  const [type, setType] = useState<Klanttype>(initial?.klanttype ?? "particulier");
+  const [addr, setAddr] = useState(initial?.addressLine ?? "");
+  const [postcode, setPostcode] = useState(initial?.postalCode ?? "");
+  const [city, setCity] = useState(initial?.city ?? "");
+  const [province, setProvince] = useState(initial?.province ?? "");
   const [sugs, setSugs] = useState<AddressSuggestion[]>([]);
   const [open, setOpen] = useState(false);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -84,25 +103,30 @@ export function ContactCreateForm({
 
       <div className="grid gap-4 sm:grid-cols-2">
         <Field label="Voornaam" htmlFor="firstName">
-          <Input id="firstName" name="firstName" autoComplete="given-name" />
+          <Input id="firstName" name="firstName" autoComplete="given-name" defaultValue={initial?.firstName ?? ""} />
         </Field>
         <Field label="Achternaam" htmlFor="lastName">
-          <Input id="lastName" name="lastName" autoComplete="family-name" />
+          <Input id="lastName" name="lastName" autoComplete="family-name" defaultValue={initial?.lastName ?? ""} />
         </Field>
       </div>
 
       {type === "zakelijk" && (
         <Field label="Bedrijfsnaam" htmlFor="companyName">
-          <Input id="companyName" name="companyName" placeholder="bv. Bouwbedrijf X SL" />
+          <Input
+            id="companyName"
+            name="companyName"
+            placeholder="bv. Bouwbedrijf X SL"
+            defaultValue={initial?.companyName ?? ""}
+          />
         </Field>
       )}
 
       <div className="grid gap-4 sm:grid-cols-2">
         <Field label="E-mail" htmlFor="email">
-          <Input id="email" name="email" type="email" autoComplete="email" />
+          <Input id="email" name="email" type="email" autoComplete="email" defaultValue={initial?.email ?? ""} />
         </Field>
         <Field label="Telefoon" htmlFor="phone">
-          <Input id="phone" name="phone" type="tel" />
+          <Input id="phone" name="phone" type="tel" defaultValue={initial?.phone ?? ""} />
         </Field>
       </div>
 
@@ -154,7 +178,7 @@ export function ContactCreateForm({
       </div>
 
       <Field label="Voorkeurstaal" htmlFor="preferredLanguage" hint="Voor offertes, facturen en herinneringen.">
-        <Select id="preferredLanguage" name="preferredLanguage" defaultValue="es">
+        <Select id="preferredLanguage" name="preferredLanguage" defaultValue={initial?.preferredLanguage ?? "es"}>
           <option value="es">Spaans</option>
           <option value="nl">Nederlands</option>
           <option value="en">Engels</option>
@@ -163,11 +187,11 @@ export function ContactCreateForm({
       </Field>
 
       <Field label="Notities" htmlFor="notes">
-        <Textarea id="notes" name="notes" />
+        <Textarea id="notes" name="notes" defaultValue={initial?.notes ?? ""} />
       </Field>
 
       <div className="pt-1">
-        <SubmitButton pendingLabel="Opslaan…">Contact opslaan</SubmitButton>
+        <SubmitButton pendingLabel="Opslaan…">{submitLabel}</SubmitButton>
       </div>
     </form>
   );
