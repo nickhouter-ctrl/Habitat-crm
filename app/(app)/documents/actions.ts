@@ -1230,6 +1230,12 @@ export async function applyStockOutFromDocument(id: string) {
   if (!res.ok && res.reason === "deal-already-booked") {
     redirect(`/documents/${id}?voorraad=dubbel&doc=${encodeURIComponent(res.otherDoc ?? "")}`);
   }
+  // Voorraad afgeboekt = de factuur is in de praktijk uitgegeven → uit 'concept'
+  // halen zodat hij meetelt als gefactureerd/openstaand (alleen facturen).
+  await db
+    .update(documents)
+    .set({ status: "sent", sentAt: new Date(), updatedAt: new Date() })
+    .where(and(eq(documents.id, id), eq(documents.kind, "invoice"), eq(documents.status, "draft")));
   revalidatePath(`/documents/${id}`);
 }
 
