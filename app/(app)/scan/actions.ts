@@ -42,6 +42,118 @@ export async function findProductByBarcode(code: string): Promise<ScannedProduct
   };
 }
 
+export type ProductSize = {
+  sku: string | null;
+  label: string;
+  priceEur: number | null;
+  stockQty: number | null;
+  inStock: boolean;
+};
+
+export type ProductInfo = {
+  id: string;
+  sku: string | null;
+  name: string;
+  imageUrl: string | null;
+  collection: string | null;
+  category: string | null;
+  subcategory: string | null;
+  unit: string | null;
+  availability: string;
+  priceEur: number | null;
+  tradePriceEur: number | null;
+  vatRate: number;
+  costEur: number | null;
+  stockQty: number;
+  stockMin: number | null;
+  description: string | null;
+  dimensions: string | null;
+  sizes: ProductSize[];
+};
+
+/** Maak van losse mm-velden een leesbaar label, bv. "B 600 × H 400 × D 200 mm". */
+function dimsLabel(p: {
+  widthMm: string | null;
+  heightMm: string | null;
+  lengthMm: string | null;
+  thicknessMm: string | null;
+}): string | null {
+  const parts: string[] = [];
+  const n = (v: string | null) => (v == null ? null : Number(v));
+  const w = n(p.widthMm),
+    h = n(p.heightMm),
+    l = n(p.lengthMm),
+    t = n(p.thicknessMm);
+  if (w) parts.push(`B ${w}`);
+  if (h) parts.push(`H ${h}`);
+  if (l) parts.push(`L ${l}`);
+  if (t) parts.push(`D ${t}`);
+  return parts.length ? `${parts.join(" × ")} mm` : null;
+}
+
+/** Lees-alleen productinfo voor de scan-opzoekmodus (prijs, maten, voorraad). */
+export async function lookupProductInfo(code: string): Promise<ProductInfo | null> {
+  await requireUser();
+  const c = code.trim();
+  if (!c) return null;
+  const p = await db.query.products.findFirst({
+    where: or(eq(products.barcode, c), eq(products.sku, c)),
+    columns: {
+      id: true,
+      sku: true,
+      name: true,
+      imageUrl: true,
+      collection: true,
+      category: true,
+      subcategory: true,
+      unit: true,
+      availability: true,
+      priceEur: true,
+      tradePriceEur: true,
+      vatRate: true,
+      costEur: true,
+      stockQty: true,
+      stockMin: true,
+      description: true,
+      widthMm: true,
+      heightMm: true,
+      lengthMm: true,
+      thicknessMm: true,
+      additionalSizes: true,
+    },
+  });
+  if (!p) return null;
+  const sizes: ProductSize[] = Array.isArray(p.additionalSizes)
+    ? p.additionalSizes.map((s) => ({
+        sku: s.sku ?? null,
+        label: s.label,
+        priceEur: s.priceEur ?? null,
+        stockQty: s.stockQty ?? null,
+        inStock: s.inStock ?? (s.stockQty ?? 0) > 0,
+      }))
+    : [];
+  return {
+    id: p.id,
+    sku: p.sku,
+    name: p.name,
+    imageUrl: p.imageUrl ?? null,
+    collection: p.collection ?? null,
+    category: p.category ?? null,
+    subcategory: p.subcategory ?? null,
+    unit: p.unit ?? null,
+    availability: p.availability,
+    priceEur: p.priceEur == null ? null : Number(p.priceEur),
+    tradePriceEur: p.tradePriceEur == null ? null : Number(p.tradePriceEur),
+    vatRate: p.vatRate,
+    costEur: p.costEur == null ? null : Number(p.costEur),
+    stockQty: Number(p.stockQty ?? 0),
+    stockMin: p.stockMin == null ? null : Number(p.stockMin),
+    description: p.description ?? null,
+    dimensions: dimsLabel(p),
+    sizes,
+  };
+}
+
 /** Pas de voorraad aan: erbij (ontvangen), eraf (uitgeven) of zetten (tellen). */
 export async function adjustStock(
   productId: string,

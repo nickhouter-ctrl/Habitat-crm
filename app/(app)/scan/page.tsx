@@ -1,15 +1,17 @@
 "use client";
 
-import { PackageCheck, ScanLine } from "lucide-react";
+import { PackageCheck, ScanLine, ScanSearch } from "lucide-react";
 import { useState } from "react";
 
 import { PageHeader } from "@/components/ui";
 import { DeliverPicking } from "./_deliver";
+import { ProductLookup } from "./_info";
 import { QuickAdjust } from "./_quick";
 
-type Mode = "quick" | "deliver";
+type Mode = "info" | "quick" | "deliver";
 
 const MODES: { id: Mode; label: string; desc: string; icon: typeof ScanLine }[] = [
+  { id: "info", label: "Opzoeken", desc: "Scan voor prijs, maten en voorraad", icon: ScanSearch },
   { id: "deliver", label: "Uitleveren", desc: "Scan een pakbon af en markeer afgeleverd", icon: PackageCheck },
   { id: "quick", label: "Snel bijwerken", desc: "Scan los en boek voorraad erbij/eraf of zet de stand", icon: ScanLine },
 ];
@@ -59,6 +61,7 @@ export default function ScanPage() {
           </div>
         )}
 
+        {mode === "info" && <ProductLookup />}
         {mode === "quick" && <QuickAdjust />}
         {mode === "deliver" && <DeliverPicking />}
       </div>
