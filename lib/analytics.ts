@@ -49,7 +49,7 @@ export type GaData = {
   leadsTrend: GaRow[];
   engagement: { bounceRate: number; engagedSessions: number; viewsPerSession: number };
 };
-export type GaRealtime = { activeUsers: number; byPage: GaRow[]; byCountry: GaRow[] };
+export type GaRealtime = { activeUsers: number; byPage: GaRow[]; byCountry: GaRow[]; byCity: GaRow[] };
 
 type GaReport = {
   rows?: { dimensionValues?: { value: string }[]; metricValues?: { value: string }[] }[];
@@ -254,7 +254,7 @@ export async function getAnalyticsData(): Promise<GaData> {
 
 export async function getRealtime(): Promise<GaRealtime> {
   const token = await accessToken();
-  const [totalRep, pagesRep, countriesRep] = await Promise.all([
+  const [totalRep, pagesRep, countriesRep, citiesRep] = await Promise.all([
     ga(token, "runRealtimeReport", { metrics: [{ name: "activeUsers" }] }),
     ga(token, "runRealtimeReport", {
       dimensions: [{ name: "unifiedScreenName" }],
@@ -266,10 +266,16 @@ export async function getRealtime(): Promise<GaRealtime> {
       metrics: [{ name: "activeUsers" }],
       limit: 8,
     }),
+    ga(token, "runRealtimeReport", {
+      dimensions: [{ name: "city" }],
+      metrics: [{ name: "activeUsers" }],
+      limit: 8,
+    }),
   ]);
   return {
     activeUsers: num(totalRep.rows?.[0]?.metricValues?.[0]?.value),
     byPage: toRows(pagesRep),
     byCountry: toRows(countriesRep),
+    byCity: toRows(citiesRep),
   };
 }

@@ -98,23 +98,19 @@ export default async function AnalyticsPage() {
         {rtError ? (
           <p className="mt-2 text-sm text-danger">{rtError}</p>
         ) : (
-          <div className="mt-3 flex flex-wrap items-end gap-x-10 gap-y-4">
+          <div className="mt-3 flex flex-wrap items-start gap-x-10 gap-y-4">
             <div>
               <p className="text-4xl font-semibold tabular-nums">{nf(realtime?.activeUsers ?? 0)}</p>
               <p className="text-xs text-muted">actieve bezoekers</p>
             </div>
-            {realtime && realtime.byPage.length > 0 && (
-              <div className="min-w-0 flex-1">
-                <p className="mb-1 text-xs font-medium uppercase tracking-wide text-muted">Actieve pagina&apos;s</p>
-                <ul className="space-y-0.5 text-sm">
-                  {realtime.byPage.slice(0, 5).map((pg, i) => (
-                    <li key={i} className="flex justify-between gap-4">
-                      <span className="truncate text-muted">{pg.label || "(onbekend)"}</span>
-                      <span className="tabular-nums">{nf(pg.value)}</span>
-                    </li>
-                  ))}
-                </ul>
+            {realtime && (realtime.byCountry.length > 0 || realtime.byCity.length > 0 || realtime.byPage.length > 0) ? (
+              <div className="grid flex-1 gap-x-8 gap-y-4 sm:grid-cols-3">
+                <RealtimeList title="Land" rows={realtime.byCountry} />
+                <RealtimeList title="Stad" rows={realtime.byCity} />
+                <RealtimeList title="Pagina" rows={realtime.byPage} />
               </div>
+            ) : (
+              <p className="self-center text-sm text-muted">Geen actieve bezoekers op dit moment.</p>
             )}
           </div>
         )}
@@ -280,6 +276,23 @@ function ChartCard({ title, rows }: { title: string; rows: GaRow[] }) {
         )}
       </CardContent>
     </Card>
+  );
+}
+
+function RealtimeList({ title, rows }: { title: string; rows: GaRow[] }) {
+  if (rows.length === 0) return null;
+  return (
+    <div className="min-w-0">
+      <p className="mb-1 text-xs font-medium uppercase tracking-wide text-muted">{title}</p>
+      <ul className="space-y-0.5 text-sm">
+        {rows.slice(0, 5).map((r, i) => (
+          <li key={i} className="flex justify-between gap-3">
+            <span className="truncate text-muted">{r.label || "(onbekend)"}</span>
+            <span className="tabular-nums">{nf(r.value)}</span>
+          </li>
+        ))}
+      </ul>
+    </div>
   );
 }
 
