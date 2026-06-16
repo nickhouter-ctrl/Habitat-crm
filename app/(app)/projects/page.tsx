@@ -76,7 +76,10 @@ export default async function ProjectsPage({
       invoiced: sql<number>`(coalesce(sum(case when ${documents.kind} = 'invoice' and ${documents.status} not in ('draft','void') then ${documents.totalEur} else 0 end), 0) - coalesce(sum(case when ${documents.kind} = 'creditnote' and ${documents.status} <> 'void' then ${documents.totalEur} else 0 end), 0))::float8`,
       outstanding: sql<number>`coalesce(sum(case when ${documents.kind} = 'invoice' and ${documents.status} not in ('draft','void','paid') then ${documents.totalEur} - ${documents.paidEur} else 0 end), 0)::float8`,
       openInvoices: sql<number>`count(*) filter (where ${documents.kind} = 'invoice' and ${documents.status} not in ('draft','void','paid') and ${documents.totalEur} > ${documents.paidEur})::int`,
-      reservedValue: sql<number>`coalesce(sum(case when ${documents.kind} = 'estimate' and (${documents.status} = 'accepted' or ${documents.reservedAt} is not null) and ${documents.status} not in ('rejected','void') then ${documents.totalEur} else 0 end), 0)::float8`,
+      // Gereserveerd = alleen offertes die expliciet als gereserveerd zijn
+      // gemarkeerd én nog NIET gefactureerd zijn. Geaccepteerde/gefactureerde
+      // offertes en facturen (al afgeboekt) tellen NIET mee.
+      reservedValue: sql<number>`coalesce(sum(case when ${documents.kind} = 'estimate' and ${documents.reservedAt} is not null and ${documents.status} not in ('rejected','void') and not exists (select 1 from documents inv where inv.kind = 'invoice' and inv.source_document_id = ${documents.id} and inv.status <> 'void') then ${documents.totalEur} else 0 end), 0)::float8`,
       lastDocAt: sql<string | null>`max(${documents.updatedAt})`,
     })
     .from(documents)
@@ -159,7 +162,7 @@ export default async function ProjectsPage({
         <StatTile
           label="Gereserveerd"
           value={formatEUR(totals.reserved)}
-          hint="uit geaccepteerde/gereserveerde offertes"
+          hint="uit gemarkeerd-gereserveerde offertes (nog niet gefactureerd)"
           tone="info"
         />
       </div>

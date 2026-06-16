@@ -132,7 +132,7 @@ export default async function ProjectDetailPage({
   const projMargin = projRevenue - projCost;
   const projMarginPct = projRevenue > 0 ? Math.round((projMargin / projRevenue) * 100) : null;
 
-  // Producten in dit project: gereserveerd (uit geaccepteerde offertes) vs.
+  // Producten in dit project: gereserveerd (uit gemarkeerd-gereserveerde offertes) vs.
   // verkocht (uit facturen − creditnota's). Geeft inzicht in wat er naar de klus
   // gaat én wat er voor het project is gereserveerd.
   const projDocItems = await db
@@ -169,9 +169,10 @@ export default async function ProjectDetailPage({
         } satisfies Agg);
       const u = Number(it.units) || 0;
       const amt = (Number(it.price) || 0) * u;
-      // Gereserveerd = geaccepteerde offertes én offertes die handmatig op
-      // 'gereserveerd' zijn gezet (reservedAt) — gelijk aan lib/stock.
-      if (d.kind === "estimate" && (d.status === "accepted" || d.reservedAt)) {
+      // Gereserveerd = alleen offertes die expliciet op 'gereserveerd' zijn gezet
+      // (reservedAt). Geaccepteerde/gefactureerde offertes tellen niet als
+      // reservering; wat verkocht is wordt hieronder via 'sold' weer afgetrokken.
+      if (d.kind === "estimate" && d.reservedAt) {
         entry.reserved += u;
         entry.reservedAmt += amt;
       } else if (d.kind === "invoice") {
@@ -636,7 +637,7 @@ export default async function ProjectDetailPage({
                 </TBody>
               </Table>
             )}
-            <p className="border-t px-5 py-3 text-xs text-muted">Uit facturen (minus creditnota's).</p>
+            <p className="border-t px-5 py-3 text-xs text-muted">Uit facturen (minus creditnota&apos;s).</p>
           </Card>
         </div>
       )}
