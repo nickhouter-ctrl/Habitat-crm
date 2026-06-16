@@ -26,10 +26,23 @@ export default async function DraairichtingenPage({
   const sp = await searchParams;
 
   const doorProds = await db
-    .select({ id: products.id, sku: products.sku })
+    .select({ id: products.id, sku: products.sku, additionalSizes: products.additionalSizes })
     .from(products)
     .where(sql`${products.sku} like 'DR-00%'`);
   const doorIds = new Set(doorProds.map((p) => p.id));
+  // Per deur de bestaande richtingen (uit de uitvoeringen), zodat we alleen die
+  // tonen — bv. Hotel Suite alleen S1/S2 i.p.v. altijd S1–S4.
+  const orientsByProduct = new Map<string, { key: string; label: string }[]>();
+  for (const p of doorProds) {
+    const sizes = (p.additionalSizes as Array<{ label?: string }> | null) ?? [];
+    const list = sizes
+      .map((s) => {
+        const m = (s.label ?? "").match(/\bS([1-4])\b/);
+        return m ? { key: `S${m[1]}`, label: s.label ?? `S${m[1]}` } : null;
+      })
+      .filter((x): x is { key: string; label: string } => !!x);
+    if (list.length) orientsByProduct.set(p.id, list);
+  }
 
   const invoices = await db
     .select({
@@ -110,7 +123,7 @@ export default async function DraairichtingenPage({
                       </span>
                     </div>
                     <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-                      {ORIENTS.map((o) => (
+                      {(orientsByProduct.get(it.productId!) ?? ORIENTS).map((o) => (
                         <label key={o.key} className="block text-xs">
                           <span className="mb-1 block font-medium text-muted">{o.label}</span>
                           <Input name={o.key} type="number" min={0} step={1} defaultValue="0" className="text-right tabular-nums" />
