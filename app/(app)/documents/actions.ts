@@ -1218,7 +1218,14 @@ async function bookStockOutInternal(
   const negatives: string[] = [];
   for (const it of lines) {
     const prod = await db.query.products.findFirst({ where: eq(products.id, it.productId!) });
-    const kit = (prod?.components as Array<{ sku: string; qty: number }> | null) ?? null;
+    // Set met uitvoeringen (varianten) wordt als één product afgeboekt — niet via
+    // de losse onderdelen. Alleen een "pure kit" (componenten zonder varianten)
+    // boekt op componentniveau af.
+    const hasVariants =
+      Array.isArray(prod?.additionalSizes) && (prod!.additionalSizes as unknown[]).length > 0;
+    const kit = !hasVariants
+      ? ((prod?.components as Array<{ sku: string; qty: number }> | null) ?? null)
+      : null;
     if (kit && kit.length > 0) {
       for (const comp of kit) {
         const deductQty = Number(it.units) * Number(comp.qty);
@@ -1272,7 +1279,11 @@ async function addBackStockForItems(items: unknown): Promise<void> {
   for (const it of normalizeDocItems(items)) {
     if (!it.productId || !it.units) continue;
     const prod = await db.query.products.findFirst({ where: eq(products.id, it.productId) });
-    const kit = (prod?.components as Array<{ sku: string; qty: number }> | null) ?? null;
+    const hasVariants =
+      Array.isArray(prod?.additionalSizes) && (prod!.additionalSizes as unknown[]).length > 0;
+    const kit = !hasVariants
+      ? ((prod?.components as Array<{ sku: string; qty: number }> | null) ?? null)
+      : null;
     if (kit && kit.length > 0) {
       for (const comp of kit) {
         await db
@@ -1362,7 +1373,11 @@ export async function reverseStockOutFromDocument(id: string) {
   for (const it of normalizeDocItems(doc.items)) {
     if (!it.productId || !it.units) continue;
     const prod = await db.query.products.findFirst({ where: eq(products.id, it.productId) });
-    const kit = (prod?.components as Array<{ sku: string; qty: number }> | null) ?? null;
+    const hasVariants =
+      Array.isArray(prod?.additionalSizes) && (prod!.additionalSizes as unknown[]).length > 0;
+    const kit = !hasVariants
+      ? ((prod?.components as Array<{ sku: string; qty: number }> | null) ?? null)
+      : null;
     if (kit && kit.length > 0) {
       for (const comp of kit) {
         const addQty = Number(it.units) * Number(comp.qty);

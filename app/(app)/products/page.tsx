@@ -330,11 +330,17 @@ export default async function ProductsPage({
                     const pricePerM2 = m2 && m2 > 0 && price > 0 ? price / m2 : null;
                     const kitComponents = (p.components as KitComponent[] | null) ?? null;
                     const isKit = !!kitComponents && kitComponents.length > 0;
-                    const stock = isKit
-                      ? (kitStocks.get(p.sku ?? "") ?? 0)
-                      : p.stockQty != null
-                        ? Number(p.stockQty)
-                        : null;
+                    // Set/variant-product (meerdere uitvoeringen): voorraad = eigen veld
+                    // (= totaal van de varianten), niet de kit-berekening van losse onderdelen.
+                    const variantArr =
+                      (p.additionalSizes as Array<{ stockQty?: number | null }> | null) ?? [];
+                    const isVariantSet = variantArr.length >= 2;
+                    const stock =
+                      isVariantSet || !isKit
+                        ? p.stockQty != null
+                          ? Number(p.stockQty)
+                          : null
+                        : (kitStocks.get(p.sku ?? "") ?? 0);
                     const sizeRows = (
                       (p.additionalSizes as Array<{
                         sku: string;
