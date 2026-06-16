@@ -98,7 +98,6 @@ export default async function AnalyticsPage() {
         {rtError ? (
           <p className="mt-2 text-sm text-danger">{rtError}</p>
         ) : (
-          <>
           <div className="mt-3 flex flex-wrap items-start gap-x-10 gap-y-4">
             <div>
               <p className="text-4xl font-semibold tabular-nums">{nf(realtime?.activeUsers ?? 0)}</p>
@@ -114,13 +113,6 @@ export default async function AnalyticsPage() {
               <p className="self-center text-sm text-muted">Geen actieve bezoekers op dit moment.</p>
             )}
           </div>
-          {realtime && realtime.byCountry.length > 0 && (
-            <div className="mt-4 max-w-xl">
-              <p className="mb-1 text-xs font-medium uppercase tracking-wide text-muted">Live op de kaart</p>
-              <WorldMap data={realtime.byCountry} />
-            </div>
-          )}
-          </>
         )}
       </Card>
 
