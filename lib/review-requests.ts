@@ -2,8 +2,8 @@
  * Review-verzoeken: vraag klanten ~3 weken na levering om een Google-review.
  * - Alleen afgeleverde pakbonnen (deliveredAt), 21–90 dagen geleden (zo spammen
  *   we bij de eerste run geen oude klanten).
- * - Hoogstens één verzoek per klant, en niet als die klant de afgelopen 180
- *   dagen al een review-verzoek kreeg.
+ * - Hoogstens één verzoek per klant ooit (nooit opnieuw als de klant al een
+ *   review-verzoek kreeg).
  * - Staat standaard uit; zet REVIEW_REQUESTS_ENABLED=true om te activeren.
  */
 import "server-only";
@@ -26,19 +26,13 @@ export async function runReviewRequests(): Promise<{
     return { ok: true, candidates: 0, sent: 0, skipped: 0, disabled: true };
   }
 
-  // Klanten die we de afgelopen 180 dagen al vroegen — niet opnieuw mailen.
-  const askedRecently = new Set(
+  // Klanten die we ooit al een review-verzoek stuurden — nooit opnieuw mailen.
+  const alreadyAsked = new Set(
     (
       await db
         .select({ cid: documents.contactId })
         .from(documents)
-        .where(
-          and(
-            isNotNull(documents.contactId),
-            isNotNull(documents.reviewRequestedAt),
-            sql`${documents.reviewRequestedAt} >= now() - interval '180 days'`,
-          ),
-        )
+        .where(and(isNotNull(documents.contactId), isNotNull(documents.reviewRequestedAt)))
     )
       .map((r) => r.cid)
       .filter(Boolean) as string[],
@@ -75,7 +69,7 @@ export async function runReviewRequests(): Promise<{
       skipped++;
       continue;
     }
-    if (askedRecently.has(r.contactId) || doneThisRun.has(r.contactId)) {
+    if (alreadyAsked.has(r.contactId) || doneThisRun.has(r.contactId)) {
       skipped++;
       continue;
     }
