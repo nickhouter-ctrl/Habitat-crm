@@ -127,6 +127,20 @@ export function LineItemsEditor({
 
   const totals = computeTotals(rows.map(rowToItem).filter((r) => r.name.length > 0));
   const costById = new Map(products.map((p) => [p.id, p.costEur != null ? Number(p.costEur) : null]));
+  // Ook op SKU kunnen matchen (regels die wel een SKU in de omschrijving hebben
+  // maar niet aan een productId gekoppeld zijn) — net als de factuurweergave.
+  const costBySku = new Map(
+    products
+      .filter((p) => p.sku && p.costEur != null)
+      .map((p) => [p.sku as string, Number(p.costEur)]),
+  );
+  /** Kostprijs van een regel: via productId, anders via SKU in de omschrijving. */
+  const costOfRow = (r: Row): number | null => {
+    const byId = r.productId ? costById.get(r.productId) : undefined;
+    if (byId != null) return byId;
+    const bySku = r.description ? costBySku.get(r.description.trim()) : undefined;
+    return bySku ?? null;
+  };
 
   const priceFor = (p: { priceEur: string | null; tradePriceEur: string | null }) =>
     audience === "aannemer" && p.tradePriceEur ? p.tradePriceEur : p.priceEur;
@@ -295,7 +309,7 @@ export function LineItemsEditor({
   // Margin info for a row that's linked to a product with a known cost.
   // "marge" = winst als % van de verkoopprijs (zoals in de productcatalogus).
   const marginFor = (r: Row) => {
-    const cost = r.productId ? costById.get(r.productId) ?? null : null;
+    const cost = costOfRow(r);
     if (cost == null || cost <= 0) return null;
     const unit = lineUnitPrice({ price: Number(r.price) || 0, discount: Number(r.discount) || 0 });
     const listPrice = Number(r.price) || 0;
@@ -315,9 +329,10 @@ export function LineItemsEditor({
   let costedCount = 0;
   let productLineCount = 0;
   for (const r of rows) {
-    if (!r.productId) continue;
+    const isProductLine = !!r.productId || (r.description ? costBySku.has(r.description.trim()) : false);
+    if (!isProductLine) continue;
     productLineCount++;
-    const cost = costById.get(r.productId) ?? null;
+    const cost = costOfRow(r);
     if (cost == null || cost <= 0) continue;
     marginRevenue += lineNet(rowToItem(r));
     marginCost += cost * (Number(r.units) || 0);

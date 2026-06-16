@@ -199,7 +199,10 @@ export default async function DocumentDetailPage({
     .filter(
       (x): x is { name: string; sku: string; stock: number; units: number; toOrder: number } => !!x,
     );
+  // Marge alleen berekenen over regels waarvoor we een kostprijs kennen — anders
+  // telt een regel zonder kostprijs als 100% marge en wordt het percentage te hoog.
   let docCost = 0;
+  let costedRevenue = 0;
   let costedLines = 0;
   for (const it of items) {
     const cost =
@@ -207,12 +210,12 @@ export default async function DocumentDetailPage({
       (it.description ? costBySku.get(it.description.trim()) : undefined);
     if (cost != null && cost > 0) {
       docCost += cost * (Number(it.units) || 0);
+      costedRevenue += lineNet(it);
       costedLines++;
     }
   }
-  const docRevenue = items.reduce((s, it) => s + lineNet(it), 0);
-  const docMargin = docRevenue - docCost;
-  const docMarginPct = docRevenue > 0 ? Math.round((docMargin / docRevenue) * 100) : null;
+  const docMargin = costedRevenue - docCost;
+  const docMarginPct = costedRevenue > 0 ? Math.round((docMargin / costedRevenue) * 100) : null;
   const marginComplete = items.length > 0 && costedLines === items.length;
 
   const partyName = doc.contact?.name ?? doc.company?.name ?? null;
@@ -737,7 +740,7 @@ export default async function DocumentDetailPage({
                       <span>Totaal</span>
                       <span className="tabular-nums">{formatEUR(doc.totalEur)}</span>
                     </div>
-                    {docRevenue > 0 && (
+                    {costedRevenue > 0 && (
                       <div
                         className={`mt-2 flex justify-between border-t pt-2 text-xs ${docMargin < 0 ? "text-danger" : "text-muted"}`}
                       >
