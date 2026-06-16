@@ -27,6 +27,7 @@ import {
   type ReminderLevel,
 } from "@/lib/email";
 import { REVIEW_URL } from "@/lib/review-requests";
+import { recordSentEmail } from "@/lib/sent-email";
 import { renderDocumentPdf } from "@/lib/document-pdf";
 import { pushDocumentToHolded } from "@/lib/holded/sync";
 import { formatDate, formatEUR } from "@/lib/utils";
@@ -418,6 +419,15 @@ export async function sendPaymentReminderNow(
   });
   const res = await sendEmail({ to: email, ...mail });
   if (!res.sent) return { ok: false, error: "Versturen mislukt — probeer het later opnieuw." };
+  await recordSentEmail({
+    kind: "reminder",
+    toEmail: email,
+    subject: mail.subject,
+    html: mail.html,
+    text: mail.text,
+    contactId: doc.contactId,
+    documentId: doc.id,
+  });
 
   await db
     .update(documents)
@@ -506,6 +516,14 @@ export async function sendAccountReminder(
   });
   const res = await sendEmail({ to: contact.email, ...mail });
   if (!res.sent) return { ok: false, error: "Versturen mislukt — probeer het later opnieuw." };
+  await recordSentEmail({
+    kind: "reminder",
+    toEmail: contact.email,
+    subject: mail.subject,
+    html: mail.html,
+    text: mail.text,
+    contactId,
+  });
 
   // Markeer alle meegestuurde facturen + log één activiteit bij de klant.
   await db
@@ -548,6 +566,14 @@ export async function sendReviewRequestNow(
   });
   const res = await sendEmail({ to: contact.email, ...mail });
   if (!res.sent) return { ok: false, error: "Versturen mislukt — probeer het later opnieuw." };
+  await recordSentEmail({
+    kind: "review",
+    toEmail: contact.email,
+    subject: mail.subject,
+    html: mail.html,
+    text: mail.text,
+    contactId,
+  });
 
   // Markeer de recentste afgeleverde pakbon, zodat de automatische cron niet dubbel vraagt.
   const lastDelivered = await db.query.documents.findFirst({

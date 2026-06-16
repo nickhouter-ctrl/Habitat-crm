@@ -958,6 +958,33 @@ export const emailSyncState = pgTable("email_sync_state", {
   ...timestamps,
 });
 
+/**
+ * Archief van UITGAANDE mails die het CRM zelf verstuurt (herinneringen,
+ * aanmaningen, review-verzoeken, …) — zodat je later kunt terugzien wát er naar
+ * de klant is gestuurd. Soft links (geen harde FK).
+ */
+export const sentEmails = pgTable(
+  "sent_emails",
+  {
+    id: uuid().primaryKey().default(sql`gen_random_uuid()`),
+    /** reminder | review | document | other */
+    kind: text().notNull().default("reminder"),
+    toEmail: text(),
+    subject: text(),
+    html: text(),
+    body: text(),
+    contactId: uuid(),
+    documentId: uuid(),
+    ...timestamps,
+  },
+  (t) => [
+    index("sent_emails_contact_idx").on(t.contactId),
+    index("sent_emails_created_idx").on(t.createdAt),
+  ],
+);
+
+export type SentEmail = typeof sentEmails.$inferSelect;
+
 export type EmailInbox = typeof emailInbox.$inferSelect;
 export type NewEmailInbox = typeof emailInbox.$inferInsert;
 export type EmailSyncState = typeof emailSyncState.$inferSelect;

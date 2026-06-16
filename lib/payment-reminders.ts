@@ -10,6 +10,7 @@ import { and, eq, inArray, ne, notInArray, sql } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { activities, contacts, documents } from "@/lib/db/schema";
 import { accountReminderEmail, sendEmail, type ReminderLevel } from "@/lib/email";
+import { recordSentEmail } from "@/lib/sent-email";
 import { formatDate, formatEUR } from "@/lib/utils";
 
 export async function runPaymentReminders(): Promise<{
@@ -136,6 +137,14 @@ export async function runPaymentReminders(): Promise<{
       const res = await sendEmail({ to: email, ...mail });
       if (res.sent) {
         sent++;
+        await recordSentEmail({
+          kind: "reminder",
+          toEmail: email,
+          subject: mail.subject,
+          html: mail.html,
+          text: mail.text,
+          contactId,
+        });
         await db
           .update(documents)
           .set({ paymentReminderAt: new Date(), reminderLevel: lvl, updatedAt: new Date() })

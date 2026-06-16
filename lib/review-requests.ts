@@ -12,6 +12,7 @@ import { and, eq, isNotNull, isNull, sql } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { activities, contacts, documents } from "@/lib/db/schema";
 import { reviewRequestEmail, sendEmail } from "@/lib/email";
+import { recordSentEmail } from "@/lib/sent-email";
 
 export const REVIEW_URL = process.env.REVIEW_URL || "https://g.page/r/CZeAh9IuS2oQEBM/review";
 
@@ -79,6 +80,15 @@ export async function runReviewRequests(): Promise<{
       if (res.sent) {
         sent++;
         doneThisRun.add(r.contactId);
+        await recordSentEmail({
+          kind: "review",
+          toEmail: r.email,
+          subject: mail.subject,
+          html: mail.html,
+          text: mail.text,
+          contactId: r.contactId,
+          documentId: r.id,
+        });
         await db
           .update(documents)
           .set({ reviewRequestedAt: new Date(), updatedAt: new Date() })

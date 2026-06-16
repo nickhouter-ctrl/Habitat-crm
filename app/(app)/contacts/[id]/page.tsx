@@ -38,6 +38,7 @@ import {
   documents,
   holdedSyncMap,
   projects,
+  sentEmails,
 } from "@/lib/db/schema";
 import { cn, formatDate, formatEUR } from "@/lib/utils";
 import { normalizeDocItems } from "@/lib/documents";
@@ -178,9 +179,12 @@ export default async function ContactDetailPage({
     (d) => d.kind === "invoice" && d.status !== "paid" && d.status !== "void" && d.status !== "draft" && num(d.totalEur) - num(d.paidEur) > 0.01,
   );
   const hasOpenInvoices = openInvoices.length > 0;
-  const reminderLog = timeline.filter(
-    (a) => a.type === "email" && /herinner|aanmaning/i.test(a.subject ?? ""),
-  );
+  // Verstuurde mails (herinneringen, aanmaningen, reviews) — met bewaarde inhoud.
+  const sentMails = await db.query.sentEmails.findMany({
+    where: eq(sentEmails.contactId, id),
+    orderBy: desc(sentEmails.createdAt),
+    limit: 50,
+  });
 
   // Documenten per project (voor de uitklapbare Projecten-tab).
   const projectIds = relatedProjects.map((p) => p.id);
@@ -615,23 +619,42 @@ export default async function ContactDetailPage({
 
           <Card>
             <CardHeader>
-              <CardTitle>Verstuurde herinneringen &amp; aanmaningen</CardTitle>
+              <CardTitle>Verstuurde e-mails</CardTitle>
             </CardHeader>
             <CardContent>
-              {reminderLog.length === 0 ? (
-                <p className="text-sm text-muted">Nog geen herinneringen verstuurd.</p>
+              {sentMails.length === 0 ? (
+                <p className="text-sm text-muted">
+                  Nog geen e-mails verstuurd vanuit het CRM. Eerder verstuurde herinneringen vind je
+                  in de tijdlijn onder Overzicht.
+                </p>
               ) : (
                 <ol className="space-y-2">
-                  {reminderLog.map((a) => (
+                  {sentMails.map((m) => (
                     <li
-                      key={a.id}
+                      key={m.id}
                       className="flex items-start justify-between gap-3 border-b border-border pb-2 text-sm last:border-0 last:pb-0"
                     >
                       <span className="min-w-0">
-                        <span className="block font-medium">{a.subject}</span>
-                        {a.body && <span className="block text-xs text-muted">{a.body}</span>}
+                        <span className="flex items-center gap-2">
+                          <Badge tone={m.kind === "review" ? "accent" : "warning"}>
+                            {m.kind === "review"
+                              ? "Review"
+                              : m.kind === "document"
+                                ? "Document"
+                                : "Herinnering"}
+                          </Badge>
+                          <span className="truncate font-medium">{m.subject}</span>
+                        </span>
+                        <span className="mt-0.5 block text-xs text-muted">
+                          {formatDate(m.createdAt)} · naar {m.toEmail ?? "—"}
+                        </span>
                       </span>
-                      <span className="shrink-0 text-xs text-muted">{formatDate(a.createdAt)}</span>
+                      <Link
+                        href={`/sent-mail/${m.id}`}
+                        className="shrink-0 text-xs font-medium text-accent hover:underline"
+                      >
+                        Bekijk mail →
+                      </Link>
                     </li>
                   ))}
                 </ol>
