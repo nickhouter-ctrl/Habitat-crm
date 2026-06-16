@@ -6,10 +6,39 @@
  * 1 deur + 4 hinges + 1 slot kan maximaal min(deuren, hinges/4, sloten)
  * keer verkocht worden.
  */
-import { and, eq, inArray, isNotNull, notInArray, or } from "drizzle-orm";
+import { and, eq, inArray, isNotNull, ne, notInArray, or } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { documents, products } from "@/lib/db/schema";
 import { normalizeDocItems } from "@/lib/documents";
+
+/**
+ * Per set-product (met uitvoeringen): aantal verkochte stuks (facturen −
+ * creditnota's) waarvan op de regel GEEN draairichting/uitvoering is gekozen.
+ * Regels met bv. "S1", "inwaarts/uitwaarts" of "Left/Right Hand" tellen als
+ * toegewezen. Voor de melding "draairichting nog kiezen" op de productenlijst.
+ */
+export async function getUnassignedDirectionSales(
+  productIds: string[],
+): Promise<Map<string, number>> {
+  if (productIds.length === 0) return new Map();
+  const docs = await db.query.documents.findMany({
+    where: and(inArray(documents.kind, ["invoice", "creditnote"]), ne(documents.status, "void")),
+    columns: { kind: true, items: true },
+  });
+  const directionRe = /\bs[1-9]\b|inwaarts|uitwaarts|left hand|right hand/i;
+  const wanted = new Set(productIds);
+  const out = new Map<string, number>();
+  for (const d of docs) {
+    const sign = d.kind === "creditnote" ? -1 : 1;
+    for (const it of normalizeDocItems(d.items)) {
+      if (!it.productId || !wanted.has(it.productId) || !it.units) continue;
+      const text = `${it.name ?? ""} ${it.description ?? ""}`;
+      if (directionRe.test(text)) continue; // richting toegewezen → niet meetellen
+      out.set(it.productId, (out.get(it.productId) ?? 0) + sign * Number(it.units));
+    }
+  }
+  return out;
+}
 
 export type KitComponent = { sku: string; qty: number };
 

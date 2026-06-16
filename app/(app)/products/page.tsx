@@ -21,7 +21,12 @@ import {
 } from "@/components/ui";
 import { db } from "@/lib/db";
 import { products } from "@/lib/db/schema";
-import { getReservedStockByProduct, resolveKitStocks, type KitComponent } from "@/lib/stock";
+import {
+  getReservedStockByProduct,
+  getUnassignedDirectionSales,
+  resolveKitStocks,
+  type KitComponent,
+} from "@/lib/stock";
 import { cn, formatEUR } from "@/lib/utils";
 import { getProductCollections } from "../_options";
 import { Gs1ExcelDownload } from "./gs1-download";
@@ -132,6 +137,12 @@ export default async function ProductsPage({
 
   // Gereserveerde stuks per product (uit geaccepteerde, nog niet afgeboekte offertes).
   const reservedByProduct = await getReservedStockByProduct();
+
+  // Set-producten (met uitvoeringen): verkocht zónder gekozen draairichting → melding.
+  const variantSetIds = rows
+    .filter((r) => Array.isArray(r.additionalSizes) && (r.additionalSizes as unknown[]).length >= 2)
+    .map((r) => r.id);
+  const unassignedDirByProduct = await getUnassignedDirectionSales(variantSetIds);
 
   // Group by category for the display (skip when sorting flat by onderweg).
   const groups = new Map<string, typeof rows>();
@@ -457,6 +468,18 @@ export default async function ProductsPage({
                                 <span className={cn(free < 0 && "font-semibold text-danger")}>
                                   {free.toLocaleString("nl-NL")} vrij
                                 </span>
+                              </span>
+                            );
+                          })()}
+                          {(() => {
+                            const open = unassignedDirByProduct.get(p.id) ?? 0;
+                            if (open <= 0) return null;
+                            return (
+                              <span
+                                className="mt-0.5 block text-[10px] font-medium text-amber-600"
+                                title="Het totaal klopt; voor deze verkochte stuks moet nog gekozen worden welke draairichting verkocht is."
+                              >
+                                ⚠ {open.toLocaleString("nl-NL")} verkocht · draairichting nog kiezen
                               </span>
                             );
                           })()}
