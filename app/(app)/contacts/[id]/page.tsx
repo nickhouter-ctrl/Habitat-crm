@@ -44,6 +44,7 @@ import { normalizeDocItems } from "@/lib/documents";
 import { ConfirmSubmit } from "@/components/confirm-submit";
 import { AccountReminderButton } from "@/components/account-reminder-button";
 import { ReminderButton } from "@/components/reminder-button";
+import { ReviewRequestButton } from "@/components/review-request-button";
 import { addContactNote, deleteContact } from "../actions";
 import {
   contactTypeMeta,
@@ -586,6 +587,23 @@ export default async function ContactDetailPage({
                 </p>
               ) : (
                 <p className="text-sm text-muted">Geen openstaande facturen. 🎉</p>
+              )}
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Tevredenheid &amp; review</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-2">
+              <p className="text-sm text-muted">
+                Vraag de klant om een Google-review. (Automatisch ±3 weken na levering zodra de
+                review-mails aanstaan.)
+              </p>
+              {contact.email ? (
+                <ReviewRequestButton contactId={contact.id} />
+              ) : (
+                <p className="text-sm text-danger">Geen e-mailadres bekend.</p>
               )}
             </CardContent>
           </Card>

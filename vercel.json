@@ -15,6 +15,10 @@
     {
       "path": "/api/cron/invoice-status",
       "schedule": "0 5 * * *"
+    },
+    {
+      "path": "/api/cron/review-requests",
+      "schedule": "0 8 * * *"
     }
   ]
 }

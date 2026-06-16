@@ -535,6 +535,62 @@ export function accountReminderEmail(args: {
   return { subject: `${s.subject}${levelTag}`, html, text };
 }
 
+/** Review-verzoek: enige tijd na levering vragen of de klant een review wil plaatsen. */
+const REVIEW: Record<Lang, { subject: string; intro: string; ask: string; cta: string; thanks: string }> = {
+  nl: {
+    subject: "Tevreden? Een korte review zou ons enorm helpen",
+    intro: "Hartelijk dank dat u voor Habitat One heeft gekozen. We hopen dat u inmiddels volop geniet van uw aankoop.",
+    ask: "Zou u een momentje willen nemen om uw ervaring te delen? Een korte Google-review helpt ons enorm — en helpt anderen een goede keuze te maken.",
+    cta: "Laat een review achter",
+    thanks: "Alvast heel hartelijk dank!",
+  },
+  en: {
+    subject: "Happy with your purchase? A short review would mean a lot",
+    intro: "Thank you for choosing Habitat One. We hope you are already enjoying your purchase.",
+    ask: "Would you take a moment to share your experience? A short Google review helps us enormously — and helps others make a good choice.",
+    cta: "Leave a review",
+    thanks: "Thank you so much in advance!",
+  },
+  es: {
+    subject: "¿Contento con su compra? Una breve reseña nos ayudaría mucho",
+    intro: "Muchas gracias por elegir Habitat One. Esperamos que ya esté disfrutando de su compra.",
+    ask: "¿Podría dedicar un momento a compartir su experiencia? Una breve reseña en Google nos ayuda muchísimo y ayuda a otros a elegir bien.",
+    cta: "Dejar una reseña",
+    thanks: "¡Muchas gracias de antemano!",
+  },
+  de: {
+    subject: "Zufrieden? Eine kurze Bewertung würde uns sehr helfen",
+    intro: "Vielen Dank, dass Sie sich für Habitat One entschieden haben. Wir hoffen, Sie genießen Ihren Kauf bereits.",
+    ask: "Würden Sie sich einen Moment Zeit nehmen, um Ihre Erfahrung zu teilen? Eine kurze Google-Bewertung hilft uns sehr — und hilft anderen bei der Wahl.",
+    cta: "Bewertung abgeben",
+    thanks: "Vielen Dank im Voraus!",
+  },
+};
+
+export function reviewRequestEmail(args: {
+  lang?: string | null;
+  contactName?: string | null;
+  reviewUrl: string;
+}): { subject: string; html: string; text: string } {
+  const lang = pickLang(args.lang);
+  const r = REVIEW[lang];
+  const t = T[lang];
+  const greeting = args.contactName ? `${t.hi} ${escapeHtml(args.contactName)},` : `${t.hi},`;
+  const html = brandedEmail(`
+      <p style="margin:0">${greeting}</p>
+      <p>${escapeHtml(r.intro)}</p>
+      <p>${escapeHtml(r.ask)}</p>
+      <p style="text-align:center;margin:26px 0">
+        <a href="${args.reviewUrl}" style="display:inline-block;background:${COMPANY.brown};color:#fff;text-decoration:none;padding:12px 24px;border-radius:8px;font-weight:600">${escapeHtml(r.cta)}</a>
+      </p>
+      <p style="font-size:13px;color:#888">${escapeHtml(r.thanks)}</p>
+      <hr style="border:none;border-top:1px solid ${COMPANY.sand};margin:24px 0 16px" />
+      <p style="margin:0 0 4px">${t.regards}</p>
+      <div style="font-size:13px;color:#888;line-height:1.7">${signatureHtml()}</div>`);
+  const text = `${greeting}\n\n${r.intro}\n\n${r.ask}\n\n${r.cta}: ${args.reviewUrl}\n\n${r.thanks}\n\n${t.regards}\n${COMPANY.legalName}`;
+  return { subject: r.subject, html, text };
+}
+
 /** Herinnering aan de klant: levering/ophaling/montage is (morgen) gepland. */
 const REMIND: Record<Lang, Record<"leveren" | "ophalen" | "plaatsen", { subject: string; intro: string }>> = {
   nl: {

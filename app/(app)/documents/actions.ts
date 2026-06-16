@@ -1,6 +1,6 @@
 "use server";
 
-import { and, eq, inArray, isNotNull, isNull, ne, or, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, isNotNull, isNull, ne, or, sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
@@ -22,9 +22,11 @@ import {
   accountReminderEmail,
   offerteEmail,
   paymentReminderEmail,
+  reviewRequestEmail,
   sendEmail,
   type ReminderLevel,
 } from "@/lib/email";
+import { REVIEW_URL } from "@/lib/review-requests";
 import { renderDocumentPdf } from "@/lib/document-pdf";
 import { pushDocumentToHolded } from "@/lib/holded/sync";
 import { formatDate, formatEUR } from "@/lib/utils";
@@ -525,6 +527,51 @@ export async function sendAccountReminder(
   });
   revalidatePath(`/contacts/${contactId}`);
   revalidatePath("/invoices");
+  return { ok: true };
+}
+
+/** Stuur NU handmatig een review-verzoek (Google-review) naar een klant. */
+export async function sendReviewRequestNow(
+  contactId: string,
+): Promise<{ ok: boolean; error?: string }> {
+  await requireUser();
+  const contact = await db.query.contacts.findFirst({
+    where: eq(contacts.id, contactId),
+    columns: { name: true, email: true, preferredLanguage: true },
+  });
+  if (!contact?.email) return { ok: false, error: "Geen e-mailadres bij de klant bekend." };
+
+  const mail = reviewRequestEmail({
+    lang: contact.preferredLanguage,
+    contactName: contact.name,
+    reviewUrl: REVIEW_URL,
+  });
+  const res = await sendEmail({ to: contact.email, ...mail });
+  if (!res.sent) return { ok: false, error: "Versturen mislukt — probeer het later opnieuw." };
+
+  // Markeer de recentste afgeleverde pakbon, zodat de automatische cron niet dubbel vraagt.
+  const lastDelivered = await db.query.documents.findFirst({
+    where: and(
+      eq(documents.contactId, contactId),
+      eq(documents.kind, "deliverynote"),
+      isNotNull(documents.deliveredAt),
+    ),
+    columns: { id: true },
+    orderBy: desc(documents.deliveredAt),
+  });
+  if (lastDelivered) {
+    await db
+      .update(documents)
+      .set({ reviewRequestedAt: new Date(), updatedAt: new Date() })
+      .where(eq(documents.id, lastDelivered.id));
+  }
+  await db.insert(activities).values({
+    type: "email",
+    subject: "Review-verzoek verstuurd",
+    body: `Handmatig verstuurd naar ${contact.email}.`,
+    contactId,
+  });
+  revalidatePath(`/contacts/${contactId}`);
   return { ok: true };
 }
 
