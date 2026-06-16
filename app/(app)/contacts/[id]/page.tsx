@@ -42,6 +42,7 @@ import {
 import { cn, formatDate, formatEUR } from "@/lib/utils";
 import { normalizeDocItems } from "@/lib/documents";
 import { ConfirmSubmit } from "@/components/confirm-submit";
+import { AccountReminderButton } from "@/components/account-reminder-button";
 import { ReminderButton } from "@/components/reminder-button";
 import { addContactNote, deleteContact } from "../actions";
 import {
@@ -164,12 +165,21 @@ export default async function ContactDetailPage({
     { key: "facturen", label: "Facturen" },
     { key: "pakbonnen", label: "Pakbonnen" },
     { key: "projecten", label: "Projecten" },
+    { key: "archief", label: "Archief" },
   ] as const;
   type Tab = (typeof TABS)[number]["key"];
   const tab: Tab = TABS.some((t) => t.key === sp.tab) ? (sp.tab as Tab) : "overzicht";
   const offertesList = relatedDocs.filter((d) => d.kind === "estimate");
   const facturenList = relatedDocs.filter((d) => d.kind === "invoice" || d.kind === "creditnote");
   const pakbonnenList = relatedDocs.filter((d) => d.kind === "deliverynote");
+  // Openstaande posten + verstuurde herinneringen voor het archief.
+  const openInvoices = facturenList.filter(
+    (d) => d.kind === "invoice" && d.status !== "paid" && d.status !== "void" && d.status !== "draft" && num(d.totalEur) - num(d.paidEur) > 0.01,
+  );
+  const hasOpenInvoices = openInvoices.length > 0;
+  const reminderLog = timeline.filter(
+    (a) => a.type === "email" && /herinner|aanmaning/i.test(a.subject ?? ""),
+  );
 
   // Documenten per project (voor de uitklapbare Projecten-tab).
   const projectIds = relatedProjects.map((p) => p.id);
@@ -555,6 +565,101 @@ export default async function ContactDetailPage({
             </div>
           )}
         </Card>
+      )}
+
+      {tab === "archief" && (
+        <div className="space-y-4">
+          <Card>
+            <CardHeader>
+              <CardTitle>Openstaand</CardTitle>
+              {hasOpenInvoices && contact.email && <AccountReminderButton contactId={contact.id} />}
+            </CardHeader>
+            <CardContent>
+              {hasOpenInvoices ? (
+                <p className="text-sm">
+                  <strong>{openInvoices.length}</strong> openstaande factu
+                  {openInvoices.length === 1 ? "ur" : "ren"} · totaal{" "}
+                  <strong>{formatEUR(openstaand)}</strong> incl. btw.
+                  {!contact.email && (
+                    <span className="text-danger"> Geen e-mailadres bekend.</span>
+                  )}
+                </p>
+              ) : (
+                <p className="text-sm text-muted">Geen openstaande facturen. 🎉</p>
+              )}
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Verstuurde herinneringen &amp; aanmaningen</CardTitle>
+            </CardHeader>
+            <CardContent>
+              {reminderLog.length === 0 ? (
+                <p className="text-sm text-muted">Nog geen herinneringen verstuurd.</p>
+              ) : (
+                <ol className="space-y-2">
+                  {reminderLog.map((a) => (
+                    <li
+                      key={a.id}
+                      className="flex items-start justify-between gap-3 border-b border-border pb-2 text-sm last:border-0 last:pb-0"
+                    >
+                      <span className="min-w-0">
+                        <span className="block font-medium">{a.subject}</span>
+                        {a.body && <span className="block text-xs text-muted">{a.body}</span>}
+                      </span>
+                      <span className="shrink-0 text-xs text-muted">{formatDate(a.createdAt)}</span>
+                    </li>
+                  ))}
+                </ol>
+              )}
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Alle facturen &amp; creditnota&apos;s</CardTitle>
+            </CardHeader>
+            {facturenList.length === 0 ? (
+              <CardContent>
+                <p className="text-sm text-muted">Nog geen facturen.</p>
+              </CardContent>
+            ) : (
+              <Table>
+                <THead>
+                  <tr>
+                    <Th>Nr.</Th>
+                    <Th>Type</Th>
+                    <Th>Status</Th>
+                    <Th>Datum</Th>
+                    <Th className="text-right">Totaal</Th>
+                    <Th className="text-right">Betaald</Th>
+                  </tr>
+                </THead>
+                <TBody>
+                  {facturenList.map((doc) => (
+                    <Tr key={doc.id}>
+                      <Td className="font-medium">
+                        <Link href={`/documents/${doc.id}`} className="hover:underline">
+                          {doc.docNumber ?? "(geen nr.)"}
+                        </Link>
+                      </Td>
+                      <Td>{documentKindMeta[doc.kind]}</Td>
+                      <Td>
+                        <Badge tone={documentStatusMeta[doc.status].tone}>
+                          {documentStatusMeta[doc.status].label}
+                        </Badge>
+                      </Td>
+                      <Td className="text-muted">{formatDate(doc.issueDate)}</Td>
+                      <Td className="text-right tabular-nums">{formatEUR(doc.totalEur)}</Td>
+                      <Td className="text-right tabular-nums text-muted">{formatEUR(doc.paidEur)}</Td>
+                    </Tr>
+                  ))}
+                </TBody>
+              </Table>
+            )}
+          </Card>
+        </div>
       )}
 
       {tab === "overzicht" && (

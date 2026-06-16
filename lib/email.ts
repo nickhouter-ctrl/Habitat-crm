@@ -411,32 +411,128 @@ const PAY: Record<Lang, { subject: (nr: string) => string; intro: string; openLa
   },
 };
 
+/** Toon/teksten per herinneringsniveau: 1 = vriendelijk, 2 = steviger, 3 = aanmaning. */
+export type ReminderLevel = 1 | 2 | 3;
+const PAY_LEVELS: Record<Lang, Record<ReminderLevel, { subject: (nr: string) => string; intro: string; ask: string }>> = {
+  nl: {
+    1: { subject: (nr) => `Herinnering: factuur ${nr} nog open`, intro: "Een vriendelijke herinnering: volgens onze administratie staat onderstaande factuur nog open. Mogelijk is uw betaling onderweg — in dat geval kunt u deze mail als niet verzonden beschouwen.", ask: "Wilt u de betaling op korte termijn voldoen? Bij vragen of een afwijkende afspraak horen we het graag." },
+    2: { subject: (nr) => `Tweede herinnering: factuur ${nr}`, intro: "Wij hebben nog geen betaling van onderstaande factuur kunnen vaststellen, terwijl de vervaldatum inmiddels is verstreken.", ask: "Wij verzoeken u vriendelijk doch dringend het openstaande bedrag binnen 7 dagen te voldoen." },
+    3: { subject: (nr) => `Aanmaning: factuur ${nr}`, intro: "Ondanks eerdere herinneringen staat onderstaande factuur nog steeds open. Dit is een laatste aanmaning.", ask: "Wij verzoeken u het openstaande bedrag binnen 14 dagen te voldoen, om verdere (incasso)stappen te voorkomen." },
+  },
+  en: {
+    1: { subject: (nr) => `Reminder: invoice ${nr} still open`, intro: "A friendly reminder: according to our records the invoice below is still outstanding. If your payment is already on its way, please disregard this message.", ask: "Could you arrange payment soon? If you have any questions or a different arrangement, just let us know." },
+    2: { subject: (nr) => `Second reminder: invoice ${nr}`, intro: "We have not yet been able to register payment of the invoice below, while the due date has now passed.", ask: "We kindly but urgently request payment of the outstanding amount within 7 days." },
+    3: { subject: (nr) => `Final notice: invoice ${nr}`, intro: "Despite earlier reminders the invoice below is still unpaid. This is a final notice.", ask: "Please settle the outstanding amount within 14 days to avoid further collection steps." },
+  },
+  es: {
+    1: { subject: (nr) => `Recordatorio: factura ${nr} pendiente`, intro: "Un recordatorio amable: según nuestros registros, la siguiente factura sigue pendiente. Si su pago ya está en camino, puede ignorar este mensaje.", ask: "¿Podría realizar el pago en breve? Si tiene alguna pregunta o un acuerdo distinto, díganoslo." },
+    2: { subject: (nr) => `Segundo recordatorio: factura ${nr}`, intro: "Todavía no hemos podido registrar el pago de la siguiente factura, y la fecha de vencimiento ya ha pasado.", ask: "Le rogamos encarecidamente que abone el importe pendiente en un plazo de 7 días." },
+    3: { subject: (nr) => `Requerimiento de pago: factura ${nr}`, intro: "A pesar de recordatorios anteriores, la siguiente factura sigue pendiente. Este es un último aviso.", ask: "Le solicitamos que abone el importe pendiente en un plazo de 14 días para evitar gestiones de cobro adicionales." },
+  },
+  de: {
+    1: { subject: (nr) => `Erinnerung: Rechnung ${nr} noch offen`, intro: "Eine freundliche Erinnerung: nach unseren Unterlagen ist die folgende Rechnung noch offen. Sollte Ihre Zahlung bereits unterwegs sein, betrachten Sie diese Nachricht bitte als gegenstandslos.", ask: "Könnten Sie die Zahlung zeitnah veranlassen? Bei Fragen oder einer abweichenden Vereinbarung melden Sie sich gern." },
+    2: { subject: (nr) => `Zweite Erinnerung: Rechnung ${nr}`, intro: "Wir konnten den Zahlungseingang der folgenden Rechnung noch nicht feststellen, obwohl das Fälligkeitsdatum bereits verstrichen ist.", ask: "Wir bitten Sie freundlich, aber dringend, den offenen Betrag innerhalb von 7 Tagen zu begleichen." },
+    3: { subject: (nr) => `Mahnung: Rechnung ${nr}`, intro: "Trotz vorheriger Erinnerungen ist die folgende Rechnung weiterhin offen. Dies ist eine letzte Mahnung.", ask: "Wir bitten Sie, den offenen Betrag innerhalb von 14 Tagen zu begleichen, um weitere Schritte zu vermeiden." },
+  },
+};
+
 export function paymentReminderEmail(args: {
   lang?: string | null;
   contactName?: string | null;
   docNumber: string;
   amount: string;
   dueDate: string;
+  level?: ReminderLevel;
 }): { subject: string; html: string; text: string } {
   const lang = pickLang(args.lang);
   const p = PAY[lang];
+  const lvl: ReminderLevel = args.level ?? 1;
+  const l = PAY_LEVELS[lang][lvl];
   const t = T[lang];
   const greeting = args.contactName ? `${t.hi} ${escapeHtml(args.contactName)},` : `${t.hi},`;
   const html = brandedEmail(`
       <p style="margin:0">${greeting}</p>
-      <p>${escapeHtml(p.intro)}</p>
+      <p>${escapeHtml(l.intro)}</p>
       <div style="margin:16px 0;padding:14px 18px;background:${COMPANY.cream};border-radius:10px">
         <div style="font-weight:600;color:${COMPANY.brown}">${escapeHtml(args.docNumber)}</div>
         <div style="font-size:14px;color:#555;margin-top:4px">${escapeHtml(p.openLabel)}: <strong>${escapeHtml(args.amount)}</strong></div>
         <div style="font-size:14px;color:#555">${escapeHtml(p.dueLabel)}: ${escapeHtml(args.dueDate)}</div>
       </div>
-      <p>${escapeHtml(p.ask)}</p>
+      <p>${escapeHtml(l.ask)}</p>
       <hr style="border:none;border-top:1px solid ${COMPANY.sand};margin:24px 0 16px" />
       <p style="margin:0 0 4px">${t.regards}</p>
       <div style="font-size:13px;color:#888;line-height:1.7">${signatureHtml()}</div>`);
   const text =
-    `${greeting}\n\n${p.intro}\n\n${args.docNumber}\n${p.openLabel}: ${args.amount}\n${p.dueLabel}: ${args.dueDate}\n\n${p.ask}\n\n${t.regards}\n${COMPANY.legalName}`;
-  return { subject: p.subject(args.docNumber), html, text };
+    `${greeting}\n\n${l.intro}\n\n${args.docNumber}\n${p.openLabel}: ${args.amount}\n${p.dueLabel}: ${args.dueDate}\n\n${l.ask}\n\n${t.regards}\n${COMPANY.legalName}`;
+  return { subject: l.subject(args.docNumber), html, text };
+}
+
+/** Verzamelherinnering: alle openstaande facturen (en creditnota's) in één overzicht. */
+const STMT: Record<Lang, { subject: string; intro: string; colDoc: string; colDue: string; colAmount: string; creditLabel: string; totalLabel: string }> = {
+  nl: { subject: "Overzicht van uw openstaande facturen", intro: "Hierbij een overzicht van de posten die volgens onze administratie nog openstaan.", colDoc: "Factuur", colDue: "Vervaldatum", colAmount: "Openstaand", creditLabel: "Creditnota", totalLabel: "Totaal te voldoen" },
+  en: { subject: "Overview of your outstanding invoices", intro: "Please find below an overview of the items that are still outstanding according to our records.", colDoc: "Invoice", colDue: "Due date", colAmount: "Outstanding", creditLabel: "Credit note", totalLabel: "Total payable" },
+  es: { subject: "Resumen de sus facturas pendientes", intro: "A continuación encontrará un resumen de las partidas que según nuestros registros siguen pendientes.", colDoc: "Factura", colDue: "Vencimiento", colAmount: "Pendiente", creditLabel: "Abono", totalLabel: "Total a pagar" },
+  de: { subject: "Übersicht Ihrer offenen Rechnungen", intro: "Nachstehend finden Sie eine Übersicht der Posten, die nach unseren Unterlagen noch offen sind.", colDoc: "Rechnung", colDue: "Fälligkeit", colAmount: "Offen", creditLabel: "Gutschrift", totalLabel: "Zu zahlender Gesamtbetrag" },
+};
+
+export function accountReminderEmail(args: {
+  lang?: string | null;
+  contactName?: string | null;
+  level?: ReminderLevel;
+  invoices: { docNumber: string; dueDate: string; amount: string }[];
+  credits: { docNumber: string; amount: string }[];
+  total: string;
+}): { subject: string; html: string; text: string } {
+  const lang = pickLang(args.lang);
+  const lvl: ReminderLevel = args.level ?? 1;
+  const l = PAY_LEVELS[lang][lvl];
+  const s = STMT[lang];
+  const t = T[lang];
+  const greeting = args.contactName ? `${t.hi} ${escapeHtml(args.contactName)},` : `${t.hi},`;
+  const levelTag = lvl === 2 ? ` (${lang === "nl" ? "2e herinnering" : lang === "de" ? "2. Erinnerung" : lang === "es" ? "2º recordatorio" : "2nd reminder"})` : lvl === 3 ? ` (${lang === "nl" ? "aanmaning" : lang === "de" ? "Mahnung" : lang === "es" ? "requerimiento" : "final notice"})` : "";
+
+  const rows = [
+    ...args.invoices.map(
+      (i) => `<tr>
+        <td style="padding:6px 10px;border-top:1px solid ${COMPANY.sand}">${escapeHtml(i.docNumber)}</td>
+        <td style="padding:6px 10px;border-top:1px solid ${COMPANY.sand};color:#777">${escapeHtml(i.dueDate)}</td>
+        <td style="padding:6px 10px;border-top:1px solid ${COMPANY.sand};text-align:right">${escapeHtml(i.amount)}</td></tr>`,
+    ),
+    ...args.credits.map(
+      (c) => `<tr>
+        <td style="padding:6px 10px;border-top:1px solid ${COMPANY.sand}">${escapeHtml(s.creditLabel)} ${escapeHtml(c.docNumber)}</td>
+        <td style="padding:6px 10px;border-top:1px solid ${COMPANY.sand}"></td>
+        <td style="padding:6px 10px;border-top:1px solid ${COMPANY.sand};text-align:right;color:#16794a">${escapeHtml(c.amount)}</td></tr>`,
+    ),
+  ].join("");
+
+  const html = brandedEmail(`
+      <p style="margin:0">${greeting}</p>
+      <p>${escapeHtml(s.intro)}</p>
+      <table style="width:100%;border-collapse:collapse;margin:16px 0;font-size:14px">
+        <thead><tr>
+          <th style="text-align:left;padding:6px 10px;color:#777;font-weight:600">${escapeHtml(s.colDoc)}</th>
+          <th style="text-align:left;padding:6px 10px;color:#777;font-weight:600">${escapeHtml(s.colDue)}</th>
+          <th style="text-align:right;padding:6px 10px;color:#777;font-weight:600">${escapeHtml(s.colAmount)}</th>
+        </tr></thead>
+        <tbody>${rows}</tbody>
+        <tfoot><tr>
+          <td colspan="2" style="padding:10px;border-top:2px solid ${COMPANY.brown};font-weight:700">${escapeHtml(s.totalLabel)}</td>
+          <td style="padding:10px;border-top:2px solid ${COMPANY.brown};text-align:right;font-weight:700">${escapeHtml(args.total)}</td>
+        </tr></tfoot>
+      </table>
+      <p>${escapeHtml(l.ask)}</p>
+      <hr style="border:none;border-top:1px solid ${COMPANY.sand};margin:24px 0 16px" />
+      <p style="margin:0 0 4px">${t.regards}</p>
+      <div style="font-size:13px;color:#888;line-height:1.7">${signatureHtml()}</div>`);
+
+  const textLines = [
+    ...args.invoices.map((i) => `${i.docNumber}  ${i.dueDate}  ${i.amount}`),
+    ...args.credits.map((c) => `${s.creditLabel} ${c.docNumber}  ${c.amount}`),
+  ].join("\n");
+  const text = `${greeting}\n\n${s.intro}\n\n${textLines}\n${s.totalLabel}: ${args.total}\n\n${l.ask}\n\n${t.regards}\n${COMPANY.legalName}`;
+
+  return { subject: `${s.subject}${levelTag}`, html, text };
 }
 
 /** Herinnering aan de klant: levering/ophaling/montage is (morgen) gepland. */

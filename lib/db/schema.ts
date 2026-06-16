@@ -503,6 +503,10 @@ export const documents = pgTable(
     /** Factuur: moment waarop de laatste betaalherinnering is verstuurd (zodat we
      * niet dagelijks blijven mailen). */
     paymentReminderAt: timestamp({ withTimezone: true }),
+    /** Factuur: hoeveel herinneringen al verstuurd (0=geen, 1=1e, 2=2e, 3=aanmaning). */
+    reminderLevel: integer().notNull().default(0),
+    /** Factuur/levering: review-verzoek verstuurd op (zodat we maar één keer vragen). */
+    reviewRequestedAt: timestamp({ withTimezone: true }),
     /** Convenience copy of the Holded id; the source of truth mapping lives in holded_sync_map. */
     holdedId: text(),
     ...timestamps,

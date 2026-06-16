@@ -1,6 +1,6 @@
 "use server";
 
-import { and, eq, isNotNull, isNull, ne, or, sql } from "drizzle-orm";
+import { and, eq, inArray, isNotNull, isNull, ne, or, sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
@@ -18,7 +18,13 @@ import {
   type DocKind,
 } from "@/lib/documents";
 import { insertNumberedDocument } from "@/lib/doc-number";
-import { offerteEmail, paymentReminderEmail, sendEmail } from "@/lib/email";
+import {
+  accountReminderEmail,
+  offerteEmail,
+  paymentReminderEmail,
+  sendEmail,
+  type ReminderLevel,
+} from "@/lib/email";
 import { renderDocumentPdf } from "@/lib/document-pdf";
 import { pushDocumentToHolded } from "@/lib/holded/sync";
 import { formatDate, formatEUR } from "@/lib/utils";
@@ -365,8 +371,15 @@ export async function setDeliveryNoteDelivered(id: string, delivered: boolean) {
  * ook als de auto-herinneringen uitstaan. Wel loggen we 'm en zetten we
  * payment_reminder_at zodat de cron 'm niet meteen dubbel verstuurt.
  */
+const REMINDER_NAME: Record<ReminderLevel, string> = {
+  1: "1e betaalherinnering",
+  2: "2e betaalherinnering",
+  3: "Aanmaning",
+};
+
 export async function sendPaymentReminderNow(
   id: string,
+  level?: ReminderLevel,
 ): Promise<{ ok: boolean; error?: string }> {
   await requireUser();
   const doc = await db.query.documents.findFirst({
@@ -379,6 +392,7 @@ export async function sendPaymentReminderNow(
       paidEur: true,
       status: true,
       contactId: true,
+      reminderLevel: true,
     },
     with: { contact: { columns: { name: true, email: true, preferredLanguage: true } } },
   });
@@ -389,24 +403,28 @@ export async function sendPaymentReminderNow(
   const email = doc.contact?.email;
   if (!email) return { ok: false, error: "Geen e-mailadres bij de klant bekend." };
 
+  // Niveau: handmatig gekozen, anders automatisch oplopen (max 3 = aanmaning).
+  const lvl: ReminderLevel = level ?? (Math.min(3, (doc.reminderLevel ?? 0) + 1) as ReminderLevel);
+
   const mail = paymentReminderEmail({
     lang: doc.contact?.preferredLanguage,
     contactName: doc.contact?.name,
     docNumber: doc.docNumber ?? "",
     amount: formatEUR(open),
     dueDate: doc.dueDate ? formatDate(doc.dueDate) : "—",
+    level: lvl,
   });
   const res = await sendEmail({ to: email, ...mail });
   if (!res.sent) return { ok: false, error: "Versturen mislukt — probeer het later opnieuw." };
 
   await db
     .update(documents)
-    .set({ paymentReminderAt: new Date(), updatedAt: new Date() })
+    .set({ paymentReminderAt: new Date(), reminderLevel: lvl, updatedAt: new Date() })
     .where(eq(documents.id, id));
   await db.insert(activities).values({
     type: "email",
-    subject: `Betaalherinnering verstuurd — ${doc.docNumber ?? ""}`,
-    body: `Handmatig verstuurd naar ${email}. Openstaand ${formatEUR(open)}${
+    subject: `${REMINDER_NAME[lvl]} verstuurd — ${doc.docNumber ?? ""}`,
+    body: `Verstuurd naar ${email}. Openstaand ${formatEUR(open)}${
       doc.dueDate ? ` · vervallen op ${formatDate(doc.dueDate)}` : ""
     }.`,
     documentId: doc.id,
@@ -415,6 +433,98 @@ export async function sendPaymentReminderNow(
   revalidatePath(`/documents/${id}`);
   revalidatePath("/invoices");
   if (doc.contactId) revalidatePath(`/contacts/${doc.contactId}`);
+  return { ok: true };
+}
+
+/**
+ * Verzamelherinnering: alle openstaande facturen van één klant in ÉÉN mail met
+ * een totaaloverzicht. Openstaande creditnota's worden meegenomen (verlagen het
+ * totaal). Niveau loopt automatisch op tenzij handmatig gekozen.
+ */
+export async function sendAccountReminder(
+  contactId: string,
+  level?: ReminderLevel,
+): Promise<{ ok: boolean; error?: string }> {
+  await requireUser();
+  const contact = await db.query.contacts.findFirst({
+    where: eq(contacts.id, contactId),
+    columns: { name: true, email: true, preferredLanguage: true },
+  });
+  if (!contact?.email) return { ok: false, error: "Geen e-mailadres bij de klant bekend." };
+
+  const docs = await db.query.documents.findMany({
+    where: and(
+      eq(documents.contactId, contactId),
+      inArray(documents.kind, ["invoice", "creditnote"]),
+      ne(documents.status, "void"),
+    ),
+    columns: {
+      id: true,
+      kind: true,
+      docNumber: true,
+      dueDate: true,
+      totalEur: true,
+      paidEur: true,
+      status: true,
+      reminderLevel: true,
+    },
+  });
+
+  const openOf = (d: (typeof docs)[number]) => Number(d.totalEur ?? 0) - Number(d.paidEur ?? 0);
+  const invoices = docs.filter(
+    (d) => d.kind === "invoice" && d.status !== "draft" && openOf(d) > 0.01,
+  );
+  const credits = docs.filter((d) => d.kind === "creditnote" && openOf(d) > 0.01);
+  if (invoices.length === 0) {
+    return { ok: false, error: "Geen openstaande facturen voor deze klant." };
+  }
+
+  const invoiceTotal = invoices.reduce((s, d) => s + openOf(d), 0);
+  const creditTotal = credits.reduce((s, d) => s + openOf(d), 0);
+  const total = invoiceTotal - creditTotal;
+
+  const lvl: ReminderLevel =
+    level ??
+    (Math.min(3, Math.max(0, ...invoices.map((d) => d.reminderLevel ?? 0)) + 1) as ReminderLevel);
+
+  const mail = accountReminderEmail({
+    lang: contact.preferredLanguage,
+    contactName: contact.name,
+    level: lvl,
+    invoices: invoices.map((d) => ({
+      docNumber: d.docNumber ?? "—",
+      dueDate: d.dueDate ? formatDate(d.dueDate) : "—",
+      amount: formatEUR(openOf(d)),
+    })),
+    credits: credits.map((d) => ({
+      docNumber: d.docNumber ?? "—",
+      amount: `− ${formatEUR(openOf(d))}`,
+    })),
+    total: formatEUR(total),
+  });
+  const res = await sendEmail({ to: contact.email, ...mail });
+  if (!res.sent) return { ok: false, error: "Versturen mislukt — probeer het later opnieuw." };
+
+  // Markeer alle meegestuurde facturen + log één activiteit bij de klant.
+  await db
+    .update(documents)
+    .set({ paymentReminderAt: new Date(), reminderLevel: lvl, updatedAt: new Date() })
+    .where(
+      inArray(
+        documents.id,
+        invoices.map((d) => d.id),
+      ),
+    );
+  await db.insert(activities).values({
+    type: "email",
+    subject: `Verzamelherinnering verstuurd (${REMINDER_NAME[lvl]})`,
+    body: `${invoices.length} factu${invoices.length === 1 ? "ur" : "ren"}${
+      credits.length ? ` − ${credits.length} creditnota('s)` : ""
+    } · totaal te voldoen ${formatEUR(total)}. Naar ${contact.email}.`,
+    contactId,
+  });
+  revalidatePath(`/contacts/${contactId}`);
+  revalidatePath("/invoices");
   return { ok: true };
 }
 
