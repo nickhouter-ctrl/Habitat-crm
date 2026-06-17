@@ -41,8 +41,11 @@ Font.register({
   ],
 });
 
-// Eigen logo (HABITAT ONE · JAVEA) voor de PDF-header.
+// Eigen logo (HABITAT ONE) voor de PDF-header.
 const LOGO_PATH = path.join(process.cwd(), "public", "brand", "habitat-one-logo.png");
+// Crème-variant (donkere letters) — voor het voor- en eindblad met crème/lichte
+// achtergrond, zodat het logo elegant meebeweegt i.p.v. een hard zwart blok.
+const LOGO_PATH_CREAM = path.join(process.cwd(), "public", "brand", "habitat-one-logo-cream.png");
 
 type ExampleImage = { data: Buffer; format: "jpg" | "png" };
 
@@ -549,7 +552,7 @@ function DocumentPdf({ doc }: { doc: PdfDoc }) {
       {showExtras && (
         <Page size="A4" style={cs.cover}>
           <View style={cs.coverWordmark}>
-            <Image src={LOGO_PATH} style={cs.coverLogo} />
+            <Image src={LOGO_PATH_CREAM} style={cs.coverLogo} />
             <Text style={cs.coverTagline}>{C.tagline}</Text>
           </View>
           {coverImgs.length > 0 ? (
@@ -764,7 +767,7 @@ function DocumentPdf({ doc }: { doc: PdfDoc }) {
               {C.phone} · {C.email} · {C.website}
             </Text>
             <View style={{ marginTop: 14, alignItems: "center" }}>
-              <Image src={LOGO_PATH} style={cs.coverLogoSmall} />
+              <Image src={LOGO_PATH_CREAM} style={cs.coverLogoSmall} />
             </View>
           </View>
         </Page>
