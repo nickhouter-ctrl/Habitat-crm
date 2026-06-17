@@ -28,7 +28,7 @@ export default async function EditContactPage({
   const company = contact.companyId
     ? await db.query.companies.findFirst({
         where: eq(companies.id, contact.companyId),
-        columns: { name: true },
+        columns: { name: true, vatNumber: true },
       })
     : null;
 
@@ -47,6 +47,7 @@ export default async function EditContactPage({
     firstName: contact.firstName,
     lastName: contact.lastName,
     companyName: company?.name ?? null,
+    companyVat: company?.vatNumber ?? null,
     email: contact.email,
     phone: contact.phone,
     addressLine: contact.addressLine,

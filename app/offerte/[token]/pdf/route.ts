@@ -24,18 +24,20 @@ export async function GET(
           preferredLanguage: true,
         },
       },
+      company: {
+        columns: { name: true, vatNumber: true, addressLine: true, postalCode: true, city: true },
+      },
       project: { columns: { name: true } },
     },
   });
   if (!doc) return new Response("Not found", { status: 404 });
 
+  const joinAddr = (line?: string | null, pc?: string | null, city?: string | null) =>
+    [line, [pc, city].filter(Boolean).join(" ")].filter((p) => p && p.trim()).join(", ") || null;
   const addr =
-    [
-      doc.contact?.addressLine,
-      [doc.contact?.postalCode, doc.contact?.city].filter(Boolean).join(" "),
-    ]
-      .filter((p) => p && p.trim())
-      .join(", ") || null;
+    (doc.company
+      ? joinAddr(doc.company.addressLine, doc.company.postalCode, doc.company.city)
+      : null) ?? joinAddr(doc.contact?.addressLine, doc.contact?.postalCode, doc.contact?.city);
 
   const buf = await renderDocumentPdf({
     kind: doc.kind,
@@ -50,6 +52,8 @@ export async function GET(
     notes: doc.notes,
     contactName: doc.contact?.name ?? null,
     contactAddress: addr,
+    companyName: doc.company?.name ?? null,
+    contactVat: doc.company?.vatNumber ?? null,
     projectName: doc.project?.name ?? null,
     locale: doc.contact?.preferredLanguage ?? "es",
   });

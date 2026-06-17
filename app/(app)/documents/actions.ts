@@ -9,7 +9,7 @@ import { z } from "zod";
 
 import { auth } from "@/auth";
 import { db } from "@/lib/db";
-import { activities, contacts, deals, deliveries, documents, holdedSyncMap, products } from "@/lib/db/schema";
+import { activities, companies, contacts, deals, deliveries, documents, holdedSyncMap, products } from "@/lib/db/schema";
 import { syncDealFromDocument } from "@/lib/deals";
 import {
   computeTotals,
@@ -775,13 +775,17 @@ export async function sendDocument(id: string) {
       | { filename: string; content: Uint8Array; contentType: string }[]
       | undefined;
     try {
+      const company = doc.companyId
+        ? await db.query.companies.findFirst({
+            where: eq(companies.id, doc.companyId),
+            columns: { name: true, vatNumber: true, addressLine: true, postalCode: true, city: true },
+          })
+        : null;
+      const joinAddr = (line?: string | null, pc?: string | null, city?: string | null) =>
+        [line, [pc, city].filter(Boolean).join(" ")].filter((p) => p && p.trim()).join(", ") || null;
       const addr =
-        [
-          doc.contact.addressLine,
-          [doc.contact.postalCode, doc.contact.city].filter(Boolean).join(" "),
-        ]
-          .filter((p) => p && p.trim())
-          .join(", ") || null;
+        (company ? joinAddr(company.addressLine, company.postalCode, company.city) : null) ??
+        joinAddr(doc.contact.addressLine, doc.contact.postalCode, doc.contact.city);
       const buf = await renderDocumentPdf({
         kind: doc.kind,
         docNumber: doc.docNumber,
@@ -795,6 +799,8 @@ export async function sendDocument(id: string) {
         notes: doc.notes,
         contactName: doc.contact.name ?? null,
         contactAddress: addr,
+        companyName: company?.name ?? null,
+        contactVat: company?.vatNumber ?? null,
         locale: doc.contact.preferredLanguage ?? "es",
       });
       attachments = [
@@ -890,13 +896,17 @@ export async function sendDocumentCustom(id: string, formData: FormData) {
     redirect(`/documents/${id}?verzonden=geenadres`);
   }
 
+  const company = doc.companyId
+    ? await db.query.companies.findFirst({
+        where: eq(companies.id, doc.companyId),
+        columns: { name: true, vatNumber: true, addressLine: true, postalCode: true, city: true },
+      })
+    : null;
+  const joinAddr = (line?: string | null, pc?: string | null, city?: string | null) =>
+    [line, [pc, city].filter(Boolean).join(" ")].filter((p) => p && p.trim()).join(", ") || null;
   const addr =
-    [
-      doc.contact?.addressLine,
-      [doc.contact?.postalCode, doc.contact?.city].filter(Boolean).join(" "),
-    ]
-      .filter((p) => p && p.trim())
-      .join(", ") || null;
+    (company ? joinAddr(company.addressLine, company.postalCode, company.city) : null) ??
+    joinAddr(doc.contact?.addressLine, doc.contact?.postalCode, doc.contact?.city);
 
   // PDF genereren + mail versturen gebeurt ná de response (gebruiker keert meteen
   // terug). Voorkomt het "er gebeurt niks"-gevoel en dus dubbele verzendingen.
@@ -916,6 +926,8 @@ export async function sendDocumentCustom(id: string, formData: FormData) {
         notes: doc.notes,
         contactName: doc.contact?.name ?? null,
         contactAddress: addr,
+        companyName: company?.name ?? null,
+        contactVat: company?.vatNumber ?? null,
         locale: doc.contact?.preferredLanguage ?? "es",
       });
       attachments.push({

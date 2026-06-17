@@ -21,6 +21,7 @@ export type ContactFormInitial = {
   firstName?: string | null;
   lastName?: string | null;
   companyName?: string | null;
+  companyVat?: string | null;
   email?: string | null;
   phone?: string | null;
   addressLine?: string | null;
@@ -111,14 +112,24 @@ export function ContactCreateForm({
       </div>
 
       {type === "zakelijk" && (
-        <Field label="Bedrijfsnaam" htmlFor="companyName">
-          <Input
-            id="companyName"
-            name="companyName"
-            placeholder="bv. Bouwbedrijf X SL"
-            defaultValue={initial?.companyName ?? ""}
-          />
-        </Field>
+        <div className="grid gap-4 sm:grid-cols-2">
+          <Field label="Bedrijfsnaam" htmlFor="companyName">
+            <Input
+              id="companyName"
+              name="companyName"
+              placeholder="bv. Bouwbedrijf X SL"
+              defaultValue={initial?.companyName ?? ""}
+            />
+          </Field>
+          <Field label="CIF / NIF (btw-nummer)" htmlFor="companyVat" hint="Verplicht op facturen in Spanje.">
+            <Input
+              id="companyVat"
+              name="companyVat"
+              placeholder="bv. B12345678"
+              defaultValue={initial?.companyVat ?? ""}
+            />
+          </Field>
+        </div>
       )}
 
       <div className="grid gap-4 sm:grid-cols-2">

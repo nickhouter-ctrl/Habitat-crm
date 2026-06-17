@@ -22,6 +22,7 @@ const newContactSchema = z.object({
   firstName: z.string().trim().max(120).optional().or(z.literal("")),
   lastName: z.string().trim().max(120).optional().or(z.literal("")),
   companyName: z.string().trim().max(200).optional().or(z.literal("")),
+  companyVat: z.string().trim().max(40).optional().or(z.literal("")),
   email: z.string().trim().email().optional().or(z.literal("")),
   phone: z.string().trim().max(40).optional().or(z.literal("")),
   preferredLanguage: z.enum(["en", "nl", "es", "de"]).default("es"),
@@ -63,6 +64,7 @@ export async function createContact(formData: FormData) {
         clean({
           name: v.companyName.trim(),
           type: "client",
+          vatNumber: v.companyVat || "",
           email: v.email || "",
           phone: v.phone || "",
           addressLine: v.addressLine || "",
@@ -129,6 +131,7 @@ export async function updateContact(id: string, formData: FormData) {
   if (v.klanttype === "zakelijk" && v.companyName?.trim()) {
     const coData = clean({
       name: v.companyName.trim(),
+      vatNumber: v.companyVat || "",
       email: v.email || "",
       phone: v.phone || "",
       addressLine: v.addressLine || "",

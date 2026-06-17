@@ -440,6 +440,10 @@ export type PdfDoc = {
   notes: string | null;
   contactName: string | null;
   contactAddress?: string | null;
+  /** Bedrijfsnaam (zakelijke klant) — komt boven de contactpersoon op de factuur. */
+  companyName?: string | null;
+  /** CIF/NIF (of BTW-nummer) van de klant — in Spanje verplicht op de factuur. */
+  contactVat?: string | null;
   /** Projectnaam — getoond op alle documenten zodat duidelijk is waar het voor is. */
   projectName?: string | null;
   /** Taal van het document — volgt de voorkeurstaal van het contact. Default es. */
@@ -562,7 +566,7 @@ function DocumentPdf({ doc }: { doc: PdfDoc }) {
           <View style={cs.coverMetaRow}>
             <View>
               <Text style={cs.coverMetaLabel}>{coverTxt.for.toUpperCase()}</Text>
-              <Text style={cs.coverMetaValue}>{doc.contactName ?? "—"}</Text>
+              <Text style={cs.coverMetaValue}>{doc.companyName ?? doc.contactName ?? "—"}</Text>
             </View>
             <View>
               <Text style={[cs.coverMetaLabel, { textAlign: "right" }]}>{coverTxt.date.toUpperCase()}</Text>
@@ -608,9 +612,15 @@ function DocumentPdf({ doc }: { doc: PdfDoc }) {
             </View>
             <View style={{ flex: 1, alignItems: "flex-end" }}>
               <Text style={s.partyLabel}>{t.to}</Text>
-              <Text style={s.partyName}>{doc.contactName ?? "—"}</Text>
+              <Text style={s.partyName}>{doc.companyName ?? doc.contactName ?? "—"}</Text>
+              {doc.companyName && doc.contactName && doc.contactName !== doc.companyName ? (
+                <Text style={[s.muted, { textAlign: "right" }]}>t.a.v. {doc.contactName}</Text>
+              ) : null}
               {doc.contactAddress ? (
                 <Text style={[s.muted, { textAlign: "right" }]}>{doc.contactAddress}</Text>
+              ) : null}
+              {doc.contactVat ? (
+                <Text style={[s.muted, { textAlign: "right" }]}>CIF/NIF: {doc.contactVat}</Text>
               ) : null}
               {doc.projectName ? (
                 <Text style={[s.partyName, { textAlign: "right", marginTop: 6, color: C.terracotta }]}>
