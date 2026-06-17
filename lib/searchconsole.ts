@@ -18,9 +18,11 @@ export type ScRow = {
   position: number;
 };
 export type ScTotals = { clicks: number; impressions: number; ctr: number; position: number };
-export type ScTrend = { label: string; clicks: number; impressions: number };
+export type ScTrend = { label: string; clicks: number; impressions: number; date?: string };
 export type SeoData = {
   range: { start: string; end: string };
+  granularity: "day" | "single";
+  lagDays: number; // hoeveel dagen Search Console achterloopt
   totals: ScTotals | null;
   prev: ScTotals | null;
   trend: ScTrend[];
@@ -28,6 +30,7 @@ export type SeoData = {
   pages: ScRow[];
   opportunities: ScRow[];
   countries: ScRow[];
+  devices: ScRow[];
 };
 
 async function accessToken(): Promise<string> {
@@ -75,40 +78,68 @@ function toTotals(rows: ScRow[]): ScTotals | null {
   return { clicks: r.clicks, impressions: r.impressions, ctr: r.ctr, position: r.position };
 }
 
-export async function getSeoData(): Promise<SeoData> {
-  const token = await accessToken();
-  // SC-data loopt ~3 dagen achter; laatste 28 dagen + de 28 dagen ervoor.
-  const end = new Date(Date.now() - 3 * 86_400_000);
-  const start = new Date(end.getTime() - 27 * 86_400_000);
-  const prevEnd = new Date(start.getTime() - 86_400_000);
-  const prevStart = new Date(prevEnd.getTime() - 27 * 86_400_000);
-  const cur = { startDate: ymd(start), endDate: ymd(end) };
-  const prevR = { startDate: ymd(prevStart), endDate: ymd(prevEnd) };
+const LAG_DAYS = 3; // Search Console-data is doorgaans pas na ~3 dagen volledig.
 
-  const [totals, prev, trendRows, queries, pages, countries] = await Promise.all([
+export type SeoQuery = { days?: number; date?: string };
+
+export async function getSeoData(opts: SeoQuery | number = {}): Promise<SeoData> {
+  const q: SeoQuery = typeof opts === "number" ? { days: opts } : opts;
+  const token = await accessToken();
+
+  let cur: { startDate: string; endDate: string };
+  let prevR: { startDate: string; endDate: string };
+  const single = Boolean(q.date);
+
+  if (single) {
+    cur = { startDate: q.date as string, endDate: q.date as string };
+    const d = new Date(`${q.date}T00:00:00Z`);
+    d.setUTCDate(d.getUTCDate() - 1);
+    const prevDay = ymd(d);
+    prevR = { startDate: prevDay, endDate: prevDay };
+  } else {
+    // SC-data loopt ~3 dagen achter; laatste N dagen + de N dagen ervoor.
+    const days = q.days ?? 28;
+    const end = new Date(Date.now() - LAG_DAYS * 86_400_000);
+    const start = new Date(end.getTime() - (days - 1) * 86_400_000);
+    const prevEnd = new Date(start.getTime() - 86_400_000);
+    const prevStart = new Date(prevEnd.getTime() - (days - 1) * 86_400_000);
+    cur = { startDate: ymd(start), endDate: ymd(end) };
+    prevR = { startDate: ymd(prevStart), endDate: ymd(prevEnd) };
+  }
+
+  const [totals, prev, trendRows, queries, pages, countries, devices] = await Promise.all([
     query(token, { ...cur, dimensions: [], rowLimit: 1 }),
     query(token, { ...prevR, dimensions: [], rowLimit: 1 }),
-    query(token, { ...cur, dimensions: ["date"], rowLimit: 60 }),
-    query(token, { ...cur, dimensions: ["query"], rowLimit: 100 }),
-    query(token, { ...cur, dimensions: ["page"], rowLimit: 25 }),
-    query(token, { ...cur, dimensions: ["country"], rowLimit: 10 }),
+    query(token, { ...cur, dimensions: ["date"], rowLimit: 100 }),
+    query(token, { ...cur, dimensions: ["query"], rowLimit: 200 }),
+    query(token, { ...cur, dimensions: ["page"], rowLimit: 100 }),
+    query(token, { ...cur, dimensions: ["country"], rowLimit: 20 }),
+    query(token, { ...cur, dimensions: ["device"], rowLimit: 5 }),
   ]);
 
   const opportunities = queries
     .filter((r) => r.position >= 5 && r.position <= 20 && r.impressions >= 5)
     .sort((a, b) => b.impressions - a.impressions)
-    .slice(0, 15);
+    .slice(0, 25);
 
   return {
-    range: { start: ymd(start), end: ymd(end) },
+    range: { start: cur.startDate, end: cur.endDate },
+    granularity: single ? "single" : "day",
+    lagDays: LAG_DAYS,
     totals: toTotals(totals),
     prev: toTotals(prev),
     trend: trendRows
       .sort((a, b) => (a.keys?.[0] ?? "").localeCompare(b.keys?.[0] ?? ""))
-      .map((r) => ({ label: fmtDay(r.keys?.[0] ?? ""), clicks: r.clicks, impressions: r.impressions })),
-    queries: queries.slice(0, 15),
-    pages: pages.slice(0, 15),
+      .map((r) => ({
+        label: fmtDay(r.keys?.[0] ?? ""),
+        clicks: r.clicks,
+        impressions: r.impressions,
+        date: r.keys?.[0] ?? "",
+      })),
+    queries: queries.slice(0, 50),
+    pages: pages.slice(0, 50),
     opportunities,
     countries,
+    devices,
   };
 }

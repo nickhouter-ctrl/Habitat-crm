@@ -49,7 +49,11 @@ function deltaHint(cur: number, prev: number | undefined): { hint?: string; tone
   };
 }
 
-const PERIODS = [
+const DAY_TABS = [
+  { key: "today", label: "Vandaag" },
+  { key: "yesterday", label: "Gisteren" },
+] as const;
+const RANGE_TABS = [
   { dagen: 7, label: "Week" },
   { dagen: 28, label: "Maand" },
   { dagen: 90, label: "Kwartaal" },
@@ -61,7 +65,9 @@ export default async function AnalyticsPage({
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const sp = await searchParams;
-  const dagen = PERIODS.some((p) => p.dagen === Number(sp.dagen)) ? Number(sp.dagen) : 28;
+  const datum = typeof sp.datum === "string" ? sp.datum : undefined;
+  const single = Boolean(datum);
+  const dagen = RANGE_TABS.some((p) => p.dagen === Number(sp.dagen)) ? Number(sp.dagen) : 28;
   if (!gaConfigured()) {
     return (
       <>
@@ -85,29 +91,50 @@ export default async function AnalyticsPage({
     rtError = e instanceof Error ? e.message : String(e);
   }
   try {
-    data = await getAnalyticsData(dagen);
+    data = await getAnalyticsData(single ? { date: datum } : { days: dagen });
   } catch (e) {
     error = e instanceof Error ? e.message : String(e);
   }
 
   const t = data?.totals;
   const p = data?.prev ?? undefined;
+  const periodeLabel = data
+    ? data.range.start === data.range.end
+      ? data.range.start
+      : `${data.range.start} t/m ${data.range.end}`
+    : "";
+  // Een aangeklikte specifieke dag (geen "today"/"yesterday") krijgt geen actieve tab.
+  const customDay = single && datum !== "today" && datum !== "yesterday";
 
   return (
     <>
       <AutoRefresh seconds={30} />
       <PageHeader
         title="Analytics"
-        subtitle={data ? `Google Analytics (GA4) · ${data.range.start} t/m ${data.range.end}` : "Google Analytics (GA4)"}
+        subtitle={data ? `Google Analytics (GA4) · ${periodeLabel}` : "Google Analytics (GA4)"}
         actions={
           <div className="flex items-center overflow-hidden rounded-md border border-border text-sm">
-            {PERIODS.map((per) => (
+            {DAY_TABS.map((tab) => (
+              <Link
+                key={tab.key}
+                href={`/rapporten/analytics?datum=${tab.key}`}
+                className={cn(
+                  "px-3 py-1.5 transition-colors",
+                  datum === tab.key
+                    ? "bg-accent font-medium text-white"
+                    : "text-muted hover:bg-background",
+                )}
+              >
+                {tab.label}
+              </Link>
+            ))}
+            {RANGE_TABS.map((per) => (
               <Link
                 key={per.dagen}
                 href={`/rapporten/analytics?dagen=${per.dagen}`}
                 className={cn(
                   "px-3 py-1.5 transition-colors",
-                  per.dagen === dagen
+                  !single && per.dagen === dagen
                     ? "bg-accent font-medium text-white"
                     : "text-muted hover:bg-background",
                 )}
@@ -118,6 +145,19 @@ export default async function AnalyticsPage({
           </div>
         }
       />
+
+      {single && (
+        <div className="mb-5 flex items-center gap-3 text-sm">
+          <Link href="/rapporten/analytics" className="text-accent hover:underline">
+            ← Terug naar maandoverzicht
+          </Link>
+          {customDay && (
+            <span className="rounded-md bg-accent/10 px-2 py-0.5 text-xs font-medium text-accent">
+              Dagoverzicht · {periodeLabel}
+            </span>
+          )}
+        </div>
+      )}
 
       {/* Live — nu actief (ververst elke 30s) */}
       <Card className="mb-5 p-5">
@@ -194,10 +234,16 @@ export default async function AnalyticsPage({
           {data.trend.length > 0 && (
             <Card className="mb-5">
               <CardHeader>
-                <CardTitle>Bezoekers per dag</CardTitle>
+                <CardTitle>{single ? "Bezoekers per uur" : "Bezoekers per dag"}</CardTitle>
               </CardHeader>
               <CardContent>
-                <VisitorsAreaChart data={data.trend} />
+                <VisitorsAreaChart
+                  data={data.trend}
+                  drillBase={single ? undefined : "/rapporten/analytics?datum="}
+                />
+                {!single && (
+                  <p className="mt-2 text-xs text-muted">Tip: klik op een dag in de grafiek voor het volledige dagoverzicht.</p>
+                )}
               </CardContent>
             </Card>
           )}
@@ -224,7 +270,7 @@ export default async function AnalyticsPage({
                 <CardTitle>Leads per dag</CardTitle>
               </CardHeader>
               <CardContent>
-                <VisitorsAreaChart data={data.leadsTrend} />
+                <VisitorsAreaChart data={data.leadsTrend} valueLabel="Leads" />
               </CardContent>
             </Card>
           )}
@@ -273,7 +319,7 @@ export default async function AnalyticsPage({
                 <CardTitle>Wanneer bezoekers actief zijn (per uur)</CardTitle>
               </CardHeader>
               <CardContent>
-                <VisitorsAreaChart data={data.byHour} />
+                <VisitorsAreaChart data={data.byHour} valueLabel="Sessies" />
               </CardContent>
             </Card>
           )}

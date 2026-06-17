@@ -19,7 +19,7 @@ export type GaTotals = {
   avgSessionDuration: number; // seconden
   engagementRate: number;
 };
-export type GaRow = { label: string; value: number };
+export type GaRow = { label: string; value: number; date?: string };
 export type GaLeads = {
   generateLead: number;
   contactClick: number;
@@ -28,6 +28,7 @@ export type GaLeads = {
 };
 export type GaData = {
   range: { start: string; end: string };
+  granularity: "day" | "hour"; // "hour" = enkele-dag-weergave (grafiek per uur)
   totals: GaTotals | null;
   prev: GaTotals | null;
   trend: GaRow[];
@@ -129,13 +130,54 @@ function fmtDay(yyyymmdd: string): string {
   if (yyyymmdd.length !== 8) return yyyymmdd;
   return `${Number(yyyymmdd.slice(6, 8))}/${Number(yyyymmdd.slice(4, 6))}`;
 }
+const isoDay = (yyyymmdd: string) =>
+  yyyymmdd.length === 8 ? `${yyyymmdd.slice(0, 4)}-${yyyymmdd.slice(4, 6)}-${yyyymmdd.slice(6, 8)}` : yyyymmdd;
 
-export async function getAnalyticsData(days = 28): Promise<GaData> {
+// Vorige dag van een datum-spec ("today" -> "yesterday", "2026-06-15" -> "2026-06-14").
+function prevDayOf(spec: string): string {
+  if (spec === "today") return "yesterday";
+  if (spec === "yesterday") return "2daysAgo";
+  const d = new Date(`${spec}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() - 1);
+  return d.toISOString().slice(0, 10);
+}
+function dayLabel(spec: string): string {
+  if (spec === "today") return "vandaag";
+  if (spec === "yesterday") return "gisteren";
+  const [y, m, d] = spec.split("-");
+  return `${Number(d)}/${Number(m)}/${y}`;
+}
+
+export type GaQuery = { days?: number; date?: string };
+
+export async function getAnalyticsData(opts: GaQuery | number = {}): Promise<GaData> {
+  const q: GaQuery = typeof opts === "number" ? { days: opts } : opts;
+  const single = Boolean(q.date);
+  const days = q.days ?? 28;
   const token = await accessToken();
-  const cur = [{ startDate: `${days}daysAgo`, endDate: "yesterday" }];
-  const prevRange = [{ startDate: `${days * 2}daysAgo`, endDate: `${days + 1}daysAgo` }];
-  // De grafiek loopt t/m vandaag (intraday); de totalen blijven op hele dagen.
-  const trendRange = [{ startDate: `${days}daysAgo`, endDate: "today" }];
+
+  // cur = de getoonde periode; prevRange = de even lange periode ervoor (voor vergelijking).
+  const cur = single
+    ? [{ startDate: q.date as string, endDate: q.date as string }]
+    : [{ startDate: `${days}daysAgo`, endDate: "yesterday" }];
+  const prevRange = single
+    ? [{ startDate: prevDayOf(q.date as string), endDate: prevDayOf(q.date as string) }]
+    : [{ startDate: `${days * 2}daysAgo`, endDate: `${days + 1}daysAgo` }];
+  // Meerdaags: grafiek per dag t/m vandaag (intraday). Enkele dag: grafiek per uur.
+  const trendRange = single ? cur : [{ startDate: `${days}daysAgo`, endDate: "today" }];
+  const trendReport = single
+    ? {
+        dateRanges: trendRange,
+        dimensions: [{ name: "hour" }],
+        metrics: [{ name: "totalUsers" }],
+        orderBys: [{ dimension: { dimensionName: "hour" } }],
+      }
+    : {
+        dateRanges: trendRange,
+        dimensions: [{ name: "date" }],
+        metrics: [{ name: "totalUsers" }],
+        orderBys: [{ dimension: { dimensionName: "date" } }],
+      };
 
   const top = (dim: string, metric: string, limit = 8) => ({
     dateRanges: cur,
@@ -162,12 +204,7 @@ export async function getAnalyticsData(days = 28): Promise<GaData> {
   ] = await Promise.all([
     ga(token, "runReport", { dateRanges: cur, metrics: TOTAL_METRICS }),
     ga(token, "runReport", { dateRanges: prevRange, metrics: TOTAL_METRICS }),
-    ga(token, "runReport", {
-      dateRanges: trendRange,
-      dimensions: [{ name: "date" }],
-      metrics: [{ name: "totalUsers" }],
-      orderBys: [{ dimension: { dimensionName: "date" } }],
-    }),
+    ga(token, "runReport", trendReport),
     ga(token, "runReport", top("pagePath", "screenPageViews", 12)),
     ga(token, "runReport", top("landingPage", "sessions", 10)),
     ga(token, "runReport", top("sessionDefaultChannelGroup", "sessions", 8)),
@@ -212,13 +249,18 @@ export async function getAnalyticsData(days = 28): Promise<GaData> {
   const engM = engR.rows?.[0]?.metricValues;
 
   return {
-    range: { start: `${days} dagen geleden`, end: "vandaag" },
+    range: single
+      ? { start: dayLabel(q.date as string), end: dayLabel(q.date as string) }
+      : { start: `${days} dagen geleden`, end: "vandaag" },
+    granularity: single ? "hour" : "day",
     totals: parseTotals(totalsR),
     prev: parseTotals(prevR),
-    trend: (trendR.rows ?? []).map((r) => ({
-      label: fmtDay(r.dimensionValues?.[0]?.value ?? ""),
-      value: num(r.metricValues?.[0]?.value),
-    })),
+    trend: (trendR.rows ?? []).map((r) => {
+      const v = r.dimensionValues?.[0]?.value ?? "";
+      return single
+        ? { label: `${Number(v)}u`, value: num(r.metricValues?.[0]?.value) }
+        : { label: fmtDay(v), value: num(r.metricValues?.[0]?.value), date: isoDay(v) };
+    }),
     topPages: toRows(pagesR),
     landingPages: toRows(landingR),
     channels: toRows(channelsR),

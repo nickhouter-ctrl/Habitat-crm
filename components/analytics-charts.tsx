@@ -1,5 +1,6 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import {
   Area,
   AreaChart,
@@ -20,14 +21,36 @@ const BROWN = "#3a2a20";
 export function VisitorsAreaChart({
   data,
   height = 260,
+  valueLabel = "Bezoekers",
+  drillBase,
 }: {
-  data: { label: string; value: number }[];
+  data: { label: string; value: number; date?: string }[];
   height?: number;
+  valueLabel?: string;
+  /** Bijv. "/rapporten/analytics?datum=" — maakt elke dag aanklikbaar voor een dagoverzicht. */
+  drillBase?: string;
 }) {
+  const router = useRouter();
+  const clickable = Boolean(drillBase) && data.some((d) => d.date);
+  // Toon punten als de reeks kort is (anders wordt één losse dag onzichtbaar).
+  const showDots = data.length <= 14;
+
+  const handleClick = (e: unknown) => {
+    if (!clickable) return;
+    const date = (e as { activePayload?: { payload?: { date?: string } }[] } | undefined)
+      ?.activePayload?.[0]?.payload?.date;
+    if (date) router.push(`${drillBase}${date}`);
+  };
+
   return (
     <div style={{ width: "100%", height }}>
       <ResponsiveContainer>
-        <AreaChart data={data} margin={{ top: 5, right: 10, left: 0, bottom: 0 }}>
+        <AreaChart
+          data={data}
+          margin={{ top: 5, right: 10, left: 0, bottom: 0 }}
+          onClick={handleClick}
+          style={clickable ? { cursor: "pointer" } : undefined}
+        >
           <defs>
             <linearGradient id="gaFill" x1="0" y1="0" x2="0" y2="1">
               <stop offset="0%" stopColor={ACCENT} stopOpacity={0.35} />
@@ -38,10 +61,18 @@ export function VisitorsAreaChart({
           <XAxis dataKey="label" tickLine={false} axisLine={false} fontSize={11} stroke="#6b7280" minTickGap={24} />
           <YAxis tickFormatter={(v) => nf(Number(v))} tickLine={false} axisLine={false} fontSize={11} stroke="#6b7280" width={36} allowDecimals={false} />
           <Tooltip
-            formatter={(v) => [nf(Number(v)), "Bezoekers"]}
+            formatter={(v) => [nf(Number(v)), valueLabel]}
             contentStyle={{ borderRadius: 8, fontSize: 12, border: "1px solid #e5e7eb" }}
           />
-          <Area type="monotone" dataKey="value" stroke={ACCENT} strokeWidth={2} fill="url(#gaFill)" />
+          <Area
+            type="monotone"
+            dataKey="value"
+            stroke={ACCENT}
+            strokeWidth={2}
+            fill="url(#gaFill)"
+            dot={showDots ? { r: 3, fill: ACCENT } : false}
+            activeDot={{ r: 5 }}
+          />
         </AreaChart>
       </ResponsiveContainer>
     </div>

@@ -1,6 +1,8 @@
 import { Search } from "lucide-react";
+import Link from "next/link";
 
 import { SeoTrendChart } from "@/components/seo-charts";
+import { SortableSeoTable } from "@/components/seo-tables";
 import {
   Card,
   CardContent,
@@ -9,25 +11,24 @@ import {
   EmptyState,
   PageHeader,
   StatTile,
-  TBody,
-  Table,
-  Td,
-  Th,
-  THead,
-  Tr,
 } from "@/components/ui";
-import { getSeoData, scConfigured, type ScRow } from "@/lib/searchconsole";
+import { getSeoData, scConfigured } from "@/lib/searchconsole";
+import { cn } from "@/lib/utils";
 
 export const metadata = { title: "SEO" };
 
 const nf = (n: number) => Math.round(n).toLocaleString("nl-NL");
 const pf = (n: number) => `${(n * 100).toFixed(1)}%`;
-
-const COUNTRY: Record<string, string> = {
-  nld: "Nederland", esp: "Spanje", deu: "Duitsland", bel: "België", gbr: "VK",
-  usa: "VS", fra: "Frankrijk", ita: "Italië", che: "Zwitserland", aut: "Oostenrijk",
+const fmtIso = (iso: string) => {
+  const [, m, d] = iso.split("-");
+  return d && m ? `${Number(d)}/${Number(m)}` : iso;
 };
-const cname = (c: string) => COUNTRY[(c || "").toLowerCase()] ?? (c ? c.toUpperCase() : "(onbekend)");
+
+const RANGE_TABS = [
+  { dagen: 7, label: "Week" },
+  { dagen: 28, label: "Maand" },
+  { dagen: 90, label: "Kwartaal" },
+] as const;
 
 function kpiDelta(
   cur: number,
@@ -37,13 +38,22 @@ function kpiDelta(
   if (prev == null || prev === 0) return { tone: "neutral" };
   if (kind === "position") {
     const diff = cur - prev; // negatief = beter (lagere positie)
-    return { hint: `${diff >= 0 ? "+" : ""}${diff.toFixed(1)} vs vorige 28d`, tone: diff <= 0 ? "success" : "danger" };
+    return { hint: `${diff >= 0 ? "+" : ""}${diff.toFixed(1)} vs vorige periode`, tone: diff <= 0 ? "success" : "danger" };
   }
   const pct = ((cur - prev) / prev) * 100;
-  return { hint: `${pct >= 0 ? "+" : ""}${pct.toFixed(0)}% vs vorige 28d`, tone: pct >= 0 ? "success" : "danger" };
+  return { hint: `${pct >= 0 ? "+" : ""}${pct.toFixed(0)}% vs vorige periode`, tone: pct >= 0 ? "success" : "danger" };
 }
 
-export default async function SeoPage() {
+export default async function SeoPage({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}) {
+  const sp = await searchParams;
+  const datum = typeof sp.datum === "string" ? sp.datum : undefined;
+  const single = Boolean(datum);
+  const dagen = RANGE_TABS.some((p) => p.dagen === Number(sp.dagen)) ? Number(sp.dagen) : 28;
+
   if (!scConfigured()) {
     return (
       <>
@@ -60,20 +70,61 @@ export default async function SeoPage() {
   let data: Awaited<ReturnType<typeof getSeoData>> | null = null;
   let error: string | null = null;
   try {
-    data = await getSeoData();
+    data = await getSeoData(single ? { date: datum } : { days: dagen });
   } catch (e) {
     error = e instanceof Error ? e.message : String(e);
   }
 
   const t = data?.totals;
   const p = data?.prev ?? undefined;
+  const periodeLabel = data
+    ? data.range.start === data.range.end
+      ? fmtIso(data.range.start)
+      : `${fmtIso(data.range.start)} t/m ${fmtIso(data.range.end)}`
+    : "";
 
   return (
     <>
       <PageHeader
         title="SEO"
-        subtitle={data ? `Google Search Console · ${data.range.start} t/m ${data.range.end}` : "Google Search Console"}
+        subtitle={data ? `Google Search Console · ${periodeLabel}` : "Google Search Console"}
+        actions={
+          <div className="flex items-center overflow-hidden rounded-md border border-border text-sm">
+            {RANGE_TABS.map((per) => (
+              <Link
+                key={per.dagen}
+                href={`/rapporten/seo?dagen=${per.dagen}`}
+                className={cn(
+                  "px-3 py-1.5 transition-colors",
+                  !single && per.dagen === dagen
+                    ? "bg-accent font-medium text-white"
+                    : "text-muted hover:bg-background",
+                )}
+              >
+                {per.label}
+              </Link>
+            ))}
+          </div>
+        }
       />
+
+      {single && (
+        <div className="mb-5 flex items-center gap-3 text-sm">
+          <Link href="/rapporten/seo" className="text-accent hover:underline">
+            ← Terug naar maandoverzicht
+          </Link>
+          <span className="rounded-md bg-accent/10 px-2 py-0.5 text-xs font-medium text-accent">
+            Dagoverzicht · {periodeLabel}
+          </span>
+        </div>
+      )}
+
+      {!single && (
+        <p className="mb-5 text-xs text-muted">
+          Let op: Google Search Console levert cijfers met ~{data?.lagDays ?? 3} dagen vertraging aan. De laatste paar dagen
+          (incl. vandaag) verschijnen hier dus pas later — dat is normaal en geen fout.
+        </p>
+      )}
 
       {error && (
         <Card className="mb-5 border-danger/30 bg-danger/5 p-4 text-sm text-danger">
@@ -84,8 +135,8 @@ export default async function SeoPage() {
       {data && !t && (
         <EmptyState
           icon={<Search />}
-          title="Nog geen data"
-          description="Je property is recent geverifieerd. Google heeft meestal een paar dagen nodig voordat de eerste cijfers verschijnen — kom binnenkort terug."
+          title="Nog geen data in deze periode"
+          description="Search Console heeft voor deze dagen nog geen cijfers (de data loopt een paar dagen achter), of je property is recent geverifieerd. Kies een ruimere periode of kom binnenkort terug."
         />
       )}
 
@@ -106,83 +157,28 @@ export default async function SeoPage() {
             })()}
           </div>
 
-          {data.trend.length > 0 && (
+          {!single && data.trend.length > 0 && (
             <Card className="mb-5">
               <CardHeader>
                 <CardTitle>Kliks &amp; vertoningen per dag</CardTitle>
               </CardHeader>
               <CardContent>
-                <SeoTrendChart data={data.trend} />
+                <SeoTrendChart data={data.trend} drillBase="/rapporten/seo?datum=" />
+                <p className="mt-2 text-xs text-muted">Tip: klik op een dag in de grafiek voor het volledige dagoverzicht.</p>
               </CardContent>
             </Card>
           )}
 
+          <p className="mb-3 text-xs text-muted">Klik op een kolomkop om te sorteren.</p>
           <div className="grid gap-5 lg:grid-cols-2">
-            <SeoTable title="Top zoekwoorden" keyLabel="Zoekwoord" rows={data.queries} />
-            <SeoTable title="Top pagina's" keyLabel="Pagina" rows={data.pages} strip />
-            <SeoTable title="Top landen" keyLabel="Land" rows={data.countries} country />
-            <SeoTable title="Kansen — positie 5 t/m 20" keyLabel="Zoekwoord" rows={data.opportunities} />
+            <SortableSeoTable title="Top zoekwoorden" keyLabel="Zoekwoord" rows={data.queries} />
+            <SortableSeoTable title="Top pagina's" keyLabel="Pagina" rows={data.pages} strip />
+            <SortableSeoTable title="Top landen" keyLabel="Land" rows={data.countries} country />
+            <SortableSeoTable title="Apparaten" keyLabel="Apparaat" rows={data.devices} />
+            <SortableSeoTable title="Kansen — positie 5 t/m 20" keyLabel="Zoekwoord" rows={data.opportunities} />
           </div>
         </>
       )}
     </>
-  );
-}
-
-function SeoTable({
-  title,
-  keyLabel,
-  rows,
-  strip,
-  country,
-}: {
-  title: string;
-  keyLabel: string;
-  rows: ScRow[];
-  strip?: boolean;
-  country?: boolean;
-}) {
-  return (
-    <Card>
-      <CardHeader>
-        <CardTitle>{title}</CardTitle>
-      </CardHeader>
-      <CardContent>
-        {rows.length === 0 ? (
-          <p className="py-2 text-sm text-muted">Nog geen data in deze periode.</p>
-        ) : (
-          <Table>
-            <THead>
-              <Tr>
-                <Th>{keyLabel}</Th>
-                <Th className="text-right">Kliks</Th>
-                <Th className="text-right">Vert.</Th>
-                <Th className="text-right">CTR</Th>
-                <Th className="text-right">Positie</Th>
-              </Tr>
-            </THead>
-            <TBody>
-              {rows.map((r, i) => {
-                const key = r.keys?.[0] ?? "";
-                const label = country
-                  ? cname(key)
-                  : strip
-                    ? key.replace("https://www.habitat-one.com", "") || "/"
-                    : key;
-                return (
-                  <Tr key={`${key}-${i}`}>
-                    <Td className="max-w-[18rem] truncate">{label}</Td>
-                    <Td className="text-right tabular-nums">{nf(r.clicks)}</Td>
-                    <Td className="text-right tabular-nums">{nf(r.impressions)}</Td>
-                    <Td className="text-right tabular-nums">{pf(r.ctr)}</Td>
-                    <Td className="text-right tabular-nums">{r.position.toFixed(1)}</Td>
-                  </Tr>
-                );
-              })}
-            </TBody>
-          </Table>
-        )}
-      </CardContent>
-    </Card>
   );
 }
