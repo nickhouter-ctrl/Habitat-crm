@@ -124,6 +124,13 @@ export const holded = {
         method: "POST",
         body,
       }),
+    /** Werk een bestaand Holded-document bij (lukt alleen zolang het in Holded nog
+     *  niet definitief/verstuurd is — anders weigert Holded de wijziging). */
+    update: (docType: HoldedDocType, id: string, body: Record<string, unknown>) =>
+      request<HoldedWriteResult>(`/invoicing/v1/documents/${docType}/${id}`, {
+        method: "PUT",
+        body,
+      }),
     /** Registreer een betaling op een document (date = unix-seconden). */
     pay: (docType: HoldedDocType, id: string, body: { date: number; amount: number; desc?: string }) =>
       request<HoldedWriteResult>(`/invoicing/v1/documents/${docType}/${id}/pay`, {

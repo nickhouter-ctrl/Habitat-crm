@@ -34,6 +34,7 @@ import {
   createInvoiceFromEstimate,
   deleteDocument,
   pushDocumentToHoldedAction,
+  updateDocumentInHoldedAction,
   reverseStockOutFromDocument,
   setDeliveryNoteDelivered,
   setDocumentStatus,
@@ -647,16 +648,32 @@ export default async function DocumentDetailPage({
               )}
               {typeof sp.holdedError === "string" && (
                 <p className="rounded-md bg-red-50 px-3 py-2 text-sm text-danger">
-                  Push mislukt: {sp.holdedError}
+                  Mislukt: {sp.holdedError}
+                </p>
+              )}
+              {sp.holdedUpdate === "ok" && (
+                <p className="rounded-md bg-green-50 px-3 py-2 text-sm text-success">
+                  Factuur bijgewerkt in Holded.
                 </p>
               )}
               {holdedMap || doc.holdedId ? (
-                <dl className="grid grid-cols-2 gap-x-3 gap-y-1.5">
-                  <dt className="text-muted">Holded-id</dt>
-                  <dd className="font-mono text-xs">{holdedMap?.holdedId ?? doc.holdedId}</dd>
-                  <dt className="text-muted">Laatste sync</dt>
-                  <dd>{formatDate(holdedMap?.lastSyncedAt)}</dd>
-                </dl>
+                <>
+                  <dl className="grid grid-cols-2 gap-x-3 gap-y-1.5">
+                    <dt className="text-muted">Holded-id</dt>
+                    <dd className="font-mono text-xs">{holdedMap?.holdedId ?? doc.holdedId}</dd>
+                    <dt className="text-muted">Laatste sync</dt>
+                    <dd>{formatDate(holdedMap?.lastSyncedAt)}</dd>
+                  </dl>
+                  <form action={updateDocumentInHoldedAction.bind(null, id)} className="mt-1">
+                    <SubmitButton variant="secondary" size="sm" pendingLabel="Bijwerken…">
+                      Bijwerken in Holded
+                    </SubmitButton>
+                  </form>
+                  <p className="text-xs text-muted">
+                    Stuurt de huidige versie naar Holded. Lukt alleen zolang de factuur daar nog
+                    niet definitief is.
+                  </p>
+                </>
               ) : (
                 <>
                   <p className="text-muted">Nog niet naar Holded gepusht.</p>

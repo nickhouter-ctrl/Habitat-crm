@@ -708,6 +708,61 @@ export async function pushDocumentToHolded(docId: string): Promise<string> {
   return result.id;
 }
 
+/**
+ * Werk een al-gekoppelde Holded-factuur bij met de huidige CRM-versie (regels,
+ * bedragen, datums). Verandert het Holded-nummer NIET. Lukt alleen zolang de
+ * factuur in Holded nog niet definitief/verstuurd is — anders weigert Holded de
+ * wijziging (de fout wordt doorgegeven aan de aanroeper).
+ */
+export async function updateDocumentInHolded(docId: string): Promise<void> {
+  const doc = await db.query.documents.findFirst({ where: eq(documents.id, docId) });
+  if (!doc) throw new Error("Document niet gevonden.");
+  if (!doc.holdedId) {
+    throw new Error("Deze factuur staat nog niet in Holded — gebruik eerst 'Push naar Holded'.");
+  }
+  const docType = DOC_KIND_TO_HOLDED[doc.kind];
+  if (!docType) throw new Error(`Documenttype "${doc.kind}" kan niet naar Holded.`);
+
+  const items = normalizeDocItems(doc.items);
+  const localIds = items.map((i) => i.productId).filter((x): x is string => !!x);
+  const productLookup = localIds.length
+    ? new Map(
+        (
+          await db
+            .select({ id: products.id, holdedProductId: products.holdedProductId })
+            .from(products)
+            .where(inArray(products.id, localIds))
+        ).map((p) => [p.id, p.holdedProductId]),
+      )
+    : new Map<string, string | null>();
+  const itemsBody = items.map((it) => {
+    const hid = it.productId ? productLookup.get(it.productId) : null;
+    return {
+      name: it.name,
+      ...(it.description ? { desc: it.description } : {}),
+      ...(hid ? { productId: hid } : {}),
+      units: Number(it.units) || 0,
+      subtotal: Number(it.price) || 0,
+      tax: Number(it.taxRate ?? 21),
+      ...(it.discount ? { discount: Number(it.discount) } : {}),
+    };
+  });
+  const dateUnix = doc.issueDate
+    ? Math.floor(new Date(doc.issueDate).getTime() / 1000)
+    : Math.floor(Date.now() / 1000);
+  const dueUnix = doc.dueDate ? Math.floor(new Date(doc.dueDate).getTime() / 1000) : undefined;
+  const body: Record<string, unknown> = {
+    desc: doc.title ?? doc.docNumber ?? "",
+    date: dateUnix,
+    ...(dueUnix ? { dueDate: dueUnix } : {}),
+    currency: (doc.currency ?? "EUR").toLowerCase(),
+    notes: doc.notes ?? "",
+    items: itemsBody,
+  };
+  await holded.documents.update(docType, doc.holdedId, body);
+  await upsertSyncMap({ entityType: "document", localId: docId, holdedId: doc.holdedId, direction: "push" });
+}
+
 /* --------------------------------------------------------- projecten (pull) */
 
 interface HoldedProjectShape {

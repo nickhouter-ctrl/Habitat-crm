@@ -29,7 +29,7 @@ import {
 import { REVIEW_URL } from "@/lib/review-requests";
 import { recordSentEmail } from "@/lib/sent-email";
 import { renderDocumentPdf } from "@/lib/document-pdf";
-import { pushDocumentToHolded } from "@/lib/holded/sync";
+import { pushDocumentToHolded, updateDocumentInHolded } from "@/lib/holded/sync";
 import { formatDate, formatEUR } from "@/lib/utils";
 
 function newToken(): string {
@@ -1329,6 +1329,26 @@ export async function pushDocumentToHoldedAction(id: string) {
   } catch (err) {
     let msg = err instanceof Error ? err.message : "push naar Holded mislukt";
     // Holded-foutdetail (body) meesturen zodat de gebruiker de echte oorzaak ziet.
+    const body = (err as { body?: unknown })?.body;
+    if (body) {
+      const detail = typeof body === "string" ? body : JSON.stringify(body);
+      msg += ` — ${detail.slice(0, 300)}`;
+    }
+    target = `/documents/${id}?holdedError=${encodeURIComponent(msg)}`;
+  }
+  revalidatePath(`/documents/${id}`);
+  redirect(target);
+}
+
+/** Werk een al-gekoppelde Holded-factuur bij met de huidige CRM-versie. */
+export async function updateDocumentInHoldedAction(id: string) {
+  await requireUser();
+  let target: string;
+  try {
+    await updateDocumentInHolded(id);
+    target = `/documents/${id}?holdedUpdate=ok`;
+  } catch (err) {
+    let msg = err instanceof Error ? err.message : "bijwerken in Holded mislukt";
     const body = (err as { body?: unknown })?.body;
     if (body) {
       const detail = typeof body === "string" ? body : JSON.stringify(body);
