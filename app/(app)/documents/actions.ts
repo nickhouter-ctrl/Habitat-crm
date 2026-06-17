@@ -30,6 +30,7 @@ import { REVIEW_URL } from "@/lib/review-requests";
 import { recordSentEmail } from "@/lib/sent-email";
 import { renderDocumentPdf } from "@/lib/document-pdf";
 import { pushDocumentToHolded, updateDocumentInHolded } from "@/lib/holded/sync";
+import { holded } from "@/lib/holded/client";
 import { formatDate, formatEUR } from "@/lib/utils";
 
 function newToken(): string {
@@ -626,7 +627,7 @@ export async function setDocumentStatus(id: string, formData: FormData) {
 
   const doc = await db.query.documents.findFirst({
     where: eq(documents.id, id),
-    columns: { totalEur: true, kind: true, dealId: true },
+    columns: { totalEur: true, kind: true, dealId: true, holdedId: true },
   });
   if (!doc) return;
 
@@ -639,6 +640,28 @@ export async function setDocumentStatus(id: string, formData: FormData) {
   }
 
   await db.update(documents).set(patch).where(eq(documents.id, id));
+
+  // Betaling doorzetten naar Holded — alleen verkoopfacturen, best-effort.
+  // NOOIT dubbel: lees eerst de betaalstand in Holded en registreer enkel het
+  // nog openstaande bedrag; sla over als Holded 'm al (volledig) betaald heeft
+  // (bv. automatisch afgeboekt via bankkoppeling).
+  if (status === "paid" && doc.kind === "invoice" && doc.holdedId) {
+    try {
+      const h = await holded.documents.get("invoice", doc.holdedId);
+      const alreadyPaid = Number(h.paymentsTotal ?? 0);
+      const holdedTotal = Number(h.total ?? doc.totalEur ?? 0);
+      const open = Math.round((holdedTotal - alreadyPaid) * 100) / 100;
+      if (h.status !== 1 && open > 0.01) {
+        await holded.documents.pay("invoice", doc.holdedId, {
+          date: Math.floor(Date.now() / 1000),
+          amount: open,
+          desc: "Betaald via Habitat CRM",
+        });
+      }
+    } catch (e) {
+      console.error("[setDocumentStatus] Holded pay-push failed:", e);
+    }
+  }
   await syncDealFromDocument(doc.dealId, { kind: doc.kind, status, totalEur: doc.totalEur });
 
   // Voorraad sluitend: een factuur boekt de voorraad automatisch af zodra hij
