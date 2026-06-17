@@ -74,7 +74,8 @@ export async function GET(req: Request) {
   for (const r of rows) {
     const start = new Date(r.startsAt);
     const end = r.endsAt ? new Date(r.endsAt) : new Date(start.getTime() + 60 * 60 * 1000);
-    const summary = r.contactName ? `${r.title} — ${r.contactName}` : r.title;
+    const summary =
+      r.contactName && !r.title.includes(r.contactName) ? `${r.title} — ${r.contactName}` : r.title;
     const descParts: string[] = [];
     if (r.contactName) descParts.push(`Contact: ${r.contactName}`);
     if (r.notes) descParts.push(r.notes);
