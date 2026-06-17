@@ -54,6 +54,7 @@ export async function DocumentsList({
     with: {
       contact: { columns: { id: true, name: true } },
       company: { columns: { id: true, name: true } },
+      project: { columns: { id: true, name: true } },
     },
   });
 
@@ -157,6 +158,14 @@ export async function DocumentsList({
                       ) : (
                         <span className="text-muted">{partyName}</span>
                       )}
+                      {d.project ? (
+                        <StopLink
+                          href={`/projects/${d.project.id}`}
+                          className="mt-0.5 block text-xs text-accent hover:underline"
+                        >
+                          📁 {d.project.name}
+                        </StopLink>
+                      ) : null}
                     </Td>
                     <Td>
                       {d.kind === "deliverynote" ? (
