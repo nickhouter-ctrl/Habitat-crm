@@ -728,6 +728,7 @@ export async function sendDocument(id: string) {
         columns: {
           email: true,
           name: true,
+          companyId: true,
           preferredLanguage: true,
           addressLine: true,
           postalCode: true,
@@ -775,9 +776,10 @@ export async function sendDocument(id: string) {
       | { filename: string; content: Uint8Array; contentType: string }[]
       | undefined;
     try {
-      const company = doc.companyId
+      const cId = doc.companyId ?? doc.contact?.companyId ?? null;
+      const company = cId
         ? await db.query.companies.findFirst({
-            where: eq(companies.id, doc.companyId),
+            where: eq(companies.id, cId),
             columns: { name: true, vatNumber: true, addressLine: true, postalCode: true, city: true },
           })
         : null;
@@ -841,6 +843,7 @@ export async function sendDocumentCustom(id: string, formData: FormData) {
         columns: {
           email: true,
           name: true,
+          companyId: true,
           preferredLanguage: true,
           addressLine: true,
           postalCode: true,
@@ -896,9 +899,10 @@ export async function sendDocumentCustom(id: string, formData: FormData) {
     redirect(`/documents/${id}?verzonden=geenadres`);
   }
 
-  const company = doc.companyId
+  const cId = doc.companyId ?? doc.contact?.companyId ?? null;
+  const company = cId
     ? await db.query.companies.findFirst({
-        where: eq(companies.id, doc.companyId),
+        where: eq(companies.id, cId),
         columns: { name: true, vatNumber: true, addressLine: true, postalCode: true, city: true },
       })
     : null;

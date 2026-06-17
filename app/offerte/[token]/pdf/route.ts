@@ -1,7 +1,7 @@
 import { eq } from "drizzle-orm";
 
 import { db } from "@/lib/db";
-import { documents } from "@/lib/db/schema";
+import { companies, documents } from "@/lib/db/schema";
 import { renderDocumentPdf } from "@/lib/document-pdf";
 
 export const dynamic = "force-dynamic";
@@ -18,26 +18,30 @@ export async function GET(
       contact: {
         columns: {
           name: true,
+          companyId: true,
           addressLine: true,
           postalCode: true,
           city: true,
           preferredLanguage: true,
         },
       },
-      company: {
-        columns: { name: true, vatNumber: true, addressLine: true, postalCode: true, city: true },
-      },
       project: { columns: { name: true } },
     },
   });
   if (!doc) return new Response("Not found", { status: 404 });
 
+  const companyId = doc.companyId ?? doc.contact?.companyId ?? null;
+  const company = companyId
+    ? await db.query.companies.findFirst({
+        where: eq(companies.id, companyId),
+        columns: { name: true, vatNumber: true, addressLine: true, postalCode: true, city: true },
+      })
+    : null;
   const joinAddr = (line?: string | null, pc?: string | null, city?: string | null) =>
     [line, [pc, city].filter(Boolean).join(" ")].filter((p) => p && p.trim()).join(", ") || null;
   const addr =
-    (doc.company
-      ? joinAddr(doc.company.addressLine, doc.company.postalCode, doc.company.city)
-      : null) ?? joinAddr(doc.contact?.addressLine, doc.contact?.postalCode, doc.contact?.city);
+    (company ? joinAddr(company.addressLine, company.postalCode, company.city) : null) ??
+    joinAddr(doc.contact?.addressLine, doc.contact?.postalCode, doc.contact?.city);
 
   const buf = await renderDocumentPdf({
     kind: doc.kind,
@@ -52,8 +56,8 @@ export async function GET(
     notes: doc.notes,
     contactName: doc.contact?.name ?? null,
     contactAddress: addr,
-    companyName: doc.company?.name ?? null,
-    contactVat: doc.company?.vatNumber ?? null,
+    companyName: company?.name ?? null,
+    contactVat: company?.vatNumber ?? null,
     projectName: doc.project?.name ?? null,
     locale: doc.contact?.preferredLanguage ?? "es",
   });
