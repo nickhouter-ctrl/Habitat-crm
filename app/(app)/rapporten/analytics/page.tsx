@@ -1,5 +1,8 @@
 import type { ReactNode } from "react";
 import { Activity } from "lucide-react";
+import Link from "next/link";
+
+import { cn } from "@/lib/utils";
 
 import { AutoRefresh } from "@/components/auto-refresh";
 import { BreakdownBars, VisitorsAreaChart } from "@/components/analytics-charts";
@@ -41,12 +44,24 @@ function deltaHint(cur: number, prev: number | undefined): { hint?: string; tone
   if (prev == null || prev === 0) return { tone: "neutral" };
   const pct = ((cur - prev) / prev) * 100;
   return {
-    hint: `${pct >= 0 ? "+" : ""}${pct.toFixed(0)}% vs vorige 28d`,
+    hint: `${pct >= 0 ? "+" : ""}${pct.toFixed(0)}% vs vorige periode`,
     tone: pct >= 0 ? "success" : "danger",
   };
 }
 
-export default async function AnalyticsPage() {
+const PERIODS = [
+  { dagen: 7, label: "Week" },
+  { dagen: 28, label: "Maand" },
+  { dagen: 90, label: "Kwartaal" },
+] as const;
+
+export default async function AnalyticsPage({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}) {
+  const sp = await searchParams;
+  const dagen = PERIODS.some((p) => p.dagen === Number(sp.dagen)) ? Number(sp.dagen) : 28;
   if (!gaConfigured()) {
     return (
       <>
@@ -70,7 +85,7 @@ export default async function AnalyticsPage() {
     rtError = e instanceof Error ? e.message : String(e);
   }
   try {
-    data = await getAnalyticsData();
+    data = await getAnalyticsData(dagen);
   } catch (e) {
     error = e instanceof Error ? e.message : String(e);
   }
@@ -84,6 +99,24 @@ export default async function AnalyticsPage() {
       <PageHeader
         title="Analytics"
         subtitle={data ? `Google Analytics (GA4) · ${data.range.start} t/m ${data.range.end}` : "Google Analytics (GA4)"}
+        actions={
+          <div className="flex items-center overflow-hidden rounded-md border border-border text-sm">
+            {PERIODS.map((per) => (
+              <Link
+                key={per.dagen}
+                href={`/rapporten/analytics?dagen=${per.dagen}`}
+                className={cn(
+                  "px-3 py-1.5 transition-colors",
+                  per.dagen === dagen
+                    ? "bg-accent font-medium text-white"
+                    : "text-muted hover:bg-background",
+                )}
+              >
+                {per.label}
+              </Link>
+            ))}
+          </div>
+        }
       />
 
       {/* Live — nu actief (ververst elke 30s) */}

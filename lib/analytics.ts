@@ -130,10 +130,12 @@ function fmtDay(yyyymmdd: string): string {
   return `${Number(yyyymmdd.slice(6, 8))}/${Number(yyyymmdd.slice(4, 6))}`;
 }
 
-export async function getAnalyticsData(): Promise<GaData> {
+export async function getAnalyticsData(days = 28): Promise<GaData> {
   const token = await accessToken();
-  const cur = [{ startDate: "28daysAgo", endDate: "yesterday" }];
-  const prevRange = [{ startDate: "56daysAgo", endDate: "29daysAgo" }];
+  const cur = [{ startDate: `${days}daysAgo`, endDate: "yesterday" }];
+  const prevRange = [{ startDate: `${days * 2}daysAgo`, endDate: `${days + 1}daysAgo` }];
+  // De grafiek loopt t/m vandaag (intraday); de totalen blijven op hele dagen.
+  const trendRange = [{ startDate: `${days}daysAgo`, endDate: "today" }];
 
   const top = (dim: string, metric: string, limit = 8) => ({
     dateRanges: cur,
@@ -161,7 +163,7 @@ export async function getAnalyticsData(): Promise<GaData> {
     ga(token, "runReport", { dateRanges: cur, metrics: TOTAL_METRICS }),
     ga(token, "runReport", { dateRanges: prevRange, metrics: TOTAL_METRICS }),
     ga(token, "runReport", {
-      dateRanges: cur,
+      dateRanges: trendRange,
       dimensions: [{ name: "date" }],
       metrics: [{ name: "totalUsers" }],
       orderBys: [{ dimension: { dimensionName: "date" } }],
@@ -210,7 +212,7 @@ export async function getAnalyticsData(): Promise<GaData> {
   const engM = engR.rows?.[0]?.metricValues;
 
   return {
-    range: { start: "28 dagen geleden", end: "gisteren" },
+    range: { start: `${days} dagen geleden`, end: "vandaag" },
     totals: parseTotals(totalsR),
     prev: parseTotals(prevR),
     trend: (trendR.rows ?? []).map((r) => ({
