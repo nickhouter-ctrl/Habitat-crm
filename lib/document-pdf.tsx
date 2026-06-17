@@ -534,9 +534,9 @@ function DocumentPdf({ doc }: { doc: PdfDoc }) {
   const images = doc.exampleImages ?? [];
   const coverImgs = images.slice(0, 2);
   const endImgs = images.slice(2, 4);
-  // Geen cover/eindblad meer — alle documenten (offerte, factuur, pakbon) zijn
-  // clean en starten direct met de logo-header.
-  const showExtras = false;
+  // Voor-/eindblad met sfeerfoto's terug aan voor offertes/facturen (en andere
+  // verkoopdocumenten); pakbonnen blijven clean (starten direct met de header).
+  const showExtras = !isDelivery;
   const coverTxt = COVER_TXT[locale];
   const endTxt = ENDPAGE_TXT[locale];
 
