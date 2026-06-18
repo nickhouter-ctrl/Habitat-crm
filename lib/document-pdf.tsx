@@ -380,8 +380,11 @@ const s = StyleSheet.create({
     alignSelf: "flex-start",
   },
   payTitle: { fontSize: 7, letterSpacing: 1.5, color: C.muted, marginBottom: 10 },
-  payLine: { fontSize: 9, lineHeight: 1.5, marginBottom: 3, fontFamily: "Sora", fontWeight: 500, color: C.charcoal },
-  payHolder: { fontSize: 8.5, lineHeight: 1.5, color: C.muted, marginTop: 6 },
+  // Marge op een omhullende View (betrouwbaar in react-pdf), niet op de Text zelf.
+  payLineWrap: { marginBottom: 6 },
+  payHolderWrap: { marginTop: 6 },
+  payLineText: { fontSize: 9, lineHeight: 1.4, fontFamily: "Sora", fontWeight: 500, color: C.charcoal },
+  payHolderText: { fontSize: 8.5, lineHeight: 1.4, color: C.muted },
   payNote: {
     fontSize: 7.5,
     color: C.muted,
@@ -721,9 +724,19 @@ function DocumentPdf({ doc }: { doc: PdfDoc }) {
                 {isInvoice ? (
                   <View style={s.payBox}>
                     <Text style={s.payTitle}>{t.paymentTitle}</Text>
-                    {C.iban ? <Text style={s.payLine}>IBAN: {C.iban}</Text> : null}
-                    {C.bic ? <Text style={s.payLine}>BIC: {C.bic}</Text> : null}
-                    <Text style={s.payHolder}>{C.legalName}</Text>
+                    {C.iban ? (
+                      <View style={s.payLineWrap}>
+                        <Text style={s.payLineText}>IBAN: {C.iban}</Text>
+                      </View>
+                    ) : null}
+                    {C.bic ? (
+                      <View style={s.payLineWrap}>
+                        <Text style={s.payLineText}>BIC: {C.bic}</Text>
+                      </View>
+                    ) : null}
+                    <View style={s.payHolderWrap}>
+                      <Text style={s.payHolderText}>{C.legalName}</Text>
+                    </View>
                     <Text style={s.payNote}>{t.payNote}</Text>
                   </View>
                 ) : null}
