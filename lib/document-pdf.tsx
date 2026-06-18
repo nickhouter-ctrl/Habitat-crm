@@ -370,19 +370,20 @@ const s = StyleSheet.create({
   lineImg: { width: 28, height: 28, objectFit: "cover", borderRadius: 2 },
   lineImgEmpty: { width: 28, height: 28, borderRadius: 2, backgroundColor: "#f0eee9" },
 
-  bottomRow: { marginTop: 18, flexDirection: "row", justifyContent: "space-between", gap: 24 },
+  // alignItems flex-start zodat het betaalvak op z'n eigen inhoud meet (niet
+  // uitgerekt door de totalen-kolom); anders klapt de hoogte in en overlappen
+  // de regels. Geverifieerd via een lokale render.
+  bottomRow: { marginTop: 18, flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start", gap: 24 },
   payBox: {
-    flex: 1,
     backgroundColor: C.cream,
     borderRadius: 4,
     paddingVertical: 14,
     paddingHorizontal: 14,
-    alignSelf: "flex-start",
   },
   payTitle: { fontSize: 7, letterSpacing: 1.5, color: C.muted, marginBottom: 8 },
-  // Alle regels in één Text met \n: hier honoreert react-pdf lineHeight wél,
-  // dus geen overlap (margin tussen losse Text-elementen werkt onbetrouwbaar).
-  payBody: { fontSize: 9, lineHeight: 1.8, fontFamily: "Sora", fontWeight: 500, color: C.charcoal },
+  // Losse regel met eigen lineHeight (box = fontSize × lineHeight) → geen overlap.
+  payLine: { fontSize: 9, lineHeight: 1.7, fontFamily: "Sora", fontWeight: 500, color: C.charcoal },
+  payHolder: { fontSize: 9, lineHeight: 1.7, color: C.muted },
   payNote: {
     fontSize: 7.5,
     color: C.muted,
@@ -722,11 +723,9 @@ function DocumentPdf({ doc }: { doc: PdfDoc }) {
                 {isInvoice ? (
                   <View style={s.payBox}>
                     <Text style={s.payTitle}>{t.paymentTitle}</Text>
-                    <Text style={s.payBody}>
-                      {C.iban ? <Text>IBAN: {C.iban}{"\n"}</Text> : null}
-                      {C.bic ? <Text>BIC: {C.bic}{"\n"}</Text> : null}
-                      <Text style={s.muted}>{C.legalName}</Text>
-                    </Text>
+                    {C.iban ? <Text style={s.payLine}>IBAN: {C.iban}</Text> : null}
+                    {C.bic ? <Text style={s.payLine}>BIC: {C.bic}</Text> : null}
+                    <Text style={s.payHolder}>{C.legalName}</Text>
                     <Text style={s.payNote}>{t.payNote}</Text>
                   </View>
                 ) : null}
