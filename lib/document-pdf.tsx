@@ -379,12 +379,10 @@ const s = StyleSheet.create({
     paddingHorizontal: 14,
     alignSelf: "flex-start",
   },
-  payTitle: { fontSize: 7, letterSpacing: 1.5, color: C.muted, marginBottom: 10 },
-  // Marge op een omhullende View (betrouwbaar in react-pdf), niet op de Text zelf.
-  payLineWrap: { marginBottom: 6 },
-  payHolderWrap: { marginTop: 6 },
-  payLineText: { fontSize: 9, lineHeight: 1.4, fontFamily: "Sora", fontWeight: 500, color: C.charcoal },
-  payHolderText: { fontSize: 8.5, lineHeight: 1.4, color: C.muted },
+  payTitle: { fontSize: 7, letterSpacing: 1.5, color: C.muted, marginBottom: 8 },
+  // Alle regels in één Text met \n: hier honoreert react-pdf lineHeight wél,
+  // dus geen overlap (margin tussen losse Text-elementen werkt onbetrouwbaar).
+  payBody: { fontSize: 9, lineHeight: 1.8, fontFamily: "Sora", fontWeight: 500, color: C.charcoal },
   payNote: {
     fontSize: 7.5,
     color: C.muted,
@@ -724,19 +722,11 @@ function DocumentPdf({ doc }: { doc: PdfDoc }) {
                 {isInvoice ? (
                   <View style={s.payBox}>
                     <Text style={s.payTitle}>{t.paymentTitle}</Text>
-                    {C.iban ? (
-                      <View style={s.payLineWrap}>
-                        <Text style={s.payLineText}>IBAN: {C.iban}</Text>
-                      </View>
-                    ) : null}
-                    {C.bic ? (
-                      <View style={s.payLineWrap}>
-                        <Text style={s.payLineText}>BIC: {C.bic}</Text>
-                      </View>
-                    ) : null}
-                    <View style={s.payHolderWrap}>
-                      <Text style={s.payHolderText}>{C.legalName}</Text>
-                    </View>
+                    <Text style={s.payBody}>
+                      {C.iban ? <Text>IBAN: {C.iban}{"\n"}</Text> : null}
+                      {C.bic ? <Text>BIC: {C.bic}{"\n"}</Text> : null}
+                      <Text style={s.muted}>{C.legalName}</Text>
+                    </Text>
                     <Text style={s.payNote}>{t.payNote}</Text>
                   </View>
                 ) : null}

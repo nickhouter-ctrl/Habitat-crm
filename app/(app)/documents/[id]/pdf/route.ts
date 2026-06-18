@@ -112,6 +112,7 @@ export async function GET(
     headers: {
       "content-type": "application/pdf",
       "content-disposition": `inline; filename="${filename}"`,
+      "cache-control": "no-store, max-age=0, must-revalidate",
     },
   });
 }
