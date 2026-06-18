@@ -12,6 +12,7 @@ import { db } from "@/lib/db";
 import { activities, companies, contacts, deals, deliveries, documents, holdedSyncMap, products } from "@/lib/db/schema";
 import { syncDealFromDocument } from "@/lib/deals";
 import {
+  billingAddressLines,
   computeTotals,
   normalizeDocItems,
   parseLineItems,
@@ -783,11 +784,7 @@ export async function sendDocument(id: string) {
             columns: { name: true, vatNumber: true, addressLine: true, postalCode: true, city: true },
           })
         : null;
-      const joinAddr = (line?: string | null, pc?: string | null, city?: string | null) =>
-        [line, [pc, city].filter(Boolean).join(" ")].filter((p) => p && p.trim()).join(", ") || null;
-      const addr =
-        (company ? joinAddr(company.addressLine, company.postalCode, company.city) : null) ??
-        joinAddr(doc.contact.addressLine, doc.contact.postalCode, doc.contact.city);
+      const { line: addrLine, region: addrRegion } = billingAddressLines(company, doc.contact);
       const buf = await renderDocumentPdf({
         kind: doc.kind,
         docNumber: doc.docNumber,
@@ -800,7 +797,8 @@ export async function sendDocument(id: string) {
         items: normalizeDocItems(doc.items),
         notes: doc.notes,
         contactName: doc.contact.name ?? null,
-        contactAddress: addr,
+        contactAddressLine: addrLine,
+        contactAddressRegion: addrRegion,
         companyName: company?.name ?? null,
         contactVat: company?.vatNumber ?? null,
         locale: doc.contact.preferredLanguage ?? "es",
@@ -906,11 +904,7 @@ export async function sendDocumentCustom(id: string, formData: FormData) {
         columns: { name: true, vatNumber: true, addressLine: true, postalCode: true, city: true },
       })
     : null;
-  const joinAddr = (line?: string | null, pc?: string | null, city?: string | null) =>
-    [line, [pc, city].filter(Boolean).join(" ")].filter((p) => p && p.trim()).join(", ") || null;
-  const addr =
-    (company ? joinAddr(company.addressLine, company.postalCode, company.city) : null) ??
-    joinAddr(doc.contact?.addressLine, doc.contact?.postalCode, doc.contact?.city);
+  const { line: addrLine, region: addrRegion } = billingAddressLines(company, doc.contact);
 
   // PDF genereren + mail versturen gebeurt ná de response (gebruiker keert meteen
   // terug). Voorkomt het "er gebeurt niks"-gevoel en dus dubbele verzendingen.
@@ -929,7 +923,8 @@ export async function sendDocumentCustom(id: string, formData: FormData) {
         items: normalizeDocItems(doc.items),
         notes: doc.notes,
         contactName: doc.contact?.name ?? null,
-        contactAddress: addr,
+        contactAddressLine: addrLine,
+        contactAddressRegion: addrRegion,
         companyName: company?.name ?? null,
         contactVat: company?.vatNumber ?? null,
         locale: doc.contact?.preferredLanguage ?? "es",

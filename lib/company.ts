@@ -25,7 +25,8 @@ export const COMPANY = {
   email: process.env.COMPANY_EMAIL ?? "hi@habitat-one.com",
   phone: process.env.COMPANY_PHONE ?? "+31 6 51170545",
   website: process.env.COMPANY_WEBSITE ?? "habitat-one.com",
-  iban: process.env.COMPANY_IBAN ?? "", // not provided yet
+  iban: process.env.COMPANY_IBAN ?? "ES98 2100 9015 2402 0056 2218", // CaixaBank
+  bic: process.env.COMPANY_BIC ?? "CAIXESBBXXX", // CaixaBank SWIFT/BIC
   // Luxe-mediterraanse palet — gebruikt op PDFs en e-mails.
   brown: "#3a2a20",        // wordmark / hoofdtitels
   cream: "#f3efe9",        // achtergrond

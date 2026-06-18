@@ -42,6 +42,28 @@ export function lineTax(item: DocumentLineItem): number {
   return round2(lineNet(item) * ((Number(item.taxRate) || 0) / 100));
 }
 
+type AddressParts = { addressLine?: string | null; postalCode?: string | null; city?: string | null };
+
+/**
+ * Factuuradres in twee regels (straat / postcode + plaats), net als ons eigen
+ * bedrijfsadres. Zakelijke klant: bedrijfsadres heeft voorrang, anders het
+ * contactadres. Geeft `null` per regel als die leeg is.
+ */
+export function billingAddressLines(
+  company: AddressParts | null | undefined,
+  contact: AddressParts | null | undefined,
+): { line: string | null; region: string | null } {
+  const src =
+    company && (company.addressLine || company.postalCode || company.city) ? company : contact;
+  const line = src?.addressLine?.trim() || null;
+  const region =
+    [src?.postalCode, src?.city]
+      .map((x) => (x ? String(x).trim() : ""))
+      .filter(Boolean)
+      .join(" ") || null;
+  return { line, region };
+}
+
 export function computeTotals(items: DocumentLineItem[]): {
   subtotal: number;
   tax: number;

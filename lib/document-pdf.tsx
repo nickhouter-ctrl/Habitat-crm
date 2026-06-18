@@ -442,7 +442,12 @@ export type PdfDoc = {
   items: Array<DocumentLineItem & { sku?: string | null }>;
   notes: string | null;
   contactName: string | null;
+  /** Eénregelig adres (oude stijl) — fallback als de twee aparte regels ontbreken. */
   contactAddress?: string | null;
+  /** Straat (regel 1 van het klantadres). */
+  contactAddressLine?: string | null;
+  /** Postcode + plaats (regel 2 van het klantadres), net als ons eigen adres. */
+  contactAddressRegion?: string | null;
   /** Bedrijfsnaam (zakelijke klant) — komt boven de contactpersoon op de factuur. */
   companyName?: string | null;
   /** CIF/NIF (of BTW-nummer) van de klant — in Spanje verplicht op de factuur. */
@@ -619,7 +624,16 @@ function DocumentPdf({ doc }: { doc: PdfDoc }) {
               {doc.companyName && doc.contactName && doc.contactName !== doc.companyName ? (
                 <Text style={[s.muted, { textAlign: "right" }]}>t.a.v. {doc.contactName}</Text>
               ) : null}
-              {doc.contactAddress ? (
+              {doc.contactAddressLine || doc.contactAddressRegion ? (
+                <>
+                  {doc.contactAddressLine ? (
+                    <Text style={[s.muted, { textAlign: "right" }]}>{doc.contactAddressLine}</Text>
+                  ) : null}
+                  {doc.contactAddressRegion ? (
+                    <Text style={[s.muted, { textAlign: "right" }]}>{doc.contactAddressRegion}</Text>
+                  ) : null}
+                </>
+              ) : doc.contactAddress ? (
                 <Text style={[s.muted, { textAlign: "right" }]}>{doc.contactAddress}</Text>
               ) : null}
               {doc.contactVat ? (
@@ -697,6 +711,7 @@ function DocumentPdf({ doc }: { doc: PdfDoc }) {
                   <View style={s.payBox}>
                     <Text style={s.payTitle}>{t.paymentTitle}</Text>
                     {C.iban ? <Text>IBAN: {C.iban}</Text> : null}
+                    {C.bic ? <Text>BIC: {C.bic}</Text> : null}
                     <Text style={s.muted}>{C.legalName}</Text>
                     <Text style={s.payNote}>{t.payNote}</Text>
                   </View>

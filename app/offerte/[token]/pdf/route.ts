@@ -3,6 +3,7 @@ import { eq } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { companies, documents } from "@/lib/db/schema";
 import { renderDocumentPdf } from "@/lib/document-pdf";
+import { billingAddressLines } from "@/lib/documents";
 
 export const dynamic = "force-dynamic";
 
@@ -37,11 +38,7 @@ export async function GET(
         columns: { name: true, vatNumber: true, addressLine: true, postalCode: true, city: true },
       })
     : null;
-  const joinAddr = (line?: string | null, pc?: string | null, city?: string | null) =>
-    [line, [pc, city].filter(Boolean).join(" ")].filter((p) => p && p.trim()).join(", ") || null;
-  const addr =
-    (company ? joinAddr(company.addressLine, company.postalCode, company.city) : null) ??
-    joinAddr(doc.contact?.addressLine, doc.contact?.postalCode, doc.contact?.city);
+  const { line: addrLine, region: addrRegion } = billingAddressLines(company, doc.contact);
 
   const buf = await renderDocumentPdf({
     kind: doc.kind,
@@ -55,7 +52,8 @@ export async function GET(
     items: doc.items ?? [],
     notes: doc.notes,
     contactName: doc.contact?.name ?? null,
-    contactAddress: addr,
+    contactAddressLine: addrLine,
+    contactAddressRegion: addrRegion,
     companyName: company?.name ?? null,
     contactVat: company?.vatNumber ?? null,
     projectName: doc.project?.name ?? null,

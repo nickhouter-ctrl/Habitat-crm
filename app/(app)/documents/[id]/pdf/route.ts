@@ -4,7 +4,7 @@ import { auth } from "@/auth";
 import { db } from "@/lib/db";
 import { companies, documents, products } from "@/lib/db/schema";
 import { renderDocumentPdf } from "@/lib/document-pdf";
-import { normalizeDocItems } from "@/lib/documents";
+import { billingAddressLines, normalizeDocItems } from "@/lib/documents";
 
 async function fetchImage(url: string): Promise<{ data: Buffer; format: "jpg" | "png" } | null> {
   try {
@@ -54,12 +54,9 @@ export async function GET(
         columns: { name: true, vatNumber: true, addressLine: true, postalCode: true, city: true },
       })
     : null;
-  // Zakelijk: bedrijfsadres voorrang; anders contactadres.
-  const joinAddr = (line?: string | null, pc?: string | null, city?: string | null) =>
-    [line, [pc, city].filter(Boolean).join(" ")].filter((p) => p && p.trim()).join(", ") || null;
-  const addr =
-    (company ? joinAddr(company.addressLine, company.postalCode, company.city) : null) ??
-    joinAddr(doc.contact?.addressLine, doc.contact?.postalCode, doc.contact?.city);
+  // Zakelijk: bedrijfsadres voorrang; anders contactadres. Twee regels (straat /
+  // postcode + plaats), net als ons eigen adres.
+  const { line: addrLine, region: addrRegion } = billingAddressLines(company, doc.contact);
 
   const baseItems = normalizeDocItems(doc.items);
 
@@ -100,7 +97,8 @@ export async function GET(
     items,
     notes: doc.notes,
     contactName: doc.contact?.name ?? null,
-    contactAddress: addr,
+    contactAddressLine: addrLine,
+    contactAddressRegion: addrRegion,
     companyName: company?.name ?? null,
     contactVat: company?.vatNumber ?? null,
     projectName: doc.project?.name ?? null,
