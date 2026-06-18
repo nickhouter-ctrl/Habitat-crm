@@ -711,7 +711,7 @@ function DocumentPdf({ doc }: { doc: PdfDoc }) {
                   <View style={s.payBox}>
                     <Text style={s.payTitle}>{t.paymentTitle}</Text>
                     {C.iban ? <Text>IBAN: {C.iban}</Text> : null}
-                    {C.bic ? <Text>BIC: {C.bic}</Text> : null}
+                    {C.bic ? <Text style={{ marginTop: 4 }}>BIC: {C.bic}</Text> : null}
                     <Text style={s.muted}>{C.legalName}</Text>
                     <Text style={s.payNote}>{t.payNote}</Text>
                   </View>
