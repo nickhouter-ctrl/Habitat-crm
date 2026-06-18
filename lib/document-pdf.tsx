@@ -379,9 +379,9 @@ const s = StyleSheet.create({
     paddingHorizontal: 14,
     alignSelf: "flex-start",
   },
-  payTitle: { fontSize: 7, letterSpacing: 1.5, color: C.muted, marginBottom: 9 },
-  payLine: { fontSize: 9, marginBottom: 5, fontFamily: "Sora", fontWeight: 500, color: C.charcoal },
-  payHolder: { fontSize: 8.5, color: C.muted, marginTop: 4 },
+  payTitle: { fontSize: 7, letterSpacing: 1.5, color: C.muted, marginBottom: 10 },
+  payLine: { fontSize: 9, lineHeight: 1.5, marginBottom: 3, fontFamily: "Sora", fontWeight: 500, color: C.charcoal },
+  payHolder: { fontSize: 8.5, lineHeight: 1.5, color: C.muted, marginTop: 6 },
   payNote: {
     fontSize: 7.5,
     color: C.muted,

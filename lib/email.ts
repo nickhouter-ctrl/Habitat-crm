@@ -431,6 +431,36 @@ const PAY_LEVELS: Record<Lang, Record<ReminderLevel, { subject: (nr: string) => 
   },
 };
 
+/** Betaalgegevens (IBAN/BIC) — meegestuurd in herinneringen zodat de klant direct kan betalen. */
+const BANK: Record<Lang, { title: string; via: string; holder: string }> = {
+  nl: { title: "Betaalgegevens", via: "Gelieve te betalen via bankoverschrijving naar:", holder: "T.n.v." },
+  en: { title: "Payment details", via: "Please pay by bank transfer to:", holder: "Account holder" },
+  es: { title: "Datos de pago", via: "Rogamos efectuar el pago por transferencia bancaria a:", holder: "Titular" },
+  de: { title: "Zahlungsinformationen", via: "Bitte überweisen Sie per Banküberweisung an:", holder: "Kontoinhaber" },
+};
+
+function bankBlockHtml(lang: Lang): string {
+  if (!COMPANY.iban) return "";
+  const b = BANK[lang];
+  const bic = COMPANY.bic
+    ? `<div style="font-size:14px;color:#555;margin-top:3px">BIC: ${escapeHtml(COMPANY.bic)}</div>`
+    : "";
+  return `<div style="margin:16px 0;padding:14px 18px;background:${COMPANY.cream};border-radius:10px">
+        <div style="font-size:11px;letter-spacing:1px;text-transform:uppercase;color:#999;margin-bottom:6px">${escapeHtml(b.title)}</div>
+        <div style="font-size:14px;color:#555;margin-bottom:6px">${escapeHtml(b.via)}</div>
+        <div style="font-size:14px;color:${COMPANY.brown};font-weight:600">IBAN: ${escapeHtml(COMPANY.iban)}</div>
+        ${bic}
+        <div style="font-size:13px;color:#777;margin-top:6px">${escapeHtml(b.holder)}: ${escapeHtml(COMPANY.legalName)}</div>
+      </div>`;
+}
+
+function bankBlockText(lang: Lang): string {
+  if (!COMPANY.iban) return "";
+  const b = BANK[lang];
+  const bic = COMPANY.bic ? `\nBIC: ${COMPANY.bic}` : "";
+  return `\n\n${b.title}\n${b.via}\nIBAN: ${COMPANY.iban}${bic}\n${b.holder}: ${COMPANY.legalName}`;
+}
+
 export function paymentReminderEmail(args: {
   lang?: string | null;
   contactName?: string | null;
@@ -454,11 +484,12 @@ export function paymentReminderEmail(args: {
         <div style="font-size:14px;color:#555">${escapeHtml(p.dueLabel)}: ${escapeHtml(args.dueDate)}</div>
       </div>
       <p>${escapeHtml(l.ask)}</p>
+      ${bankBlockHtml(lang)}
       <hr style="border:none;border-top:1px solid ${COMPANY.sand};margin:24px 0 16px" />
       <p style="margin:0 0 4px">${t.regards}</p>
       <div style="font-size:13px;color:#888;line-height:1.7">${signatureHtml()}</div>`);
   const text =
-    `${greeting}\n\n${l.intro}\n\n${args.docNumber}\n${p.openLabel}: ${args.amount}\n${p.dueLabel}: ${args.dueDate}\n\n${l.ask}\n\n${t.regards}\n${COMPANY.legalName}`;
+    `${greeting}\n\n${l.intro}\n\n${args.docNumber}\n${p.openLabel}: ${args.amount}\n${p.dueLabel}: ${args.dueDate}\n\n${l.ask}${bankBlockText(lang)}\n\n${t.regards}\n${COMPANY.legalName}`;
   return { subject: l.subject(args.docNumber), html, text };
 }
 
@@ -517,6 +548,7 @@ export function accountReminderEmail(args: {
         </tr></tfoot>
       </table>
       <p>${escapeHtml(l.ask)}</p>
+      ${bankBlockHtml(lang)}
       <hr style="border:none;border-top:1px solid ${COMPANY.sand};margin:24px 0 16px" />
       <p style="margin:0 0 4px">${t.regards}</p>
       <div style="font-size:13px;color:#888;line-height:1.7">${signatureHtml()}</div>`);
@@ -525,7 +557,7 @@ export function accountReminderEmail(args: {
     ...args.invoices.map((i) => `${i.docNumber}  ${i.dueDate}  ${i.amount}`),
     ...args.credits.map((c) => `${s.creditLabel} ${c.docNumber}  ${c.amount}`),
   ].join("\n");
-  const text = `${greeting}\n\n${s.intro}\n\n${textLines}\n${s.totalLabel}: ${args.total}\n\n${l.ask}\n\n${t.regards}\n${COMPANY.legalName}`;
+  const text = `${greeting}\n\n${s.intro}\n\n${textLines}\n${s.totalLabel}: ${args.total}\n\n${l.ask}${bankBlockText(lang)}\n\n${t.regards}\n${COMPANY.legalName}`;
 
   return { subject: `${s.subject}${levelTag}`, html, text };
 }
