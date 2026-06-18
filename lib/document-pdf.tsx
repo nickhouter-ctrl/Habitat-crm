@@ -375,11 +375,24 @@ const s = StyleSheet.create({
     flex: 1,
     backgroundColor: C.cream,
     borderRadius: 4,
-    padding: 12,
+    paddingVertical: 14,
+    paddingHorizontal: 14,
     alignSelf: "flex-start",
   },
-  payTitle: { fontSize: 7, letterSpacing: 1.5, color: C.muted, marginBottom: 4 },
-  payNote: { fontSize: 7.5, color: C.muted, marginTop: 6, lineHeight: 1.5 },
+  payTitle: { fontSize: 7, letterSpacing: 1.5, color: C.muted, marginBottom: 9 },
+  payRow: { flexDirection: "row", marginBottom: 5 },
+  payLabel: { width: 34, fontSize: 7, letterSpacing: 0.5, color: C.muted, fontFamily: "Sora", fontWeight: 700 },
+  payValue: { flex: 1, fontSize: 9, fontFamily: "Sora", fontWeight: 500, color: C.charcoal },
+  payHolder: { fontSize: 8.5, color: C.muted, marginTop: 4 },
+  payNote: {
+    fontSize: 7.5,
+    color: C.muted,
+    marginTop: 10,
+    paddingTop: 8,
+    borderTopWidth: 0.5,
+    borderColor: C.sand,
+    lineHeight: 1.5,
+  },
 
   totals: { width: 208 },
   totalRow: { flexDirection: "row", justifyContent: "space-between", paddingVertical: 2.5 },
@@ -710,9 +723,19 @@ function DocumentPdf({ doc }: { doc: PdfDoc }) {
                 {isInvoice ? (
                   <View style={s.payBox}>
                     <Text style={s.payTitle}>{t.paymentTitle}</Text>
-                    {C.iban ? <Text>IBAN: {C.iban}</Text> : null}
-                    {C.bic ? <Text style={{ marginTop: 4 }}>BIC: {C.bic}</Text> : null}
-                    <Text style={s.muted}>{C.legalName}</Text>
+                    {C.iban ? (
+                      <View style={s.payRow}>
+                        <Text style={s.payLabel}>IBAN</Text>
+                        <Text style={s.payValue}>{C.iban}</Text>
+                      </View>
+                    ) : null}
+                    {C.bic ? (
+                      <View style={s.payRow}>
+                        <Text style={s.payLabel}>BIC</Text>
+                        <Text style={s.payValue}>{C.bic}</Text>
+                      </View>
+                    ) : null}
+                    <Text style={s.payHolder}>{C.legalName}</Text>
                     <Text style={s.payNote}>{t.payNote}</Text>
                   </View>
                 ) : null}
