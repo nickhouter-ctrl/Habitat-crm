@@ -751,23 +751,23 @@ const APPT: Record<
 // Voorstel-mail: meerdere alternatieve momenten waaruit de klant kiest.
 const APPT_PROPOSE: Record<Lang, { subject: string; body: string; cta: string }> = {
   nl: {
-    subject: "Plan je bezoek aan onze showroom",
-    body: "Wat leuk dat je onze showroom in Jávea wilt bezoeken. Om je snel verder te helpen hebben we alvast een aantal dagen en tijden doorgestuurd die ons goed uitkomen. Kies hieronder het moment dat jóú het beste past — dan bevestigen we je afspraak meteen en zien we je graag.",
+    subject: "Een nieuw moment voor je showroombezoek",
+    body: "Bedankt voor je verzoek om onze showroom in Jávea te bezoeken. Het door jou aangegeven moment komt bij ons helaas net niet uit. Daarom hebben we alvast een aantal dagen en tijden doorgestuurd die ons wél goed uitkomen. Kies hieronder het moment dat jóú het beste past, dan bevestigen we je afspraak meteen en zien we je graag.",
     cta: "Kies een moment",
   },
   en: {
-    subject: "Plan your visit to our showroom",
-    body: "We're delighted that you'd like to visit our showroom in Jávea. To help you along quickly, we've already put forward a few days and times that work well for us. Simply choose the moment that suits you best below — we'll confirm your appointment right away and look forward to welcoming you.",
+    subject: "A new time for your showroom visit",
+    body: "Thank you for your request to visit our showroom in Jávea. Unfortunately the time you indicated doesn't quite work on our side. We've therefore put forward a few days and times that do suit us. Simply choose the moment that works best for you below, and we'll confirm your appointment right away — we look forward to welcoming you.",
     cta: "Choose a time",
   },
   es: {
-    subject: "Planifica tu visita a nuestro showroom",
-    body: "Nos encanta que quieras visitar nuestro showroom en Jávea. Para ayudarte cuanto antes, ya te hemos propuesto varios días y horas que nos vienen bien. Elige a continuación el momento que mejor te convenga y confirmaremos tu cita de inmediato. ¡Te esperamos!",
+    subject: "Un nuevo momento para tu visita al showroom",
+    body: "Gracias por tu solicitud para visitar nuestro showroom en Jávea. Lamentablemente el momento que indicaste no nos viene del todo bien. Por eso te proponemos varios días y horas que sí nos convienen. Elige a continuación el que mejor te venga y confirmaremos tu cita de inmediato. ¡Te esperamos!",
     cta: "Elegir un momento",
   },
   de: {
-    subject: "Plane deinen Besuch in unserem Showroom",
-    body: "Schön, dass du unseren Showroom in Jávea besuchen möchtest. Damit es schnell geht, haben wir dir bereits einige Tage und Uhrzeiten vorgeschlagen, die uns gut passen. Wähle unten einfach den Moment, der dir am besten passt — wir bestätigen deinen Termin sofort und freuen uns auf deinen Besuch.",
+    subject: "Ein neuer Termin für deinen Showroom-Besuch",
+    body: "Vielen Dank für deine Anfrage, unseren Showroom in Jávea zu besuchen. Der von dir angegebene Zeitpunkt passt bei uns leider nicht ganz. Deshalb haben wir dir einige Tage und Uhrzeiten vorgeschlagen, die uns gut passen. Wähle unten einfach den Moment, der dir am besten passt, und wir bestätigen deinen Termin sofort — wir freuen uns auf deinen Besuch.",
     cta: "Moment wählen",
   },
 };
