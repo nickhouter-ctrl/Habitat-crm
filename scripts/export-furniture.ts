@@ -1,9 +1,8 @@
 /**
- * Exporteer de actieve meubels (Caracole + Cornelius) uit het CRM naar een
- * gegenereerd databestand voor de website-catalogus, met per product de
- * volledige foto-galerij van de leverancier (gematcht op SKU). Caracole-producten
- * worden per Shopify-model GEGROEPEERD, zodat maten/kleuren één productpagina met
- * varianten worden. Dry-run standaard; `--apply` schrijft weg.
+ * Exporteer actieve meubels (Caracole + Cornelius) → website-catalogus, met
+ * leverancier-galerijen (op SKU) EN slimme variant-samenvoeging: dezelfde
+ * meubel in andere maat/kleur/links-rechts wordt één product met opties.
+ * Dry-run standaard; `--apply` schrijft weg.
  */
 import "./load-env";
 import { writeFileSync } from "node:fs";
@@ -31,154 +30,148 @@ const SUB: Record<string, string> = {
 const slugify = (s: string) =>
   s.toLowerCase().normalize("NFKD").replace(/[^\w]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 70);
 
-// Kleurnaam (variant-titel) → swatch-hex. Geen match (bv. "Queen Size") → null.
+// Kleur-/maat-/richting-woorden — weggehaald uit de naam om dezelfde meubel te
+// herkennen, en gebruikt als variant-label.
 const COLORS: [RegExp, string][] = [
-  [/black|noir|onyx|ebony/i, "#1d1d1f"], [/charcoal|anthracite|graphite/i, "#3a3a3e"],
-  [/white|blanc|ivory|chalk/i, "#f3efe7"], [/cream|ecru|oat/i, "#ece2cf"],
-  [/beige|sand|linen|natural|flax|oatmeal|wheat|almond/i, "#d7c4a6"],
-  [/taupe|mushroom|greige|stone/i, "#b6a890"], [/(grey|gray|silver|dove|ash)/i, "#9b9b9b"],
-  [/brown|walnut|chocolate|cognac|coffee|espresso|chestnut/i, "#6b4f3a"],
-  [/tan|camel|caramel|honey/i, "#b07a4a"], [/navy|indigo/i, "#28324c"],
-  [/blue|teal|denim|sky|azure/i, "#5b7c98"], [/(green|olive|sage|moss|emerald)/i, "#6e7d5b"],
-  [/gold|brass/i, "#b8985a"], [/bronze|copper/i, "#7d5a3a"], [/rust|terracotta|clay/i, "#b0542d"],
-  [/red|crimson|burgundy|wine/i, "#8a3a3a"], [/pink|blush|rose/i, "#cf9aa0"],
-  [/yellow|mustard|ochre/i, "#c79a3a"], [/purple|aubergine|plum/i, "#5d3a5a"],
+  [/\bblack\b|\bnoir\b|\bonyx\b|\bebony\b/i, "#1d1d1f"], [/\bcharcoal\b|\banthracite\b|\bgraphite\b/i, "#3a3a3e"],
+  [/\bwhite\b|\bivory\b|\bchalk\b/i, "#f3efe7"], [/\bcream\b|\becru\b|\boat\b|\boatmeal\b/i, "#ece2cf"],
+  [/\bbeige\b|\bsand\b|\blinn?en\b|\bnatural\b|\bflax\b|\bwheat\b|\balmond\b|\bpearl\b/i, "#d7c4a6"],
+  [/\btaupe\b|\bmushroom\b|\bgreige\b|\bstone\b/i, "#b6a890"], [/\bgrey\b|\bgray\b|\bsilver\b|\bdove\b|\bash\b/i, "#9b9b9b"],
+  [/\bbrown\b|\bwalnut\b|\bchocolate\b|\bcognac\b|\bcoffee\b|\bespresso\b|\bchestnut\b/i, "#6b4f3a"],
+  [/\btan\b|\bcamel\b|\bcaramel\b|\bhoney\b/i, "#b07a4a"], [/\bnavy\b|\bindigo\b/i, "#28324c"],
+  [/\bblue\b|\bteal\b|\bdenim\b|\bsky\b|\bazure\b/i, "#5b7c98"], [/\bgreen\b|\bolive\b|\bsage\b|\bmoss\b|\bemerald\b/i, "#6e7d5b"],
+  [/\bgold\b|\bbrass\b/i, "#b8985a"], [/\bbronze\b|\bcopper\b/i, "#7d5a3a"], [/\brust\b|\bterracotta\b|\bclay\b/i, "#b0542d"],
+  [/\bred\b|\bcrimson\b|\bburgundy\b|\bwine\b/i, "#8a3a3a"], [/\bpink\b|\bblush\b|\brose\b/i, "#cf9aa0"],
+  [/\bchampagne\b/i, "#e7d6b0"],
 ];
-const colourHex = (title?: string): string | null => {
-  if (!title) return null;
-  for (const [re, hex] of COLORS) if (re.test(title)) return hex;
-  return null;
+const colourHex = (t?: string): string | null => { if (!t) return null; for (const [re, hex] of COLORS) if (re.test(t)) return hex; return null; };
+const colourWord = (name: string): string | null => {
+  const m = name.match(/\b(black|white|ivory|cream|beige|sand|linn?en|natural|taupe|mushroom|greige|grey|gray|silver|brown|walnut|chocolate|cognac|espresso|chestnut|tan|camel|caramel|honey|navy|indigo|blue|teal|denim|green|olive|sage|moss|gold|brass|bronze|copper|rust|terracotta|red|burgundy|pink|blush|rose|champagne|pearl)\b/i);
+  return m ? m[1][0].toUpperCase() + m[1].slice(1).toLowerCase() : null;
 };
+const sizeWord = (name: string): string | null => {
+  const m = name.match(/\b(king|queen|full|twin|california king|cal king)\b/i);
+  return m ? m[1].replace(/\b\w/g, (c) => c.toUpperCase()) : null;
+};
+const dirWord = (name: string): string | null => {
+  const m = name.match(/\b(left chaise|right chaise|left|right|laf|raf)\b/i);
+  if (!m) return null;
+  const v = m[1].toLowerCase();
+  return v.includes("left") || v === "laf" ? "Left" : "Right";
+};
+// Naam zónder kleur/maat/richting → herkent hetzelfde design.
+const normName = (name: string): string =>
+  name.toLowerCase()
+    .replace(/\b(black|white|ivory|cream|ecru|oat|oatmeal|beige|sand|linn?en|natural|flax|wheat|almond|pearl|taupe|mushroom|greige|stone|grey|gray|silver|dove|ash|brown|walnut|chocolate|cognac|coffee|espresso|chestnut|tan|camel|caramel|honey|navy|indigo|blue|teal|denim|sky|azure|green|olive|sage|moss|emerald|gold|brass|bronze|copper|rust|terracotta|clay|red|crimson|burgundy|wine|pink|blush|rose|champagne|dark|light|neutral|toned)\b/gi, " ")
+    .replace(/\b(king|queen|full|twin|california|cal|size)\b/gi, " ")
+    .replace(/\b(left|right|laf|raf)\b/gi, " ")
+    .replace(/[^\w|]+/g, " ").replace(/\s+/g, " ").trim();
 
 async function fetchJson(url: string): Promise<any> {
   const r = await fetch(url, { headers: { "User-Agent": "Mozilla/5.0 HabitatOne" } });
   if (!r.ok) throw new Error(`${r.status} ${url}`);
   return r.json();
 }
-
-type ShopProd = { handle: string; title: string; images: string[]; variantTitle: Map<string, string> };
-
-// Caracole (Shopify): groepeer op product-handle, met variant-titels (Queen/King/kleur).
+type ShopProd = { title: string; images: string[]; variantTitle: Map<string, string> };
 async function caracole(): Promise<{ byHandle: Map<string, ShopProd>; handleBySku: Map<string, string> }> {
-  const byHandle = new Map<string, ShopProd>();
-  const handleBySku = new Map<string, string>();
+  const byHandle = new Map<string, ShopProd>(); const handleBySku = new Map<string, string>();
   for (let page = 1; page <= 12; page++) {
     const j = await fetchJson(`https://caracole.eu.com/products.json?limit=250&page=${page}`);
-    const arr = j.products ?? [];
-    if (arr.length === 0) break;
+    const arr = j.products ?? []; if (arr.length === 0) break;
     for (const p of arr) {
       const images: string[] = (p.images ?? []).map((i: any) => i.src).filter(Boolean);
       const variantTitle = new Map<string, string>();
-      for (const v of p.variants ?? []) {
-        if (!v.sku) continue;
-        const sku = String(v.sku).trim().toUpperCase();
-        variantTitle.set(sku, v.title && v.title !== "Default Title" ? v.title : "");
-        handleBySku.set(sku, p.handle);
-      }
-      byHandle.set(p.handle, { handle: p.handle, title: p.title, images, variantTitle });
+      for (const v of p.variants ?? []) { if (!v.sku) continue; const sku = String(v.sku).trim().toUpperCase(); variantTitle.set(sku, v.title && v.title !== "Default Title" ? v.title : ""); handleBySku.set(sku, p.handle); }
+      byHandle.set(p.handle, { title: p.title, images, variantTitle });
     }
     if (arr.length < 250) break;
   }
   return { byHandle, handleBySku };
 }
-
-// Cornelius (Woo): sku → galerij (losse producten).
 async function cornelius(): Promise<Map<string, string[]>> {
   const idx = new Map<string, string[]>();
   for (let page = 1; page <= 12; page++) {
     const arr = await fetchJson(`https://www.corneliuslifestyle.com/wp-json/wc/store/products?per_page=100&page=${page}`);
     if (!Array.isArray(arr) || arr.length === 0) break;
-    for (const p of arr) {
-      const imgs: string[] = (p.images ?? []).map((i: any) => String(i.src ?? "").replace(/-\d+x\d+(?=\.\w+$)/, "")).filter(Boolean);
-      for (const tok of String(p.sku ?? "").split(/[^0-9A-Za-z]+/)) if (tok && tok.length >= 6) idx.set(tok.toUpperCase(), imgs);
-    }
+    for (const p of arr) { const imgs: string[] = (p.images ?? []).map((i: any) => String(i.src ?? "").replace(/-\d+x\d+(?=\.\w+$)/, "")).filter(Boolean); for (const tok of String(p.sku ?? "").split(/[^0-9A-Za-z]+/)) if (tok && tok.length >= 6) idx.set(tok.toUpperCase(), imgs); }
     if (arr.length < 100) break;
   }
   return idx;
 }
+const dedup = (a: string[]) => Array.from(new Set(a.filter(Boolean))).slice(0, 12);
+const dimStr = (r: any) => { const d = [r.widthMm, r.heightMm, r.lengthMm].filter((x: any) => x != null).map((x: any) => Math.round(Number(x))); return d.length ? `${d.join(" × ")} mm` : null; };
 
-const dedup = (a: string[]) => Array.from(new Set(a.filter(Boolean))).slice(0, 10);
-const dims = (r: any) => {
-  const d = [r.widthMm, r.heightMm, r.lengthMm].filter((x: any) => x != null).map((x: any) => Math.round(Number(x)));
-  return d.length ? `${d.join(" × ")} mm` : null;
-};
+type Member = { sku: string; name: string; sub: string; dims: string | null; descr: string | null; di18n: any; gallery: string[]; shopVariants: { sku: string; title: string }[] };
 
 async function main() {
   console.log("CRM-meubels ophalen…");
   const rows = await db.select().from(products).where(and(eq(products.isActive, true), isNotNull(products.sku)));
   const car = rows.filter((r) => r.collection === "Caracole");
   const cor = rows.filter((r) => r.collection === "Cornelius Lifestyle");
-  console.log(`  Caracole ${car.length} · Cornelius ${cor.length}`);
-
-  console.log("Leverancier-catalogi ophalen…");
   const [{ byHandle, handleBySku }, corIdx] = await Promise.all([caracole(), cornelius()]);
-  console.log(`  Caracole: ${byHandle.size} modellen / ${handleBySku.size} sku-keys · Cornelius: ${corIdx.size} sku-keys`);
+  console.log(`  Caracole ${car.length} · Cornelius ${cor.length} · Shopify ${byHandle.size} modellen`);
 
-  const out: string[] = [];
-  const seen = new Set<string>();
-  let idN = 2_000_000;
-  const push = (o: unknown) => out.push("  " + JSON.stringify(o) + ",");
-  const uniqSlug = (base: string) => { let s = base; while (seen.has(s)) s += "-x"; seen.add(s); return s; };
-
-  // ---- Caracole: één product per Shopify-model; varianten = ALLE leverancier-
-  // maten/kleuren (ook die niet los in het CRM staan), CRM levert naam/omschrijving.
-  const repByHandle = new Map<string, typeof car[number]>();
-  const standalone: typeof car = [];
+  // Bouw "members" (één per CRM-rij), met Shopify-galerij + (eventuele) maat-varianten.
+  const members: Member[] = [];
   for (const r of car) {
+    const subSlug = SUB[(r.subcategory ?? "").trim().toLowerCase()]; if (!subSlug) continue;
     const h = handleBySku.get((r.sku ?? "").trim().toUpperCase());
-    if (!h) { standalone.push(r); continue; }
-    if (!repByHandle.has(h)) repByHandle.set(h, r);
+    const shop = h ? byHandle.get(h) : undefined;
+    const gallery = dedup([...(r.imageUrl ? [r.imageUrl] : []), ...((shop?.images) ?? [])]);
+    const sv = shop ? [...shop.variantTitle.entries()].map(([sku, title]) => ({ sku, title })) : [{ sku: r.sku!, title: "" }];
+    members.push({ sku: r.sku!, name: r.name, sub: subSlug, dims: dimStr(r), descr: r.description ?? null, di18n: r.descriptionI18n ?? null, gallery, shopVariants: sv.length ? sv : [{ sku: r.sku!, title: "" }] });
   }
-  let grouped = 0, variantsTotal = 0;
-  for (const [handle, rep] of repByHandle) {
-    const shop = byHandle.get(handle)!;
-    const subSlug = SUB[(rep.subcategory ?? "").trim().toLowerCase()];
-    if (!subSlug) continue;
-    const id = idN++;
-    const gallery = dedup([...(rep.imageUrl ? [rep.imageUrl] : []), ...(shop.images ?? [])]);
-    const sv = [...shop.variantTitle.entries()]; // [sku, title] in Shopify-volgorde
-    const variants = sv.map(([sku, title], i) => ({
-      id: id * 100 + i,
-      name: sv.length > 1 ? (title || `Variant ${i + 1}`) : null,
-      colorHex: colourHex(title),
-      sku,
-      images: gallery,
-    }));
-    if (variants.length === 0) variants.push({ id: id * 100, name: null, colorHex: null, sku: rep.sku!, images: gallery });
-    variantsTotal += variants.length;
-    if (variants.length > 1) grouped++;
-    push({
-      id, name: rep.name, slug: uniqSlug(`${slugify(rep.name)}-${slugify(rep.sku ?? "")}`), sku: rep.sku, short: null,
-      description: rep.description ?? null, descriptionI18n: rep.descriptionI18n ?? null, additionalSizes: null,
-      image: gallery[0] ?? null, images: gallery, featured: false, dimensions: dims(rep),
-      materials: [], spaces: [], categories: [subSlug], collection: "furniture", variants,
-    });
-  }
-
-  // ---- Cornelius + losse Caracole: één product per rij ----
-  for (const r of [...cor, ...standalone]) {
-    const brandCor = r.collection === "Cornelius Lifestyle";
+  for (const r of cor) {
+    const subSlug = SUB[(r.subcategory ?? "").trim().toLowerCase()]; if (!subSlug) continue;
     const skuU = (r.sku ?? "").toUpperCase();
-    let gal: string[] = brandCor ? corIdx.get(skuU) ?? [] : [];
-    if (!gal.length && brandCor) for (const tok of skuU.split(/[^0-9A-Z]+/)) { const g = corIdx.get(tok); if (g) { gal = g; break; } }
-    const imgs = dedup([...(r.imageUrl ? [r.imageUrl] : []), ...gal]);
-    if (!imgs.length) continue;
-    const subSlug = SUB[(r.subcategory ?? "").trim().toLowerCase()];
-    if (!subSlug) continue;
-    const id = idN++;
-    push({
-      id, name: r.name, slug: uniqSlug(`${slugify(r.name)}-${slugify(r.sku ?? "")}`), sku: r.sku, short: null,
-      description: r.description ?? null, descriptionI18n: r.descriptionI18n ?? null, additionalSizes: null,
-      image: imgs[0], images: imgs, featured: false, dimensions: dims(r),
-      materials: [], spaces: [], categories: [subSlug], collection: "furniture",
-      variants: [{ id: id * 100, name: null, colorHex: null, sku: r.sku, images: imgs }],
-    });
+    let gal = corIdx.get(skuU) ?? []; if (!gal.length) for (const tok of skuU.split(/[^0-9A-Z]+/)) { const g = corIdx.get(tok); if (g) { gal = g; break; } }
+    const gallery = dedup([...(r.imageUrl ? [r.imageUrl] : []), ...gal]);
+    members.push({ sku: r.sku!, name: r.name, sub: subSlug, dims: dimStr(r), descr: r.description ?? null, di18n: r.descriptionI18n ?? null, gallery, shopVariants: [{ sku: r.sku!, title: "" }] });
   }
 
-  console.log(`\n${out.length} producten · ${grouped} Caracole-modellen met meerdere varianten · ${variantsTotal} Caracole-varianten`);
+  // Groepeer members op (subcategorie + modelnaam-zonder-kleur/maat/richting).
+  const fam = new Map<string, Member[]>();
+  for (const m of members) { const key = `${m.sub}||${normName(m.name)}`; (fam.get(key) ?? fam.set(key, []).get(key)!).push(m); }
+
+  const out: string[] = []; const seen = new Set<string>(); let idN = 2_000_000; let mergedFams = 0;
+  const uniqSlug = (b: string) => { let s = b; while (seen.has(s)) s += "-x"; seen.add(s); return s; };
+  const titleCase = (s: string) => s.replace(/\|/g, "| ").replace(/\s+/g, " ").trim().replace(/\b\w/g, (c) => c.toUpperCase());
+
+  for (const [, group] of fam) {
+    const rep = group[0];
+    const multi = group.length > 1 || group.some((m) => m.shopVariants.length > 1);
+    if (group.length > 1) mergedFams++;
+    const id = idN++;
+    const gallery = dedup(group.flatMap((m) => m.gallery));
+    // Variant per (member × shop-variant).
+    const variants: any[] = []; let vi = 0;
+    for (const m of group) {
+      const col = colourWord(m.name); const dir = dirWord(m.name);
+      for (const sv of m.shopVariants) {
+        const size = (sv.title && sv.title !== "Default Title") ? sv.title.replace(/\bsize\b/i, "").trim() : sizeWord(m.name);
+        const label = multi ? ([col, size, dir].filter(Boolean).join(" · ") || `Variant ${vi + 1}`) : null;
+        variants.push({ id: id * 100 + vi++, name: label, colorHex: colourHex(col ?? ""), sku: sv.sku, images: m.gallery.length ? m.gallery : gallery, dim: m.dims });
+      }
+    }
+    // Productnaam = rep-naam met kleur/maat/richting eruit (behoudt hoofdletters
+    // + leestekens zoals "Three's Company"), of rep-naam als die leeg wordt.
+    const stripped = rep.name
+      .replace(/\b(black|white|ivory|cream|ecru|oat|oatmeal|beige|sand|linn?en|natural|flax|wheat|almond|pearl|taupe|mushroom|greige|stone|grey|gray|silver|dove|ash|brown|walnut|chocolate|cognac|coffee|espresso|chestnut|tan|camel|caramel|honey|navy|indigo|blue|teal|denim|sky|azure|green|olive|sage|moss|emerald|gold|brass|bronze|copper|rust|terracotta|clay|red|crimson|burgundy|wine|pink|blush|rose|champagne|dark|light|neutral|toned)\b/gi, " ")
+      .replace(/\b(king|queen|full|twin|california|cal|size)\b/gi, " ")
+      .replace(/\b(left|right|laf|raf)\b/gi, " ")
+      .replace(/\s+/g, " ").replace(/\s+\|/g, " |").replace(/\|\s+/g, "| ").replace(/^\s*\|\s*/, "").trim();
+    const name = multi && stripped ? stripped : rep.name;
+    out.push("  " + JSON.stringify({
+      id, name, slug: uniqSlug(`${slugify(name)}-${slugify(rep.sku)}`), sku: rep.sku, short: null,
+      description: rep.descr, descriptionI18n: rep.di18n, additionalSizes: null,
+      image: gallery[0] ?? null, images: gallery, featured: false, dimensions: rep.dims,
+      materials: [], spaces: [], categories: [rep.sub], collection: "furniture", variants,
+    }) + ",");
+  }
+
+  console.log(`\n${out.length} producten · ${mergedFams} samengevoegde families (>1 lid)`);
   if (!APPLY) { console.log("\nDRY-RUN. Voeg --apply toe om weg te schrijven."); return; }
-  const header = `// AUTO-GENERATED — meubels (Caracole + Cornelius) uit het CRM. Niet handmatig bewerken.\nimport type { CatalogProduct } from "./products.generated";\n\nexport const furnitureProducts: CatalogProduct[] = [\n`;
-  writeFileSync(OUT, header + out.join("\n") + "\n];\n");
+  writeFileSync(OUT, `// AUTO-GENERATED — meubels (Caracole + Cornelius) uit het CRM. Niet handmatig bewerken.\nimport type { CatalogProduct } from "./products.generated";\n\nexport const furnitureProducts: CatalogProduct[] = [\n` + out.join("\n") + "\n];\n");
   console.log(`Geschreven: ${OUT}`);
 }
 main().then(() => process.exit(0)).catch((e) => { console.error(e); process.exit(1); });
