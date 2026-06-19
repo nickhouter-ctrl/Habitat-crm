@@ -147,10 +147,20 @@ export async function pushProductToWebsite(productId: string): Promise<PushResul
   const nextT = num(product.thicknessMm);
   const nowIso = new Date().toISOString();
 
-  // Auto-vertaal de omschrijving naar de andere 3 talen (best-effort).
-  // We gaan ervan uit dat de bron NL is; valt stilletjes terug als OpenAI faalt.
+  // Omschrijvingen per taal. Voorkeur: de in het CRM opgeslagen unieke teksten
+  // (descriptionI18n, bv. AI-gegenereerd) — die gaan VERBATIM naar de site. Alleen
+  // als die ontbreken vertalen we `description` best-effort via OpenAI (bron = NL).
   let translatedDesc: Partial<Record<Locale, string>> | null = null;
-  if (product.description?.trim() && process.env.OPENAI_API_KEY) {
+  const i18n = product.descriptionI18n as Partial<Record<Locale, string>> | null;
+  const hasI18n = i18n && (["nl", "de", "en", "es"] as Locale[]).some((l) => i18n[l]?.trim());
+  if (hasI18n) {
+    translatedDesc = {
+      nl: i18n!.nl?.trim() || product.description?.trim() || undefined,
+      de: i18n!.de?.trim() || undefined,
+      en: i18n!.en?.trim() || undefined,
+      es: i18n!.es?.trim() || undefined,
+    };
+  } else if (product.description?.trim() && process.env.OPENAI_API_KEY) {
     try {
       const out = await translateText({
         text: product.description,

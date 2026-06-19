@@ -1,4 +1,4 @@
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 import Link from "next/link";
 
 import {
@@ -235,6 +235,21 @@ export default async function DataCheckPage() {
   const totalIssues = withCounts.reduce((s, i) => s + i.count, 0);
   const clean = withCounts.filter((i) => i.count === 0).length;
 
+  // Voortgang unieke meubelteksten (SEO) — Cornelius + Caracole.
+  const furnitureDescRows = await db
+    .select({
+      total: sql<number>`count(*)::int`,
+      done: sql<number>`count(*) filter (where ${products.descriptionI18n} is not null)::int`,
+    })
+    .from(products)
+    .where(
+      and(
+        inArray(products.collection, ["Cornelius Lifestyle", "Caracole"]),
+        eq(products.isActive, true),
+      ),
+    );
+  const fd = furnitureDescRows[0] ?? { total: 0, done: 0 };
+
   return (
     <>
       <PageHeader
@@ -255,6 +270,19 @@ export default async function DataCheckPage() {
         <div className="mb-5 rounded-lg border border-border bg-surface px-4 py-3 text-sm">
           <strong>{totalIssues}</strong> aandachtspunt(en) over {withCounts.length - clean} categorie(ën).
           {clean > 0 && <span className="text-muted"> · {clean} categorie(ën) schoon ✓</span>}
+        </div>
+      )}
+
+      {fd.total > 0 && (
+        <div className="mb-5 rounded-lg border border-border bg-surface px-4 py-3 text-sm">
+          Unieke meubelteksten (SEO): <strong>{fd.done}/{fd.total}</strong> meubels met eigen
+          meertalige omschrijving.
+          {fd.done < fd.total && (
+            <span className="text-muted">
+              {" "}
+              · de rest volgt automatisch zodra <code>AI_DESCRIPTIONS_ENABLED</code> aanstaat.
+            </span>
+          )}
         </div>
       )}
 
