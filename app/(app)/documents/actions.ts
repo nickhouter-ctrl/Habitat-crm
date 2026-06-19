@@ -324,6 +324,7 @@ export async function updateDocument(id: string, formData: FormData) {
     columns: { kind: true, stockAppliedAt: true, items: true },
   });
   const wasBooked = old?.kind === "invoice" && !!old.stockAppliedAt;
+  const wasBookedCredit = old?.kind === "creditnote" && !!old.stockAppliedAt;
 
   const { values } = buildValues(parsed.data);
   // Don't clobber paidEur on edit.
@@ -356,6 +357,12 @@ export async function updateDocument(id: string, formData: FormData) {
     await addBackStockForItems(old!.items); // oude aantallen terug op voorraad
     await db.update(documents).set({ stockAppliedAt: null }).where(eq(documents.id, id));
     await bookStockOutInternal(id, user.id, { auto: true }); // nieuwe aantallen afboeken
+  } else if (wasBookedCredit && values.kind === "creditnote") {
+    // Spiegelbeeld voor een creditnota: oude bijboeking eerst weer eraf, dan de
+    // nieuwe regels opnieuw bijboeken.
+    await removeStockForItems(old!.items);
+    await db.update(documents).set({ stockAppliedAt: null }).where(eq(documents.id, id));
+    await bookStockInForCreditNote(id, user.id, { auto: true });
   }
 
   await syncDealFromDocument(values.dealId, values);
@@ -670,6 +677,9 @@ export async function setDocumentStatus(id: string, formData: FormData) {
   // dus dubbel aanroepen (sent → later paid) is veilig.
   if (doc.kind === "invoice" && (status === "sent" || status === "paid")) {
     await bookStockOutInternal(id, user.id, { auto: true });
+  } else if (doc.kind === "creditnote" && (status === "sent" || status === "paid")) {
+    // Creditnota = retour → voorraad weer bijboeken (idempotent).
+    await bookStockInForCreditNote(id, user.id, { auto: true });
   }
 
   revalidateAround(doc.kind as DocKind, id);
@@ -758,6 +768,8 @@ export async function sendDocument(id: string) {
   // + per-deal-bescherming in de helper, dus veilig als 'ie al geboekt was).
   if (doc.kind === "invoice") {
     await bookStockOutInternal(id, user.id, { auto: true });
+  } else if (doc.kind === "creditnote") {
+    await bookStockInForCreditNote(id, user.id, { auto: true });
   }
 
   let emailNote = doc.contact?.email
@@ -1340,6 +1352,79 @@ async function addBackStockForItems(items: unknown): Promise<void> {
   }
 }
 
+/** Spiegelbeeld van addBackStockForItems: haal de aantallen er WEER AF (kit-aware). */
+async function removeStockForItems(items: unknown): Promise<void> {
+  for (const it of normalizeDocItems(items)) {
+    if (!it.productId || !it.units) continue;
+    const prod = await db.query.products.findFirst({ where: eq(products.id, it.productId) });
+    const hasVariants =
+      Array.isArray(prod?.additionalSizes) && (prod!.additionalSizes as unknown[]).length > 0;
+    const kit = !hasVariants
+      ? ((prod?.components as Array<{ sku: string; qty: number }> | null) ?? null)
+      : null;
+    if (kit && kit.length > 0) {
+      for (const comp of kit) {
+        await db
+          .update(products)
+          .set({
+            stockQty: sql`coalesce(${products.stockQty}, 0) - ${String(Number(it.units) * Number(comp.qty))}`,
+            updatedAt: new Date(),
+          })
+          .where(eq(products.sku, comp.sku));
+      }
+    } else {
+      await db
+        .update(products)
+        .set({
+          stockQty: sql`coalesce(${products.stockQty}, 0) - ${String(it.units)}`,
+          updatedAt: new Date(),
+        })
+        .where(eq(products.id, it.productId));
+    }
+  }
+}
+
+/**
+ * Voorraad **bijboeken** voor een creditnota (retour). Spiegelbeeld van
+ * bookStockOutInternal: zet de gecrediteerde stuks weer op voorraad. Idempotent
+ * via de atomaire claim op stockAppliedAt; set-/variant-aware.
+ */
+async function bookStockInForCreditNote(
+  docId: string,
+  userId: string,
+  opts: { auto?: boolean } = {},
+): Promise<StockOutResult> {
+  const doc = await db.query.documents.findFirst({ where: eq(documents.id, docId) });
+  if (!doc) return { ok: false, reason: "not-found" };
+  if (doc.kind !== "creditnote") return { ok: false, reason: "wrong-kind" };
+
+  const lines = normalizeDocItems(doc.items).filter((it) => it.productId && it.units);
+  if (lines.length === 0) return { ok: false, reason: "no-products" };
+
+  // Atomair claimen: alleen de eerste boekt bij (geen dubbele klik / dubbele boeking).
+  const [claimed] = await db
+    .update(documents)
+    .set({ stockAppliedAt: new Date() })
+    .where(and(eq(documents.id, docId), isNull(documents.stockAppliedAt)))
+    .returning({ id: documents.id });
+  if (!claimed) return { ok: false, reason: "already-booked" };
+
+  await addBackStockForItems(doc.items);
+
+  await db.insert(activities).values({
+    type: "note",
+    subject: `Voorraad teruggeboekt — creditnota ${doc.docNumber ?? ""}`.trim(),
+    body: `${lines.length} productregel(s) weer op voorraad gezet${opts.auto ? " (automatisch bij statuswijziging)" : ""}.`,
+    documentId: docId,
+    contactId: doc.contactId,
+    authorId: userId,
+  });
+
+  revalidatePath(`/documents/${docId}`);
+  revalidatePath("/products");
+  return { ok: true, applied: lines.length, negatives: [] };
+}
+
 /** Push dit verkoopdocument naar Holded (maakt/koppelt de Holded-factuur). */
 export async function pushDocumentToHoldedAction(id: string) {
   const user = await requireUser();
@@ -1358,6 +1443,12 @@ export async function pushDocumentToHoldedAction(id: string) {
         .set({ status: "sent", sentAt: new Date(), updatedAt: new Date() })
         .where(and(eq(documents.id, id), eq(documents.status, "draft")));
       await bookStockOutInternal(id, user.id, { auto: true });
+    } else if (doc?.kind === "creditnote" && doc.status === "draft") {
+      await db
+        .update(documents)
+        .set({ status: "sent", sentAt: new Date(), updatedAt: new Date() })
+        .where(and(eq(documents.id, id), eq(documents.status, "draft")));
+      await bookStockInForCreditNote(id, user.id, { auto: true });
     }
     target = `/documents/${id}?holded=ok&hid=${encodeURIComponent(hid)}`;
   } catch (err) {
@@ -1397,6 +1488,20 @@ export async function updateDocumentInHoldedAction(id: string) {
 /** Handmatige knop "Voorraad afboeken" op een factuur of pakbon. */
 export async function applyStockOutFromDocument(id: string) {
   const user = await requireUser();
+  const which = await db.query.documents.findFirst({
+    where: eq(documents.id, id),
+    columns: { kind: true },
+  });
+  // Creditnota = voorraad terugboeken (i.p.v. afboeken).
+  if (which?.kind === "creditnote") {
+    await bookStockInForCreditNote(id, user.id);
+    await db
+      .update(documents)
+      .set({ status: "sent", sentAt: new Date(), updatedAt: new Date() })
+      .where(and(eq(documents.id, id), eq(documents.kind, "creditnote"), eq(documents.status, "draft")));
+    revalidatePath(`/documents/${id}`);
+    return;
+  }
   const res = await bookStockOutInternal(id, user.id);
   if (!res.ok && res.reason === "deal-already-booked") {
     redirect(`/documents/${id}?voorraad=dubbel&doc=${encodeURIComponent(res.otherDoc ?? "")}`);
@@ -1424,6 +1529,9 @@ export async function reverseStockOutFromDocument(id: string) {
     .returning({ id: documents.id });
   if (!claimed) return;
 
+  // Een factuur/pakbon boekte AF → terugdraaien zet erbij (+). Een creditnota
+  // boekte BIJ → terugdraaien haalt er weer af (−). Vandaar de richting.
+  const dir = doc.kind === "creditnote" ? -1 : 1;
   for (const it of normalizeDocItems(doc.items)) {
     if (!it.productId || !it.units) continue;
     const prod = await db.query.products.findFirst({ where: eq(products.id, it.productId) });
@@ -1434,7 +1542,7 @@ export async function reverseStockOutFromDocument(id: string) {
       : null;
     if (kit && kit.length > 0) {
       for (const comp of kit) {
-        const addQty = Number(it.units) * Number(comp.qty);
+        const addQty = dir * Number(it.units) * Number(comp.qty);
         await db
           .update(products)
           .set({
@@ -1447,7 +1555,7 @@ export async function reverseStockOutFromDocument(id: string) {
       await db
         .update(products)
         .set({
-          stockQty: sql`coalesce(${products.stockQty}, 0) + ${String(it.units)}`,
+          stockQty: sql`coalesce(${products.stockQty}, 0) + ${String(dir * Number(it.units))}`,
           updatedAt: new Date(),
         })
         .where(eq(products.id, it.productId));
