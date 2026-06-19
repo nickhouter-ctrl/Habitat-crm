@@ -1,19 +1,12 @@
 import { and, eq, inArray, sql } from "drizzle-orm";
 import Link from "next/link";
 
-import {
-  Badge,
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-  LinkButton,
-  PageHeader,
-} from "@/components/ui";
+import { Badge, Card, LinkButton, PageHeader } from "@/components/ui";
 import { db } from "@/lib/db";
 import { documents, products } from "@/lib/db/schema";
 import { normalizeDocItems } from "@/lib/documents";
 import { getReservedStockByProduct } from "@/lib/stock";
+import { cn } from "@/lib/utils";
 
 export const metadata = { title: "Data-check" };
 export const dynamic = "force-dynamic";
@@ -286,47 +279,57 @@ export default async function DataCheckPage() {
         </div>
       )}
 
-      <div className="grid gap-4 lg:grid-cols-2">
+      <div className="grid items-start gap-4 lg:grid-cols-2">
         {withCounts.map((issue) => (
-          <Card key={issue.key} className={issue.count === 0 ? "opacity-60" : undefined}>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                {issue.title}
+          <Card
+            key={issue.key}
+            className={cn("overflow-hidden", issue.count === 0 ? "opacity-60" : undefined)}
+          >
+            {/* Inklapbaar (standaard dicht); de lijst eronder is scrollbaar. */}
+            <details className="group">
+              <summary className="flex cursor-pointer list-none items-center gap-2 px-4 py-3 text-sm font-semibold hover:bg-background">
+                <span className="text-xs text-muted transition-transform group-open:rotate-90">▶</span>
+                <span className="flex-1">{issue.title}</span>
                 <Badge tone={issue.count === 0 ? "success" : toneBadge[issue.tone]}>
                   {issue.count === 0 ? "✓" : issue.count}
                 </Badge>
-              </CardTitle>
-              {issue.listHref && issue.count > 0 && (
-                <Link href={issue.listHref} className="text-xs text-accent hover:underline">
-                  Alle bekijken →
-                </Link>
-              )}
-            </CardHeader>
-            <CardContent>
-              <p className="mb-3 text-xs text-muted">{issue.why}</p>
-              {issue.count === 0 ? (
-                <p className="text-sm text-success">Niets gevonden ✓</p>
-              ) : (
-                <ul className="space-y-1.5 text-sm">
-                  {issue.items.map((it, i) => (
-                    <li key={i} className="flex items-baseline justify-between gap-2 border-b border-border/40 py-1 last:border-0">
-                      <Link href={it.href} className="font-medium hover:underline">
-                        {it.label}
+              </summary>
+              <div className="border-t border-border/60 px-4 py-3">
+                <p className="mb-2 text-xs text-muted">{issue.why}</p>
+                {issue.count === 0 ? (
+                  <p className="text-sm text-success">Niets gevonden ✓</p>
+                ) : (
+                  <>
+                    {issue.listHref && (
+                      <Link
+                        href={issue.listHref}
+                        className="mb-2 inline-block text-xs text-accent hover:underline"
+                      >
+                        Alle bekijken →
                       </Link>
-                      {it.sub && <span className="shrink-0 text-xs text-muted">{it.sub}</span>}
-                    </li>
-                  ))}
-                  {issue.listHref && issue.count > issue.items.length && (
-                    <li className="pt-1 text-xs text-muted">
-                      + {issue.count - issue.items.length} meer —{" "}
-                      <Link href={issue.listHref} className="text-accent hover:underline">
-                        bekijk alle
-                      </Link>
-                    </li>
-                  )}
-                </ul>
-              )}
-            </CardContent>
+                    )}
+                    <ul className="max-h-72 space-y-1.5 overflow-auto pr-1 text-sm">
+                      {issue.items.map((it, i) => (
+                        <li key={i} className="flex items-baseline justify-between gap-2 border-b border-border/40 py-1 last:border-0">
+                          <Link href={it.href} className="font-medium hover:underline">
+                            {it.label}
+                          </Link>
+                          {it.sub && <span className="shrink-0 text-xs text-muted">{it.sub}</span>}
+                        </li>
+                      ))}
+                      {issue.listHref && issue.count > issue.items.length && (
+                        <li className="pt-1 text-xs text-muted">
+                          + {issue.count - issue.items.length} meer —{" "}
+                          <Link href={issue.listHref} className="text-accent hover:underline">
+                            bekijk alle
+                          </Link>
+                        </li>
+                      )}
+                    </ul>
+                  </>
+                )}
+              </div>
+            </details>
           </Card>
         ))}
       </div>
