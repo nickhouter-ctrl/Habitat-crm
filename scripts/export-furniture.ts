@@ -148,9 +148,10 @@ const sizeKey = (t?: string | null) => (t ?? "").toLowerCase().match(/\b(queen|k
 const escapeRe = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 function elemDimFor(desc: string | null | undefined, title: string): string | null {
   if (!desc) return null;
-  const t = title.replace(/[^A-Za-z ]/g, "").trim().split(/\s+/).map(escapeRe).join("\\s+");
+  const t = title.replace(/[^A-Za-z0-9 ]/g, "").trim().split(/\s+/).map(escapeRe).join("\\s+");
   if (!t) return null;
-  const re = new RegExp(`${t}\\s*:\\s*W\\s*[\\d.]+\\s*[x×]\\s*D\\s*[\\d.]+\\s*[x×]\\s*H\\s*[\\d.]+\\s*in\\s*W\\s*(\\d+(?:\\.\\d+)?)\\s*[x×]\\s*D\\s*(\\d+(?:\\.\\d+)?)\\s*[x×]\\s*H\\s*(\\d+(?:\\.\\d+)?)\\s*cm`, "i");
+  // Dubbele punt is optioneel ("Corner Section W54…" én "Left Arm Facing Chaise: W67…").
+  const re = new RegExp(`${t}\\s*:?\\s*W\\s*[\\d.]+\\s*[x×]\\s*D\\s*[\\d.]+\\s*[x×]\\s*H\\s*[\\d.]+\\s*in\\s*W\\s*(\\d+(?:\\.\\d+)?)\\s*[x×]\\s*D\\s*(\\d+(?:\\.\\d+)?)\\s*[x×]\\s*H\\s*(\\d+(?:\\.\\d+)?)\\s*cm`, "i");
   const m = desc.match(re);
   return m ? `${Math.round(+m[1] * 10)} × ${Math.round(+m[3] * 10)} × ${Math.round(+m[2] * 10)} mm` : null;
 }
