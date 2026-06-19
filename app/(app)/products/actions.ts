@@ -205,8 +205,8 @@ export async function importCorneliusProducts(): Promise<{
     subcategory: SUBCAT[p.category] ?? p.category ?? null,
     unit: "stuk",
     priceEur: p.priceEur != null ? String(p.priceEur) : null,
-    tradePriceEur:
-      p.priceEur != null ? String(Math.round(p.priceEur * 0.8 * 100) / 100) : null,
+    // Meubels: geen aannemerskorting → aannemersprijs = verkoopprijs.
+    tradePriceEur: p.priceEur != null ? String(p.priceEur) : null,
     vatRate: 21,
     description: p.description || null,
     imageUrl: p.imageUrl || null,
