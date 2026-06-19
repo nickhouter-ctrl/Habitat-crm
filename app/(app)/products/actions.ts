@@ -179,6 +179,16 @@ export async function importCorneliusProducts(): Promise<{
   await requireUser();
   const items = corneliusData as CorneliusItem[];
 
+  // Indeling: collection "Meubels" → category (groep) → subcategory (type).
+  const GROUP: Record<string, string> = {
+    Armchairs: "Seating", Sofas: "Seating", Chairs: "Seating", "Dining Chairs": "Seating",
+    Barstools: "Seating", Benches: "Seating", Poufs: "Seating",
+    "Coffee Tables": "Tables", "Dining Tables": "Tables", "Console Tables": "Tables", "Side Tables": "Tables",
+    Chandeliers: "Lighting", Pendants: "Lighting", "Floor Lamps": "Lighting",
+    Trees: "Decoration", Artwork: "Decoration",
+  };
+  const SUBCAT: Record<string, string> = { Trees: "Real Touch Trees and Plants" };
+
   const existing = await db
     .select({ sku: products.sku })
     .from(products)
@@ -190,7 +200,9 @@ export async function importCorneliusProducts(): Promise<{
   const rows = toInsert.map((p) => ({
     name: p.name,
     sku: p.sku,
-    category: p.category || null,
+    collection: "Meubels",
+    category: GROUP[p.category] ?? "Overig",
+    subcategory: SUBCAT[p.category] ?? p.category ?? null,
     unit: "stuk",
     priceEur: p.priceEur != null ? String(p.priceEur) : null,
     tradePriceEur:
