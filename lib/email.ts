@@ -788,7 +788,6 @@ export function appointmentProposalEmail(args: {
       <p style="margin:26px 0">
         <a href="${args.url}" style="display:inline-block;background:${COMPANY.brown};color:#fff;text-decoration:none;padding:13px 26px;border-radius:10px;font-weight:600;font-size:15px">${a.cta}</a>
       </p>
-      <p style="font-size:12px;color:#999;word-break:break-all">${escapeHtml(args.url)}</p>
       <hr style="border:none;border-top:1px solid ${COMPANY.sand};margin:24px 0 16px" />
   `);
   const text = `${greeting}\n\n${a.body}\n\n${a.cta}: ${args.url}`;
