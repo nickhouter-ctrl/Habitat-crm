@@ -101,6 +101,21 @@ async function cornelius(): Promise<Map<string, string[]>> {
 const dedup = (a: string[]) => Array.from(new Set(a.filter(Boolean))).slice(0, 12);
 const dimStr = (r: any) => { const d = [r.widthMm, r.heightMm, r.lengthMm].filter((x: any) => x != null).map((x: any) => Math.round(Number(x))); return d.length ? `${d.join(" × ")} mm` : null; };
 
+// Maat → afmeting (mm, W × H × D) uit de omschrijving, bv. "Queen Size … W178 x
+// D229 x H147 cm King Size … W218 x D229 x H147 cm".
+function sizeDims(desc?: string | null): Map<string, string> {
+  const map = new Map<string, string>();
+  if (!desc) return map;
+  const re = /\b(queen|king|full|twin)\s+size\b[^]{0,90}?W\s*(\d+)\s*[x×]\s*D\s*(\d+)\s*[x×]\s*H\s*(\d+)\s*cm/gi;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(desc))) {
+    const W = +m[2], D = +m[3], H = +m[4];
+    if (!map.has(m[1].toLowerCase())) map.set(m[1].toLowerCase(), `${W * 10} × ${H * 10} × ${D * 10} mm`);
+  }
+  return map;
+}
+const sizeKey = (t?: string | null) => (t ?? "").toLowerCase().match(/\b(queen|king|full|twin)\b/)?.[1] ?? null;
+
 type Member = { sku: string; name: string; sub: string; dims: string | null; descr: string | null; di18n: any; gallery: string[]; shopVariants: { sku: string; title: string }[] };
 
 async function main() {
@@ -147,10 +162,13 @@ async function main() {
     const variants: any[] = []; let vi = 0;
     for (const m of group) {
       const col = colourWord(m.name); const dir = dirWord(m.name);
+      const sd = sizeDims(m.descr);
       for (const sv of m.shopVariants) {
         const size = (sv.title && sv.title !== "Default Title") ? sv.title.replace(/\bsize\b/i, "").trim() : sizeWord(m.name);
         const label = multi ? ([col, size, dir].filter(Boolean).join(" · ") || `Variant ${vi + 1}`) : null;
-        variants.push({ id: id * 100 + vi++, name: label, colorHex: colourHex(col ?? ""), sku: sv.sku, images: m.gallery.length ? m.gallery : gallery, dim: m.dims });
+        const sk = sizeKey(sv.title) ?? sizeKey(m.name);
+        const dim = (sk && sd.get(sk)) || m.dims;
+        variants.push({ id: id * 100 + vi++, name: label, colorHex: colourHex(col ?? ""), sku: sv.sku, images: m.gallery.length ? m.gallery : gallery, dim });
       }
     }
     // Productnaam = rep-naam met kleur/maat/richting eruit (behoudt hoofdletters
