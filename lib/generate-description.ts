@@ -7,16 +7,13 @@
  * Kosten: ~€0,02 per product. Gegrond: gebruikt alleen meegegeven feiten en
  * verzint geen maten/materialen.
  */
-import { and, eq, inArray, isNull, sql } from "drizzle-orm";
+import { and, eq, isNull, sql } from "drizzle-orm";
 
 import { db } from "@/lib/db";
 import { products } from "@/lib/db/schema";
 import type { Locale } from "@/lib/translate";
 
 const API_URL = "https://api.anthropic.com/v1/messages";
-
-/** Collecties (meubels) waarvoor unieke teksten worden gegenereerd. */
-const FURNITURE_COLLECTIONS = ["Cornelius Lifestyle", "Caracole"];
 const MODEL = process.env.ANTHROPIC_MODEL ?? "claude-sonnet-4-6";
 
 export type ProductForCopy = {
@@ -53,8 +50,8 @@ function buildFacts(p: ProductForCopy): string {
   return [
     `Naam: ${p.name}`,
     p.brand ? `Merk/collectie: ${p.brand}` : "",
-    p.type ? `Type meubel: ${p.type}` : "",
-    p.variants?.length ? `Beschikbare uitvoeringen/kleuren: ${p.variants.join(", ")}` : "",
+    p.type ? `Type product: ${p.type}` : "",
+    p.variants?.length ? `Beschikbare uitvoeringen/maten/kleuren: ${p.variants.join(", ")}` : "",
     dims ? `Afmetingen: ${dims}` : "",
     p.sourceText ? `Referentie (leveranciertekst, NIET overnemen, alleen ter info): ${p.sourceText.slice(0, 800)}` : "",
   ]
@@ -62,14 +59,15 @@ function buildFacts(p: ProductForCopy): string {
     .join("\n");
 }
 
-const PROMPT = `Je bent copywriter voor Habitat One, een exclusieve interieur-/meubelzaak aan de Costa Blanca (Xàbia/Jávea, Spanje). Toon: warm, verfijnd, mediterraan-luxe, maar concreet en niet zweverig.
+const PROMPT = `Je bent copywriter voor Habitat One, een exclusieve interieurzaak aan de Costa Blanca (Xàbia/Jávea, Spanje). Habitat One voert natuursteen, flexibele steen- en wandpanelen, deuren, verlichting én meubels. Toon: warm, verfijnd, mediterraan-luxe, maar concreet en niet zweverig.
 
-Schrijf een UNIEKE verkoopomschrijving voor onderstaand meubel, in VIER talen: Nederlands, Duits, Engels en Spaans. Elke taal apart, geen vertaling-op-vertaling: schrijf in elke taal natuurlijk.
+Schrijf een UNIEKE verkoopomschrijving voor onderstaand product, in VIER talen: Nederlands, Duits, Engels en Spaans. Elke taal apart, geen vertaling-op-vertaling: schrijf in elke taal natuurlijk.
 
 Regels:
 - Per taal 110-160 woorden, 2 korte alinea's.
+- Stem de inhoud af op het TYPE product: bij meubels over comfort/vorm/gebruik, bij steen/wand­panelen over afwerking/textuur/toepassing (wand, vloer), bij verlichting/deuren navenant.
 - Volledig ORIGINEEL — neem GEEN zinnen letterlijk over uit de referentietekst.
-- Verwerk het type meubel en (indien gegeven) het materiaal/kleur natuurlijk in de tekst (goed voor SEO), zonder te overdrijven of trefwoorden te stapelen.
+- Verwerk het type product en (indien gegeven) het materiaal/kleur natuurlijk in de tekst (goed voor SEO), zonder te overdrijven of trefwoorden te stapelen.
 - Gebruik UITSLUITEND de meegegeven feiten. Verzin GEEN afmetingen, materialen, gewichten of eigenschappen die er niet staan. Als je weinig feiten hebt, blijf dan algemener over stijl/sfeer/toepassing.
 - Noem afmetingen alleen als ze zijn meegegeven, en dan beknopt.
 - Geen prijzen, geen merknaam van de leverancier, geen "Habitat One" in de lopende tekst.
@@ -164,11 +162,8 @@ export async function runDescriptionGeneration(
   const limit = opts.limit ?? 12;
   const concurrency = opts.concurrency ?? 3;
 
-  const where = and(
-    inArray(products.collection, FURNITURE_COLLECTIONS),
-    eq(products.isActive, true),
-    isNull(products.descriptionI18n),
-  );
+  // Alle actieve producten zonder unieke meertalige tekst (idempotent).
+  const where = and(eq(products.isActive, true), isNull(products.descriptionI18n));
 
   const batch = await db.query.products.findMany({ where, limit });
   const remainingBefore = await db

@@ -235,19 +235,14 @@ export default async function DataCheckPage() {
   const totalIssues = withCounts.reduce((s, i) => s + i.count, 0);
   const clean = withCounts.filter((i) => i.count === 0).length;
 
-  // Voortgang unieke meubelteksten (SEO) — Cornelius + Caracole.
+  // Voortgang unieke meertalige productteksten (SEO) — alle actieve producten.
   const furnitureDescRows = await db
     .select({
       total: sql<number>`count(*)::int`,
       done: sql<number>`count(*) filter (where ${products.descriptionI18n} is not null)::int`,
     })
     .from(products)
-    .where(
-      and(
-        inArray(products.collection, ["Cornelius Lifestyle", "Caracole"]),
-        eq(products.isActive, true),
-      ),
-    );
+    .where(eq(products.isActive, true));
   const fd = furnitureDescRows[0] ?? { total: 0, done: 0 };
 
   return (
@@ -275,7 +270,7 @@ export default async function DataCheckPage() {
 
       {fd.total > 0 && (
         <div className="mb-5 rounded-lg border border-border bg-surface px-4 py-3 text-sm">
-          Unieke meubelteksten (SEO): <strong>{fd.done}/{fd.total}</strong> meubels met eigen
+          Unieke productteksten (SEO): <strong>{fd.done}/{fd.total}</strong> producten met eigen
           meertalige omschrijving.
           {fd.done < fd.total && (
             <span className="text-muted">
