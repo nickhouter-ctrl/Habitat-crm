@@ -163,6 +163,16 @@ function elemDimFor(desc: string | null | undefined, title: string): string | nu
   return m ? `${Math.round(+m[1] * 10)} × ${Math.round(+m[3] * 10)} × ${Math.round(+m[2] * 10)} mm` : null;
 }
 
+// Algemene fallback: de eerste W×D×H-maat (cm) uit een omschrijving. Vangt ook
+// "110W X 103D X 29H in 279 x 262 x 74 cm" (kale cm-groep ná de inch-maat).
+function firstDim(desc?: string | null): string | null {
+  if (!desc) return null;
+  let m = desc.match(/W\s*(\d+(?:\.\d+)?)\s*[x×]\s*D\s*(\d+(?:\.\d+)?)\s*[x×]\s*H\s*(\d+(?:\.\d+)?)\s*cm/i);
+  if (!m) m = desc.match(/(\d+(?:\.\d+)?)\s*W\s*[x×]\s*(\d+(?:\.\d+)?)\s*D\s*[x×]\s*(\d+(?:\.\d+)?)\s*H\s*cm/i);
+  if (!m) m = desc.match(/\bin\s+(\d+(?:\.\d+)?)\s*[x×]\s*(\d+(?:\.\d+)?)\s*[x×]\s*(\d+(?:\.\d+)?)\s*cm\b/i);
+  return m ? `${Math.round(+m[1] * 10)} × ${Math.round(+m[3] * 10)} × ${Math.round(+m[2] * 10)} mm` : null;
+}
+
 // SKU-ontleding (Caracole): PREFIX-SERIE-ELEMENT-KLEUR, bv. M150-023-LH1-B.
 const seriesOf = (sku: string) => sku.trim().toUpperCase().split("-").slice(0, 2).join("-"); // "M150-023", "UPH-425V"
 const colourBase = (sku: string) => sku.trim().toUpperCase().replace(/-[A-Z]$/, ""); // element-identiteit zonder kleurletter
@@ -240,7 +250,7 @@ async function main() {
         const nm = `${!colourInTitle && baseCol ? baseCol + " " : ""}${et} | Caracole ${cap(line ?? "")}`.replace(/\s+\|/, " |").trim();
         members.push({
           sku: esku, name: nm, sub: subSlug, brand: "caracole", series: seriesOf(esku), line, cbase: colourBase(esku),
-          dims: elemDimFor(r.description, et) ?? dimStr(r), descr: r.description ?? null, di18n: r.descriptionI18n ?? null,
+          dims: elemDimFor(r.description, et) ?? dimStr(r) ?? firstDim(r.description), descr: r.description ?? null, di18n: r.descriptionI18n ?? null,
           gallery: dedup([shop.variantImg.get(esku) ?? "", ...(r.imageUrl ? [r.imageUrl] : []), ...shop.images]),
           shopVariants: [{ sku: esku, title: "" }],
         });
@@ -249,14 +259,14 @@ async function main() {
     }
     const gallery = dedup([...(r.imageUrl ? [r.imageUrl] : []), ...((shop?.images) ?? [])]);
     const sv = shop ? [...shop.variantTitle.entries()].map(([sku, title]) => ({ sku, title, img: shop.variantImg.get(sku) })) : [{ sku: r.sku!, title: "" }];
-    members.push({ sku: r.sku!, name: r.name, sub: subSlug, brand: "caracole", series: seriesOf(r.sku!), line, cbase: colourBase(r.sku!), dims: dimStr(r), descr: r.description ?? null, di18n: r.descriptionI18n ?? null, gallery, shopVariants: sv.length ? sv : [{ sku: r.sku!, title: "" }] });
+    members.push({ sku: r.sku!, name: r.name, sub: subSlug, brand: "caracole", series: seriesOf(r.sku!), line, cbase: colourBase(r.sku!), dims: dimStr(r) ?? firstDim(r.description), descr: r.description ?? null, di18n: r.descriptionI18n ?? null, gallery, shopVariants: sv.length ? sv : [{ sku: r.sku!, title: "" }] });
   }
   for (const r of cor) {
     const subSlug = resolveSub(r); if (!subSlug) continue;
     const skuU = (r.sku ?? "").toUpperCase();
     let gal = corIdx.get(skuU) ?? []; if (!gal.length) for (const tok of skuU.split(/[^0-9A-Z]+/)) { const g = corIdx.get(tok); if (g) { gal = g; break; } }
     const gallery = dedup([...(r.imageUrl ? [r.imageUrl] : []), ...gal]);
-    members.push({ sku: r.sku!, name: r.name, sub: subSlug, brand: "cornelius", series: seriesOf(r.sku!), line: null, cbase: colourBase(r.sku!), dims: dimStr(r), descr: r.description ?? null, di18n: r.descriptionI18n ?? null, gallery, shopVariants: [{ sku: r.sku!, title: "" }] });
+    members.push({ sku: r.sku!, name: r.name, sub: subSlug, brand: "cornelius", series: seriesOf(r.sku!), line: null, cbase: colourBase(r.sku!), dims: dimStr(r) ?? firstDim(r.description), descr: r.description ?? null, di18n: r.descriptionI18n ?? null, gallery, shopVariants: [{ sku: r.sku!, title: "" }] });
   }
 
   // ── Groeperen ─────────────────────────────────────────────────────────────
