@@ -30,6 +30,14 @@ const SUB: Record<string, string> = {
 const slugify = (s: string) =>
   s.toLowerCase().normalize("NFKD").replace(/[^\w]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 70);
 
+// Subcategorie bepalen, met naam-overrides (bv. bed-bolsters horen bij beds,
+// niet bij decoratie/cushions).
+const resolveSub = (r: any): string | undefined => {
+  let s = SUB[(r.subcategory ?? "").trim().toLowerCase()];
+  if (/\bbolster\b/i.test(r.name) && /\bbed\b/i.test(r.name)) s = "bed-pillows";
+  return s;
+};
+
 // Kleur-/maat-/richting-woorden — weggehaald uit de naam om dezelfde meubel te
 // herkennen, en gebruikt als variant-label.
 const COLORS: [RegExp, string][] = [
@@ -59,12 +67,12 @@ const dirWord = (name: string): string | null => {
   const v = m[1].toLowerCase();
   return v.includes("left") || v === "laf" ? "Left" : "Right";
 };
-// Naam zónder kleur/maat/richting → herkent hetzelfde design.
+// Naam zónder kleur/maat → herkent hetzelfde element. Richting (links/rechts)
+// blijft staan: links- en rechts-elementen zijn aparte producten.
 const normName = (name: string): string =>
   name.toLowerCase()
     .replace(/\b(black|white|ivory|cream|ecru|oat|oatmeal|beige|sand|linn?en|natural|flax|wheat|almond|pearl|taupe|mushroom|greige|stone|grey|gray|silver|dove|ash|brown|walnut|chocolate|cognac|coffee|espresso|chestnut|tan|camel|caramel|honey|navy|indigo|blue|teal|denim|sky|azure|green|olive|sage|moss|emerald|gold|brass|bronze|copper|rust|terracotta|clay|red|crimson|burgundy|wine|pink|blush|rose|champagne|dark|light|neutral|toned)\b/gi, " ")
     .replace(/\b(king|queen|full|twin|california|cal|size)\b/gi, " ")
-    .replace(/\b(left|right|laf|raf)\b/gi, " ")
     .replace(/[^\w|]+/g, " ").replace(/\s+/g, " ").trim();
 
 async function fetchJson(url: string): Promise<any> {
@@ -99,6 +107,20 @@ async function cornelius(): Promise<Map<string, string[]>> {
   return idx;
 }
 const dedup = (a: string[]) => Array.from(new Set(a.filter(Boolean))).slice(0, 12);
+// Hoofdfoto = productfoto (packshot op wit), nooit een interieur/room-scene.
+// Rangschik: 0) packshot met de SKU in de bestandsnaam, 1) hoek-packshot
+// (_front/_back/_side…), 2) onbekend, 3) interieur/room-scene ("…_RS…").
+const fileLC = (u: string) => (u.split("/").pop() ?? "").toLowerCase();
+const isRoomScene = (u: string) => /_rs(?:[_\d.]|$)/i.test(fileLC(u));
+const imgRank = (u: string, skus: string[]): number => {
+  const f = fileLC(u);
+  if (isRoomScene(u)) return 3;
+  if (skus.some((s) => s && f.includes(s.toLowerCase()))) return 0;
+  if (/_(front|main|back|back2|side|angle|detail|top|open|closed)\b/.test(f)) return 1;
+  return 2;
+};
+const orderImgs = (arr: string[], skus: string[]): string[] =>
+  arr.map((u, i) => [u, i] as [string, number]).sort((a, b) => (imgRank(a[0], skus) - imgRank(b[0], skus)) || (a[1] - b[1])).map((x) => x[0]);
 const dimStr = (r: any) => { const d = [r.widthMm, r.heightMm, r.lengthMm].filter((x: any) => x != null).map((x: any) => Math.round(Number(x))); return d.length ? `${d.join(" × ")} mm` : null; };
 
 // Maat → afmeting (mm, W × H × D) uit de omschrijving, bv. "Queen Size … W178 x
@@ -164,6 +186,14 @@ const pieceLabel = (name: string): string => {
   s = s.replace(MATERIALS, " ").replace(/\s+/g, " ").trim();
   return s || stripCollection(name);
 };
+// Sommige collecties zetten het element ná de lijnnaam ("… | Caracole Altura
+// Right Chaise Sectional" → element "Right Chaise Sectional"). Pak dat deel.
+const suffixElement = (name: string, line: string | null): string | null => {
+  if (!line) return null;
+  const m = name.match(new RegExp(`\\|\\s*caracole\\s+${line.replace(/[.*+?^${}()|[\\]\\\\]/g, "\\$&")}\\s+(.+)$`, "i"));
+  const e = m?.[1]?.replace(MATERIALS, " ").replace(/\s+/g, " ").trim();
+  return e || null;
+};
 // Een Shopify-varianttitel die een modulair element beschrijft (bv. Lumi: "Left
 // Arm Facing Chaise", "Wedge Section") i.p.v. een kleur/maat → eigen element-stuk.
 const isElementTitle = (t?: string) =>
@@ -180,18 +210,41 @@ async function main() {
   const [{ byHandle, handleBySku }, corIdx] = await Promise.all([caracole(), cornelius()]);
   console.log(`  Caracole ${car.length} · Cornelius ${cor.length} · Shopify ${byHandle.size} modellen`);
 
-  // Bouw "members" (één per CRM-rij), met Shopify-galerij + (eventuele) maat-varianten.
+  // Bouw "members" (één per CRM-rij). Elk element = eigen product; alleen kleuren
+  // van hetzelfde element worden later samengevoegd. Draagt één Shopify-product de
+  // elementen als varianten (bv. Lumi), dan exploderen we die tot losse members
+  // (elk met eigen afmeting). Een handle exploderen we maar één keer.
   const members: Member[] = [];
+  const explodedHandles = new Set<string>();
   for (const r of car) {
-    const subSlug = SUB[(r.subcategory ?? "").trim().toLowerCase()]; if (!subSlug) continue;
+    const subSlug = resolveSub(r); if (!subSlug) continue;
     const h = handleBySku.get((r.sku ?? "").trim().toUpperCase());
     const shop = h ? byHandle.get(h) : undefined;
+    const line = lineWord(r.name);
+    const elemVs = shop ? [...shop.variantTitle.entries()].filter(([, t]) => isElementTitle(t)) : [];
+    if (h && shop && elemVs.length >= 2) {
+      if (explodedHandles.has(h)) continue; // collectie-product al uitgesplitst
+      explodedHandles.add(h);
+      const baseCol = colourPhrase(r.name);
+      for (const [esku, etitle] of elemVs) {
+        const et = cleanTitle(etitle);
+        const colourInTitle = !!colourPhrase(et);
+        const nm = `${!colourInTitle && baseCol ? baseCol + " " : ""}${et} | Caracole ${cap(line ?? "")}`.replace(/\s+\|/, " |").trim();
+        members.push({
+          sku: esku, name: nm, sub: subSlug, brand: "caracole", series: seriesOf(esku), line, cbase: colourBase(esku),
+          dims: elemDimFor(r.description, et) ?? dimStr(r), descr: r.description ?? null, di18n: r.descriptionI18n ?? null,
+          gallery: dedup([shop.variantImg.get(esku) ?? "", ...(r.imageUrl ? [r.imageUrl] : []), ...shop.images]),
+          shopVariants: [{ sku: esku, title: "" }],
+        });
+      }
+      continue;
+    }
     const gallery = dedup([...(r.imageUrl ? [r.imageUrl] : []), ...((shop?.images) ?? [])]);
     const sv = shop ? [...shop.variantTitle.entries()].map(([sku, title]) => ({ sku, title, img: shop.variantImg.get(sku) })) : [{ sku: r.sku!, title: "" }];
-    members.push({ sku: r.sku!, name: r.name, sub: subSlug, brand: "caracole", series: seriesOf(r.sku!), line: lineWord(r.name), cbase: colourBase(r.sku!), dims: dimStr(r), descr: r.description ?? null, di18n: r.descriptionI18n ?? null, gallery, shopVariants: sv.length ? sv : [{ sku: r.sku!, title: "" }] });
+    members.push({ sku: r.sku!, name: r.name, sub: subSlug, brand: "caracole", series: seriesOf(r.sku!), line, cbase: colourBase(r.sku!), dims: dimStr(r), descr: r.description ?? null, di18n: r.descriptionI18n ?? null, gallery, shopVariants: sv.length ? sv : [{ sku: r.sku!, title: "" }] });
   }
   for (const r of cor) {
-    const subSlug = SUB[(r.subcategory ?? "").trim().toLowerCase()]; if (!subSlug) continue;
+    const subSlug = resolveSub(r); if (!subSlug) continue;
     const skuU = (r.sku ?? "").toUpperCase();
     let gal = corIdx.get(skuU) ?? []; if (!gal.length) for (const tok of skuU.split(/[^0-9A-Z]+/)) { const g = corIdx.get(tok); if (g) { gal = g; break; } }
     const gallery = dedup([...(r.imageUrl ? [r.imageUrl] : []), ...gal]);
@@ -199,29 +252,11 @@ async function main() {
   }
 
   // ── Groeperen ─────────────────────────────────────────────────────────────
-  // Sofas (Caracole) → per design-lijn (serie + lijnnaam). Meerdere elementen =
-  // configureerbaar bankstel (klik = elementen); één element = kleur-merge.
-  // Alle overige categorieën → union-find op naam-zonder-kleur/maat (nk) ÉN
-  // SKU-kleurbasis (ck), zodat kleurvarianten (ook met niet-standaard kleurnamen
-  // zoals "Eucalyptus"/"Rouge") en maten (Queen/King) samenvallen.
-  const sofaLines = new Map<string, Member[]>();
-  const others: Member[] = [];
-  for (const m of members) {
-    if (m.sub === "sofas" && m.brand === "caracole" && m.line) {
-      const k = `${m.series}||${m.line}`;
-      (sofaLines.get(k) ?? sofaLines.set(k, []).get(k)!).push(m);
-    } else others.push(m);
-  }
-  // Een lijn is een échte modulaire set bij ≥2 verschillende stuk-types
-  // (chaise + armless + …), óf wanneer één product de elementen als Shopify-
-  // varianten draagt (bv. Lumi). Anders = kleurvarianten → kleur-merge.
-  const sofaSets = new Map<string, Member[]>();
-  for (const [k, g] of sofaLines) {
-    const types = new Set(g.map((m) => pieceType(stripCollection(m.name))));
-    const hasElemVariants = g.some((m) => m.shopVariants.filter((sv) => isElementTitle(sv.title)).length >= 2);
-    if ((g.length > 1 && types.size > 1) || hasElemVariants) sofaSets.set(k, g);
-    else others.push(...g);
-  }
+  // Elk element = eigen product. Union-find voegt ALLEEN kleurvarianten van
+  // hetzelfde element samen: naam-zonder-kleur/maat (nk) én SKU-kleurbasis (ck),
+  // zodat ook niet-standaard kleurnamen ("Eucalyptus"/"Rouge") en maten
+  // (Queen/King) samenvallen. Geen configureerbare sets.
+  const others: Member[] = members;
 
   const parent = others.map((_, i) => i);
   const find = (x: number): number => { while (parent[x] !== x) { parent[x] = parent[parent[x]]; x = parent[x]; } return x; };
@@ -238,37 +273,21 @@ async function main() {
   const comps = new Map<number, Member[]>();
   others.forEach((m, i) => { const r = find(i); (comps.get(r) ?? comps.set(r, []).get(r)!).push(m); });
 
-  const groups: { members: Member[]; setLine?: string }[] = [
-    ...[...comps.values()].map((g) => ({ members: g })),
-    ...[...sofaSets.values()].map((g) => ({ members: g, setLine: g.find((m) => m.line)?.line ?? undefined })),
-  ];
+  const groups: { members: Member[]; setLine?: string }[] = [...comps.values()].map((g) => ({ members: g }));
 
-  const out: string[] = []; const seen = new Set<string>(); let idN = 2_000_000; let mergedFams = 0; let setCount = 0;
+  const out: { sort: string; json: string }[] = []; const seen = new Set<string>(); let idN = 2_000_000; let mergedFams = 0;
   const uniqSlug = (b: string) => { let s = b; while (seen.has(s)) s += "-x"; seen.add(s); return s; };
 
   for (const { members: group, setLine } of groups) {
-    const distinctEls = new Set(group.map((m) => m.cbase)).size;
-    const isSet = !!setLine && distinctEls > 1;
+    const isSet = false; // alles is een eigen product; geen configureerbare sets
     if (group.length > 1) mergedFams++;
-    if (isSet) setCount++;
     const id = idN++;
-    // Compleet bankstel ("…-piece"/"sectional") eerst → wordt kaart-/hero-foto.
-    const score = (m: Member) => (/(\d+\s*-?\s*piece|sectional)/i.test(stripCollection(m.name)) ? 100 : 0) + Math.min(m.gallery.length, 9);
-    const ordered = [...group].sort((a, b) => score(b) - score(a));
+    // Hoofdfoto = eigen packshot; interieur/room-scenes komen achteraan.
+    const ordered = [...group];
     const rep = ordered[0];
-    // Hoofdfoto = de "_RS" room-scene (lifestyle-render met het complete meubel)
-    // als die bestaat — Caracole-naamgeving "…_RS.jpg" of "…_RS_<uuid>.jpg".
-    const isRS = (u: string) => /_rs(?:[_\d.]|$)/i.test(u.split("/").pop() ?? "");
-    const allImgs = Array.from(new Set(ordered.flatMap((m) => m.gallery)));
-    const rsHero = allImgs.find(isRS);
-    // Eén nette packshot per element (front/main), zodat een set niet vol komt met
-    // 7 bijna-identieke room-scenes van één element. Detail-galerij = hero + per stuk.
-    const frontOf = (m: Member) =>
-      m.gallery.find((u) => /_(front|main)\b/i.test(u.split("/").pop() ?? "")) ?? m.gallery.find((u) => !isRS(u)) ?? m.gallery[0];
-    const gallery = isSet
-      ? dedup([rsHero, ...ordered.map(frontOf), ...allImgs].filter(Boolean) as string[])
-      : dedup(rsHero ? [rsHero, ...allImgs.filter((u) => u !== rsHero)] : allImgs);
-    const multi = isSet || group.length > 1 || group.some((m) => m.shopVariants.length > 1);
+    const skus = ordered.map((m) => m.sku);
+    const gallery = orderImgs(dedup(ordered.flatMap((m) => m.gallery)), skus);
+    const multi = group.length > 1 || group.some((m) => m.shopVariants.length > 1);
 
     // Gemeenschappelijk woord-achtervoegsel van de membernamen → het verschillende
     // deel (prefix) is de kleur/versie, óók als het geen bekend kleurwoord is
@@ -289,61 +308,47 @@ async function main() {
       const col = colourWord(m.name); const dir = dirWord(m.name); const sd = sizeDims(m.descr);
       // Alleen écht maat-varianten (Queen/King) expanden; anders is de member zélf
       // de variant (eigen SKU) — voorkomt dat members elkaars SKU's binnentrekken.
-      // Bij sets: element-getitelde Shopify-varianten (Lumi e.d.) zijn losse stukken.
-      // Anders alleen écht maat-varianten (Queen/King); anders de member zelf.
-      const elemVs = isSet ? m.shopVariants.filter((sv) => isElementTitle(sv.title)) : [];
       const sizeVs = m.shopVariants.filter((sv) => sizeKey(sv.title));
-      const svList = elemVs.length ? elemVs : (sizeVs.length ? sizeVs : [{ sku: m.sku, title: "" } as Member["shopVariants"][number]]);
+      const svList = sizeVs.length ? sizeVs : [{ sku: m.sku, title: "" } as Member["shopVariants"][number]];
+      const imgs = orderImgs(m.gallery.length ? m.gallery : gallery, [m.sku]);
       for (const sv of svList) {
         if (vSeen.has(sv.sku.toUpperCase())) continue;
         vSeen.add(sv.sku.toUpperCase());
-        const isElem = isElementTitle(sv.title);
-        const size = (!isElem && sv.title && sv.title !== "Default Title") ? sv.title.replace(/\bsize\b/i, "").trim() : sizeWord(m.name);
+        const size = (sv.title && sv.title !== "Default Title") ? sv.title.replace(/\bsize\b/i, "").trim() : sizeWord(m.name);
         const sk = sizeKey(sv.title) ?? sizeKey(m.name);
-        const dim = (isElem ? elemDimFor(m.descr, cleanTitle(sv.title)) : null) || (sk && sd.get(sk)) || m.dims;
-        const imgs = sv.img ? dedup([sv.img, ...m.gallery]) : (m.gallery.length ? m.gallery : gallery);
-        if (isSet) {
-          // Modulair bankstel: kleur = losse keuze, piece = het element (eigen afmeting).
-          const colour = colourPhrase(m.name);
-          const piece = ((isElem ? cleanTitle(sv.title) : pieceLabel(m.name)) + (size ? ` · ${size}` : "")).trim();
-          const label = `${colour ? colour + " · " : ""}${piece}`;
-          variants.push({ id: id * 100 + vi++, name: label, piece, colour, colorHex: colourHex(colour ?? m.name), sku: sv.sku, images: imgs, dim });
-        } else {
-          // Kleur/maat-merge: één keuze met kleur·maat·richting-label.
-          const label = multi ? ([col, size, dir].filter(Boolean).join(" · ") || diffOf(m.name) || `Variant ${vi + 1}`) : null;
-          variants.push({ id: id * 100 + vi++, name: label, colorHex: colourHex(col ?? m.name), sku: sv.sku, images: imgs, dim });
-        }
+        const dim = (sk && sd.get(sk)) || m.dims;
+        // Eén keuze per kleur/maat (links/rechts zijn aparte producten).
+        const label = multi ? ([col, size, dir].filter(Boolean).join(" · ") || diffOf(m.name) || `Variant ${vi + 1}`) : null;
+        variants.push({ id: id * 100 + vi++, name: label, colorHex: colourHex(col ?? m.name), sku: sv.sku, images: imgs, dim });
       }
     }
 
-    // Productnaam: configureerbaar bankstel → "<Lijn> Sectional"; anders rep-naam
-    // met kleur/maat/richting eruit (behoudt leestekens zoals "Three's Company").
+    // Productnaam = rep-naam met kleur/maat eruit (behoudt richting "Left"/"Right"
+    // en leestekens zoals "Three's Company"), of rep-naam als die leeg wordt.
     const stripped = rep.name
       .replace(/\b(black|white|ivory|cream|ecru|oat|oatmeal|beige|sand|linn?en|natural|flax|wheat|almond|pearl|taupe|mushroom|greige|stone|grey|gray|silver|dove|ash|brown|walnut|chocolate|cognac|coffee|espresso|chestnut|tan|camel|caramel|honey|navy|indigo|blue|teal|denim|sky|azure|green|olive|sage|moss|emerald|gold|brass|bronze|copper|rust|terracotta|clay|red|crimson|burgundy|wine|pink|blush|rose|champagne|dark|light|neutral|toned)\b/gi, " ")
       .replace(/\b(king|queen|full|twin|california|cal|size)\b/gi, " ")
-      .replace(/\b(left|right|laf|raf)\b/gi, " ")
-      .replace(/\s+/g, " ").replace(/\s+\|/g, " |").replace(/\|\s+/g, "| ").replace(/^\s*\|\s*/, "").trim();
+      .replace(/\s+/g, " ").replace(/\s+\|/g, " |").replace(/\|\s+/g, "| ").trim();
     // Onbekende-kleurfamilie (bv. Cocoon "Eucalyptus/Rouge/Ivory"): naam = het
     // gemeenschappelijke deel ("Cocoon Sofa"); kleur zit in de variant-labels.
-    const unknownColourFam = !isSet && multi && commonSuf.length > 0 && !colourWord(rep.name) && !sizeWord(rep.name) && !!diffOf(rep.name);
-    const name = isSet ? `${cap(setLine!)} Sectional` : (unknownColourFam ? commonSuf.join(" ") : (multi && stripped ? stripped : rep.name));
+    const unknownColourFam = multi && commonSuf.length > 0 && !colourWord(rep.name) && !sizeWord(rep.name) && !!diffOf(rep.name);
+    const name = (unknownColourFam ? commonSuf.join(" ") : (multi && stripped ? stripped : rep.name)).replace(/^\s*[\s\-–—|·]+/, "").trim();
 
-    out.push("  " + JSON.stringify({
+    // Sorteersleutel: per subcategorie → collectie-lijn → naam, zodat collectie-
+    // genoten in de lijst bij elkaar staan (Seta naast Seta, niet verspreid).
+    const sortKey = `${rep.sub}__${(rep.line ?? "~~~").toLowerCase()}__${slugify(name)}`;
+    out.push({ sort: sortKey, json: "  " + JSON.stringify({
       id, name, slug: uniqSlug(`${slugify(name)}-${slugify(rep.sku)}`), sku: rep.sku, short: null,
       description: rep.descr, descriptionI18n: rep.di18n, additionalSizes: null,
       image: gallery[0] ?? null, images: gallery, featured: false, dimensions: rep.dims,
       materials: [], spaces: [], categories: [rep.sub], collection: "furniture", variants,
-    }) + ",");
-
-    if (isSet) {
-      console.log(`  SET ${name.padEnd(24)} ${distinctEls} elementen → ${variants.length} varianten`);
-      if (process.env.DEBUG) for (const m of ordered) console.log(`        ${m.sku.padEnd(18)} ${stripCollection(m.name)}`);
-    }
+    }) + "," });
   }
 
-  console.log(`\n${out.length} producten · ${mergedFams} samengevoegde families · ${setCount} configureerbare bankstellen`);
+  out.sort((a, b) => a.sort.localeCompare(b.sort));
+  console.log(`\n${out.length} producten · ${mergedFams} kleur-samengevoegde families`);
   if (!APPLY) { console.log("\nDRY-RUN. Voeg --apply toe om weg te schrijven."); return; }
-  writeFileSync(OUT, `// AUTO-GENERATED — meubels (Caracole + Cornelius) uit het CRM. Niet handmatig bewerken.\nimport type { CatalogProduct } from "./products.generated";\n\nexport const furnitureProducts: CatalogProduct[] = [\n` + out.join("\n") + "\n];\n");
+  writeFileSync(OUT, `// AUTO-GENERATED — meubels (Caracole + Cornelius) uit het CRM. Niet handmatig bewerken.\nimport type { CatalogProduct } from "./products.generated";\n\nexport const furnitureProducts: CatalogProduct[] = [\n` + out.map((o) => o.json).join("\n") + "\n];\n");
   console.log(`Geschreven: ${OUT}`);
 }
 main().then(() => process.exit(0)).catch((e) => { console.error(e); process.exit(1); });
