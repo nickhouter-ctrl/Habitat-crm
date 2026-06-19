@@ -112,12 +112,19 @@ const dedup = (a: string[]) => Array.from(new Set(a.filter(Boolean))).slice(0, 1
 // (_front/_back/_side…), 2) onbekend, 3) interieur/room-scene ("…_RS…").
 const fileLC = (u: string) => (u.split("/").pop() ?? "").toLowerCase();
 const isRoomScene = (u: string) => /_rs(?:[_\d.]|$)/i.test(fileLC(u));
+// Binnen de packshots: recht vooraanzicht ("_Main") eerst, dan "_Front", dan de
+// kale SKU-foto, dan zij-/achterhoeken. Interieur/room-scenes altijd achteraan.
+const suffixPri = (f: string): number => {
+  if (/_main\b/.test(f)) return 0;
+  if (/_front\b/.test(f)) return 1;
+  if (/_(back2?|side|angle|top|open|closed|detail)\b/.test(f)) return 4;
+  return 3;
+};
 const imgRank = (u: string, skus: string[]): number => {
+  if (isRoomScene(u)) return 100;
   const f = fileLC(u);
-  if (isRoomScene(u)) return 3;
-  if (skus.some((s) => s && f.includes(s.toLowerCase()))) return 0;
-  if (/_(front|main|back|back2|side|angle|detail|top|open|closed)\b/.test(f)) return 1;
-  return 2;
+  const hasSku = skus.some((s) => s && f.includes(s.toLowerCase()));
+  return (hasSku ? 0 : 50) + suffixPri(f);
 };
 const orderImgs = (arr: string[], skus: string[]): string[] =>
   arr.map((u, i) => [u, i] as [string, number]).sort((a, b) => (imgRank(a[0], skus) - imgRank(b[0], skus)) || (a[1] - b[1])).map((x) => x[0]);
