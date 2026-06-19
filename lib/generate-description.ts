@@ -7,13 +7,16 @@
  * Kosten: ~€0,02 per product. Gegrond: gebruikt alleen meegegeven feiten en
  * verzint geen maten/materialen.
  */
-import { and, eq, isNull, sql } from "drizzle-orm";
+import { and, eq, inArray, isNull, sql } from "drizzle-orm";
 
 import { db } from "@/lib/db";
 import { products } from "@/lib/db/schema";
 import type { Locale } from "@/lib/translate";
 
 const API_URL = "https://api.anthropic.com/v1/messages";
+
+/** Collecties (meubels) waarvoor unieke teksten worden gegenereerd. */
+const FURNITURE_COLLECTIONS = ["Cornelius Lifestyle", "Caracole"];
 const MODEL = process.env.ANTHROPIC_MODEL ?? "claude-sonnet-4-6";
 
 export type ProductForCopy = {
@@ -162,8 +165,12 @@ export async function runDescriptionGeneration(
   const limit = opts.limit ?? 12;
   const concurrency = opts.concurrency ?? 3;
 
-  // Alle actieve producten zonder unieke meertalige tekst (idempotent).
-  const where = and(eq(products.isActive, true), isNull(products.descriptionI18n));
+  // Meubels (Cornelius + Caracole) zonder unieke meertalige tekst (idempotent).
+  const where = and(
+    inArray(products.collection, FURNITURE_COLLECTIONS),
+    eq(products.isActive, true),
+    isNull(products.descriptionI18n),
+  );
 
   const batch = await db.query.products.findMany({ where, limit });
   const remainingBefore = await db

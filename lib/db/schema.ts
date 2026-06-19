@@ -669,7 +669,11 @@ export const quoteRequests = pgTable(
     /** Door de klant gekozen voorkeursmoment (afspraak) — "YYYY-MM-DD" / "HH:MM". */
     appointmentDate: text(),
     appointmentTime: text(),
-    status: text().notNull().default("pending"), // pending|accepted|rejected
+    /** Voorgestelde alternatieve tijdslots (afspraak) waaruit de klant kiest. */
+    proposedSlots: jsonb().$type<{ date: string; time: string }[]>(),
+    /** Token voor de publieke "kies een tijd"-pagina (/book/[token]). */
+    bookingToken: text(),
+    status: text().notNull().default("pending"), // pending|proposed|accepted|rejected
     /** Gekoppeld contact (gemaakt bij accepteren als nog niet bekend). */
     contactId: uuid().references((): AnyPgColumn => contacts.id, { onDelete: "set null" }),
     /** Gekoppeld offerte-document (optioneel). */
