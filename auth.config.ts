@@ -19,7 +19,8 @@ export const authConfig = {
         pathname.startsWith("/login") ||
         pathname.startsWith("/api/auth") ||
         pathname.startsWith("/api/webhooks") ||
-        pathname.startsWith("/offerte"); // public accept/reject page for clients
+        pathname.startsWith("/offerte") || // public accept/reject page for clients
+        pathname.startsWith("/book"); // public "pick an appointment slot" page
       return isPublic || isLoggedIn;
     },
     jwt({ token, user }) {

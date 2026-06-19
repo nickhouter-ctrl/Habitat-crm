@@ -3,11 +3,13 @@
 import { eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import { headers } from "next/headers";
 
 import { auth } from "@/auth";
 import { db } from "@/lib/db";
-import { activities, appointments, contacts, quoteRequests } from "@/lib/db/schema";
-import { appointmentConfirmedEmail, sendEmail } from "@/lib/email";
+import { activities, contacts, quoteRequests } from "@/lib/db/schema";
+import { appointmentProposalEmail, sendEmail } from "@/lib/email";
+import { confirmAppointment } from "@/lib/appointments";
 
 async function requireUser() {
   const session = await auth();
@@ -15,38 +17,22 @@ async function requireUser() {
   return session.user;
 }
 
+function newToken(): string {
+  return (crypto.randomUUID() + crypto.randomUUID()).replace(/-/g, "");
+}
+
+async function baseUrl(): Promise<string> {
+  const h = await headers();
+  const host = h.get("host") ?? "localhost:3001";
+  const proto = h.get("x-forwarded-proto") ?? (host.includes("localhost") ? "http" : "https");
+  return `${proto}://${host}`;
+}
+
 function escapeHtml(s: string): string {
   return s.replace(
     /[&<>"]/g,
     (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c] ?? c,
   );
-}
-
-const SHOWROOM = "Showroom — Camí de la Fontana 3, Jávea";
-
-/** Zorg dat er een contact bij de aanvraag hoort (maak aan indien nodig). */
-async function ensureContactForRequest(req: {
-  contactId: string | null;
-  name: string;
-  email: string;
-  phone: string | null;
-  company: string | null;
-}): Promise<string> {
-  if (req.contactId) return req.contactId;
-  const existing = await db.query.contacts.findFirst({ where: eq(contacts.email, req.email) });
-  if (existing) return existing.id;
-  const [c] = await db
-    .insert(contacts)
-    .values({
-      name: req.name,
-      email: req.email,
-      phone: req.phone ?? null,
-      source: "website-aanvraag",
-      type: "lead",
-      notes: req.company ? `Bedrijf: ${req.company}` : null,
-    })
-    .returning({ id: contacts.id });
-  return c.id;
 }
 
 /**
@@ -137,62 +123,63 @@ export async function scheduleAppointment(quoteRequestId: string, formData: Form
 
   const date = String(formData.get("date") ?? "").trim();
   const time = String(formData.get("time") ?? "").trim();
-  const location = String(formData.get("location") ?? "").trim() || SHOWROOM;
+  const location = String(formData.get("location") ?? "").trim();
   const note = String(formData.get("note") ?? "").trim();
   if (!date || !time) redirect(`/aanvragen/${quoteRequestId}?error=datum`);
   const startsAt = new Date(`${date}T${time}`);
   if (Number.isNaN(startsAt.getTime())) redirect(`/aanvragen/${quoteRequestId}?error=datum`);
 
-  const contactId = await ensureContactForRequest(req);
-
-  await db.insert(appointments).values({
-    title: `Showroombezoek — ${req.name}`,
-    contactId,
-    quoteRequestId,
-    startsAt,
-    location,
-    notes: note || null,
-    createdBy: user.id,
-  });
-
-  await db
-    .update(quoteRequests)
-    .set({ status: "accepted", acceptedAt: req.acceptedAt ?? new Date(), contactId, updatedAt: new Date() })
-    .where(eq(quoteRequests.id, quoteRequestId));
-
-  const when = startsAt.toLocaleString("nl-NL", {
-    weekday: "long",
-    day: "numeric",
-    month: "long",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
-  try {
-    const mail = appointmentConfirmedEmail({
-      lang: req.locale,
-      contactName: req.name,
-      when,
-      location,
-      note: note || null,
-    });
-    await sendEmail({ to: req.email, subject: mail.subject, html: mail.html, text: mail.text });
-  } catch (err) {
-    console.warn("[aanvragen] afspraak-bevestiging mislukt:", err);
-  }
-
-  await db.insert(activities).values({
-    type: "note",
-    subject: `Afspraak ingepland — ${when}`,
-    body: `${location}${note ? `\n${note}` : ""}`,
-    contactId,
-    authorId: user.id,
-  });
+  await confirmAppointment(req, { startsAt, location, note, createdBy: user.id });
 
   revalidatePath("/agenda");
   revalidatePath("/aanvragen");
   revalidatePath(`/aanvragen/${quoteRequestId}`);
   redirect("/agenda");
+}
+
+/**
+ * Stel meerdere alternatieve momenten voor: bewaar de slots + een token en mail
+ * de klant een link naar de publieke kies-pagina. De klant kiest er één → de
+ * afspraak wordt dan automatisch bevestigd (in de agenda).
+ */
+export async function proposeSlots(quoteRequestId: string, formData: FormData) {
+  const user = await requireUser();
+  const req = await db.query.quoteRequests.findFirst({ where: eq(quoteRequests.id, quoteRequestId) });
+  if (!req) throw new Error("Aanvraag niet gevonden");
+
+  const slots: { date: string; time: string }[] = [];
+  for (let i = 0; i < 8; i++) {
+    const date = String(formData.get(`date_${i}`) ?? "").trim();
+    const time = String(formData.get(`time_${i}`) ?? "").trim();
+    if (date && time && !Number.isNaN(new Date(`${date}T${time}`).getTime())) slots.push({ date, time });
+  }
+  if (slots.length === 0) redirect(`/aanvragen/${quoteRequestId}?error=slots`);
+
+  const token = req.bookingToken ?? newToken();
+  await db
+    .update(quoteRequests)
+    .set({ proposedSlots: slots, bookingToken: token, status: "proposed", updatedAt: new Date() })
+    .where(eq(quoteRequests.id, quoteRequestId));
+
+  const url = `${await baseUrl()}/book/${token}`;
+  try {
+    const mail = appointmentProposalEmail({ lang: req.locale, contactName: req.name, url });
+    await sendEmail({ to: req.email, subject: mail.subject, html: mail.html, text: mail.text });
+  } catch (err) {
+    console.warn("[aanvragen] voorstel-mail mislukt:", err);
+  }
+
+  await db.insert(activities).values({
+    type: "note",
+    subject: `Afspraak-voorstel verstuurd (${slots.length} ${slots.length === 1 ? "optie" : "opties"})`,
+    body: slots.map((s) => `${s.date} ${s.time}`).join(" · "),
+    contactId: req.contactId,
+    authorId: user.id,
+  });
+
+  revalidatePath("/aanvragen");
+  revalidatePath(`/aanvragen/${quoteRequestId}`);
+  redirect(`/aanvragen/${quoteRequestId}?proposed=1`);
 }
 
 /** Mail de klant direct vanuit een aanvraag (bv. met extra vragen). */

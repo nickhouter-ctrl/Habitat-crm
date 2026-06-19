@@ -748,6 +748,53 @@ const APPT: Record<
   },
 };
 
+// Voorstel-mail: meerdere alternatieve momenten waaruit de klant kiest.
+const APPT_PROPOSE: Record<Lang, { subject: string; body: string; cta: string }> = {
+  nl: {
+    subject: "Kies een moment voor je showroombezoek",
+    body: "Bedankt voor je afspraakverzoek. Het door jou gekozen moment kwam bij ons helaas niet uit — we stellen graag een paar alternatieven voor. Kies hieronder het moment dat jou het beste uitkomt, dan bevestigen we het meteen.",
+    cta: "Kies een tijd",
+  },
+  en: {
+    subject: "Pick a time for your showroom visit",
+    body: "Thank you for your appointment request. Unfortunately the time you chose didn't suit us — we'd like to propose a few alternatives. Choose the moment that works best for you below and we'll confirm it right away.",
+    cta: "Pick a time",
+  },
+  es: {
+    subject: "Elige un momento para tu visita al showroom",
+    body: "Gracias por tu solicitud de cita. Lamentablemente la hora que elegiste no nos venía bien; nos gustaría proponerte algunas alternativas. Elige a continuación el momento que mejor te convenga y lo confirmaremos enseguida.",
+    cta: "Elegir una hora",
+  },
+  de: {
+    subject: "Wähle einen Termin für deinen Showroom-Besuch",
+    body: "Vielen Dank für deine Terminanfrage. Der von dir gewählte Zeitpunkt passte bei uns leider nicht — wir möchten dir gerne einige Alternativen vorschlagen. Wähle unten den Moment, der dir am besten passt, und wir bestätigen ihn sofort.",
+    cta: "Termin wählen",
+  },
+};
+
+/** Voorstel met alternatieve afspraakmomenten + link naar de publieke kies-pagina. */
+export function appointmentProposalEmail(args: {
+  lang?: string | null;
+  contactName?: string | null;
+  url: string;
+}): { subject: string; html: string; text: string } {
+  const lang = pickLang(args.lang);
+  const a = APPT_PROPOSE[lang];
+  const t = T[lang];
+  const greeting = args.contactName ? `${t.hi} ${escapeHtml(args.contactName)},` : `${t.hi},`;
+  const html = brandedEmail(`
+      <p style="margin:0">${greeting}</p>
+      <p>${a.body}</p>
+      <p style="margin:26px 0">
+        <a href="${args.url}" style="display:inline-block;background:${COMPANY.brown};color:#fff;text-decoration:none;padding:13px 26px;border-radius:10px;font-weight:600;font-size:15px">${a.cta}</a>
+      </p>
+      <p style="font-size:12px;color:#999;word-break:break-all">${escapeHtml(args.url)}</p>
+      <hr style="border:none;border-top:1px solid ${COMPANY.sand};margin:24px 0 16px" />
+  `);
+  const text = `${greeting}\n\n${a.body}\n\n${a.cta}: ${args.url}`;
+  return { subject: a.subject, html, text };
+}
+
 /** Ontvangstbevestiging van een showroom-afspraakverzoek (de afspraak is nog niet vast). */
 export function appointmentReceivedEmail(args: {
   lang?: string | null;

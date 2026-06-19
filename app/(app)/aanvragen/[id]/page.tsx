@@ -25,6 +25,7 @@ import {
   acceptQuoteRequest,
   deleteQuoteRequest,
   mailQuoteRequestCustomer,
+  proposeSlots,
   rejectQuoteRequest,
   reopenQuoteRequest,
   saveQuoteRequestNotes,
@@ -67,6 +68,7 @@ export default async function QuoteRequestDetailPage({
   const remove = deleteQuoteRequest.bind(null, id);
   const saveNotes = saveQuoteRequestNotes.bind(null, id);
   const schedule = scheduleAppointment.bind(null, id);
+  const propose = proposeSlots.bind(null, id);
   const mailCustomer = mailQuoteRequestCustomer.bind(null, id);
 
   return (
@@ -228,6 +230,35 @@ export default async function QuoteRequestDetailPage({
                 <p className="mt-2 text-xs text-muted">
                   De klant krijgt direct een bevestigingsmail; de afspraak verschijnt in de agenda.
                 </p>
+
+                <div className="mt-5 border-t pt-4">
+                  <p className="text-sm font-medium">Of: stel andere tijden voor</p>
+                  <p className="mb-2 text-xs text-muted">
+                    Komt het gevraagde moment niet uit? Geef een paar opties — de klant kiest er zelf één via een
+                    link. Bij de keuze wordt de afspraak automatisch bevestigd en in de agenda gezet.
+                  </p>
+                  {sp.proposed === "1" && (
+                    <p className="mb-2 rounded-md bg-success/10 px-3 py-2 text-xs text-success">
+                      ✓ Voorstel met opties verstuurd naar de klant.
+                    </p>
+                  )}
+                  {sp.error === "slots" && (
+                    <p className="mb-2 rounded-md bg-warning/10 px-3 py-2 text-xs text-warning">
+                      Vul minstens één datum + tijd in.
+                    </p>
+                  )}
+                  <form action={propose} className="space-y-2">
+                    {[0, 1, 2, 3].map((i) => (
+                      <div key={i} className="grid grid-cols-2 gap-2">
+                        <Input type="date" name={`date_${i}`} defaultValue={i === 0 ? req.appointmentDate ?? "" : ""} />
+                        <Input type="time" name={`time_${i}`} defaultValue={i === 0 ? req.appointmentTime ?? "" : ""} />
+                      </div>
+                    ))}
+                    <SubmitButton variant="secondary" className="w-full" pendingLabel="Versturen…">
+                      Voorstel sturen naar klant
+                    </SubmitButton>
+                  </form>
+                </div>
               </CardContent>
             </Card>
           )}
