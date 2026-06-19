@@ -31,6 +31,25 @@ const SUB: Record<string, string> = {
 const slugify = (s: string) =>
   s.toLowerCase().normalize("NFKD").replace(/[^\w]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 70);
 
+// Kleurnaam (variant-titel) → swatch-hex. Geen match (bv. "Queen Size") → null.
+const COLORS: [RegExp, string][] = [
+  [/black|noir|onyx|ebony/i, "#1d1d1f"], [/charcoal|anthracite|graphite/i, "#3a3a3e"],
+  [/white|blanc|ivory|chalk/i, "#f3efe7"], [/cream|ecru|oat/i, "#ece2cf"],
+  [/beige|sand|linen|natural|flax|oatmeal|wheat|almond/i, "#d7c4a6"],
+  [/taupe|mushroom|greige|stone/i, "#b6a890"], [/(grey|gray|silver|dove|ash)/i, "#9b9b9b"],
+  [/brown|walnut|chocolate|cognac|coffee|espresso|chestnut/i, "#6b4f3a"],
+  [/tan|camel|caramel|honey/i, "#b07a4a"], [/navy|indigo/i, "#28324c"],
+  [/blue|teal|denim|sky|azure/i, "#5b7c98"], [/(green|olive|sage|moss|emerald)/i, "#6e7d5b"],
+  [/gold|brass/i, "#b8985a"], [/bronze|copper/i, "#7d5a3a"], [/rust|terracotta|clay/i, "#b0542d"],
+  [/red|crimson|burgundy|wine/i, "#8a3a3a"], [/pink|blush|rose/i, "#cf9aa0"],
+  [/yellow|mustard|ochre/i, "#c79a3a"], [/purple|aubergine|plum/i, "#5d3a5a"],
+];
+const colourHex = (title?: string): string | null => {
+  if (!title) return null;
+  for (const [re, hex] of COLORS) if (re.test(title)) return hex;
+  return null;
+};
+
 async function fetchJson(url: string): Promise<any> {
   const r = await fetch(url, { headers: { "User-Agent": "Mozilla/5.0 HabitatOne" } });
   if (!r.ok) throw new Error(`${r.status} ${url}`);
@@ -121,7 +140,7 @@ async function main() {
     const variants = sv.map(([sku, title], i) => ({
       id: id * 100 + i,
       name: sv.length > 1 ? (title || `Variant ${i + 1}`) : null,
-      colorHex: null,
+      colorHex: colourHex(title),
       sku,
       images: gallery,
     }));
