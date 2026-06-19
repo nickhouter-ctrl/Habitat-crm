@@ -72,7 +72,7 @@ async function fetchJson(url: string): Promise<any> {
   if (!r.ok) throw new Error(`${r.status} ${url}`);
   return r.json();
 }
-type ShopProd = { title: string; images: string[]; variantTitle: Map<string, string> };
+type ShopProd = { title: string; images: string[]; variantTitle: Map<string, string>; variantImg: Map<string, string> };
 async function caracole(): Promise<{ byHandle: Map<string, ShopProd>; handleBySku: Map<string, string> }> {
   const byHandle = new Map<string, ShopProd>(); const handleBySku = new Map<string, string>();
   for (let page = 1; page <= 12; page++) {
@@ -80,9 +80,9 @@ async function caracole(): Promise<{ byHandle: Map<string, ShopProd>; handleBySk
     const arr = j.products ?? []; if (arr.length === 0) break;
     for (const p of arr) {
       const images: string[] = (p.images ?? []).map((i: any) => i.src).filter(Boolean);
-      const variantTitle = new Map<string, string>();
-      for (const v of p.variants ?? []) { if (!v.sku) continue; const sku = String(v.sku).trim().toUpperCase(); variantTitle.set(sku, v.title && v.title !== "Default Title" ? v.title : ""); handleBySku.set(sku, p.handle); }
-      byHandle.set(p.handle, { title: p.title, images, variantTitle });
+      const variantTitle = new Map<string, string>(); const variantImg = new Map<string, string>();
+      for (const v of p.variants ?? []) { if (!v.sku) continue; const sku = String(v.sku).trim().toUpperCase(); variantTitle.set(sku, v.title && v.title !== "Default Title" ? v.title : ""); if (v.featured_image?.src) variantImg.set(sku, v.featured_image.src); handleBySku.set(sku, p.handle); }
+      byHandle.set(p.handle, { title: p.title, images, variantTitle, variantImg });
     }
     if (arr.length < 250) break;
   }
@@ -121,6 +121,18 @@ function sizeDims(desc?: string | null): Map<string, string> {
 }
 const sizeKey = (t?: string | null) => (t ?? "").toLowerCase().match(/\b(queen|king|full|twin)\b/)?.[1] ?? null;
 
+// Per-element afmeting uit de omschrijving — gericht op de élement-titel, bv.
+// "Left Arm Facing Chaise: W67 x D39 x H27 in W169 x D98 x H69 cm" → mm (W × H × D).
+const escapeRe = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+function elemDimFor(desc: string | null | undefined, title: string): string | null {
+  if (!desc) return null;
+  const t = title.replace(/[^A-Za-z ]/g, "").trim().split(/\s+/).map(escapeRe).join("\\s+");
+  if (!t) return null;
+  const re = new RegExp(`${t}\\s*:\\s*W\\s*[\\d.]+\\s*[x×]\\s*D\\s*[\\d.]+\\s*[x×]\\s*H\\s*[\\d.]+\\s*in\\s*W\\s*(\\d+(?:\\.\\d+)?)\\s*[x×]\\s*D\\s*(\\d+(?:\\.\\d+)?)\\s*[x×]\\s*H\\s*(\\d+(?:\\.\\d+)?)\\s*cm`, "i");
+  const m = desc.match(re);
+  return m ? `${Math.round(+m[1] * 10)} × ${Math.round(+m[3] * 10)} × ${Math.round(+m[2] * 10)} mm` : null;
+}
+
 // SKU-ontleding (Caracole): PREFIX-SERIE-ELEMENT-KLEUR, bv. M150-023-LH1-B.
 const seriesOf = (sku: string) => sku.trim().toUpperCase().split("-").slice(0, 2).join("-"); // "M150-023", "UPH-425V"
 const colourBase = (sku: string) => sku.trim().toUpperCase().replace(/-[A-Z]$/, ""); // element-identiteit zonder kleurletter
@@ -140,8 +152,25 @@ const PIECES: [RegExp, string][] = [
   [/\d+\s*-?\s*pc\b|\d+\s*-?\s*piece|\bsectional\b/i, "sectional"], [/\bsofa\b/i, "sofa"], [/\bchair\b/i, "chair"],
 ];
 const pieceType = (name: string): string => { for (const [re, t] of PIECES) if (re.test(name)) return t; return "other"; };
+// Splits een element-naam in kleur (losse keuze) en stuk-label (het element).
+const MOD = "dark|light|warm|cool|soft|deep|pale|antique|vintage|almost|neutral[- ]?toned";
+const COLNAMES = "black|white|ivory|cream|ecru|oat|oatmeal|beige|sand|linen|linnen|natural|flax|wheat|almond|pearl|taupe|mushroom|greige|stone|grey|gray|silver|dove|ash|brown|walnut|chocolate|cognac|coffee|espresso|chestnut|tan|camel|caramel|honey|navy|indigo|blue|teal|denim|sky|azure|green|olive|sage|moss|emerald|gold|brass|bronze|copper|rust|terracotta|clay|red|crimson|burgundy|wine|pink|blush|rose|champagne|eucalyptus|rouge";
+const reColourLead = new RegExp(`^\\s*((?:${MOD})\\s+)?(${COLNAMES})\\b`, "i");
+const FILLER = /^\s*(?:upholstered|modern|classic|vintage|woven|fully|new|luxurious|elegant)\s+/i;
+const colourPhrase = (name: string): string | null => { const m = stripCollection(name).replace(FILLER, "").match(reColourLead); return m ? cap(((m[1] ?? "") + m[2]).trim()) : null; };
+const MATERIALS = /\b(upholstered|linen|linnen|velvet|fabric|bouclé|boucle|leather|ribbed|woven|mohair|chenille|performance|micro-?ribbed|plush|fully|modern|classic|vintage|welted)\b/gi;
+const pieceLabel = (name: string): string => {
+  let s = stripCollection(name).replace(FILLER, "").replace(reColourLead, " ");
+  s = s.replace(MATERIALS, " ").replace(/\s+/g, " ").trim();
+  return s || stripCollection(name);
+};
+// Een Shopify-varianttitel die een modulair element beschrijft (bv. Lumi: "Left
+// Arm Facing Chaise", "Wedge Section") i.p.v. een kleur/maat → eigen element-stuk.
+const isElementTitle = (t?: string) =>
+  !!t && /\b(chaise|loveseat|love seat|armless|corner|wedge|section|sofa|ottoman|settee|arm[- ]?facing|\bl[ar]f\b|bumper|sectional|chair)\b/i.test(t);
+const cleanTitle = (t: string) => t.replace(/\bsize\b/i, "").replace(/\s+/g, " ").trim();
 
-type Member = { sku: string; name: string; sub: string; brand: "caracole" | "cornelius"; series: string; line: string | null; cbase: string; dims: string | null; descr: string | null; di18n: any; gallery: string[]; shopVariants: { sku: string; title: string }[] };
+type Member = { sku: string; name: string; sub: string; brand: "caracole" | "cornelius"; series: string; line: string | null; cbase: string; dims: string | null; descr: string | null; di18n: any; gallery: string[]; shopVariants: { sku: string; title: string; img?: string }[] };
 
 async function main() {
   console.log("CRM-meubels ophalen…");
@@ -158,7 +187,7 @@ async function main() {
     const h = handleBySku.get((r.sku ?? "").trim().toUpperCase());
     const shop = h ? byHandle.get(h) : undefined;
     const gallery = dedup([...(r.imageUrl ? [r.imageUrl] : []), ...((shop?.images) ?? [])]);
-    const sv = shop ? [...shop.variantTitle.entries()].map(([sku, title]) => ({ sku, title })) : [{ sku: r.sku!, title: "" }];
+    const sv = shop ? [...shop.variantTitle.entries()].map(([sku, title]) => ({ sku, title, img: shop.variantImg.get(sku) })) : [{ sku: r.sku!, title: "" }];
     members.push({ sku: r.sku!, name: r.name, sub: subSlug, brand: "caracole", series: seriesOf(r.sku!), line: lineWord(r.name), cbase: colourBase(r.sku!), dims: dimStr(r), descr: r.description ?? null, di18n: r.descriptionI18n ?? null, gallery, shopVariants: sv.length ? sv : [{ sku: r.sku!, title: "" }] });
   }
   for (const r of cor) {
@@ -184,11 +213,13 @@ async function main() {
     } else others.push(m);
   }
   // Een lijn is een échte modulaire set bij ≥2 verschillende stuk-types
-  // (chaise + armless + …). Anders zijn het gewoon kleurvarianten → kleur-merge.
+  // (chaise + armless + …), óf wanneer één product de elementen als Shopify-
+  // varianten draagt (bv. Lumi). Anders = kleurvarianten → kleur-merge.
   const sofaSets = new Map<string, Member[]>();
   for (const [k, g] of sofaLines) {
     const types = new Set(g.map((m) => pieceType(stripCollection(m.name))));
-    if (g.length > 1 && types.size > 1) sofaSets.set(k, g);
+    const hasElemVariants = g.some((m) => m.shopVariants.filter((sv) => isElementTitle(sv.title)).length >= 2);
+    if ((g.length > 1 && types.size > 1) || hasElemVariants) sofaSets.set(k, g);
     else others.push(...g);
   }
 
@@ -258,20 +289,30 @@ async function main() {
       const col = colourWord(m.name); const dir = dirWord(m.name); const sd = sizeDims(m.descr);
       // Alleen écht maat-varianten (Queen/King) expanden; anders is de member zélf
       // de variant (eigen SKU) — voorkomt dat members elkaars SKU's binnentrekken.
+      // Bij sets: element-getitelde Shopify-varianten (Lumi e.d.) zijn losse stukken.
+      // Anders alleen écht maat-varianten (Queen/King); anders de member zelf.
+      const elemVs = isSet ? m.shopVariants.filter((sv) => isElementTitle(sv.title)) : [];
       const sizeVs = m.shopVariants.filter((sv) => sizeKey(sv.title));
-      const svList = sizeVs.length ? sizeVs : [{ sku: m.sku, title: "" }];
+      const svList = elemVs.length ? elemVs : (sizeVs.length ? sizeVs : [{ sku: m.sku, title: "" } as Member["shopVariants"][number]]);
       for (const sv of svList) {
         if (vSeen.has(sv.sku.toUpperCase())) continue;
         vSeen.add(sv.sku.toUpperCase());
-        const size = (sv.title && sv.title !== "Default Title") ? sv.title.replace(/\bsize\b/i, "").trim() : sizeWord(m.name);
-        // Set-varianten dragen de volledige elementnaam ("Taupe Velvet Left Chaise");
-        // kleur/maat-merges dragen het kleur·maat·richting-label.
-        const label = isSet
-          ? (stripCollection(m.name) + (size ? ` · ${size}` : "")).trim()
-          : (multi ? ([col, size, dir].filter(Boolean).join(" · ") || diffOf(m.name) || `Variant ${vi + 1}`) : null);
+        const isElem = isElementTitle(sv.title);
+        const size = (!isElem && sv.title && sv.title !== "Default Title") ? sv.title.replace(/\bsize\b/i, "").trim() : sizeWord(m.name);
         const sk = sizeKey(sv.title) ?? sizeKey(m.name);
-        const dim = (sk && sd.get(sk)) || m.dims;
-        variants.push({ id: id * 100 + vi++, name: label, colorHex: colourHex(col ?? m.name), sku: sv.sku, images: m.gallery.length ? m.gallery : gallery, dim });
+        const dim = (isElem ? elemDimFor(m.descr, cleanTitle(sv.title)) : null) || (sk && sd.get(sk)) || m.dims;
+        const imgs = sv.img ? dedup([sv.img, ...m.gallery]) : (m.gallery.length ? m.gallery : gallery);
+        if (isSet) {
+          // Modulair bankstel: kleur = losse keuze, piece = het element (eigen afmeting).
+          const colour = colourPhrase(m.name);
+          const piece = ((isElem ? cleanTitle(sv.title) : pieceLabel(m.name)) + (size ? ` · ${size}` : "")).trim();
+          const label = `${colour ? colour + " · " : ""}${piece}`;
+          variants.push({ id: id * 100 + vi++, name: label, piece, colour, colorHex: colourHex(colour ?? m.name), sku: sv.sku, images: imgs, dim });
+        } else {
+          // Kleur/maat-merge: één keuze met kleur·maat·richting-label.
+          const label = multi ? ([col, size, dir].filter(Boolean).join(" · ") || diffOf(m.name) || `Variant ${vi + 1}`) : null;
+          variants.push({ id: id * 100 + vi++, name: label, colorHex: colourHex(col ?? m.name), sku: sv.sku, images: imgs, dim });
+        }
       }
     }
 
