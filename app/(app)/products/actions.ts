@@ -8,6 +8,7 @@ import { z } from "zod";
 import { auth } from "@/auth";
 import { db } from "@/lib/db";
 import { products } from "@/lib/db/schema";
+import corneliusData from "@/lib/import/cornelius-products.json";
 import { isValidEan13, nextProductBarcode } from "@/lib/barcode";
 import { hasCostBreakdown, landedCost } from "@/lib/pricing";
 import { deleteProductImageByUrl, uploadProductImage } from "@/lib/storage";
@@ -152,6 +153,64 @@ export async function updateProduct(id: string, formData: FormData) {
   revalidatePath("/products");
   revalidatePath(`/products/${id}/edit`);
   redirect(`/products/${id}/edit?saved=1`);
+}
+
+type CorneliusItem = {
+  name: string;
+  sku: string;
+  priceEur: number | null;
+  category: string;
+  imageUrl: string | null;
+  description: string | null;
+  sourceUrl: string | null;
+};
+
+/**
+ * Bulk-import van de Cornelius Lifestyle-catalogus (lib/import/cornelius-products.json).
+ * Alles komt binnen als "op bestelling" (telt nooit mee in voorraad). Idempotent:
+ * producten waarvan de SKU al bestaat worden overgeslagen, zodat nogmaals klikken
+ * geen dubbele aanmaakt. Verkoopprijs = de Cornelius-prijs; aannemersprijs −20%.
+ */
+export async function importCorneliusProducts(): Promise<{
+  added: number;
+  skipped: number;
+  total: number;
+}> {
+  await requireUser();
+  const items = corneliusData as CorneliusItem[];
+
+  const existing = await db
+    .select({ sku: products.sku })
+    .from(products)
+    .where(isNotNull(products.sku));
+  const have = new Set(existing.map((r) => (r.sku ?? "").trim()).filter(Boolean));
+
+  const toInsert = items.filter((p) => p.sku && !have.has(p.sku.trim()));
+
+  const rows = toInsert.map((p) => ({
+    name: p.name,
+    sku: p.sku,
+    category: p.category || null,
+    unit: "stuk",
+    priceEur: p.priceEur != null ? String(p.priceEur) : null,
+    tradePriceEur:
+      p.priceEur != null ? String(Math.round(p.priceEur * 0.8 * 100) / 100) : null,
+    vatRate: 21,
+    description: p.description || null,
+    imageUrl: p.imageUrl || null,
+    availability: "order_only" as const,
+    isActive: true,
+    pushToWebsite: false,
+  }));
+
+  let added = 0;
+  for (let i = 0; i < rows.length; i += 50) {
+    await db.insert(products).values(rows.slice(i, i + 50));
+    added += Math.min(50, rows.length - i);
+  }
+
+  revalidatePath("/products");
+  return { added, skipped: items.length - toInsert.length, total: items.length };
 }
 
 export async function deleteProduct(id: string) {
