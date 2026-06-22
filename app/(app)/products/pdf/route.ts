@@ -20,15 +20,18 @@ export async function GET() {
   if (!session?.user) return new Response("Unauthorized", { status: 401 });
 
   const [overallRes, byCollectionRes, topValueRes, lowStockRes] = await Promise.all([
+    // Identieke definitie als de Producten-pagina: totaal = alle producten,
+    // voorraadwaarde over álle producten (order-only uitgesloten, géén is_active-
+    // filter). 'zonder foto' gebruikt wél is_active (net als de pagina).
     db.execute(sql`
       select
-        count(*) filter (where is_active) as active_n,
-        coalesce(sum(case when is_active and availability <> 'order_only' then coalesce(cost_eur,0)*coalesce(stock_qty,0) else 0 end),0) as cost_val,
-        coalesce(sum(case when is_active and availability <> 'order_only' then coalesce(price_eur,0)*coalesce(stock_qty,0) else 0 end),0) as sale_val,
+        count(*) as total_n,
+        coalesce(sum(case when availability <> 'order_only' then coalesce(cost_eur,0)*coalesce(stock_qty,0) else 0 end),0) as cost_val,
+        coalesce(sum(case when availability <> 'order_only' then coalesce(price_eur,0)*coalesce(stock_qty,0) else 0 end),0) as sale_val,
         count(*) filter (where is_active and image_url is null) as no_photo,
         count(*) filter (where is_active and availability <> 'order_only' and stock_min is not null and coalesce(stock_qty,0) < stock_min) as low_stock,
         count(*) filter (where is_active and coalesce(stock_qty,0) <= 0 and components is null and availability <> 'order_only') as to_order,
-        count(distinct collection) filter (where is_active and collection is not null) as collections
+        count(distinct collection) filter (where collection is not null) as collections
       from products
     `),
     db.execute(sql`
@@ -37,7 +40,6 @@ export async function GET() {
              coalesce(sum(case when availability <> 'order_only' then coalesce(cost_eur,0)*coalesce(stock_qty,0) else 0 end),0) as cost_val,
              coalesce(sum(case when availability <> 'order_only' then coalesce(price_eur,0)*coalesce(stock_qty,0) else 0 end),0) as sale_val
       from products
-      where is_active = true
       group by collection
       order by cost_val desc
     `),
@@ -45,7 +47,7 @@ export async function GET() {
       select name, sku, coalesce(stock_qty,0) as qty,
              coalesce(cost_eur,0)*coalesce(stock_qty,0) as cost_val
       from products
-      where is_active = true and availability <> 'order_only' and coalesce(stock_qty,0) > 0
+      where availability <> 'order_only' and coalesce(stock_qty,0) > 0
       order by cost_val desc
       limit 15
     `),
@@ -66,18 +68,18 @@ export async function GET() {
   const marginPct = pct(saleVal, margin);
 
   const kpis = [
-    { label: "Actieve producten", value: String(num(o.active_n)), hint: "in de catalogus" },
+    { label: "Producten (totaal)", value: String(num(o.total_n)), hint: "in de catalogus" },
     { label: "Voorraadwaarde (kostprijs)", value: formatEUR(costVal), hint: "kostprijs × voorraad" },
     { label: "Voorraadwaarde (verkoop)", value: formatEUR(saleVal), hint: "verkoopprijs × voorraad" },
     {
-      label: "Brutomarge voorraad",
+      label: "Totale marge (voorraad)",
       value: formatEUR(margin),
-      hint: marginPct != null ? `${marginPct}% van verkoopwaarde` : undefined,
+      hint: marginPct != null ? `${marginPct}% · verkoop − kostprijs` : undefined,
     },
     { label: "Lage voorraad", value: String(num(o.low_stock)), hint: "onder de drempel" },
     { label: "Te bestellen", value: String(num(o.to_order)), hint: "niet op voorraad" },
-    { label: "Zonder foto", value: String(num(o.no_photo)), hint: "ontbreekt op de site" },
-    { label: "Collecties", value: String(num(o.collections)), hint: "actief" },
+    { label: "Zonder foto", value: String(num(o.no_photo)), hint: "actief · ontbreekt op de site" },
+    { label: "Collecties", value: String(num(o.collections)), hint: "in de catalogus" },
   ];
 
   const byCol = rowsOf(byCollectionRes);
@@ -87,7 +89,7 @@ export async function GET() {
   const tables: ReportTable[] = [
     {
       title: "Voorraadwaarde per collectie",
-      subtitle: "actieve producten · order-only uitgesloten",
+      subtitle: "alle producten · order-only uitgesloten",
       columns: [
         { header: "Collectie", flex: 2.4 },
         { header: "#", align: "right", flex: 0.7 },
