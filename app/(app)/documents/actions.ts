@@ -635,17 +635,21 @@ export async function setDocumentStatus(id: string, formData: FormData) {
 
   const doc = await db.query.documents.findFirst({
     where: eq(documents.id, id),
-    columns: { totalEur: true, kind: true, dealId: true, holdedId: true },
+    columns: { totalEur: true, kind: true, dealId: true, holdedId: true, sentAt: true },
   });
   if (!doc) return;
 
-  const patch: { status: (typeof STATUSES)[number]; paidEur?: string } = {
+  const patch: { status: (typeof STATUSES)[number]; paidEur?: string; sentAt?: Date } = {
     status: status as (typeof STATUSES)[number],
   };
   if (status === "paid") patch.paidEur = doc.totalEur;
   if (status === "draft" || status === "sent" || status === "rejected" || status === "void") {
     patch.paidEur = "0";
   }
+  // Handmatig op "verstuurd" zetten (bv. factuur persoonlijk/per app afgegeven):
+  // stempel ook de verzenddatum, zodat het systeem 'm echt als verstuurd kent —
+  // net als de "Versturen"-knop. Bestaande datum niet overschrijven.
+  if (status === "sent" && !doc.sentAt) patch.sentAt = new Date();
 
   await db.update(documents).set(patch).where(eq(documents.id, id));
 
@@ -682,6 +686,44 @@ export async function setDocumentStatus(id: string, formData: FormData) {
     await bookStockInForCreditNote(id, user.id, { auto: true });
   }
 
+  revalidateAround(doc.kind as DocKind, id);
+}
+
+/**
+ * Markeer een factuur/creditnota handmatig als **verstuurd** — zonder mail.
+ * Voor wanneer je 'm persoonlijk of per app hebt afgegeven: het systeem weet dan
+ * dat 'ie de deur uit is (status → verstuurd + verzenddatum) en de voorraad wordt
+ * sluitend afgeboekt (factuur) of teruggeboekt (creditnota). Idempotent.
+ *
+ * Dit is het bewezen-betrouwbare pad (vaste knop, geen dropdown-veld dat kan
+ * wegvallen) en spiegelt `markDocumentSent`, alleen zonder e-mail/PDF.
+ */
+export async function markDocumentSentNoEmail(id: string) {
+  const user = await requireUser();
+  const doc = await db.query.documents.findFirst({
+    where: eq(documents.id, id),
+    columns: { kind: true, status: true, sentAt: true, dealId: true, totalEur: true },
+  });
+  if (!doc) return;
+  if (doc.kind !== "invoice" && doc.kind !== "creditnote") return;
+
+  await db
+    .update(documents)
+    .set({
+      // Een al-betaalde/geannuleerde status niet terugzetten naar 'sent'.
+      status: doc.status === "draft" || doc.status === "void" ? "sent" : doc.status,
+      sentAt: doc.sentAt ?? new Date(),
+      updatedAt: new Date(),
+    })
+    .where(eq(documents.id, id));
+
+  if (doc.kind === "invoice") {
+    await bookStockOutInternal(id, user.id, { auto: true });
+  } else {
+    await bookStockInForCreditNote(id, user.id, { auto: true });
+  }
+
+  await syncDealFromDocument(doc.dealId, { kind: doc.kind, status: "sent", totalEur: doc.totalEur });
   revalidateAround(doc.kind as DocKind, id);
 }
 

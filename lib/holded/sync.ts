@@ -28,7 +28,7 @@ import {
 import { parsePoLineItems } from "@/lib/purchase-orders";
 import { normalizeDocItems } from "@/lib/documents";
 
-import { holded, holdedListAll } from "./client";
+import { holded, holdedListAll, HoldedError } from "./client";
 import type {
   HoldedContact,
   HoldedDocType,
@@ -759,8 +759,32 @@ export async function updateDocumentInHolded(docId: string): Promise<void> {
     notes: doc.notes ?? "",
     items: itemsBody,
   };
-  await holded.documents.update(docType, doc.holdedId, body);
+  try {
+    await holded.documents.update(docType, doc.holdedId, body);
+  } catch (err) {
+    // De gekoppelde Holded-factuur bestaat daar niet meer ("Id not found" —
+    // bv. handmatig verwijderd in Holded). De opgeslagen koppeling is dood:
+    // wis 'm en maak/koppel het document opnieuw aan, zodat "Bijwerken" zichzelf
+    // herstelt i.p.v. te blijven hangen op een dode id.
+    if (holdedDocumentGone(err)) {
+      await db.update(documents).set({ holdedId: null, updatedAt: new Date() }).where(eq(documents.id, docId));
+      await pushDocumentToHolded(docId);
+      return;
+    }
+    throw err;
+  }
   await upsertSyncMap({ entityType: "document", localId: docId, holdedId: doc.holdedId, direction: "push" });
+}
+
+/**
+ * Herkent een Holded-respons die zegt dat het document niet (meer) bestaat:
+ * een 404, of de typische `{"status":0,"info":"Id not found"}` met HTTP 400.
+ */
+function holdedDocumentGone(err: unknown): boolean {
+  if (!(err instanceof HoldedError)) return false;
+  if (err.status === 404) return true;
+  const body = typeof err.body === "string" ? err.body : JSON.stringify(err.body ?? "");
+  return /id not found/i.test(body);
 }
 
 /* --------------------------------------------------------- projecten (pull) */

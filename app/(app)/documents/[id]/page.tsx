@@ -33,6 +33,7 @@ import {
   createDeliveryNoteFromDocument,
   createInvoiceFromEstimate,
   deleteDocument,
+  markDocumentSentNoEmail,
   pushDocumentToHoldedAction,
   updateDocumentInHoldedAction,
   reverseStockOutFromDocument,
@@ -612,6 +613,18 @@ export default async function DocumentDetailPage({
                 </div>
               ) : (
                 <>
+                  {(doc.kind === "invoice" || doc.kind === "creditnote") &&
+                    doc.status === "draft" && (
+                      <form action={markDocumentSentNoEmail.bind(null, id)} className="pt-1">
+                        <SubmitButton size="sm" variant="primary" pendingLabel="Bezig…">
+                          ✓ Markeer als verstuurd (zonder mail)
+                        </SubmitButton>
+                        <p className="mt-1 text-[11px] text-muted">
+                          Voor wanneer je de factuur persoonlijk of per app hebt afgegeven — boekt ook de
+                          voorraad {doc.kind === "creditnote" ? "terug" : "af"}.
+                        </p>
+                      </form>
+                    )}
                   <form action={changeStatus} className="flex items-center gap-2 pt-1">
                     <Select name="status" defaultValue={doc.status} className="flex-1">
                       {STATUS_OPTIONS.map((s) => (
