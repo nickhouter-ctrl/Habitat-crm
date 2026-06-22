@@ -208,9 +208,6 @@ export default async function ProductsPage({
                   <LinkButton href={`/print-labels${qs}`} variant="secondary">
                     Labels printen
                   </LinkButton>
-                  <LinkButton href="/products/import-cornelius" variant="secondary">
-                    Cornelius importeren
-                  </LinkButton>
                 </>
               );
             })()}
