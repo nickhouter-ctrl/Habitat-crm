@@ -202,6 +202,9 @@ export default async function ProductsPage({
                     Excel downloaden
                   </a>
                   <Gs1ExcelDownload />
+                  <LinkButton href="/products/pdf" variant="primary" target="_blank">
+                    📄 PDF-overzicht
+                  </LinkButton>
                   <LinkButton href={`/print-labels${qs}`} variant="secondary">
                     Labels printen
                   </LinkButton>
