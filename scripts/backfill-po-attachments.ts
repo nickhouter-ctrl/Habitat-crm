@@ -112,9 +112,11 @@ async function main() {
     }
 
     if (newAttachments.length > info.existing.length) {
+      // sql.json() bindt als één jsonb-waarde. (NIET JSON.stringify(...)::jsonb —
+      // dat dubbel-encodeert in deze postgres-driver tot een jsonb-string.)
       await sql`
         UPDATE purchase_orders
-        SET attachments = ${JSON.stringify(newAttachments)}::jsonb, updated_at = NOW()
+        SET attachments = ${sql.json(newAttachments)}, updated_at = NOW()
         WHERE id = ${poId}
       `;
       added++;
