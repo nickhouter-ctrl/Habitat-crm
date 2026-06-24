@@ -1034,19 +1034,32 @@ export async function createInvoiceFromEstimate(estimateId: string, formData?: F
   const est = await db.query.documents.findFirst({ where: eq(documents.id, estimateId) });
   if (!est) return;
 
-  // Percentage voor termijn-/deelfacturen (bv. 50% aanbetaling). Default 100%.
+  // Twee manieren om (deels) te factureren:
+  //  - per FASE: alle regels met die fase-sleutel, tegen volle prijs (`phase`-veld);
+  //  - per PERCENTAGE: alle regels geschaald met X% (bv. 50% aanbetaling).
+  const phaseKey = String(formData?.get("phase") ?? "").trim();
   const rawPct = Number(formData?.get("percentage") ?? 100);
   const pct = Number.isFinite(rawPct) && rawPct > 0 && rawPct <= 100 ? rawPct : 100;
   const factor = pct / 100;
 
   const baseItems = normalizeDocItems(est.items);
-  const items =
-    pct === 100
-      ? baseItems
-      : baseItems.map((it) => ({
-          ...it,
-          price: Math.round(Number(it.price) * factor * 100) / 100,
-        }));
+
+  let items = baseItems;
+  let coveredPhase: string | null = null;
+  let titleSuffix = "";
+  if (phaseKey) {
+    items = baseItems.filter((it) => (it.phase ?? "") === phaseKey);
+    if (items.length === 0) {
+      redirect(`/documents/${estimateId}?fase=leeg`);
+    }
+    coveredPhase = phaseKey;
+    const phaseLabel =
+      (Array.isArray(est.phases) ? est.phases.find((p) => p.key === phaseKey)?.label : undefined) ?? phaseKey;
+    titleSuffix = ` — ${phaseLabel}`;
+  } else if (pct !== 100) {
+    items = baseItems.map((it) => ({ ...it, price: Math.round(Number(it.price) * factor * 100) / 100 }));
+    titleSuffix = ` — ${pct}% van ${est.docNumber ?? "offerte"}`;
+  }
   const totals = computeTotals(items);
   const round2 = (n: number) => (Math.round(n * 100) / 100).toFixed(2);
 
@@ -1058,10 +1071,8 @@ export async function createInvoiceFromEstimate(estimateId: string, formData?: F
     kind: "invoice",
     status: "draft",
     sourceDocumentId: est.id, // koppeling factuur → bron-offerte
-    title:
-      pct === 100
-        ? est.title
-        : `${est.title ?? "Factuur"} — ${pct}% van ${est.docNumber ?? "offerte"}`,
+    coveredPhase,
+    title: titleSuffix ? `${est.title ?? "Factuur"}${titleSuffix}` : est.title,
     contactId: est.contactId,
     companyId: est.companyId,
     dealId: est.dealId,

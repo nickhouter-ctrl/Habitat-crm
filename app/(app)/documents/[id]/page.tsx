@@ -116,6 +116,7 @@ export default async function DocumentDetailPage({
             totalEur: true,
             paidEur: true,
             issueDate: true,
+            coveredPhase: true,
           },
           orderBy: [asc(documents.issueDate)],
         })
@@ -150,6 +151,30 @@ export default async function DocumentDetailPage({
   const remainingPct = Math.min(100, Math.max(1, 100 - invoicedPct));
 
   const items = normalizeDocItems(doc.items);
+
+  // Fases op deze offerte: groepeer regels op `phase`. Per fase: subtotaal (ex. BTW
+  // na korting) en of er al een factuur voor bestaat (coveredPhase op een factuur).
+  const coveredPhases = new Set(
+    linkedInvoices.map((inv) => inv.coveredPhase).filter((p): p is string => !!p),
+  );
+  const phaseMap = new Map<string, { subtotal: number; lines: number }>();
+  if (doc.kind === "estimate") {
+    for (const it of items) {
+      const key = (it.phase ?? "").trim();
+      if (!key) continue;
+      const net = (Number(it.units) || 0) * (Number(it.price) || 0) * (1 - (Number(it.discount) || 0) / 100);
+      const e = phaseMap.get(key) ?? { subtotal: 0, lines: 0 };
+      e.subtotal += net;
+      e.lines += 1;
+      phaseMap.set(key, e);
+    }
+  }
+  const phaseLabelMap = new Map(
+    (Array.isArray(doc.phases) ? doc.phases : []).map((p) => [p.key, p.label]),
+  );
+  const phaseList = [...phaseMap.entries()]
+    .map(([key, v]) => ({ key, label: phaseLabelMap.get(key) ?? key, ...v, covered: coveredPhases.has(key) }))
+    .sort((a, b) => a.label.localeCompare(b.label, "nl", { numeric: true }));
 
   // Marge (intern): kostprijs per regel via gekoppeld product (id of SKU). Komt
   // NIET op de klant-PDF — alleen zichtbaar voor jullie op deze pagina.
@@ -529,6 +554,35 @@ export default async function DocumentDetailPage({
                     {doc.reservedAt ? "Reservering opheffen" : "🔖 Reserveren"}
                   </SubmitButton>
                 </form>
+              )}
+
+              {doc.kind === "estimate" && phaseList.length > 0 && (
+                <div className="space-y-2 rounded-md bg-background px-3 py-2.5">
+                  <p className="text-xs font-medium text-muted">Factureren per fase</p>
+                  {phaseList.map((ph) => (
+                    <div key={ph.key} className="flex items-center justify-between gap-2 border-b border-border/60 pb-1.5 last:border-0">
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-medium">{ph.label}</p>
+                        <p className="text-xs text-muted">
+                          {ph.lines} regel{ph.lines === 1 ? "" : "s"} · {formatEUR(ph.subtotal)} ex. BTW
+                        </p>
+                      </div>
+                      {ph.covered ? (
+                        <Badge tone="success">✓ Gefactureerd</Badge>
+                      ) : (
+                        <form action={makeInvoice}>
+                          <input type="hidden" name="phase" value={ph.key} />
+                          <SubmitButton size="sm" variant="secondary" pendingLabel="…">
+                            → Factuur
+                          </SubmitButton>
+                        </form>
+                      )}
+                    </div>
+                  ))}
+                  <p className="text-[11px] text-muted">
+                    Of factureer hieronder een percentage van de hele offerte.
+                  </p>
+                </div>
               )}
 
               {doc.kind === "estimate" && fullyInvoiced && (

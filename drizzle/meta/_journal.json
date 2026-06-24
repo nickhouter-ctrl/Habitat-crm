@@ -239,6 +239,20 @@
       "when": 1781886985339,
       "tag": "0033_opposite_donald_blake",
       "breakpoints": true
+    },
+    {
+      "idx": 34,
+      "version": "7",
+      "when": 1782296081064,
+      "tag": "0034_first_natasha_romanoff",
+      "breakpoints": true
+    },
+    {
+      "idx": 35,
+      "version": "7",
+      "when": 1782296397226,
+      "tag": "0035_smiling_arclight",
+      "breakpoints": true
     }
   ]
 }

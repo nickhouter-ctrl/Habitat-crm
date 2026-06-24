@@ -27,9 +27,35 @@ import {
 } from "@/components/ui";
 import { Combobox, type ComboOption } from "@/components/combobox";
 import { db } from "@/lib/db";
-import { contacts, documents, products, projects, properties, users } from "@/lib/db/schema";
+import {
+  contacts,
+  documents,
+  products,
+  projectBudgetLines,
+  projectCosts,
+  projects,
+  properties,
+  purchaseOrders,
+  timeEntries,
+  users,
+  workers,
+} from "@/lib/db/schema";
 import { normalizeDocItems } from "@/lib/documents";
-import { attachDocumentToProject, deleteProject, setProjectStatus, updateProject } from "../actions";
+import { formatEUR } from "@/lib/utils";
+import {
+  addBudgetLine,
+  addProjectCost,
+  addTimeEntry,
+  attachDocumentToProject,
+  deleteBudgetLine,
+  deleteProject,
+  deleteProjectCost,
+  deleteTimeEntry,
+  linkPurchaseOrderToProject,
+  setProjectStatus,
+  unlinkPurchaseOrder,
+  updateProject,
+} from "../actions";
 import {
   applyStockOutFromDocument,
   approveEstimateToInvoice,
@@ -215,6 +241,78 @@ export default async function ProjectDetailPage({
   const isEstimateConverted = (total: number) =>
     invoiceTotalsForConv.some((t) => Math.abs(t - total) <= 0.02);
 
+  // ─────────── Job-costing: uren (arbeid), kosten/inkoop, begroting, doel ───────────
+  const [timeRows, costRows, budgetRows, linkedPOs, workerRows, unlinkedPOs, estTotals] =
+    await Promise.all([
+      db.select().from(timeEntries).where(eq(timeEntries.projectId, id)).orderBy(desc(timeEntries.date)),
+      db.select().from(projectCosts).where(eq(projectCosts.projectId, id)).orderBy(desc(projectCosts.date)),
+      db
+        .select()
+        .from(projectBudgetLines)
+        .where(eq(projectBudgetLines.projectId, id))
+        .orderBy(asc(projectBudgetLines.sortOrder), asc(projectBudgetLines.createdAt)),
+      db.select().from(purchaseOrders).where(eq(purchaseOrders.projectId, id)).orderBy(desc(purchaseOrders.orderDate)),
+      db.select().from(workers).where(eq(workers.active, true)).orderBy(asc(workers.name)),
+      db
+        .select({
+          id: purchaseOrders.id,
+          supplier: purchaseOrders.supplier,
+          reference: purchaseOrders.reference,
+          total: purchaseOrders.total,
+          subtotal: purchaseOrders.subtotal,
+          status: purchaseOrders.status,
+        })
+        .from(purchaseOrders)
+        .where(and(isNull(purchaseOrders.projectId), eq(purchaseOrders.currency, "EUR")))
+        .orderBy(desc(purchaseOrders.orderDate))
+        .limit(200),
+      db
+        .select({ subtotalEur: documents.subtotalEur })
+        .from(documents)
+        .where(and(eq(documents.projectId, id), eq(documents.kind, "estimate"))),
+    ]);
+
+  const laborHours = timeRows.reduce((s, t) => s + Number(t.hours ?? 0), 0);
+  const laborCost = timeRows.reduce((s, t) => s + Number(t.hours ?? 0) * Number(t.hourlyCostEur ?? 0), 0);
+  const poCost = linkedPOs.reduce((s, p) => s + Number(p.subtotal ?? p.total ?? 0), 0); // ex. BTW, EUR
+  const looseCost = costRows.reduce((s, c) => s + Number(c.amountEur ?? 0), 0);
+  const materialCost = poCost + looseCost;
+  const ownProductCost = projCost; // kostprijs van eigen producten op de facturen (bestaande engine)
+  const totalCost = laborCost + materialCost + ownProductCost;
+
+  // Doel/omzetbaseline: aanneemprijs indien gezet, anders het offertetotaal (ex. BTW).
+  const estimateSubtotal = estTotals.reduce((s, e) => s + Number(e.subtotalEur ?? 0), 0);
+  const contractPrice = project.contractPriceEur != null ? Number(project.contractPriceEur) : null;
+  const targetRevenue = contractPrice ?? estimateSubtotal;
+  const toInvoice = Math.max(0, targetRevenue - projRevenue);
+
+  // Resultaat: gerealiseerd (gefactureerd − kosten) en verwacht (doel − kosten).
+  const realizedProfit = projRevenue - totalCost;
+  const expectedProfit = targetRevenue - totalCost;
+  const expectedMarginPct = targetRevenue > 0 ? Math.round((expectedProfit / targetRevenue) * 100) : null;
+  const costRatio = targetRevenue > 0 ? totalCost / targetRevenue : null;
+  const resultTone = expectedProfit < 0 ? "danger" : expectedMarginPct != null && expectedMarginPct < 10 ? "warning" : "success";
+
+  // Begroting
+  const budgetTotal = budgetRows.reduce((s, b) => s + Number(b.amountEur ?? 0), 0);
+  const budgetByCat = new Map<string, number>();
+  for (const b of budgetRows) budgetByCat.set(b.category, (budgetByCat.get(b.category) ?? 0) + Number(b.amountEur ?? 0));
+
+  const isConstruction = project.kind === "construction";
+  const PAY_LABEL = { cash: "Contant", invoice: "Per factuur" } as const;
+  const BUDGET_CAT_LABEL: Record<string, string> = {
+    labor: "Arbeid",
+    material: "Materiaal",
+    subcontractor: "Onderaanneming",
+    equipment: "Materieel",
+    other: "Overig",
+  };
+  const workerOptions = workerRows.map((w) => ({
+    value: w.id,
+    label: w.name + (w.role ? ` · ${w.role}` : ""),
+    rate: Number(w.hourlyCostEur ?? 0),
+  }));
+
   const contactOptions: ComboOption[] = contactOpts.map((c) => ({ value: c.id, label: c.name }));
   const ownerOptions: ComboOption[] = ownerOpts.map((u) => ({ value: u.id, label: u.name ?? u.email }));
   const propertyOptions: ComboOption[] = propertyOpts.map((p) => ({ value: p.id, label: p.title }));
@@ -271,18 +369,339 @@ export default async function ProjectDetailPage({
 
       <div className="mb-5 grid grid-cols-2 gap-3 sm:grid-cols-4">
         <StatTile
-          label="Omzet (gefactureerd)"
-          value={`€ ${projRevenue.toLocaleString("nl-NL", { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`}
+          label={contractPrice != null ? "Aanneemprijs" : "Offerte (doel)"}
+          value={formatEUR(targetRevenue)}
+          hint={contractPrice != null ? "afgesproken · ex. BTW" : "offertetotaal · ex. BTW"}
           tone="info"
         />
+        <StatTile label="Gefactureerd" value={formatEUR(projRevenue)} hint="ex. BTW" tone="neutral" />
+        <StatTile label="Nog te factureren" value={formatEUR(toInvoice)} tone={toInvoice > 0 ? "warning" : "neutral"} />
+        <StatTile label="Totale kosten" value={formatEUR(totalCost)} hint="arbeid + inkoop + eigen producten" tone="neutral" />
+        <StatTile label="Arbeid" value={formatEUR(laborCost)} hint={`${laborHours.toLocaleString("nl-NL")} uur`} tone="neutral" />
+        <StatTile label="Inkoop / materiaal" value={formatEUR(materialCost)} hint="gekoppelde inkoop + kostenregels" tone="neutral" />
+        <StatTile label="Eigen producten" value={formatEUR(ownProductCost)} hint="kostprijs op facturen" tone="neutral" />
         <StatTile
-          label="Marge"
-          value={`€ ${projMargin.toLocaleString("nl-NL", { minimumFractionDigits: 0, maximumFractionDigits: 0 })}${projMarginPct != null ? ` · ${projMarginPct}%` : ""}`}
-          tone={projMargin < 0 ? "danger" : "success"}
+          label="Verwacht resultaat"
+          value={`${formatEUR(expectedProfit)}${expectedMarginPct != null ? ` · ${expectedMarginPct}%` : ""}`}
+          hint="doel − totale kosten"
+          tone={resultTone}
         />
-        <StatTile label="Documenten" value={String(linkedDocs.length)} tone="neutral" />
-        <StatTile label="Producten" value={String(projectProducts.length)} tone="neutral" />
       </div>
+
+      {/* ─────────────── Resultaat (P&L) ─────────────── */}
+      <Card className="mb-5">
+        <CardHeader>
+          <CardTitle>Resultaat — zitten we goed?</CardTitle>
+          <span className="text-xs text-muted">begroot → werkelijk → gefactureerd · alle bedragen ex. BTW</span>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <div className="grid gap-3 sm:grid-cols-3">
+            <div className="rounded-lg border bg-background p-3">
+              <p className="text-xs text-muted">Doel (omzet)</p>
+              <p className="text-lg font-semibold tabular-nums">{formatEUR(targetRevenue)}</p>
+            </div>
+            <div className="rounded-lg border bg-background p-3">
+              <p className="text-xs text-muted">Begrote kosten</p>
+              <p className="text-lg font-semibold tabular-nums">{budgetTotal > 0 ? formatEUR(budgetTotal) : "—"}</p>
+            </div>
+            <div className="rounded-lg border bg-background p-3">
+              <p className="text-xs text-muted">Werkelijke kosten</p>
+              <p className="text-lg font-semibold tabular-nums">
+                {formatEUR(totalCost)}
+                {budgetTotal > 0 && (
+                  <span className={`ml-2 text-xs font-normal ${totalCost > budgetTotal ? "text-danger" : "text-success"}`}>
+                    {totalCost > budgetTotal ? "▲ boven" : "▼ onder"} begroting ({formatEUR(Math.abs(totalCost - budgetTotal))})
+                  </span>
+                )}
+              </p>
+            </div>
+          </div>
+          <div className={`rounded-lg p-3 text-sm ${resultTone === "danger" ? "bg-danger/10 text-danger" : resultTone === "warning" ? "bg-warning/10 text-warning" : "bg-success/10 text-success"}`}>
+            <span className="font-semibold">
+              {resultTone === "danger" ? "⚠ Let op — verwacht verlies" : resultTone === "warning" ? "⚠ Krappe marge" : "✓ Op koers"}
+            </span>{" "}
+            Verwacht resultaat {formatEUR(expectedProfit)}
+            {expectedMarginPct != null ? ` (${expectedMarginPct}% marge)` : ""} ·{" "}
+            kosten zijn {costRatio != null ? `${Math.round(costRatio * 100)}%` : "—"} van het doel ·{" "}
+            gerealiseerd (gefactureerd − kosten): {formatEUR(realizedProfit)}.
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* ─────────────── Bouw: begroting, uren, kosten ─────────────── */}
+      <details open={isConstruction} className="group mb-5">
+        <summary className="mb-3 cursor-pointer list-none text-lg font-semibold marker:content-none">
+          <span className="inline-flex items-center gap-2">
+            <span className="text-muted transition group-open:rotate-90">▶</span>
+            Begroting, uren &amp; kosten
+            <span className="text-xs font-normal text-muted">
+              {isConstruction ? "(bouwproject)" : "(klik om te openen)"}
+            </span>
+          </span>
+        </summary>
+
+        <div className="grid gap-5">
+          {/* Begroting */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Begroting</CardTitle>
+              <span className="text-xs text-muted">geraamde kosten vóór uitvoering · ex. BTW</span>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {budgetRows.length > 0 && (
+                <Table>
+                  <THead>
+                    <tr>
+                      <Th>Categorie</Th>
+                      <Th>Omschrijving</Th>
+                      <Th className="text-right">Aantal</Th>
+                      <Th className="text-right">Per eenheid</Th>
+                      <Th className="text-right">Begroot</Th>
+                      <Th />
+                    </tr>
+                  </THead>
+                  <TBody>
+                    {budgetRows.map((b) => (
+                      <Tr key={b.id}>
+                        <Td>{BUDGET_CAT_LABEL[b.category] ?? b.category}</Td>
+                        <Td>{b.description}</Td>
+                        <Td className="text-right tabular-nums text-muted">{b.quantity ? Number(b.quantity).toLocaleString("nl-NL") : "—"}</Td>
+                        <Td className="text-right tabular-nums text-muted">{b.unitPriceEur ? formatEUR(b.unitPriceEur) : "—"}</Td>
+                        <Td className="text-right tabular-nums font-medium">{formatEUR(b.amountEur)}</Td>
+                        <Td className="text-right">
+                          <form action={deleteBudgetLine.bind(null, id, b.id)}>
+                            <SubmitButton size="sm" variant="ghost" className="text-muted" pendingLabel="…">
+                              ×
+                            </SubmitButton>
+                          </form>
+                        </Td>
+                      </Tr>
+                    ))}
+                    <Tr>
+                      <Td className="font-semibold" colSpan={4}>
+                        Totaal begroot
+                      </Td>
+                      <Td className="text-right font-semibold tabular-nums">{formatEUR(budgetTotal)}</Td>
+                      <Td />
+                    </Tr>
+                  </TBody>
+                </Table>
+              )}
+              <form action={addBudgetLine.bind(null, id)} className="grid gap-3 sm:grid-cols-2 lg:grid-cols-[1fr_2fr_0.8fr_0.9fr_0.9fr_auto] lg:items-end">
+                <Field label="Categorie">
+                  <Select name="category" defaultValue="material">
+                    <option value="labor">Arbeid</option>
+                    <option value="material">Materiaal</option>
+                    <option value="subcontractor">Onderaanneming</option>
+                    <option value="equipment">Materieel</option>
+                    <option value="other">Overig</option>
+                  </Select>
+                </Field>
+                <Field label="Omschrijving">
+                  <Input name="description" required placeholder="bijv. tegelwerk badkamer" />
+                </Field>
+                <Field label="Aantal">
+                  <Input name="quantity" inputMode="decimal" placeholder="optioneel" />
+                </Field>
+                <Field label="Per eenheid (€)">
+                  <Input name="unitPriceEur" inputMode="decimal" placeholder="optioneel" />
+                </Field>
+                <Field label="Bedrag (€)" hint="of aantal × eenheid">
+                  <Input name="amountEur" inputMode="decimal" placeholder="0,00" />
+                </Field>
+                <SubmitButton size="sm" variant="secondary" pendingLabel="…">
+                  + Regel
+                </SubmitButton>
+              </form>
+            </CardContent>
+          </Card>
+
+          {/* Uren */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Uren — arbeid</CardTitle>
+              <span className="text-xs text-muted">
+                {laborHours.toLocaleString("nl-NL")} uur · {formatEUR(laborCost)} kosten
+                {project.budgetHours ? ` · begroot ${Number(project.budgetHours).toLocaleString("nl-NL")} u` : ""}
+              </span>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {timeRows.length > 0 && (
+                <Table>
+                  <THead>
+                    <tr>
+                      <Th>Datum</Th>
+                      <Th>Arbeider</Th>
+                      <Th className="text-right">Uren</Th>
+                      <Th className="text-right">Tarief</Th>
+                      <Th className="text-right">Kosten</Th>
+                      <Th>Betaling</Th>
+                      <Th />
+                    </tr>
+                  </THead>
+                  <TBody>
+                    {timeRows.map((t) => (
+                      <Tr key={t.id}>
+                        <Td className="whitespace-nowrap">{new Date(t.date).toLocaleDateString("nl-NL", { day: "numeric", month: "short" })}</Td>
+                        <Td>{t.workerName ?? "—"}{t.note ? <span className="block text-xs text-muted">{t.note}</span> : null}</Td>
+                        <Td className="text-right tabular-nums">{Number(t.hours).toLocaleString("nl-NL")}</Td>
+                        <Td className="text-right tabular-nums text-muted">{formatEUR(t.hourlyCostEur)}</Td>
+                        <Td className="text-right tabular-nums font-medium">{formatEUR(Number(t.hours) * Number(t.hourlyCostEur))}</Td>
+                        <Td><Badge tone={t.paymentMethod === "cash" ? "warning" : "neutral"}>{PAY_LABEL[t.paymentMethod]}</Badge></Td>
+                        <Td className="text-right">
+                          <form action={deleteTimeEntry.bind(null, id, t.id)}>
+                            <SubmitButton size="sm" variant="ghost" className="text-muted" pendingLabel="…">×</SubmitButton>
+                          </form>
+                        </Td>
+                      </Tr>
+                    ))}
+                  </TBody>
+                </Table>
+              )}
+              {workerRows.length === 0 ? (
+                <p className="text-sm text-muted">
+                  Voeg eerst arbeiders toe in <Link href="/ploeg" className="text-accent hover:underline">Ploeg</Link>.
+                </p>
+              ) : (
+                <form action={addTimeEntry.bind(null, id)} className="grid gap-3 sm:grid-cols-2 lg:grid-cols-[1.4fr_0.8fr_0.9fr_1fr_auto] lg:items-end">
+                  <Field label="Arbeider">
+                    <Select name="workerId" required>
+                      {workerOptions.map((w) => (
+                        <option key={w.value} value={w.value}>{w.label}</option>
+                      ))}
+                    </Select>
+                  </Field>
+                  <Field label="Uren">
+                    <Input name="hours" inputMode="decimal" required placeholder="8" />
+                  </Field>
+                  <Field label="Datum">
+                    <Input name="date" type="date" required />
+                  </Field>
+                  <Field label="Betaling">
+                    <Select name="paymentMethod" defaultValue="cash">
+                      <option value="cash">Contant</option>
+                      <option value="invoice">Per factuur</option>
+                    </Select>
+                  </Field>
+                  <SubmitButton size="sm" variant="secondary" pendingLabel="…">+ Uren</SubmitButton>
+                  <Field label="Tarief (€/u) — leeg = standaard" className="lg:col-span-2">
+                    <Input name="hourlyCostEur" inputMode="decimal" placeholder="overschrijf tarief" />
+                  </Field>
+                  <Field label="Notitie" className="lg:col-span-3">
+                    <Input name="note" placeholder="optioneel" />
+                  </Field>
+                </form>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Kosten & inkoop */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Kosten &amp; inkoop</CardTitle>
+              <span className="text-xs text-muted">
+                gekoppelde inkoop {formatEUR(poCost)} + losse kosten {formatEUR(looseCost)} = {formatEUR(materialCost)}
+              </span>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {linkedPOs.length > 0 && (
+                <div>
+                  <p className="mb-1 text-xs font-medium uppercase tracking-wide text-muted">Gekoppelde inkooporders</p>
+                  <Table>
+                    <TBody>
+                      {linkedPOs.map((p) => (
+                        <Tr key={p.id}>
+                          <Td>
+                            <Link href={`/inkooporders/${p.id}`} className="text-accent hover:underline">{p.supplier}</Link>
+                            {p.reference ? <span className="ml-1 text-xs text-muted">{p.reference}</span> : null}
+                          </Td>
+                          <Td className="text-right tabular-nums">{formatEUR(p.subtotal ?? p.total)}</Td>
+                          <Td className="text-right">
+                            <form action={unlinkPurchaseOrder.bind(null, id, p.id)}>
+                              <SubmitButton size="sm" variant="ghost" className="text-muted" pendingLabel="…">ontkoppel</SubmitButton>
+                            </form>
+                          </Td>
+                        </Tr>
+                      ))}
+                    </TBody>
+                  </Table>
+                </div>
+              )}
+              {costRows.length > 0 && (
+                <Table>
+                  <THead>
+                    <tr>
+                      <Th>Datum</Th>
+                      <Th>Categorie</Th>
+                      <Th>Omschrijving</Th>
+                      <Th className="text-right">Bedrag</Th>
+                      <Th>Betaling</Th>
+                      <Th />
+                    </tr>
+                  </THead>
+                  <TBody>
+                    {costRows.map((c) => (
+                      <Tr key={c.id}>
+                        <Td className="whitespace-nowrap">{new Date(c.date).toLocaleDateString("nl-NL", { day: "numeric", month: "short" })}</Td>
+                        <Td>{BUDGET_CAT_LABEL[c.category] ?? c.category}</Td>
+                        <Td>{c.description}{c.supplier ? <span className="block text-xs text-muted">{c.supplier}</span> : null}</Td>
+                        <Td className="text-right tabular-nums font-medium">{formatEUR(c.amountEur)}</Td>
+                        <Td><Badge tone={c.paymentMethod === "cash" ? "warning" : "neutral"}>{PAY_LABEL[c.paymentMethod]}</Badge></Td>
+                        <Td className="text-right">
+                          <form action={deleteProjectCost.bind(null, id, c.id)}>
+                            <SubmitButton size="sm" variant="ghost" className="text-muted" pendingLabel="…">×</SubmitButton>
+                          </form>
+                        </Td>
+                      </Tr>
+                    ))}
+                  </TBody>
+                </Table>
+              )}
+              <form action={addProjectCost.bind(null, id)} className="grid gap-3 sm:grid-cols-2 lg:grid-cols-[0.9fr_1fr_1.6fr_0.9fr_0.9fr_auto] lg:items-end">
+                <Field label="Datum">
+                  <Input name="date" type="date" required />
+                </Field>
+                <Field label="Categorie">
+                  <Select name="category" defaultValue="material">
+                    <option value="material">Materiaal</option>
+                    <option value="subcontractor">Onderaanneming</option>
+                    <option value="equipment">Materieel</option>
+                    <option value="other">Overig</option>
+                  </Select>
+                </Field>
+                <Field label="Omschrijving">
+                  <Input name="description" required placeholder="bijv. tegels + lijm" />
+                </Field>
+                <Field label="Bedrag (€)">
+                  <Input name="amountEur" inputMode="decimal" required placeholder="0,00" />
+                </Field>
+                <Field label="Betaling">
+                  <Select name="paymentMethod" defaultValue="invoice">
+                    <option value="cash">Contant</option>
+                    <option value="invoice">Per factuur</option>
+                  </Select>
+                </Field>
+                <SubmitButton size="sm" variant="secondary" pendingLabel="…">+ Kost</SubmitButton>
+              </form>
+              {unlinkedPOs.length > 0 && (
+                <form action={linkPurchaseOrderToProject.bind(null, id)} className="flex flex-wrap items-end gap-2 border-t pt-3">
+                  <Field label="Bestaande inkooporder koppelen" className="flex-1">
+                    <Select name="purchaseOrderId" defaultValue="">
+                      <option value="">— kies inkooporder —</option>
+                      {unlinkedPOs.map((p) => (
+                        <option key={p.id} value={p.id}>
+                          {p.supplier}{p.reference ? ` · ${p.reference}` : ""} — {formatEUR(p.subtotal ?? p.total)}
+                        </option>
+                      ))}
+                    </Select>
+                  </Field>
+                  <SubmitButton size="sm" variant="secondary" pendingLabel="…">Koppelen</SubmitButton>
+                </form>
+              )}
+            </CardContent>
+          </Card>
+        </div>
+      </details>
 
       <div className="grid gap-5 lg:grid-cols-[1fr_18rem]">
         <Card>
@@ -301,6 +720,28 @@ export default async function ProjectDetailPage({
                     <option value="completed">Afgerond</option>
                     <option value="archived">Gearchiveerd</option>
                   </Select>
+                </Field>
+                <Field label="Soort project" htmlFor="kind" hint="bouw toont uren, kosten & begroting">
+                  <Select id="kind" name="kind" defaultValue={project.kind}>
+                    <option value="sales">Verkoop (producten)</option>
+                    <option value="construction">Bouw / werkzaamheden</option>
+                  </Select>
+                </Field>
+                <Field label="Aanneemprijs (€, ex. BTW)" htmlFor="contractPriceEur" hint="leeg = offertetotaal als doel">
+                  <Input
+                    id="contractPriceEur"
+                    name="contractPriceEur"
+                    inputMode="decimal"
+                    defaultValue={project.contractPriceEur ? String(project.contractPriceEur).replace(".", ",") : ""}
+                  />
+                </Field>
+                <Field label="Begrote uren (optioneel)" htmlFor="budgetHours">
+                  <Input
+                    id="budgetHours"
+                    name="budgetHours"
+                    inputMode="decimal"
+                    defaultValue={project.budgetHours ? String(project.budgetHours).replace(".", ",") : ""}
+                  />
                 </Field>
                 <Field label="Verantwoordelijke" htmlFor="ownerId">
                   <Combobox

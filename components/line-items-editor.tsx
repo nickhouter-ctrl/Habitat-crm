@@ -50,6 +50,7 @@ type Row = {
   taxRate: string;
   category: string;
   productId: string;
+  phase: string;
 };
 
 function emptyRow(category = "materiaal"): Row {
@@ -62,6 +63,7 @@ function emptyRow(category = "materiaal"): Row {
     taxRate: String(vatForCategory(category)),
     category,
     productId: "",
+    phase: "",
   };
 }
 
@@ -75,6 +77,7 @@ function rowToItem(r: Row): DocumentLineItem {
     taxRate: Number(r.taxRate) || 0,
     category: r.category || undefined,
     productId: r.productId || undefined,
+    phase: r.phase.trim() || undefined,
   };
 }
 
@@ -116,6 +119,7 @@ export function LineItemsEditor({
           taxRate: String(it.taxRate ?? 21),
           category: it.category ?? "materiaal",
           productId: it.productId ?? "",
+          phase: it.phase ?? "",
         }))
       : [emptyRow()],
   );
@@ -210,6 +214,7 @@ export function LineItemsEditor({
       taxRate: String(p.vatRate ?? 21),
       category: "materiaal",
       productId: p.id,
+      phase: "",
     };
     setRows((rs) =>
       rs.length === 1 && !rs[0].name.trim() && !rs[0].productId ? [row] : [...rs, row],
@@ -269,6 +274,7 @@ export function LineItemsEditor({
       taxRate: "21",
       category: "transport",
       productId: "",
+      phase: "",
     };
     // Vervang een eventuele bestaande bezorgregel (geen dubbeltelling).
     setRows((rs) => [...rs.filter((r) => !r.name.startsWith("Bezorgkosten")), line]);
@@ -356,9 +362,15 @@ export function LineItemsEditor({
             taxRate: Number(r.taxRate),
             category: r.category,
             productId: r.productId,
+            phase: r.phase.trim() || undefined,
           })),
         )}
       />
+      <datalist id="doc-phase-suggestions">
+        {Array.from(new Set(rows.map((r) => r.phase.trim()).filter(Boolean))).map((p) => (
+          <option key={p} value={p} />
+        ))}
+      </datalist>
 
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div className="flex items-center gap-3">
@@ -434,6 +446,13 @@ export function LineItemsEditor({
                       onChange={(e) => patchRow(i, { description: e.target.value })}
                       placeholder="Extra omschrijving (optioneel)"
                       className="text-xs"
+                    />
+                    <Input
+                      value={r.phase}
+                      onChange={(e) => patchRow(i, { phase: e.target.value })}
+                      placeholder="Fase (optioneel, bv. 1 — Sloop)"
+                      className="mt-1 text-xs"
+                      list="doc-phase-suggestions"
                     />
                     {m != null && (
                       <p

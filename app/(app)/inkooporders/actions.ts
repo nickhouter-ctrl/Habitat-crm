@@ -148,6 +148,17 @@ export async function updatePurchaseOrder(id: string, formData: FormData) {
   redirect(`/inkooporders/${id}`);
 }
 
+/** Koppel deze inkooporder aan een project (of ontkoppel met lege waarde). */
+export async function setPurchaseOrderProject(id: string, formData: FormData) {
+  await requireUser();
+  const raw = String(formData.get("projectId") ?? "").trim();
+  const projectId = raw.length === 36 ? raw : null;
+  await db.update(purchaseOrders).set({ projectId, updatedAt: new Date() }).where(eq(purchaseOrders.id, id));
+  revalidatePath(`/inkooporders/${id}`);
+  revalidatePath("/inkooporders");
+  if (projectId) revalidatePath(`/projects/${projectId}`);
+}
+
 export async function setPurchaseOrderStatus(id: string, status: (typeof PO_STATUSES)[number]) {
   const user = await requireUser();
   const existing = await db.query.purchaseOrders.findFirst({

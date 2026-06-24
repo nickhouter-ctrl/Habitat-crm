@@ -143,6 +143,26 @@ export const activityType = pgEnum("activity_type", [
 export const syncEntity = pgEnum("sync_entity", ["contact", "company", "document"]);
 export const syncDirection = pgEnum("sync_direction", ["pull", "push"]);
 
+/** Betaalwijze van arbeid/kosten op een project: contant of per factuur. */
+export const paymentMethod = pgEnum("payment_method", ["cash", "invoice"]);
+/** Soort project: verkoop (productgedreven) of bouw (werkzaamheden). */
+export const projectKind = pgEnum("project_kind", ["sales", "construction"]);
+/** Categorie van een losse projectkostenregel. */
+export const projectCostCategory = pgEnum("project_cost_category", [
+  "material", // materialen van derden (tegels, lijm, ...)
+  "subcontractor", // onderaannemer
+  "equipment", // huur materieel/gereedschap
+  "other",
+]);
+/** Categorie van een begrotingsregel (incl. arbeid t.o.v. de losse-kosten-categorie). */
+export const budgetCategory = pgEnum("budget_category", [
+  "labor", // arbeid (geraamde uren × tarief)
+  "material", // materialen
+  "subcontractor", // onderaannemer
+  "equipment", // materieel/gereedschap
+  "other",
+]);
+
 /* ---------------------------------------------------------- auth.js tables */
 /* Standard @auth/drizzle-adapter schema, extended with passwordHash + role.   */
 
@@ -454,6 +474,19 @@ export type DocumentLineItem = {
   category?: string;
   /** Optional link to a catalogue product (snapshot of name/price stays on the line). */
   productId?: string;
+  /** Fase-sleutel: koppelt deze regel aan een fase van de offerte (bv. "1"),
+   * zodat we per fase kunnen factureren. Kan vooraf of achteraf toegekend worden. */
+  phase?: string;
+};
+
+/** Geordende fase-definitie op een offerte/factuur (voor naam/volgorde/planning). */
+export type DocumentPhase = {
+  /** Stabiele sleutel die op de regels (`DocumentLineItem.phase`) verwijst. */
+  key: string;
+  label: string;
+  /** Geplande factuurdatum (optioneel) — "YYYY-MM-DD". */
+  plannedDate?: string;
+  note?: string;
 };
 
 export const documents = pgTable(
@@ -479,6 +512,12 @@ export const documents = pgTable(
     totalEur: numeric({ precision: 14, scale: 2 }).notNull().default("0"),
     paidEur: numeric({ precision: 14, scale: 2 }).notNull().default("0"),
     items: jsonb().$type<DocumentLineItem[]>().notNull().default(sql`'[]'::jsonb`),
+    /** Offerte: geordende fase-definities (naam/volgorde/planning). Regels verwijzen
+     * via `DocumentLineItem.phase` naar `key`. Leeg = niet in fases opgedeeld. */
+    phases: jsonb().$type<DocumentPhase[]>(),
+    /** Factuur: welke offerte-fase deze (deel)factuur dekt — zodat de offerte per
+     * fase 'gefactureerd' kan tonen. Null = niet fase-gebaseerd (bv. percentage). */
+    coveredPhase: text(),
     notes: text(),
     /** Sent to the client (status moved to "sent"). */
     sentAt: timestamp({ withTimezone: true }),
@@ -533,6 +572,13 @@ export const projects = pgTable(
       .default(sql`gen_random_uuid()`),
     name: text().notNull(),
     description: text(),
+    /** Soort project: "sales" (productgedreven, default) of "construction" (bouw/werkzaamheden). */
+    kind: projectKind().notNull().default("sales"),
+    /** Afgesproken aanneemprijs (ex. BTW), optioneel. Indien gezet is dit het
+     * omzetdoel; anders valt het doel terug op het offertetotaal. */
+    contractPriceEur: numeric({ precision: 14, scale: 2 }),
+    /** Begrote uren (optioneel) — om uren-voortgang tegen af te zetten. */
+    budgetHours: numeric({ precision: 8, scale: 2 }),
     /** Korte code/sleutel uit Holded (bv. "VER"). */
     code: text(),
     color: text(),
@@ -590,6 +636,8 @@ export const purchaseOrders = pgTable(
       .primaryKey()
       .default(sql`gen_random_uuid()`),
     supplier: text().notNull(),
+    /** Optioneel gekoppeld project — telt dan mee als materiaal/inkoopkost op de klus. */
+    projectId: uuid().references((): AnyPgColumn => projects.id, { onDelete: "set null" }),
     /** Supplier's order / proforma-invoice number. */
     reference: text(),
     status: purchaseOrderStatus().notNull().default("ordered"),
@@ -639,7 +687,121 @@ export const purchaseOrders = pgTable(
     uniqueIndex("purchase_orders_holded_id_idx").on(t.holdedId),
     index("purchase_orders_container_ref_idx").on(t.containerRef),
     index("purchase_orders_shipment_ref_idx").on(t.shipmentRef),
+    index("purchase_orders_project_idx").on(t.projectId),
   ],
+);
+
+/* ----------------------------------------- ploeg, uren & projectkosten (job-costing) */
+
+/**
+ * De ploeg ("de jongens") — arbeiders met een kostentarief per uur. Los van de
+ * CRM-loginaccounts (`users`); dit zijn de uitvoerders op de klus.
+ */
+export const workers = pgTable(
+  "workers",
+  {
+    id: uuid().primaryKey().default(sql`gen_random_uuid()`),
+    name: text().notNull(),
+    /** Functie/rol (bv. tegelzetter, schilder). Vrij veld. */
+    role: text(),
+    /** Kostentarief per uur (ex. BTW) — wat de arbeider ons kost. */
+    hourlyCostEur: numeric({ precision: 8, scale: 2 }),
+    /** Standaard betaalwijze (contant/factuur) — per urenregel te overschrijven. */
+    defaultPaymentMethod: paymentMethod().notNull().default("cash"),
+    active: boolean().notNull().default(true),
+    notes: text(),
+    ...timestamps,
+  },
+  (t) => [index("workers_active_idx").on(t.active)],
+);
+
+/**
+ * Urenregistratie per project. Arbeidskost van een regel = `hours × hourlyCostEur`
+ * (tarief-snapshot, los van latere tariefwijzigingen). `paymentMethod` is
+ * informatief + afrekenstatus (`paidAt`); het telt nooit dubbel — arbeid wordt
+ * uitsluitend via deze tabel als kost geteld.
+ */
+export const timeEntries = pgTable(
+  "time_entries",
+  {
+    id: uuid().primaryKey().default(sql`gen_random_uuid()`),
+    projectId: uuid()
+      .notNull()
+      .references(() => projects.id, { onDelete: "cascade" }),
+    workerId: uuid().references(() => workers.id, { onDelete: "set null" }),
+    /** Naam-snapshot (voor als de worker later verwijderd/gewijzigd wordt). */
+    workerName: text(),
+    date: date().notNull(),
+    hours: numeric({ precision: 6, scale: 2 }).notNull(),
+    /** Tarief-snapshot op het moment van invoeren. */
+    hourlyCostEur: numeric({ precision: 8, scale: 2 }).notNull().default("0"),
+    paymentMethod: paymentMethod().notNull().default("cash"),
+    /** Gezet zodra afgerekend (contant betaald / factuur voldaan). */
+    paidAt: timestamp({ withTimezone: true }),
+    note: text(),
+    ...timestamps,
+  },
+  (t) => [
+    index("time_entries_project_idx").on(t.projectId),
+    index("time_entries_worker_idx").on(t.workerId),
+    index("time_entries_date_idx").on(t.date),
+  ],
+);
+
+/**
+ * Losse projectkosten die niet via een gekoppelde inkooporder lopen — bv.
+ * contant gekochte tegels/lijm of een onderaannemer. Bedragen ex. BTW.
+ */
+export const projectCosts = pgTable(
+  "project_costs",
+  {
+    id: uuid().primaryKey().default(sql`gen_random_uuid()`),
+    projectId: uuid()
+      .notNull()
+      .references(() => projects.id, { onDelete: "cascade" }),
+    date: date().notNull(),
+    category: projectCostCategory().notNull().default("material"),
+    description: text().notNull(),
+    supplier: text(),
+    /** Bedrag ex. BTW. */
+    amountEur: numeric({ precision: 14, scale: 2 }).notNull().default("0"),
+    paymentMethod: paymentMethod().notNull().default("invoice"),
+    paidAt: timestamp({ withTimezone: true }),
+    note: text(),
+    ...timestamps,
+  },
+  (t) => [
+    index("project_costs_project_idx").on(t.projectId),
+    index("project_costs_date_idx").on(t.date),
+  ],
+);
+
+/**
+ * Begroting per project: geraamde kosten (en optioneel prijs) per regel, vóór de
+ * uitvoering. Som van de regels = begrote kosten; afgezet tegen de werkelijke
+ * kosten (uren + inkoop + materiaal) en de aanneemprijs/offerte op het dashboard.
+ * Bedragen ex. BTW.
+ */
+export const projectBudgetLines = pgTable(
+  "project_budget_lines",
+  {
+    id: uuid().primaryKey().default(sql`gen_random_uuid()`),
+    projectId: uuid()
+      .notNull()
+      .references(() => projects.id, { onDelete: "cascade" }),
+    category: budgetCategory().notNull().default("material"),
+    description: text().notNull(),
+    /** Aantal (bv. geraamde uren of stuks) — optioneel. */
+    quantity: numeric({ precision: 12, scale: 2 }),
+    /** Prijs per eenheid (ex. BTW) — optioneel. */
+    unitPriceEur: numeric({ precision: 14, scale: 2 }),
+    /** Begroot bedrag (ex. BTW). Indien quantity×unitPrice ingevuld is, gelijk daaraan. */
+    amountEur: numeric({ precision: 14, scale: 2 }).notNull().default("0"),
+    sortOrder: integer().notNull().default(0),
+    note: text(),
+    ...timestamps,
+  },
+  (t) => [index("project_budget_lines_project_idx").on(t.projectId)],
 );
 
 /* ----------------------------------------------- quote requests (van website) */
@@ -883,6 +1045,31 @@ export const projectsRelations = relations(projects, ({ one, many }) => ({
   contact: one(contacts, { fields: [projects.contactId], references: [contacts.id] }),
   property: one(properties, { fields: [projects.propertyId], references: [properties.id] }),
   documents: many(documents),
+  timeEntries: many(timeEntries),
+  costs: many(projectCosts),
+  budgetLines: many(projectBudgetLines),
+  purchaseOrders: many(purchaseOrders),
+}));
+
+export const projectBudgetLinesRelations = relations(projectBudgetLines, ({ one }) => ({
+  project: one(projects, { fields: [projectBudgetLines.projectId], references: [projects.id] }),
+}));
+
+export const workersRelations = relations(workers, ({ many }) => ({
+  timeEntries: many(timeEntries),
+}));
+
+export const timeEntriesRelations = relations(timeEntries, ({ one }) => ({
+  project: one(projects, { fields: [timeEntries.projectId], references: [projects.id] }),
+  worker: one(workers, { fields: [timeEntries.workerId], references: [workers.id] }),
+}));
+
+export const projectCostsRelations = relations(projectCosts, ({ one }) => ({
+  project: one(projects, { fields: [projectCosts.projectId], references: [projects.id] }),
+}));
+
+export const purchaseOrdersRelations = relations(purchaseOrders, ({ one }) => ({
+  project: one(projects, { fields: [purchaseOrders.projectId], references: [projects.id] }),
 }));
 
 export const activitiesRelations = relations(activities, ({ one }) => ({
@@ -910,6 +1097,14 @@ export type PurchaseOrder = typeof purchaseOrders.$inferSelect;
 export type NewPurchaseOrder = typeof purchaseOrders.$inferInsert;
 export type Project = typeof projects.$inferSelect;
 export type NewProject = typeof projects.$inferInsert;
+export type Worker = typeof workers.$inferSelect;
+export type NewWorker = typeof workers.$inferInsert;
+export type TimeEntry = typeof timeEntries.$inferSelect;
+export type NewTimeEntry = typeof timeEntries.$inferInsert;
+export type ProjectCost = typeof projectCosts.$inferSelect;
+export type NewProjectCost = typeof projectCosts.$inferInsert;
+export type ProjectBudgetLine = typeof projectBudgetLines.$inferSelect;
+export type NewProjectBudgetLine = typeof projectBudgetLines.$inferInsert;
 export type Activity = typeof activities.$inferSelect;
 export type HoldedSyncMap = typeof holdedSyncMap.$inferSelect;
 export type WebhookEvent = typeof webhookEvents.$inferSelect;

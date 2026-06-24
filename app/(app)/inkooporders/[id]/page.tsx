@@ -1,4 +1,4 @@
-import { and, eq, ilike, inArray, isNotNull } from "drizzle-orm";
+import { and, asc, eq, ilike, inArray, isNotNull } from "drizzle-orm";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
@@ -11,6 +11,7 @@ import {
   CardTitle,
   LinkButton,
   PageHeader,
+  Select,
   TBody,
   Table,
   Td,
@@ -19,7 +20,7 @@ import {
   Tr,
 } from "@/components/ui";
 import { db } from "@/lib/db";
-import { products, purchaseOrders } from "@/lib/db/schema";
+import { products, projects, purchaseOrders } from "@/lib/db/schema";
 import { nextSequentialSku } from "@/lib/products";
 import {
   formatMoney,
@@ -37,6 +38,7 @@ import {
   markPurchaseOrderPaid,
   pushPurchaseOrderToHolded,
   regeneratePurchaseOrderPdfs,
+  setPurchaseOrderProject,
   setPurchaseOrderStatus,
 } from "../actions";
 
@@ -58,6 +60,13 @@ export default async function PurchaseOrderPage({ params }: { params: Promise<{ 
   const { id } = await params;
   const po = await db.query.purchaseOrders.findFirst({ where: eq(purchaseOrders.id, id) });
   if (!po) notFound();
+
+  // Projecten om deze inkoop aan te koppelen (telt dan mee als materiaalkost).
+  const projectRows = await db
+    .select({ id: projects.id, name: projects.name })
+    .from(projects)
+    .where(eq(projects.status, "active"))
+    .orderBy(asc(projects.name));
 
   const items = parsePoLineItems(po.items);
   const linkedIds = items.map((i) => i.productId).filter(Boolean) as string[];
@@ -284,6 +293,32 @@ export default async function PurchaseOrderPage({ params }: { params: Promise<{ 
                   Bij ‘Ontvangen’ worden de aantallen van gekoppelde producten bij de voorraad opgeteld.
                 </p>
               )}
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Project</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-2">
+              <form action={setPurchaseOrderProject.bind(null, id)} className="flex items-end gap-2">
+                <div className="flex-1">
+                  <Select name="projectId" defaultValue={po.projectId ?? ""}>
+                    <option value="">— geen project —</option>
+                    {projectRows.map((p) => (
+                      <option key={p.id} value={p.id}>
+                        {p.name}
+                      </option>
+                    ))}
+                  </Select>
+                </div>
+                <SubmitButton size="sm" variant="secondary" pendingLabel="…">
+                  Koppelen
+                </SubmitButton>
+              </form>
+              <p className="text-xs text-muted">
+                Gekoppeld aan een project telt deze inkoop mee als materiaalkost op dat project.
+              </p>
             </CardContent>
           </Card>
 
