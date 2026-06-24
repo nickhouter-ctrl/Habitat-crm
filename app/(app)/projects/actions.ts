@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { eq } from "drizzle-orm";
+import { asc, eq } from "drizzle-orm";
 import { z } from "zod";
 
 import { auth } from "@/auth";
@@ -11,11 +11,16 @@ import {
   documents,
   projectBudgetLines,
   projectCosts,
+  projectPhases,
   projects,
   purchaseOrders,
   timeEntries,
   workers,
+  type DocumentLineItem,
+  type DocumentPhase,
 } from "@/lib/db/schema";
+import { computeTotals } from "@/lib/documents";
+import { insertNumberedDocument } from "@/lib/doc-number";
 
 async function requireUser() {
   const session = await auth();
@@ -76,6 +81,7 @@ const updateSchema = z.object({
   kind: z.enum(["sales", "construction"]).default("sales"),
   contractPriceEur: z.string().trim().optional(),
   budgetHours: z.string().trim().optional(),
+  contingencyPct: z.string().trim().optional(),
   contactId: z.string().trim().optional(),
   ownerId: z.string().trim().optional(),
   propertyId: z.string().trim().optional(),
@@ -105,6 +111,7 @@ export async function updateProject(id: string, formData: FormData) {
       kind: d.kind,
       contractPriceEur: moneyOrNull(d.contractPriceEur),
       budgetHours: moneyOrNull(d.budgetHours),
+      contingencyPct: moneyOrNull(d.contingencyPct),
       contactId: uuidOrNull(d.contactId),
       ownerId: uuidOrNull(d.ownerId),
       propertyId: uuidOrNull(d.propertyId),
@@ -243,15 +250,19 @@ export async function unlinkPurchaseOrder(projectId: string, poId: string) {
 /* ------------------------------------------------------------- begroting */
 
 const budgetSchema = z.object({
-  category: z.enum(["labor", "material", "subcontractor", "equipment", "other"]).default("material"),
+  category: z.enum(["labor", "material", "subcontractor", "equipment", "other"]).default("other"),
+  section: z.string().trim().optional(),
+  phase: z.string().trim().optional(),
   description: z.string().trim().min(1, "Omschrijving is verplicht"),
   quantity: z.string().trim().optional(),
   unitPriceEur: z.string().trim().optional(),
   amountEur: z.string().trim().optional(),
+  estimatedCostEur: z.string().trim().optional(),
+  isStelpost: z.union([z.literal("on"), z.literal("")]).optional(),
   note: z.string().trim().optional(),
 });
 
-/** Begroot bedrag: qty×eenheidsprijs indien beide ingevuld, anders het losse bedrag. */
+/** Targetprijs: qty×eenheidsprijs indien beide ingevuld, anders het losse bedrag. */
 function budgetAmount(qty: string | null, unit: string | null, amount: string | null): string {
   if (qty != null && unit != null) return String(Math.round(Number(qty) * Number(unit) * 100) / 100);
   return amount ?? "0";
@@ -267,10 +278,14 @@ export async function addBudgetLine(projectId: string, formData: FormData) {
   await db.insert(projectBudgetLines).values({
     projectId,
     category: d.category,
+    section: d.section || null,
+    phase: d.phase || null,
     description: d.description,
     quantity: qty,
     unitPriceEur: unit,
     amountEur: budgetAmount(qty, unit, moneyOrNull(d.amountEur)),
+    estimatedCostEur: moneyOrNull(d.estimatedCostEur),
+    isStelpost: d.isStelpost === "on",
     note: d.note || null,
   });
   revalidatePath(`/projects/${projectId}`);
@@ -280,4 +295,127 @@ export async function deleteBudgetLine(projectId: string, lineId: string) {
   await requireUser();
   await db.delete(projectBudgetLines).where(eq(projectBudgetLines.id, lineId));
   revalidatePath(`/projects/${projectId}`);
+}
+
+/* ------------------------------------------------------------- projectfases */
+
+const phaseSchema = z.object({
+  name: z.string().trim().min(1, "Naam is verplicht"),
+  description: z.string().trim().optional(),
+  plannedWeeks: z.string().trim().optional(),
+  sortOrder: z.string().trim().optional(),
+});
+
+export async function addProjectPhase(projectId: string, formData: FormData) {
+  await requireUser();
+  const parsed = phaseSchema.safeParse(Object.fromEntries(formData));
+  if (!parsed.success) throw new Error(parsed.error.issues.map((i) => i.message).join(", "));
+  const d = parsed.data;
+  // Nieuwe fase achteraan tenzij expliciet een volgorde is meegegeven.
+  const count = await db.$count(projectPhases, eq(projectPhases.projectId, projectId));
+  await db.insert(projectPhases).values({
+    projectId,
+    name: d.name,
+    description: d.description || null,
+    plannedWeeks: d.plannedWeeks || null,
+    sortOrder: d.sortOrder ? Number(d.sortOrder) : count,
+  });
+  revalidatePath(`/projects/${projectId}`);
+}
+
+export async function updateProjectPhase(projectId: string, phaseId: string, formData: FormData) {
+  await requireUser();
+  const parsed = phaseSchema.safeParse(Object.fromEntries(formData));
+  if (!parsed.success) throw new Error(parsed.error.issues.map((i) => i.message).join(", "));
+  const d = parsed.data;
+  await db
+    .update(projectPhases)
+    .set({
+      name: d.name,
+      description: d.description || null,
+      plannedWeeks: d.plannedWeeks || null,
+      sortOrder: d.sortOrder ? Number(d.sortOrder) : undefined,
+      updatedAt: new Date(),
+    })
+    .where(eq(projectPhases.id, phaseId));
+  revalidatePath(`/projects/${projectId}`);
+}
+
+export async function deleteProjectPhase(projectId: string, phaseId: string) {
+  await requireUser();
+  await db.delete(projectPhases).where(eq(projectPhases.id, phaseId));
+  revalidatePath(`/projects/${projectId}`);
+}
+
+/* ------------------------------------------ offerte genereren uit de begroting */
+
+/**
+ * Maakt een concept-offerte uit de begroting: elke begrotingsregel wordt een
+ * offerteregel (targetprijs = stuksprijs), met de fase ingevuld zodat je daarna
+ * per fase kunt factureren. De projectfases (naam + omschrijving) komen als
+ * `phases` op het document; een eventueel onvoorzien-% wordt als slotregel
+ * toegevoegd. Koppelt de offerte meteen aan het project.
+ */
+export async function createEstimateFromBudget(projectId: string) {
+  await requireUser();
+  const project = await db.query.projects.findFirst({ where: eq(projects.id, projectId) });
+  if (!project) return;
+  const [lines, phaseRows] = await Promise.all([
+    db
+      .select()
+      .from(projectBudgetLines)
+      .where(eq(projectBudgetLines.projectId, projectId))
+      .orderBy(asc(projectBudgetLines.sortOrder), asc(projectBudgetLines.createdAt)),
+    db.select().from(projectPhases).where(eq(projectPhases.projectId, projectId)).orderBy(asc(projectPhases.sortOrder)),
+  ]);
+  if (lines.length === 0) redirect(`/projects/${projectId}?begroting=leeg`);
+
+  const items: DocumentLineItem[] = lines.map((l) => ({
+    name: l.description,
+    description: l.section ?? undefined,
+    units: 1,
+    price: Number(l.amountEur ?? 0),
+    taxRate: 21,
+    category: l.category === "labor" ? "arbeid" : "materiaal",
+    phase: l.phase ?? undefined,
+  }));
+
+  // Onvoorzien als slotregel (percentage over het subtotaal van de regels).
+  const pct = Number(project.contingencyPct ?? 0);
+  if (pct > 0) {
+    const sub = items.reduce((s, it) => s + (Number(it.price) || 0) * (Number(it.units) || 0), 0);
+    items.push({
+      name: `Onvoorzien (${pct}%)`,
+      units: 1,
+      price: Math.round(sub * (pct / 100) * 100) / 100,
+      taxRate: 21,
+      category: "materiaal",
+    });
+  }
+
+  const phases: DocumentPhase[] = phaseRows.map((p) => ({
+    key: p.name,
+    label: p.name,
+    note: p.description ?? undefined,
+  }));
+
+  const totals = computeTotals(items);
+  const round2 = (n: number) => (Math.round(n * 100) / 100).toFixed(2);
+  const { id } = await insertNumberedDocument("estimate", {
+    kind: "estimate",
+    status: "draft",
+    title: `Offerte ${project.name}`,
+    contactId: project.contactId,
+    projectId,
+    propertyId: project.propertyId,
+    issueDate: new Date().toISOString().slice(0, 10),
+    currency: "EUR",
+    subtotalEur: round2(totals.subtotal),
+    taxEur: round2(totals.tax),
+    totalEur: round2(totals.total),
+    items,
+    phases: phases.length > 0 ? phases : null,
+  });
+  revalidatePath(`/projects/${projectId}`);
+  redirect(`/documents/${id}/edit`);
 }

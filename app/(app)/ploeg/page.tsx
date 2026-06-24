@@ -65,7 +65,7 @@ export default async function PloegPage() {
             <Field label="Uurtarief (€, kostprijs)" htmlFor="w-rate">
               <Input id="w-rate" name="hourlyCostEur" inputMode="decimal" placeholder="25,00" />
             </Field>
-            <Field label="Betaalwijze" htmlFor="w-pay">
+            <Field label="Standaard betaalwijze" htmlFor="w-pay" hint="alleen een voorinvulling — per urenregel kies je contant of factuur">
               <Select id="w-pay" name="defaultPaymentMethod" defaultValue="cash">
                 <option value="cash">Contant</option>
                 <option value="invoice">Per factuur</option>
@@ -107,7 +107,7 @@ export default async function PloegPage() {
                     defaultValue={w.hourlyCostEur ? String(w.hourlyCostEur).replace(".", ",") : ""}
                   />
                 </Field>
-                <Field label="Betaalwijze">
+                <Field label="Standaard betaalwijze">
                   <Select name="defaultPaymentMethod" defaultValue={w.defaultPaymentMethod}>
                     <option value="cash">Contant</option>
                     <option value="invoice">Per factuur</option>

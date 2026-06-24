@@ -33,6 +33,7 @@ import {
   products,
   projectBudgetLines,
   projectCosts,
+  projectPhases,
   projects,
   properties,
   purchaseOrders,
@@ -45,11 +46,14 @@ import { formatEUR } from "@/lib/utils";
 import {
   addBudgetLine,
   addProjectCost,
+  addProjectPhase,
   addTimeEntry,
   attachDocumentToProject,
+  createEstimateFromBudget,
   deleteBudgetLine,
   deleteProject,
   deleteProjectCost,
+  deleteProjectPhase,
   deleteTimeEntry,
   linkPurchaseOrderToProject,
   setProjectStatus,
@@ -110,14 +114,16 @@ export default async function ProjectDetailPage({
       .limit(500),
   ]);
 
-  // Marge per project (intern): omzet − kostprijs van factuurregels (facturen − creditnota's).
-  const invoiceDocs = await db
-    .select({ id: documents.id, kind: documents.kind, subtotalEur: documents.subtotalEur, items: documents.items })
+  // Marge per project (intern): omzet − kostprijs van regels. We halen ook de
+  // OFFERTE (estimate) op, zodat de prognose de productkostprijs op de offerte
+  // meeneemt — ook vóór er gefactureerd is (anders lijkt de marge 100%).
+  const marginDocs = await db
+    .select({ id: documents.id, kind: documents.kind, status: documents.status, subtotalEur: documents.subtotalEur, items: documents.items })
     .from(documents)
-    .where(and(eq(documents.projectId, id), inArray(documents.kind, ["invoice", "creditnote"])));
+    .where(and(eq(documents.projectId, id), inArray(documents.kind, ["estimate", "invoice", "creditnote"])));
   const allPids = new Set<string>();
   const allSkus = new Set<string>();
-  for (const d of invoiceDocs) {
+  for (const d of marginDocs) {
     for (const it of normalizeDocItems(d.items)) {
       if (it.productId) allPids.add(it.productId);
       if (it.description?.trim()) allSkus.add(it.description.trim());
@@ -137,24 +143,34 @@ export default async function ProjectDetailPage({
   const pCostBySku = new Map(
     projCostRows.filter((p) => p.sku).map((p) => [p.sku as string, Number(p.costEur ?? 0)]),
   );
-  let projRevenue = 0;
-  let projCost = 0;
-  // Marge per factuur/creditnota (omzet ex. BTW − kostprijs van de regels).
-  const marginByDoc = new Map<string, { margin: number; pct: number | null }>();
-  for (const d of invoiceDocs) {
-    const rev = Number(d.subtotalEur ?? 0);
+  const lineCost = (items: unknown) => {
     let cost = 0;
-    for (const it of normalizeDocItems(d.items)) {
+    for (const it of normalizeDocItems(items)) {
       const c =
         (it.productId ? pCostById.get(it.productId) : undefined) ??
         (it.description ? pCostBySku.get(it.description.trim()) : undefined);
       if (c != null && c > 0) cost += c * (Number(it.units) || 0);
+    }
+    return cost;
+  };
+  let projRevenue = 0;
+  let projCost = 0; // kostprijs eigen producten op facturen (gerealiseerd)
+  let offerteProductCost = 0; // kostprijs eigen producten op de offerte(s)
+  const marginByDoc = new Map<string, { margin: number; pct: number | null }>();
+  for (const d of marginDocs) {
+    const rev = Number(d.subtotalEur ?? 0);
+    const cost = lineCost(d.items);
+    if (d.kind === "estimate") {
+      if (d.status !== "void" && d.status !== "rejected") offerteProductCost += cost;
+      continue;
     }
     marginByDoc.set(d.id, { margin: rev - cost, pct: rev > 0 ? Math.round(((rev - cost) / rev) * 100) : null });
     const sign = d.kind === "creditnote" ? -1 : 1;
     projRevenue += sign * rev;
     projCost += sign * cost;
   }
+  // invoiceDocs = alleen facturen/creditnota's (voor de gefactureerd-lijst onderaan).
+  const invoiceDocs = marginDocs.filter((d) => d.kind !== "estimate");
   const projMargin = projRevenue - projCost;
   const projMarginPct = projRevenue > 0 ? Math.round((projMargin / projRevenue) * 100) : null;
 
@@ -231,7 +247,6 @@ export default async function ProjectDetailPage({
     .filter((p) => p.reservedNet > 0)
     .sort((a, b) => b.reservedNet - a.reservedNet);
   const soldProducts = aggList.filter((p) => p.sold !== 0).sort((a, b) => b.sold - a.sold);
-  const projectProducts = aggList.filter((p) => p.reservedNet > 0 || p.sold !== 0);
 
   // Een offerte die al tot een factuur (zelfde bedrag) heeft geleid telt niet
   // meer als reservering — toon 'm dan als "Gefactureerd" zonder omzet-knop.
@@ -242,7 +257,7 @@ export default async function ProjectDetailPage({
     invoiceTotalsForConv.some((t) => Math.abs(t - total) <= 0.02);
 
   // ─────────── Job-costing: uren (arbeid), kosten/inkoop, begroting, doel ───────────
-  const [timeRows, costRows, budgetRows, linkedPOs, workerRows, unlinkedPOs, estTotals] =
+  const [timeRows, costRows, budgetRows, linkedPOs, workerRows, unlinkedPOs, estTotals, phaseRows] =
     await Promise.all([
       db.select().from(timeEntries).where(eq(timeEntries.projectId, id)).orderBy(desc(timeEntries.date)),
       db.select().from(projectCosts).where(eq(projectCosts.projectId, id)).orderBy(desc(projectCosts.date)),
@@ -270,6 +285,7 @@ export default async function ProjectDetailPage({
         .select({ subtotalEur: documents.subtotalEur })
         .from(documents)
         .where(and(eq(documents.projectId, id), eq(documents.kind, "estimate"))),
+      db.select().from(projectPhases).where(eq(projectPhases.projectId, id)).orderBy(asc(projectPhases.sortOrder)),
     ]);
 
   const laborHours = timeRows.reduce((s, t) => s + Number(t.hours ?? 0), 0);
@@ -277,26 +293,39 @@ export default async function ProjectDetailPage({
   const poCost = linkedPOs.reduce((s, p) => s + Number(p.subtotal ?? p.total ?? 0), 0); // ex. BTW, EUR
   const looseCost = costRows.reduce((s, c) => s + Number(c.amountEur ?? 0), 0);
   const materialCost = poCost + looseCost;
-  const ownProductCost = projCost; // kostprijs van eigen producten op de facturen (bestaande engine)
-  const totalCost = laborCost + materialCost + ownProductCost;
 
-  // Doel/omzetbaseline: aanneemprijs indien gezet, anders het offertetotaal (ex. BTW).
+  // Eigen-productkost: gerealiseerd = op facturen; verwacht = het meest complete
+  // beeld (offerte als die hoger is dan wat al gefactureerd is). Voorkomt zowel
+  // "100% marge" (offerte nog niet gefactureerd) als dubbeltelling.
+  const ownProductCostRealized = projCost;
+  const ownProductCostExpected = Math.max(projCost, offerteProductCost);
+  const realizedCost = laborCost + materialCost + ownProductCostRealized;
+  const totalCost = laborCost + materialCost + ownProductCostExpected; // verwachte totale kosten
+
+  // Begroting: targetprijzen (verkoop) + geraamde kosten per onderdeel.
+  const budgetTargetBase = budgetRows.reduce((s, b) => s + Number(b.amountEur ?? 0), 0);
+  const budgetCostTotal = budgetRows.reduce((s, b) => s + Number(b.estimatedCostEur ?? 0), 0);
+  const contingencyPct = project.contingencyPct != null ? Number(project.contingencyPct) : 0;
+  const contingencyAmt = contingencyPct > 0 ? Math.round(budgetTargetBase * (contingencyPct / 100) * 100) / 100 : 0;
+  const budgetTargetTotal = budgetTargetBase + contingencyAmt;
+
+  // Doel/omzetbaseline: aanneemprijs > begroting-targettotaal > offertetotaal.
+  // Is er geen expliciet doel maar wél al gefactureerd, dan is het doel minstens
+  // wat er gefactureerd is (anders zou het doel 0 zijn naast 40k omzet).
   const estimateSubtotal = estTotals.reduce((s, e) => s + Number(e.subtotalEur ?? 0), 0);
   const contractPrice = project.contractPriceEur != null ? Number(project.contractPriceEur) : null;
-  const targetRevenue = contractPrice ?? estimateSubtotal;
+  const explicitTarget =
+    contractPrice ?? (budgetTargetTotal > 0 ? budgetTargetTotal : estimateSubtotal > 0 ? estimateSubtotal : null);
+  const targetRevenue = explicitTarget != null ? Math.max(explicitTarget, projRevenue) : projRevenue;
+  const targetIsImplicit = explicitTarget == null;
   const toInvoice = Math.max(0, targetRevenue - projRevenue);
 
-  // Resultaat: gerealiseerd (gefactureerd − kosten) en verwacht (doel − kosten).
-  const realizedProfit = projRevenue - totalCost;
+  // Resultaat: gerealiseerd (gefactureerd − gerealiseerde kosten) en verwacht (doel − verwachte kosten).
+  const realizedProfit = projRevenue - realizedCost;
   const expectedProfit = targetRevenue - totalCost;
   const expectedMarginPct = targetRevenue > 0 ? Math.round((expectedProfit / targetRevenue) * 100) : null;
   const costRatio = targetRevenue > 0 ? totalCost / targetRevenue : null;
   const resultTone = expectedProfit < 0 ? "danger" : expectedMarginPct != null && expectedMarginPct < 10 ? "warning" : "success";
-
-  // Begroting
-  const budgetTotal = budgetRows.reduce((s, b) => s + Number(b.amountEur ?? 0), 0);
-  const budgetByCat = new Map<string, number>();
-  for (const b of budgetRows) budgetByCat.set(b.category, (budgetByCat.get(b.category) ?? 0) + Number(b.amountEur ?? 0));
 
   const isConstruction = project.kind === "construction";
   const PAY_LABEL = { cash: "Contant", invoice: "Per factuur" } as const;
@@ -307,6 +336,15 @@ export default async function ProjectDetailPage({
     equipment: "Materieel",
     other: "Overig",
   };
+  // Begroting groeperen: per fase → per sectie.
+  const phaseNames = phaseRows.map((p) => p.name);
+  const budgetGroupKeys = Array.from(
+    new Set([...phaseNames, ...budgetRows.map((b) => (b.phase ?? "").trim())]),
+  ).filter((k) => k !== "" || budgetRows.some((b) => !(b.phase ?? "").trim()));
+  const budgetByPhase = (phase: string) =>
+    budgetRows.filter((b) => (b.phase ?? "").trim() === phase);
+  const begrootMarge = budgetTargetBase - budgetCostTotal;
+  const begrootMargePct = budgetTargetBase > 0 ? Math.round((begrootMarge / budgetTargetBase) * 100) : null;
   const workerOptions = workerRows.map((w) => ({
     value: w.id,
     label: w.name + (w.role ? ` · ${w.role}` : ""),
@@ -369,21 +407,26 @@ export default async function ProjectDetailPage({
 
       <div className="mb-5 grid grid-cols-2 gap-3 sm:grid-cols-4">
         <StatTile
-          label={contractPrice != null ? "Aanneemprijs" : "Offerte (doel)"}
+          label={contractPrice != null ? "Aanneemprijs" : targetIsImplicit ? "Doel (= gefactureerd)" : "Offerte (doel)"}
           value={formatEUR(targetRevenue)}
-          hint={contractPrice != null ? "afgesproken · ex. BTW" : "offertetotaal · ex. BTW"}
+          hint={contractPrice != null ? "afgesproken · ex. BTW" : targetIsImplicit ? "nog geen offerte/aanneemprijs" : "offertetotaal · ex. BTW"}
           tone="info"
         />
         <StatTile label="Gefactureerd" value={formatEUR(projRevenue)} hint="ex. BTW" tone="neutral" />
         <StatTile label="Nog te factureren" value={formatEUR(toInvoice)} tone={toInvoice > 0 ? "warning" : "neutral"} />
-        <StatTile label="Totale kosten" value={formatEUR(totalCost)} hint="arbeid + inkoop + eigen producten" tone="neutral" />
+        <StatTile label="Totale kosten (verwacht)" value={formatEUR(totalCost)} hint="arbeid + inkoop + eigen producten" tone="neutral" />
         <StatTile label="Arbeid" value={formatEUR(laborCost)} hint={`${laborHours.toLocaleString("nl-NL")} uur`} tone="neutral" />
         <StatTile label="Inkoop / materiaal" value={formatEUR(materialCost)} hint="gekoppelde inkoop + kostenregels" tone="neutral" />
-        <StatTile label="Eigen producten" value={formatEUR(ownProductCost)} hint="kostprijs op facturen" tone="neutral" />
+        <StatTile
+          label="Eigen producten"
+          value={formatEUR(ownProductCostExpected)}
+          hint={offerteProductCost > projCost ? "kostprijs op offerte" : "kostprijs op facturen"}
+          tone="neutral"
+        />
         <StatTile
           label="Verwacht resultaat"
           value={`${formatEUR(expectedProfit)}${expectedMarginPct != null ? ` · ${expectedMarginPct}%` : ""}`}
-          hint="doel − totale kosten"
+          hint="doel − verwachte kosten"
           tone={resultTone}
         />
       </div>
@@ -402,15 +445,15 @@ export default async function ProjectDetailPage({
             </div>
             <div className="rounded-lg border bg-background p-3">
               <p className="text-xs text-muted">Begrote kosten</p>
-              <p className="text-lg font-semibold tabular-nums">{budgetTotal > 0 ? formatEUR(budgetTotal) : "—"}</p>
+              <p className="text-lg font-semibold tabular-nums">{budgetCostTotal > 0 ? formatEUR(budgetCostTotal) : "—"}</p>
             </div>
             <div className="rounded-lg border bg-background p-3">
               <p className="text-xs text-muted">Werkelijke kosten</p>
               <p className="text-lg font-semibold tabular-nums">
-                {formatEUR(totalCost)}
-                {budgetTotal > 0 && (
-                  <span className={`ml-2 text-xs font-normal ${totalCost > budgetTotal ? "text-danger" : "text-success"}`}>
-                    {totalCost > budgetTotal ? "▲ boven" : "▼ onder"} begroting ({formatEUR(Math.abs(totalCost - budgetTotal))})
+                {formatEUR(realizedCost)}
+                {budgetCostTotal > 0 && (
+                  <span className={`ml-2 text-xs font-normal ${realizedCost > budgetCostTotal ? "text-danger" : "text-success"}`}>
+                    {realizedCost > budgetCostTotal ? "▲ boven" : "▼ onder"} begroting ({formatEUR(Math.abs(realizedCost - budgetCostTotal))})
                   </span>
                 )}
               </p>
@@ -441,55 +484,176 @@ export default async function ProjectDetailPage({
         </summary>
 
         <div className="grid gap-5">
+          {/* Fases */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Fases</CardTitle>
+              <span className="text-xs text-muted">wat er per fase gebeurt — sturen de begroting & facturatie aan</span>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              {phaseRows.length > 0 && (
+                <div className="space-y-2">
+                  {phaseRows.map((ph) => (
+                    <div key={ph.id} className="rounded-md border bg-background px-3 py-2">
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="min-w-0">
+                          <p className="font-medium">{ph.name}</p>
+                          {ph.description ? <p className="text-xs text-muted">{ph.description}</p> : null}
+                          {ph.plannedWeeks ? <p className="text-[11px] text-muted">🗓 {ph.plannedWeeks}</p> : null}
+                        </div>
+                        <form action={deleteProjectPhase.bind(null, id, ph.id)}>
+                          <SubmitButton size="sm" variant="ghost" className="text-muted" pendingLabel="…">×</SubmitButton>
+                        </form>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+              <form action={addProjectPhase.bind(null, id)} className="grid gap-3 sm:grid-cols-2 lg:grid-cols-[1fr_2fr_1fr_auto] lg:items-end">
+                <Field label="Fase">
+                  <Input name="name" required placeholder="bijv. Fase 1 — Sloop" />
+                </Field>
+                <Field label="Wat gebeurt er">
+                  <Input name="description" placeholder="bijv. sloop & strippen, afvoeren puin" />
+                </Field>
+                <Field label="Planning (optioneel)">
+                  <Input name="plannedWeeks" placeholder="bijv. Week 1–3 · 2 weken" />
+                </Field>
+                <SubmitButton size="sm" variant="secondary" pendingLabel="…">+ Fase</SubmitButton>
+              </form>
+            </CardContent>
+          </Card>
+
           {/* Begroting */}
           <Card>
             <CardHeader>
-              <CardTitle>Begroting</CardTitle>
-              <span className="text-xs text-muted">geraamde kosten vóór uitvoering · ex. BTW</span>
+              <div className="flex flex-wrap items-start justify-between gap-2">
+                <div>
+                  <CardTitle>Begroting</CardTitle>
+                  <span className="text-xs text-muted">
+                    targetprijs {formatEUR(budgetTargetTotal)} · geraamde kost {formatEUR(budgetCostTotal)} ·{" "}
+                    begrote marge {formatEUR(begrootMarge)}
+                    {begrootMargePct != null ? ` (${begrootMargePct}%)` : ""}
+                  </span>
+                </div>
+                {budgetRows.length > 0 && (
+                  <div className="flex flex-wrap items-center gap-2">
+                    <LinkButton href={`/projects/${id}/begroting/pdf`} target="_blank" variant="secondary" size="sm">
+                      📄 Print begroting
+                    </LinkButton>
+                    <form action={createEstimateFromBudget.bind(null, id)}>
+                      <SubmitButton size="sm" variant="primary" pendingLabel="Bezig…">
+                        → Maak offerte van begroting
+                      </SubmitButton>
+                    </form>
+                  </div>
+                )}
+              </div>
             </CardHeader>
             <CardContent className="space-y-4">
               {budgetRows.length > 0 && (
-                <Table>
-                  <THead>
-                    <tr>
-                      <Th>Categorie</Th>
-                      <Th>Omschrijving</Th>
-                      <Th className="text-right">Aantal</Th>
-                      <Th className="text-right">Per eenheid</Th>
-                      <Th className="text-right">Begroot</Th>
-                      <Th />
-                    </tr>
-                  </THead>
-                  <TBody>
-                    {budgetRows.map((b) => (
-                      <Tr key={b.id}>
-                        <Td>{BUDGET_CAT_LABEL[b.category] ?? b.category}</Td>
-                        <Td>{b.description}</Td>
-                        <Td className="text-right tabular-nums text-muted">{b.quantity ? Number(b.quantity).toLocaleString("nl-NL") : "—"}</Td>
-                        <Td className="text-right tabular-nums text-muted">{b.unitPriceEur ? formatEUR(b.unitPriceEur) : "—"}</Td>
-                        <Td className="text-right tabular-nums font-medium">{formatEUR(b.amountEur)}</Td>
-                        <Td className="text-right">
-                          <form action={deleteBudgetLine.bind(null, id, b.id)}>
-                            <SubmitButton size="sm" variant="ghost" className="text-muted" pendingLabel="…">
-                              ×
-                            </SubmitButton>
-                          </form>
-                        </Td>
-                      </Tr>
-                    ))}
-                    <Tr>
-                      <Td className="font-semibold" colSpan={4}>
-                        Totaal begroot
-                      </Td>
-                      <Td className="text-right font-semibold tabular-nums">{formatEUR(budgetTotal)}</Td>
-                      <Td />
-                    </Tr>
-                  </TBody>
-                </Table>
+                <div className="space-y-4">
+                  {budgetGroupKeys.map((grp) => {
+                    const grpLines = budgetByPhase(grp);
+                    if (grpLines.length === 0) return null;
+                    const ph = phaseRows.find((p) => p.name === grp);
+                    const tTotal = grpLines.reduce((s, b) => s + Number(b.amountEur ?? 0), 0);
+                    const cTotal = grpLines.reduce((s, b) => s + Number(b.estimatedCostEur ?? 0), 0);
+                    return (
+                      <div key={grp || "_geen"} className="overflow-hidden rounded-md border">
+                        <div className="bg-background px-3 py-1.5">
+                          <p className="text-sm font-semibold">{grp || "Algemeen (geen fase)"}</p>
+                          {ph?.description ? <p className="text-[11px] text-muted">{ph.description}</p> : null}
+                        </div>
+                        <Table>
+                          <THead>
+                            <tr>
+                              <Th>Onderdeel</Th>
+                              <Th className="text-right">Targetprijs</Th>
+                              <Th className="text-right">Geraamde kost</Th>
+                              <Th className="text-right">Marge</Th>
+                              <Th />
+                            </tr>
+                          </THead>
+                          <TBody>
+                            {grpLines.map((b) => {
+                              const t = Number(b.amountEur ?? 0);
+                              const c = b.estimatedCostEur != null ? Number(b.estimatedCostEur) : null;
+                              const mp = c != null && t > 0 ? Math.round(((t - c) / t) * 100) : null;
+                              return (
+                                <Tr key={b.id}>
+                                  <Td>
+                                    <span className="font-medium">{b.description}</span>
+                                    {b.isStelpost && <Badge tone="warning" className="ml-2">stelpost</Badge>}
+                                    <span className="block text-xs text-muted">
+                                      {b.section ? `${b.section} · ` : ""}
+                                      {BUDGET_CAT_LABEL[b.category] ?? b.category}
+                                      {b.quantity && b.unitPriceEur
+                                        ? ` · ${Number(b.quantity).toLocaleString("nl-NL")} × ${formatEUR(b.unitPriceEur)}`
+                                        : ""}
+                                    </span>
+                                  </Td>
+                                  <Td className="text-right tabular-nums font-medium">{formatEUR(t)}</Td>
+                                  <Td className="text-right tabular-nums text-muted">{c != null ? formatEUR(c) : "—"}</Td>
+                                  <Td className="text-right tabular-nums">{c != null ? `${formatEUR(t - c)}${mp != null ? ` · ${mp}%` : ""}` : "—"}</Td>
+                                  <Td className="text-right">
+                                    <form action={deleteBudgetLine.bind(null, id, b.id)}>
+                                      <SubmitButton size="sm" variant="ghost" className="text-muted" pendingLabel="…">×</SubmitButton>
+                                    </form>
+                                  </Td>
+                                </Tr>
+                              );
+                            })}
+                            <Tr>
+                              <Td className="font-semibold">Subtotaal {grp || ""}</Td>
+                              <Td className="text-right font-semibold tabular-nums">{formatEUR(tTotal)}</Td>
+                              <Td className="text-right font-semibold tabular-nums text-muted">{cTotal > 0 ? formatEUR(cTotal) : "—"}</Td>
+                              <Td className="text-right font-semibold tabular-nums">{cTotal > 0 ? formatEUR(tTotal - cTotal) : "—"}</Td>
+                              <Td />
+                            </Tr>
+                          </TBody>
+                        </Table>
+                      </div>
+                    );
+                  })}
+                  <div className="ml-auto w-full max-w-sm space-y-1 border-t pt-3 text-sm">
+                    <div className="flex justify-between">
+                      <span className="text-muted">Subtotaal targetprijs</span>
+                      <span className="tabular-nums">{formatEUR(budgetTargetBase)}</span>
+                    </div>
+                    {contingencyAmt > 0 && (
+                      <div className="flex justify-between">
+                        <span className="text-muted">Onvoorzien ({contingencyPct}%)</span>
+                        <span className="tabular-nums">{formatEUR(contingencyAmt)}</span>
+                      </div>
+                    )}
+                    <div className="flex justify-between border-t pt-1 font-semibold">
+                      <span>Totaal targetprijs (= doel)</span>
+                      <span className="tabular-nums">{formatEUR(budgetTargetTotal)}</span>
+                    </div>
+                    <div className="flex justify-between text-muted">
+                      <span>Totaal geraamde kost</span>
+                      <span className="tabular-nums">{formatEUR(budgetCostTotal)}</span>
+                    </div>
+                    <div className="flex justify-between font-medium text-success">
+                      <span>Begrote marge</span>
+                      <span className="tabular-nums">
+                        {formatEUR(begrootMarge)}
+                        {begrootMargePct != null ? ` · ${begrootMargePct}%` : ""}
+                      </span>
+                    </div>
+                  </div>
+                </div>
               )}
-              <form action={addBudgetLine.bind(null, id)} className="grid gap-3 sm:grid-cols-2 lg:grid-cols-[1fr_2fr_0.8fr_0.9fr_0.9fr_auto] lg:items-end">
+              <form action={addBudgetLine.bind(null, id)} className="grid gap-3 rounded-md border bg-background px-3 py-3 sm:grid-cols-2 lg:grid-cols-3">
+                <Field label="Fase">
+                  <Input name="phase" list="project-phase-names" placeholder="bijv. Fase 1" defaultValue={phaseNames[0] ?? ""} />
+                </Field>
+                <Field label="Sectie">
+                  <Input name="section" placeholder="bijv. Woning / Buiten" />
+                </Field>
                 <Field label="Categorie">
-                  <Select name="category" defaultValue="material">
+                  <Select name="category" defaultValue="other">
                     <option value="labor">Arbeid</option>
                     <option value="material">Materiaal</option>
                     <option value="subcontractor">Onderaanneming</option>
@@ -497,22 +661,33 @@ export default async function ProjectDetailPage({
                     <option value="other">Overig</option>
                   </Select>
                 </Field>
-                <Field label="Omschrijving">
-                  <Input name="description" required placeholder="bijv. tegelwerk badkamer" />
+                <Field label="Onderdeel / omschrijving" className="lg:col-span-3">
+                  <Input name="description" required placeholder="bijv. Sloop / strippen" />
                 </Field>
-                <Field label="Aantal">
-                  <Input name="quantity" inputMode="decimal" placeholder="optioneel" />
+                <Field label="Aantal (optioneel)">
+                  <Input name="quantity" inputMode="decimal" placeholder="bijv. 80" />
                 </Field>
-                <Field label="Per eenheid (€)">
-                  <Input name="unitPriceEur" inputMode="decimal" placeholder="optioneel" />
+                <Field label="Per eenheid € (optioneel)">
+                  <Input name="unitPriceEur" inputMode="decimal" placeholder="bijv. 45" />
                 </Field>
-                <Field label="Bedrag (€)" hint="of aantal × eenheid">
+                <Field label="Targetprijs € (of aantal × eenheid)">
                   <Input name="amountEur" inputMode="decimal" placeholder="0,00" />
                 </Field>
-                <SubmitButton size="sm" variant="secondary" pendingLabel="…">
-                  + Regel
-                </SubmitButton>
+                <Field label="Geraamde kost € (optioneel)">
+                  <Input name="estimatedCostEur" inputMode="decimal" placeholder="0,00" />
+                </Field>
+                <label className="flex items-center gap-2 text-sm">
+                  <input type="checkbox" name="isStelpost" className="size-4" /> Stelpost
+                </label>
+                <div className="flex items-end">
+                  <SubmitButton size="sm" variant="secondary" pendingLabel="…">+ Regel</SubmitButton>
+                </div>
               </form>
+              <datalist id="project-phase-names">
+                {phaseNames.map((n) => (
+                  <option key={n} value={n} />
+                ))}
+              </datalist>
             </CardContent>
           </Card>
 

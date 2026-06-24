@@ -579,6 +579,8 @@ export const projects = pgTable(
     contractPriceEur: numeric({ precision: 14, scale: 2 }),
     /** Begrote uren (optioneel) — om uren-voortgang tegen af te zetten. */
     budgetHours: numeric({ precision: 8, scale: 2 }),
+    /** Onvoorzien-percentage op de begroting (bv. 8) — als aparte regel meegerekend. */
+    contingencyPct: numeric({ precision: 5, scale: 2 }),
     /** Korte code/sleutel uit Holded (bv. "VER"). */
     code: text(),
     color: text(),
@@ -790,18 +792,51 @@ export const projectBudgetLines = pgTable(
       .notNull()
       .references(() => projects.id, { onDelete: "cascade" }),
     category: budgetCategory().notNull().default("material"),
+    /** Sectie/hoofdgroep (vrij), bv. "Woning" of "Buiten / zwembad / tuin". */
+    section: text(),
+    /** Fase waarin dit onderdeel valt (label-string, bv. "Fase 1"). Sluit aan op
+     * de fase-facturatie (DocumentLineItem.phase). */
+    phase: text(),
+    /** Onderdeel/omschrijving, bv. "Sloop / strippen". */
     description: text().notNull(),
     /** Aantal (bv. geraamde uren of stuks) — optioneel. */
     quantity: numeric({ precision: 12, scale: 2 }),
     /** Prijs per eenheid (ex. BTW) — optioneel. */
     unitPriceEur: numeric({ precision: 14, scale: 2 }),
-    /** Begroot bedrag (ex. BTW). Indien quantity×unitPrice ingevuld is, gelijk daaraan. */
+    /** Targetprijs / begroot bedrag (ex. BTW) — de verkoop-/aanneemkant. */
     amountEur: numeric({ precision: 14, scale: 2 }).notNull().default("0"),
+    /** Geraamde kostprijs (ex. BTW) — interne kost → begrote marge = amount − cost. */
+    estimatedCostEur: numeric({ precision: 14, scale: 2 }),
+    /** Stelpost (richtwaarde, nog niet definitief). */
+    isStelpost: boolean().notNull().default(false),
     sortOrder: integer().notNull().default(0),
     note: text(),
     ...timestamps,
   },
   (t) => [index("project_budget_lines_project_idx").on(t.projectId)],
+);
+
+/**
+ * Fases van een (bouw)project: naam + omschrijving van wat er in die fase gebeurt,
+ * plus volgorde en indicatieve duur. Begrotingsregels en offerteregels verwijzen
+ * via de fase-naam; bij "offerte van begroting" worden deze fases meegegeven.
+ */
+export const projectPhases = pgTable(
+  "project_phases",
+  {
+    id: uuid().primaryKey().default(sql`gen_random_uuid()`),
+    projectId: uuid()
+      .notNull()
+      .references(() => projects.id, { onDelete: "cascade" }),
+    name: text().notNull(),
+    /** Omschrijving van de werkzaamheden in deze fase. */
+    description: text(),
+    /** Indicatieve duur/planning, vrij veld (bv. "Week 1–3 · 2 weken"). */
+    plannedWeeks: text(),
+    sortOrder: integer().notNull().default(0),
+    ...timestamps,
+  },
+  (t) => [index("project_phases_project_idx").on(t.projectId)],
 );
 
 /* ----------------------------------------------- quote requests (van website) */
@@ -1048,11 +1083,16 @@ export const projectsRelations = relations(projects, ({ one, many }) => ({
   timeEntries: many(timeEntries),
   costs: many(projectCosts),
   budgetLines: many(projectBudgetLines),
+  phases: many(projectPhases),
   purchaseOrders: many(purchaseOrders),
 }));
 
 export const projectBudgetLinesRelations = relations(projectBudgetLines, ({ one }) => ({
   project: one(projects, { fields: [projectBudgetLines.projectId], references: [projects.id] }),
+}));
+
+export const projectPhasesRelations = relations(projectPhases, ({ one }) => ({
+  project: one(projects, { fields: [projectPhases.projectId], references: [projects.id] }),
 }));
 
 export const workersRelations = relations(workers, ({ many }) => ({
@@ -1105,6 +1145,8 @@ export type ProjectCost = typeof projectCosts.$inferSelect;
 export type NewProjectCost = typeof projectCosts.$inferInsert;
 export type ProjectBudgetLine = typeof projectBudgetLines.$inferSelect;
 export type NewProjectBudgetLine = typeof projectBudgetLines.$inferInsert;
+export type ProjectPhase = typeof projectPhases.$inferSelect;
+export type NewProjectPhase = typeof projectPhases.$inferInsert;
 export type Activity = typeof activities.$inferSelect;
 export type HoldedSyncMap = typeof holdedSyncMap.$inferSelect;
 export type WebhookEvent = typeof webhookEvents.$inferSelect;
