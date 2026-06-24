@@ -98,7 +98,7 @@ export default async function BegrotingPage({
             <LinkButton href={`/projects/${id}`} variant="ghost">
               ← Project
             </LinkButton>
-            {budgetRows.length > 0 && (
+            {(phaseRows.length > 0 || budgetRows.length > 0) && (
               <>
                 <LinkButton href={`/projects/${id}/begroting/pdf`} target="_blank" variant="secondary">
                   📄 Printen
@@ -108,11 +108,13 @@ export default async function BegrotingPage({
                     ✉ Versturen naar klant
                   </SubmitButton>
                 </form>
-                <form action={createEstimateFromBudget.bind(null, id)}>
-                  <SubmitButton variant="primary" pendingLabel="Bezig…">
-                    → Offerte maken
-                  </SubmitButton>
-                </form>
+                {budgetRows.length > 0 && (
+                  <form action={createEstimateFromBudget.bind(null, id)}>
+                    <SubmitButton variant="primary" pendingLabel="Bezig…">
+                      → Offerte maken
+                    </SubmitButton>
+                  </form>
+                )}
               </>
             )}
           </div>

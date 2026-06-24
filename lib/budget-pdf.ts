@@ -32,7 +32,6 @@ export async function renderBudgetPdf(projectId: string): Promise<BudgetPdf | nu
   ]);
 
   const phaseNames = phaseRows.map((p) => p.name);
-  const groupKeys = Array.from(new Set([...phaseNames, ...lines.map((l) => (l.phase ?? "").trim())]));
   const linesOf = (key: string) => lines.filter((l) => (l.phase ?? "").trim() === key);
 
   const lineLabel = (l: (typeof lines)[number]) => {
@@ -46,19 +45,15 @@ export async function renderBudgetPdf(projectId: string): Promise<BudgetPdf | nu
   };
 
   const tables: ReportTable[] = [];
-  for (const key of groupKeys) {
-    const grp = linesOf(key);
-    if (grp.length === 0) continue;
-    const ph = phaseRows.find((p) => p.name === key);
-    const subtitleParts = [ph?.description, ph?.plannedWeeks].filter(Boolean) as string[];
+  const sectionFor = (title: string, subtitle: string | undefined, grp: typeof lines) => {
     const subtotal = grp.reduce((s, l) => s + Number(l.amountEur ?? 0), 0);
+    const hasPrices = subtotal > 0;
     // Prijs alleen tonen als die er is; anders is de regel pure uitleg (bestek).
     const rows = grp.map((l) => [lineLabel(l), Number(l.amountEur ?? 0) > 0 ? formatEUR(l.amountEur) : ""]);
-    const hasPrices = subtotal > 0;
     if (hasPrices) rows.push(["Subtotaal", formatEUR(subtotal)]);
     tables.push({
-      title: key || "Werkzaamheden",
-      subtitle: subtitleParts.join("\n") || undefined,
+      title,
+      subtitle,
       columns: [
         { header: "Onderdeel", flex: 4 },
         { header: hasPrices ? "Bedrag" : "", align: "right", flex: 1.3 },
@@ -66,7 +61,16 @@ export async function renderBudgetPdf(projectId: string): Promise<BudgetPdf | nu
       rows,
       emphasizeRow: (i) => hasPrices && i === rows.length - 1,
     });
+  };
+  // Eén sectie per fase (in volgorde) — óók als er nog geen onderdelen zijn,
+  // dan toont 'ie alleen de fase-uitleg (bestek).
+  for (const ph of phaseRows) {
+    const subtitle = [ph.description, ph.plannedWeeks].filter(Boolean).join("\n") || undefined;
+    sectionFor(ph.name, subtitle, linesOf(ph.name));
   }
+  // Onderdelen zonder (gekende) fase.
+  const ungrouped = lines.filter((l) => !phaseNames.includes((l.phase ?? "").trim()));
+  if (ungrouped.length > 0) sectionFor("Werkzaamheden", undefined, ungrouped);
 
   const base = lines.reduce((s, l) => s + Number(l.amountEur ?? 0), 0);
   const pct = project.contingencyPct != null ? Number(project.contingencyPct) : 0;

@@ -334,6 +334,7 @@ export default async function ProjectDetailPage({
   };
   // Begroting-samenvatting voor de compacte kaart (de builder zit op /begroting).
   const budgetLineCount = budgetRows.length;
+  const hasBudgetContent = budgetLineCount > 0 || phaseRows.length > 0;
   const begrootMarge = budgetTargetBase - budgetCostTotal;
   const begrootMargePct = budgetTargetBase > 0 ? Math.round((begrootMarge / budgetTargetBase) * 100) : null;
   const workerOptions = workerRows.map((w) => ({
@@ -563,16 +564,16 @@ export default async function ProjectDetailPage({
             <div>
               <CardTitle>Begroting</CardTitle>
               <span className="text-xs text-muted">
-                {budgetLineCount > 0
-                  ? `${budgetLineCount} ${budgetLineCount === 1 ? "onderdeel" : "onderdelen"} · ${phaseRows.length} ${phaseRows.length === 1 ? "fase" : "fases"} · totaal ${formatEUR(budgetTargetTotal)}${begrootMargePct != null ? ` · marge ${begrootMargePct}%` : ""}`
+                {hasBudgetContent
+                  ? `${phaseRows.length} ${phaseRows.length === 1 ? "fase" : "fases"}${budgetLineCount > 0 ? ` · ${budgetLineCount} ${budgetLineCount === 1 ? "onderdeel" : "onderdelen"}` : ""}${budgetTargetTotal > 0 ? ` · totaal ${formatEUR(budgetTargetTotal)}${begrootMargePct != null ? ` · marge ${begrootMargePct}%` : ""}` : " · uitleg/bestek"}`
                   : "nog geen begroting — bouw 'm per fase op een eigen scherm"}
               </span>
             </div>
             <div className="flex flex-wrap items-center gap-2">
-              <LinkButton href={`/projects/${id}/begroting`} variant={budgetLineCount > 0 ? "secondary" : "primary"}>
-                {budgetLineCount > 0 ? "Begroting openen" : "+ Begroting maken"}
+              <LinkButton href={`/projects/${id}/begroting`} variant={hasBudgetContent ? "secondary" : "primary"}>
+                {hasBudgetContent ? "Begroting openen" : "+ Begroting maken"}
               </LinkButton>
-              {budgetLineCount > 0 && (
+              {hasBudgetContent && (
                 <>
                   <LinkButton href={`/projects/${id}/begroting/pdf`} target="_blank" variant="secondary">
                     📄 Printen

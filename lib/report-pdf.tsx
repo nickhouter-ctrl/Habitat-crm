@@ -151,11 +151,16 @@ const s = StyleSheet.create({
 });
 
 function Table({ table }: { table: ReportTable }) {
+  // Geen regels én geen emptyText → puur een tekst-sectie (titel + uitleg), zonder
+  // tabel-koprij. Zo rendert een fase die alleen uit uitleg bestaat netjes.
+  const showGrid = table.rows.length > 0 || table.emptyText != null;
   return (
     <View style={s.tableBlock} wrap={false}>
       <Text style={s.tableTitle}>{table.title}</Text>
       <View style={s.tableTitleAccent} />
       {table.subtitle ? <Text style={s.tableSubtitle}>{table.subtitle}</Text> : <View style={{ height: 5 }} />}
+      {!showGrid ? null : (
+      <>
       <View style={s.tHead}>
         {table.columns.map((c, i) => (
           <Text key={i} style={[s.tHeadCell, { flex: c.flex ?? 1, textAlign: c.align ?? "left" }]}>
@@ -182,6 +187,8 @@ function Table({ table }: { table: ReportTable }) {
             </View>
           );
         })
+      )}
+      </>
       )}
     </View>
   );
