@@ -336,13 +336,37 @@ export default async function ProjectDetailPage({
     equipment: "Materieel",
     other: "Overig",
   };
-  // Begroting groeperen: per fase → per sectie.
+  // Begroting in blokken: één blok per fase (met z'n onderdelen), plus een blok
+  // voor onderdelen zonder (gekende) fase. Elk blok heeft z'n eigen toevoeg-form.
   const phaseNames = phaseRows.map((p) => p.name);
-  const budgetGroupKeys = Array.from(
-    new Set([...phaseNames, ...budgetRows.map((b) => (b.phase ?? "").trim())]),
-  ).filter((k) => k !== "" || budgetRows.some((b) => !(b.phase ?? "").trim()));
-  const budgetByPhase = (phase: string) =>
-    budgetRows.filter((b) => (b.phase ?? "").trim() === phase);
+  const linesOfPhase = (name: string) => budgetRows.filter((b) => (b.phase ?? "").trim() === name);
+  const ungroupedBudget = budgetRows.filter((b) => !phaseNames.includes((b.phase ?? "").trim()));
+  type BudgetBlock = {
+    key: string;
+    title: string;
+    description: string | null;
+    plannedWeeks: string | null;
+    phaseValue: string;
+    lines: typeof budgetRows;
+  };
+  const budgetBlocks: BudgetBlock[] = phaseRows.map((p) => ({
+    key: p.id,
+    title: p.name,
+    description: p.description,
+    plannedWeeks: p.plannedWeeks,
+    phaseValue: p.name,
+    lines: linesOfPhase(p.name),
+  }));
+  if (ungroupedBudget.length > 0 || phaseRows.length === 0) {
+    budgetBlocks.push({
+      key: "_geen",
+      title: "Zonder fase",
+      description: phaseRows.length === 0 ? "voeg onderdelen toe, of maak eerst fases aan" : null,
+      plannedWeeks: null,
+      phaseValue: "",
+      lines: ungroupedBudget,
+    });
+  }
   const begrootMarge = budgetTargetBase - budgetCostTotal;
   const begrootMargePct = budgetTargetBase > 0 ? Math.round((begrootMarge / budgetTargetBase) * 100) : null;
   const workerOptions = workerRows.map((w) => ({
@@ -550,144 +574,144 @@ export default async function ProjectDetailPage({
                 )}
               </div>
             </CardHeader>
-            <CardContent className="space-y-4">
-              {budgetRows.length > 0 && (
-                <div className="space-y-4">
-                  {budgetGroupKeys.map((grp) => {
-                    const grpLines = budgetByPhase(grp);
-                    if (grpLines.length === 0) return null;
-                    const ph = phaseRows.find((p) => p.name === grp);
-                    const tTotal = grpLines.reduce((s, b) => s + Number(b.amountEur ?? 0), 0);
-                    const cTotal = grpLines.reduce((s, b) => s + Number(b.estimatedCostEur ?? 0), 0);
-                    return (
-                      <div key={grp || "_geen"} className="overflow-hidden rounded-md border">
-                        <div className="bg-background px-3 py-1.5">
-                          <p className="text-sm font-semibold">{grp || "Algemeen (geen fase)"}</p>
-                          {ph?.description ? <p className="text-[11px] text-muted">{ph.description}</p> : null}
-                        </div>
-                        <Table>
-                          <THead>
-                            <tr>
-                              <Th>Onderdeel</Th>
-                              <Th className="text-right">Targetprijs</Th>
-                              <Th className="text-right">Geraamde kost</Th>
-                              <Th className="text-right">Marge</Th>
-                              <Th />
-                            </tr>
-                          </THead>
-                          <TBody>
-                            {grpLines.map((b) => {
-                              const t = Number(b.amountEur ?? 0);
-                              const c = b.estimatedCostEur != null ? Number(b.estimatedCostEur) : null;
-                              const mp = c != null && t > 0 ? Math.round(((t - c) / t) * 100) : null;
-                              return (
-                                <Tr key={b.id}>
-                                  <Td>
-                                    <span className="font-medium">{b.description}</span>
-                                    {b.isStelpost && <Badge tone="warning" className="ml-2">stelpost</Badge>}
+            <CardContent className="space-y-5">
+              {phaseRows.length === 0 && (
+                <p className="rounded-md bg-background px-3 py-2 text-sm text-muted">
+                  Maak eerst hierboven een <strong>fase</strong> aan (bijv. “Fase 1 — Sloop”). Daarna voeg je per fase
+                  meerdere onderdelen met een prijs toe.
+                </p>
+              )}
+
+              {/* Eén blok per fase: koptekst + onderdelen + een mini-formulier om een onderdeel toe te voegen. */}
+              {budgetBlocks.map((blk) => {
+                const lines = blk.lines;
+                const tTotal = lines.reduce((s, b) => s + Number(b.amountEur ?? 0), 0);
+                const cTotal = lines.reduce((s, b) => s + Number(b.estimatedCostEur ?? 0), 0);
+                return (
+                  <div key={blk.key} className="overflow-hidden rounded-lg border">
+                    <div className="flex items-baseline justify-between gap-2 bg-background px-3 py-2">
+                      <div className="min-w-0">
+                        <p className="font-semibold">{blk.title}</p>
+                        {blk.description ? <p className="text-xs text-muted">{blk.description}</p> : null}
+                        {blk.plannedWeeks ? <p className="text-[11px] text-muted">🗓 {blk.plannedWeeks}</p> : null}
+                      </div>
+                      {lines.length > 0 && (
+                        <p className="shrink-0 text-sm font-semibold tabular-nums">{formatEUR(tTotal)}</p>
+                      )}
+                    </div>
+
+                    {lines.length > 0 && (
+                      <Table>
+                        <THead>
+                          <tr>
+                            <Th>Onderdeel</Th>
+                            <Th className="text-right">Targetprijs</Th>
+                            <Th className="text-right">Kost</Th>
+                            <Th className="text-right">Marge</Th>
+                            <Th />
+                          </tr>
+                        </THead>
+                        <TBody>
+                          {lines.map((b) => {
+                            const t = Number(b.amountEur ?? 0);
+                            const c = b.estimatedCostEur != null ? Number(b.estimatedCostEur) : null;
+                            const mp = c != null && t > 0 ? Math.round(((t - c) / t) * 100) : null;
+                            return (
+                              <Tr key={b.id}>
+                                <Td>
+                                  <span className="font-medium">{b.description}</span>
+                                  {b.isStelpost && <Badge tone="warning" className="ml-2">stelpost</Badge>}
+                                  {(b.section || (b.quantity && b.unitPriceEur)) && (
                                     <span className="block text-xs text-muted">
-                                      {b.section ? `${b.section} · ` : ""}
-                                      {BUDGET_CAT_LABEL[b.category] ?? b.category}
+                                      {b.section ? b.section : ""}
+                                      {b.section && b.quantity && b.unitPriceEur ? " · " : ""}
                                       {b.quantity && b.unitPriceEur
-                                        ? ` · ${Number(b.quantity).toLocaleString("nl-NL")} × ${formatEUR(b.unitPriceEur)}`
+                                        ? `${Number(b.quantity).toLocaleString("nl-NL")} × ${formatEUR(b.unitPriceEur)}`
                                         : ""}
                                     </span>
-                                  </Td>
-                                  <Td className="text-right tabular-nums font-medium">{formatEUR(t)}</Td>
-                                  <Td className="text-right tabular-nums text-muted">{c != null ? formatEUR(c) : "—"}</Td>
-                                  <Td className="text-right tabular-nums">{c != null ? `${formatEUR(t - c)}${mp != null ? ` · ${mp}%` : ""}` : "—"}</Td>
-                                  <Td className="text-right">
-                                    <form action={deleteBudgetLine.bind(null, id, b.id)}>
-                                      <SubmitButton size="sm" variant="ghost" className="text-muted" pendingLabel="…">×</SubmitButton>
-                                    </form>
-                                  </Td>
-                                </Tr>
-                              );
-                            })}
+                                  )}
+                                </Td>
+                                <Td className="text-right tabular-nums font-medium">{formatEUR(t)}</Td>
+                                <Td className="text-right tabular-nums text-muted">{c != null ? formatEUR(c) : "—"}</Td>
+                                <Td className="text-right tabular-nums">{c != null ? `${formatEUR(t - c)}${mp != null ? ` · ${mp}%` : ""}` : "—"}</Td>
+                                <Td className="text-right">
+                                  <form action={deleteBudgetLine.bind(null, id, b.id)}>
+                                    <SubmitButton size="sm" variant="ghost" className="text-muted" pendingLabel="…">×</SubmitButton>
+                                  </form>
+                                </Td>
+                              </Tr>
+                            );
+                          })}
+                          {cTotal > 0 && (
                             <Tr>
-                              <Td className="font-semibold">Subtotaal {grp || ""}</Td>
-                              <Td className="text-right font-semibold tabular-nums">{formatEUR(tTotal)}</Td>
-                              <Td className="text-right font-semibold tabular-nums text-muted">{cTotal > 0 ? formatEUR(cTotal) : "—"}</Td>
-                              <Td className="text-right font-semibold tabular-nums">{cTotal > 0 ? formatEUR(tTotal - cTotal) : "—"}</Td>
+                              <Td className="text-xs text-muted">Subtotaal kost / marge</Td>
+                              <Td />
+                              <Td className="text-right text-xs tabular-nums text-muted">{formatEUR(cTotal)}</Td>
+                              <Td className="text-right text-xs tabular-nums text-muted">{formatEUR(tTotal - cTotal)}</Td>
                               <Td />
                             </Tr>
-                          </TBody>
-                        </Table>
-                      </div>
-                    );
-                  })}
-                  <div className="ml-auto w-full max-w-sm space-y-1 border-t pt-3 text-sm">
-                    <div className="flex justify-between">
-                      <span className="text-muted">Subtotaal targetprijs</span>
-                      <span className="tabular-nums">{formatEUR(budgetTargetBase)}</span>
-                    </div>
-                    {contingencyAmt > 0 && (
-                      <div className="flex justify-between">
-                        <span className="text-muted">Onvoorzien ({contingencyPct}%)</span>
-                        <span className="tabular-nums">{formatEUR(contingencyAmt)}</span>
-                      </div>
+                          )}
+                        </TBody>
+                      </Table>
                     )}
-                    <div className="flex justify-between border-t pt-1 font-semibold">
-                      <span>Totaal targetprijs (= doel)</span>
-                      <span className="tabular-nums">{formatEUR(budgetTargetTotal)}</span>
-                    </div>
-                    <div className="flex justify-between text-muted">
-                      <span>Totaal geraamde kost</span>
-                      <span className="tabular-nums">{formatEUR(budgetCostTotal)}</span>
-                    </div>
-                    <div className="flex justify-between font-medium text-success">
-                      <span>Begrote marge</span>
-                      <span className="tabular-nums">
-                        {formatEUR(begrootMarge)}
-                        {begrootMargePct != null ? ` · ${begrootMargePct}%` : ""}
-                      </span>
-                    </div>
+
+                    {/* Mini-formulier: onderdeel toevoegen aan déze fase (geen fase overtypen). */}
+                    <form
+                      action={addBudgetLine.bind(null, id)}
+                      className="flex flex-wrap items-end gap-2 border-t bg-surface px-3 py-2.5"
+                    >
+                      <input type="hidden" name="phase" value={blk.phaseValue} />
+                      <Field label="Onderdeel" className="min-w-[12rem] flex-1">
+                        <Input name="description" required placeholder="bijv. Sloop binnenwanden" />
+                      </Field>
+                      <Field label="Targetprijs €" className="w-32">
+                        <Input name="amountEur" inputMode="decimal" required placeholder="0,00" />
+                      </Field>
+                      <Field label="Kost € (optie)" className="w-28">
+                        <Input name="estimatedCostEur" inputMode="decimal" placeholder="0,00" />
+                      </Field>
+                      <label className="flex items-center gap-1.5 pb-2 text-sm">
+                        <input type="checkbox" name="isStelpost" className="size-4" /> stelpost
+                      </label>
+                      <SubmitButton size="sm" variant="secondary" pendingLabel="…">+ onderdeel</SubmitButton>
+                    </form>
                   </div>
+                );
+              })}
+
+              {budgetRows.length > 0 && (
+                <div className="ml-auto w-full max-w-sm space-y-1 border-t pt-3 text-sm">
+                  <div className="flex justify-between">
+                    <span className="text-muted">Subtotaal targetprijs</span>
+                    <span className="tabular-nums">{formatEUR(budgetTargetBase)}</span>
+                  </div>
+                  {contingencyAmt > 0 && (
+                    <div className="flex justify-between">
+                      <span className="text-muted">Onvoorzien ({contingencyPct}%)</span>
+                      <span className="tabular-nums">{formatEUR(contingencyAmt)}</span>
+                    </div>
+                  )}
+                  <div className="flex justify-between border-t pt-1 font-semibold">
+                    <span>Totaal (= doel)</span>
+                    <span className="tabular-nums">{formatEUR(budgetTargetTotal)}</span>
+                  </div>
+                  {budgetCostTotal > 0 && (
+                    <>
+                      <div className="flex justify-between text-muted">
+                        <span>Totaal geraamde kost</span>
+                        <span className="tabular-nums">{formatEUR(budgetCostTotal)}</span>
+                      </div>
+                      <div className="flex justify-between font-medium text-success">
+                        <span>Begrote marge</span>
+                        <span className="tabular-nums">
+                          {formatEUR(begrootMarge)}
+                          {begrootMargePct != null ? ` · ${begrootMargePct}%` : ""}
+                        </span>
+                      </div>
+                    </>
+                  )}
                 </div>
               )}
-              <form action={addBudgetLine.bind(null, id)} className="grid gap-3 rounded-md border bg-background px-3 py-3 sm:grid-cols-2 lg:grid-cols-3">
-                <Field label="Fase">
-                  <Input name="phase" list="project-phase-names" placeholder="bijv. Fase 1" defaultValue={phaseNames[0] ?? ""} />
-                </Field>
-                <Field label="Sectie">
-                  <Input name="section" placeholder="bijv. Woning / Buiten" />
-                </Field>
-                <Field label="Categorie">
-                  <Select name="category" defaultValue="other">
-                    <option value="labor">Arbeid</option>
-                    <option value="material">Materiaal</option>
-                    <option value="subcontractor">Onderaanneming</option>
-                    <option value="equipment">Materieel</option>
-                    <option value="other">Overig</option>
-                  </Select>
-                </Field>
-                <Field label="Onderdeel / omschrijving" className="lg:col-span-3">
-                  <Input name="description" required placeholder="bijv. Sloop / strippen" />
-                </Field>
-                <Field label="Aantal (optioneel)">
-                  <Input name="quantity" inputMode="decimal" placeholder="bijv. 80" />
-                </Field>
-                <Field label="Per eenheid € (optioneel)">
-                  <Input name="unitPriceEur" inputMode="decimal" placeholder="bijv. 45" />
-                </Field>
-                <Field label="Targetprijs € (of aantal × eenheid)">
-                  <Input name="amountEur" inputMode="decimal" placeholder="0,00" />
-                </Field>
-                <Field label="Geraamde kost € (optioneel)">
-                  <Input name="estimatedCostEur" inputMode="decimal" placeholder="0,00" />
-                </Field>
-                <label className="flex items-center gap-2 text-sm">
-                  <input type="checkbox" name="isStelpost" className="size-4" /> Stelpost
-                </label>
-                <div className="flex items-end">
-                  <SubmitButton size="sm" variant="secondary" pendingLabel="…">+ Regel</SubmitButton>
-                </div>
-              </form>
-              <datalist id="project-phase-names">
-                {phaseNames.map((n) => (
-                  <option key={n} value={n} />
-                ))}
-              </datalist>
             </CardContent>
           </Card>
 
