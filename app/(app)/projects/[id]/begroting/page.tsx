@@ -14,6 +14,7 @@ import {
   TBody,
   Table,
   Td,
+  Textarea,
   Th,
   THead,
   Tr,
@@ -163,7 +164,7 @@ export default async function BegrotingPage({
                 <div key={ph.id} className="flex items-start justify-between gap-2 rounded-md border bg-background px-3 py-2">
                   <div className="min-w-0">
                     <p className="font-medium">{ph.name}</p>
-                    {ph.description ? <p className="text-xs text-muted">{ph.description}</p> : null}
+                    {ph.description ? <p className="whitespace-pre-line text-xs text-muted">{ph.description}</p> : null}
                     {ph.plannedWeeks ? <p className="text-[11px] text-muted">🗓 {ph.plannedWeeks}</p> : null}
                   </div>
                   <form action={deleteProjectPhase.bind(null, id, ph.id)}>
@@ -173,17 +174,23 @@ export default async function BegrotingPage({
               ))}
             </div>
           )}
-          <form action={addProjectPhase.bind(null, id)} className="grid gap-3 sm:grid-cols-2 lg:grid-cols-[1fr_2fr_1fr_auto] lg:items-end">
-            <Field label="Fase">
-              <Input name="name" required placeholder="bijv. Fase 1 — Sloop" />
+          <form action={addProjectPhase.bind(null, id)} className="space-y-3">
+            <div className="grid gap-3 sm:grid-cols-[1fr_1fr_auto] sm:items-end">
+              <Field label="Fase">
+                <Input name="name" required placeholder="bijv. Fase 1 — Sloop" />
+              </Field>
+              <Field label="Planning (optioneel)">
+                <Input name="plannedWeeks" placeholder="bijv. Week 1–3 · 2 weken" />
+              </Field>
+              <SubmitButton size="sm" variant="secondary" pendingLabel="…">+ Fase</SubmitButton>
+            </div>
+            <Field label="Wat gebeurt er in deze fase (uitleg)">
+              <Textarea
+                name="description"
+                rows={3}
+                placeholder="bijv. Verwijderen bestaande binnenwanden, demonteren sanitair, afvoeren puin conform lokale regelgeving…"
+              />
             </Field>
-            <Field label="Wat gebeurt er">
-              <Input name="description" placeholder="bijv. sloop & strippen, afvoeren puin" />
-            </Field>
-            <Field label="Planning (optioneel)">
-              <Input name="plannedWeeks" placeholder="bijv. Week 1–3 · 2 weken" />
-            </Field>
-            <SubmitButton size="sm" variant="secondary" pendingLabel="…">+ Fase</SubmitButton>
           </form>
         </CardContent>
       </Card>
@@ -210,7 +217,7 @@ export default async function BegrotingPage({
                 <div className="flex items-baseline justify-between gap-2 bg-background px-3 py-2">
                   <div className="min-w-0">
                     <p className="font-semibold">{blk.title}</p>
-                    {blk.description ? <p className="text-xs text-muted">{blk.description}</p> : null}
+                    {blk.description ? <p className="whitespace-pre-line text-xs text-muted">{blk.description}</p> : null}
                     {blk.plannedWeeks ? <p className="text-[11px] text-muted">🗓 {blk.plannedWeeks}</p> : null}
                   </div>
                   {lines.length > 0 && <p className="shrink-0 text-sm font-semibold tabular-nums">{formatEUR(tTotal)}</p>}
@@ -247,9 +254,9 @@ export default async function BegrotingPage({
                                 </span>
                               )}
                             </Td>
-                            <Td className="text-right tabular-nums font-medium">{formatEUR(t)}</Td>
+                            <Td className="text-right tabular-nums font-medium">{t > 0 ? formatEUR(t) : "—"}</Td>
                             <Td className="text-right tabular-nums text-muted">{c != null ? formatEUR(c) : "—"}</Td>
-                            <Td className="text-right tabular-nums">{c != null ? `${formatEUR(t - c)}${mp != null ? ` · ${mp}%` : ""}` : "—"}</Td>
+                            <Td className="text-right tabular-nums">{c != null && t > 0 ? `${formatEUR(t - c)}${mp != null ? ` · ${mp}%` : ""}` : "—"}</Td>
                             <Td className="text-right">
                               <form action={deleteBudgetLine.bind(null, id, b.id)}>
                                 <SubmitButton size="sm" variant="ghost" className="text-muted" pendingLabel="…">×</SubmitButton>
@@ -273,11 +280,11 @@ export default async function BegrotingPage({
 
                 <form action={addBudgetLine.bind(null, id)} className="flex flex-wrap items-end gap-2 border-t bg-surface px-3 py-2.5">
                   <input type="hidden" name="phase" value={blk.phaseValue} />
-                  <Field label="Onderdeel" className="min-w-[12rem] flex-1">
-                    <Input name="description" required placeholder="bijv. Sloop binnenwanden" />
+                  <Field label="Onderdeel / uitleg" className="min-w-[14rem] flex-[2]">
+                    <Input name="description" required placeholder="bijv. Sloop binnenwanden + afvoeren puin" />
                   </Field>
-                  <Field label="Targetprijs €" className="w-32">
-                    <Input name="amountEur" inputMode="decimal" required placeholder="0,00" />
+                  <Field label="Prijs € (optioneel)" className="w-32">
+                    <Input name="amountEur" inputMode="decimal" placeholder="leeg = alleen uitleg" />
                   </Field>
                   <Field label="Kost € (optie)" className="w-28">
                     <Input name="estimatedCostEur" inputMode="decimal" placeholder="0,00" />

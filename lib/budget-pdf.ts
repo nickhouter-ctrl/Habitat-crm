@@ -52,36 +52,46 @@ export async function renderBudgetPdf(projectId: string): Promise<BudgetPdf | nu
     const ph = phaseRows.find((p) => p.name === key);
     const subtitleParts = [ph?.description, ph?.plannedWeeks].filter(Boolean) as string[];
     const subtotal = grp.reduce((s, l) => s + Number(l.amountEur ?? 0), 0);
-    const rows = grp.map((l) => [lineLabel(l), formatEUR(l.amountEur)]);
-    rows.push(["Subtotaal", formatEUR(subtotal)]);
+    // Prijs alleen tonen als die er is; anders is de regel pure uitleg (bestek).
+    const rows = grp.map((l) => [lineLabel(l), Number(l.amountEur ?? 0) > 0 ? formatEUR(l.amountEur) : ""]);
+    const hasPrices = subtotal > 0;
+    if (hasPrices) rows.push(["Subtotaal", formatEUR(subtotal)]);
     tables.push({
       title: key || "Werkzaamheden",
-      subtitle: subtitleParts.join(" · ") || undefined,
+      subtitle: subtitleParts.join("\n") || undefined,
       columns: [
         { header: "Onderdeel", flex: 4 },
-        { header: "Bedrag", align: "right", flex: 1.3 },
+        { header: hasPrices ? "Bedrag" : "", align: "right", flex: 1.3 },
       ],
       rows,
-      emphasizeRow: (i) => i === rows.length - 1,
+      emphasizeRow: (i) => hasPrices && i === rows.length - 1,
     });
   }
 
   const base = lines.reduce((s, l) => s + Number(l.amountEur ?? 0), 0);
   const pct = project.contingencyPct != null ? Number(project.contingencyPct) : 0;
   const contingency = pct > 0 ? Math.round(base * (pct / 100) * 100) / 100 : 0;
-  const total = base + contingency;
-  const totalRows: string[][] = [["Subtotaal werkzaamheden", formatEUR(base)]];
-  if (contingency > 0) totalRows.push([`Onvoorzien (${pct}%)`, formatEUR(contingency)]);
-  totalRows.push(["Totaal (excl. BTW)", formatEUR(total)]);
-  tables.push({
-    title: "Totaal",
-    columns: [
-      { header: "", flex: 4 },
-      { header: "Bedrag", align: "right", flex: 1.3 },
-    ],
-    rows: totalRows,
-    emphasizeRow: (i) => i === totalRows.length - 1,
-  });
+  const contract = project.contractPriceEur != null ? Number(project.contractPriceEur) : 0;
+  // Met regelprijzen: subtotaal (+onvoorzien). Geen regelprijzen maar wél een
+  // afgesproken aanneemprijs: toon die als totaal. Anders: geen totaalblok (puur bestek).
+  if (base > 0) {
+    const totalRows: string[][] = [["Subtotaal werkzaamheden", formatEUR(base)]];
+    if (contingency > 0) totalRows.push([`Onvoorzien (${pct}%)`, formatEUR(contingency)]);
+    totalRows.push(["Totaal (excl. BTW)", formatEUR(base + contingency)]);
+    tables.push({
+      title: "Totaal",
+      columns: [{ header: "", flex: 4 }, { header: "Bedrag", align: "right", flex: 1.3 }],
+      rows: totalRows,
+      emphasizeRow: (i) => i === totalRows.length - 1,
+    });
+  } else if (contract > 0) {
+    tables.push({
+      title: "Totaal",
+      columns: [{ header: "", flex: 4 }, { header: "Bedrag", align: "right", flex: 1.3 }],
+      rows: [["Aanneemsom (excl. BTW)", formatEUR(contract)]],
+      emphasizeRow: () => true,
+    });
+  }
 
   const subtitleBits = ["Begroting per fase", "alle bedragen excl. BTW"];
   let contactEmail: string | null = null;
