@@ -21,6 +21,9 @@ import {
 } from "@/lib/db/schema";
 import { computeTotals } from "@/lib/documents";
 import { insertNumberedDocument } from "@/lib/doc-number";
+import { renderBudgetPdf } from "@/lib/budget-pdf";
+import { sendEmail } from "@/lib/email";
+import { COMPANY } from "@/lib/company";
 
 async function requireUser() {
   const session = await auth();
@@ -295,6 +298,35 @@ export async function deleteBudgetLine(projectId: string, lineId: string) {
   await requireUser();
   await db.delete(projectBudgetLines).where(eq(projectBudgetLines.id, lineId));
   revalidatePath(`/projects/${projectId}`);
+  revalidatePath(`/projects/${projectId}/begroting`);
+}
+
+/** Stuur de begroting als PDF naar de klant (e-mail). */
+export async function sendBudgetToClient(projectId: string) {
+  await requireUser();
+  const pdf = await renderBudgetPdf(projectId);
+  if (!pdf) redirect(`/projects/${projectId}/begroting?mail=geenproject`);
+  if (!pdf.contactEmail) redirect(`/projects/${projectId}/begroting?mail=geenadres`);
+
+  const html = `
+    <p>Beste klant,</p>
+    <p>In de bijlage vind je de begroting voor <strong>${pdf.projectName}</strong>, opgedeeld per fase.
+    Alle bedragen zijn exclusief btw. Heb je vragen of wil je iets aanpassen? Laat het gerust weten.</p>
+    <p>Met vriendelijke groet,<br/>${COMPANY.legalName}<br/>${COMPANY.email} · ${COMPANY.website}</p>
+  `;
+  const text = `Beste klant,\n\nIn de bijlage vind je de begroting voor ${pdf.projectName}, opgedeeld per fase (excl. btw).\n\nMet vriendelijke groet,\n${COMPANY.legalName}\n${COMPANY.email} · ${COMPANY.website}`;
+
+  const res = await sendEmail({
+    to: pdf.contactEmail,
+    subject: `Begroting — ${pdf.projectName}`,
+    html,
+    text,
+    attachments: [
+      { filename: pdf.filename, content: new Uint8Array(pdf.buffer), contentType: "application/pdf" },
+    ],
+  });
+  revalidatePath(`/projects/${projectId}/begroting`);
+  redirect(`/projects/${projectId}/begroting?mail=${res.sent ? "ok" : "mislukt"}`);
 }
 
 /* ------------------------------------------------------------- projectfases */

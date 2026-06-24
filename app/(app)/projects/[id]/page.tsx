@@ -44,18 +44,14 @@ import {
 import { normalizeDocItems } from "@/lib/documents";
 import { formatEUR } from "@/lib/utils";
 import {
-  addBudgetLine,
   addProjectCost,
-  addProjectPhase,
   addTimeEntry,
   attachDocumentToProject,
-  createEstimateFromBudget,
-  deleteBudgetLine,
   deleteProject,
   deleteProjectCost,
-  deleteProjectPhase,
   deleteTimeEntry,
   linkPurchaseOrderToProject,
+  sendBudgetToClient,
   setProjectStatus,
   unlinkPurchaseOrder,
   updateProject,
@@ -336,37 +332,8 @@ export default async function ProjectDetailPage({
     equipment: "Materieel",
     other: "Overig",
   };
-  // Begroting in blokken: één blok per fase (met z'n onderdelen), plus een blok
-  // voor onderdelen zonder (gekende) fase. Elk blok heeft z'n eigen toevoeg-form.
-  const phaseNames = phaseRows.map((p) => p.name);
-  const linesOfPhase = (name: string) => budgetRows.filter((b) => (b.phase ?? "").trim() === name);
-  const ungroupedBudget = budgetRows.filter((b) => !phaseNames.includes((b.phase ?? "").trim()));
-  type BudgetBlock = {
-    key: string;
-    title: string;
-    description: string | null;
-    plannedWeeks: string | null;
-    phaseValue: string;
-    lines: typeof budgetRows;
-  };
-  const budgetBlocks: BudgetBlock[] = phaseRows.map((p) => ({
-    key: p.id,
-    title: p.name,
-    description: p.description,
-    plannedWeeks: p.plannedWeeks,
-    phaseValue: p.name,
-    lines: linesOfPhase(p.name),
-  }));
-  if (ungroupedBudget.length > 0 || phaseRows.length === 0) {
-    budgetBlocks.push({
-      key: "_geen",
-      title: "Zonder fase",
-      description: phaseRows.length === 0 ? "voeg onderdelen toe, of maak eerst fases aan" : null,
-      plannedWeeks: null,
-      phaseValue: "",
-      lines: ungroupedBudget,
-    });
-  }
+  // Begroting-samenvatting voor de compacte kaart (de builder zit op /begroting).
+  const budgetLineCount = budgetRows.length;
   const begrootMarge = budgetTargetBase - budgetCostTotal;
   const begrootMargePct = budgetTargetBase > 0 ? Math.round((begrootMarge / budgetTargetBase) * 100) : null;
   const workerOptions = workerRows.map((w) => ({
@@ -428,6 +395,100 @@ export default async function ProjectDetailPage({
           </div>
         }
       />
+
+      {/* Hoofdgegevens — bovenaan, volle breedte */}
+      <Card className="mb-5">
+        <CardContent className="p-5">
+          <form action={action} className="space-y-4">
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              <Field label="Naam" htmlFor="name">
+                <Input id="name" name="name" required defaultValue={project.name} />
+              </Field>
+              <Field label="Code (optioneel)" htmlFor="code" hint="korte projectcode, bv. VER">
+                <Input id="code" name="code" defaultValue={project.code ?? ""} />
+              </Field>
+              <Field label="Status" htmlFor="status">
+                <Select id="status" name="status" defaultValue={project.status}>
+                  <option value="active">Actief</option>
+                  <option value="completed">Afgerond</option>
+                  <option value="archived">Gearchiveerd</option>
+                </Select>
+              </Field>
+              <Field label="Soort project" htmlFor="kind" hint="bouw toont uren, kosten & begroting">
+                <Select id="kind" name="kind" defaultValue={project.kind}>
+                  <option value="sales">Verkoop (producten)</option>
+                  <option value="construction">Bouw / werkzaamheden</option>
+                </Select>
+              </Field>
+              <Field label="Aanneemprijs (€, ex. BTW)" htmlFor="contractPriceEur" hint="leeg = offertetotaal als doel">
+                <Input
+                  id="contractPriceEur"
+                  name="contractPriceEur"
+                  inputMode="decimal"
+                  defaultValue={project.contractPriceEur ? String(project.contractPriceEur).replace(".", ",") : ""}
+                />
+              </Field>
+              <Field label="Begrote uren (optioneel)" htmlFor="budgetHours">
+                <Input
+                  id="budgetHours"
+                  name="budgetHours"
+                  inputMode="decimal"
+                  defaultValue={project.budgetHours ? String(project.budgetHours).replace(".", ",") : ""}
+                />
+              </Field>
+              <Field label="Verantwoordelijke" htmlFor="ownerId">
+                <Combobox
+                  name="ownerId"
+                  options={ownerOptions}
+                  defaultValue={project.ownerId ?? ""}
+                  placeholder="— geen — / kies medewerker"
+                  clearable
+                />
+              </Field>
+              <Field label="Klant" htmlFor="contactId">
+                <Combobox
+                  name="contactId"
+                  options={contactOptions}
+                  defaultValue={project.contactId ?? ""}
+                  placeholder="— geen — / zoek contact"
+                  clearable
+                />
+              </Field>
+              <Field label="Pand (optioneel)" htmlFor="propertyId">
+                <Combobox
+                  name="propertyId"
+                  options={propertyOptions}
+                  defaultValue={project.propertyId ?? ""}
+                  placeholder="— geen — / zoek pand"
+                  clearable
+                />
+              </Field>
+              <Field label="Startdatum" htmlFor="startDate">
+                <Input id="startDate" name="startDate" type="date" defaultValue={project.startDate ?? ""} />
+              </Field>
+              <Field label="Einddatum (gepland)" htmlFor="endDate">
+                <Input id="endDate" name="endDate" type="date" defaultValue={project.endDate ?? ""} />
+              </Field>
+            </div>
+            <Field label="Omschrijving" htmlFor="description">
+              <Textarea id="description" name="description" rows={3} defaultValue={project.description ?? ""} />
+            </Field>
+            <div className="flex flex-wrap items-center justify-between gap-2 border-t pt-4">
+              <SubmitButton pendingLabel="Opslaan…">Opslaan</SubmitButton>
+              {!project.holdedProjectId && (
+                <ConfirmSubmit
+                  formAction={remove}
+                  message="Dit project definitief verwijderen?"
+                  pendingLabel="Verwijderen…"
+                  className="rounded-md px-3 py-2 text-sm font-medium text-danger transition-colors hover:bg-danger/10"
+                >
+                  Project verwijderen
+                </ConfirmSubmit>
+              )}
+            </div>
+          </form>
+        </CardContent>
+      </Card>
 
       <div className="mb-5 grid grid-cols-2 gap-3 sm:grid-cols-4">
         <StatTile
@@ -495,12 +556,45 @@ export default async function ProjectDetailPage({
         </CardContent>
       </Card>
 
-      {/* ─────────────── Bouw: begroting, uren, kosten ─────────────── */}
+      {/* ─────────────── Begroting (eigen scherm) ─────────────── */}
+      <Card className="mb-5">
+        <CardHeader>
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <CardTitle>Begroting</CardTitle>
+              <span className="text-xs text-muted">
+                {budgetLineCount > 0
+                  ? `${budgetLineCount} ${budgetLineCount === 1 ? "onderdeel" : "onderdelen"} · ${phaseRows.length} ${phaseRows.length === 1 ? "fase" : "fases"} · totaal ${formatEUR(budgetTargetTotal)}${begrootMargePct != null ? ` · marge ${begrootMargePct}%` : ""}`
+                  : "nog geen begroting — bouw 'm per fase op een eigen scherm"}
+              </span>
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <LinkButton href={`/projects/${id}/begroting`} variant={budgetLineCount > 0 ? "secondary" : "primary"}>
+                {budgetLineCount > 0 ? "Begroting openen" : "+ Begroting maken"}
+              </LinkButton>
+              {budgetLineCount > 0 && (
+                <>
+                  <LinkButton href={`/projects/${id}/begroting/pdf`} target="_blank" variant="secondary">
+                    📄 Printen
+                  </LinkButton>
+                  <form action={sendBudgetToClient.bind(null, id)}>
+                    <SubmitButton variant="secondary" pendingLabel="Versturen…">
+                      ✉ Versturen naar klant
+                    </SubmitButton>
+                  </form>
+                </>
+              )}
+            </div>
+          </div>
+        </CardHeader>
+      </Card>
+
+      {/* ─────────────── Uren & kosten ─────────────── */}
       <details open={isConstruction} className="group mb-5">
         <summary className="mb-3 cursor-pointer list-none text-lg font-semibold marker:content-none">
           <span className="inline-flex items-center gap-2">
             <span className="text-muted transition group-open:rotate-90">▶</span>
-            Begroting, uren &amp; kosten
+            Uren &amp; kosten
             <span className="text-xs font-normal text-muted">
               {isConstruction ? "(bouwproject)" : "(klik om te openen)"}
             </span>
@@ -508,213 +602,6 @@ export default async function ProjectDetailPage({
         </summary>
 
         <div className="grid gap-5">
-          {/* Fases */}
-          <Card>
-            <CardHeader>
-              <CardTitle>Fases</CardTitle>
-              <span className="text-xs text-muted">wat er per fase gebeurt — sturen de begroting & facturatie aan</span>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              {phaseRows.length > 0 && (
-                <div className="space-y-2">
-                  {phaseRows.map((ph) => (
-                    <div key={ph.id} className="rounded-md border bg-background px-3 py-2">
-                      <div className="flex items-start justify-between gap-2">
-                        <div className="min-w-0">
-                          <p className="font-medium">{ph.name}</p>
-                          {ph.description ? <p className="text-xs text-muted">{ph.description}</p> : null}
-                          {ph.plannedWeeks ? <p className="text-[11px] text-muted">🗓 {ph.plannedWeeks}</p> : null}
-                        </div>
-                        <form action={deleteProjectPhase.bind(null, id, ph.id)}>
-                          <SubmitButton size="sm" variant="ghost" className="text-muted" pendingLabel="…">×</SubmitButton>
-                        </form>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-              <form action={addProjectPhase.bind(null, id)} className="grid gap-3 sm:grid-cols-2 lg:grid-cols-[1fr_2fr_1fr_auto] lg:items-end">
-                <Field label="Fase">
-                  <Input name="name" required placeholder="bijv. Fase 1 — Sloop" />
-                </Field>
-                <Field label="Wat gebeurt er">
-                  <Input name="description" placeholder="bijv. sloop & strippen, afvoeren puin" />
-                </Field>
-                <Field label="Planning (optioneel)">
-                  <Input name="plannedWeeks" placeholder="bijv. Week 1–3 · 2 weken" />
-                </Field>
-                <SubmitButton size="sm" variant="secondary" pendingLabel="…">+ Fase</SubmitButton>
-              </form>
-            </CardContent>
-          </Card>
-
-          {/* Begroting */}
-          <Card>
-            <CardHeader>
-              <div className="flex flex-wrap items-start justify-between gap-2">
-                <div>
-                  <CardTitle>Begroting</CardTitle>
-                  <span className="text-xs text-muted">
-                    targetprijs {formatEUR(budgetTargetTotal)} · geraamde kost {formatEUR(budgetCostTotal)} ·{" "}
-                    begrote marge {formatEUR(begrootMarge)}
-                    {begrootMargePct != null ? ` (${begrootMargePct}%)` : ""}
-                  </span>
-                </div>
-                {budgetRows.length > 0 && (
-                  <div className="flex flex-wrap items-center gap-2">
-                    <LinkButton href={`/projects/${id}/begroting/pdf`} target="_blank" variant="secondary" size="sm">
-                      📄 Print begroting
-                    </LinkButton>
-                    <form action={createEstimateFromBudget.bind(null, id)}>
-                      <SubmitButton size="sm" variant="primary" pendingLabel="Bezig…">
-                        → Maak offerte van begroting
-                      </SubmitButton>
-                    </form>
-                  </div>
-                )}
-              </div>
-            </CardHeader>
-            <CardContent className="space-y-5">
-              {phaseRows.length === 0 && (
-                <p className="rounded-md bg-background px-3 py-2 text-sm text-muted">
-                  Maak eerst hierboven een <strong>fase</strong> aan (bijv. “Fase 1 — Sloop”). Daarna voeg je per fase
-                  meerdere onderdelen met een prijs toe.
-                </p>
-              )}
-
-              {/* Eén blok per fase: koptekst + onderdelen + een mini-formulier om een onderdeel toe te voegen. */}
-              {budgetBlocks.map((blk) => {
-                const lines = blk.lines;
-                const tTotal = lines.reduce((s, b) => s + Number(b.amountEur ?? 0), 0);
-                const cTotal = lines.reduce((s, b) => s + Number(b.estimatedCostEur ?? 0), 0);
-                return (
-                  <div key={blk.key} className="overflow-hidden rounded-lg border">
-                    <div className="flex items-baseline justify-between gap-2 bg-background px-3 py-2">
-                      <div className="min-w-0">
-                        <p className="font-semibold">{blk.title}</p>
-                        {blk.description ? <p className="text-xs text-muted">{blk.description}</p> : null}
-                        {blk.plannedWeeks ? <p className="text-[11px] text-muted">🗓 {blk.plannedWeeks}</p> : null}
-                      </div>
-                      {lines.length > 0 && (
-                        <p className="shrink-0 text-sm font-semibold tabular-nums">{formatEUR(tTotal)}</p>
-                      )}
-                    </div>
-
-                    {lines.length > 0 && (
-                      <Table>
-                        <THead>
-                          <tr>
-                            <Th>Onderdeel</Th>
-                            <Th className="text-right">Targetprijs</Th>
-                            <Th className="text-right">Kost</Th>
-                            <Th className="text-right">Marge</Th>
-                            <Th />
-                          </tr>
-                        </THead>
-                        <TBody>
-                          {lines.map((b) => {
-                            const t = Number(b.amountEur ?? 0);
-                            const c = b.estimatedCostEur != null ? Number(b.estimatedCostEur) : null;
-                            const mp = c != null && t > 0 ? Math.round(((t - c) / t) * 100) : null;
-                            return (
-                              <Tr key={b.id}>
-                                <Td>
-                                  <span className="font-medium">{b.description}</span>
-                                  {b.isStelpost && <Badge tone="warning" className="ml-2">stelpost</Badge>}
-                                  {(b.section || (b.quantity && b.unitPriceEur)) && (
-                                    <span className="block text-xs text-muted">
-                                      {b.section ? b.section : ""}
-                                      {b.section && b.quantity && b.unitPriceEur ? " · " : ""}
-                                      {b.quantity && b.unitPriceEur
-                                        ? `${Number(b.quantity).toLocaleString("nl-NL")} × ${formatEUR(b.unitPriceEur)}`
-                                        : ""}
-                                    </span>
-                                  )}
-                                </Td>
-                                <Td className="text-right tabular-nums font-medium">{formatEUR(t)}</Td>
-                                <Td className="text-right tabular-nums text-muted">{c != null ? formatEUR(c) : "—"}</Td>
-                                <Td className="text-right tabular-nums">{c != null ? `${formatEUR(t - c)}${mp != null ? ` · ${mp}%` : ""}` : "—"}</Td>
-                                <Td className="text-right">
-                                  <form action={deleteBudgetLine.bind(null, id, b.id)}>
-                                    <SubmitButton size="sm" variant="ghost" className="text-muted" pendingLabel="…">×</SubmitButton>
-                                  </form>
-                                </Td>
-                              </Tr>
-                            );
-                          })}
-                          {cTotal > 0 && (
-                            <Tr>
-                              <Td className="text-xs text-muted">Subtotaal kost / marge</Td>
-                              <Td />
-                              <Td className="text-right text-xs tabular-nums text-muted">{formatEUR(cTotal)}</Td>
-                              <Td className="text-right text-xs tabular-nums text-muted">{formatEUR(tTotal - cTotal)}</Td>
-                              <Td />
-                            </Tr>
-                          )}
-                        </TBody>
-                      </Table>
-                    )}
-
-                    {/* Mini-formulier: onderdeel toevoegen aan déze fase (geen fase overtypen). */}
-                    <form
-                      action={addBudgetLine.bind(null, id)}
-                      className="flex flex-wrap items-end gap-2 border-t bg-surface px-3 py-2.5"
-                    >
-                      <input type="hidden" name="phase" value={blk.phaseValue} />
-                      <Field label="Onderdeel" className="min-w-[12rem] flex-1">
-                        <Input name="description" required placeholder="bijv. Sloop binnenwanden" />
-                      </Field>
-                      <Field label="Targetprijs €" className="w-32">
-                        <Input name="amountEur" inputMode="decimal" required placeholder="0,00" />
-                      </Field>
-                      <Field label="Kost € (optie)" className="w-28">
-                        <Input name="estimatedCostEur" inputMode="decimal" placeholder="0,00" />
-                      </Field>
-                      <label className="flex items-center gap-1.5 pb-2 text-sm">
-                        <input type="checkbox" name="isStelpost" className="size-4" /> stelpost
-                      </label>
-                      <SubmitButton size="sm" variant="secondary" pendingLabel="…">+ onderdeel</SubmitButton>
-                    </form>
-                  </div>
-                );
-              })}
-
-              {budgetRows.length > 0 && (
-                <div className="ml-auto w-full max-w-sm space-y-1 border-t pt-3 text-sm">
-                  <div className="flex justify-between">
-                    <span className="text-muted">Subtotaal targetprijs</span>
-                    <span className="tabular-nums">{formatEUR(budgetTargetBase)}</span>
-                  </div>
-                  {contingencyAmt > 0 && (
-                    <div className="flex justify-between">
-                      <span className="text-muted">Onvoorzien ({contingencyPct}%)</span>
-                      <span className="tabular-nums">{formatEUR(contingencyAmt)}</span>
-                    </div>
-                  )}
-                  <div className="flex justify-between border-t pt-1 font-semibold">
-                    <span>Totaal (= doel)</span>
-                    <span className="tabular-nums">{formatEUR(budgetTargetTotal)}</span>
-                  </div>
-                  {budgetCostTotal > 0 && (
-                    <>
-                      <div className="flex justify-between text-muted">
-                        <span>Totaal geraamde kost</span>
-                        <span className="tabular-nums">{formatEUR(budgetCostTotal)}</span>
-                      </div>
-                      <div className="flex justify-between font-medium text-success">
-                        <span>Begrote marge</span>
-                        <span className="tabular-nums">
-                          {formatEUR(begrootMarge)}
-                          {begrootMargePct != null ? ` · ${begrootMargePct}%` : ""}
-                        </span>
-                      </div>
-                    </>
-                  )}
-                </div>
-              )}
-            </CardContent>
-          </Card>
-
           {/* Uren */}
           <Card>
             <CardHeader>
@@ -902,100 +789,7 @@ export default async function ProjectDetailPage({
         </div>
       </details>
 
-      <div className="grid gap-5 lg:grid-cols-[1fr_18rem]">
-        <Card>
-          <CardContent className="p-5">
-            <form action={action} className="space-y-4">
-              <div className="grid gap-4 sm:grid-cols-2">
-                <Field label="Naam" htmlFor="name">
-                  <Input id="name" name="name" required defaultValue={project.name} />
-                </Field>
-                <Field label="Code (optioneel)" htmlFor="code" hint="korte projectcode, bv. VER">
-                  <Input id="code" name="code" defaultValue={project.code ?? ""} />
-                </Field>
-                <Field label="Status" htmlFor="status">
-                  <Select id="status" name="status" defaultValue={project.status}>
-                    <option value="active">Actief</option>
-                    <option value="completed">Afgerond</option>
-                    <option value="archived">Gearchiveerd</option>
-                  </Select>
-                </Field>
-                <Field label="Soort project" htmlFor="kind" hint="bouw toont uren, kosten & begroting">
-                  <Select id="kind" name="kind" defaultValue={project.kind}>
-                    <option value="sales">Verkoop (producten)</option>
-                    <option value="construction">Bouw / werkzaamheden</option>
-                  </Select>
-                </Field>
-                <Field label="Aanneemprijs (€, ex. BTW)" htmlFor="contractPriceEur" hint="leeg = offertetotaal als doel">
-                  <Input
-                    id="contractPriceEur"
-                    name="contractPriceEur"
-                    inputMode="decimal"
-                    defaultValue={project.contractPriceEur ? String(project.contractPriceEur).replace(".", ",") : ""}
-                  />
-                </Field>
-                <Field label="Begrote uren (optioneel)" htmlFor="budgetHours">
-                  <Input
-                    id="budgetHours"
-                    name="budgetHours"
-                    inputMode="decimal"
-                    defaultValue={project.budgetHours ? String(project.budgetHours).replace(".", ",") : ""}
-                  />
-                </Field>
-                <Field label="Verantwoordelijke" htmlFor="ownerId">
-                  <Combobox
-                    name="ownerId"
-                    options={ownerOptions}
-                    defaultValue={project.ownerId ?? ""}
-                    placeholder="— geen — / kies medewerker"
-                    clearable
-                  />
-                </Field>
-                <Field label="Klant" htmlFor="contactId">
-                  <Combobox
-                    name="contactId"
-                    options={contactOptions}
-                    defaultValue={project.contactId ?? ""}
-                    placeholder="— geen — / zoek contact"
-                    clearable
-                  />
-                </Field>
-                <Field label="Pand (optioneel)" htmlFor="propertyId">
-                  <Combobox
-                    name="propertyId"
-                    options={propertyOptions}
-                    defaultValue={project.propertyId ?? ""}
-                    placeholder="— geen — / zoek pand"
-                    clearable
-                  />
-                </Field>
-                <Field label="Startdatum" htmlFor="startDate">
-                  <Input id="startDate" name="startDate" type="date" defaultValue={project.startDate ?? ""} />
-                </Field>
-                <Field label="Einddatum (gepland)" htmlFor="endDate">
-                  <Input id="endDate" name="endDate" type="date" defaultValue={project.endDate ?? ""} />
-                </Field>
-              </div>
-              <Field label="Omschrijving" htmlFor="description">
-                <Textarea id="description" name="description" rows={4} defaultValue={project.description ?? ""} />
-              </Field>
-              <div className="flex flex-wrap items-center justify-between gap-2 border-t pt-4">
-                <SubmitButton pendingLabel="Opslaan…">Opslaan</SubmitButton>
-                {!project.holdedProjectId && (
-                  <ConfirmSubmit
-                    formAction={remove}
-                    message="Dit project definitief verwijderen?"
-                    pendingLabel="Verwijderen…"
-                    className="rounded-md px-3 py-2 text-sm font-medium text-danger transition-colors hover:bg-danger/10"
-                  >
-                    Project verwijderen
-                  </ConfirmSubmit>
-                )}
-              </div>
-            </form>
-          </CardContent>
-        </Card>
-
+      <div>
         <div className="space-y-5">
           <Card>
             <CardHeader>
