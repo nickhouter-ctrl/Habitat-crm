@@ -11,6 +11,7 @@ import {
   documents,
   projectBudgetLines,
   projectCosts,
+  projectPayments,
   projectPhases,
   projects,
   purchaseOrders,
@@ -229,6 +230,38 @@ export async function addProjectCost(projectId: string, formData: FormData) {
 export async function deleteProjectCost(projectId: string, costId: string) {
   await requireUser();
   await db.delete(projectCosts).where(eq(projectCosts.id, costId));
+  revalidatePath(`/projects/${projectId}`);
+}
+
+/* ----------------------------------------- ontvangen betalingen (van klant) */
+
+const paymentSchema = z.object({
+  date: z.string().trim().optional(),
+  amountEur: z.string().trim().min(1, "Bedrag is verplicht"),
+  method: z.enum(["cash", "bank", "invoice", "advance", "other"]).default("bank"),
+  description: z.string().trim().optional(),
+  note: z.string().trim().optional(),
+});
+
+export async function addProjectPayment(projectId: string, formData: FormData) {
+  await requireUser();
+  const parsed = paymentSchema.safeParse(Object.fromEntries(formData));
+  if (!parsed.success) throw new Error(parsed.error.issues.map((i) => i.message).join(", "));
+  const d = parsed.data;
+  await db.insert(projectPayments).values({
+    projectId,
+    date: dateOrNull(d.date),
+    amountEur: numOrZero(d.amountEur),
+    method: d.method,
+    description: d.description || null,
+    note: d.note || null,
+  });
+  revalidatePath(`/projects/${projectId}`);
+}
+
+export async function deleteProjectPayment(projectId: string, paymentId: string) {
+  await requireUser();
+  await db.delete(projectPayments).where(eq(projectPayments.id, paymentId));
   revalidatePath(`/projects/${projectId}`);
 }
 

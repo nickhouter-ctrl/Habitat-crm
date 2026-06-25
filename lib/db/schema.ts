@@ -154,6 +154,14 @@ export const projectCostCategory = pgEnum("project_cost_category", [
   "equipment", // huur materieel/gereedschap
   "other",
 ]);
+/** Manier waarop een ontvangen klantbetaling binnenkwam. */
+export const receivedPaymentMethod = pgEnum("received_payment_method", [
+  "cash", // contant
+  "bank", // bankoverschrijving
+  "invoice", // via (derden)factuur
+  "advance", // voorschot / aanbetaling
+  "other",
+]);
 /** Categorie van een begrotingsregel (incl. arbeid t.o.v. de losse-kosten-categorie). */
 export const budgetCategory = pgEnum("budget_category", [
   "labor", // arbeid (geraamde uren × tarief)
@@ -776,6 +784,33 @@ export const projectCosts = pgTable(
     index("project_costs_project_idx").on(t.projectId),
     index("project_costs_date_idx").on(t.date),
   ],
+);
+
+/**
+ * Ontvangen betalingen van de klant op een project — los van de formele
+ * facturatie (`documents`). Bedoeld om aanbetalingen/voorschotten en contante
+ * ontvangsten vast te leggen die (nog) niet 1-op-1 op een Habitat-factuur staan.
+ * Telt NIET mee in de omzet/marge (die blijft factuurgebaseerd); puur als
+ * inzicht in wat de klant al heeft betaald. Bedragen incl. eventuele btw.
+ */
+export const projectPayments = pgTable(
+  "project_payments",
+  {
+    id: uuid().primaryKey().default(sql`gen_random_uuid()`),
+    projectId: uuid()
+      .notNull()
+      .references(() => projects.id, { onDelete: "cascade" }),
+    /** Datum van ontvangst (optioneel — niet altijd bekend). */
+    date: date(),
+    /** Ontvangen bedrag (incl. btw). */
+    amountEur: numeric({ precision: 14, scale: 2 }).notNull().default("0"),
+    method: receivedPaymentMethod().notNull().default("bank"),
+    /** Omschrijving zoals de klant/boekhouding 'm noemt (bv. "factuur F26009 creadores"). */
+    description: text(),
+    note: text(),
+    ...timestamps,
+  },
+  (t) => [index("project_payments_project_idx").on(t.projectId)],
 );
 
 /**

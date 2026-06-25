@@ -33,6 +33,7 @@ import {
   products,
   projectBudgetLines,
   projectCosts,
+  projectPayments,
   projectPhases,
   projects,
   properties,
@@ -45,10 +46,12 @@ import { normalizeDocItems } from "@/lib/documents";
 import { formatEUR } from "@/lib/utils";
 import {
   addProjectCost,
+  addProjectPayment,
   addTimeEntry,
   attachDocumentToProject,
   deleteProject,
   deleteProjectCost,
+  deleteProjectPayment,
   deleteTimeEntry,
   linkPurchaseOrderToProject,
   sendBudgetToClient,
@@ -253,10 +256,11 @@ export default async function ProjectDetailPage({
     invoiceTotalsForConv.some((t) => Math.abs(t - total) <= 0.02);
 
   // ─────────── Job-costing: uren (arbeid), kosten/inkoop, begroting, doel ───────────
-  const [timeRows, costRows, budgetRows, linkedPOs, workerRows, unlinkedPOs, estTotals, phaseRows] =
+  const [timeRows, costRows, paymentRows, budgetRows, linkedPOs, workerRows, unlinkedPOs, estTotals, phaseRows] =
     await Promise.all([
       db.select().from(timeEntries).where(eq(timeEntries.projectId, id)).orderBy(desc(timeEntries.date)),
       db.select().from(projectCosts).where(eq(projectCosts.projectId, id)).orderBy(desc(projectCosts.date)),
+      db.select().from(projectPayments).where(eq(projectPayments.projectId, id)).orderBy(desc(projectPayments.date)),
       db
         .select()
         .from(projectBudgetLines)
@@ -290,6 +294,10 @@ export default async function ProjectDetailPage({
   const looseCost = costRows.reduce((s, c) => s + Number(c.amountEur ?? 0), 0);
   const materialCost = poCost + looseCost;
 
+  // Ontvangen betalingen van de klant (incl. btw) — informatief, los van de
+  // factuurgebaseerde omzet/marge hierboven.
+  const receivedTotal = paymentRows.reduce((s, p) => s + Number(p.amountEur ?? 0), 0);
+
   // Eigen-productkost: gerealiseerd = op facturen; verwacht = het meest complete
   // beeld (offerte als die hoger is dan wat al gefactureerd is). Voorkomt zowel
   // "100% marge" (offerte nog niet gefactureerd) als dubbeltelling.
@@ -314,7 +322,11 @@ export default async function ProjectDetailPage({
     contractPrice ?? (budgetTargetTotal > 0 ? budgetTargetTotal : estimateSubtotal > 0 ? estimateSubtotal : null);
   const targetRevenue = explicitTarget != null ? Math.max(explicitTarget, projRevenue) : projRevenue;
   const targetIsImplicit = explicitTarget == null;
-  const toInvoice = Math.max(0, targetRevenue - projRevenue);
+  // Wat de klant al heeft betaald (ontvangsten) telt — net als wat al formeel is
+  // gefactureerd — mee als "afgehandeld" richting de aanneemprijs. Zo beweegt
+  // "nog te factureren" mee zodra er een ontvangst wordt geboekt.
+  const settledToTarget = projRevenue + receivedTotal;
+  const toInvoice = Math.max(0, targetRevenue - settledToTarget);
 
   // Resultaat: gerealiseerd (gefactureerd − gerealiseerde kosten) en verwacht (doel − verwachte kosten).
   const realizedProfit = projRevenue - realizedCost;
@@ -325,6 +337,13 @@ export default async function ProjectDetailPage({
 
   const isConstruction = project.kind === "construction";
   const PAY_LABEL = { cash: "Contant", invoice: "Per factuur" } as const;
+  const RECEIVED_METHOD_LABEL: Record<string, string> = {
+    cash: "Contant",
+    bank: "Bankoverschrijving",
+    invoice: "Via factuur",
+    advance: "Voorschot",
+    other: "Overig",
+  };
   const BUDGET_CAT_LABEL: Record<string, string> = {
     labor: "Arbeid",
     material: "Materiaal",
@@ -498,27 +517,74 @@ export default async function ProjectDetailPage({
           hint={contractPrice != null ? "afgesproken · ex. BTW" : targetIsImplicit ? "nog geen offerte/aanneemprijs" : "offertetotaal · ex. BTW"}
           tone="info"
         />
-        <StatTile label="Gefactureerd" value={formatEUR(projRevenue)} hint="ex. BTW" tone="neutral" />
-        <StatTile label="Nog te factureren" value={formatEUR(toInvoice)} tone={toInvoice > 0 ? "warning" : "neutral"} />
-        <StatTile label="Totale kosten (verwacht)" value={formatEUR(totalCost)} hint="arbeid + inkoop + eigen producten" tone="neutral" />
-        <StatTile label="Arbeid" value={formatEUR(laborCost)} hint={`${laborHours.toLocaleString("nl-NL")} uur`} tone="neutral" />
-        <StatTile label="Inkoop / materiaal" value={formatEUR(materialCost)} hint="gekoppelde inkoop + kostenregels" tone="neutral" />
+        <StatTile label="Gefactureerd" value={formatEUR(projRevenue)} hint="ex. BTW" tone="neutral" href="#documenten" />
+        <StatTile
+          label="Ontvangen (klant)"
+          value={formatEUR(receivedTotal)}
+          hint={`${paymentRows.length} ${paymentRows.length === 1 ? "betaling" : "betalingen"} · incl. BTW`}
+          tone={receivedTotal > 0 ? "success" : "neutral"}
+          href="#ontvangen"
+        />
+        <StatTile label="Nog te factureren" value={formatEUR(toInvoice)} hint="doel − gefactureerd − ontvangen" tone={toInvoice > 0 ? "warning" : "neutral"} href="#geldstroom" />
+        <StatTile label="Totale kosten (verwacht)" value={formatEUR(totalCost)} hint="arbeid + inkoop + eigen producten" tone="neutral" href="#urenkosten" />
+        <StatTile label="Arbeid" value={formatEUR(laborCost)} hint={`${laborHours.toLocaleString("nl-NL")} uur`} tone="neutral" href="#uren" />
+        <StatTile label="Inkoop / materiaal" value={formatEUR(materialCost)} hint="gekoppelde inkoop + kostenregels" tone="neutral" href="#kosten" />
         <StatTile
           label="Eigen producten"
           value={formatEUR(ownProductCostExpected)}
           hint={offerteProductCost > projCost ? "kostprijs op offerte" : "kostprijs op facturen"}
           tone="neutral"
+          href="#documenten"
         />
         <StatTile
           label="Verwacht resultaat"
           value={`${formatEUR(expectedProfit)}${expectedMarginPct != null ? ` · ${expectedMarginPct}%` : ""}`}
           hint="doel − verwachte kosten"
           tone={resultTone}
+          href="#resultaat"
         />
       </div>
 
+      {/* ─────────────── Geldstroom: eruit / ontvangen / nog te factureren ─────────────── */}
+      <Card id="geldstroom" className="mb-5 scroll-mt-24">
+        <CardHeader>
+          <CardTitle>Geldstroom dit project</CardTitle>
+          <span className="text-xs text-muted">
+            wat eruit ging · wat de klant al betaalde · wat er nog gefactureerd moet worden — incl. wat via Creadores liep
+          </span>
+        </CardHeader>
+        <CardContent>
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            <div className="rounded-lg border bg-background p-3">
+              <p className="text-xs text-muted">Eruit gegaan (kosten)</p>
+              <p className="text-lg font-semibold tabular-nums text-danger">− {formatEUR(realizedCost)}</p>
+              <p className="text-xs text-muted">arbeid + inkoop + materiaal · ex. btw</p>
+            </div>
+            <div className="rounded-lg border bg-background p-3">
+              <p className="text-xs text-muted">Ontvangen van klant</p>
+              <p className="text-lg font-semibold tabular-nums text-success">+ {formatEUR(receivedTotal)}</p>
+              <p className="text-xs text-muted">{paymentRows.length} {paymentRows.length === 1 ? "betaling" : "betalingen"} · incl. btw</p>
+            </div>
+            <div className="rounded-lg border bg-background p-3">
+              <p className="text-xs text-muted">Saldo (ontvangen − eruit)</p>
+              <p className={`text-lg font-semibold tabular-nums ${receivedTotal - realizedCost < 0 ? "text-danger" : "text-success"}`}>
+                {formatEUR(receivedTotal - realizedCost)}
+              </p>
+              <p className="text-xs text-muted">kaspositie op dit project</p>
+            </div>
+            <div className="rounded-lg border bg-background p-3">
+              <p className="text-xs text-muted">Nog te factureren</p>
+              <p className={`text-lg font-semibold tabular-nums ${toInvoice > 0 ? "text-warning" : ""}`}>{formatEUR(toInvoice)}</p>
+              <p className="text-xs text-muted">
+                {contractPrice != null ? "aanneemprijs" : "doel"} {formatEUR(targetRevenue)} − gefactureerd {formatEUR(projRevenue)} − ontvangen {formatEUR(receivedTotal)}
+              </p>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
       {/* ─────────────── Resultaat (P&L) ─────────────── */}
-      <Card className="mb-5">
+      <Card id="resultaat" className="mb-5 scroll-mt-24">
         <CardHeader>
           <CardTitle>Resultaat — zitten we goed?</CardTitle>
           <span className="text-xs text-muted">begroot → werkelijk → gefactureerd · alle bedragen ex. BTW</span>
@@ -590,8 +656,78 @@ export default async function ProjectDetailPage({
         </CardHeader>
       </Card>
 
+      {/* ─────────────── Ontvangen betalingen (van klant) ─────────────── */}
+      <Card id="ontvangen" className="mb-5 scroll-mt-24">
+        <CardHeader>
+          <CardTitle>Ontvangen betalingen</CardTitle>
+          <span className="text-xs text-muted">
+            wat de klant al heeft betaald · {formatEUR(receivedTotal)} totaal · incl. btw · telt niet mee in omzet/marge
+          </span>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {paymentRows.length > 0 && (
+            <Table>
+              <THead>
+                <tr>
+                  <Th>Datum</Th>
+                  <Th>Omschrijving</Th>
+                  <Th>Wijze</Th>
+                  <Th className="text-right">Bedrag</Th>
+                  <Th />
+                </tr>
+              </THead>
+              <TBody>
+                {paymentRows.map((p) => (
+                  <Tr key={p.id}>
+                    <Td className="whitespace-nowrap">
+                      {p.date ? new Date(p.date).toLocaleDateString("nl-NL", { day: "numeric", month: "short", year: "numeric" }) : "—"}
+                    </Td>
+                    <Td>
+                      {p.description ?? "—"}
+                      {p.note ? <span className="block text-xs text-muted">{p.note}</span> : null}
+                    </Td>
+                    <Td>
+                      <Badge tone={p.method === "cash" ? "warning" : p.method === "advance" ? "info" : "neutral"}>
+                        {RECEIVED_METHOD_LABEL[p.method] ?? p.method}
+                      </Badge>
+                    </Td>
+                    <Td className="text-right tabular-nums font-medium">{formatEUR(p.amountEur)}</Td>
+                    <Td className="text-right">
+                      <form action={deleteProjectPayment.bind(null, id, p.id)}>
+                        <SubmitButton size="sm" variant="ghost" className="text-muted" pendingLabel="…">×</SubmitButton>
+                      </form>
+                    </Td>
+                  </Tr>
+                ))}
+              </TBody>
+            </Table>
+          )}
+          <form action={addProjectPayment.bind(null, id)} className="grid gap-3 sm:grid-cols-2 lg:grid-cols-[0.9fr_1.6fr_1fr_0.9fr_auto] lg:items-end">
+            <Field label="Datum">
+              <Input name="date" type="date" />
+            </Field>
+            <Field label="Omschrijving">
+              <Input name="description" placeholder="bijv. factuur F26009 / voorschot" />
+            </Field>
+            <Field label="Wijze">
+              <Select name="method" defaultValue="bank">
+                <option value="bank">Bankoverschrijving</option>
+                <option value="cash">Contant</option>
+                <option value="invoice">Via factuur</option>
+                <option value="advance">Voorschot</option>
+                <option value="other">Overig</option>
+              </Select>
+            </Field>
+            <Field label="Bedrag (€)">
+              <Input name="amountEur" inputMode="decimal" required placeholder="0,00" />
+            </Field>
+            <SubmitButton size="sm" variant="secondary" pendingLabel="…">+ Betaling</SubmitButton>
+          </form>
+        </CardContent>
+      </Card>
+
       {/* ─────────────── Uren & kosten ─────────────── */}
-      <details open={isConstruction} className="group mb-5">
+      <details id="urenkosten" open={isConstruction} className="group mb-5 scroll-mt-24">
         <summary className="mb-3 cursor-pointer list-none text-lg font-semibold marker:content-none">
           <span className="inline-flex items-center gap-2">
             <span className="text-muted transition group-open:rotate-90">▶</span>
@@ -604,7 +740,7 @@ export default async function ProjectDetailPage({
 
         <div className="grid gap-5">
           {/* Uren */}
-          <Card>
+          <Card id="uren" className="scroll-mt-24">
             <CardHeader>
               <CardTitle>Uren — arbeid</CardTitle>
               <span className="text-xs text-muted">
@@ -683,7 +819,7 @@ export default async function ProjectDetailPage({
           </Card>
 
           {/* Kosten & inkoop */}
-          <Card>
+          <Card id="kosten" className="scroll-mt-24">
             <CardHeader>
               <CardTitle>Kosten &amp; inkoop</CardTitle>
               <span className="text-xs text-muted">
@@ -820,7 +956,7 @@ export default async function ProjectDetailPage({
             </CardContent>
           </Card>
 
-          <Card>
+          <Card id="documenten" className="scroll-mt-24">
             <CardHeader>
               <CardTitle>Documenten in dit project</CardTitle>
               <span className="text-xs text-muted">{linkedDocs.length}</span>

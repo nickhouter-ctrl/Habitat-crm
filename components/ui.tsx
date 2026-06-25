@@ -293,6 +293,7 @@ export function StatTile({
   hint,
   tone = "neutral",
   icon,
+  href,
 }: {
   label: string;
   value: ReactNode;
@@ -301,13 +302,29 @@ export function StatTile({
   tone?: BadgeTone;
   /** Optioneel icoon rechtsboven (bv. een lucide-icoon). */
   icon?: ReactNode;
+  /** Maakt de tegel klikbaar — bv. een anchor (#uren) naar de onderbouwing. */
+  href?: string;
 }) {
   return (
-    <Card className="relative overflow-hidden p-4 pl-5 transition-shadow hover:shadow-md">
+    <Card
+      className={cn(
+        "relative overflow-hidden p-4 pl-5 transition-shadow hover:shadow-md",
+        href && "group cursor-pointer hover:border-accent/40",
+      )}
+    >
       <span className={cn("absolute inset-y-0 left-0 w-1.5", statBar[tone])} aria-hidden />
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <p className="text-xs font-medium uppercase tracking-wide text-muted">{label}</p>
+          <p className="text-xs font-medium uppercase tracking-wide text-muted">
+            {href ? (
+              <a href={href} className="after:absolute after:inset-0" aria-label={`Bekijk onderbouwing: ${label}`}>
+                {label}
+              </a>
+            ) : (
+              label
+            )}
+            {href && <span className="ml-1 opacity-0 transition group-hover:opacity-100" aria-hidden>→</span>}
+          </p>
           <p className="mt-1 text-2xl font-semibold tabular-nums">{value}</p>
           {hint && <p className="mt-0.5 text-xs text-muted">{hint}</p>}
         </div>

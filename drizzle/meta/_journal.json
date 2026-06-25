@@ -260,6 +260,13 @@
       "when": 1782297689242,
       "tag": "0036_ambitious_ozymandias",
       "breakpoints": true
+    },
+    {
+      "idx": 37,
+      "version": "7",
+      "when": 1782424434859,
+      "tag": "0037_yellow_warbird",
+      "breakpoints": true
     }
   ]
 }
