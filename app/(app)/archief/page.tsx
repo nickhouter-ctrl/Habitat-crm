@@ -66,9 +66,10 @@ export default async function ArchiefPage({
   const category = typeof params.category === "string" ? params.category : "";
   const supplier = typeof params.supplier === "string" ? params.supplier : "";
   const type = typeof params.type === "string" ? params.type : "";
-  const sort: SortKey = (typeof params.sort === "string" && params.sort in SORT_COL ? params.sort : "category") as SortKey;
+  const sort: SortKey = (typeof params.sort === "string" && params.sort in SORT_COL ? params.sort : "date") as SortKey;
   const dir = params.dir === "asc" ? "asc" : "desc";
-  // Default: sorteer op categorie zodat groepen samenklonteren, dan datum binnen groep
+  // Standaard: nieuwste eerst (op datum). Alleen bij expliciete categorie-sortering
+  // klonteren de groepen samen (met datum-desc binnen elke groep).
   const useGrouping = sort === "category" && !category;
 
   const typeFilter =
