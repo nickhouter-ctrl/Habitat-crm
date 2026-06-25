@@ -7,14 +7,19 @@ import { z } from "zod";
 
 import { auth } from "@/auth";
 import { db } from "@/lib/db";
-import { activities, products, purchaseOrders } from "@/lib/db/schema";
+import { activities, emailInbox, mailAttachments, products, purchaseOrders } from "@/lib/db/schema";
 import type { PurchaseOrderAttachment } from "@/lib/db/schema";
 import { nextSequentialSku } from "@/lib/products";
 import { normalizePoAttachments, parsePoLineItems, poTotal, PO_STATUSES } from "@/lib/purchase-orders";
-import { deletePurchaseOrderFile, downloadPurchaseOrderBuffer } from "@/lib/storage";
+import { copyMailAttachmentToPoBucket, deletePurchaseOrderFile, downloadMailAttachmentBuffer, downloadPurchaseOrderBuffer } from "@/lib/storage";
 import { buildInvoicePdfAttachment, isExcelAttachment, pdfNameFor } from "@/lib/excel-to-pdf";
+import { buildPurchaseReference } from "@/lib/auto-purchase-invoice";
 import { holded } from "@/lib/holded/client";
 import { pushPurchaseOrderToHolded as syncPushToHolded } from "@/lib/holded/sync";
+
+/** Financiële categorieën die een (te-betalen) inkoopfactuur kunnen zijn. */
+const FINANCIAL_CATEGORIES = ["supplier-invoice", "freight-invoice", "agent-fee-china", "agent-fee-spain", "opex"];
+const isProforma = (f: string) => /\bproforma\b|\bquotation\b|\bquote\b|^PI[\s._-]|\bPI\s+for\b/i.test(f);
 
 const schema = z.object({
   supplier: z.string().trim().min(1, "Leverancier is verplicht"),
@@ -498,4 +503,83 @@ export async function createReorderPurchaseOrder(group: string) {
 
   revalidatePath("/inkooporders");
   redirect(`/inkooporders/${row.id}`);
+}
+
+/* ───────────────── Te verwerken: mail → inkooporder ───────────────── */
+
+/**
+ * Maak één inkooporder uit een (nog niet gekoppelde) e-mail in de review-lijst.
+ * Model: één PO per factuur (bij Allpack incl. handling). We pakken de financiële
+ * bijlage met het hoogste bedrag als hoofdfactuur, kopiëren álle bijlagen mee,
+ * en koppelen de mail. Daarna kun je op de PO-pagina het bedrag/leverancier nog
+ * bijstellen.
+ */
+export async function createPoFromEmail(emailId: string) {
+  await requireUser();
+  const mail = await db.query.emailInbox.findFirst({ where: eq(emailInbox.id, emailId) });
+  if (!mail) return;
+  if (mail.linkedPurchaseOrderId) redirect(`/inkooporders/${mail.linkedPurchaseOrderId}`);
+
+  const atts = await db.select().from(mailAttachments).where(eq(mailAttachments.emailId, emailId));
+  // Financiële bijlagen (geen proforma); val terug op alle bijlagen als er geen financiële zijn.
+  const fin = atts.filter((a) => FINANCIAL_CATEGORIES.includes(a.category) && !isProforma(a.filename));
+  const pool = fin.length > 0 ? fin : atts;
+  // Hoofdfactuur = grootste bedrag, anders de eerste.
+  const primary = [...pool].sort((a, b) => Number(b.amountEur ?? 0) - Number(a.amountEur ?? 0))[0];
+
+  const supplier = (primary?.supplierTag || mail.fromName || mail.fromEmail || "Onbekende leverancier").trim();
+  const reference = primary ? buildPurchaseReference(mail.subject, primary.filename) : (mail.subject ?? "").slice(0, 80);
+  const total = Number(primary?.amountEur ?? 0);
+
+  // Bijlagen kopiëren naar de PO-bucket (incl. Excel→PDF).
+  const poAttachments: PurchaseOrderAttachment[] = [];
+  for (const a of pool) {
+    const copied = await copyMailAttachmentToPoBucket({ mailStoragePath: a.storagePath, filename: a.filename });
+    if (copied) poAttachments.push({ name: copied.name, path: copied.path, size: copied.size, uploadedAt: new Date().toISOString() });
+    if (isExcelAttachment(a.filename, a.contentType)) {
+      try {
+        const xbuf = await downloadMailAttachmentBuffer(a.storagePath);
+        const pdfAtt = xbuf ? await buildInvoicePdfAttachment(xbuf, a.filename) : null;
+        if (pdfAtt) poAttachments.push(pdfAtt);
+      } catch {
+        /* PDF-generatie best-effort */
+      }
+    }
+  }
+
+  const orderDate = (mail.receivedAt ?? new Date()).toISOString().slice(0, 10);
+  const [po] = await db
+    .insert(purchaseOrders)
+    .values({
+      supplier,
+      reference: reference || null,
+      status: "received",
+      currency: "EUR",
+      orderDate,
+      receivedAt: mail.receivedAt ?? new Date(),
+      total: total.toFixed(2),
+      items: [{ name: mail.subject ?? `Factuur ${reference}`, units: 1, unitPrice: total, note: primary ? `Bron: ${primary.filename}` : undefined }],
+      attachments: poAttachments,
+      notes: `Handmatig uit mail "${mail.subject ?? ""}" (${mail.fromEmail ?? ""}).`,
+      stockAppliedAt: new Date(), // geen voorraadmutatie
+    })
+    .returning({ id: purchaseOrders.id });
+
+  await db.update(emailInbox).set({ linkedPurchaseOrderId: po.id, status: "linked", updatedAt: new Date() }).where(eq(emailInbox.id, emailId));
+  await db.insert(activities).values({
+    type: "note",
+    subject: `Inkoopfactuur uit mail: ${supplier}${reference ? ` · ${reference}` : ""}`,
+    body: `Bedrag: €${total.toFixed(2)} · controleer en stel zo nodig bij. Nog niet naar Holded gesynced.`,
+  });
+
+  revalidatePath("/inkooporders");
+  revalidatePath("/inkooporders/te-verwerken");
+  redirect(`/inkooporders/${po.id}`);
+}
+
+/** Markeer een mail als 'geen inkoopfactuur' → verdwijnt uit de review-lijst. */
+export async function dismissEmailFromQueue(emailId: string) {
+  await requireUser();
+  await db.update(emailInbox).set({ status: "archived", updatedAt: new Date() }).where(eq(emailInbox.id, emailId));
+  revalidatePath("/inkooporders/te-verwerken");
 }

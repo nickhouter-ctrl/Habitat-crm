@@ -1,4 +1,4 @@
-import { desc } from "drizzle-orm";
+import { and, desc, eq, inArray, isNull, ne, sql } from "drizzle-orm";
 import Link from "next/link";
 
 import {
@@ -17,7 +17,7 @@ import {
   Tr,
 } from "@/components/ui";
 import { db } from "@/lib/db";
-import { purchaseOrders } from "@/lib/db/schema";
+import { emailInbox, mailAttachments, purchaseOrders } from "@/lib/db/schema";
 import { formatMoney, PO_OPEN_STATUSES, PO_STATUS_META } from "@/lib/purchase-orders";
 import { cn, formatEUR } from "@/lib/utils";
 
@@ -61,6 +61,19 @@ export default async function PurchaseOrdersPage({
     .limit(2000);
 
   const pendingHolded = rows.filter((r) => !r.holdedId).length;
+
+  // Aantal nog te verwerken factuur-mails (financiële bijlage, niet gekoppeld).
+  const [{ n: queueCount }] = await db
+    .select({ n: sql<number>`count(distinct ${emailInbox.id})::int` })
+    .from(mailAttachments)
+    .innerJoin(emailInbox, eq(emailInbox.id, mailAttachments.emailId))
+    .where(
+      and(
+        isNull(emailInbox.linkedPurchaseOrderId),
+        ne(emailInbox.status, "archived"),
+        inArray(mailAttachments.category, ["supplier-invoice", "freight-invoice", "agent-fee-china", "agent-fee-spain", "opex"]),
+      ),
+    );
 
   // Aggregaten op de VOLLEDIGE set (overzicht blijft stabiel los van het filter).
   const eurRows = rows.filter((r) => (r.currency ?? "EUR") === "EUR");
@@ -123,6 +136,11 @@ export default async function PurchaseOrdersPage({
         actions={
           <>
             <SyncHoldedButton pendingCount={pendingHolded} />
+            {queueCount > 0 && (
+              <LinkButton href="/inkooporders/te-verwerken" variant="secondary">
+                📥 Te verwerken ({queueCount})
+              </LinkButton>
+            )}
             <LinkButton href="/inkooporders/bestellen" variant="secondary">
               Bijbestellen
             </LinkButton>
