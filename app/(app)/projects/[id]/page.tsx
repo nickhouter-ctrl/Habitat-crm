@@ -117,7 +117,7 @@ export default async function ProjectDetailPage({
   // OFFERTE (estimate) op, zodat de prognose de productkostprijs op de offerte
   // meeneemt — ook vóór er gefactureerd is (anders lijkt de marge 100%).
   const marginDocs = await db
-    .select({ id: documents.id, kind: documents.kind, status: documents.status, subtotalEur: documents.subtotalEur, items: documents.items })
+    .select({ id: documents.id, kind: documents.kind, status: documents.status, subtotalEur: documents.subtotalEur, totalEur: documents.totalEur, paidEur: documents.paidEur, items: documents.items })
     .from(documents)
     .where(and(eq(documents.projectId, id), inArray(documents.kind, ["estimate", "invoice", "creditnote"])));
   const allPids = new Set<string>();
@@ -170,6 +170,18 @@ export default async function ProjectDetailPage({
   }
   // invoiceDocs = alleen facturen/creditnota's (voor de gefactureerd-lijst onderaan).
   const invoiceDocs = marginDocs.filter((d) => d.kind !== "estimate");
+  // Openstaand (ex. btw): onbetaalde facturen, subtotaal × onbetaalde fractie.
+  let openOutstanding = 0;
+  let openInvoiceCount = 0;
+  for (const d of marginDocs) {
+    if (d.kind !== "invoice") continue;
+    if (d.status === "draft" || d.status === "void" || d.status === "paid") continue;
+    const total = Number(d.totalEur ?? 0);
+    const paid = Number(d.paidEur ?? 0);
+    if (total <= paid) continue;
+    openOutstanding += total > 0 ? Number(d.subtotalEur ?? 0) * ((total - paid) / total) : 0;
+    openInvoiceCount += 1;
+  }
   const projMargin = projRevenue - projCost;
   const projMarginPct = projRevenue > 0 ? Math.round((projMargin / projRevenue) * 100) : null;
 
@@ -518,6 +530,13 @@ export default async function ProjectDetailPage({
           tone="info"
         />
         <StatTile label="Gefactureerd" value={formatEUR(projRevenue)} hint="ex. BTW" tone="neutral" href="#documenten" />
+        <StatTile
+          label="Openstaande facturen"
+          value={formatEUR(openOutstanding)}
+          hint={`${openInvoiceCount} open factu${openInvoiceCount === 1 ? "ur" : "ren"} · ex. BTW`}
+          tone={openOutstanding > 0 ? "warning" : "neutral"}
+          href="#documenten"
+        />
         <StatTile
           label="Ontvangen (klant)"
           value={formatEUR(receivedTotal)}
