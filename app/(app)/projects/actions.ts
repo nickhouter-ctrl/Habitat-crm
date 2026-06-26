@@ -191,6 +191,34 @@ export async function addTimeEntry(projectId: string, formData: FormData) {
   revalidatePath(`/projects/${projectId}`);
 }
 
+const timeEntryUpdateSchema = z.object({
+  date: z.string().trim().optional(),
+  hours: z.string().trim().min(1, "Uren zijn verplicht"),
+  hourlyCostEur: z.string().trim().min(1, "Tarief is verplicht"),
+  paymentMethod: z.enum(["cash", "invoice"]).default("cash"),
+  note: z.string().trim().optional(),
+});
+
+/** Pas een bestaande urenregel aan (uren/tarief → kosten = uren × tarief). */
+export async function updateTimeEntry(projectId: string, entryId: string, formData: FormData) {
+  await requireUser();
+  const parsed = timeEntryUpdateSchema.safeParse(Object.fromEntries(formData));
+  if (!parsed.success) throw new Error(parsed.error.issues.map((i) => i.message).join(", "));
+  const d = parsed.data;
+  await db
+    .update(timeEntries)
+    .set({
+      date: dateOrNull(d.date) ?? undefined,
+      hours: numOrZero(d.hours),
+      hourlyCostEur: numOrZero(d.hourlyCostEur),
+      paymentMethod: d.paymentMethod,
+      note: d.note?.trim() ? d.note : null,
+      updatedAt: new Date(),
+    })
+    .where(eq(timeEntries.id, entryId));
+  revalidatePath(`/projects/${projectId}`);
+}
+
 export async function deleteTimeEntry(projectId: string, entryId: string) {
   await requireUser();
   await db.delete(timeEntries).where(eq(timeEntries.id, entryId));

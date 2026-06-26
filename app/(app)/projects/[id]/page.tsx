@@ -53,6 +53,7 @@ import {
   deleteProjectCost,
   deleteProjectPayment,
   deleteTimeEntry,
+  updateTimeEntry,
   linkPurchaseOrderToProject,
   sendBudgetToClient,
   setProjectStatus,
@@ -71,10 +72,13 @@ export const metadata = { title: "Project" };
 
 export default async function ProjectDetailPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>;
+  searchParams: Promise<{ edit?: string }>;
 }) {
   const { id } = await params;
+  const { edit: editEntryId } = await searchParams;
   const project = await db.query.projects.findFirst({ where: eq(projects.id, id) });
   if (!project) notFound();
 
@@ -782,21 +786,64 @@ export default async function ProjectDetailPage({
                     </tr>
                   </THead>
                   <TBody>
-                    {timeRows.map((t) => (
-                      <Tr key={t.id}>
-                        <Td className="whitespace-nowrap">{new Date(t.date).toLocaleDateString("nl-NL", { day: "numeric", month: "short" })}</Td>
-                        <Td>{t.workerName ?? "—"}{t.note ? <span className="block text-xs text-muted">{t.note}</span> : null}</Td>
-                        <Td className="text-right tabular-nums">{Number(t.hours).toLocaleString("nl-NL")}</Td>
-                        <Td className="text-right tabular-nums text-muted">{formatEUR(t.hourlyCostEur)}</Td>
-                        <Td className="text-right tabular-nums font-medium">{formatEUR(Number(t.hours) * Number(t.hourlyCostEur))}</Td>
-                        <Td><Badge tone={t.paymentMethod === "cash" ? "warning" : "neutral"}>{PAY_LABEL[t.paymentMethod]}</Badge></Td>
-                        <Td className="text-right">
-                          <form action={deleteTimeEntry.bind(null, id, t.id)}>
-                            <SubmitButton size="sm" variant="ghost" className="text-muted" pendingLabel="…">×</SubmitButton>
-                          </form>
-                        </Td>
-                      </Tr>
-                    ))}
+                    {timeRows.map((t) => {
+                      if (t.id === editEntryId) {
+                        // Bewerk-modus: hele regel als één formulier (uren/tarief/datum/betaling).
+                        return (
+                          <Tr key={t.id} className="bg-amber-50/50">
+                            <Td colSpan={7} className="p-3">
+                              <form action={updateTimeEntry.bind(null, id, t.id)} className="flex flex-wrap items-end gap-3">
+                                <input type="hidden" name="note" defaultValue={t.note ?? ""} />
+                                <div className="text-sm">
+                                  <span className="block text-xs text-muted">Arbeider</span>
+                                  <span className="font-medium">{t.workerName ?? "—"}</span>
+                                </div>
+                                <Field label="Datum">
+                                  <Input type="date" name="date" defaultValue={String(t.date).slice(0, 10)} />
+                                </Field>
+                                <Field label="Uren">
+                                  <Input name="hours" defaultValue={String(t.hours)} inputMode="decimal" className="w-24 text-right tabular-nums" />
+                                </Field>
+                                <Field label="Tarief (€/u)">
+                                  <Input name="hourlyCostEur" defaultValue={String(t.hourlyCostEur)} inputMode="decimal" className="w-24 text-right tabular-nums" />
+                                </Field>
+                                <Field label="Betaling">
+                                  <Select name="paymentMethod" defaultValue={t.paymentMethod}>
+                                    <option value="cash">Contant</option>
+                                    <option value="invoice">Per factuur</option>
+                                  </Select>
+                                </Field>
+                                <SubmitButton size="sm" variant="secondary" pendingLabel="…">Opslaan</SubmitButton>
+                                <Link href={`/projects/${id}#uren`} className="px-2 py-2 text-xs text-muted hover:underline">
+                                  Annuleer
+                                </Link>
+                                <p className="w-full text-xs text-muted">Kosten = uren × tarief — wordt na opslaan herberekend.</p>
+                              </form>
+                            </Td>
+                          </Tr>
+                        );
+                      }
+                      return (
+                        <Tr key={t.id}>
+                          <Td className="whitespace-nowrap">{new Date(t.date).toLocaleDateString("nl-NL", { day: "numeric", month: "short" })}</Td>
+                          <Td>{t.workerName ?? "—"}{t.note ? <span className="block text-xs text-muted">{t.note}</span> : null}</Td>
+                          <Td className="text-right tabular-nums">{Number(t.hours).toLocaleString("nl-NL")}</Td>
+                          <Td className="text-right tabular-nums text-muted">{formatEUR(t.hourlyCostEur)}</Td>
+                          <Td className="text-right tabular-nums font-medium">{formatEUR(Number(t.hours) * Number(t.hourlyCostEur))}</Td>
+                          <Td><Badge tone={t.paymentMethod === "cash" ? "warning" : "neutral"}>{PAY_LABEL[t.paymentMethod]}</Badge></Td>
+                          <Td className="text-right whitespace-nowrap">
+                            <div className="flex items-center justify-end gap-1">
+                              <Link href={`/projects/${id}?edit=${t.id}#uren`} title="Bewerk" className="rounded px-1.5 py-1 text-muted hover:bg-muted/50">
+                                ✎
+                              </Link>
+                              <form action={deleteTimeEntry.bind(null, id, t.id)}>
+                                <SubmitButton size="sm" variant="ghost" className="text-muted" pendingLabel="…">×</SubmitButton>
+                              </form>
+                            </div>
+                          </Td>
+                        </Tr>
+                      );
+                    })}
                   </TBody>
                 </Table>
               )}
