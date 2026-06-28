@@ -25,9 +25,11 @@ export type ProjectFinancials = {
   targetRevenue: number;
   targetIsImplicit: boolean;
   hasTarget: boolean;
-  totalCost: number;
-  expectedProfit: number;
-  expectedMarginPct: number | null;
+  /** Werkelijke kosten tot nu toe (arbeid + inkoop + eigen producten gerealiseerd). */
+  costToDate: number;
+  /** Resultaat tot nu toe = doel − kosten tot nu toe. */
+  resultToDate: number;
+  marginPct: number | null;
   toInvoice: number;
   /** "op koers": success = goed, warning = krappe marge, danger = verlies. */
   tone: "success" | "warning" | "danger" | "neutral";
@@ -43,18 +45,18 @@ export function deriveProjectFinancials(i: ProjectFinancialsInput): ProjectFinan
   const targetRevenue = explicitTarget != null ? Math.max(explicitTarget, i.invoicedSubtotal) : i.invoicedSubtotal;
   const targetIsImplicit = explicitTarget == null;
 
-  const totalCost = i.laborCost + i.materialCost + i.ownProductCost;
-  const expectedProfit = targetRevenue - totalCost;
-  const expectedMarginPct = targetRevenue > 0 ? Math.round((expectedProfit / targetRevenue) * 100) : null;
+  const costToDate = i.laborCost + i.materialCost + i.ownProductCost;
+  const resultToDate = targetRevenue - costToDate;
+  const marginPct = targetRevenue > 0 ? Math.round((resultToDate / targetRevenue) * 100) : null;
   const toInvoice = Math.max(0, targetRevenue - i.invoicedSubtotal - i.received);
 
   // "Op koers" alleen zinvol als er een doel én iets gebeurd is (kosten of omzet).
-  const meaningful = targetRevenue > 0 && (totalCost > 0 || i.invoicedSubtotal > 0 || i.received > 0);
+  const meaningful = targetRevenue > 0 && (costToDate > 0 || i.invoicedSubtotal > 0 || i.received > 0);
   const tone: ProjectFinancials["tone"] = !meaningful
     ? "neutral"
-    : expectedProfit < 0
+    : resultToDate < 0
       ? "danger"
-      : expectedMarginPct != null && expectedMarginPct < 10
+      : marginPct != null && marginPct < 10
         ? "warning"
         : "success";
 
@@ -62,9 +64,9 @@ export function deriveProjectFinancials(i: ProjectFinancialsInput): ProjectFinan
     targetRevenue,
     targetIsImplicit,
     hasTarget: explicitTarget != null,
-    totalCost,
-    expectedProfit,
-    expectedMarginPct,
+    costToDate,
+    resultToDate,
+    marginPct,
     toInvoice,
     tone,
   };

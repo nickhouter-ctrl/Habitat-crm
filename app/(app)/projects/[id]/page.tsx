@@ -158,15 +158,11 @@ export default async function ProjectDetailPage({
   };
   let projRevenue = 0;
   let projCost = 0; // kostprijs eigen producten op facturen (gerealiseerd)
-  let offerteProductCost = 0; // kostprijs eigen producten op de offerte(s)
   const marginByDoc = new Map<string, { margin: number; pct: number | null }>();
   for (const d of marginDocs) {
     const rev = Number(d.subtotalEur ?? 0);
     const cost = lineCost(d.items);
-    if (d.kind === "estimate") {
-      if (d.status !== "void" && d.status !== "rejected") offerteProductCost += cost;
-      continue;
-    }
+    if (d.kind === "estimate") continue;
     marginByDoc.set(d.id, { margin: rev - cost, pct: rev > 0 ? Math.round(((rev - cost) / rev) * 100) : null });
     const sign = d.kind === "creditnote" ? -1 : 1;
     projRevenue += sign * rev;
@@ -318,9 +314,7 @@ export default async function ProjectDetailPage({
   // beeld (offerte als die hoger is dan wat al gefactureerd is). Voorkomt zowel
   // "100% marge" (offerte nog niet gefactureerd) als dubbeltelling.
   const ownProductCostRealized = projCost;
-  const ownProductCostExpected = Math.max(projCost, offerteProductCost);
-  const realizedCost = laborCost + materialCost + ownProductCostRealized;
-  const totalCost = laborCost + materialCost + ownProductCostExpected; // verwachte totale kosten
+  const realizedCost = laborCost + materialCost + ownProductCostRealized; // kosten tot nu toe
 
   // Begroting: targetprijzen (verkoop) + geraamde kosten per onderdeel.
   const budgetTargetBase = budgetRows.reduce((s, b) => s + Number(b.amountEur ?? 0), 0);
@@ -344,12 +338,12 @@ export default async function ProjectDetailPage({
   const settledToTarget = projRevenue + receivedTotal;
   const toInvoice = Math.max(0, targetRevenue - settledToTarget);
 
-  // Resultaat: gerealiseerd (gefactureerd − gerealiseerde kosten) en verwacht (doel − verwachte kosten).
+  // Resultaat TOT NU TOE = doel − werkelijke (gerealiseerde) kosten tot nu toe.
   const realizedProfit = projRevenue - realizedCost;
-  const expectedProfit = targetRevenue - totalCost;
-  const expectedMarginPct = targetRevenue > 0 ? Math.round((expectedProfit / targetRevenue) * 100) : null;
-  const costRatio = targetRevenue > 0 ? totalCost / targetRevenue : null;
-  const resultTone = expectedProfit < 0 ? "danger" : expectedMarginPct != null && expectedMarginPct < 10 ? "warning" : "success";
+  const resultToDate = targetRevenue - realizedCost;
+  const resultMarginPct = targetRevenue > 0 ? Math.round((resultToDate / targetRevenue) * 100) : null;
+  const costRatio = targetRevenue > 0 ? realizedCost / targetRevenue : null;
+  const resultTone = resultToDate < 0 ? "danger" : resultMarginPct != null && resultMarginPct < 10 ? "warning" : "success";
 
   const isConstruction = project.kind === "construction";
   const PAY_LABEL = { cash: "Contant", invoice: "Per factuur" } as const;
@@ -549,20 +543,20 @@ export default async function ProjectDetailPage({
           href="#ontvangen"
         />
         <StatTile label="Nog te factureren" value={formatEUR(toInvoice)} hint="doel − gefactureerd − ontvangen" tone={toInvoice > 0 ? "warning" : "neutral"} href="#geldstroom" />
-        <StatTile label="Totale kosten (verwacht)" value={formatEUR(totalCost)} hint="arbeid + inkoop + eigen producten" tone="neutral" href="#urenkosten" />
+        <StatTile label="Kosten tot nu toe" value={formatEUR(realizedCost)} hint="arbeid + inkoop + eigen producten" tone="neutral" href="#urenkosten" />
         <StatTile label="Arbeid" value={formatEUR(laborCost)} hint={`${laborHours.toLocaleString("nl-NL")} uur`} tone="neutral" href="#uren" />
         <StatTile label="Inkoop / materiaal" value={formatEUR(materialCost)} hint="gekoppelde inkoop + kostenregels" tone="neutral" href="#kosten" />
         <StatTile
           label="Eigen producten"
-          value={formatEUR(ownProductCostExpected)}
-          hint={offerteProductCost > projCost ? "kostprijs op offerte" : "kostprijs op facturen"}
+          value={formatEUR(ownProductCostRealized)}
+          hint="kostprijs op facturen"
           tone="neutral"
           href="#documenten"
         />
         <StatTile
-          label="Verwacht resultaat"
-          value={`${formatEUR(expectedProfit)}${expectedMarginPct != null ? ` · ${expectedMarginPct}%` : ""}`}
-          hint="doel − verwachte kosten"
+          label="Resultaat tot nu toe"
+          value={`${formatEUR(resultToDate)}${resultMarginPct != null ? ` · ${resultMarginPct}%` : ""}`}
+          hint="doel − kosten tot nu toe"
           tone={resultTone}
           href="#resultaat"
         />
@@ -636,12 +630,12 @@ export default async function ProjectDetailPage({
           </div>
           <div className={`rounded-lg p-3 text-sm ${resultTone === "danger" ? "bg-danger/10 text-danger" : resultTone === "warning" ? "bg-warning/10 text-warning" : "bg-success/10 text-success"}`}>
             <span className="font-semibold">
-              {resultTone === "danger" ? "⚠ Let op — verwacht verlies" : resultTone === "warning" ? "⚠ Krappe marge" : "✓ Op koers"}
+              {resultTone === "danger" ? "⚠ Let op — verlies" : resultTone === "warning" ? "⚠ Krappe marge" : "✓ Op koers"}
             </span>{" "}
-            Verwacht resultaat {formatEUR(expectedProfit)}
-            {expectedMarginPct != null ? ` (${expectedMarginPct}% marge)` : ""} ·{" "}
+            Resultaat tot nu toe {formatEUR(resultToDate)}
+            {resultMarginPct != null ? ` (${resultMarginPct}% marge)` : ""} ·{" "}
             kosten zijn {costRatio != null ? `${Math.round(costRatio * 100)}%` : "—"} van het doel ·{" "}
-            gerealiseerd (gefactureerd − kosten): {formatEUR(realizedProfit)}.
+            gefactureerd − kosten: {formatEUR(realizedProfit)}.
           </div>
         </CardContent>
       </Card>

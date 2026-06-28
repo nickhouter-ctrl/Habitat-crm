@@ -250,19 +250,17 @@ export default async function ProjectsPage({
   const ownProductCostByProject = new Map<string, number>();
   for (const [pid, docs] of docsByProject) {
     reservedByProject.set(pid, computeReservedNet(docs as ReservedDoc[]));
+    // Kostprijs eigen producten TOT NU TOE = gerealiseerd op facturen (− creditnota's).
     let realized = 0;
-    let offerte = 0;
     for (const d of docs) {
       const c = lineCost(d.items);
-      if (d.kind === "estimate") {
-        if (d.status !== "void" && d.status !== "rejected") offerte += c;
-      } else if (d.kind === "invoice" && d.status !== "draft" && d.status !== "void") {
+      if (d.kind === "invoice" && d.status !== "draft" && d.status !== "void") {
         realized += c;
       } else if (d.kind === "creditnote" && d.status !== "void") {
         realized -= c;
       }
     }
-    ownProductCostByProject.set(pid, Math.max(realized, offerte));
+    ownProductCostByProject.set(pid, realized);
   }
 
   // 4. Samenvoegen + per-project financiën afleiden (zelfde formule als detailscherm).
@@ -309,11 +307,11 @@ export default async function ProjectsPage({
       s.invoiced += r.invoiced;
       s.outstanding += r.outstanding;
       s.toInvoice += r.fin.toInvoice;
-      s.expectedProfit += r.fin.expectedProfit;
+      s.resultToDate += r.fin.resultToDate;
       s.contract += r.contractPriceEur != null ? Number(r.contractPriceEur) : 0;
       return s;
     },
-    { invoiced: 0, outstanding: 0, toInvoice: 0, expectedProfit: 0, contract: 0 },
+    { invoiced: 0, outstanding: 0, toInvoice: 0, resultToDate: 0, contract: 0 },
   );
 
   const statusBadge = (s: string) =>
@@ -356,10 +354,10 @@ export default async function ProjectsPage({
           tone={totals.toInvoice > 0 ? "warning" : "neutral"}
         />
         <StatTile
-          label="Verwacht resultaat"
-          value={formatEUR(totals.expectedProfit)}
-          hint="doel − verwachte kosten · ex. BTW"
-          tone={totals.expectedProfit < 0 ? "danger" : "info"}
+          label="Resultaat tot nu toe"
+          value={formatEUR(totals.resultToDate)}
+          hint="doel − kosten tot nu toe · ex. BTW"
+          tone={totals.resultToDate < 0 ? "danger" : "info"}
         />
       </div>
 
@@ -395,7 +393,7 @@ export default async function ProjectsPage({
                 <Th className="text-right">Openstaand</Th>
                 <Th className="text-right">Open facturen</Th>
                 <Th className="text-right">Nog te factureren</Th>
-                <Th className="text-right">Verwacht resultaat</Th>
+                <Th className="text-right">Resultaat tot nu toe</Th>
                 <Th>Op koers</Th>
                 <Th>Status</Th>
               </tr>
@@ -464,9 +462,9 @@ export default async function ProjectsPage({
                         <span className="text-muted">—</span>
                       ) : (
                         <span className={`font-medium ${profitTone}`}>
-                          {formatEUR(p.fin.expectedProfit)}
-                          {p.fin.expectedMarginPct != null ? (
-                            <span className="ml-1 text-xs font-normal text-muted">{p.fin.expectedMarginPct}%</span>
+                          {formatEUR(p.fin.resultToDate)}
+                          {p.fin.marginPct != null ? (
+                            <span className="ml-1 text-xs font-normal text-muted">{p.fin.marginPct}%</span>
                           ) : null}
                         </span>
                       )}
