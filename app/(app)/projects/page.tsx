@@ -20,7 +20,6 @@ import { db } from "@/lib/db";
 import {
   contacts,
   documents,
-  products,
   projectBudgetLines,
   projectCosts,
   projectPayments,
@@ -31,7 +30,7 @@ import {
 } from "@/lib/db/schema";
 import { normalizeDocItems } from "@/lib/documents";
 import { deriveProjectFinancials } from "@/lib/project-financials";
-import { formatDate, formatEUR } from "@/lib/utils";
+import { formatEUR } from "@/lib/utils";
 
 export const metadata = { title: "Projecten" };
 
