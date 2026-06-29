@@ -155,6 +155,8 @@ export const projectCostCategory = pgEnum("project_cost_category", [
   "equipment", // huur materieel/gereedschap
   "other",
 ]);
+/** Status van een uitgegeven sample: uit (borg uitstaand) / retour / verkocht. */
+export const sampleMovementStatus = pgEnum("sample_movement_status", ["out", "returned", "sold"]);
 /** Manier waarop een ontvangen klantbetaling binnenkwam. */
 export const receivedPaymentMethod = pgEnum("received_payment_method", [
   "cash", // contant
@@ -356,6 +358,8 @@ export const products = pgTable(
     barcode: text(),
     /** Current stock on hand (mirror of Holded once synced). */
     stockQty: numeric({ precision: 14, scale: 3 }),
+    /** Sample-voorraad (zelfde SKU) — fysieke staaltjes die we kunnen uitgeven. */
+    sampleStockQty: numeric({ precision: 10, scale: 2 }),
     /** Lage-voorraad-drempel — alert verschijnt wanneer stockQty onder dit getal zakt. */
     stockMin: numeric({ precision: 14, scale: 3 }),
     /** Top-level group / department, e.g. "Wandpanelen", "Badkamer", "Accessoires". */
@@ -480,6 +484,43 @@ export const consignments = pgTable(
     index("consignments_reseller_idx").on(t.resellerId),
     index("consignments_product_idx").on(t.productId),
     uniqueIndex("consignments_reseller_product_idx").on(t.resellerId, t.productId),
+  ],
+);
+
+/* ------------------------------------------------------ samples (staaltjes) */
+
+/**
+ * Sample-logboek: elke uitgifte van een staaltje (zelfde SKU als het product).
+ * "Uitgeven" verlaagt `products.sampleStockQty` en zet een regel op `out` met €5
+ * borg. Bij retour (`returned`) komt de borg + voorraad terug; bij verkoop
+ * (`sold`) blijft de sample weg en is de borg definitief (omzet). "Waar zijn de
+ * samples" = regels met status `out`, per ontvanger.
+ */
+export const sampleMovements = pgTable(
+  "sample_movements",
+  {
+    id: uuid().primaryKey().default(sql`gen_random_uuid()`),
+    productId: uuid().references(() => products.id, { onDelete: "set null" }),
+    productName: text().notNull(),
+    sku: text(),
+    unit: text(),
+    /** Ontvanger (klant/wederverkoper) — optioneel als alleen een naam bekend is. */
+    recipientId: uuid().references(() => contacts.id, { onDelete: "set null" }),
+    recipientName: text(),
+    qty: numeric({ precision: 10, scale: 2 }).notNull().default("1"),
+    /** Borg per sample (ex. btw). */
+    depositEur: numeric({ precision: 10, scale: 2 }).notNull().default("5"),
+    status: sampleMovementStatus().notNull().default("out"),
+    date: date().notNull(),
+    /** Optioneel gekoppeld document (offerte/factuur) waarop de sample staat. */
+    documentId: uuid(),
+    note: text(),
+    ...timestamps,
+  },
+  (t) => [
+    index("sample_movements_product_idx").on(t.productId),
+    index("sample_movements_recipient_idx").on(t.recipientId),
+    index("sample_movements_status_idx").on(t.status),
   ],
 );
 

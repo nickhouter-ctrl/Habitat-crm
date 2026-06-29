@@ -50,6 +50,7 @@ const NAV = [
   { href: "/ploeg", label: "Ploeg", icon: HardHat },
   { href: "/properties", label: "Panden", icon: Building2 },
   { href: "/products", label: "Producten", icon: Boxes },
+  { href: "/samples", label: "Samples", icon: Layers },
   { href: "/wederverkopers", label: "Wederverkopers", icon: Store },
   { href: "/samplecatalogus", label: "Samplecatalogus", icon: Layers },
   { href: "/prijslijst", label: "Prijslijst", icon: Tag },
