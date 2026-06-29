@@ -37,7 +37,7 @@ export default async function SamplesPage() {
     db
       .select({ id: products.id, name: products.name, sku: products.sku, sampleStockQty: products.sampleStockQty })
       .from(products)
-      .where(eq(products.isActive, true))
+      .where(and(eq(products.isActive, true), isNotNull(products.sampleStockQty)))
       .orderBy(asc(products.name)),
     db.select({ id: contacts.id, name: contacts.name }).from(contacts).orderBy(asc(contacts.name)),
   ]);
@@ -49,6 +49,22 @@ export default async function SamplesPage() {
   const soldDeposit = history
     .filter((m) => m.status === "sold")
     .reduce((s, m) => s + Number(m.qty) * Number(m.depositEur), 0);
+
+  // Uitstaande samples gegroepeerd per ontvanger (klant/wederverkoper).
+  type OutRow = (typeof out)[number];
+  const groups = new Map<string, { name: string; contactId: string | null; items: OutRow[]; qty: number; deposit: number }>();
+  for (const m of out) {
+    const key = m.recipientId ?? `n:${(m.recipientName ?? "—").toLowerCase()}`;
+    let g = groups.get(key);
+    if (!g) {
+      g = { name: m.recipientName ?? "Onbekend", contactId: m.recipientId ?? null, items: [], qty: 0, deposit: 0 };
+      groups.set(key, g);
+    }
+    g.items.push(m);
+    g.qty += Number(m.qty);
+    g.deposit += Number(m.qty) * Number(m.depositEur);
+  }
+  const groupList = [...groups.values()].sort((a, b) => a.name.localeCompare(b.name, "nl"));
 
   const productOptions: ComboOption[] = productRows.map((p) => ({
     value: p.id,
@@ -100,49 +116,61 @@ export default async function SamplesPage() {
         {out.length === 0 ? (
           <div className="px-5 pb-5 text-sm text-muted">Geen samples uitstaand.</div>
         ) : (
-          <Table>
-            <THead>
-              <tr>
-                <Th>Datum</Th>
-                <Th>Product</Th>
-                <Th>Bij wie</Th>
-                <Th className="text-right">Aantal</Th>
-                <Th className="text-right">Borg</Th>
-                <Th>Acties</Th>
-              </tr>
-            </THead>
-            <TBody>
-              {out.map((m) => (
-                <Tr key={m.id}>
-                  <Td className="whitespace-nowrap">{dt(m.date)}</Td>
-                  <Td>
-                    {m.productName}
-                    {m.sku ? <span className="block text-xs text-muted">{m.sku}</span> : null}
-                  </Td>
-                  <Td>
-                    {m.recipientId ? (
-                      <Link href={`/contacts/${m.recipientId}`} className="hover:underline">{m.recipientName ?? "—"}</Link>
-                    ) : (
-                      m.recipientName ?? <span className="text-muted">—</span>
-                    )}
-                    {m.note ? <span className="block text-xs text-muted">{m.note}</span> : null}
-                  </Td>
-                  <Td className="text-right tabular-nums">{Number(m.qty).toLocaleString("nl-NL")}</Td>
-                  <Td className="text-right tabular-nums">{formatEUR(Number(m.qty) * Number(m.depositEur))}</Td>
-                  <Td>
-                    <div className="flex items-center gap-2">
-                      <form action={returnSample.bind(null, m.id)}>
-                        <SubmitButton size="sm" variant="ghost" className="text-muted" pendingLabel="…">retour</SubmitButton>
-                      </form>
-                      <form action={markSampleSold.bind(null, m.id)}>
-                        <SubmitButton size="sm" variant="ghost" className="text-success" pendingLabel="…">verkocht</SubmitButton>
-                      </form>
-                    </div>
-                  </Td>
-                </Tr>
-              ))}
-            </TBody>
-          </Table>
+          <div className="divide-y">
+            {groupList.map((g) => (
+              <details key={g.contactId ?? g.name} className="group/rec">
+                <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-5 py-3 marker:content-none hover:bg-muted/30">
+                  <span className="inline-flex items-center gap-2 font-medium">
+                    <span className="text-muted transition group-open/rec:rotate-90">▶</span>
+                    {g.name}
+                  </span>
+                  <span className="text-sm text-muted tabular-nums">
+                    {g.qty.toLocaleString("nl-NL")} {g.qty === 1 ? "sample" : "samples"} · {formatEUR(g.deposit)} borg
+                  </span>
+                </summary>
+                <Table>
+                  <THead>
+                    <tr>
+                      <Th>Datum</Th>
+                      <Th>Product</Th>
+                      <Th className="text-right">Aantal</Th>
+                      <Th className="text-right">Borg</Th>
+                      <Th>Acties</Th>
+                    </tr>
+                  </THead>
+                  <TBody>
+                    {g.items.map((m) => (
+                      <Tr key={m.id}>
+                        <Td className="whitespace-nowrap">{dt(m.date)}</Td>
+                        <Td>
+                          {m.productName}
+                          {m.sku ? <span className="block text-xs text-muted">{m.sku}</span> : null}
+                          {m.note ? <span className="block text-xs text-muted">{m.note}</span> : null}
+                        </Td>
+                        <Td className="text-right tabular-nums">{Number(m.qty).toLocaleString("nl-NL")}</Td>
+                        <Td className="text-right tabular-nums">{formatEUR(Number(m.qty) * Number(m.depositEur))}</Td>
+                        <Td>
+                          <div className="flex items-center gap-2">
+                            <form action={returnSample.bind(null, m.id)}>
+                              <SubmitButton size="sm" variant="ghost" className="text-muted" pendingLabel="…">retour</SubmitButton>
+                            </form>
+                            <form action={markSampleSold.bind(null, m.id)}>
+                              <SubmitButton size="sm" variant="ghost" className="text-success" pendingLabel="…">verkocht</SubmitButton>
+                            </form>
+                          </div>
+                        </Td>
+                      </Tr>
+                    ))}
+                  </TBody>
+                </Table>
+                {g.contactId && (
+                  <div className="px-5 pb-3 text-xs">
+                    <Link href={`/contacts/${g.contactId}`} className="text-accent hover:underline">→ contact openen</Link>
+                  </div>
+                )}
+              </details>
+            ))}
+          </div>
         )}
       </Card>
 
