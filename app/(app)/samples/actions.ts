@@ -113,24 +113,25 @@ export async function createSampleInvoice(recipientId: string) {
   });
   if (rows.length === 0) redirect("/samples?factuur=leeg");
 
+  // Bewust GEEN productId: een sample-borg is geen productverkoop, dus het mag
+  // niet meetellen voor voorraad/bestellen of de productvoorraad afboeken.
   const items: DocumentLineItem[] = rows.map((m) => ({
-    name: `Sample (borg) — ${m.productName}`,
-    description: m.sku ?? undefined,
+    name: `Sample — ${m.productName}${m.sku ? ` (${m.sku})` : ""}`,
     units: Number(m.qty),
     price: Number(m.depositEur),
     taxRate: 21,
-    category: "materiaal",
-    productId: m.productId ?? undefined,
+    category: "sample",
   }));
   const totals = computeTotals(items);
   const round2 = (n: number) => (Math.round(n * 100) / 100).toFixed(2);
   const { id } = await insertNumberedDocument("invoice", {
     kind: "invoice",
     status: "draft",
-    title: `Samples (borg) — ${contact.name}`,
+    title: `Samples — ${contact.name}`,
     contactId: recipientId,
     issueDate: new Date().toISOString().slice(0, 10),
     currency: "EUR",
+    notes: `De in rekening gebrachte bedragen zijn een borg (waarborg) van €${SAMPLE_DEPOSIT_EUR} per sample. Bij retour van de sample(s) wordt de borg terugbetaald.`,
     subtotalEur: round2(totals.subtotal),
     taxEur: round2(totals.tax),
     totalEur: round2(totals.total),
