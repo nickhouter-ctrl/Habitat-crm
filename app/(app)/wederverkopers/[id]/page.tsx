@@ -24,7 +24,7 @@ import { db } from "@/lib/db";
 import { consignments, contacts, products } from "@/lib/db/schema";
 import { formatEUR } from "@/lib/utils";
 import { DEALER_MIN_MARGIN_PCT, dealerMarginPct, dealerPrice } from "@/lib/reseller";
-import { placeConsignment, recordConsignmentSale, returnConsignment } from "../actions";
+import { createResellerInvoice, placeConsignment, recordConsignmentSale, returnConsignment } from "../actions";
 
 export const metadata = { title: "Wederverkoper" };
 
@@ -108,7 +108,19 @@ export default async function ResellerDetailPage({ params }: { params: Promise<{
 
       <Card className="overflow-hidden">
         <CardHeader>
-          <CardTitle>In consignatie</CardTitle>
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <CardTitle>In consignatie</CardTitle>
+              <span className="text-xs text-muted">factuur = de producten die nu in de winkel liggen, tegen dealerprijs</span>
+            </div>
+            {inStoreValue > 0 && (
+              <form action={createResellerInvoice.bind(null, id)}>
+                <SubmitButton size="sm" variant="primary" pendingLabel="Aanmaken…">
+                  Factuur maken ({formatEUR(inStoreValue)})
+                </SubmitButton>
+              </form>
+            )}
+          </div>
         </CardHeader>
         {rows.length === 0 ? (
           <div className="px-5 pb-5 text-sm text-muted">Nog niets neergelegd bij deze wederverkoper.</div>

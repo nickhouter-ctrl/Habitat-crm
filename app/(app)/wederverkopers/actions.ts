@@ -7,7 +7,9 @@ import { z } from "zod";
 
 import { auth } from "@/auth";
 import { db } from "@/lib/db";
-import { consignments, contacts, products } from "@/lib/db/schema";
+import { consignments, contacts, products, type DocumentLineItem } from "@/lib/db/schema";
+import { computeTotals } from "@/lib/documents";
+import { insertNumberedDocument } from "@/lib/doc-number";
 import { dealerPrice } from "@/lib/reseller";
 
 async function requireUser() {
@@ -82,6 +84,48 @@ export async function placeConsignment(resellerId: string, formData: FormData) {
 
   revalidatePath(`/wederverkopers/${resellerId}`);
   revalidatePath("/wederverkopers");
+}
+
+/**
+ * Maak een concept-factuur voor de wederverkoper met de producten die nu bij
+ * hem in de winkel liggen (consignatie, aantal = geplaatst − verkocht), tegen
+ * dealerprijs. Opent meteen de factuur om te controleren/versturen.
+ */
+export async function createResellerInvoice(resellerId: string) {
+  await requireUser();
+  const reseller = await db.query.contacts.findFirst({ where: eq(contacts.id, resellerId) });
+  if (!reseller) redirect("/wederverkopers");
+
+  const rows = await db.select().from(consignments).where(eq(consignments.resellerId, resellerId));
+  const items: DocumentLineItem[] = rows
+    .map((c) => ({ row: c, qty: Number(c.qtyPlaced) - Number(c.qtySold), price: Number(c.dealerPriceEur ?? 0) }))
+    .filter((x) => x.qty > 0 && x.price > 0)
+    .map(({ row, qty, price }) => ({
+      name: row.productName,
+      description: row.sku ?? undefined,
+      units: qty,
+      price,
+      taxRate: 21,
+      category: "materiaal",
+      productId: row.productId ?? undefined,
+    }));
+  if (items.length === 0) redirect(`/wederverkopers/${resellerId}?factuur=leeg`);
+
+  const totals = computeTotals(items);
+  const round2 = (n: number) => (Math.round(n * 100) / 100).toFixed(2);
+  const { id } = await insertNumberedDocument("invoice", {
+    kind: "invoice",
+    status: "draft",
+    title: `Wederverkoper — ${reseller.name}`,
+    contactId: resellerId,
+    issueDate: new Date().toISOString().slice(0, 10),
+    currency: "EUR",
+    subtotalEur: round2(totals.subtotal),
+    taxEur: round2(totals.tax),
+    totalEur: round2(totals.total),
+    items,
+  });
+  redirect(`/documents/${id}/edit`);
 }
 
 /** Registreer een verkoop door de dealer (→ onze omzet tegen dealerprijs). */
