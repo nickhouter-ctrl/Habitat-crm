@@ -60,10 +60,24 @@ export default async function ResellerDetailPage({ params }: { params: Promise<{
     };
   });
 
+  // Actuele (live) dealerprijs + kostprijs uit het product; valt terug op de
+  // momentopname als het product niet meer (actief) bestaat.
+  const prodById = new Map(productRows.map((p) => [p.id, p]));
+  const liveDealer = (c: (typeof rows)[number]): number | null => {
+    const p = c.productId ? prodById.get(c.productId) : undefined;
+    const dp = p ? dealerPrice(p.priceEur, p.dealerPriceEur) : null;
+    return dp ?? (c.dealerPriceEur != null ? Number(c.dealerPriceEur) : null);
+  };
+  const liveCost = (c: (typeof rows)[number]): number | null => {
+    const p = c.productId ? prodById.get(c.productId) : undefined;
+    const cost = p?.costEur ?? c.costEur;
+    return cost != null ? Number(cost) : null;
+  };
+
   let inStoreValue = 0;
   let soldValue = 0;
   for (const c of rows) {
-    const dp = Number(c.dealerPriceEur ?? 0);
+    const dp = liveDealer(c) ?? 0;
     inStoreValue += (Number(c.qtyPlaced) - Number(c.qtySold)) * dp;
     soldValue += Number(c.qtySold) * dp;
   }
@@ -133,7 +147,7 @@ export default async function ResellerDetailPage({ params }: { params: Promise<{
                 <Th className="text-right">Verkocht</Th>
                 <Th className="text-right">Nu in winkel</Th>
                 <Th className="text-right">Dealerprijs</Th>
-                <Th className="text-right">Onze marge</Th>
+                <Th className="text-right">Onze marge (op kostprijs)</Th>
                 <Th>Acties</Th>
               </tr>
             </THead>
@@ -142,8 +156,8 @@ export default async function ResellerDetailPage({ params }: { params: Promise<{
                 const placed = Number(c.qtyPlaced);
                 const sold = Number(c.qtySold);
                 const left = placed - sold;
-                const dp = c.dealerPriceEur != null ? Number(c.dealerPriceEur) : null;
-                const margin = dealerMarginPct(dp, c.costEur);
+                const dp = liveDealer(c);
+                const margin = dealerMarginPct(dp, liveCost(c));
                 const lowMargin = margin != null && margin < DEALER_MIN_MARGIN_PCT;
                 return (
                   <Tr key={c.id}>

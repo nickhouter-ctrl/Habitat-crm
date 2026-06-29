@@ -18,7 +18,7 @@ import {
 import { SubmitButton } from "@/components/submit-button";
 import { Combobox, type ComboOption } from "@/components/combobox";
 import { db } from "@/lib/db";
-import { consignments, contacts } from "@/lib/db/schema";
+import { consignments, contacts, products } from "@/lib/db/schema";
 import { formatEUR } from "@/lib/utils";
 import { markAsReseller } from "./actions";
 
@@ -36,10 +36,12 @@ export default async function WederverkopersPage() {
         resellerId: consignments.resellerId,
         products: sql<number>`count(*)::int`,
         inStoreQty: sql<number>`coalesce(sum(${consignments.qtyPlaced} - ${consignments.qtySold}), 0)::float8`,
-        inStoreValue: sql<number>`coalesce(sum((${consignments.qtyPlaced} - ${consignments.qtySold}) * coalesce(${consignments.dealerPriceEur}, 0)), 0)::float8`,
-        soldValue: sql<number>`coalesce(sum(${consignments.qtySold} * coalesce(${consignments.dealerPriceEur}, 0)), 0)::float8`,
+        // Live dealerprijs: override → particulier −25% → momentopname.
+        inStoreValue: sql<number>`coalesce(sum((${consignments.qtyPlaced} - ${consignments.qtySold}) * coalesce(${products.dealerPriceEur}, ${products.priceEur} * 0.75, ${consignments.dealerPriceEur}, 0)), 0)::float8`,
+        soldValue: sql<number>`coalesce(sum(${consignments.qtySold} * coalesce(${products.dealerPriceEur}, ${products.priceEur} * 0.75, ${consignments.dealerPriceEur}, 0)), 0)::float8`,
       })
       .from(consignments)
+      .leftJoin(products, eq(consignments.productId, products.id))
       .groupBy(consignments.resellerId),
     db.select({ id: contacts.id, name: contacts.name, type: contacts.type }).from(contacts).orderBy(asc(contacts.name)),
   ]);

@@ -97,8 +97,21 @@ export async function createResellerInvoice(resellerId: string) {
   if (!reseller) redirect("/wederverkopers");
 
   const rows = await db.select().from(consignments).where(eq(consignments.resellerId, resellerId));
+  // Actuele dealerprijs uit het product (valt terug op de momentopname).
+  const prodIds = rows.map((r) => r.productId).filter((x): x is string => !!x);
+  const prods = prodIds.length
+    ? await db.query.products.findMany({
+        where: (p, { inArray: inArr }) => inArr(p.id, prodIds),
+        columns: { id: true, priceEur: true, dealerPriceEur: true },
+      })
+    : [];
+  const prodById = new Map(prods.map((p) => [p.id, p]));
   const items: DocumentLineItem[] = rows
-    .map((c) => ({ row: c, qty: Number(c.qtyPlaced) - Number(c.qtySold), price: Number(c.dealerPriceEur ?? 0) }))
+    .map((c) => {
+      const p = c.productId ? prodById.get(c.productId) : undefined;
+      const live = p ? dealerPrice(p.priceEur, p.dealerPriceEur) : null;
+      return { row: c, qty: Number(c.qtyPlaced) - Number(c.qtySold), price: live ?? Number(c.dealerPriceEur ?? 0) };
+    })
     .filter((x) => x.qty > 0 && x.price > 0)
     .map(({ row, qty, price }) => ({
       name: row.productName,

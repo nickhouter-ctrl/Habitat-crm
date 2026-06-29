@@ -22,13 +22,13 @@ export function dealerPrice(
   return null;
 }
 
-/** Onze marge% op een dealerverkoop = (dealerprijs − kostprijs) / dealerprijs. */
+/** Onze marge% op een dealerverkoop, op de KOSTPRIJS (opslag) = (dealerprijs − kostprijs) / kostprijs. */
 export function dealerMarginPct(
   dealer: number | null | undefined,
   cost: number | string | null | undefined,
 ): number | null {
-  if (dealer == null || dealer <= 0 || cost == null || cost === "") return null;
+  if (dealer == null || cost == null || cost === "") return null;
   const c = Number(cost);
-  if (!Number.isFinite(c)) return null;
-  return Math.round(((dealer - c) / dealer) * 100);
+  if (!Number.isFinite(c) || c <= 0) return null;
+  return Math.round(((dealer - c) / c) * 100);
 }
