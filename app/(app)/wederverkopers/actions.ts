@@ -106,22 +106,22 @@ export async function createResellerInvoice(resellerId: string) {
       })
     : [];
   const prodById = new Map(prods.map((p) => [p.id, p]));
-  const items: DocumentLineItem[] = rows
+  const invoiced = rows
     .map((c) => {
       const p = c.productId ? prodById.get(c.productId) : undefined;
       const live = p ? dealerPrice(p.priceEur, p.dealerPriceEur) : null;
       return { row: c, qty: Number(c.qtyPlaced) - Number(c.qtySold), price: live ?? Number(c.dealerPriceEur ?? 0) };
     })
-    .filter((x) => x.qty > 0 && x.price > 0)
-    .map(({ row, qty, price }) => ({
-      name: row.productName,
-      description: row.sku ?? undefined,
-      units: qty,
-      price,
-      taxRate: 21,
-      category: "materiaal",
-      productId: row.productId ?? undefined,
-    }));
+    .filter((x) => x.qty > 0 && x.price > 0);
+  const items: DocumentLineItem[] = invoiced.map(({ row, qty, price }) => ({
+    name: row.productName,
+    description: row.sku ?? undefined,
+    units: qty,
+    price,
+    taxRate: 21,
+    category: "materiaal",
+    productId: row.productId ?? undefined,
+  }));
   if (items.length === 0) redirect(`/wederverkopers/${resellerId}?factuur=leeg`);
 
   const totals = computeTotals(items);
@@ -138,6 +138,16 @@ export async function createResellerInvoice(resellerId: string) {
     totalEur: round2(totals.total),
     items,
   });
+
+  // Wat nu gefactureerd is → markeer als verkocht, zodat het uit "nu in winkel"
+  // valt en de regels inklappen (er kunnen daarna nieuwe orders neergelegd worden).
+  for (const { row, qty } of invoiced) {
+    await db
+      .update(consignments)
+      .set({ qtySold: sql`${consignments.qtySold} + ${qty}`, updatedAt: new Date() })
+      .where(eq(consignments.id, row.id));
+  }
+  revalidatePath(`/wederverkopers/${resellerId}`);
   redirect(`/documents/${id}/edit`);
 }
 

@@ -82,6 +82,66 @@ export default async function ResellerDetailPage({ params }: { params: Promise<{
     soldValue += Number(c.qtySold) * dp;
   }
 
+  // Actief = nog in de winkel; gedaan = volledig gefactureerd/verkocht (ingeklapt).
+  const activeRows = rows.filter((c) => Number(c.qtyPlaced) - Number(c.qtySold) > 0);
+  const doneRows = rows.filter((c) => Number(c.qtyPlaced) - Number(c.qtySold) <= 0 && Number(c.qtyPlaced) > 0);
+
+  const renderRow = (c: (typeof rows)[number], done: boolean) => {
+    const placed = Number(c.qtyPlaced);
+    const sold = Number(c.qtySold);
+    const left = placed - sold;
+    const dp = liveDealer(c);
+    const margin = dealerMarginPct(dp, liveCost(c));
+    const lowMargin = margin != null && margin < DEALER_MIN_MARGIN_PCT;
+    return (
+      <Tr key={c.id}>
+        <Td>
+          {c.productName}
+          {c.sku ? <span className="block text-xs text-muted">{c.sku}</span> : null}
+        </Td>
+        <Td className="text-right tabular-nums">{placed.toLocaleString("nl-NL")}</Td>
+        <Td className="text-right tabular-nums">{sold.toLocaleString("nl-NL")}</Td>
+        <Td className="text-right tabular-nums font-medium">{left.toLocaleString("nl-NL")}</Td>
+        <Td className="text-right tabular-nums">{dp != null ? formatEUR(dp) : "—"}</Td>
+        <Td className="text-right tabular-nums">
+          {margin != null ? (
+            <Badge tone={margin < 0 ? "danger" : lowMargin ? "warning" : "success"}>{margin}%</Badge>
+          ) : (
+            <span className="text-muted">—</span>
+          )}
+        </Td>
+        <Td>
+          {done ? (
+            <Badge tone="neutral">gefactureerd / verkocht</Badge>
+          ) : (
+            <div className="flex flex-wrap items-center gap-2">
+              <form action={recordConsignmentSale.bind(null, id, c.id)} className="flex items-center gap-1">
+                <Input name="qty" inputMode="decimal" placeholder="aant." className="h-8 w-16 px-2 py-1 text-right" />
+                <SubmitButton size="sm" variant="ghost" className="text-success" pendingLabel="…">verkocht</SubmitButton>
+              </form>
+              <form action={returnConsignment.bind(null, id, c.id)} className="flex items-center gap-1">
+                <Input name="qty" inputMode="decimal" placeholder="aant." className="h-8 w-16 px-2 py-1 text-right" />
+                <SubmitButton size="sm" variant="ghost" className="text-muted" pendingLabel="…">retour</SubmitButton>
+              </form>
+            </div>
+          )}
+        </Td>
+      </Tr>
+    );
+  };
+
+  const headerRow = (
+    <tr>
+      <Th>Product</Th>
+      <Th className="text-right">Geplaatst</Th>
+      <Th className="text-right">Verkocht</Th>
+      <Th className="text-right">Nu in winkel</Th>
+      <Th className="text-right">Dealerprijs</Th>
+      <Th className="text-right">Onze marge (op kostprijs)</Th>
+      <Th>Acties</Th>
+    </tr>
+  );
+
   return (
     <>
       <PageHeader
@@ -139,60 +199,36 @@ export default async function ResellerDetailPage({ params }: { params: Promise<{
         {rows.length === 0 ? (
           <div className="px-5 pb-5 text-sm text-muted">Nog niets neergelegd bij deze wederverkoper.</div>
         ) : (
-          <Table>
-            <THead>
-              <tr>
-                <Th>Product</Th>
-                <Th className="text-right">Geplaatst</Th>
-                <Th className="text-right">Verkocht</Th>
-                <Th className="text-right">Nu in winkel</Th>
-                <Th className="text-right">Dealerprijs</Th>
-                <Th className="text-right">Onze marge (op kostprijs)</Th>
-                <Th>Acties</Th>
-              </tr>
-            </THead>
-            <TBody>
-              {rows.map((c) => {
-                const placed = Number(c.qtyPlaced);
-                const sold = Number(c.qtySold);
-                const left = placed - sold;
-                const dp = liveDealer(c);
-                const margin = dealerMarginPct(dp, liveCost(c));
-                const lowMargin = margin != null && margin < DEALER_MIN_MARGIN_PCT;
-                return (
-                  <Tr key={c.id}>
-                    <Td>
-                      {c.productName}
-                      {c.sku ? <span className="block text-xs text-muted">{c.sku}</span> : null}
-                    </Td>
-                    <Td className="text-right tabular-nums">{placed.toLocaleString("nl-NL")}</Td>
-                    <Td className="text-right tabular-nums">{sold.toLocaleString("nl-NL")}</Td>
-                    <Td className="text-right tabular-nums font-medium">{left.toLocaleString("nl-NL")}</Td>
-                    <Td className="text-right tabular-nums">{dp != null ? formatEUR(dp) : "—"}</Td>
-                    <Td className="text-right tabular-nums">
-                      {margin != null ? (
-                        <Badge tone={margin < 0 ? "danger" : lowMargin ? "warning" : "success"}>{margin}%</Badge>
-                      ) : (
-                        <span className="text-muted">—</span>
-                      )}
-                    </Td>
-                    <Td>
-                      <div className="flex flex-wrap items-center gap-2">
-                        <form action={recordConsignmentSale.bind(null, id, c.id)} className="flex items-center gap-1">
-                          <Input name="qty" inputMode="decimal" placeholder="aant." className="h-8 w-16 px-2 py-1 text-right" />
-                          <SubmitButton size="sm" variant="ghost" className="text-success" pendingLabel="…">verkocht</SubmitButton>
-                        </form>
-                        <form action={returnConsignment.bind(null, id, c.id)} className="flex items-center gap-1">
-                          <Input name="qty" inputMode="decimal" placeholder="aant." className="h-8 w-16 px-2 py-1 text-right" />
-                          <SubmitButton size="sm" variant="ghost" className="text-muted" pendingLabel="…">retour</SubmitButton>
-                        </form>
-                      </div>
+          <>
+            <Table>
+              <THead>{headerRow}</THead>
+              <TBody>
+                {activeRows.length > 0 ? (
+                  activeRows.map((c) => renderRow(c, false))
+                ) : (
+                  <Tr>
+                    <Td colSpan={7} className="text-sm text-muted">
+                      Niets meer in de winkel — alles is gefactureerd. Leg hierboven nieuwe producten neer voor een volgende order.
                     </Td>
                   </Tr>
-                );
-              })}
-            </TBody>
-          </Table>
+                )}
+              </TBody>
+            </Table>
+            {doneRows.length > 0 && (
+              <details className="group border-t">
+                <summary className="cursor-pointer list-none px-5 py-3 text-sm text-muted marker:content-none hover:bg-muted/30">
+                  <span className="inline-flex items-center gap-2">
+                    <span className="transition group-open:rotate-90">▶</span>
+                    Gefactureerd / verkocht ({doneRows.length}) — klik om te tonen
+                  </span>
+                </summary>
+                <Table>
+                  <THead>{headerRow}</THead>
+                  <TBody>{doneRows.map((c) => renderRow(c, true))}</TBody>
+                </Table>
+              </details>
+            )}
+          </>
         )}
       </Card>
     </>
