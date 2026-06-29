@@ -23,7 +23,7 @@ import { db } from "@/lib/db";
 import { contacts, products, sampleMovements } from "@/lib/db/schema";
 import { formatEUR } from "@/lib/utils";
 import { SAMPLE_DEPOSIT_EUR, SAMPLE_STATUS_LABEL } from "@/lib/samples";
-import { giveSample, markSampleSold, returnSample } from "./actions";
+import { createSampleInvoice, giveSample, markSampleSold, returnSample } from "./actions";
 
 export const metadata = { title: "Samples" };
 
@@ -52,17 +52,19 @@ export default async function SamplesPage() {
 
   // Uitstaande samples gegroepeerd per ontvanger (klant/wederverkoper).
   type OutRow = (typeof out)[number];
-  const groups = new Map<string, { name: string; contactId: string | null; items: OutRow[]; qty: number; deposit: number }>();
+  const groups = new Map<string, { name: string; contactId: string | null; items: OutRow[]; qty: number; deposit: number; toInvoice: number }>();
   for (const m of out) {
     const key = m.recipientId ?? `n:${(m.recipientName ?? "—").toLowerCase()}`;
     let g = groups.get(key);
     if (!g) {
-      g = { name: m.recipientName ?? "Onbekend", contactId: m.recipientId ?? null, items: [], qty: 0, deposit: 0 };
+      g = { name: m.recipientName ?? "Onbekend", contactId: m.recipientId ?? null, items: [], qty: 0, deposit: 0, toInvoice: 0 };
       groups.set(key, g);
     }
     g.items.push(m);
     g.qty += Number(m.qty);
-    g.deposit += Number(m.qty) * Number(m.depositEur);
+    const borg = Number(m.qty) * Number(m.depositEur);
+    g.deposit += borg;
+    if (!m.documentId) g.toInvoice += borg; // nog niet gefactureerd
   }
   const groupList = [...groups.values()].sort((a, b) => a.name.localeCompare(b.name, "nl"));
 
@@ -128,6 +130,16 @@ export default async function SamplesPage() {
                     {g.qty.toLocaleString("nl-NL")} {g.qty === 1 ? "sample" : "samples"} · {formatEUR(g.deposit)} borg
                   </span>
                 </summary>
+                {g.contactId && g.toInvoice > 0 && (
+                  <div className="flex items-center justify-end gap-3 border-b bg-background/40 px-5 py-2">
+                    <span className="text-xs text-muted">borg nog te factureren: {formatEUR(g.toInvoice)}</span>
+                    <form action={createSampleInvoice.bind(null, g.contactId)}>
+                      <SubmitButton size="sm" variant="primary" pendingLabel="Aanmaken…">
+                        Factuur maken ({formatEUR(g.toInvoice)})
+                      </SubmitButton>
+                    </form>
+                  </div>
+                )}
                 <Table>
                   <THead>
                     <tr>
@@ -150,14 +162,18 @@ export default async function SamplesPage() {
                         <Td className="text-right tabular-nums">{Number(m.qty).toLocaleString("nl-NL")}</Td>
                         <Td className="text-right tabular-nums">{formatEUR(Number(m.qty) * Number(m.depositEur))}</Td>
                         <Td>
-                          <div className="flex items-center gap-2">
-                            <form action={returnSample.bind(null, m.id)}>
-                              <SubmitButton size="sm" variant="ghost" className="text-muted" pendingLabel="…">retour</SubmitButton>
-                            </form>
-                            <form action={markSampleSold.bind(null, m.id)}>
-                              <SubmitButton size="sm" variant="ghost" className="text-success" pendingLabel="…">verkocht</SubmitButton>
-                            </form>
-                          </div>
+                          {m.documentId ? (
+                            <Badge tone="info">gefactureerd</Badge>
+                          ) : (
+                            <div className="flex items-center gap-2">
+                              <form action={returnSample.bind(null, m.id)}>
+                                <SubmitButton size="sm" variant="ghost" className="text-muted" pendingLabel="…">retour</SubmitButton>
+                              </form>
+                              <form action={markSampleSold.bind(null, m.id)}>
+                                <SubmitButton size="sm" variant="ghost" className="text-success" pendingLabel="…">verkocht</SubmitButton>
+                              </form>
+                            </div>
+                          )}
                         </Td>
                       </Tr>
                     ))}

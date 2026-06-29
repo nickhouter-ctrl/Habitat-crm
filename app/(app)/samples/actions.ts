@@ -7,7 +7,9 @@ import { z } from "zod";
 
 import { auth } from "@/auth";
 import { db } from "@/lib/db";
-import { contacts, products, sampleMovements } from "@/lib/db/schema";
+import { contacts, products, sampleMovements, type DocumentLineItem } from "@/lib/db/schema";
+import { computeTotals } from "@/lib/documents";
+import { insertNumberedDocument } from "@/lib/doc-number";
 import { SAMPLE_DEPOSIT_EUR } from "@/lib/samples";
 
 async function requireUser() {
@@ -91,6 +93,55 @@ export async function markSampleSold(movementId: string) {
   await requireUser();
   await db.update(sampleMovements).set({ status: "sold", updatedAt: new Date() }).where(eq(sampleMovements.id, movementId));
   revalidatePath("/samples");
+}
+
+/**
+ * Maak een concept-factuur voor de uitstaande samples (borg) van één ontvanger.
+ * Elke nog-niet-gefactureerde uitgifte wordt een regel à €5 borg; de regels
+ * worden aan de factuur gekoppeld (status blijft 'out' — borg blijft terug te
+ * betalen bij retour).
+ */
+export async function createSampleInvoice(recipientId: string) {
+  await requireUser();
+  if (recipientId.length !== 36) redirect("/samples");
+  const contact = await db.query.contacts.findFirst({ where: eq(contacts.id, recipientId) });
+  if (!contact) redirect("/samples");
+
+  const rows = await db.query.sampleMovements.findMany({
+    where: (m, { and: andF, eq: eqF, isNull }) =>
+      andF(eqF(m.recipientId, recipientId), eqF(m.status, "out"), isNull(m.documentId)),
+  });
+  if (rows.length === 0) redirect("/samples?factuur=leeg");
+
+  const items: DocumentLineItem[] = rows.map((m) => ({
+    name: `Sample (borg) — ${m.productName}`,
+    description: m.sku ?? undefined,
+    units: Number(m.qty),
+    price: Number(m.depositEur),
+    taxRate: 21,
+    category: "materiaal",
+    productId: m.productId ?? undefined,
+  }));
+  const totals = computeTotals(items);
+  const round2 = (n: number) => (Math.round(n * 100) / 100).toFixed(2);
+  const { id } = await insertNumberedDocument("invoice", {
+    kind: "invoice",
+    status: "draft",
+    title: `Samples (borg) — ${contact.name}`,
+    contactId: recipientId,
+    issueDate: new Date().toISOString().slice(0, 10),
+    currency: "EUR",
+    subtotalEur: round2(totals.subtotal),
+    taxEur: round2(totals.tax),
+    totalEur: round2(totals.total),
+    items,
+  });
+  // Koppel de samples aan de factuur (zodat ze niet dubbel gefactureerd worden).
+  for (const m of rows) {
+    await db.update(sampleMovements).set({ documentId: id, updatedAt: new Date() }).where(eq(sampleMovements.id, m.id));
+  }
+  revalidatePath("/samples");
+  redirect(`/documents/${id}/edit`);
 }
 
 /** Sample-voorraad van een product bijvullen. */
