@@ -50,13 +50,15 @@ export function deriveProjectFinancials(i: ProjectFinancialsInput): ProjectFinan
   const marginPct = targetRevenue > 0 ? Math.round((resultToDate / targetRevenue) * 100) : null;
   const toInvoice = Math.max(0, targetRevenue - i.invoicedSubtotal - i.received);
 
-  // "Op koers" alleen zinvol als er een doel én iets gebeurd is (kosten of omzet).
+  // Norm: minimaal 15% marge. "Op koers" alleen zinvol als er een doel én iets
+  // gebeurd is (kosten of omzet).
+  const MIN_MARGIN_PCT = 15;
   const meaningful = targetRevenue > 0 && (costToDate > 0 || i.invoicedSubtotal > 0 || i.received > 0);
   const tone: ProjectFinancials["tone"] = !meaningful
     ? "neutral"
     : resultToDate < 0
       ? "danger"
-      : marginPct != null && marginPct < 10
+      : marginPct != null && marginPct < MIN_MARGIN_PCT
         ? "warning"
         : "success";
 

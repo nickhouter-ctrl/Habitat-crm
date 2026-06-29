@@ -339,11 +339,21 @@ export default async function ProjectDetailPage({
   const toInvoice = Math.max(0, targetRevenue - settledToTarget);
 
   // Resultaat TOT NU TOE = doel − werkelijke (gerealiseerde) kosten tot nu toe.
-  const realizedProfit = projRevenue - realizedCost;
+  // Norm: minimaal 15% marge → kosten mogen max. 85% van het doel zijn (kostenplafond).
+  const MIN_MARGIN_PCT = 15;
   const resultToDate = targetRevenue - realizedCost;
   const resultMarginPct = targetRevenue > 0 ? Math.round((resultToDate / targetRevenue) * 100) : null;
   const costRatio = targetRevenue > 0 ? realizedCost / targetRevenue : null;
-  const resultTone = resultToDate < 0 ? "danger" : resultMarginPct != null && resultMarginPct < 10 ? "warning" : "success";
+  const maxCost = targetRevenue * (1 - MIN_MARGIN_PCT / 100); // kostenplafond voor 15% marge
+  const costHeadroom = maxCost - realizedCost; // + = ruimte over, − = boven plafond
+  const resultTone =
+    resultMarginPct == null
+      ? "neutral"
+      : resultMarginPct < 0
+        ? "danger"
+        : resultMarginPct < MIN_MARGIN_PCT
+          ? "warning"
+          : "success";
 
   const isConstruction = project.kind === "construction";
   const PAY_LABEL = { cash: "Contant", invoice: "Per factuur" } as const;
@@ -604,38 +614,52 @@ export default async function ProjectDetailPage({
       <Card id="resultaat" className="mb-5 scroll-mt-24">
         <CardHeader>
           <CardTitle>Resultaat — zitten we goed?</CardTitle>
-          <span className="text-xs text-muted">begroot → werkelijk → gefactureerd · alle bedragen ex. BTW</span>
+          <span className="text-xs text-muted">norm: minimaal {MIN_MARGIN_PCT}% marge · alle bedragen ex. BTW</span>
         </CardHeader>
         <CardContent className="space-y-3">
-          <div className="grid gap-3 sm:grid-cols-3">
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
             <div className="rounded-lg border bg-background p-3">
               <p className="text-xs text-muted">Doel (omzet)</p>
               <p className="text-lg font-semibold tabular-nums">{formatEUR(targetRevenue)}</p>
             </div>
             <div className="rounded-lg border bg-background p-3">
-              <p className="text-xs text-muted">Begrote kosten</p>
-              <p className="text-lg font-semibold tabular-nums">{budgetCostTotal > 0 ? formatEUR(budgetCostTotal) : "—"}</p>
+              <p className="text-xs text-muted">Max. kosten ({MIN_MARGIN_PCT}% marge)</p>
+              <p className="text-lg font-semibold tabular-nums">{formatEUR(maxCost)}</p>
+              <p className="text-xs text-muted">kostenplafond</p>
             </div>
             <div className="rounded-lg border bg-background p-3">
-              <p className="text-xs text-muted">Werkelijke kosten</p>
+              <p className="text-xs text-muted">Kosten tot nu toe</p>
               <p className="text-lg font-semibold tabular-nums">
                 {formatEUR(realizedCost)}
                 {budgetCostTotal > 0 && (
                   <span className={`ml-2 text-xs font-normal ${realizedCost > budgetCostTotal ? "text-danger" : "text-success"}`}>
-                    {realizedCost > budgetCostTotal ? "▲ boven" : "▼ onder"} begroting ({formatEUR(Math.abs(realizedCost - budgetCostTotal))})
+                    {realizedCost > budgetCostTotal ? "▲ boven" : "▼ onder"} begroting
                   </span>
                 )}
               </p>
             </div>
+            <div className="rounded-lg border bg-background p-3">
+              <p className="text-xs text-muted">Ruimte tot plafond</p>
+              <p className={`text-lg font-semibold tabular-nums ${costHeadroom < 0 ? "text-danger" : "text-success"}`}>
+                {costHeadroom < 0 ? `− ${formatEUR(Math.abs(costHeadroom))}` : formatEUR(costHeadroom)}
+              </p>
+              <p className="text-xs text-muted">{costHeadroom < 0 ? "boven plafond" : "kosten mogen er nog bij"}</p>
+            </div>
           </div>
-          <div className={`rounded-lg p-3 text-sm ${resultTone === "danger" ? "bg-danger/10 text-danger" : resultTone === "warning" ? "bg-warning/10 text-warning" : "bg-success/10 text-success"}`}>
+          <div className={`rounded-lg p-3 text-sm ${resultTone === "danger" ? "bg-danger/10 text-danger" : resultTone === "warning" ? "bg-warning/10 text-warning" : resultTone === "neutral" ? "bg-background text-muted" : "bg-success/10 text-success"}`}>
             <span className="font-semibold">
-              {resultTone === "danger" ? "⚠ Let op — verlies" : resultTone === "warning" ? "⚠ Krappe marge" : "✓ Op koers"}
+              {resultTone === "danger"
+                ? "⚠ Let op — verlies"
+                : resultTone === "warning"
+                  ? `⚠ Onder de norm — minder dan ${MIN_MARGIN_PCT}% marge`
+                  : resultTone === "neutral"
+                    ? "Nog geen doel ingesteld"
+                    : `✓ Op koers — ${MIN_MARGIN_PCT}%+ marge`}
             </span>{" "}
             Resultaat tot nu toe {formatEUR(resultToDate)}
             {resultMarginPct != null ? ` (${resultMarginPct}% marge)` : ""} ·{" "}
-            kosten zijn {costRatio != null ? `${Math.round(costRatio * 100)}%` : "—"} van het doel ·{" "}
-            gefactureerd − kosten: {formatEUR(realizedProfit)}.
+            kosten zijn {costRatio != null ? `${Math.round(costRatio * 100)}%` : "—"} van het doel
+            {costHeadroom < 0 ? ` · ${formatEUR(Math.abs(costHeadroom))} boven het ${MIN_MARGIN_PCT}%-plafond` : ` · nog ${formatEUR(costHeadroom)} ruimte tot het plafond`}.
           </div>
         </CardContent>
       </Card>

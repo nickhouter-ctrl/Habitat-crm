@@ -81,7 +81,7 @@ const FILTERS: { key: Filter; label: string }[] = [
 
 const TONE_BADGE: Record<string, { label: string; tone: "success" | "warning" | "danger" | "neutral" }> = {
   success: { label: "✓ Op koers", tone: "success" },
-  warning: { label: "⚠ Krappe marge", tone: "warning" },
+  warning: { label: "⚠ < 15% marge", tone: "warning" },
   danger: { label: "⚠ Verlies", tone: "danger" },
   neutral: { label: "—", tone: "neutral" },
 };
