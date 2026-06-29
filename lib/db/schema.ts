@@ -43,6 +43,7 @@ export const contactType = pgEnum("contact_type", [
   "customer",
   "owner", // property owner
   "partner",
+  "reseller", // wederverkoper — verkoopt onze producten in eigen winkel (dealerprijs)
   "supplier",
   "other",
 ]);
@@ -367,6 +368,9 @@ export const products = pgTable(
      * priceEur, maar per product instelbaar. Wordt gebruikt wanneer een offerte/
      * factuur wordt aangemaakt met klanttype = aannemer. */
     tradePriceEur: numeric({ precision: 14, scale: 4 }),
+    /** Wederverkoper-/dealerprijs (B2B winkels), ex. VAT. Leeg → afgeleid als
+     * particulierprijs −25%. Per product te overschrijven. */
+    dealerPriceEur: numeric({ precision: 14, scale: 4 }),
     vatRate: integer().notNull().default(21), // default IVA % for this product
     // Landed-cost breakdown (per unit) — China imports etc.:
     purchaseCostEur: numeric({ precision: 14, scale: 2 }), // inkoopprijs (bv. uit China)
@@ -436,6 +440,46 @@ export const products = pgTable(
     index("products_category_idx").on(t.category),
     index("products_name_idx").on(t.name),
     uniqueIndex("products_holded_id_idx").on(t.holdedProductId),
+  ],
+);
+
+/* ------------------------------------------------ consignatie bij wederverkopers */
+
+/**
+ * Consignatievoorraad bij een wederverkoper (dealer/winkel die onze producten
+ * verkoopt). Eén regel per (wederverkoper × product). "Neerleggen" haalt het van
+ * onze eigen voorraad (`products.stockQty`) af en zet het hier als geplaatst;
+ * bij verkoop door de dealer stijgt `qtySold` (→ onze omzet tegen dealerprijs).
+ * Nu-in-winkel = qtyPlaced − qtySold. Bedragen ex. btw.
+ */
+export const consignments = pgTable(
+  "consignments",
+  {
+    id: uuid().primaryKey().default(sql`gen_random_uuid()`),
+    /** De wederverkoper (contact met type "reseller"). */
+    resellerId: uuid()
+      .notNull()
+      .references(() => contacts.id, { onDelete: "cascade" }),
+    productId: uuid().references(() => products.id, { onDelete: "set null" }),
+    /** Naam/SKU/eenheid-snapshot (voor als het product later wijzigt/verdwijnt). */
+    productName: text().notNull(),
+    sku: text(),
+    unit: text(),
+    /** Dealerprijs-snapshot bij plaatsing (ex. btw). */
+    dealerPriceEur: numeric({ precision: 14, scale: 4 }),
+    /** Kostprijs-snapshot (landed) — voor de dealermarge. */
+    costEur: numeric({ precision: 14, scale: 2 }),
+    /** Totaal aantal dat naar deze dealer is gegaan. */
+    qtyPlaced: numeric({ precision: 14, scale: 3 }).notNull().default("0"),
+    /** Aantal dat de dealer heeft verkocht (→ onze omzet). */
+    qtySold: numeric({ precision: 14, scale: 3 }).notNull().default("0"),
+    notes: text(),
+    ...timestamps,
+  },
+  (t) => [
+    index("consignments_reseller_idx").on(t.resellerId),
+    index("consignments_product_idx").on(t.productId),
+    uniqueIndex("consignments_reseller_product_idx").on(t.resellerId, t.productId),
   ],
 );
 

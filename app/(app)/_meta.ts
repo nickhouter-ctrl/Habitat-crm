@@ -16,13 +16,14 @@ export const leadStageMeta: Record<
 };
 
 export const contactTypeMeta: Record<
-  "lead" | "customer" | "owner" | "partner" | "supplier" | "other",
+  "lead" | "customer" | "owner" | "partner" | "reseller" | "supplier" | "other",
   Meta
 > = {
   lead: { label: "Lead", tone: "info" },
   customer: { label: "Klant", tone: "success" },
   owner: { label: "Eigenaar", tone: "accent" },
   partner: { label: "Partner", tone: "neutral" },
+  reseller: { label: "Wederverkoper", tone: "info" },
   supplier: { label: "Leverancier", tone: "neutral" },
   other: { label: "Overig", tone: "neutral" },
 };
