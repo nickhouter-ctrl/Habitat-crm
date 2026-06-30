@@ -492,7 +492,7 @@ export function LineItemsEditor({
                     <Input
                       type="number"
                       step="any"
-                      min="0"
+                      title="Negatief bedrag mag — bijv. een aanbetaling/korting (reeds betaald −€1.000)"
                       value={r.price}
                       onChange={(e) => patchRow(i, { price: e.target.value })}
                       onBlur={(e) =>
