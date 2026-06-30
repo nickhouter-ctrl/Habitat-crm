@@ -23,11 +23,21 @@ export type ProductOption = {
 };
 
 async function listContacts(): Promise<SelectOption[]> {
-  return db.query.contacts.findMany({
+  const rows = await db.query.contacts.findMany({
     columns: { id: true, name: true },
+    with: { company: { columns: { name: true } } },
     orderBy: asc(contacts.name),
     limit: 1000,
   });
+  // Heeft het contact een bedrijf? Toon dan de bedrijfsnaam eerst
+  // ("Bedrijf — Persoon"), of alleen het bedrijf als het contact zelf het bedrijf is.
+  return rows
+    .map((c) => {
+      const co = c.company?.name?.trim();
+      const name = co ? (co === c.name ? co : `${co} — ${c.name}`) : c.name;
+      return { id: c.id, name };
+    })
+    .sort((a, b) => a.name.localeCompare(b.name, "nl"));
 }
 
 async function listProperties(): Promise<SelectOption[]> {
