@@ -27,6 +27,8 @@ import {
   Tag,
   Truck,
   Users,
+  UserCog,
+  Percent,
   X,
 } from "lucide-react";
 import Image from "next/image";
@@ -43,6 +45,8 @@ const NAV = [
   { href: "/scan", label: "Scannen", icon: ScanLine },
   { href: "/contacts", label: "Contacten", icon: Users },
   { href: "/aanvragen", label: "Aanvragen", icon: Inbox },
+  { href: "/accounts", label: "Klant-accounts", icon: UserCog },
+  { href: "/commissies", label: "Commissies", icon: Percent },
   { href: "/agenda", label: "Agenda", icon: CalendarDays },
   { href: "/inbox", label: "Mail-inbox", icon: Mail },
   { href: "/archief", label: "Archief", icon: FileText },

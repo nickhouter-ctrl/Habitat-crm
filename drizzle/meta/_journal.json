@@ -281,6 +281,13 @@
       "when": 1782729867210,
       "tag": "0039_youthful_red_wolf",
       "breakpoints": true
+    },
+    {
+      "idx": 40,
+      "version": "7",
+      "when": 1782902946280,
+      "tag": "0040_soft_husk",
+      "breakpoints": true
     }
   ]
 }

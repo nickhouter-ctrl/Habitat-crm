@@ -144,6 +144,20 @@ export const activityType = pgEnum("activity_type", [
 export const syncEntity = pgEnum("sync_entity", ["contact", "company", "document"]);
 export const syncDirection = pgEnum("sync_direction", ["pull", "push"]);
 
+/* -------- klantportal: accounts, aanvragen, referral/commissie -------- */
+/** Prijsniveau van een klant-account: particulier (normale prijs) of aannemer (−20%). */
+export const customerPriceTier = pgEnum("customer_price_tier", ["particulier", "aannemer"]);
+/** Status van een klant-account. */
+export const customerAccountStatus = pgEnum("customer_account_status", ["pending", "active", "suspended"]);
+/** Soort accountaanvraag van de website. */
+export const accountRequestKind = pgEnum("account_request_kind", ["particulier", "zakelijk"]);
+/** Status van een accountaanvraag. */
+export const accountRequestStatus = pgEnum("account_request_status", ["pending", "approved", "rejected"]);
+/** Aanbreng-relatie: zakelijk (bedrijf brengt bedrijf) of particulier (aannemer brengt particulier). */
+export const referralScope = pgEnum("referral_scope", ["business", "particulier"]);
+/** Status van een commissieregel. */
+export const commissionStatus = pgEnum("commission_status", ["pending", "approved", "paid"]);
+
 /** Betaalwijze van arbeid/kosten op een project: contant of per factuur. */
 export const paymentMethod = pgEnum("payment_method", ["cash", "invoice"]);
 /** Soort project: verkoop (productgedreven) of bouw (werkzaamheden). */
@@ -1004,6 +1018,122 @@ export const quoteRequests = pgTable(
     index("quote_requests_status_idx").on(t.status),
     index("quote_requests_email_idx").on(t.email),
     index("quote_requests_created_idx").on(t.createdAt),
+  ],
+);
+
+/* ------------------------------------------- klantportal (accounts + prijzen) */
+
+/**
+ * Accountaanvraag vanaf de website habitat-one.com. De klant vult zijn gegevens
+ * in; zakelijk vereist bedrijfsnaam + IVA/BTW. Habitat keurt goed (→ contact +
+ * customer_account). Team wordt gemaild; review op /accounts.
+ */
+export const accountRequests = pgTable(
+  "account_requests",
+  {
+    id: uuid().primaryKey().default(sql`gen_random_uuid()`),
+    name: text().notNull(),
+    email: text().notNull(),
+    phone: text(),
+    kind: accountRequestKind().notNull().default("particulier"),
+    businessName: text(),
+    vatNumber: text(),
+    address: text(),
+    locale: language(),
+    message: text(),
+    status: accountRequestStatus().notNull().default("pending"),
+    /** Gezet zodra goedgekeurd en aan een contact/account gekoppeld. */
+    contactId: uuid().references(() => contacts.id, { onDelete: "set null" }),
+    ...timestamps,
+  },
+  (t) => [
+    index("account_requests_status_idx").on(t.status),
+    index("account_requests_email_idx").on(t.email),
+  ],
+);
+
+/**
+ * Klant-/aannemer-account waarmee op de website prijzen zichtbaar zijn. Los van
+ * de staff-`users`-tabel. `priceTier` bepaalt welke prijs de portal-API teruggeeft
+ * (particulier → priceEur, aannemer → tradePriceEur).
+ */
+export const customerAccounts = pgTable(
+  "customer_accounts",
+  {
+    id: uuid().primaryKey().default(sql`gen_random_uuid()`),
+    contactId: uuid().references(() => contacts.id, { onDelete: "set null" }),
+    email: text().notNull(),
+    passwordHash: text(),
+    priceTier: customerPriceTier().notNull().default("particulier"),
+    status: customerAccountStatus().notNull().default("pending"),
+    businessName: text(),
+    vatNumber: text(),
+    /** Eenmalige token voor het instellen van het wachtwoord (activatie/reset). */
+    activationToken: text(),
+    activationExpires: timestamp({ withTimezone: true }),
+    verifiedAt: timestamp({ withTimezone: true }),
+    lastLoginAt: timestamp({ withTimezone: true }),
+    ...timestamps,
+  },
+  (t) => [
+    uniqueIndex("customer_accounts_email_idx").on(t.email),
+    index("customer_accounts_contact_idx").on(t.contactId),
+    index("customer_accounts_status_idx").on(t.status),
+  ],
+);
+
+/**
+ * Aanbreng-relatie: `referrer` bracht `referee` binnen en verdient commissie op
+ * diens orders. `commissionPct` = % van het orderbedrag (ex btw), instelbaar.
+ * Bij scope `particulier` komt de commissie uit de particulier↔aannemer-gap en kan
+ * `customerDiscountPct` als korting naar de klant gaan (rest = commissie).
+ */
+export const referrals = pgTable(
+  "referrals",
+  {
+    id: uuid().primaryKey().default(sql`gen_random_uuid()`),
+    referrerContactId: uuid()
+      .notNull()
+      .references((): AnyPgColumn => contacts.id, { onDelete: "cascade" }),
+    refereeContactId: uuid()
+      .notNull()
+      .references((): AnyPgColumn => contacts.id, { onDelete: "cascade" }),
+    scope: referralScope().notNull().default("business"),
+    commissionPct: numeric({ precision: 5, scale: 2 }).notNull().default("5"),
+    /** Alleen scope=particulier: korting die de aannemer aan de klant geeft. */
+    customerDiscountPct: numeric({ precision: 5, scale: 2 }).notNull().default("0"),
+    active: boolean().notNull().default(true),
+    note: text(),
+    ...timestamps,
+  },
+  (t) => [
+    uniqueIndex("referrals_pair_idx").on(t.referrerContactId, t.refereeContactId),
+    index("referrals_referrer_idx").on(t.referrerContactId),
+    index("referrals_referee_idx").on(t.refereeContactId),
+  ],
+);
+
+/**
+ * Verdiende commissie per factuur van een aangebrachte klant. Aangemaakt zodra
+ * een factuur voor de `referee` wordt aangemaakt. Bedragen ex. btw.
+ */
+export const commissionEntries = pgTable(
+  "commission_entries",
+  {
+    id: uuid().primaryKey().default(sql`gen_random_uuid()`),
+    referralId: uuid()
+      .notNull()
+      .references(() => referrals.id, { onDelete: "cascade" }),
+    documentId: uuid().references((): AnyPgColumn => documents.id, { onDelete: "set null" }),
+    baseAmountEur: numeric({ precision: 14, scale: 2 }).notNull().default("0"),
+    pct: numeric({ precision: 5, scale: 2 }).notNull().default("0"),
+    amountEur: numeric({ precision: 14, scale: 2 }).notNull().default("0"),
+    status: commissionStatus().notNull().default("pending"),
+    ...timestamps,
+  },
+  (t) => [
+    index("commission_entries_referral_idx").on(t.referralId),
+    uniqueIndex("commission_entries_document_idx").on(t.documentId),
   ],
 );
 
