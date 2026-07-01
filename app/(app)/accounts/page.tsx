@@ -6,6 +6,8 @@ import {
   Card,
   CardHeader,
   CardTitle,
+  Field,
+  Input,
   PageHeader,
   Select,
   StatTile,
@@ -17,10 +19,12 @@ import {
   Tr,
 } from "@/components/ui";
 import { SubmitButton } from "@/components/submit-button";
+import { Combobox, type ComboOption } from "@/components/combobox";
 import { db } from "@/lib/db";
 import { accountRequests, contacts, customerAccounts } from "@/lib/db/schema";
 import {
   approveAccountRequest,
+  createAccountManually,
   rejectAccountRequest,
   resendActivation,
   setAccountStatus,
@@ -33,7 +37,7 @@ const STATUS_TONE = { pending: "warning", active: "success", suspended: "danger"
 const STATUS_LABEL = { pending: "Wacht op activatie", active: "Actief", suspended: "Geblokkeerd" } as const;
 
 export default async function AccountsPage() {
-  const [requests, accounts] = await Promise.all([
+  const [requests, accounts, contactRows] = await Promise.all([
     db.select().from(accountRequests).where(eq(accountRequests.status, "pending")).orderBy(desc(accountRequests.createdAt)),
     db
       .select({
@@ -50,8 +54,14 @@ export default async function AccountsPage() {
       .from(customerAccounts)
       .leftJoin(contacts, eq(customerAccounts.contactId, contacts.id))
       .orderBy(asc(customerAccounts.status), desc(customerAccounts.createdAt)),
+    db.select({ id: contacts.id, name: contacts.name, email: contacts.email }).from(contacts).orderBy(asc(contacts.name)),
   ]);
 
+  const contactOptions: ComboOption[] = contactRows.map((c) => ({
+    value: c.id,
+    label: c.name,
+    hint: c.email ?? "geen e-mail",
+  }));
   const activeCount = accounts.filter((a) => a.status === "active").length;
   const dt = (d: Date | null) => (d ? new Date(d).toLocaleDateString("nl-NL", { day: "numeric", month: "short", year: "numeric" }) : "—");
 
@@ -64,6 +74,28 @@ export default async function AccountsPage() {
         <StatTile label="Actieve accounts" value={String(activeCount)} tone={activeCount ? "success" : "neutral"} />
         <StatTile label="Totaal accounts" value={String(accounts.length)} tone="neutral" />
       </div>
+
+      <Card className="mb-5">
+        <CardHeader>
+          <CardTitle>Handmatig account aanmaken</CardTitle>
+          <span className="text-xs text-muted">kies een bestaand contact (e-mail volgt) of vul zelf een e-mail in · de klant krijgt een activatiemail</span>
+        </CardHeader>
+        <form action={createAccountManually} className="grid gap-3 px-5 pb-5 lg:grid-cols-[1.6fr_1.4fr_1fr_auto] lg:items-end">
+          <Field label="Bestaand contact (optioneel)">
+            <Combobox name="contactId" options={contactOptions} placeholder="zoek contact…" clearable />
+          </Field>
+          <Field label="E-mail (indien geen contact)">
+            <Input name="email" type="email" placeholder="klant@voorbeeld.nl" />
+          </Field>
+          <Field label="Prijsniveau">
+            <Select name="tier" defaultValue="particulier">
+              <option value="particulier">Particulier</option>
+              <option value="aannemer">Aannemer (−20%)</option>
+            </Select>
+          </Field>
+          <SubmitButton size="sm" variant="secondary" pendingLabel="…">+ Account</SubmitButton>
+        </form>
+      </Card>
 
       <Card className="mb-5 overflow-hidden">
         <CardHeader>

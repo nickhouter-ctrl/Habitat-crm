@@ -88,6 +88,77 @@ export async function approveAccountRequest(requestId: string, formData: FormDat
   revalidatePath("/accounts");
 }
 
+/** Interne helper: maak een account voor een e-mail (+ optioneel contact) en mail activatie. */
+async function createAccount(opts: {
+  email: string;
+  name: string;
+  tier: "particulier" | "aannemer";
+  contactId?: string | null;
+  businessName?: string | null;
+  vatNumber?: string | null;
+}): Promise<{ ok: boolean; reason?: string }> {
+  const email = opts.email.trim().toLowerCase();
+  if (!email) return { ok: false, reason: "geen e-mail" };
+  const existing = await db.query.customerAccounts.findFirst({ where: eq(customerAccounts.email, email) });
+  if (existing) return { ok: false, reason: "bestaat al" };
+  const token = newToken();
+  await db.insert(customerAccounts).values({
+    contactId: opts.contactId ?? null,
+    email,
+    priceTier: opts.tier,
+    status: "pending",
+    businessName: opts.businessName ?? null,
+    vatNumber: opts.vatNumber ?? null,
+    activationToken: token,
+    activationExpires: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+  });
+  try {
+    await sendActivationMail(email, opts.name, token, opts.tier);
+  } catch (err) {
+    console.warn("[accounts] activatiemail mislukt:", err);
+  }
+  return { ok: true };
+}
+
+/** Handmatig een account aanmaken (op /accounts): kies een contact of vul een e-mail in. */
+const manualSchema = z.object({
+  contactId: z.string().optional(),
+  email: z.string().trim().optional(),
+  tier: z.enum(["particulier", "aannemer"]).default("particulier"),
+  businessName: z.string().trim().optional(),
+  vatNumber: z.string().trim().optional(),
+});
+export async function createAccountManually(formData: FormData) {
+  await requireUser();
+  const d = manualSchema.parse(Object.fromEntries(formData));
+  const contactId = d.contactId && d.contactId.length === 36 ? d.contactId : null;
+  let email = d.email?.trim() || "";
+  let name = "";
+  let businessName = d.businessName || null;
+  if (contactId) {
+    const c = await db.query.contacts.findFirst({ where: eq(contacts.id, contactId) });
+    if (c) {
+      email = email || c.email || "";
+      name = c.name;
+      businessName = businessName || c.name;
+    }
+  }
+  if (!email) throw new Error("Vul een e-mail in of kies een contact met e-mail.");
+  await createAccount({ email, name: name || email, tier: d.tier, contactId, businessName, vatNumber: d.vatNumber || null });
+  revalidatePath("/accounts");
+}
+
+/** Maak een account voor een bestaand contact (knop op contact-detail). */
+export async function createAccountForContact(contactId: string, formData: FormData) {
+  await requireUser();
+  const tier = String(formData.get("tier") ?? "particulier") === "aannemer" ? "aannemer" : "particulier";
+  const c = await db.query.contacts.findFirst({ where: eq(contacts.id, contactId) });
+  if (!c?.email) throw new Error("Dit contact heeft geen e-mailadres.");
+  await createAccount({ email: c.email, name: c.name, tier, contactId, businessName: c.name });
+  revalidatePath("/accounts");
+  revalidatePath(`/contacts/${contactId}`);
+}
+
 export async function rejectAccountRequest(requestId: string) {
   await requireUser();
   await db.update(accountRequests).set({ status: "rejected", updatedAt: new Date() }).where(eq(accountRequests.id, requestId));
