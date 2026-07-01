@@ -18,7 +18,7 @@ export type ProductOption = {
   costEur: string | null;
   vatRate: number;
   additionalSizes:
-    | Array<{ sku: string; label: string; priceEur?: number | null; inStock?: boolean }>
+    | Array<{ sku: string; label: string; priceEur?: number | null; inStock?: boolean; stockQty?: number | null }>
     | null;
 };
 

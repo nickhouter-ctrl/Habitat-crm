@@ -739,15 +739,21 @@ export function LineItemsEditor({
                         {g.items.map((p) => {
                           const price = priceFor(p);
                           const added = addedIds.has(p.id);
+                          // Producten met maten: kies verplicht een maat (voorkomt maatloze regels).
+                          const hasSizes = (p.additionalSizes ?? []).filter((s) => s.label).length > 0;
                           return (
                             <li key={p.id}>
                               <button
                                 type="button"
                                 onClick={() => {
+                                  if (hasSizes) return;
                                   addFromProduct(p.id);
                                   setAddedIds((prev) => new Set(prev).add(p.id));
                                 }}
-                                className="flex w-full items-center justify-between gap-3 px-5 py-2.5 text-left hover:bg-background"
+                                className={cn(
+                                  "flex w-full items-center justify-between gap-3 px-5 py-2.5 text-left",
+                                  hasSizes ? "cursor-default" : "hover:bg-background",
+                                )}
                               >
                                 <span className="min-w-0">
                                   <span className="font-medium">{p.name}</span>
@@ -758,10 +764,14 @@ export function LineItemsEditor({
                                   <span
                                     className={cn(
                                       "rounded px-2 py-0.5 text-xs font-medium",
-                                      added ? "bg-success/15 text-success" : "bg-accent/10 text-accent",
+                                      hasSizes
+                                        ? "bg-background text-muted"
+                                        : added
+                                          ? "bg-success/15 text-success"
+                                          : "bg-accent/10 text-accent",
                                     )}
                                   >
-                                    {added ? "✓ toegevoegd" : "+ toevoegen"}
+                                    {hasSizes ? "kies maat ↓" : added ? "✓ toegevoegd" : "+ toevoegen"}
                                   </span>
                                 </span>
                               </button>
@@ -779,15 +789,29 @@ export function LineItemsEditor({
                                           className="flex w-full items-center justify-between gap-3 px-5 py-1.5 text-left text-sm hover:bg-background"
                                         >
                                           <span className="flex items-center gap-2">
-                                            {s.inStock ? (
-                                              <span className="text-success" title="op voorraad">
-                                                ●
-                                              </span>
-                                            ) : null}
                                             <span className="tabular-nums">{s.label.replace(/\*/g, "×")}</span>
                                             {s.sku ? (
                                               <span className="font-mono text-xs text-muted">{s.sku}</span>
                                             ) : null}
+                                            {(() => {
+                                              const inStock = s.inStock || (s.stockQty ?? 0) > 0;
+                                              const qty = s.stockQty;
+                                              return (
+                                                <span
+                                                  className={cn(
+                                                    "inline-flex items-center gap-1 text-xs",
+                                                    inStock ? "text-success" : "text-muted/70",
+                                                  )}
+                                                >
+                                                  <span>{inStock ? "●" : "○"}</span>
+                                                  {inStock
+                                                    ? qty != null
+                                                      ? `${qty.toLocaleString("nl-NL")} op voorraad`
+                                                      : "op voorraad"
+                                                    : "niet op voorraad"}
+                                                </span>
+                                              );
+                                            })()}
                                           </span>
                                           <span className="flex shrink-0 items-center gap-3 text-xs">
                                             <span className="tabular-nums">
