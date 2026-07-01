@@ -1,4 +1,4 @@
-import { and, eq } from "drizzle-orm";
+import { and, eq, isNotNull } from "drizzle-orm";
 
 import { db } from "@/lib/db";
 import { products } from "@/lib/db/schema";
@@ -28,7 +28,9 @@ export async function GET(req: Request) {
       additionalSizes: products.additionalSizes,
     })
     .from(products)
-    .where(and(eq(products.isActive, true), eq(products.pushToWebsite, true)));
+    // Alle actieve producten met een prijs (niet alleen de naar de website gepushte),
+    // zodat elke matchende SKU op de site een prijs krijgt voor ingelogde klanten.
+    .where(and(eq(products.isActive, true), isNotNull(products.priceEur)));
 
   const out: Record<string, { price: number; vat: number }> = {};
   for (const p of rows) {
