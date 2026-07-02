@@ -134,6 +134,10 @@ export function normaliseLineItem(raw: unknown): DocumentLineItem | null {
     typeof r.productId === "string" && r.productId.trim().length > 0
       ? r.productId.trim()
       : undefined;
+  const numOrU = (v: unknown) => {
+    const n = Number(v);
+    return Number.isFinite(n) && n !== 0 ? round2(n) : undefined;
+  };
   return {
     name: name.slice(0, 300),
     description:
@@ -146,6 +150,9 @@ export function normaliseLineItem(raw: unknown): DocumentLineItem | null {
     taxRate: Number.isFinite(taxRate) && taxRate >= 0 ? taxRate : 21,
     category,
     productId,
+    costEur: numOrU(r.costEur),
+    supplierPriceEur: numOrU(r.supplierPriceEur),
+    marginPct: numOrU(r.marginPct),
   };
 }
 

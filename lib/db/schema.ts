@@ -581,6 +581,13 @@ export type DocumentLineItem = {
   category?: string;
   /** Optional link to a catalogue product (snapshot of name/price stays on the line). */
   productId?: string;
+  /** Kostprijs per stuk (ex. btw) — bv. voor kozijnen op maat waar geen product
+   * met kostprijs aan hangt. Gebruikt voor de marge-weergave. */
+  costEur?: number;
+  /** Kozijn-calculator (import): leveranciersprijs + marge% waaruit costEur/price
+   * zijn berekend (leverancier × 1,55 = kostprijs; × (1+marge%) = verkoop). */
+  supplierPriceEur?: number;
+  marginPct?: number;
   /** Fase-sleutel: koppelt deze regel aan een fase van de offerte (bv. "1"),
    * zodat we per fase kunnen factureren. Kan vooraf of achteraf toegekend worden. */
   phase?: string;
