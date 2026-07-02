@@ -30,6 +30,7 @@ import {
 import { REVIEW_URL } from "@/lib/review-requests";
 import { recordSentEmail } from "@/lib/sent-email";
 import { renderDocumentPdf } from "@/lib/document-pdf";
+import { uploadDocumentFile, deleteDocumentFile, fetchDocumentFileBytes } from "@/lib/storage";
 import { pushDocumentToHolded, updateDocumentInHolded } from "@/lib/holded/sync";
 import { holded } from "@/lib/holded/client";
 import { formatDate, formatEUR } from "@/lib/utils";
@@ -371,6 +372,46 @@ export async function updateDocument(id: string, formData: FormData) {
   revalidateAround(values.kind as DocKind, id);
   revalidatePath("/products");
   redirect(`/documents/${id}`);
+}
+
+/** Upload bijlage(n) (bv. kozijn-tekeningen) bij een offerte/factuur. */
+export async function uploadDocumentAttachment(id: string, formData: FormData) {
+  await requireUser();
+  const files = formData.getAll("files").filter((f): f is File => f instanceof File && f.size > 0);
+  if (files.length === 0) return;
+  const doc = await db.query.documents.findFirst({
+    where: eq(documents.id, id),
+    columns: { attachments: true, kind: true },
+  });
+  if (!doc) return;
+  const current = doc.attachments ?? [];
+  const added: NonNullable<typeof doc.attachments> = [];
+  for (const file of files) {
+    try {
+      added.push(await uploadDocumentFile(id, file));
+    } catch (err) {
+      console.warn("[documents] bijlage-upload mislukt:", err instanceof Error ? err.message : err);
+    }
+  }
+  if (added.length === 0) return;
+  await db.update(documents).set({ attachments: [...current, ...added] }).where(eq(documents.id, id));
+  revalidatePath(`/documents/${id}`);
+}
+
+/** Verwijder een documentbijlage (uit de lijst + uit storage). */
+export async function deleteDocumentAttachment(id: string, path: string) {
+  await requireUser();
+  const doc = await db.query.documents.findFirst({
+    where: eq(documents.id, id),
+    columns: { attachments: true },
+  });
+  if (!doc?.attachments) return;
+  await db
+    .update(documents)
+    .set({ attachments: doc.attachments.filter((a) => a.path !== path) })
+    .where(eq(documents.id, id));
+  await deleteDocumentFile(path);
+  revalidatePath(`/documents/${id}`);
 }
 
 /**
@@ -869,6 +910,13 @@ export async function sendDocument(id: string) {
     } catch (err) {
       console.warn("[habitat-crm] kon PDF niet genereren voor mail:", err);
     }
+    // Bijlagen (bv. kozijn-tekeningen) meesturen naar de klant.
+    for (const att of doc.attachments ?? []) {
+      const f = await fetchDocumentFileBytes(att.path);
+      if (!f) continue;
+      attachments = attachments ?? [];
+      attachments.push({ filename: att.name, content: f.bytes, contentType: att.contentType || f.contentType });
+    }
     const res = await sendEmail({ to: doc.contact.email, ...mail, attachments });
     if (!res.sent) emailNote += " (mail nog niet ingesteld — link handmatig versturen)";
   }
@@ -994,6 +1042,11 @@ export async function sendDocumentCustom(id: string, formData: FormData) {
       console.warn("[habitat-crm] kon PDF niet genereren voor mail:", err);
     }
     attachments.push(...extras);
+    // Persistente bijlagen (kozijn-tekeningen) altijd meesturen.
+    for (const att of doc.attachments ?? []) {
+      const f = await fetchDocumentFileBytes(att.path);
+      if (f) attachments.push({ filename: att.name, content: f.bytes, contentType: att.contentType || f.contentType });
+    }
 
     const mail = offerteEmail({
       lang: doc.contact?.preferredLanguage,

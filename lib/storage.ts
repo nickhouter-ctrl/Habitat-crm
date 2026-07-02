@@ -183,6 +183,56 @@ export async function deletePurchaseOrderFile(path: string): Promise<void> {
   }
 }
 
+/* Documentbijlagen (bv. kozijn-tekeningen) — zelfde private bucket, eigen prefix. */
+
+/** Upload een bijlage voor een offerte/factuur; returnt storage-metadata. */
+export async function uploadDocumentFile(
+  documentId: string,
+  file: File,
+): Promise<{ name: string; path: string; size: number; contentType: string; uploadedAt: string }> {
+  if (!file || file.size === 0) throw new Error("Leeg bestand.");
+  if (file.type && !PO_DOC_MIME.has(file.type)) {
+    throw new Error(`Niet-ondersteund bestandstype (${file.type}). Gebruik PDF of een afbeelding.`);
+  }
+  if (file.size > MAX_BYTES) throw new Error("Bestand te groot (max 25 MB).");
+  await ensurePoBucket();
+  const path = `documents/${documentId}/${crypto.randomUUID()}-${safeName(file.name)}`;
+  const { error } = await supabase()
+    .storage.from(PO_BUCKET)
+    .upload(path, file, { contentType: file.type || "application/octet-stream", upsert: false });
+  if (error) throw new Error(`Upload mislukt: ${error.message}`);
+  return {
+    name: file.name,
+    path,
+    size: file.size,
+    contentType: file.type || "application/octet-stream",
+    uploadedAt: new Date().toISOString(),
+  };
+}
+
+/** Short-lived signed download URL voor een documentbijlage. */
+export async function documentFileUrl(path: string, expiresInSec = 3600): Promise<string | null> {
+  return purchaseOrderFileUrl(path, expiresInSec);
+}
+
+export async function deleteDocumentFile(path: string): Promise<void> {
+  await deletePurchaseOrderFile(path);
+}
+
+/** Download de bytes van een documentbijlage (voor de mail-bijlage). */
+export async function fetchDocumentFileBytes(
+  path: string,
+): Promise<{ bytes: Uint8Array; contentType: string } | null> {
+  try {
+    const { data, error } = await supabase().storage.from(PO_BUCKET).download(path);
+    if (error || !data) return null;
+    const buf = new Uint8Array(await data.arrayBuffer());
+    return { bytes: buf, contentType: data.type || "application/octet-stream" };
+  } catch {
+    return null;
+  }
+}
+
 /**
  * Kopieer een mail-bijlage (uit bucket 'email-attachments') naar de
  * purchase-order-files bucket. Returns metadata voor opslag in

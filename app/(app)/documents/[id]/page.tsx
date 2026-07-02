@@ -33,6 +33,7 @@ import {
   createDeliveryNoteFromDocument,
   createInvoiceFromEstimate,
   deleteDocument,
+  deleteDocumentAttachment,
   markDocumentSentNoEmail,
   pushDocumentToHoldedAction,
   updateDocumentInHoldedAction,
@@ -40,7 +41,9 @@ import {
   setDeliveryNoteDelivered,
   setDocumentStatus,
   toggleReserveEstimate,
+  uploadDocumentAttachment,
 } from "../actions";
+import { documentFileUrl } from "@/lib/storage";
 import { documentKindMeta, documentStatusMeta } from "../../_meta";
 import { ConfirmSubmit } from "@/components/confirm-submit";
 
@@ -98,6 +101,12 @@ export default async function DocumentDetailPage({
     },
   });
   if (!doc) notFound();
+
+  // Bijlagen (kozijn-tekeningen e.d.) + korte-termijn download-links.
+  const attachments = doc.attachments ?? [];
+  const attachmentLinks = await Promise.all(
+    attachments.map(async (a) => ({ ...a, url: await documentFileUrl(a.path) })),
+  );
 
   const holdedMap = await db.query.holdedSyncMap.findFirst({
     where: and(eq(holdedSyncMap.entityType, "document"), eq(holdedSyncMap.localId, id)),
@@ -861,6 +870,55 @@ export default async function DocumentDetailPage({
               <CardContent className="whitespace-pre-wrap text-sm">{doc.notes}</CardContent>
             </Card>
           )}
+
+          <Card className="mt-4">
+            <CardHeader>
+              <CardTitle>Tekeningen / bijlagen</CardTitle>
+              <span className="text-xs text-muted">PDF's (bv. kozijn-tekeningen) — worden meegestuurd in de mail naar de klant</span>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              {attachmentLinks.length === 0 ? (
+                <p className="text-sm text-muted">Nog geen bijlagen.</p>
+              ) : (
+                <ul className="divide-y divide-border">
+                  {attachmentLinks.map((a) => (
+                    <li key={a.path} className="flex items-center justify-between gap-3 py-2 text-sm">
+                      <span className="min-w-0 truncate">
+                        {a.url ? (
+                          <a href={a.url} target="_blank" rel="noopener noreferrer" className="text-accent hover:underline">
+                            {a.name}
+                          </a>
+                        ) : (
+                          a.name
+                        )}
+                        <span className="ml-2 text-xs text-muted">{(a.size / 1024).toFixed(0)} kB</span>
+                      </span>
+                      <form action={deleteDocumentAttachment.bind(null, doc.id, a.path)}>
+                        <ConfirmSubmit
+                          message={`Bijlage "${a.name}" verwijderen?`}
+                          className="rounded px-2 py-1 text-xs font-medium text-danger hover:bg-danger/10"
+                        >
+                          Verwijderen
+                        </ConfirmSubmit>
+                      </form>
+                    </li>
+                  ))}
+                </ul>
+              )}
+              <form action={uploadDocumentAttachment.bind(null, doc.id)} className="flex flex-wrap items-center gap-2 border-t border-border pt-3">
+                <input
+                  type="file"
+                  name="files"
+                  multiple
+                  accept="application/pdf,image/*"
+                  className="text-sm file:mr-3 file:rounded file:border-0 file:bg-accent/10 file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-accent"
+                />
+                <SubmitButton size="sm" variant="secondary" pendingLabel="Uploaden…">
+                  Toevoegen
+                </SubmitButton>
+              </form>
+            </CardContent>
+          </Card>
         </div>
       </div>
     </>

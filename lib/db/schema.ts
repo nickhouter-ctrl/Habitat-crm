@@ -633,6 +633,11 @@ export const documents = pgTable(
      * fase 'gefactureerd' kan tonen. Null = niet fase-gebaseerd (bv. percentage). */
     coveredPhase: text(),
     notes: text(),
+    /** Bijlagen (bv. kozijn-tekeningen van de leverancier) — meegestuurd in de
+     * offerte-mail naar de klant. Opgeslagen in de private storage-bucket. */
+    attachments: jsonb().$type<
+      Array<{ name: string; path: string; size: number; contentType: string; uploadedAt: string }>
+    >(),
     /** Sent to the client (status moved to "sent"). */
     sentAt: timestamp({ withTimezone: true }),
     /** Random token for the public accept/reject page (/offerte/[token]). */
