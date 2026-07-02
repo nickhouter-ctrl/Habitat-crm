@@ -116,6 +116,7 @@ function buildValues(v: z.infer<typeof docSchema>) {
       taxEur: String(totals.tax),
       totalEur: String(totals.total),
       items,
+      notes: v.notes?.trim() || null,
     },
     totals,
   };
@@ -347,6 +348,7 @@ export async function updateDocument(id: string, formData: FormData) {
       taxEur: values.taxEur,
       totalEur: values.totalEur,
       items: values.items,
+      notes: values.notes,
     })
     .where(eq(documents.id, id));
 
