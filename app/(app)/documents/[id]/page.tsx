@@ -874,7 +874,7 @@ export default async function DocumentDetailPage({
           <Card className="mt-4">
             <CardHeader>
               <CardTitle>Tekeningen / bijlagen</CardTitle>
-              <span className="text-xs text-muted">PDF's (bv. kozijn-tekeningen) — worden meegestuurd in de mail naar de klant</span>
+              <span className="text-xs text-muted">PDF-bestanden (bv. kozijn-tekeningen) — worden meegestuurd in de mail naar de klant</span>
             </CardHeader>
             <CardContent className="space-y-3">
               {attachmentLinks.length === 0 ? (
