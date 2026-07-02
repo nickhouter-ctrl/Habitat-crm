@@ -251,7 +251,9 @@ export function LineItemsEditor({
     const row: Row = {
       ...emptyRow("materiaal"),
       name: koz.name.trim() || "Kozijn op maat (import)",
-      description: `Import: leverancier ${formatEUR(kozSupplier)} + ${KOZIJN_HANDLING_PCT}% handling + ${KOZIJN_IMPORT_PCT}% invoer = ${formatEUR(kozCost)} kostprijs · marge ${kozMargin}%`,
+      // BEWUST geen kostprijs/marge in de omschrijving — die is klant-zichtbaar op
+      // de offerte. De inkoop/marge blijven intern op de regel (costEur e.d.).
+      description: "",
       units: String(kozUnits),
       price: String(kozSale),
       taxRate: "21",

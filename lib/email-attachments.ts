@@ -127,6 +127,14 @@ const CATEGORY_RULES: Array<{ cat: AttachmentCategory; test: (ctx: CategorizeCtx
       /sabadell|caixabank|bbva|santander/i.test(c.fromEmail) ||
       /extracto.*cuenta|bank.*statement|account.*statement|posición\s+global/i.test(c.allText) },
 
+  // Csaba's facturen voor het Habitat-project in Villajoyosa (bv. Silvestre) →
+  // leverancier-factuur (telt als inkoop, auto-inkooporder). Staat vóór de
+  // 'contractor'/'other'-regels zodat Villajoyosa niet als 'niet-voor-Habitat'
+  // wordt weggezet. (Eerste match wint.)
+  { cat: "supplier-invoice", test: (c) =>
+      /csaba/i.test(c.fromName + " " + c.fromEmail) &&
+      /villajoyosa/i.test(c.filename + " " + c.subject + " " + c.allText) },
+
   // Aannemer — Csaba's invoices VOOR HABITAT (showroom-verbouwing). Csaba
   // werkt ook voor andere klanten in Benissa/Costa Nova/Oliva — die invoices
   // gaan naar 'other' (niet relevant voor Habitat).
@@ -136,9 +144,10 @@ const CATEGORY_RULES: Array<{ cat: AttachmentCategory; test: (ctx: CategorizeCtx
       /^INVOICE\s+A1[2-6][0-9].*WAREHOUSE/i.test(c.filename) ||
       /works[_\s]*costs[_\s]*summary/i.test(c.filename) },
 
-  // Csaba's externe klanten — apart afvangen → other (niet voor Habitat)
+  // Csaba's externe klanten — apart afvangen → other (niet voor Habitat).
+  // Villajoyosa NIET meer hier (is nu Habitat-inkoop, zie de regel hierboven).
   { cat: "other", test: (c) =>
-      /^INVOICE\s+A1[2-6][0-9].*(BENISSA|COSTA\s*NOVA|OLIVA|VILLAJOYOSA|DENIA)/i.test(c.filename) &&
+      /^INVOICE\s+A1[2-6][0-9].*(BENISSA|COSTA\s*NOVA|OLIVA|DENIA)/i.test(c.filename) &&
       !/WAREHOUSE/i.test(c.filename) },
 
   // Bedrijfskosten — loods-huur, elektriciteit, water, forklift-rental, Google
