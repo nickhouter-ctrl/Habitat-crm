@@ -1,7 +1,7 @@
 "use client";
 
 import { AlertTriangle, Plus, Trash2, X } from "lucide-react";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { Button, Input, Select } from "@/components/ui";
 import type { ProductOption } from "@/app/(app)/_options";
@@ -240,12 +240,30 @@ export function LineItemsEditor({
 
   // --- Kozijn-calculator (import China): leverancier × 1,55 + marge ---
   const [kozijnOpen, setKozijnOpen] = useState(false);
-  const [koz, setKoz] = useState({ name: "", units: "1", supplier: "", margin: "30" });
-  const kozSupplier = Number(koz.supplier) || 0;
+  const [koz, setKoz] = useState({ name: "", units: "1", supplier: "", margin: "30", currency: "USD", rate: "0.92" });
+  const kozSupplier = Number(koz.supplier) || 0; // in de gekozen valuta
+  const kozRate = Number(koz.rate) || 1;
+  const kozIsUsd = koz.currency === "USD";
+  // Leveranciersprijs (evt. USD) → EUR vóór de import-opslag + marge.
+  const kozSupplierEur = round2(kozIsUsd ? kozSupplier * kozRate : kozSupplier);
   const kozUnits = Number(koz.units) || 1;
-  const kozCost = round2(kozSupplier * KOZIJN_COST_FACTOR);
+  const kozCost = round2(kozSupplierEur * KOZIJN_COST_FACTOR);
   const kozMargin = Number(koz.margin) || 0;
   const kozSale = round2(kozCost * (1 + kozMargin / 100));
+  // Live USD→EUR-koers ophalen zodra de calculator opengaat (koers blijft aanpasbaar).
+  useEffect(() => {
+    if (!kozijnOpen) return;
+    let alive = true;
+    fetch("/api/fx/usd")
+      .then((r) => r.json())
+      .then((d) => {
+        if (alive && d?.rate) setKoz((k) => ({ ...k, rate: String(d.rate) }));
+      })
+      .catch(() => {});
+    return () => {
+      alive = false;
+    };
+  }, [kozijnOpen]);
   const addKozijn = () => {
     if (kozSupplier <= 0) return;
     const row: Row = {
@@ -258,12 +276,12 @@ export function LineItemsEditor({
       price: String(kozSale),
       taxRate: "21",
       costEur: String(kozCost),
-      supplierPriceEur: String(kozSupplier),
+      supplierPriceEur: String(kozSupplierEur),
       marginPct: String(kozMargin),
     };
     setRows((rs) => (rs.length === 1 && !rs[0].name.trim() && !rs[0].productId ? [row] : [...rs, row]));
     setKozijnOpen(false);
-    setKoz({ name: "", units: "1", supplier: "", margin: "30" });
+    setKoz((k) => ({ ...k, name: "", units: "1", supplier: "", margin: "30" }));
   };
 
   // --- Bezorgkosten: afstand showroom → klantadres × tarief, als regel ---
@@ -765,39 +783,72 @@ export function LineItemsEditor({
                 </div>
                 <div>
                   <label className="mb-1 block text-xs font-medium text-muted">Leveranciersprijs (p/st, ex. btw)</label>
+                  <div className="flex gap-1.5">
+                    <Select
+                      value={koz.currency}
+                      onChange={(e) => setKoz((k) => ({ ...k, currency: e.target.value }))}
+                      className="w-20"
+                    >
+                      <option value="USD">USD $</option>
+                      <option value="EUR">EUR €</option>
+                    </Select>
+                    <Input
+                      type="number"
+                      inputMode="decimal"
+                      value={koz.supplier}
+                      onChange={(e) => setKoz((k) => ({ ...k, supplier: e.target.value }))}
+                      placeholder="0,00"
+                      className="flex-1 text-right"
+                    />
+                  </div>
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                {kozIsUsd && (
+                  <div>
+                    <label className="mb-1 block text-xs font-medium text-muted">Koers USD → EUR</label>
+                    <Input
+                      type="number"
+                      inputMode="decimal"
+                      step="0.0001"
+                      value={koz.rate}
+                      onChange={(e) => setKoz((k) => ({ ...k, rate: e.target.value }))}
+                      className="text-right"
+                    />
+                  </div>
+                )}
+                <div className={kozIsUsd ? "" : "col-span-2"}>
+                  <label className="mb-1 block text-xs font-medium text-muted">Marge (% op kostprijs)</label>
                   <Input
                     type="number"
                     inputMode="decimal"
-                    value={koz.supplier}
-                    onChange={(e) => setKoz((k) => ({ ...k, supplier: e.target.value }))}
-                    placeholder="0,00"
+                    value={koz.margin}
+                    onChange={(e) => setKoz((k) => ({ ...k, margin: e.target.value }))}
                     className="text-right"
                   />
                 </div>
               </div>
-              <div>
-                <label className="mb-1 block text-xs font-medium text-muted">Marge (% op kostprijs)</label>
-                <Input
-                  type="number"
-                  inputMode="decimal"
-                  value={koz.margin}
-                  onChange={(e) => setKoz((k) => ({ ...k, margin: e.target.value }))}
-                  className="text-right"
-                />
-              </div>
 
               <div className="rounded-md border border-border bg-background-soft px-4 py-3 text-sm">
                 <div className="flex justify-between text-muted">
-                  <span>Leveranciersprijs</span>
-                  <span className="tabular-nums">{formatEUR(kozSupplier)}</span>
+                  <span>Leveranciersprijs{kozIsUsd ? " (USD)" : ""}</span>
+                  <span className="tabular-nums">
+                    {kozIsUsd ? `$ ${kozSupplier.toLocaleString("nl-NL", { minimumFractionDigits: 2 })}` : formatEUR(kozSupplier)}
+                  </span>
                 </div>
+                {kozIsUsd && (
+                  <div className="flex justify-between text-muted">
+                    <span>× koers {kozRate.toLocaleString("nl-NL", { maximumFractionDigits: 4 })} → EUR</span>
+                    <span className="tabular-nums">{formatEUR(kozSupplierEur)}</span>
+                  </div>
+                )}
                 <div className="flex justify-between text-muted">
                   <span>+ {KOZIJN_HANDLING_PCT}% handling</span>
-                  <span className="tabular-nums">{formatEUR(round2(kozSupplier * (KOZIJN_HANDLING_PCT / 100)))}</span>
+                  <span className="tabular-nums">{formatEUR(round2(kozSupplierEur * (KOZIJN_HANDLING_PCT / 100)))}</span>
                 </div>
                 <div className="flex justify-between text-muted">
                   <span>+ {KOZIJN_IMPORT_PCT}% invoer</span>
-                  <span className="tabular-nums">{formatEUR(round2(kozSupplier * (KOZIJN_IMPORT_PCT / 100)))}</span>
+                  <span className="tabular-nums">{formatEUR(round2(kozSupplierEur * (KOZIJN_IMPORT_PCT / 100)))}</span>
                 </div>
                 <div className="mt-1 flex justify-between border-t border-border pt-1 font-medium">
                   <span>Kostprijs (×{KOZIJN_COST_FACTOR.toLocaleString("nl-NL")})</span>
