@@ -116,12 +116,13 @@ export default async function DocumentDetailPage({
 
   // Offerte ↔ factuur-koppeling: welke facturen zijn van deze offerte gemaakt
   // (incl. deelfacturen), en — voor een factuur — uit welke offerte komt hij.
-  const linkedInvoices =
+  const linkedDocs =
     doc.kind === "estimate"
       ? await db.query.documents.findMany({
           where: and(eq(documents.sourceDocumentId, id), ne(documents.status, "void")),
           columns: {
             id: true,
+            kind: true,
             docNumber: true,
             status: true,
             totalEur: true,
@@ -132,8 +133,11 @@ export default async function DocumentDetailPage({
           orderBy: [asc(documents.issueDate)],
         })
       : [];
+  // Facturen tellen als "gefactureerd"; proforma-voorschotten los tonen.
+  const linkedInvoices = linkedDocs.filter((d) => d.kind === "invoice");
+  const linkedVoorschotten = linkedDocs.filter((d) => d.kind === "proforma");
   const sourceEstimate =
-    doc.kind === "invoice" && doc.sourceDocumentId
+    (doc.kind === "invoice" || doc.kind === "proforma") && doc.sourceDocumentId
       ? await db.query.documents.findFirst({
           where: eq(documents.id, doc.sourceDocumentId),
           columns: { id: true, docNumber: true, status: true },
@@ -381,9 +385,9 @@ export default async function DocumentDetailPage({
         </div>
       )}
 
-      {doc.kind === "invoice" && sourceEstimate && (
+      {(doc.kind === "invoice" || doc.kind === "proforma") && sourceEstimate && (
         <div className="mb-4 flex flex-wrap items-center gap-2 rounded-md border border-border bg-muted/30 px-3 py-2 text-sm">
-          <span className="text-muted">Gemaakt van offerte</span>
+          <span className="text-muted">{doc.kind === "proforma" ? "Voorschot bij offerte" : "Gemaakt van offerte"}</span>
           <Link href={`/documents/${sourceEstimate.id}`} className="font-medium text-accent hover:underline">
             {sourceEstimate.docNumber ?? "(offerte)"} →
           </Link>
@@ -565,6 +569,40 @@ export default async function DocumentDetailPage({
                     {doc.reservedAt ? "Reservering opheffen" : "🔖 Reserveren"}
                   </SubmitButton>
                 </form>
+              )}
+
+              {doc.kind === "estimate" && (
+                <div className="rounded-md bg-background px-3 py-2.5">
+                  <p className="text-xs font-medium text-muted">Voorschotten bij deze offerte</p>
+                  {linkedVoorschotten.length > 0 ? (
+                    <ul className="mb-2 mt-1 space-y-1">
+                      {linkedVoorschotten.map((v) => (
+                        <li key={v.id} className="flex items-center justify-between gap-2 text-sm">
+                          <Link href={`/documents/${v.id}`} className="text-accent hover:underline">
+                            {v.docNumber}
+                          </Link>
+                          <span className="flex items-center gap-2">
+                            <Badge tone={v.status === "paid" ? "success" : "neutral"}>
+                              {v.status === "paid" ? "betaald" : "open"}
+                            </Badge>
+                            <span className="tabular-nums">{formatEUR(v.totalEur)}</span>
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <p className="mb-2 text-[11px] text-muted">
+                      Een proforma-voorschot dat aan deze offerte hangt en op de eindfactuur wordt verrekend.
+                    </p>
+                  )}
+                  <LinkButton
+                    href={`/documents/new?kind=proforma&sourceDocumentId=${id}${doc.projectId ? `&projectId=${doc.projectId}` : ""}${doc.contactId ? `&contactId=${doc.contactId}` : ""}`}
+                    size="sm"
+                    variant="secondary"
+                  >
+                    + Voorschot (proforma)
+                  </LinkButton>
+                </div>
               )}
 
               {doc.kind === "estimate" && phaseList.length > 0 && (

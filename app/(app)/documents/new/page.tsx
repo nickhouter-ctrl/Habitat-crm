@@ -42,6 +42,7 @@ export default async function NewDocumentPage({
     dealId: typeof params.dealId === "string" ? params.dealId : undefined,
     propertyId: typeof params.propertyId === "string" ? params.propertyId : undefined,
     projectId: typeof params.projectId === "string" ? params.projectId : undefined,
+    sourceDocumentId: typeof params.sourceDocumentId === "string" ? params.sourceDocumentId : undefined,
   };
   // Producten uit een (geaccepteerde) aanvraag voorladen als offerte-regels.
   let initialItems: DocumentLineItem[] | undefined;

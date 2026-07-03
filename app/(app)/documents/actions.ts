@@ -80,6 +80,8 @@ const docSchema = z.object({
   currency: z.string().trim().min(3).max(3).default("EUR"),
   notes: z.string().trim().max(8000).optional().or(z.literal("")),
   items: z.string().optional(),
+  /** Bron-document (bv. een proforma-voorschot gekoppeld aan een offerte). */
+  sourceDocumentId: optionalUuid,
 });
 
 function listPathFor(kind: DocKind): string {
@@ -118,6 +120,7 @@ function buildValues(v: z.infer<typeof docSchema>) {
       totalEur: String(totals.total),
       items,
       notes: v.notes?.trim() || null,
+      sourceDocumentId: v.sourceDocumentId || null,
     },
     totals,
   };
@@ -1174,6 +1177,34 @@ export async function createInvoiceFromEstimate(estimateId: string, formData?: F
     items = baseItems.map((it) => ({ ...it, price: Math.round(Number(it.price) * factor * 100) / 100 }));
     titleSuffix = ` — ${pct}% van ${est.docNumber ?? "offerte"}`;
   }
+
+  // Reeds betaalde voorschotten (proforma's gekoppeld aan deze offerte) als
+  // negatieve "reeds betaald"-regels verrekenen — btw komt op deze eindfactuur.
+  const paidVoorschotten = await db.query.documents.findMany({
+    where: and(
+      eq(documents.sourceDocumentId, estimateId),
+      eq(documents.kind, "proforma"),
+      eq(documents.status, "paid"),
+    ),
+    columns: { docNumber: true, totalEur: true },
+  });
+  for (const v of paidVoorschotten) {
+    const amt = Number(v.totalEur ?? 0);
+    if (amt > 0) {
+      items = [
+        ...items,
+        {
+          name: `Reeds betaald voorschot ${v.docNumber ?? ""}`.trim(),
+          units: 1,
+          price: -amt,
+          discount: 0,
+          taxRate: 0,
+          category: "materiaal",
+        },
+      ];
+    }
+  }
+
   const totals = computeTotals(items);
   const round2 = (n: number) => (Math.round(n * 100) / 100).toFixed(2);
 

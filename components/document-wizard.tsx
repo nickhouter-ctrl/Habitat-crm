@@ -63,7 +63,7 @@ export function DocumentWizard({
   properties: Option[];
   projects?: Option[];
   products?: ProductOption[];
-  defaults?: { contactId?: string; dealId?: string; propertyId?: string; projectId?: string };
+  defaults?: { contactId?: string; dealId?: string; propertyId?: string; projectId?: string; sourceDocumentId?: string };
   initialItems?: DocumentLineItem[] | null;
 }) {
   const [step, setStep] = useState<1 | 2>(1);
@@ -114,6 +114,9 @@ export function DocumentWizard({
       <input type="hidden" name="kind" value={kind} />
       <input type="hidden" name="currency" value="EUR" />
       <input type="hidden" name="clientMode" value={mode} />
+      {defaults?.sourceDocumentId && (
+        <input type="hidden" name="sourceDocumentId" value={defaults.sourceDocumentId} />
+      )}
       {mode === "existing" ? (
         <input type="hidden" name="contactId" value={contactId} />
       ) : (
