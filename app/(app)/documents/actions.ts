@@ -30,7 +30,7 @@ import {
 import { REVIEW_URL } from "@/lib/review-requests";
 import { recordSentEmail } from "@/lib/sent-email";
 import { renderDocumentPdf } from "@/lib/document-pdf";
-import { uploadDocumentFile, deleteDocumentFile, fetchDocumentFileBytes } from "@/lib/storage";
+import { uploadDocumentFile, deleteDocumentFile, fetchDocumentFileBytes, signDocumentUpload } from "@/lib/storage";
 import { pushDocumentToHolded, updateDocumentInHolded } from "@/lib/holded/sync";
 import { holded } from "@/lib/holded/client";
 import { formatDate, formatEUR } from "@/lib/utils";
@@ -374,7 +374,7 @@ export async function updateDocument(id: string, formData: FormData) {
   redirect(`/documents/${id}`);
 }
 
-/** Upload bijlage(n) (bv. kozijn-tekeningen) bij een offerte/factuur. */
+/** Upload bijlage(n) via een server-action (kleine bestanden < ~4,5 MB). */
 export async function uploadDocumentAttachment(id: string, formData: FormData) {
   await requireUser();
   const files = formData.getAll("files").filter((f): f is File => f instanceof File && f.size > 0);
@@ -395,6 +395,38 @@ export async function uploadDocumentAttachment(id: string, formData: FormData) {
   }
   if (added.length === 0) return;
   await db.update(documents).set({ attachments: [...current, ...added] }).where(eq(documents.id, id));
+  revalidatePath(`/documents/${id}`);
+}
+
+/** Signed upload-URL voor directe (client→Supabase) upload — omzeilt Vercel's body-limiet. */
+export async function signDocumentUploadAction(id: string, filename: string, contentType?: string) {
+  await requireUser();
+  return signDocumentUpload(id, filename, contentType);
+}
+
+/** Koppel al-geüploade bestanden (metadata) aan een document. */
+export async function attachDocumentFiles(
+  id: string,
+  files: Array<{ name: string; path: string; size: number; contentType: string }>,
+) {
+  await requireUser();
+  if (!files?.length) return;
+  const doc = await db.query.documents.findFirst({
+    where: eq(documents.id, id),
+    columns: { attachments: true },
+  });
+  if (!doc) return;
+  const clean = files
+    .filter((f) => f && typeof f.path === "string" && f.path.startsWith(`documents/${id}/`))
+    .map((f) => ({
+      name: String(f.name).slice(0, 200),
+      path: f.path,
+      size: Number(f.size) || 0,
+      contentType: String(f.contentType || "application/octet-stream"),
+      uploadedAt: new Date().toISOString(),
+    }));
+  if (!clean.length) return;
+  await db.update(documents).set({ attachments: [...(doc.attachments ?? []), ...clean] }).where(eq(documents.id, id));
   revalidatePath(`/documents/${id}`);
 }
 

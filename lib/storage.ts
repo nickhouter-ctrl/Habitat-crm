@@ -219,6 +219,23 @@ export async function deleteDocumentFile(path: string): Promise<void> {
   await deletePurchaseOrderFile(path);
 }
 
+/**
+ * Signed upload-URL zodat de browser het bestand RECHTSTREEKS naar Supabase
+ * uploadt (omzeilt de ~4,5 MB body-limiet van Vercel server-actions). De server
+ * genereert de URL met de service-role; de client PUT't het bestand ernaartoe.
+ */
+export async function signDocumentUpload(
+  documentId: string,
+  filename: string,
+  contentType?: string,
+): Promise<{ path: string; token: string; signedUrl: string; contentType: string }> {
+  await ensurePoBucket();
+  const path = `documents/${documentId}/${crypto.randomUUID()}-${safeName(filename)}`;
+  const { data, error } = await supabase().storage.from(PO_BUCKET).createSignedUploadUrl(path);
+  if (error || !data) throw new Error(`Kon upload-URL niet aanmaken: ${error?.message ?? "onbekend"}`);
+  return { path, token: data.token, signedUrl: data.signedUrl, contentType: contentType || "application/octet-stream" };
+}
+
 /** Download de bytes van een documentbijlage (voor de mail-bijlage). */
 export async function fetchDocumentFileBytes(
   path: string,

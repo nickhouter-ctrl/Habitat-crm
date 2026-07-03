@@ -361,6 +361,9 @@ const s = StyleSheet.create({
   cDesc: { flex: 4, paddingRight: 6 },
   cCat: { flex: 1.6, color: C.muted, paddingRight: 4 },
   cNum: { flex: 1, textAlign: "right" },
+  // Aantal-kolom: eigen rechter-marge zodat het aantal niet tegen de prijs plakt
+  // (anders leest "1" + "19.687,71" als "119.687,71").
+  cQty: { flex: 0.7, textAlign: "right", paddingRight: 12 },
   cVat: { flex: 0.8, textAlign: "right" },
   cAmt: { flex: 1.3, textAlign: "right" },
   itemName: { fontFamily: "Sora", fontWeight: 700, color: C.charcoal },
@@ -667,7 +670,7 @@ function DocumentPdf({ doc }: { doc: PdfDoc }) {
             {isDelivery && <Text style={[s.thText, s.cPic]} />}
             <Text style={[s.thText, s.cDesc]}>{t.description}</Text>
             <Text style={[s.thText, s.cCat]}>{t.category}</Text>
-            <Text style={[s.thText, isDelivery ? s.cAmt : s.cNum]}>{t.qty}</Text>
+            <Text style={[s.thText, isDelivery ? s.cAmt : s.cQty]}>{t.qty}</Text>
             {!isDelivery && (
               <>
                 <Text style={[s.thText, s.cNum]}>{t.price}</Text>
@@ -703,7 +706,7 @@ function DocumentPdf({ doc }: { doc: PdfDoc }) {
                     ) : null}
                   </View>
                   <Text style={s.cCat}>{catLabel(it.category, locale)}</Text>
-                  <Text style={isDelivery ? s.cAmt : s.cNum}>{it.units}</Text>
+                  <Text style={isDelivery ? s.cAmt : s.cQty}>{it.units}</Text>
                   {!isDelivery && (
                     <>
                       <Text style={s.cNum}>{eur(it.price)}</Text>

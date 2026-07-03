@@ -29,6 +29,7 @@ import { labelForCategory } from "@/lib/products";
 import { formatDate, formatEUR } from "@/lib/utils";
 import {
   applyStockOutFromDocument,
+  attachDocumentFiles,
   createCreditNoteFromInvoice,
   createDeliveryNoteFromDocument,
   createInvoiceFromEstimate,
@@ -40,12 +41,13 @@ import {
   reverseStockOutFromDocument,
   setDeliveryNoteDelivered,
   setDocumentStatus,
+  signDocumentUploadAction,
   toggleReserveEstimate,
-  uploadDocumentAttachment,
 } from "../actions";
 import { documentFileUrl } from "@/lib/storage";
 import { documentKindMeta, documentStatusMeta } from "../../_meta";
 import { ConfirmSubmit } from "@/components/confirm-submit";
+import { DocumentAttachmentsUploader } from "@/components/document-attachments-uploader";
 
 export async function generateMetadata({
   params,
@@ -905,18 +907,11 @@ export default async function DocumentDetailPage({
                   ))}
                 </ul>
               )}
-              <form action={uploadDocumentAttachment.bind(null, doc.id)} className="flex flex-wrap items-center gap-2 border-t border-border pt-3">
-                <input
-                  type="file"
-                  name="files"
-                  multiple
-                  accept="application/pdf,image/*"
-                  className="text-sm file:mr-3 file:rounded file:border-0 file:bg-accent/10 file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-accent"
-                />
-                <SubmitButton size="sm" variant="secondary" pendingLabel="Uploaden…">
-                  Toevoegen
-                </SubmitButton>
-              </form>
+              <DocumentAttachmentsUploader
+                documentId={doc.id}
+                signAction={signDocumentUploadAction}
+                attachAction={attachDocumentFiles}
+              />
             </CardContent>
           </Card>
         </div>

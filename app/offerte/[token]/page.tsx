@@ -169,7 +169,7 @@ export default async function PublicOffertePage({
             <thead className="text-left text-xs uppercase tracking-wide text-muted">
               <tr>
                 <th className="py-2">{t.description}</th>
-                <th className="py-2 text-right">{t.qty}</th>
+                <th className="py-2 pr-6 text-right">{t.qty}</th>
                 <th className="py-2 text-right">{t.price}</th>
                 <th className="py-2 text-right">{t.vat}%</th>
                 <th className="py-2 text-right">{t.net}</th>
@@ -184,7 +184,7 @@ export default async function PublicOffertePage({
                       <span className="block text-xs text-muted">{it.description}</span>
                     )}
                   </td>
-                  <td className="py-2.5 text-right tabular-nums">{it.units}</td>
+                  <td className="py-2.5 pr-6 text-right tabular-nums">{it.units}</td>
                   <td className="py-2.5 text-right tabular-nums">{formatEUR(it.price)}</td>
                   <td className="py-2.5 text-right tabular-nums">{it.taxRate ?? 0}%</td>
                   <td className="py-2.5 text-right tabular-nums">{formatEUR(lineNet(it))}</td>
