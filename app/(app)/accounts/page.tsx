@@ -20,6 +20,7 @@ import {
 } from "@/components/ui";
 import { SubmitButton } from "@/components/submit-button";
 import { Combobox, type ComboOption } from "@/components/combobox";
+import { AccountTierSelect } from "@/components/account-tier-select";
 import { db } from "@/lib/db";
 import { accountRequests, contacts, customerAccounts } from "@/lib/db/schema";
 import {
@@ -179,13 +180,7 @@ export default async function AccountsPage() {
                     <span className="block text-xs text-muted">{a.email}</span>
                   </Td>
                   <Td>
-                    <form action={setAccountTier.bind(null, a.id)} className="flex items-center gap-1">
-                      <Select name="tier" defaultValue={a.tier} className="h-8 py-1 text-xs">
-                        <option value="particulier">Particulier</option>
-                        <option value="aannemer">Aannemer (−20%)</option>
-                      </Select>
-                      <SubmitButton size="sm" variant="ghost" className="text-muted" pendingLabel="…">opslaan</SubmitButton>
-                    </form>
+                    <AccountTierSelect accountId={a.id} tier={a.tier} onChangeAction={setAccountTier} />
                   </Td>
                   <Td><Badge tone={STATUS_TONE[a.status]}>{STATUS_LABEL[a.status]}</Badge></Td>
                   <Td className="text-xs text-muted">{dt(a.lastLoginAt)}</Td>
