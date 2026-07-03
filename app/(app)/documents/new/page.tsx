@@ -1,10 +1,10 @@
-import { eq, inArray } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import Link from "next/link";
 
 import { DocumentWizard } from "@/components/document-wizard";
 import { PageHeader } from "@/components/ui";
 import { db } from "@/lib/db";
-import { products, quoteRequests, type DocumentLineItem } from "@/lib/db/schema";
+import { documents, products, quoteRequests, type DocumentLineItem } from "@/lib/db/schema";
 import { asStringArray, type DocKind } from "@/lib/documents";
 import { nextDocNumber } from "@/lib/doc-number";
 import { getDocumentFormOptions } from "../../_options";
@@ -75,6 +75,31 @@ export default async function NewDocumentPage({
         };
       });
     }
+  }
+
+  // Bij een definitieve factuur op een project: reeds betaalde voorschotten
+  // (proforma's) alvast als negatieve "reeds betaald"-regels voorladen, zodat ze
+  // op de eindfactuur verrekend worden (btw wel op het volledige project).
+  if (kind === "invoice" && defaults.projectId) {
+    const voorschotten = await db.query.documents.findMany({
+      where: and(
+        eq(documents.projectId, defaults.projectId),
+        eq(documents.kind, "proforma"),
+        eq(documents.status, "paid"),
+      ),
+      columns: { docNumber: true, totalEur: true },
+    });
+    const negLines: DocumentLineItem[] = voorschotten
+      .filter((v) => Number(v.totalEur ?? 0) > 0)
+      .map((v) => ({
+        name: `Reeds betaald voorschot ${v.docNumber ?? ""}`.trim(),
+        units: 1,
+        price: -Number(v.totalEur ?? 0),
+        discount: 0,
+        taxRate: 0,
+        category: "materiaal",
+      }));
+    if (negLines.length) initialItems = [...(initialItems ?? []), ...negLines];
   }
 
   const backHref =

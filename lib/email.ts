@@ -191,9 +191,10 @@ export function offerteEmail(args: {
     : "es";
   const t = T[lang];
   const kind = args.kind ?? "estimate";
+  const isProforma = kind === "proforma";
   const nr = args.docNumber || "—";
   const subject = args.subject?.trim() || t.subject(nr, kind);
-  const introText = args.message?.trim() || t.intro(kind);
+  const introText = args.message?.trim() || (isProforma ? PROFORMA_TEXT[lang].intro : t.intro(kind));
   const introHtml = introText
     .split(/\n+/)
     .map((p) => `<p>${escapeHtml(p)}</p>`)
@@ -219,13 +220,15 @@ export function offerteEmail(args: {
         }
       </div>
       <p style="font-size:13px;color:#888;margin:0">${t.pdf}: <a href="${args.url}/pdf" style="color:${COMPANY.accent};text-decoration:none">${nr}.pdf</a></p>
+      ${isProforma ? `${bankBlockHtml(lang)}<p style="font-size:13px;color:#777;margin:12px 0 0">${escapeHtml(PROFORMA_TEXT[lang].settle)}</p>` : ""}
       <hr style="border:none;border-top:1px solid ${COMPANY.sand};margin:28px 0 16px" />
       <p style="margin:0 0 4px">${t.regards}</p>
       <div style="font-size:13px;color:#888;line-height:1.7">${signatureHtml()}</div>
     </div>
   </div>
 </div>`;
-  const text = `${greeting}\n\n${introText}\n\n${t.review(kind)}: ${args.url}\n${t.pdf}: ${args.url}/pdf\n\n${t.regards}\n${COMPANY.legalName}\n${COMPANY.address}\n${[COMPANY.phone, COMPANY.email].filter(Boolean).join(" · ")}`;
+  const proformaText = isProforma ? `${bankBlockText(lang)}\n\n${PROFORMA_TEXT[lang].settle}` : "";
+  const text = `${greeting}\n\n${introText}\n\n${t.review(kind)}: ${args.url}\n${t.pdf}: ${args.url}/pdf${proformaText}\n\n${t.regards}\n${COMPANY.legalName}\n${COMPANY.address}\n${[COMPANY.phone, COMPANY.email].filter(Boolean).join(" · ")}`;
   return { subject, html, text };
 }
 
@@ -460,6 +463,26 @@ function bankBlockText(lang: Lang): string {
   const bic = COMPANY.bic ? `\nBIC: ${COMPANY.bic}` : "";
   return `\n\n${b.title}\n${b.via}\nIBAN: ${COMPANY.iban}${bic}\n${b.holder}: ${COMPANY.legalName}`;
 }
+
+/** Voorschot (pro-formafactuur): intro + verrekening-notitie per taal. */
+const PROFORMA_TEXT: Record<Lang, { intro: string; settle: string }> = {
+  nl: {
+    intro: "Hierbij ontvangt u een voorschot (pro-formafactuur) voor de voortgang van de werkzaamheden. Wij verzoeken u vriendelijk het bedrag uit de bijgevoegde pro-formafactuur te voldoen op onderstaande rekening.",
+    settle: "Dit voorschot wordt bij de uiteindelijke afrekening volledig verrekend in de definitieve factuur.",
+  },
+  en: {
+    intro: "Please find an advance payment request (pro-forma invoice) for the progress of the works. Kindly transfer the amount stated in the attached pro-forma invoice to the account below.",
+    settle: "This advance will be fully settled against the final invoice.",
+  },
+  es: {
+    intro: "Le enviamos una solicitud de anticipo (factura proforma) para la continuación de los trabajos. Le rogamos abonar el importe indicado en la factura proforma adjunta en la cuenta indicada.",
+    settle: "Este anticipo se descontará íntegramente en la factura definitiva.",
+  },
+  de: {
+    intro: "Anbei eine Anzahlungsanforderung (Proforma-Rechnung) für den Fortschritt der Arbeiten. Bitte überweisen Sie den in der beigefügten Proforma-Rechnung genannten Betrag auf das unten genannte Konto.",
+    settle: "Diese Anzahlung wird vollständig mit der Endrechnung verrechnet.",
+  },
+};
 
 export function paymentReminderEmail(args: {
   lang?: string | null;

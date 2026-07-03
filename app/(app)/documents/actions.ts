@@ -9,7 +9,7 @@ import { z } from "zod";
 
 import { auth } from "@/auth";
 import { db } from "@/lib/db";
-import { activities, companies, contacts, deals, deliveries, documents, holdedSyncMap, products } from "@/lib/db/schema";
+import { activities, companies, contacts, deals, deliveries, documents, holdedSyncMap, products, projectPayments } from "@/lib/db/schema";
 import { syncDealFromDocument } from "@/lib/deals";
 import {
   billingAddressLines,
@@ -678,7 +678,7 @@ export async function setDocumentStatus(id: string, formData: FormData) {
 
   const doc = await db.query.documents.findFirst({
     where: eq(documents.id, id),
-    columns: { totalEur: true, kind: true, dealId: true, holdedId: true, sentAt: true },
+    columns: { totalEur: true, kind: true, dealId: true, holdedId: true, sentAt: true, projectId: true, docNumber: true },
   });
   if (!doc) return;
 
@@ -718,6 +718,33 @@ export async function setDocumentStatus(id: string, formData: FormData) {
     }
   }
   await syncDealFromDocument(doc.dealId, { kind: doc.kind, status, totalEur: doc.totalEur });
+
+  // Betaalde proforma-voorschot → automatisch een ontvangst (advance) op het
+  // project, zodat het meteen in de ontvangsten telt en "nog te factureren"
+  // daalt. Idempotent via de marker-omschrijving; teruggedraaid = weer weg.
+  if (doc.kind === "proforma" && doc.projectId) {
+    const marker = `Voorschot ${doc.docNumber ?? id.slice(0, 8)}`;
+    if (status === "paid") {
+      const existing = await db.query.projectPayments.findFirst({
+        where: and(eq(projectPayments.projectId, doc.projectId), eq(projectPayments.description, marker)),
+      });
+      if (!existing) {
+        await db.insert(projectPayments).values({
+          projectId: doc.projectId,
+          amountEur: doc.totalEur ?? "0",
+          method: "advance",
+          date: new Date().toISOString().slice(0, 10),
+          description: marker,
+          note: "Automatisch via betaalde proforma",
+        });
+      }
+    } else {
+      await db
+        .delete(projectPayments)
+        .where(and(eq(projectPayments.projectId, doc.projectId), eq(projectPayments.description, marker)));
+    }
+    revalidatePath(`/projects/${doc.projectId}`);
+  }
 
   // Voorraad sluitend: een factuur boekt de voorraad automatisch af zodra hij
   // verzonden of betaald is. Idempotent + per-deal-bescherming zit in de helper,

@@ -1070,6 +1070,13 @@ export default async function ProjectDetailPage({
                   + Nieuwe offerte
                 </LinkButton>
                 <LinkButton
+                  href={`/documents/new?kind=proforma&projectId=${id}${project.contactId ? `&contactId=${project.contactId}` : ""}${project.propertyId ? `&propertyId=${project.propertyId}` : ""}`}
+                  variant="ghost"
+                  className="text-xs"
+                >
+                  + Voorschot (proforma)
+                </LinkButton>
+                <LinkButton
                   href={`/documents/new?kind=invoice&projectId=${id}${project.contactId ? `&contactId=${project.contactId}` : ""}${project.propertyId ? `&propertyId=${project.propertyId}` : ""}`}
                   variant="ghost"
                   className="text-xs"
