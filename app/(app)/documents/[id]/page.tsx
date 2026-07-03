@@ -33,6 +33,7 @@ import {
   createCreditNoteFromInvoice,
   createDeliveryNoteFromDocument,
   createInvoiceFromEstimate,
+  createInvoiceFromProforma,
   deleteDocument,
   deleteDocumentAttachment,
   markDocumentSentNoEmail,
@@ -567,6 +568,18 @@ export default async function DocumentDetailPage({
                   </p>
                   <SubmitButton size="sm" variant={doc.reservedAt ? "ghost" : "secondary"} pendingLabel="Bezig…">
                     {doc.reservedAt ? "Reservering opheffen" : "🔖 Reserveren"}
+                  </SubmitButton>
+                </form>
+              )}
+
+              {doc.kind === "proforma" && (
+                <form action={createInvoiceFromProforma.bind(null, id)} className="rounded-md bg-background px-3 py-2.5">
+                  <p className="text-xs font-medium text-muted">Omzetten naar factuur</p>
+                  <p className="mb-2 text-[11px] text-muted">
+                    Maak van dit voorschot een echte factuur (mét btw) — hier gaat de btw pas lopen.
+                  </p>
+                  <SubmitButton size="sm" variant="secondary" pendingLabel="Bezig…">
+                    → Factuur maken
                   </SubmitButton>
                 </form>
               )}

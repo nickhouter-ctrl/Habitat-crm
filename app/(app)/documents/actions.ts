@@ -1238,6 +1238,45 @@ export async function createInvoiceFromEstimate(estimateId: string, formData?: F
   redirect(`/documents/${id}/edit`);
 }
 
+/** Maak van een proforma-voorschot een echte (btw-)factuur — hier gaat de btw pas lopen. */
+export async function createInvoiceFromProforma(proformaId: string) {
+  await requireUser();
+  const pro = await db.query.documents.findFirst({ where: eq(documents.id, proformaId) });
+  if (!pro || pro.kind !== "proforma") return;
+
+  const items = normalizeDocItems(pro.items);
+  const totals = computeTotals(items);
+  const round2 = (n: number) => (Math.round(n * 100) / 100).toFixed(2);
+  const today = new Date();
+  const due = new Date(today);
+  due.setDate(due.getDate() + 30);
+
+  const { id } = await insertNumberedDocument("invoice", {
+    kind: "invoice",
+    status: "draft",
+    // Liefst de bron-offerte (dan telt 'ie daar als gefactureerd); anders de proforma.
+    sourceDocumentId: pro.sourceDocumentId ?? proformaId,
+    title: pro.title ?? "Factuur",
+    contactId: pro.contactId,
+    companyId: pro.companyId,
+    dealId: pro.dealId,
+    propertyId: pro.propertyId,
+    projectId: pro.projectId,
+    issueDate: today.toISOString().slice(0, 10),
+    dueDate: due.toISOString().slice(0, 10),
+    currency: pro.currency,
+    subtotalEur: round2(totals.subtotal),
+    taxEur: round2(totals.tax),
+    totalEur: round2(totals.total),
+    items,
+    notes: pro.notes,
+  });
+
+  revalidateAround("invoice");
+  revalidatePath(`/documents/${proformaId}`);
+  redirect(`/documents/${id}/edit`);
+}
+
 /**
  * Maak een creditnota die hoort bij een factuur. Het nummer is afgeleid van het
  * factuurnummer (FAC-2026-0011 → CN-2026-0011), zodat je altijd ziet bij welke
