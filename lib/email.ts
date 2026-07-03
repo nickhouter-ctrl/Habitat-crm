@@ -125,7 +125,10 @@ const T: Record<
   nl: {
     subject: (nr, k) => `${cap(kindNL(k))} ${nr} van ${COMPANY.name}`,
     hi: "Beste",
-    intro: (k) => `Hierbij ontvangt u onze ${kindNL(k)} (zie ook de PDF-bijlage). U kunt deze online bekijken en — als het een offerte is — direct akkoord geven of afwijzen:`,
+    intro: (k) =>
+      k === "estimate"
+        ? `Hierbij ontvangt u onze offerte (zie ook de PDF-bijlage). U kunt deze online bekijken en direct akkoord geven of afwijzen:`
+        : `Hierbij ontvangt u onze ${kindNL(k)} (zie ook de PDF-bijlage). U kunt deze online bekijken:`,
     review: (k) => `Bekijk de ${kindNL(k)}`,
     accept: "Offerte accepteren",
     pdf: "PDF downloaden",
@@ -134,7 +137,10 @@ const T: Record<
   en: {
     subject: (nr, k) => `${cap(kindEN(k))} ${nr} from ${COMPANY.name}`,
     hi: "Dear",
-    intro: (k) => `Please find our ${kindEN(k)} below (also attached as PDF). You can review it online and — for a quote — approve or decline it:`,
+    intro: (k) =>
+      k === "estimate"
+        ? `Please find our quote below (also attached as PDF). You can review it online and approve or decline it directly:`
+        : `Please find our ${kindEN(k)} below (also attached as PDF). You can review it online:`,
     review: (k) => `View the ${kindEN(k)}`,
     accept: "Accept quote",
     pdf: "Download PDF",
@@ -143,7 +149,10 @@ const T: Record<
   es: {
     subject: (nr, k) => `${cap(kindES(k))} ${nr} de ${COMPANY.name}`,
     hi: "Estimado/a",
-    intro: (k) => `Le enviamos nuestro/a ${kindES(k)} (también adjunto en PDF). Puede revisarlo en línea y — si es un presupuesto — aprobarlo o rechazarlo:`,
+    intro: (k) =>
+      k === "estimate"
+        ? `Le enviamos nuestro presupuesto (también adjunto en PDF). Puede revisarlo en línea y aprobarlo o rechazarlo directamente:`
+        : `Le enviamos nuestro/a ${kindES(k)} (también adjunto en PDF). Puede revisarlo en línea:`,
     review: (k) => `Ver el/la ${kindES(k)}`,
     accept: "Aceptar presupuesto",
     pdf: "Descargar PDF",
@@ -152,7 +161,10 @@ const T: Record<
   de: {
     subject: (nr, k) => `${cap(kindDE(k))} ${nr} von ${COMPANY.name}`,
     hi: "Sehr geehrte/r",
-    intro: (k) => `Anbei unser/e ${kindDE(k)} (auch als PDF im Anhang). Sie können es online ansehen und — bei einem Angebot — direkt annehmen oder ablehnen:`,
+    intro: (k) =>
+      k === "estimate"
+        ? `Anbei unser Angebot (auch als PDF im Anhang). Sie können es online ansehen und direkt annehmen oder ablehnen:`
+        : `Anbei unser/e ${kindDE(k)} (auch als PDF im Anhang). Sie können es online ansehen:`,
     review: (k) => `${cap(kindDE(k))} ansehen`,
     accept: "Angebot annehmen",
     pdf: "PDF herunterladen",
@@ -197,33 +209,50 @@ export function offerteEmail(args: {
   const introText = args.message?.trim() || (isProforma ? PROFORMA_TEXT[lang].intro : t.intro(kind));
   const introHtml = introText
     .split(/\n+/)
-    .map((p) => `<p>${escapeHtml(p)}</p>`)
+    .map((p) => `<p style="margin:0 0 12px;font-size:15px;line-height:1.6;color:${COMPANY.charcoal}">${escapeHtml(p)}</p>`)
     .join("");
   const greeting = args.contactName ? `${t.hi} ${escapeHtml(args.contactName)},` : `${t.hi},`;
-  const title = args.title ? `<p style="color:#555;margin:4px 0 0">${escapeHtml(args.title)}</p>` : "";
-  const html = `<div style="font-family:Helvetica,Arial,sans-serif;background:${COMPANY.cream};padding:24px 0">
-  <div style="max-width:560px;margin:0 auto;background:#fff;border-radius:12px;overflow:hidden;color:#1c1c1a">
-    <div style="background:${COMPANY.cream};padding:22px 28px">
-      ${logoHeaderHtml()}
-      <div style="font-size:11px;color:#999;margin-top:4px">${escapeHtml(COMPANY.tagline)}</div>
-    </div>
-    <div style="padding:24px 28px">
-      <p style="margin:0">${greeting}</p>
+  const title = args.title
+    ? `<p style="margin:0 0 12px;font-size:14px;color:${COMPANY.muted}">${escapeHtml(args.title)}</p>`
+    : "";
+  const kindLabelFn = { nl: kindNL, en: kindEN, es: kindES, de: kindDE }[lang];
+  const docLabel = cap(kindLabelFn(kind));
+  const btn = (href: string, label: string, primary: boolean) =>
+    primary
+      ? `<a href="${href}" style="background:${COMPANY.terracotta};color:#ffffff;text-decoration:none;padding:13px 26px;border-radius:8px;display:inline-block;font-weight:600;font-size:15px">${label}</a>`
+      : `<a href="${href}" style="color:${COMPANY.brown};text-decoration:none;padding:12px 22px;border:1px solid ${COMPANY.sand};border-radius:8px;display:inline-block;font-weight:600;font-size:15px">${label}</a>`;
+  const buttons =
+    kind === "estimate"
+      ? `${btn(`${args.url}?actie=accepteren`, t.accept, true)}<span style="display:inline-block;width:10px"></span>${btn(args.url, t.review(kind), false)}`
+      : btn(args.url, `${t.review(kind)} (${nr})`, true);
+  const html = `<div style="margin:0;padding:32px 12px;background:${COMPANY.cream};font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;color:${COMPANY.charcoal}">
+  <div style="max-width:600px;margin:0 auto;background:#ffffff;border-radius:14px;overflow:hidden;border:1px solid ${COMPANY.sand}">
+    <div style="height:4px;background:${COMPANY.terracotta}"></div>
+    <table role="presentation" width="100%" style="border-collapse:collapse">
+      <tr>
+        <td style="padding:24px 28px 18px;vertical-align:middle">
+          <img src="${COMPANY.logoUrl}" height="40" alt="${escapeHtml(COMPANY.name)}" style="display:block;height:40px;width:auto;border:0" />
+        </td>
+        <td style="padding:24px 28px 18px;text-align:right;vertical-align:middle">
+          <div style="font-size:10px;letter-spacing:1.6px;text-transform:uppercase;color:${COMPANY.muted}">${escapeHtml(docLabel)}</div>
+          <div style="font-size:17px;font-weight:700;color:${COMPANY.brown}">${escapeHtml(nr)}</div>
+        </td>
+      </tr>
+    </table>
+    <div style="height:1px;background:${COMPANY.sand};margin:0 28px"></div>
+    <div style="padding:24px 28px 8px">
+      <p style="margin:0 0 14px;font-size:15px;color:${COMPANY.charcoal}">${greeting}</p>
       ${introHtml}
       ${title}
-      <div style="margin:28px 0 18px">
-        ${
-          kind === "estimate"
-            ? `<a href="${args.url}?actie=accepteren" style="background:${COMPANY.accent};color:#ffffff;text-decoration:none;padding:12px 24px;border-radius:8px;display:inline-block;font-weight:600;font-size:15px">${t.accept}</a>
-        <a href="${args.url}" style="color:${COMPANY.brown};text-decoration:none;padding:11px 20px;border:1px solid ${COMPANY.sand};border-radius:8px;display:inline-block;font-weight:600;font-size:15px;margin:6px 0 0 8px">${t.review(kind)}</a>`
-            : `<a href="${args.url}" style="background:${COMPANY.accent};color:#ffffff;text-decoration:none;padding:12px 24px;border-radius:8px;display:inline-block;font-weight:600;font-size:15px">${t.review(kind)} (${nr})</a>`
-        }
-      </div>
-      <p style="font-size:13px;color:#888;margin:0">${t.pdf}: <a href="${args.url}/pdf" style="color:${COMPANY.accent};text-decoration:none">${nr}.pdf</a></p>
-      ${isProforma ? `${bankBlockHtml(lang)}<p style="font-size:13px;color:#777;margin:12px 0 0">${escapeHtml(PROFORMA_TEXT[lang].settle)}</p>` : ""}
-      <hr style="border:none;border-top:1px solid ${COMPANY.sand};margin:28px 0 16px" />
-      <p style="margin:0 0 4px">${t.regards}</p>
-      <div style="font-size:13px;color:#888;line-height:1.7">${signatureHtml()}</div>
+      <div style="margin:24px 0 18px">${buttons}</div>
+      <p style="font-size:13px;color:${COMPANY.muted};margin:0">${t.pdf}: <a href="${args.url}/pdf" style="color:${COMPANY.terracotta};font-weight:600;text-decoration:none">${escapeHtml(nr)}.pdf</a></p>
+      ${isProforma ? `${bankBlockHtml(lang)}<p style="font-size:13px;color:${COMPANY.muted};margin:14px 0 4px">${escapeHtml(PROFORMA_TEXT[lang].settle)}</p>` : ""}
+      <p style="margin:22px 0 4px;font-size:14px;color:${COMPANY.charcoal}">${t.regards}</p>
+    </div>
+    <div style="background:${COMPANY.cream};padding:18px 28px;border-top:1px solid ${COMPANY.sand};font-size:12px;line-height:1.7;color:${COMPANY.muted}">
+      <span style="display:block;font-weight:700;color:${COMPANY.brown}">${escapeHtml(COMPANY.legalName)}</span>
+      ${escapeHtml(COMPANY.addressStreet)}, ${escapeHtml(COMPANY.addressRegion)}<br/>
+      ${escapeHtml(COMPANY.phone)} · <a href="mailto:${COMPANY.email}" style="color:${COMPANY.muted};text-decoration:none">${escapeHtml(COMPANY.email)}</a> · ${escapeHtml(COMPANY.website)}${COMPANY.vatNumber ? ` · NIF ${escapeHtml(COMPANY.vatNumber)}` : ""}
     </div>
   </div>
 </div>`;
