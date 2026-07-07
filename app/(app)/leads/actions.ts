@@ -18,6 +18,7 @@ import {
 import { sendMail } from "@/lib/gmail";
 import { buildCampaignEmail, unsubscribeUrl, type CampaignProduct } from "@/lib/leads/campaign";
 import { searchPlaces, type PlaceCategory } from "@/lib/leads/places";
+import { searchOverpass } from "@/lib/leads/overpass";
 
 /** Max. aantal mails per verzendactie — deliverability + serverless-timeout. */
 const SEND_CAP = 60;
@@ -34,6 +35,7 @@ function token() {
 
 // ─── Bedrijven zoeken via Google Places + importeren als prospects ───────────
 const searchSchema = z.object({
+  source: z.enum(["osm", "places"]).default("osm"),
   category: z.enum([
     "architect",
     "aannemer",
@@ -52,16 +54,19 @@ export async function searchAndImportProspects(formData: FormData) {
   const parsed = searchSchema.safeParse(Object.fromEntries(formData));
   if (!parsed.success) redirect("/leads?error=zoekopdracht");
   const v = parsed.data;
+  const useOsm = v.source === "osm";
 
   let found;
   try {
-    found = await searchPlaces({ category: v.category as PlaceCategory, region: v.region, freeText: v.freeText || undefined });
+    const args = { category: v.category as PlaceCategory, region: v.region, freeText: v.freeText || undefined };
+    found = useOsm ? await searchOverpass(args) : await searchPlaces(args);
   } catch (err) {
     const msg = err instanceof Error ? err.message : "onbekende fout";
     redirect(`/leads?error=${encodeURIComponent(msg)}`);
   }
 
   const today = new Date().toISOString().slice(0, 10);
+  const sourceLabel = useOsm ? "OpenStreetMap" : "Google Places";
   let added = 0;
   for (const p of found) {
     const [row] = await db
@@ -73,10 +78,10 @@ export async function searchAndImportProspects(formData: FormData) {
         website: p.website ?? null,
         phone: p.phone ?? null,
         addressLine: p.address ?? null,
-        source: "google-places",
+        source: useOsm ? "import" : "google-places",
         sourceRef: p.placeId,
         status: "new",
-        lawfulBasisNote: `B2B gerechtvaardigd belang — via Google Places (${v.category}) op ${today}, openbare bron`,
+        lawfulBasisNote: `B2B gerechtvaardigd belang — via ${sourceLabel} (${v.category}) op ${today}, openbare bron`,
         unsubscribeToken: token(),
       })
       .onConflictDoNothing({ target: prospects.sourceRef })

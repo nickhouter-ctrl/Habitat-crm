@@ -98,13 +98,20 @@ export default async function LeadsPage({
             <CardTitle>Bedrijven zoeken</CardTitle>
           </CardHeader>
           <CardContent>
-            {!placesConfigured() && (
-              <p className="mb-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-warning">
-                Google Places is nog niet ingesteld — zet <code>GOOGLE_MAPS_API_KEY</code> in de omgeving. Je kunt intussen
-                de CSV-import hiernaast gebruiken.
-              </p>
-            )}
+            <p className="mb-3 rounded-lg border border-sky-200 bg-sky-50 px-3 py-2 text-xs text-sky-700">
+              <strong>OpenStreetMap</strong> is gratis en werkt direct (geen key nodig). Google Places geeft vaak meer
+              treffers, maar vereist <code>GOOGLE_MAPS_API_KEY</code>
+              {placesConfigured() ? " (ingesteld ✓)" : " (nog niet ingesteld)"}.
+            </p>
             <form action={searchAndImportProspects} className="space-y-3">
+              <Field label="Bron" htmlFor="source">
+                <Select id="source" name="source" defaultValue="osm">
+                  <option value="osm">OpenStreetMap — gratis</option>
+                  <option value="places" disabled={!placesConfigured()}>
+                    Google Places{placesConfigured() ? "" : " — key vereist"}
+                  </option>
+                </Select>
+              </Field>
               <Field label="Soort bedrijf" htmlFor="category">
                 <Select id="category" name="category" defaultValue="architect">
                   {Object.entries(CATEGORY_LABEL).map(([v, l]) => (
