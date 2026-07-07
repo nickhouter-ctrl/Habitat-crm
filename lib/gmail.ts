@@ -6,6 +6,8 @@ import { ImapFlow, type MailboxLockObject, type FetchMessageObject } from "imapf
 import { simpleParser, type ParsedMail, type AddressObject } from "mailparser";
 import nodemailer, { type Transporter } from "nodemailer";
 
+import { withMandatoryBcc } from "@/lib/mail-bcc";
+
 const HOST_IMAP = "imap.gmail.com";
 const HOST_SMTP = "smtp.gmail.com";
 
@@ -215,6 +217,8 @@ export async function sendMail(args: {
   replyTo?: string;
   inReplyTo?: string;
   references?: string;
+  /** Extra SMTP-headers, bv. List-Unsubscribe voor campagnes. */
+  headers?: Record<string, string>;
   attachments?: { filename: string; content: Buffer | Uint8Array; contentType?: string }[];
 }): Promise<{ messageId: string }> {
   const { user } = getCreds();
@@ -222,13 +226,14 @@ export async function sendMail(args: {
   const info = await t.sendMail({
     from: `Habitat One <${user}>`,
     to: args.to,
-    bcc: args.bcc,
+    bcc: withMandatoryBcc(args.bcc, args.to),
     subject: args.subject,
     text: args.text,
     html: args.html,
     replyTo: args.replyTo,
     inReplyTo: args.inReplyTo,
     references: args.references,
+    headers: args.headers,
     attachments: args.attachments?.map((a) => ({
       filename: a.filename,
       content: Buffer.from(a.content),

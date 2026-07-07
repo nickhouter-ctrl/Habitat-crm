@@ -12,6 +12,8 @@ export interface EmailAttachment {
   contentType?: string;
 }
 
+import { withMandatoryBcc } from "@/lib/mail-bcc";
+
 export async function sendEmail(input: {
   to: string;
   subject: string;
@@ -26,9 +28,12 @@ export async function sendEmail(input: {
   // je altijd meeleest zonder dat de klant het meeziet. Niet naar de ontvanger
   // zelf bcc'en.
   const defaultBcc = process.env.EMAIL_BCC?.trim() || process.env.NOTIFY_EMAIL?.trim() || process.env.GMAIL_USER?.trim();
-  const bcc = [defaultBcc, input.bcc]
+  const bccBase = [defaultBcc, input.bcc]
     .filter((a): a is string => !!a && a.toLowerCase() !== input.to.toLowerCase())
     .join(", ") || undefined;
+  // Voeg de vaste bedrijfs-BCC (nick@) toe op ELK transport — ook Resend/stub, die
+  // lib/gmail.ts overslaan. Op het Gmail-pad dedupliceert sendMail dit nog eens.
+  const bcc = withMandatoryBcc(bccBase, input.to);
 
   // Voorkeur: Gmail (verstuurt vanaf GMAIL_USER, bv. hi@habitat-one.com). Valt
   // terug op Resend; en als niets is ingesteld een stub, zodat de accept-link

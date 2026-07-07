@@ -73,18 +73,21 @@ export async function POST(req: Request) {
       ["Adres", v.address || "—"],
       ["Bericht", v.message || "—"],
     ];
+    const kindLabel = v.kind === "zakelijk" ? "zakelijk" : "particulier";
     await sendMail({
-      to: process.env.NOTIFY_EMAIL?.trim() || "hi@habitat-one.com",
+      to: process.env.NOTIFY_EMAIL?.trim() || "nick@habitat-one.com",
       replyTo: v.email,
-      subject: `Nieuwe accountaanvraag (${v.kind}) — ${v.name}`,
+      subject: `Nieuwe accountaanvraag — accepteer of weiger (${v.name})`,
       html: `<div style="font-family:Arial,Helvetica,sans-serif;color:#2a2620;max-width:560px">
-  <h2 style="color:#402419;margin:0 0 14px">Nieuwe accountaanvraag</h2>
+  <h2 style="color:#402419;margin:0 0 8px">Nieuwe accountaanvraag</h2>
+  <p style="margin:0 0 16px;font-size:14px;line-height:1.5">Er wil een nieuwe klant een account aanmaken (<strong>${kindLabel}</strong>). Bekijk de gegevens hieronder en <strong>accepteer of weiger</strong> de aanvraag in het CRM.</p>
   <table style="border-collapse:collapse;width:100%;font-size:14px">${rows
     .map(([k, val]) => `<tr><td style="padding:6px 10px;color:#7a6a58;white-space:nowrap;vertical-align:top">${k}</td><td style="padding:6px 10px;white-space:pre-wrap">${escapeHtml(val)}</td></tr>`)
     .join("")}</table>
-  <p style="margin:20px 0 0"><a href="${crmUrl}/accounts" style="background:#b5532b;color:#fff;padding:11px 20px;border-radius:8px;text-decoration:none;font-size:14px">Beoordeel in het CRM</a></p>
+  <p style="margin:22px 0 0"><a href="${crmUrl}/accounts" style="background:#b5532b;color:#fff;padding:11px 20px;border-radius:8px;text-decoration:none;font-size:14px">Accepteren of weigeren →</a></p>
+  <p style="margin:12px 0 0;font-size:12px;color:#9a8a78">Je kunt ook direct op deze mail antwoorden om de klant te bereiken.</p>
 </div>`,
-      text: rows.map(([k, val]) => `${k}: ${val}`).join("\n") + `\n\nCRM: ${crmUrl}/accounts`,
+      text: `Er wil een nieuwe klant (${kindLabel}) een account aanmaken. Accepteer of weiger de aanvraag in het CRM:\n\n${rows.map(([k, val]) => `${k}: ${val}`).join("\n")}\n\nBeoordelen: ${crmUrl}/accounts`,
     });
   } catch (err) {
     console.warn("[portal/register] meldings-mail mislukt:", err);
