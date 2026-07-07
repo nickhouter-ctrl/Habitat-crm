@@ -90,8 +90,9 @@ async function enum_(name: string, values: string[]) {
     updated_at timestamptz NOT NULL DEFAULT now()
   )`));
 
-  // Productgroepen op campagnes (los toegevoegd na de eerste versie).
+  // Productgroepen + verzendtaal op campagnes (los toegevoegd na de eerste versie).
   await db.execute(sql.raw(`ALTER TABLE email_campaigns ADD COLUMN IF NOT EXISTS groups jsonb NOT NULL DEFAULT '[]'::jsonb`));
+  await db.execute(sql.raw(`ALTER TABLE email_campaigns ADD COLUMN IF NOT EXISTS language text NOT NULL DEFAULT 'es'`));
 
   console.log("Leads-schema toegepast.");
 })().then(()=>process.exit(0)).catch(e=>{console.error("FOUT:", e.message); process.exit(1);});

@@ -131,9 +131,7 @@ export async function extractEmailFromSite(website: string): Promise<string | nu
   for (const url of candidates) {
     const html = await fetchText(url);
     if (!html) continue;
-    // mailto: heeft voorrang — bewust gepubliceerd adres.
-    for (const m of html.matchAll(/mailto:([^"'?>\s]+)/gi)) addEmail(found, m[1]);
-    for (const m of html.matchAll(EMAIL_RE)) addEmail(found, m[0]);
+    harvestEmails(html, found);
     if ([...found].some((e) => ROLE_PREFIX.test(e))) break; // goed genoeg
   }
   if (found.size === 0) return null;
@@ -152,6 +150,39 @@ function addEmail(set: Set<string>, raw: string) {
   const e = decodeURIComponent(raw).trim().toLowerCase();
   if (EMAIL_RE.test(e) && !BAD_EMAIL.test(e)) set.add(e);
   EMAIL_RE.lastIndex = 0;
+}
+
+/** Decodeer een Cloudflare-verborgen adres (data-cfemail / /cdn-cgi/l/email-protection#<hex>). */
+function decodeCfEmail(hex: string): string | null {
+  if (!/^[0-9a-f]+$/i.test(hex) || hex.length < 4) return null;
+  const key = parseInt(hex.slice(0, 2), 16);
+  let out = "";
+  for (let i = 2; i < hex.length; i += 2) out += String.fromCharCode(parseInt(hex.slice(i, i + 2), 16) ^ key);
+  return out;
+}
+
+/** Verzamel alle e-mailadressen uit HTML: mailto, Cloudflare-verborgen, obfuscatie ([at]/[dot]) en platte tekst. */
+function harvestEmails(html: string, found: Set<string>) {
+  // mailto: — bewust gepubliceerd adres.
+  for (const m of html.matchAll(/mailto:([^"'?>\s]+)/gi)) addEmail(found, m[1]);
+  // Cloudflare-bescherming.
+  for (const m of html.matchAll(/data-cfemail="([0-9a-f]+)"/gi)) {
+    const d = decodeCfEmail(m[1]);
+    if (d) addEmail(found, d);
+  }
+  for (const m of html.matchAll(/\/cdn-cgi\/l\/email-protection#([0-9a-f]+)/gi)) {
+    const d = decodeCfEmail(m[1]);
+    if (d) addEmail(found, d);
+  }
+  // Obfuscatie: "info [at] domein [dot] com", "(arroba)", "(punto)".
+  const deob = html
+    .replace(/\s*[([{]\s*(at|arroba)\s*[)\]}]\s*/gi, "@")
+    .replace(/\s+(at|arroba)\s+/gi, "@")
+    .replace(/\s*[([{]\s*(dot|punto)\s*[)\]}]\s*/gi, ".")
+    .replace(/\s+(dot|punto)\s+/gi, ".");
+  for (const m of deob.matchAll(EMAIL_RE)) addEmail(found, m[0]);
+  // Platte tekst.
+  for (const m of html.matchAll(EMAIL_RE)) addEmail(found, m[0]);
 }
 
 async function fetchText(url: string): Promise<string | null> {

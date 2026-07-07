@@ -80,7 +80,7 @@ export default async function LeadsPage({
     `),
     db.query.emailCampaigns.findMany({ orderBy: desc(emailCampaigns.createdAt), limit: 15 }),
     db.$count(emailSuppressions),
-    db.$count(prospects, and(isNull(prospects.email), isNotNull(prospects.website))),
+    db.$count(prospects, isNull(prospects.email)),
   ]);
 
   const groupOpts = (
@@ -201,9 +201,19 @@ export default async function LeadsPage({
         </CardHeader>
         <CardContent>
           <form action={createCampaign} className="space-y-4">
-            <Field label="Naam (intern)" htmlFor="name">
-              <Input id="name" name="name" required placeholder="Voorjaarsselectie architecten" />
-            </Field>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <Field label="Naam (intern)" htmlFor="name">
+                <Input id="name" name="name" required placeholder="Voorjaarsselectie architecten" />
+              </Field>
+              <Field label="Taal van de e-mail" htmlFor="language" hint="Spaanse bedrijven → Español">
+                <Select id="language" name="language" defaultValue="es">
+                  <option value="es">Español (standaard)</option>
+                  <option value="nl">Nederlands</option>
+                  <option value="de">Deutsch</option>
+                  <option value="en">English</option>
+                </Select>
+              </Field>
+            </div>
             <p className="rounded-lg border border-sky-200 bg-sky-50 px-3 py-2 text-xs text-sky-700">
               Onderwerp en tekst hoef je hier niet in te vullen — die stel je op de volgende stap met AI op (in de
               huisstijl), of je typt ze zelf. De verplichte afzendergegevens + afmeldlink zitten er altijd omheen.

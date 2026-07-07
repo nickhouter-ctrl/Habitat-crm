@@ -1810,6 +1810,8 @@ export const emailCampaigns = pgTable(
     name: text().notNull(),
     subject: text().notNull(),
     introText: text(),
+    /** Verzendtaal van de mail: es (standaard) | nl | de | en. */
+    language: text().notNull().default("es"),
     /** Productgroepen (collection-namen) die in de mail als tegels getoond worden. */
     groups: jsonb().$type<string[]>().notNull().default([]),
     /** Legacy: losse product-id's (niet meer gebruikt; groepen zijn de norm). */

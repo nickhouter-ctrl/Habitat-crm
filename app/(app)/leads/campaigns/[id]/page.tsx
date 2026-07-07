@@ -5,8 +5,8 @@ import Link from "next/link";
 import { Badge, Card, CardContent, CardHeader, CardTitle, Field, Input, PageHeader, Textarea } from "@/components/ui";
 import { db } from "@/lib/db";
 import { products } from "@/lib/db/schema";
-import { buildCampaignEmail } from "@/lib/leads/campaign";
-import { groupLabel, groupUrl, type CampaignGroup } from "@/lib/leads/groups";
+import { buildCampaignEmail, type CampaignLang } from "@/lib/leads/campaign";
+import { groupHeroUrl, groupLabel, groupUrl, type CampaignGroup } from "@/lib/leads/groups";
 import { aiCopyConfigured } from "@/lib/leads/ai-copy";
 import { countRecipients, updateCampaignCopy } from "../../actions";
 import { CampaignActions } from "./campaign-actions";
@@ -24,7 +24,12 @@ export default async function CampaignPage({ params }: { params: Promise<{ id: s
         where: and(eq(products.collection, collection), eq(products.isActive, true), isNotNull(products.imageUrl)),
         columns: { imageUrl: true },
       });
-      return { collection, label: groupLabel(collection), url: groupUrl(collection), imageUrl: rep?.imageUrl ?? null };
+      return {
+        collection,
+        label: groupLabel(collection, campaign.language),
+        url: groupUrl(collection, campaign.language),
+        imageUrl: groupHeroUrl(collection) ?? rep?.imageUrl ?? null,
+      };
     }),
   );
 
@@ -32,11 +37,12 @@ export default async function CampaignPage({ params }: { params: Promise<{ id: s
   const hasCopy = !!campaign.subject.trim();
 
   const { html } = buildCampaignEmail({
+    lang: campaign.language as CampaignLang,
     subject: campaign.subject,
     introText: campaign.introText,
     groups,
     unsubToken: "TEST",
-    companyName: "Voorbeeldbedrijf BV",
+    companyName: "Empresa Ejemplo S.L.",
   });
 
   const cats = (campaign.audience?.categories ?? []) as string[];

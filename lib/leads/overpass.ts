@@ -13,20 +13,26 @@ const UA = "HabitatOneCRM/1.0 (leads; hi@habitat-one.com)";
 
 /** OSM-tagfilters per categorie (key + waarde-regex). */
 const CATEGORY_FILTERS: Record<PlaceCategory, Array<[string, string]>> = {
-  architect: [["office", "architect"]],
+  architect: [
+    ["office", "architect"],
+    ["craft", "architect"],
+  ],
   aannemer: [
     ["office", "construction_company"],
-    ["craft", "builder|carpenter|plasterer|tiler"],
+    ["craft", "builder|carpenter|plasterer|tiler|stonemason|roofer|electrician|plumber|painter"],
+    ["shop", "trade|hardware|doityourself"],
   ],
-  makelaar: [["office", "estate_agent"]],
+  makelaar: [
+    ["office", "estate_agent"],
+    ["shop", "estate_agent"],
+  ],
   interieur: [
-    ["shop", "furniture|interior_decoration|kitchen|bathroom_furnishing|houseware"],
+    ["shop", "furniture|interior_decoration|kitchen|bathroom_furnishing|houseware|bed|carpet|curtain|tiles|lighting|doors"],
+    ["craft", "upholsterer"],
   ],
-  projectontwikkelaar: [
-    ["office", "construction_company|property_management|developer"],
-  ],
+  projectontwikkelaar: [["office", "construction_company|property_management|developer|property_developer"]],
   hovenier: [
-    ["shop", "garden_centre"],
+    ["shop", "garden_centre|florist"],
     ["craft", "gardener"],
     ["landscape", "yes"],
   ],
@@ -80,7 +86,7 @@ export async function searchOverpass(opts: {
   }
   if (clauses.length === 0) throw new Error("Kies een categorie of vul een zoekterm in.");
 
-  const query = `[out:json][timeout:25];(${clauses.join("")});out center tags ${Math.min(opts.max ?? 40, 80)};`;
+  const query = `[out:json][timeout:25];(${clauses.join("")});out center tags ${Math.min(opts.max ?? 80, 150)};`;
 
   const res = await fetch(OVERPASS, {
     method: "POST",

@@ -16,10 +16,13 @@ function stripFences(s: string): string {
   return s.replace(/^```(?:json)?/i, "").replace(/```$/i, "").trim();
 }
 
-const SYSTEM = `Je bent een top-copywriter voor Habitat One, een exclusieve interieur- en bouwmaterialenleverancier aan de Costa Blanca (Xàbia/Jávea). Schrijf verfijnd, warm en mediterraan-luxe — met zintuiglijke, beeldende taal die een gevoel oproept (licht, textuur, materiaal, rust, ambacht), zonder zweverig of overdreven te worden. Denk aan de toon van een high-end interieurmagazine. Doelgroep: Nederlandstalige B2B-professionals (architecten, aannemers, makelaars, interieurzaken) die met kwaliteit werken. Dit is een eerste, koude zakelijke kennismaking. Nodig subtiel uit om de collectie te bekijken en een (gratis) account aan te maken voor prijzen. Regels: geen prijzen, geen clichés als "de beste kwaliteit", geen uitroeptekens, geen emoji, niet pusherig. Elegantie boven verkoopdruk.`;
+const SYSTEM = `Je bent een top-copywriter voor Habitat One, een exclusieve interieur- en bouwmaterialenleverancier aan de Costa Blanca (Xàbia/Jávea). Schrijf verfijnd, warm en mediterraan-luxe — met zintuiglijke, beeldende taal die een gevoel oproept (licht, textuur, materiaal, rust, ambacht), zonder zweverig of overdreven te worden. Denk aan de toon van een high-end interieurmagazine. Doelgroep: B2B-professionals (architecten, aannemers, makelaars, interieurzaken) die met kwaliteit werken. Dit is een eerste, koude zakelijke kennismaking. Nodig subtiel uit om de collectie te bekijken en een (gratis) account aan te maken voor prijzen. Regels: geen prijzen, geen clichés als "de beste kwaliteit", geen uitroeptekens, geen emoji, niet pusherig. Elegantie boven verkoopdruk.`;
 
-/** Genereert { subject, intro }. Null bij ontbrekende key of fout. */
+const LANG_NAME: Record<string, string> = { es: "Spaans (Castellano)", nl: "Nederlands", de: "Duits", en: "Engels" };
+
+/** Genereert { subject, intro } in de gevraagde taal. Null bij ontbrekende key of fout. */
 export async function generateCampaignCopy(opts: {
+  language?: string;
   groupLabels: string[];
   audience?: string[];
   angle?: string | null;
@@ -27,7 +30,9 @@ export async function generateCampaignCopy(opts: {
   const key = process.env.ANTHROPIC_API_KEY;
   if (!key) return null;
 
-  const prompt = `Schrijf een korte Nederlandse marketing-e-mail voor Habitat One.
+  const langName = LANG_NAME[opts.language ?? "es"] ?? "Spaans (Castellano)";
+
+  const prompt = `Schrijf een korte marketing-e-mail voor Habitat One. BELANGRIJK: schrijf de volledige uitvoer (onderwerp én introtekst) in het ${langName}, vlekkeloos en natuurlijk (native niveau, formeel-hoffelijk waar dat past).
 
 Productgroepen die we uitlichten: ${opts.groupLabels.join(", ") || "onze collectie"}.
 Doelgroep: ${opts.audience?.join(", ") || "zakelijke relaties"}.
@@ -35,7 +40,7 @@ ${opts.angle ? `Insteek/aanleiding: ${opts.angle}` : ""}
 
 Eisen:
 - Onderwerp: pakkend en verfijnd, max ~60 tekens, wekt nieuwsgierigheid. Geen clickbait, geen uitroeptekens.
-- Introtekst: 2 tot 4 zinnen met sfeer en beeldende, zintuiglijke taal die de genoemde productgroepen laat voelen (materiaal, textuur, licht, ruimte). Komt vlak boven de beeldblokken. Begin NIET met "Beste ..." (de aanhef wordt apart toegevoegd). Sluit af met een subtiele uitnodiging om de collectie te ontdekken en een account aan te maken voor prijzen.
+- Introtekst: 2 tot 4 zinnen met sfeer en beeldende, zintuiglijke taal die de genoemde productgroepen laat voelen (materiaal, textuur, licht, ruimte). Komt vlak boven de beeldblokken. Begin NIET met een aanhef (die wordt apart toegevoegd). Sluit af met een subtiele uitnodiging om de collectie te ontdekken en een account aan te maken voor prijzen.
 - Geen prijzen, geen afmeldtekst, geen bedrijfsgegevens (die staan al in de mail).
 
 Geef ALLEEN een JSON-object terug (geen markdown): {"subject": "...", "intro": "..."}.`;
