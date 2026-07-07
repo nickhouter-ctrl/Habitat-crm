@@ -1735,3 +1735,161 @@ export const supplierOrderItems = pgTable(
 
 export type SupplierOrder = typeof supplierOrders.$inferSelect;
 export type SupplierOrderItem = typeof supplierOrderItems.$inferSelect;
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Leads generator — B2B prospecting + e-mailcampagnes.
+// Prospects zijn koude, nog niet-gekwalificeerde bedrijven (gevonden via Google
+// Places of geïmporteerd). Contacten blijven schoon; een prospect wordt pas een
+// contact bij conversie. Alle verzendingen respecteren de suppressielijst en
+// dragen een per-prospect afmeldtoken (AVG/LSSI).
+// ─────────────────────────────────────────────────────────────────────────────
+
+export const prospectCategory = pgEnum("prospect_category", [
+  "architect",
+  "aannemer",
+  "makelaar",
+  "interieur",
+  "projectontwikkelaar",
+  "hovenier",
+  "overig",
+]);
+
+export const prospectStatus = pgEnum("prospect_status", [
+  "new", // gevonden, nog niet benaderd
+  "emailed", // campagne verstuurd
+  "replied", // heeft gereageerd
+  "bounced", // e-mail kwam niet aan
+  "unsubscribed", // afgemeld
+  "converted", // omgezet naar contact/klant
+  "skipped", // handmatig overgeslagen
+]);
+
+export const prospectSource = pgEnum("prospect_source", ["google-places", "import", "manual"]);
+
+export const prospects = pgTable(
+  "prospects",
+  {
+    id: uuid()
+      .primaryKey()
+      .default(sql`gen_random_uuid()`),
+    companyName: text().notNull(),
+    category: prospectCategory().notNull().default("overig"),
+    email: text(),
+    website: text(),
+    phone: text(),
+    addressLine: text(),
+    city: text(),
+    province: text(),
+    country: text().default("ES"),
+    source: prospectSource().notNull().default("manual"),
+    sourceRef: text(), // google place_id of import-batch
+    status: prospectStatus().notNull().default("new"),
+    lawfulBasisNote: text(), // rechtsgrond/herkomst (AVG-verantwoording)
+    unsubscribeToken: text().notNull().unique(),
+    contactId: uuid().references((): AnyPgColumn => contacts.id, { onDelete: "set null" }),
+    lastEmailedAt: timestamp({ withTimezone: true }),
+    notes: text(),
+    ...timestamps,
+  },
+  (t) => [
+    uniqueIndex("prospects_email_uidx").on(t.email),
+    uniqueIndex("prospects_source_ref_uidx").on(t.sourceRef),
+    index("prospects_status_idx").on(t.status),
+    index("prospects_category_idx").on(t.category),
+  ],
+);
+
+export const campaignStatus = pgEnum("campaign_status", ["draft", "sending", "sent"]);
+
+export const emailCampaigns = pgTable(
+  "email_campaigns",
+  {
+    id: uuid()
+      .primaryKey()
+      .default(sql`gen_random_uuid()`),
+    name: text().notNull(),
+    subject: text().notNull(),
+    introText: text(),
+    productIds: jsonb().$type<string[]>().notNull().default([]),
+    audience: jsonb().$type<{ categories: string[] }>().notNull().default({ categories: [] }),
+    status: campaignStatus().notNull().default("draft"),
+    sentCount: integer().notNull().default(0),
+    testSentAt: timestamp({ withTimezone: true }),
+    sentAt: timestamp({ withTimezone: true }),
+    createdById: uuid().references(() => users.id, { onDelete: "set null" }),
+    ...timestamps,
+  },
+  (t) => [index("email_campaigns_status_idx").on(t.status)],
+);
+
+export const campaignSendStatus = pgEnum("campaign_send_status", [
+  "sent",
+  "failed",
+  "suppressed",
+]);
+
+export const campaignRecipients = pgTable(
+  "campaign_recipients",
+  {
+    id: uuid()
+      .primaryKey()
+      .default(sql`gen_random_uuid()`),
+    campaignId: uuid()
+      .notNull()
+      .references(() => emailCampaigns.id, { onDelete: "cascade" }),
+    prospectId: uuid().references(() => prospects.id, { onDelete: "set null" }),
+    email: text().notNull(),
+    status: campaignSendStatus().notNull().default("sent"),
+    error: text(),
+    messageId: text(),
+    sentAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    index("campaign_recipients_campaign_idx").on(t.campaignId),
+    uniqueIndex("campaign_recipients_campaign_email_uidx").on(t.campaignId, t.email),
+  ],
+);
+
+export const suppressionReason = pgEnum("suppression_reason", [
+  "unsubscribed",
+  "bounced",
+  "complaint",
+  "manual",
+]);
+
+export const emailSuppressions = pgTable(
+  "email_suppressions",
+  {
+    id: uuid()
+      .primaryKey()
+      .default(sql`gen_random_uuid()`),
+    email: text().notNull().unique(),
+    reason: suppressionReason().notNull().default("unsubscribed"),
+    note: text(),
+    ...timestamps,
+  },
+);
+
+export const prospectsRelations = relations(prospects, ({ one, many }) => ({
+  contact: one(contacts, { fields: [prospects.contactId], references: [contacts.id] }),
+  sends: many(campaignRecipients),
+}));
+
+export const emailCampaignsRelations = relations(emailCampaigns, ({ many }) => ({
+  recipients: many(campaignRecipients),
+}));
+
+export const campaignRecipientsRelations = relations(campaignRecipients, ({ one }) => ({
+  campaign: one(emailCampaigns, {
+    fields: [campaignRecipients.campaignId],
+    references: [emailCampaigns.id],
+  }),
+  prospect: one(prospects, {
+    fields: [campaignRecipients.prospectId],
+    references: [prospects.id],
+  }),
+}));
+
+export type Prospect = typeof prospects.$inferSelect;
+export type EmailCampaign = typeof emailCampaigns.$inferSelect;
+export type CampaignRecipient = typeof campaignRecipients.$inferSelect;
