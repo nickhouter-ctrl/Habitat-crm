@@ -1814,7 +1814,10 @@ export const emailCampaigns = pgTable(
     groups: jsonb().$type<string[]>().notNull().default([]),
     /** Legacy: losse product-id's (niet meer gebruikt; groepen zijn de norm). */
     productIds: jsonb().$type<string[]>().notNull().default([]),
-    audience: jsonb().$type<{ categories: string[] }>().notNull().default({ categories: [] }),
+    audience: jsonb()
+      .$type<{ categories: string[]; includeCustomers?: boolean }>()
+      .notNull()
+      .default({ categories: [] }),
     status: campaignStatus().notNull().default("draft"),
     sentCount: integer().notNull().default(0),
     testSentAt: timestamp({ withTimezone: true }),

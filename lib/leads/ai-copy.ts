@@ -16,7 +16,7 @@ function stripFences(s: string): string {
   return s.replace(/^```(?:json)?/i, "").replace(/```$/i, "").trim();
 }
 
-const SYSTEM = `Je bent copywriter voor Habitat One, een exclusieve interieur- en bouwmaterialenleverancier aan de Costa Blanca (Xàbia/Jávea). Toon: warm, verzorgd, mediterraan-luxe, professioneel maar niet stijf. Doelgroep: Nederlandstalige B2B-bedrijven (architecten, aannemers, makelaars, interieurzaken) op de Costa Blanca. Dit is een eerste, koude zakelijke kennismaking — nodig uit om de collectie te bekijken en een (gratis) account aan te maken om prijzen te zien. NIET pusherig, geen prijzen noemen, geen overdreven verkooptaal, geen emoji. Kort en to the point.`;
+const SYSTEM = `Je bent een top-copywriter voor Habitat One, een exclusieve interieur- en bouwmaterialenleverancier aan de Costa Blanca (Xàbia/Jávea). Schrijf verfijnd, warm en mediterraan-luxe — met zintuiglijke, beeldende taal die een gevoel oproept (licht, textuur, materiaal, rust, ambacht), zonder zweverig of overdreven te worden. Denk aan de toon van een high-end interieurmagazine. Doelgroep: Nederlandstalige B2B-professionals (architecten, aannemers, makelaars, interieurzaken) die met kwaliteit werken. Dit is een eerste, koude zakelijke kennismaking. Nodig subtiel uit om de collectie te bekijken en een (gratis) account aan te maken voor prijzen. Regels: geen prijzen, geen clichés als "de beste kwaliteit", geen uitroeptekens, geen emoji, niet pusherig. Elegantie boven verkoopdruk.`;
 
 /** Genereert { subject, intro }. Null bij ontbrekende key of fout. */
 export async function generateCampaignCopy(opts: {
@@ -34,8 +34,8 @@ Doelgroep: ${opts.audience?.join(", ") || "zakelijke relaties"}.
 ${opts.angle ? `Insteek/aanleiding: ${opts.angle}` : ""}
 
 Eisen:
-- Onderwerp: pakkend, max ~60 tekens, geen clickbait.
-- Introtekst: 2 tot 4 korte zinnen die vlak boven de productgroep-tegels komen. Begin NIET met "Beste ..." (de aanhef wordt apart toegevoegd). Sluit af met een subtiele uitnodiging om de collectie te bekijken en een account aan te maken voor prijzen.
+- Onderwerp: pakkend en verfijnd, max ~60 tekens, wekt nieuwsgierigheid. Geen clickbait, geen uitroeptekens.
+- Introtekst: 2 tot 4 zinnen met sfeer en beeldende, zintuiglijke taal die de genoemde productgroepen laat voelen (materiaal, textuur, licht, ruimte). Komt vlak boven de beeldblokken. Begin NIET met "Beste ..." (de aanhef wordt apart toegevoegd). Sluit af met een subtiele uitnodiging om de collectie te ontdekken en een account aan te maken voor prijzen.
 - Geen prijzen, geen afmeldtekst, geen bedrijfsgegevens (die staan al in de mail).
 
 Geef ALLEEN een JSON-object terug (geen markdown): {"subject": "...", "intro": "..."}.`;

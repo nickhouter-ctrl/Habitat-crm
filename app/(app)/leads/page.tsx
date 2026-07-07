@@ -1,4 +1,4 @@
-import { desc, sql } from "drizzle-orm";
+import { and, desc, eq, isNotNull, isNull, sql } from "drizzle-orm";
 import Link from "next/link";
 
 import {
@@ -26,7 +26,8 @@ import { emailCampaigns, emailSuppressions, prospects } from "@/lib/db/schema";
 import type { BadgeTone } from "@/components/ui";
 import { placesConfigured } from "@/lib/leads/places";
 import { groupLabel } from "@/lib/leads/groups";
-import { createCampaign, deleteProspect, importCsv, searchAndImportProspects } from "./actions";
+import { createCampaign, deleteCampaign, deleteProspect, importCsv, searchAndImportProspects } from "./actions";
+import { FindEmailsButton } from "./find-emails-button";
 
 export const metadata = { title: "Leads" };
 
@@ -58,9 +59,19 @@ export default async function LeadsPage({
   const flashAdded = typeof sp.added === "string" ? sp.added : null;
   const flashFound = typeof sp.found === "string" ? sp.found : null;
   const flashError = typeof sp.error === "string" ? sp.error : null;
+  const flashNoEmail = typeof sp.noemail === "string" ? sp.noemail : null;
+  const flashMails = typeof sp.mails === "string" ? sp.mails : null;
 
-  const [rows, groupRowsRaw, campaigns, suppressedCount] = await Promise.all([
-    db.query.prospects.findMany({ orderBy: desc(prospects.createdAt), limit: 300 }),
+  // Filters op de prospect-lijst.
+  const ef = typeof sp.ef === "string" ? sp.ef : "alle"; // e-mailfilter: alle | met | geen
+  const st = typeof sp.st === "string" ? sp.st : "alle"; // statusfilter
+  const prospectWhere = and(
+    ef === "met" ? isNotNull(prospects.email) : ef === "geen" ? isNull(prospects.email) : undefined,
+    st !== "alle" ? eq(prospects.status, st as never) : undefined,
+  );
+
+  const [rows, groupRowsRaw, campaigns, suppressedCount, missingEmailCount] = await Promise.all([
+    db.query.prospects.findMany({ where: prospectWhere, orderBy: desc(prospects.createdAt), limit: 300 }),
     db.execute(sql`
       SELECT collection, count(*)::int AS n, min(image_url) AS image
       FROM products
@@ -69,6 +80,7 @@ export default async function LeadsPage({
     `),
     db.query.emailCampaigns.findMany({ orderBy: desc(emailCampaigns.createdAt), limit: 15 }),
     db.$count(emailSuppressions),
+    db.$count(prospects, and(isNull(prospects.email), isNotNull(prospects.website))),
   ]);
 
   const groupOpts = (
@@ -84,7 +96,13 @@ export default async function LeadsPage({
 
       {flashAdded && (
         <p className="mb-4 rounded-lg border border-green-200 bg-green-50 px-4 py-2 text-sm text-success">
-          {flashAdded} prospect(s) toegevoegd{flashFound ? ` (van ${flashFound} gevonden)` : ""}.
+          {flashAdded} prospect(s) toegevoegd{flashFound ? ` (van ${flashFound} gevonden)` : ""}
+          {flashNoEmail ? ` · ${flashNoEmail} overgeslagen zonder e-mail` : ""}.
+        </p>
+      )}
+      {flashMails && (
+        <p className="mb-4 rounded-lg border border-green-200 bg-green-50 px-4 py-2 text-sm text-success">
+          {flashMails} e-mailadres(sen) alsnog gevonden.
         </p>
       )}
       {flashError && (
@@ -127,12 +145,21 @@ export default async function LeadsPage({
                   ))}
                 </Select>
               </Field>
-              <Field label="Regio" htmlFor="region" hint="bv. Jávea, Dénia, Moraira, Alicante">
-                <Input id="region" name="region" defaultValue="Jávea, Alicante" required />
-              </Field>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <Field label="Regio" htmlFor="region" hint="plaats of gebied">
+                  <Input id="region" name="region" defaultValue="Jávea, Alicante" required />
+                </Field>
+                <Field label="Straal (km)" htmlFor="radiusKm" hint="leeg = hele regio · max 50">
+                  <Input id="radiusKm" name="radiusKm" type="number" min={0} max={50} placeholder="bv. 20" />
+                </Field>
+              </div>
               <Field label="Extra zoekterm (optioneel)" htmlFor="freeText" hint="overschrijft de standaardterm">
                 <Input id="freeText" name="freeText" placeholder="bv. keukens, tegels…" />
               </Field>
+              <label className="flex items-center gap-2 text-sm">
+                <input type="checkbox" name="onlyWithEmail" defaultChecked />
+                Alleen bedrijven mét e-mailadres importeren
+              </label>
               <Button type="submit" variant="primary">
                 Zoeken &amp; importeren
               </Button>
@@ -193,6 +220,10 @@ export default async function LeadsPage({
                 ))}
               </div>
               <p className="mt-1 text-xs text-muted">Alleen prospects met e-mail in deze categorieën worden benaderd.</p>
+              <label className="mt-2 flex items-center gap-2 text-sm">
+                <input type="checkbox" name="includeCustomers" />
+                Ook naar bestaande klanten sturen (contacten met e-mail)
+              </label>
             </div>
 
             <div>
@@ -239,6 +270,7 @@ export default async function LeadsPage({
                   <Th>Naam</Th>
                   <Th>Status</Th>
                   <Th>Verzonden</Th>
+                  <Th />
                 </tr>
               </THead>
               <TBody>
@@ -256,6 +288,13 @@ export default async function LeadsPage({
                       </Badge>
                     </Td>
                     <Td>{c.sentCount}</Td>
+                    <Td>
+                      <form action={deleteCampaign.bind(null, c.id)}>
+                        <button type="submit" className="text-xs text-danger hover:underline">
+                          Verwijderen
+                        </button>
+                      </form>
+                    </Td>
                   </Tr>
                 ))}
               </TBody>
@@ -266,8 +305,29 @@ export default async function LeadsPage({
 
       {/* Prospect-lijst */}
       <Card className="mt-6">
-        <CardHeader>
+        <CardHeader className="flex flex-wrap items-center justify-between gap-3">
           <CardTitle>Prospects ({rows.length})</CardTitle>
+          <div className="flex flex-wrap items-center gap-2">
+            <FindEmailsButton missingCount={missingEmailCount} />
+            <form method="get" className="flex items-center gap-2">
+              <Select name="ef" defaultValue={ef} className="text-sm">
+                <option value="alle">Alle</option>
+                <option value="met">Met e-mail</option>
+                <option value="geen">Zonder e-mail</option>
+              </Select>
+              <Select name="st" defaultValue={st} className="text-sm">
+                <option value="alle">Alle statussen</option>
+                {Object.entries(STATUS).map(([v, s]) => (
+                  <option key={v} value={v}>
+                    {s.label}
+                  </option>
+                ))}
+              </Select>
+              <Button type="submit" variant="secondary" size="sm">
+                Filter
+              </Button>
+            </form>
+          </div>
         </CardHeader>
         <CardContent className="p-0">
           {rows.length === 0 ? (

@@ -2,6 +2,7 @@ import { eq, sql } from "drizzle-orm";
 
 import { db } from "@/lib/db";
 import { emailSuppressions, prospects } from "@/lib/db/schema";
+import { verifyEmailToken } from "@/lib/leads/unsub-token";
 
 /**
  * Publieke één-klik-afmeldroute voor campagne-mails. Zet het adres op de
@@ -22,29 +23,42 @@ function page(title: string, body: string): Response {
   return new Response(html, { status: 200, headers: { "content-type": "text/html; charset=utf-8" } });
 }
 
+async function suppress(email: string) {
+  await db
+    .insert(emailSuppressions)
+    .values({ email: email.toLowerCase(), reason: "unsubscribed" })
+    .onConflictDoNothing({ target: emailSuppressions.email });
+}
+
+const DONE = page(
+  "Je bent afgemeld",
+  "Je ontvangt geen commerciële e-mails meer van Habitat One. Bedankt.",
+);
+
 async function unsubscribe(token: string | null): Promise<Response> {
   if (!token) return page("Ongeldige link", "Deze afmeldlink is ongeldig of onvolledig.");
+
+  // 1) Prospect met opgeslagen token.
   const prospect = await db.query.prospects.findFirst({
     where: eq(prospects.unsubscribeToken, token),
     columns: { id: true, email: true, companyName: true },
   });
-  if (!prospect) return page("Ongeldige link", "Deze afmeldlink is ongeldig of al vervallen.");
-
-  if (prospect.email) {
-    await db
-      .insert(emailSuppressions)
-      .values({ email: prospect.email.toLowerCase(), reason: "unsubscribed" })
-      .onConflictDoNothing({ target: emailSuppressions.email });
+  if (prospect) {
+    if (prospect.email) await suppress(prospect.email);
+    await db.update(prospects).set({ status: "unsubscribed", updatedAt: sql`now()` }).where(eq(prospects.id, prospect.id));
+    return DONE;
   }
-  await db
-    .update(prospects)
-    .set({ status: "unsubscribed", updatedAt: sql`now()` })
-    .where(eq(prospects.id, prospect.id));
 
-  return page(
-    "Je bent afgemeld",
-    `${prospect.companyName ? `${prospect.companyName} ontvangt` : "Je ontvangt"} geen commerciële e-mails meer van Habitat One. Bedankt.`,
-  );
+  // 2) Bestaande klant: ondertekend e-mailtoken.
+  const email = verifyEmailToken(token);
+  if (email) {
+    await suppress(email);
+    // Ook eventuele prospect met dit adres afmelden.
+    await db.update(prospects).set({ status: "unsubscribed", updatedAt: sql`now()` }).where(eq(prospects.email, email.toLowerCase()));
+    return DONE;
+  }
+
+  return page("Ongeldige link", "Deze afmeldlink is ongeldig of al vervallen.");
 }
 
 export async function GET(req: Request) {

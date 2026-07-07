@@ -52,6 +52,7 @@ export async function searchPlaces(opts: {
   category: PlaceCategory;
   region: string;
   freeText?: string;
+  radiusKm?: number;
   max?: number;
 }): Promise<PlaceResult[]> {
   const key = process.env.GOOGLE_MAPS_API_KEY?.trim();
@@ -61,6 +62,21 @@ export async function searchPlaces(opts: {
   const textQuery = `${term} en ${opts.region.trim()}`;
   const max = Math.min(Math.max(opts.max ?? 20, 1), 20);
 
+  const body: Record<string, unknown> = { textQuery, languageCode: "es", regionCode: "ES", maxResultCount: max };
+  // Straal → cirkel rond het regiocentrum (max 50 km voor Places).
+  if (opts.radiusKm && opts.radiusKm > 0) {
+    const { geocodeRegion } = await import("@/lib/leads/geocode");
+    const geo = await geocodeRegion(opts.region);
+    if (geo) {
+      body.locationBias = {
+        circle: {
+          center: { latitude: geo.lat, longitude: geo.lon },
+          radius: Math.min(Math.round(opts.radiusKm * 1000), 50000),
+        },
+      };
+    }
+  }
+
   const res = await fetch("https://places.googleapis.com/v1/places:searchText", {
     method: "POST",
     headers: {
@@ -69,7 +85,7 @@ export async function searchPlaces(opts: {
       "X-Goog-FieldMask":
         "places.id,places.displayName,places.formattedAddress,places.websiteUri,places.nationalPhoneNumber",
     },
-    body: JSON.stringify({ textQuery, languageCode: "es", regionCode: "ES", maxResultCount: max }),
+    body: JSON.stringify(body),
     cache: "no-store",
   });
   if (!res.ok) {
@@ -108,7 +124,8 @@ export async function extractEmailFromSite(website: string): Promise<string | nu
   } catch {
     return null;
   }
-  const candidates = [base.href, new URL("/contact", base).href, new URL("/contacto", base).href];
+  const paths = ["", "/contact", "/contacto", "/contact-us", "/contacto", "/over-ons", "/about", "/about-us", "/kontakt", "/impressum", "/aviso-legal", "/legal"];
+  const candidates = Array.from(new Set(paths.map((p) => new URL(p || "/", base).href)));
   const found = new Set<string>();
 
   for (const url of candidates) {

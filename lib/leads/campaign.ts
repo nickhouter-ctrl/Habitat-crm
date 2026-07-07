@@ -22,27 +22,21 @@ export function escapeHtml(s: string): string {
   return s.replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c] ?? c);
 }
 
-function groupCard(g: CampaignGroup): string {
+/** Eén groep als groot, editorial beeldblok — bedoeld om sfeer/gevoel op te roepen. */
+function groupBlock(g: CampaignGroup): string {
   const img = g.imageUrl
-    ? `<img src="${escapeHtml(g.imageUrl)}" width="260" alt="${escapeHtml(g.label)}" style="display:block;width:100%;height:170px;object-fit:cover;border-radius:10px;border:1px solid ${COMPANY.sand}" />`
-    : `<div style="width:100%;height:170px;border-radius:10px;background:${COMPANY.sand}"></div>`;
-  return `<td style="width:50%;padding:8px;vertical-align:top">
-    <a href="${escapeHtml(g.url)}" style="text-decoration:none;color:inherit">
-      ${img}
-      <div style="margin-top:8px;font-size:15px;font-weight:600;color:${COMPANY.charcoal}">${escapeHtml(g.label)}</div>
-      <div style="font-size:12px;color:${COMPANY.terracotta}">Bekijk de collectie →</div>
-    </a>
-  </td>`;
+    ? `<img src="${escapeHtml(g.imageUrl)}" width="548" alt="${escapeHtml(g.label)}" style="display:block;width:100%;height:260px;object-fit:cover;border-radius:14px" />`
+    : `<div style="width:100%;height:260px;border-radius:14px;background:${COMPANY.sand}"></div>`;
+  return `<a href="${escapeHtml(g.url)}" style="text-decoration:none;color:inherit;display:block;margin:22px 0">
+    ${img}
+    <div style="font-family:Georgia,'Times New Roman',serif;font-size:22px;line-height:1.2;color:${COMPANY.brown};margin-top:12px">${escapeHtml(g.label)}</div>
+    <div style="font-size:12px;letter-spacing:0.08em;text-transform:uppercase;color:${COMPANY.terracotta};margin-top:4px">Ontdek de collectie →</div>
+  </a>`;
 }
 
-function groupGrid(groups: CampaignGroup[]): string {
-  if (groups.length === 0) return "";
-  const rows: string[] = [];
-  for (let i = 0; i < groups.length; i += 2) {
-    const cells = [groups[i], groups[i + 1]].filter(Boolean).map((g) => groupCard(g!)).join("");
-    rows.push(`<tr>${cells}${groups[i + 1] ? "" : '<td style="width:50%"></td>'}</tr>`);
-  }
-  return `<table role="presentation" width="100%" style="border-collapse:collapse;margin:8px 0">${rows.join("")}</table>`;
+/** Toon maximaal 6 groepen zodat de mail elegant blijft. */
+function groupBlocks(groups: CampaignGroup[]): string {
+  return groups.slice(0, 6).map(groupBlock).join("");
 }
 
 /** Verplichte, meelezbare footer: identificatie + publicidad + herkomst + privacy + afmelden. */
@@ -76,22 +70,22 @@ export function buildCampaignEmail(opts: {
   const greeting = opts.companyName ? `Beste ${escapeHtml(opts.companyName)},` : "Beste,";
   const intro = opts.introText?.trim()
     ? escapeHtml(opts.introText.trim()).replace(/\n/g, "<br/>")
-    : "Graag stellen we een selectie uit onze productgroepen aan u voor. Bekijk het volledige assortiment op onze website — met een (gratis) zakelijk account ziet u direct uw prijzen.";
+    : "Van warme travertijn en sfeervolle wandpanelen tot haarden die een ruimte tot leven brengen — bij Habitat One vindt u materialen met karakter, geselecteerd voor de mooiste projecten aan de Costa Blanca. We stelden een selectie voor u samen.";
 
-  const html = `<div style="font-family:Helvetica,Arial,sans-serif;background:${COMPANY.cream};padding:24px 0">
-  <div style="max-width:600px;margin:0 auto;background:#fff;border-radius:12px;overflow:hidden;color:${COMPANY.charcoal}">
-    <div style="background:${COMPANY.cream};padding:22px 26px">
+  const html = `<div style="font-family:Helvetica,Arial,sans-serif;background:${COMPANY.cream};padding:28px 0">
+  <div style="max-width:600px;margin:0 auto;background:#fff;border-radius:16px;overflow:hidden;color:${COMPANY.charcoal}">
+    <div style="background:${COMPANY.cream};padding:24px 30px">
       <img src="${COMPANY.logoUrl}" alt="${escapeHtml(COMPANY.name)}" height="44" style="display:block;height:44px;width:auto;border:0" />
-      <div style="font-size:11px;color:${COMPANY.muted};margin-top:4px">${escapeHtml(COMPANY.tagline)}</div>
+      <div style="font-size:11px;letter-spacing:0.06em;color:${COMPANY.muted};margin-top:6px">${escapeHtml(COMPANY.tagline)}</div>
     </div>
-    <div style="padding:22px 26px">
-      <p style="margin:0 0 10px">${greeting}</p>
-      <p style="margin:0 0 8px;line-height:1.6">${intro}</p>
-      ${groupGrid(opts.groups)}
-      <p style="margin:18px 0 8px;text-align:center">
-        <a href="${WEBSITE}/account/aanvragen" style="background:${COMPANY.terracotta};color:#fff;padding:12px 22px;border-radius:8px;text-decoration:none;font-size:14px;display:inline-block">Bekijk prijzen — vraag een account aan</a>
-      </p>
-      <p style="margin:8px 0 0;text-align:center;font-size:13px"><a href="${WEBSITE}/products" style="color:${COMPANY.muted}">Of bekijk eerst de volledige collectie →</a></p>
+    <div style="padding:26px 30px">
+      <p style="margin:0 0 14px;font-size:15px">${greeting}</p>
+      <p style="margin:0 0 6px;font-family:Georgia,'Times New Roman',serif;font-size:17px;line-height:1.55;color:${COMPANY.brown}">${intro}</p>
+      ${groupBlocks(opts.groups)}
+      <div style="text-align:center;margin:28px 0 6px">
+        <a href="${WEBSITE}/account/aanvragen" style="background:${COMPANY.terracotta};color:#fff;padding:13px 26px;border-radius:10px;text-decoration:none;font-size:14px;letter-spacing:0.03em;display:inline-block">Bekijk prijzen — vraag een account aan</a>
+      </div>
+      <p style="margin:6px 0 0;text-align:center;font-size:13px"><a href="${WEBSITE}/products" style="color:${COMPANY.muted}">Of ontdek eerst de volledige collectie →</a></p>
       ${complianceFooter(unsubUrl)}
     </div>
   </div>

@@ -5,9 +5,9 @@
  * OSM-tags. E-mail komt uit de OSM-tags of, als die ontbreekt, best-effort van
  * de bedrijfswebsite (zelfde extractie als bij Places).
  */
+import { geocodeRegion } from "@/lib/leads/geocode";
 import { extractEmailFromSite, type PlaceCategory, type PlaceResult } from "@/lib/leads/places";
 
-const NOMINATIM = "https://nominatim.openstreetmap.org/search";
 const OVERPASS = "https://overpass-api.de/api/interpreter";
 const UA = "HabitatOneCRM/1.0 (leads; hi@habitat-one.com)";
 
@@ -42,18 +42,6 @@ interface OsmElement {
   tags?: Record<string, string>;
 }
 
-/** Vertaal een regionaam naar een bounding box (south,west,north,east). */
-async function geocodeBbox(region: string): Promise<[string, string, string, string] | null> {
-  const url = `${NOMINATIM}?q=${encodeURIComponent(region + ", España")}&format=json&limit=1`;
-  const res = await fetch(url, { headers: { "user-agent": UA }, cache: "no-store" });
-  if (!res.ok) return null;
-  const data = (await res.json()) as Array<{ boundingbox?: [string, string, string, string] }>;
-  const bb = data[0]?.boundingbox; // [south, north, west, east]
-  if (!bb) return null;
-  const [south, north, west, east] = bb;
-  return [south, west, north, east];
-}
-
 function addressOf(t: Record<string, string>): string | null {
   const parts = [
     [t["addr:street"], t["addr:housenumber"]].filter(Boolean).join(" "),
@@ -67,12 +55,17 @@ export async function searchOverpass(opts: {
   category: PlaceCategory;
   region: string;
   freeText?: string;
+  radiusKm?: number;
   max?: number;
 }): Promise<PlaceResult[]> {
-  const bbox = await geocodeBbox(opts.region);
-  if (!bbox) throw new Error(`Regio "${opts.region}" niet gevonden op OpenStreetMap.`);
-  const [s, w, n, e] = bbox;
-  const box = `(${s},${w},${n},${e})`;
+  const geo = await geocodeRegion(opts.region);
+  if (!geo) throw new Error(`Regio "${opts.region}" niet gevonden op OpenStreetMap.`);
+  // Met straal → cirkel rond het centrum; anders de bounding box van de regio.
+  const [s, w, n, e] = geo.bbox;
+  const area =
+    opts.radiusKm && opts.radiusKm > 0
+      ? `(around:${Math.round(opts.radiusKm * 1000)},${geo.lat},${geo.lon})`
+      : `(${s},${w},${n},${e})`;
 
   const filters = CATEGORY_FILTERS[opts.category] ?? [];
   const clauses: string[] = [];
@@ -80,10 +73,10 @@ export async function searchOverpass(opts: {
   if (term) {
     // Vrije zoekterm → op naam matchen (case-insensitive).
     const safe = term.replace(/["\\]/g, "");
-    for (const kind of ["node", "way"]) clauses.push(`${kind}["name"~"${safe}",i]${box};`);
+    for (const kind of ["node", "way"]) clauses.push(`${kind}["name"~"${safe}",i]${area};`);
   }
   for (const [k, v] of filters) {
-    for (const kind of ["node", "way"]) clauses.push(`${kind}["${k}"~"${v}"]${box};`);
+    for (const kind of ["node", "way"]) clauses.push(`${kind}["${k}"~"${v}"]${area};`);
   }
   if (clauses.length === 0) throw new Error("Kies een categorie of vul een zoekterm in.");
 
