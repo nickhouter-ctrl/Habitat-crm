@@ -6,6 +6,7 @@ import { redirect } from "next/navigation";
 import { z } from "zod";
 
 import { auth } from "@/auth";
+import { contactDisplayName } from "@/lib/contact-name";
 import { db } from "@/lib/db";
 import { activities, companies, contacts, documents, holdedSyncMap } from "@/lib/db/schema";
 
@@ -51,9 +52,13 @@ export async function createContact(formData: FormData) {
   }
   const v = parsed.data;
   const type = KLANTTYPE_TO_TYPE[v.klanttype];
-  const personName = [v.firstName, v.lastName].filter(Boolean).join(" ").trim();
-  const displayName =
-    personName || v.companyName?.trim() || (v.email || "").trim() || "(naamloos)";
+  const displayName = contactDisplayName({
+    firstName: v.firstName,
+    lastName: v.lastName,
+    companyName: v.companyName,
+    email: v.email,
+    isZakelijk: v.klanttype === "zakelijk",
+  });
 
   // Zakelijk → bedrijf aanmaken en koppelen (zo blijft het zakelijk/particulier-filter kloppen).
   let companyId: string | null = null;
@@ -117,9 +122,13 @@ export async function updateContact(id: string, formData: FormData) {
   }
   const v = parsed.data;
   const type = KLANTTYPE_TO_TYPE[v.klanttype];
-  const personName = [v.firstName, v.lastName].filter(Boolean).join(" ").trim();
-  const displayName =
-    personName || v.companyName?.trim() || (v.email || "").trim() || "(naamloos)";
+  const displayName = contactDisplayName({
+    firstName: v.firstName,
+    lastName: v.lastName,
+    companyName: v.companyName,
+    email: v.email,
+    isZakelijk: v.klanttype === "zakelijk",
+  });
 
   const existing = await db.query.contacts.findFirst({
     where: eq(contacts.id, id),

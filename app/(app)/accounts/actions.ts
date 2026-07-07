@@ -7,8 +7,9 @@ import { eq } from "drizzle-orm";
 import { z } from "zod";
 
 import { auth } from "@/auth";
+import { contactDisplayName } from "@/lib/contact-name";
 import { db } from "@/lib/db";
-import { accountRequests, contacts, customerAccounts } from "@/lib/db/schema";
+import { accountRequests, companies, contacts, customerAccounts } from "@/lib/db/schema";
 import { sendMail } from "@/lib/gmail";
 
 async function requireUser() {
@@ -50,18 +51,46 @@ export async function approveAccountRequest(requestId: string, formData: FormDat
   // Contact: hergebruik gekoppeld contact, anders aanmaken.
   let contactId = req.contactId;
   if (!contactId) {
-    const displayName = req.kind === "zakelijk" && req.businessName ? req.businessName : req.name;
+    const isZakelijk = req.kind === "zakelijk";
+    // Zakelijk → bedrijf aanmaken en koppelen. Het CRM leidt "zakelijk" af van
+    // een gekoppeld bedrijf (companyId), en bedrijfsnaam/BTW horen in de
+    // gestructureerde velden (companies.name / companies.vatNumber) — niet in
+    // de vrije notitietekst. Zonder dit werd elk website-bedrijf als
+    // particulier opgeslagen zonder bedrijfsnaam/BTW.
+    let companyId: string | null = null;
+    if (isZakelijk && req.businessName) {
+      const [co] = await db
+        .insert(companies)
+        .values({
+          name: req.businessName,
+          type: "client",
+          vatNumber: req.vatNumber || null,
+          email: req.email || null,
+          phone: req.phone || null,
+          addressLine: req.address || null,
+          country: "ES",
+        })
+        .returning({ id: companies.id });
+      companyId = co.id;
+    }
+    const [first, ...rest] = (req.name || "").trim().split(/\s+/);
     const [c] = await db
       .insert(contacts)
       .values({
-        name: displayName,
-        firstName: req.name || null,
+        name: contactDisplayName({
+          firstName: req.name,
+          companyName: req.businessName,
+          email: req.email,
+          isZakelijk,
+        }),
+        firstName: first || null,
+        lastName: rest.join(" ") || null,
         email: req.email,
         phone: req.phone,
         type: "customer",
-        notes: [req.businessName && `Bedrijf: ${req.businessName}`, req.vatNumber && `IVA/BTW: ${req.vatNumber}`, req.address]
-          .filter(Boolean)
-          .join("\n") || null,
+        companyId,
+        addressLine: req.address || null,
+        preferredLanguage: req.locale ?? undefined,
       })
       .returning({ id: contacts.id });
     contactId = c.id;
