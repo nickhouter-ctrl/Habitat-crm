@@ -307,6 +307,20 @@ export async function generateCopyForCampaign(
   return { ok: true };
 }
 
+/** Zet 'ook naar bestaande klanten' aan/uit op een bestaande campagne. */
+export async function setCampaignAudience(campaignId: string, formData: FormData) {
+  await requireUser();
+  const includeCustomers = formData.get("includeCustomers") === "on";
+  const c = await db.query.emailCampaigns.findFirst({ where: eq(emailCampaigns.id, campaignId) });
+  if (!c) return;
+  const categories = (c.audience?.categories ?? []) as string[];
+  await db
+    .update(emailCampaigns)
+    .set({ audience: { categories, includeCustomers }, updatedAt: sql`now()` })
+    .where(eq(emailCampaigns.id, campaignId));
+  revalidatePath(`/leads/campaigns/${campaignId}`);
+}
+
 /** Handmatig het onderwerp/de introtekst aanpassen. */
 export async function updateCampaignCopy(campaignId: string, formData: FormData) {
   await requireUser();

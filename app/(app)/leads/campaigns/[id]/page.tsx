@@ -8,7 +8,7 @@ import { products } from "@/lib/db/schema";
 import { buildCampaignEmail, type CampaignLang } from "@/lib/leads/campaign";
 import { groupHeroUrl, groupLabel, groupUrl, type CampaignGroup } from "@/lib/leads/groups";
 import { aiCopyConfigured } from "@/lib/leads/ai-copy";
-import { countRecipients, updateCampaignCopy } from "../../actions";
+import { countRecipients, setCampaignAudience, updateCampaignCopy } from "../../actions";
 import { CampaignActions } from "./campaign-actions";
 
 export const metadata = { title: "Campagne" };
@@ -47,6 +47,7 @@ export default async function CampaignPage({ params }: { params: Promise<{ id: s
 
   const cats = (campaign.audience?.categories ?? []) as string[];
   const saveCopy = updateCampaignCopy.bind(null, id);
+  const setAudience = setCampaignAudience.bind(null, id);
 
   return (
     <>
@@ -89,9 +90,23 @@ export default async function CampaignPage({ params }: { params: Promise<{ id: s
                 {campaign.sentCount > 0 && <span className="text-sm text-muted">{campaign.sentCount} verstuurd</span>}
               </div>
               <p className="text-sm">
-                <span className="font-medium">{recipientCount}</span> ontvanger(s) — bedrijven met e-mail in de gekozen
-                categorieën, niet afgemeld.
+                <span className="font-medium">{recipientCount}</span> ontvanger(s) — bedrijven (en evt. klanten) met
+                e-mail, niet afgemeld.
               </p>
+
+              <form action={setAudience} className="rounded-lg border bg-background/50 p-3">
+                <label className="flex items-center gap-2 text-sm">
+                  <input
+                    type="checkbox"
+                    name="includeCustomers"
+                    defaultChecked={!!campaign.audience?.includeCustomers}
+                  />
+                  Ook naar bestaande klanten sturen (contacten met e-mail)
+                </label>
+                <button type="submit" className="mt-2 text-xs font-medium text-accent hover:underline">
+                  Bijwerken
+                </button>
+              </form>
 
               <CampaignActions
                 campaignId={id}
