@@ -16,7 +16,9 @@ import {
   prospects,
 } from "@/lib/db/schema";
 import { sendMail } from "@/lib/gmail";
-import { buildCampaignEmail, unsubscribeUrl, type CampaignProduct } from "@/lib/leads/campaign";
+import { buildCampaignEmail, unsubscribeUrl } from "@/lib/leads/campaign";
+import { generateCampaignCopy } from "@/lib/leads/ai-copy";
+import { groupLabel, groupUrl, type CampaignGroup } from "@/lib/leads/groups";
 import { searchPlaces, type PlaceCategory } from "@/lib/leads/places";
 import { searchOverpass } from "@/lib/leads/overpass";
 
@@ -136,25 +138,28 @@ export async function createCampaign(formData: FormData) {
   const name = String(formData.get("name") ?? "").trim();
   const subject = String(formData.get("subject") ?? "").trim();
   const introText = String(formData.get("introText") ?? "").trim() || null;
-  const productIds = formData.getAll("productIds").map(String).filter(Boolean);
+  const groups = formData.getAll("groups").map(String).filter(Boolean);
   const categories = formData.getAll("categories").map(String).filter(Boolean);
-  if (!name || !subject) redirect("/leads?error=campagne-onvolledig");
+  if (!name) redirect("/leads?error=campagne-onvolledig");
 
   const [row] = await db
     .insert(emailCampaigns)
-    .values({ name, subject, introText, productIds, audience: { categories }, createdById: user.id })
+    .values({ name, subject, introText, groups, audience: { categories }, createdById: user.id })
     .returning({ id: emailCampaigns.id });
   redirect(`/leads/campaigns/${row.id}`);
 }
 
-/** Actieve producten uit een lijst id's, in de vorm die de mail nodig heeft. */
-async function loadCampaignProducts(ids: string[]): Promise<CampaignProduct[]> {
-  if (ids.length === 0) return [];
-  const rows = await db.query.products.findMany({
-    where: inArray(products.id, ids),
-    columns: { name: true, imageUrl: true, collection: true },
-  });
-  return rows.map((r) => ({ name: r.name, imageUrl: r.imageUrl, collection: r.collection }));
+/** Productgroepen in de mailvorm: label + website-URL + representatieve foto. */
+async function loadCampaignGroups(collections: string[]): Promise<CampaignGroup[]> {
+  const out: CampaignGroup[] = [];
+  for (const collection of collections) {
+    const rep = await db.query.products.findFirst({
+      where: and(eq(products.collection, collection), eq(products.isActive, true), isNotNull(products.imageUrl)),
+      columns: { imageUrl: true },
+    });
+    out.push({ collection, label: groupLabel(collection), url: groupUrl(collection), imageUrl: rep?.imageUrl ?? null });
+  }
+  return out;
 }
 
 /** Ontvangers: prospects in de gekozen categorieën, met e-mail, niet afgemeld/bounced en niet op de suppressielijst. */
@@ -189,16 +194,52 @@ export async function countRecipients(campaignId: string): Promise<number> {
   return recipients.length;
 }
 
+/** Stel met AI een onderwerp + introtekst op en sla die op de campagne op. */
+export async function generateCopyForCampaign(
+  campaignId: string,
+  angle: string,
+): Promise<{ ok: boolean; error?: string }> {
+  await requireUser();
+  const c = await db.query.emailCampaigns.findFirst({ where: eq(emailCampaigns.id, campaignId) });
+  if (!c) return { ok: false, error: "Campagne niet gevonden." };
+  const copy = await generateCampaignCopy({
+    groupLabels: c.groups.map((g) => groupLabel(g)),
+    audience: (c.audience?.categories ?? []) as string[],
+    angle: angle?.trim() || null,
+  });
+  if (!copy) return { ok: false, error: "AI niet beschikbaar (ANTHROPIC_API_KEY?) of geen tekst — probeer opnieuw." };
+  await db
+    .update(emailCampaigns)
+    .set({ subject: copy.subject, introText: copy.intro, updatedAt: sql`now()` })
+    .where(eq(emailCampaigns.id, campaignId));
+  revalidatePath(`/leads/campaigns/${campaignId}`);
+  return { ok: true };
+}
+
+/** Handmatig het onderwerp/de introtekst aanpassen. */
+export async function updateCampaignCopy(campaignId: string, formData: FormData) {
+  await requireUser();
+  const subject = String(formData.get("subject") ?? "").trim();
+  const introText = String(formData.get("introText") ?? "").trim() || null;
+  await db
+    .update(emailCampaigns)
+    .set({ subject, introText, updatedAt: sql`now()` })
+    .where(eq(emailCampaigns.id, campaignId));
+  revalidatePath(`/leads/campaigns/${campaignId}`);
+}
+
 /** Stuur een testmail naar de ingelogde gebruiker (of Nick) om te controleren. */
 export async function sendTestEmail(campaignId: string): Promise<{ ok: boolean; to?: string; error?: string }> {
   const user = await requireUser();
   const c = await db.query.emailCampaigns.findFirst({ where: eq(emailCampaigns.id, campaignId) });
   if (!c) return { ok: false, error: "Campagne niet gevonden." };
+  if (!c.subject.trim()) return { ok: false, error: "Nog geen onderwerp — genereer of vul die eerst in." };
   const to = user.email || "nick@habitat-one.com";
-  const productsForMail = await loadCampaignProducts(c.productIds);
+  const groupsForMail = await loadCampaignGroups(c.groups);
   const { html, text } = buildCampaignEmail({
+    subject: c.subject,
     introText: c.introText,
-    products: productsForMail,
+    groups: groupsForMail,
     unsubToken: "TEST",
     companyName: "Voorbeeldbedrijf BV",
   });
@@ -218,16 +259,18 @@ export async function sendCampaign(campaignId: string): Promise<{ ok: boolean; s
   const { campaign, recipients } = await resolveRecipients(campaignId);
   if (!campaign) return { ok: false, error: "Campagne niet gevonden." };
   if (recipients.length === 0) return { ok: false, error: "Geen ontvangers (met e-mail, niet afgemeld)." };
+  if (!campaign.subject.trim()) return { ok: false, error: "Nog geen onderwerp — genereer of vul die eerst in." };
 
   const batch = recipients.slice(0, SEND_CAP);
-  const productsForMail = await loadCampaignProducts(campaign.productIds);
+  const groupsForMail = await loadCampaignGroups(campaign.groups);
   await db.update(emailCampaigns).set({ status: "sending", updatedAt: sql`now()` }).where(eq(emailCampaigns.id, campaignId));
 
   let sent = 0;
   for (const r of batch) {
     const { html, text } = buildCampaignEmail({
+      subject: campaign.subject,
       introText: campaign.introText,
-      products: productsForMail,
+      groups: groupsForMail,
       unsubToken: r.unsubscribeToken,
       companyName: r.companyName,
     });

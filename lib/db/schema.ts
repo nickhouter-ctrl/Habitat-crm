@@ -1810,6 +1810,9 @@ export const emailCampaigns = pgTable(
     name: text().notNull(),
     subject: text().notNull(),
     introText: text(),
+    /** Productgroepen (collection-namen) die in de mail als tegels getoond worden. */
+    groups: jsonb().$type<string[]>().notNull().default([]),
+    /** Legacy: losse product-id's (niet meer gebruikt; groepen zijn de norm). */
     productIds: jsonb().$type<string[]>().notNull().default([]),
     audience: jsonb().$type<{ categories: string[] }>().notNull().default({ categories: [] }),
     status: campaignStatus().notNull().default("draft"),

@@ -1,4 +1,4 @@
-import { and, desc, eq, isNotNull } from "drizzle-orm";
+import { desc, sql } from "drizzle-orm";
 import Link from "next/link";
 
 import {
@@ -22,9 +22,10 @@ import {
   Tr,
 } from "@/components/ui";
 import { db } from "@/lib/db";
-import { emailCampaigns, emailSuppressions, products, prospects } from "@/lib/db/schema";
+import { emailCampaigns, emailSuppressions, prospects } from "@/lib/db/schema";
 import type { BadgeTone } from "@/components/ui";
 import { placesConfigured } from "@/lib/leads/places";
+import { groupLabel } from "@/lib/leads/groups";
 import { createCampaign, deleteProspect, importCsv, searchAndImportProspects } from "./actions";
 
 export const metadata = { title: "Leads" };
@@ -58,17 +59,22 @@ export default async function LeadsPage({
   const flashFound = typeof sp.found === "string" ? sp.found : null;
   const flashError = typeof sp.error === "string" ? sp.error : null;
 
-  const [rows, productOpts, campaigns, suppressedCount] = await Promise.all([
+  const [rows, groupRowsRaw, campaigns, suppressedCount] = await Promise.all([
     db.query.prospects.findMany({ orderBy: desc(prospects.createdAt), limit: 300 }),
-    db.query.products.findMany({
-      where: and(eq(products.isActive, true), eq(products.pushToWebsite, true), isNotNull(products.imageUrl)),
-      columns: { id: true, name: true, imageUrl: true, collection: true },
-      orderBy: (p, { asc }) => asc(p.name),
-      limit: 120,
-    }),
+    db.execute(sql`
+      SELECT collection, count(*)::int AS n, min(image_url) AS image
+      FROM products
+      WHERE is_active AND collection IS NOT NULL AND collection <> '' AND image_url IS NOT NULL
+      GROUP BY collection ORDER BY count(*) DESC LIMIT 60
+    `),
     db.query.emailCampaigns.findMany({ orderBy: desc(emailCampaigns.createdAt), limit: 15 }),
     db.$count(emailSuppressions),
   ]);
+
+  const groupOpts = (
+    (groupRowsRaw as unknown as { rows?: Array<{ collection: string; n: number; image: string | null }> }).rows ??
+    (groupRowsRaw as unknown as Array<{ collection: string; n: number; image: string | null }>)
+  ).map((r) => ({ collection: r.collection, n: Number(r.n), image: r.image }));
 
   const withEmail = rows.filter((r) => r.email).length;
 
@@ -168,17 +174,13 @@ export default async function LeadsPage({
         </CardHeader>
         <CardContent>
           <form action={createCampaign} className="space-y-4">
-            <div className="grid gap-3 sm:grid-cols-2">
-              <Field label="Naam (intern)" htmlFor="name">
-                <Input id="name" name="name" required placeholder="Voorjaarsselectie architecten" />
-              </Field>
-              <Field label="Onderwerp (e-mail)" htmlFor="subject">
-                <Input id="subject" name="subject" required placeholder="Een selectie uit onze collectie" />
-              </Field>
-            </div>
-            <Field label="Introtekst" htmlFor="introText" hint="persoonlijke aanhef boven de producten">
-              <Textarea id="introText" name="introText" rows={3} />
+            <Field label="Naam (intern)" htmlFor="name">
+              <Input id="name" name="name" required placeholder="Voorjaarsselectie architecten" />
             </Field>
+            <p className="rounded-lg border border-sky-200 bg-sky-50 px-3 py-2 text-xs text-sky-700">
+              Onderwerp en tekst hoef je hier niet in te vullen — die stel je op de volgende stap met AI op (in de
+              huisstijl), of je typt ze zelf. De verplichte afzendergegevens + afmeldlink zitten er altijd omheen.
+            </p>
 
             <div>
               <p className="mb-1.5 text-sm font-medium">Doelgroep (categorieën)</p>
@@ -194,22 +196,23 @@ export default async function LeadsPage({
             </div>
 
             <div>
-              <p className="mb-1.5 text-sm font-medium">Producten in de mail</p>
-              {productOpts.length === 0 ? (
-                <p className="text-xs text-muted">Geen producten met foto beschikbaar (die op de website staan).</p>
+              <p className="mb-1.5 text-sm font-medium">Productgroepen in de mail</p>
+              {groupOpts.length === 0 ? (
+                <p className="text-xs text-muted">Geen productgroepen met foto beschikbaar.</p>
               ) : (
-                <div className="grid max-h-72 grid-cols-2 gap-2 overflow-auto rounded-lg border p-2 sm:grid-cols-3">
-                  {productOpts.map((p) => (
+                <div className="grid max-h-80 grid-cols-2 gap-2 overflow-auto rounded-lg border p-2 sm:grid-cols-3">
+                  {groupOpts.map((g) => (
                     <label
-                      key={p.id}
+                      key={g.collection}
                       className="flex cursor-pointer items-center gap-2 rounded-md p-1.5 text-xs hover:bg-background"
                     >
-                      <input type="checkbox" name="productIds" value={p.id} />
+                      <input type="checkbox" name="groups" value={g.collection} />
                       {/* eslint-disable-next-line @next/next/no-img-element */}
-                      {p.imageUrl && (
-                        <img src={p.imageUrl} alt="" className="h-9 w-9 shrink-0 rounded object-cover" />
-                      )}
-                      <span className="line-clamp-2">{p.name}</span>
+                      {g.image && <img src={g.image} alt="" className="h-10 w-10 shrink-0 rounded object-cover" />}
+                      <span className="min-w-0">
+                        <span className="block truncate font-medium">{groupLabel(g.collection)}</span>
+                        <span className="text-muted">{g.n} producten</span>
+                      </span>
                     </label>
                   ))}
                 </div>
@@ -217,7 +220,7 @@ export default async function LeadsPage({
             </div>
 
             <Button type="submit" variant="primary">
-              Concept aanmaken → controleren
+              Concept aanmaken → onderwerp & tekst
             </Button>
           </form>
         </CardContent>
