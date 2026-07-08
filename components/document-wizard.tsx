@@ -271,6 +271,21 @@ export function DocumentWizard({
                 />
               </Field>
             </div>
+
+            {(kind === "invoice" || kind === "proforma") && (
+              <div className="flex flex-col gap-2 rounded-lg border bg-background/40 p-3 sm:flex-row sm:gap-6">
+                <label className="flex items-center gap-2 text-sm">
+                  <input type="checkbox" name="isAdvance" />
+                  Voorschot / aanbetaling op project
+                  <span className="text-xs text-muted">(verrekent op de eindfactuur)</span>
+                </label>
+                <label className="flex items-center gap-2 text-sm">
+                  <input type="checkbox" name="vatReverseCharge" />
+                  BTW verlegd — zonder BTW
+                  <span className="text-xs text-muted">(inversión del sujeto pasivo)</span>
+                </label>
+              </div>
+            )}
           </CardContent>
         </Card>
 
