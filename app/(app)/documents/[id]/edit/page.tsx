@@ -63,6 +63,8 @@ export default async function EditDocumentPage({
           dueDate: doc.dueDate,
           notes: doc.notes,
           items: normalizeDocItems(doc.items),
+          isAdvance: doc.isAdvance,
+          vatReverseCharge: doc.vatReverseCharge,
         }}
         contacts={options.contacts}
         deals={options.deals}

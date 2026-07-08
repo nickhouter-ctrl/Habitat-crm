@@ -457,6 +457,8 @@ export type PdfDoc = {
   totalEur: string;
   items: Array<DocumentLineItem & { sku?: string | null }>;
   notes: string | null;
+  /** BTW verlegd — toont de wettelijk verplichte vermelding (inversión del sujeto pasivo). */
+  vatReverseCharge?: boolean;
   contactName: string | null;
   /** Eénregelig adres (oude stijl) — fallback als de twee aparte regels ontbreken. */
   contactAddress?: string | null;
@@ -762,6 +764,12 @@ function DocumentPdf({ doc }: { doc: PdfDoc }) {
             </View>
           )}
 
+          {doc.vatReverseCharge ? (
+            <Text style={s.notes}>
+              Operación con inversión del sujeto pasivo — art. 84.Uno.2º LIVA. IVA a liquidar por el destinatario / BTW
+              verlegd.
+            </Text>
+          ) : null}
           {doc.notes ? <Text style={s.notes}>{doc.notes}</Text> : null}
         </View>
 

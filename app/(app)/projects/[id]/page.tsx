@@ -125,6 +125,32 @@ export default async function ProjectDetailPage({
     .select({ id: documents.id, kind: documents.kind, status: documents.status, subtotalEur: documents.subtotalEur, totalEur: documents.totalEur, paidEur: documents.paidEur, items: documents.items })
     .from(documents)
     .where(and(eq(documents.projectId, id), inArray(documents.kind, ["estimate", "invoice", "creditnote"])));
+  // Aanbetalingen/voorschotten (proforma of als voorschot gemarkeerde factuur).
+  const advanceDocs = await db
+    .select({
+      id: documents.id,
+      kind: documents.kind,
+      docNumber: documents.docNumber,
+      status: documents.status,
+      totalEur: documents.totalEur,
+      subtotalEur: documents.subtotalEur,
+      vatReverseCharge: documents.vatReverseCharge,
+      settledAt: documents.advanceSettledAt,
+    })
+    .from(documents)
+    .where(
+      and(
+        eq(documents.projectId, id),
+        or(eq(documents.kind, "proforma"), eq(documents.isAdvance, true)),
+      ),
+    )
+    .orderBy(desc(documents.createdAt));
+  const advPaid = advanceDocs.filter((a) => a.status === "paid");
+  const advPaidTotal = advPaid.reduce((s, a) => s + Number(a.totalEur ?? 0), 0);
+  const advOpenToSettle = advPaid
+    .filter((a) => !a.settledAt)
+    .reduce((s, a) => s + Number(a.totalEur ?? 0), 0);
+
   const allPids = new Set<string>();
   const allSkus = new Set<string>();
   for (const d of marginDocs) {
@@ -707,6 +733,59 @@ export default async function ProjectDetailPage({
           </div>
         </CardHeader>
       </Card>
+
+      {/* ─────────────── Aanbetalingen / voorschotten ─────────────── */}
+      {advanceDocs.length > 0 && (
+        <Card id="aanbetalingen" className="mb-5 scroll-mt-24">
+          <CardHeader>
+            <CardTitle>Aanbetalingen / voorschotten</CardTitle>
+            <span className="text-xs text-muted">
+              {formatEUR(advPaidTotal)} betaald · {formatEUR(advOpenToSettle)} nog te verrekenen op de eindfactuur
+            </span>
+          </CardHeader>
+          <CardContent className="p-0">
+            <Table>
+              <THead>
+                <tr>
+                  <Th>Voorschot</Th>
+                  <Th>Bedrag</Th>
+                  <Th>BTW</Th>
+                  <Th>Status</Th>
+                  <Th>Verrekend</Th>
+                </tr>
+              </THead>
+              <TBody>
+                {advanceDocs.map((a) => (
+                  <Tr key={a.id}>
+                    <Td>
+                      <Link href={`/documents/${a.id}`} className="font-medium hover:underline">
+                        {a.docNumber ?? "—"}
+                      </Link>
+                      <span className="block text-xs text-muted">{a.kind === "proforma" ? "proforma" : "factuur"}</span>
+                    </Td>
+                    <Td className="tabular-nums">{formatEUR(Number(a.totalEur ?? 0))}</Td>
+                    <Td>{a.vatReverseCharge ? "verlegd" : "met btw"}</Td>
+                    <Td>
+                      <Badge tone={a.status === "paid" ? "success" : "neutral"}>
+                        {a.status === "paid" ? "Betaald" : a.status === "sent" ? "Verstuurd" : "Concept"}
+                      </Badge>
+                    </Td>
+                    <Td>
+                      {a.settledAt ? (
+                        <Badge tone="neutral">Verrekend</Badge>
+                      ) : a.status === "paid" ? (
+                        <span className="text-xs text-warning">nog openstaand</span>
+                      ) : (
+                        <span className="text-xs text-muted">—</span>
+                      )}
+                    </Td>
+                  </Tr>
+                ))}
+              </TBody>
+            </Table>
+          </CardContent>
+        </Card>
+      )}
 
       {/* ─────────────── Ontvangen betalingen (van klant) ─────────────── */}
       <Card id="ontvangen" className="mb-5 scroll-mt-24">

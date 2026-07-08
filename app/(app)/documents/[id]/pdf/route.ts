@@ -96,6 +96,7 @@ export async function GET(
     totalEur: doc.totalEur,
     items,
     notes: doc.notes,
+    vatReverseCharge: doc.vatReverseCharge,
     contactName: doc.contact?.name ?? null,
     contactAddressLine: addrLine,
     contactAddressRegion: addrRegion,

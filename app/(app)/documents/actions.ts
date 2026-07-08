@@ -9,7 +9,7 @@ import { z } from "zod";
 
 import { auth } from "@/auth";
 import { db } from "@/lib/db";
-import { activities, companies, contacts, deals, deliveries, documents, holdedSyncMap, products, projectPayments } from "@/lib/db/schema";
+import { activities, companies, contacts, deals, deliveries, documents, holdedSyncMap, products, projectPayments, type DocumentLineItem } from "@/lib/db/schema";
 import { syncDealFromDocument } from "@/lib/deals";
 import {
   billingAddressLines,
@@ -82,6 +82,10 @@ const docSchema = z.object({
   items: z.string().optional(),
   /** Bron-document (bv. een proforma-voorschot gekoppeld aan een offerte). */
   sourceDocumentId: optionalUuid,
+  /** Aanbetaling/voorschot op een project (checkbox). */
+  isAdvance: z.coerce.boolean().optional(),
+  /** BTW verlegd — factuur zonder BTW (checkbox). */
+  vatReverseCharge: z.coerce.boolean().optional(),
 });
 
 function listPathFor(kind: DocKind): string {
@@ -99,7 +103,12 @@ function revalidateAround(kind: DocKind, id?: string) {
 }
 
 function buildValues(v: z.infer<typeof docSchema>) {
-  const items = parseLineItems(v.items);
+  const reverseCharge = !!v.vatReverseCharge;
+  // BTW verlegd → alle regels zonder BTW (0%), zodat de totalen kloppen en de
+  // verplichte vermelding op de PDF komt.
+  const items = reverseCharge
+    ? parseLineItems(v.items).map((it) => ({ ...it, taxRate: 0 }))
+    : parseLineItems(v.items);
   const totals = computeTotals(items);
   return {
     values: {
@@ -121,6 +130,8 @@ function buildValues(v: z.infer<typeof docSchema>) {
       items,
       notes: v.notes?.trim() || null,
       sourceDocumentId: v.sourceDocumentId || null,
+      isAdvance: !!v.isAdvance,
+      vatReverseCharge: reverseCharge,
     },
     totals,
   };
@@ -130,6 +141,19 @@ async function requireUser() {
   const session = await auth();
   if (!session?.user) redirect("/login");
   return session.user;
+}
+
+/** Markeer aanbetalingen die op deze factuur worden verrekend (regels met
+ *  advanceRef) als verrekend. Idempotent; draait niet terug bij verwijderde regel. */
+async function settleReferencedAdvances(items: DocumentLineItem[]) {
+  const refs = [...new Set(items.map((it) => it.advanceRef).filter((r): r is string => !!r))];
+  for (const ref of refs) {
+    await db
+      .update(documents)
+      .set({ advanceSettledAt: new Date() })
+      .where(and(eq(documents.id, ref), isNull(documents.advanceSettledAt)))
+      .catch(() => {});
+  }
 }
 
 /** Bezorgafstand (km) van de showroom naar een ingevuld adres (OpenRouteService). */
@@ -241,6 +265,7 @@ export async function createDocument(formData: FormData) {
   const { values } = buildValues(parsed.data);
   const { id } = await insertNumberedDocument(values.kind as DocKind, values);
 
+  if (values.kind === "invoice") await settleReferencedAdvances(values.items);
   await syncDealFromDocument(values.dealId, values);
   revalidateAround(values.kind as DocKind);
   redirect(`/documents/${id}`);
@@ -353,8 +378,14 @@ export async function updateDocument(id: string, formData: FormData) {
       totalEur: values.totalEur,
       items: values.items,
       notes: values.notes,
+      isAdvance: values.isAdvance,
+      vatReverseCharge: values.vatReverseCharge,
     })
     .where(eq(documents.id, id));
+
+  // Voorschot-verrekening: markeer aanbetalingen die op deze factuur worden
+  // weggestreept (regels met advanceRef) als verrekend, zodat ze niet dubbel gaan.
+  if (values.kind === "invoice") await settleReferencedAdvances(values.items);
 
   // Voorraad bijtrekken: oude afboeking terugdraaien en de NIEUWE regels opnieuw
   // afboeken. Netto verandert de voorraad precies met het verschil (geen dubbele
@@ -713,7 +744,7 @@ export async function setDocumentStatus(id: string, formData: FormData) {
 
   const doc = await db.query.documents.findFirst({
     where: eq(documents.id, id),
-    columns: { totalEur: true, kind: true, dealId: true, holdedId: true, sentAt: true, projectId: true, docNumber: true },
+    columns: { totalEur: true, kind: true, dealId: true, holdedId: true, sentAt: true, projectId: true, docNumber: true, isAdvance: true },
   });
   if (!doc) return;
 
@@ -754,10 +785,11 @@ export async function setDocumentStatus(id: string, formData: FormData) {
   }
   await syncDealFromDocument(doc.dealId, { kind: doc.kind, status, totalEur: doc.totalEur });
 
-  // Betaalde proforma-voorschot → automatisch een ontvangst (advance) op het
-  // project, zodat het meteen in de ontvangsten telt en "nog te factureren"
-  // daalt. Idempotent via de marker-omschrijving; teruggedraaid = weer weg.
-  if (doc.kind === "proforma" && doc.projectId) {
+  // Betaald voorschot (proforma OF een als voorschot gemarkeerde factuur) →
+  // automatisch een ontvangst (advance) op het project, zodat het meteen in de
+  // ontvangsten telt en "nog te factureren" daalt. Idempotent via de
+  // marker-omschrijving; teruggedraaid = weer weg.
+  if ((doc.kind === "proforma" || doc.isAdvance) && doc.projectId) {
     const marker = `Voorschot ${doc.docNumber ?? id.slice(0, 8)}`;
     if (status === "paid") {
       const existing = await db.query.projectPayments.findFirst({
@@ -770,7 +802,7 @@ export async function setDocumentStatus(id: string, formData: FormData) {
           method: "advance",
           date: new Date().toISOString().slice(0, 10),
           description: marker,
-          note: "Automatisch via betaalde proforma",
+          note: "Automatisch via betaald voorschot",
         });
       }
     } else {
@@ -955,6 +987,7 @@ export async function sendDocument(id: string) {
         totalEur: doc.totalEur,
         items: normalizeDocItems(doc.items),
         notes: doc.notes,
+        vatReverseCharge: doc.vatReverseCharge,
         contactName: doc.contact.name ?? null,
         contactAddressLine: addrLine,
         contactAddressRegion: addrRegion,
@@ -1088,6 +1121,7 @@ export async function sendDocumentCustom(id: string, formData: FormData) {
         totalEur: doc.totalEur,
         items: normalizeDocItems(doc.items),
         notes: doc.notes,
+        vatReverseCharge: doc.vatReverseCharge,
         contactName: doc.contact?.name ?? null,
         contactAddressLine: addrLine,
         contactAddressRegion: addrRegion,

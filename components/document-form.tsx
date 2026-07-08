@@ -68,6 +68,8 @@ export function DocumentForm({
     dueDate: string | null;
     notes: string | null;
     items: DocumentLineItem[] | null;
+    isAdvance?: boolean | null;
+    vatReverseCharge?: boolean | null;
   };
   defaultDocNumber?: string;
   contacts: Option[];
@@ -169,6 +171,21 @@ export function DocumentForm({
               />
             </Field>
           </div>
+
+          {(kind === "invoice" || kind === "proforma") && (
+            <div className="flex flex-col gap-2 rounded-lg border bg-background/40 p-3 sm:flex-row sm:gap-6">
+              <label className="flex items-center gap-2 text-sm">
+                <input type="checkbox" name="isAdvance" defaultChecked={!!doc?.isAdvance} />
+                Voorschot / aanbetaling op project
+                <span className="text-xs text-muted">(verrekent op de eindfactuur)</span>
+              </label>
+              <label className="flex items-center gap-2 text-sm">
+                <input type="checkbox" name="vatReverseCharge" defaultChecked={!!doc?.vatReverseCharge} />
+                BTW verlegd — zonder BTW
+                <span className="text-xs text-muted">(inversión del sujeto pasivo)</span>
+              </label>
+            </div>
+          )}
         </CardContent>
       </Card>
 

@@ -1,4 +1,4 @@
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq, inArray, isNull, or } from "drizzle-orm";
 import Link from "next/link";
 
 import { DocumentWizard } from "@/components/document-wizard";
@@ -78,28 +78,36 @@ export default async function NewDocumentPage({
     }
   }
 
-  // Bij een definitieve factuur op een project: reeds betaalde voorschotten
-  // (proforma's) alvast als negatieve "reeds betaald"-regels voorladen, zodat ze
-  // op de eindfactuur verrekend worden (btw wel op het volledige project).
+  // Bij een definitieve factuur op een project: reeds betaalde, nog niet
+  // verrekende voorschotten (proforma's én als voorschot gemarkeerde facturen)
+  // alvast als negatieve "reeds betaald"-regels voorladen. De aftrek krijgt
+  // DEZELFDE BTW als het voorschot, zodat het eindbedrag én de af te dragen btw
+  // kloppen. De advanceRef markeert het voorschot bij opslaan als verrekend.
   if (kind === "invoice" && defaults.projectId) {
     const voorschotten = await db.query.documents.findMany({
       where: and(
         eq(documents.projectId, defaults.projectId),
-        eq(documents.kind, "proforma"),
         eq(documents.status, "paid"),
+        isNull(documents.advanceSettledAt),
+        or(eq(documents.kind, "proforma"), eq(documents.isAdvance, true)),
       ),
-      columns: { docNumber: true, totalEur: true },
+      columns: { id: true, docNumber: true, subtotalEur: true, taxEur: true, totalEur: true },
     });
     const negLines: DocumentLineItem[] = voorschotten
-      .filter((v) => Number(v.totalEur ?? 0) > 0)
-      .map((v) => ({
-        name: `Reeds betaald voorschot ${v.docNumber ?? ""}`.trim(),
-        units: 1,
-        price: -Number(v.totalEur ?? 0),
-        discount: 0,
-        taxRate: 0,
-        category: "materiaal",
-      }));
+      .filter((v) => Number(v.subtotalEur ?? v.totalEur ?? 0) > 0)
+      .map((v) => {
+        const net = Number(v.subtotalEur ?? 0) || Number(v.totalEur ?? 0);
+        const rate = Number(v.subtotalEur ?? 0) > 0 ? Math.round((Number(v.taxEur ?? 0) / Number(v.subtotalEur)) * 100) : 0;
+        return {
+          name: `Reeds betaald voorschot ${v.docNumber ?? ""}`.trim(),
+          units: 1,
+          price: -net,
+          discount: 0,
+          taxRate: rate,
+          category: "materiaal",
+          advanceRef: v.id,
+        };
+      });
     if (negLines.length) initialItems = [...(initialItems ?? []), ...negLines];
   }
 
