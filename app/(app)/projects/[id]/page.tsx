@@ -42,7 +42,8 @@ import {
   users,
   workers,
 } from "@/lib/db/schema";
-import { normalizeDocItems } from "@/lib/documents";
+import { lineCostEur, lineMaterialCostEur, normalizeDocItems } from "@/lib/documents";
+import type { DocumentLineItem } from "@/lib/db/schema";
 import { formatEUR } from "@/lib/utils";
 import {
   addProjectCost,
@@ -146,27 +147,37 @@ export default async function ProjectDetailPage({
   const pCostBySku = new Map(
     projCostRows.filter((p) => p.sku).map((p) => [p.sku as string, Number(p.costEur ?? 0)]),
   );
-  const lineCost = (items: unknown) => {
+  // Kostprijs-lookup uit de catalogus (op productId of SKU/omschrijving).
+  const productCostOf = (it: DocumentLineItem) =>
+    (it.productId ? pCostById.get(it.productId) : undefined) ??
+    (it.description ? pCostBySku.get(it.description.trim()) : undefined);
+  // Marge per document: regel-kostprijs > regel-marge% > catalogus-kostprijs.
+  const docMarginCost = (items: unknown) => {
     let cost = 0;
     for (const it of normalizeDocItems(items)) {
-      const c =
-        (it.productId ? pCostById.get(it.productId) : undefined) ??
-        (it.description ? pCostBySku.get(it.description.trim()) : undefined);
-      if (c != null && c > 0) cost += c * (Number(it.units) || 0);
+      const c = lineCostEur(it, productCostOf);
+      if (c != null) cost += c;
     }
     return cost;
   };
+  // Materiaal-/productkostprijs voor het projecttotaal (arbeid-regels niet — die
+  // zitten al in de uren; geen marge%-afleiding).
+  const docMaterialCost = (items: unknown) => {
+    let cost = 0;
+    for (const it of normalizeDocItems(items)) cost += lineMaterialCostEur(it, productCostOf);
+    return cost;
+  };
   let projRevenue = 0;
-  let projCost = 0; // kostprijs eigen producten op facturen (gerealiseerd)
+  let projCost = 0; // materiaal-/productkostprijs op facturen (gerealiseerd) — arbeid komt uit de uren
   const marginByDoc = new Map<string, { margin: number; pct: number | null }>();
   for (const d of marginDocs) {
     const rev = Number(d.subtotalEur ?? 0);
-    const cost = lineCost(d.items);
     if (d.kind === "estimate") continue;
-    marginByDoc.set(d.id, { margin: rev - cost, pct: rev > 0 ? Math.round(((rev - cost) / rev) * 100) : null });
+    const marginCost = docMarginCost(d.items);
+    marginByDoc.set(d.id, { margin: rev - marginCost, pct: rev > 0 ? Math.round(((rev - marginCost) / rev) * 100) : null });
     const sign = d.kind === "creditnote" ? -1 : 1;
     projRevenue += sign * rev;
-    projCost += sign * cost;
+    projCost += sign * docMaterialCost(d.items);
   }
   // invoiceDocs = alleen facturen/creditnota's (voor de gefactureerd-lijst onderaan).
   const invoiceDocs = marginDocs.filter((d) => d.kind !== "estimate");

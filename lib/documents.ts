@@ -42,6 +42,47 @@ export function lineTax(item: DocumentLineItem): number {
   return round2(lineNet(item) * ((Number(item.taxRate) || 0) / 100));
 }
 
+/** Arbeid-regels: hun kostprijs zit al in de uren (time_entries), dus tellen NIET
+ *  mee in het project-kostentotaal (anders dubbel). */
+const LABOR_CATEGORIES = new Set(["arbeid", "plaatsing"]);
+export function isLaborLine(item: DocumentLineItem): boolean {
+  return !!item.category && LABOR_CATEGORIES.has(item.category);
+}
+
+/**
+ * Kostprijs van een regel voor de MARGE-weergave (per document): eigen kostprijs
+ * (costEur) > afgeleid uit regel-marge% > catalogus-kostprijs. `null` = onbekend
+ * (dan telt de regel niet mee, i.p.v. als 100% marge).
+ */
+export function lineCostEur(
+  item: DocumentLineItem,
+  productCost?: (item: DocumentLineItem) => number | undefined,
+): number | null {
+  const units = Number(item.units) || 0;
+  if (item.costEur != null && Number(item.costEur) > 0) return round2(Number(item.costEur) * units);
+  if (item.marginPct != null && Number(item.marginPct) > 0) return round2(lineNet(item) / (1 + Number(item.marginPct) / 100));
+  const pc = productCost?.(item);
+  if (pc != null && pc > 0) return round2(pc * units);
+  return null;
+}
+
+/**
+ * Materiaal-/productkostprijs voor het PROJECT-kostentotaal: eigen kostprijs >
+ * catalogus-kostprijs. Arbeid-regels → 0 (die komen uit de uren) en géén
+ * marge%-afleiding (dat is arbeid). Onbekend → 0.
+ */
+export function lineMaterialCostEur(
+  item: DocumentLineItem,
+  productCost?: (item: DocumentLineItem) => number | undefined,
+): number {
+  if (isLaborLine(item)) return 0;
+  const units = Number(item.units) || 0;
+  if (item.costEur != null && Number(item.costEur) > 0) return round2(Number(item.costEur) * units);
+  const pc = productCost?.(item);
+  if (pc != null && pc > 0) return round2(pc * units);
+  return 0;
+}
+
 type AddressParts = { addressLine?: string | null; postalCode?: string | null; city?: string | null };
 
 /**

@@ -24,7 +24,7 @@ import {
 import { db } from "@/lib/db";
 import { documents, holdedSyncMap, products } from "@/lib/db/schema";
 import { SubmitButton } from "@/components/submit-button";
-import { lineNet, lineTax, normalizeDocItems } from "@/lib/documents";
+import { lineCostEur, lineNet, lineTax, normalizeDocItems } from "@/lib/documents";
 import { labelForCategory } from "@/lib/products";
 import { formatDate, formatEUR } from "@/lib/utils";
 import {
@@ -248,12 +248,13 @@ export default async function DocumentDetailPage({
   let docCost = 0;
   let costedRevenue = 0;
   let costedLines = 0;
+  const productCostOf = (it: (typeof items)[number]) =>
+    (it.productId ? costById.get(it.productId) : undefined) ??
+    (it.description ? costBySku.get(it.description.trim()) : undefined);
   for (const it of items) {
-    const cost =
-      (it.productId ? costById.get(it.productId) : undefined) ??
-      (it.description ? costBySku.get(it.description.trim()) : undefined);
-    if (cost != null && cost > 0) {
-      docCost += cost * (Number(it.units) || 0);
+    const cost = lineCostEur(it, productCostOf); // regel-kostprijs > marge% > catalogus
+    if (cost != null) {
+      docCost += cost;
       costedRevenue += lineNet(it);
       costedLines++;
     }

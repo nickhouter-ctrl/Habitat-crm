@@ -591,6 +591,10 @@ export type DocumentLineItem = {
   /** Fase-sleutel: koppelt deze regel aan een fase van de offerte (bv. "1"),
    * zodat we per fase kunnen factureren. Kan vooraf of achteraf toegekend worden. */
   phase?: string;
+  /** Verrekenregel: verwijst naar de aanbetaling/voorschot-factuur (documents.id)
+   * die met deze (negatieve) regel wordt weggestreept. Zo weten we welke
+   * aanbetaling verrekend is. */
+  advanceRef?: string;
 };
 
 /** Geordende fase-definitie op een offerte/factuur (voor naam/volgorde/planning). */
@@ -655,6 +659,15 @@ export const documents = pgTable(
      * en kunnen we "Gefactureerd" tonen — ook bij deelfacturen. Geen harde FK
      * (soft link) zodat verwijderen niet cascadeert. */
     sourceDocumentId: uuid(),
+    /** Aanbetaling/voorschot: deze factuur is een aanbetaling op een project die
+     * later op de eindfactuur verrekend wordt. */
+    isAdvance: boolean().notNull().default(false),
+    /** BTW verlegd (inversión del sujeto pasivo): factuur zonder BTW (0%) + de
+     * wettelijke vermelding op de PDF. */
+    vatReverseCharge: boolean().notNull().default(false),
+    /** Aanbetaling: moment waarop deze is verrekend op een eindfactuur (null = nog
+     * openstaand/te verrekenen). */
+    advanceSettledAt: timestamp({ withTimezone: true }),
     /** Pakbon: moment van afleveren. Een pakbon kent alleen klaargezet → afgeleverd
      * (geen factuurstatussen). */
     deliveredAt: timestamp({ withTimezone: true }),
