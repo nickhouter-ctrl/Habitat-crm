@@ -7,7 +7,7 @@ import { z } from "zod";
 
 import { auth } from "@/auth";
 import { db } from "@/lib/db";
-import { activities, emailInbox, mailAttachments, products, purchaseOrders } from "@/lib/db/schema";
+import { activities, emailInbox, mailAttachments, products, purchaseOrders, timeEntries } from "@/lib/db/schema";
 import type { PurchaseOrderAttachment } from "@/lib/db/schema";
 import { nextSequentialSku } from "@/lib/products";
 import { normalizePoAttachments, parsePoLineItems, poTotal, PO_STATUSES } from "@/lib/purchase-orders";
@@ -158,10 +158,57 @@ export async function setPurchaseOrderProject(id: string, formData: FormData) {
   await requireUser();
   const raw = String(formData.get("projectId") ?? "").trim();
   const projectId = raw.length === 36 ? raw : null;
-  await db.update(purchaseOrders).set({ projectId, updatedAt: new Date() }).where(eq(purchaseOrders.id, id));
+  // Als materiaal koppelen: eventuele arbeid-markering + de bijhorende uren-regel
+  // opruimen (idempotent, zodat wisselen materiaal↔uren klopt).
+  await db.delete(timeEntries).where(eq(timeEntries.purchaseOrderId, id));
+  await db
+    .update(purchaseOrders)
+    .set({ projectId, countAsLabor: false, updatedAt: new Date() })
+    .where(eq(purchaseOrders.id, id));
   revalidatePath(`/inkooporders/${id}`);
   revalidatePath("/inkooporders");
   if (projectId) revalidatePath(`/projects/${projectId}`);
+}
+
+/** Koppel een inkooporder aan een project ALS UREN/ARBEID (bv. een bouwer-factuur):
+ *  maakt een uren-regel (arbeidskost) en telt de inkoop niet als materiaal. */
+export async function linkPurchaseOrderAsHours(id: string, formData: FormData) {
+  await requireUser();
+  const raw = String(formData.get("projectId") ?? "").trim();
+  const projectId = raw.length === 36 ? raw : null;
+  if (!projectId) {
+    revalidatePath(`/inkooporders/${id}`);
+    return;
+  }
+  const po = await db.query.purchaseOrders.findFirst({ where: eq(purchaseOrders.id, id) });
+  if (!po) return;
+
+  const amount = Number(po.subtotal ?? po.total ?? 0);
+  const hoursRaw = Number(String(formData.get("hours") ?? "").replace(",", "."));
+  const hours = hoursRaw > 0 ? hoursRaw : 1; // geen uren opgegeven → 1 post t.w.v. het bedrag
+  const rate = amount > 0 ? amount / hours : 0;
+
+  // Idempotent: bestaande uren-regel voor deze inkooporder vervangen.
+  await db.delete(timeEntries).where(eq(timeEntries.purchaseOrderId, id));
+  await db.insert(timeEntries).values({
+    projectId,
+    workerName: po.supplier,
+    date: po.orderDate ?? new Date().toISOString().slice(0, 10),
+    hours: String(hours),
+    hourlyCostEur: String(rate),
+    paymentMethod: "invoice",
+    purchaseOrderId: id,
+    note: `Uren via inkooporder${po.reference ? ` ${po.reference}` : ""}`,
+  });
+  // Inkooporder aan het project koppelen maar als arbeid markeren (niet als materiaal).
+  await db
+    .update(purchaseOrders)
+    .set({ projectId, countAsLabor: true, updatedAt: new Date() })
+    .where(eq(purchaseOrders.id, id));
+
+  revalidatePath(`/inkooporders/${id}`);
+  revalidatePath("/inkooporders");
+  revalidatePath(`/projects/${projectId}`);
 }
 
 export async function setPurchaseOrderStatus(id: string, status: (typeof PO_STATUSES)[number]) {

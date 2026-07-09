@@ -772,6 +772,9 @@ export const purchaseOrders = pgTable(
     supplier: text().notNull(),
     /** Optioneel gekoppeld project — telt dan mee als materiaal/inkoopkost op de klus. */
     projectId: uuid().references((): AnyPgColumn => projects.id, { onDelete: "set null" }),
+    /** Gekoppeld als arbeid/uren (bv. een bouwer-factuur): telt dan als arbeidskost
+     * (via een uren-regel) i.p.v. materiaal, om dubbeltelling te voorkomen. */
+    countAsLabor: boolean().notNull().default(false),
     /** Supplier's order / proforma-invoice number. */
     reference: text(),
     status: purchaseOrderStatus().notNull().default("ordered"),
@@ -872,6 +875,9 @@ export const timeEntries = pgTable(
     paymentMethod: paymentMethod().notNull().default("cash"),
     /** Gezet zodra afgerekend (contant betaald / factuur voldaan). */
     paidAt: timestamp({ withTimezone: true }),
+    /** Bron-inkooporder: als deze uren-regel automatisch is gemaakt door een
+     * bouwer-inkooporder als arbeid te koppelen. Zo zijn PO en uren echt verbonden. */
+    purchaseOrderId: uuid().references((): AnyPgColumn => purchaseOrders.id, { onDelete: "cascade" }),
     note: text(),
     ...timestamps,
   },

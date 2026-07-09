@@ -339,7 +339,10 @@ export default async function ProjectDetailPage({
 
   const laborHours = timeRows.reduce((s, t) => s + Number(t.hours ?? 0), 0);
   const laborCost = timeRows.reduce((s, t) => s + Number(t.hours ?? 0) * Number(t.hourlyCostEur ?? 0), 0);
-  const poCost = linkedPOs.reduce((s, p) => s + Number(p.subtotal ?? p.total ?? 0), 0); // ex. BTW, EUR
+  // Als uren gekoppelde inkooporders tellen NIET als materiaal (ze zitten al als
+  // arbeidskost in de uren via een uren-regel) — anders dubbel.
+  const materialPOs = linkedPOs.filter((p) => !p.countAsLabor);
+  const poCost = materialPOs.reduce((s, p) => s + Number(p.subtotal ?? p.total ?? 0), 0); // ex. BTW, EUR
   const looseCost = costRows.reduce((s, c) => s + Number(c.amountEur ?? 0), 0);
   const materialCost = poCost + looseCost;
 

@@ -9,6 +9,7 @@ import {
   CardContent,
   CardHeader,
   CardTitle,
+  Input,
   LinkButton,
   PageHeader,
   Select,
@@ -36,6 +37,7 @@ import {
   createProductFromPoLine,
   deletePurchaseOrder,
   markPurchaseOrderPaid,
+  linkPurchaseOrderAsHours,
   pushPurchaseOrderToHolded,
   regeneratePurchaseOrderPdfs,
   setPurchaseOrderProject,
@@ -300,7 +302,17 @@ export default async function PurchaseOrderPage({ params }: { params: Promise<{ 
             <CardHeader>
               <CardTitle>Project</CardTitle>
             </CardHeader>
-            <CardContent className="space-y-2">
+            <CardContent className="space-y-4">
+              {po.projectId && (
+                <p className="text-sm">
+                  Gekoppeld ·{" "}
+                  <Badge tone={po.countAsLabor ? "accent" : "neutral"}>
+                    {po.countAsLabor ? "geboekt als uren/arbeid" : "materiaalkost"}
+                  </Badge>
+                </p>
+              )}
+
+              {/* Als materiaalkost */}
               <form action={setPurchaseOrderProject.bind(null, id)} className="flex items-end gap-2">
                 <div className="flex-1">
                   <Select name="projectId" defaultValue={po.projectId ?? ""}>
@@ -313,11 +325,37 @@ export default async function PurchaseOrderPage({ params }: { params: Promise<{ 
                   </Select>
                 </div>
                 <SubmitButton size="sm" variant="secondary" pendingLabel="…">
-                  Koppelen
+                  Koppel als materiaal
                 </SubmitButton>
               </form>
+
+              {/* Als uren/arbeid (bv. bouwer-factuur) */}
+              <form action={linkPurchaseOrderAsHours.bind(null, id)} className="space-y-2 border-t pt-3">
+                <p className="text-xs font-medium text-muted">Koppel als uren / arbeid (bv. een bouwer-factuur)</p>
+                <div className="flex items-end gap-2">
+                  <div className="flex-1">
+                    <Select name="projectId" defaultValue={po.projectId ?? ""}>
+                      <option value="">— kies project —</option>
+                      {projectRows.map((p) => (
+                        <option key={p.id} value={p.id}>
+                          {p.name}
+                        </option>
+                      ))}
+                    </Select>
+                  </div>
+                  <div className="w-24">
+                    <Input name="hours" type="number" step="0.5" min="0" placeholder="uren" />
+                  </div>
+                  <SubmitButton size="sm" variant="secondary" pendingLabel="…">
+                    Als uren
+                  </SubmitButton>
+                </div>
+              </form>
+
               <p className="text-xs text-muted">
-                Gekoppeld aan een project telt deze inkoop mee als materiaalkost op dat project.
+                <strong>Materiaal</strong> telt als inkoopkost. <strong>Uren</strong> maakt een arbeidsregel op het
+                project (bedrag ÷ uren = tarief; uren leeg = het hele bedrag als 1 post) en telt niet dubbel als
+                materiaal.
               </p>
             </CardContent>
           </Card>
