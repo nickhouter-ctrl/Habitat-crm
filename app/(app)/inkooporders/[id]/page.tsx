@@ -312,6 +312,48 @@ export default async function PurchaseOrderPage({ params }: { params: Promise<{ 
                 </p>
               )}
 
+              {/* AI-voorstel bij binnenkomst — één klik bevestigen */}
+              {!po.projectId && po.suggestedKind && (
+                <div className="rounded-lg border border-accent/30 bg-accent/5 p-3">
+                  <p className="text-sm font-medium text-accent">AI-voorstel</p>
+                  {(() => {
+                    const suggName = projectRows.find((p) => p.id === po.suggestedProjectId)?.name ?? null;
+                    const asLabor = po.suggestedKind === "labor";
+                    return (
+                      <>
+                        <p className="mb-2 mt-1 text-sm">
+                          Lijkt <strong>{asLabor ? "uren/arbeid" : "materiaal"}</strong>
+                          {po.suggestedHours ? ` (${Number(po.suggestedHours)} uur)` : ""}
+                          {suggName ? (
+                            <>
+                              {" "}voor project <strong>{suggName}</strong>
+                            </>
+                          ) : (
+                            " — geen project herkend, kies hieronder"
+                          )}
+                          .
+                        </p>
+                        {po.suggestedProjectId && (
+                          <form
+                            action={
+                              asLabor
+                                ? linkPurchaseOrderAsHours.bind(null, id)
+                                : setPurchaseOrderProject.bind(null, id)
+                            }
+                          >
+                            <input type="hidden" name="projectId" value={po.suggestedProjectId} />
+                            {asLabor && <input type="hidden" name="hours" value={po.suggestedHours ?? ""} />}
+                            <SubmitButton size="sm" variant="primary" pendingLabel="…">
+                              Bevestig {asLabor ? "als uren" : "als materiaal"}
+                            </SubmitButton>
+                          </form>
+                        )}
+                      </>
+                    );
+                  })()}
+                </div>
+              )}
+
               {/* Als materiaalkost */}
               <form action={setPurchaseOrderProject.bind(null, id)} className="flex items-end gap-2">
                 <div className="flex-1">

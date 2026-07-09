@@ -262,6 +262,11 @@ export default async function PurchaseOrdersPage({
                           <Link href={`/inkooporders/${po.id}`} className="hover:underline">
                             {po.supplier}
                           </Link>
+                          {po.suggestedKind && !po.projectId && (
+                            <Badge tone="accent" className="ml-2">
+                              voorstel: {po.suggestedKind === "labor" ? "uren" : "materiaal"}
+                            </Badge>
+                          )}
                         </Td>
                         <Td className="text-muted">{po.reference ?? "—"}</Td>
                         <Td className="text-muted">{fmtDate(po.orderDate)}</Td>

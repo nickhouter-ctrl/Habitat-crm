@@ -27,6 +27,12 @@ export type AiInvoiceFields = {
   invoiceNumber: string | null;
   /** YYYY-MM-DD */
   invoiceDate: string | null;
+  /** true = arbeid/uren (bv. bouwer), false = materialen/producten, null = onbekend. */
+  isLabor: boolean | null;
+  /** Aantal gewerkte uren als het een arbeidsfactuur is. */
+  hours: number | null;
+  /** Projectnaam/-referentie die op de factuur staat (bv. "Finca Lisa" / "Cap Negre"). */
+  projectHint: string | null;
 };
 
 const PROMPT = `Je leest één inkoopfactuur (van een leverancier aan ons bedrijf).
@@ -45,6 +51,9 @@ Geef ALLEEN een JSON-object terug — geen markdown, geen uitleg — met exact d
 - "currency": string | null — 3-letter ISO-code ("EUR", "USD", …)
 - "invoiceNumber": string | null — het factuurnummer
 - "invoiceDate": string | null — factuurdatum als YYYY-MM-DD
+- "isLabor": boolean | null — true als dit ARBEID/UREN is (bv. een bouwer/onderaannemer die gewerkte uren factureert, "horas", "mano de obra", "jornales"); false als het MATERIALEN/producten/goederen zijn; null bij twijfel
+- "hours": number | null — het totaal aantal gewerkte uren als het arbeid is (anders null)
+- "projectHint": string | null — de projectnaam of werf-/adresreferentie die op de factuur staat (bv. "Finca Lisa", "Cap Negre", een straat/adres of projectcode). null als er niets staat.
 
 Getallen zijn pure JSON-nummers (geen valutateken, geen duizendtal-scheiding).
 Als iets onbekend is: null.`;
@@ -143,6 +152,11 @@ export async function extractInvoiceFieldsWithAI(args: {
 
     const raw = JSON.parse(stripFences(text)) as Record<string, unknown>;
     const supplier = str(raw.supplier);
+    const extra = {
+      isLabor: typeof raw.isLabor === "boolean" ? raw.isLabor : null,
+      hours: num(raw.hours),
+      projectHint: str(raw.projectHint),
+    };
     // Veiligheid: nooit onszelf als leverancier teruggeven.
     if (supplier && /habitat\s*one|creadores|sorprendentes/i.test(supplier)) {
       return {
@@ -151,6 +165,7 @@ export async function extractInvoiceFieldsWithAI(args: {
         currency: str(raw.currency)?.toUpperCase().slice(0, 3) ?? null,
         invoiceNumber: str(raw.invoiceNumber),
         invoiceDate: str(raw.invoiceDate)?.match(/\d{4}-\d{2}-\d{2}/)?.[0] ?? null,
+        ...extra,
       };
     }
     return {
@@ -159,6 +174,7 @@ export async function extractInvoiceFieldsWithAI(args: {
       currency: str(raw.currency)?.toUpperCase().slice(0, 3) ?? null,
       invoiceNumber: str(raw.invoiceNumber),
       invoiceDate: str(raw.invoiceDate)?.match(/\d{4}-\d{2}-\d{2}/)?.[0] ?? null,
+      ...extra,
     };
   } catch (err) {
     console.warn("AI-invoice extract error:", err);

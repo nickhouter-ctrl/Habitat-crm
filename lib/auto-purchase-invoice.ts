@@ -13,7 +13,7 @@ import { eq } from "drizzle-orm";
 import { extractInvoiceFieldsWithAI } from "@/lib/ai-invoice-extract";
 import { db } from "@/lib/db";
 import { rateToEur } from "@/lib/fx";
-import { activities, emailInbox, mailAttachments, purchaseOrders } from "@/lib/db/schema";
+import { activities, emailInbox, mailAttachments, projects, purchaseOrders } from "@/lib/db/schema";
 import { buildInvoicePdfAttachment, isExcelAttachment } from "@/lib/excel-to-pdf";
 import { copyMailAttachmentToPoBucket, downloadMailAttachmentBuffer } from "@/lib/storage";
 
@@ -111,7 +111,14 @@ export async function tryAutoCreatePurchaseInvoice(emailId: string): Promise<Aut
   // staan dan in de PDF/Excel zelf. Draait dus alleen voor wat de regels missen.
   const aiMeta = new Map<
     string,
-    { invoiceNumber: string | null; currency: string | null; total: number | null }
+    {
+      invoiceNumber: string | null;
+      currency: string | null;
+      total: number | null;
+      isLabor: boolean | null;
+      hours: number | null;
+      projectHint: string | null;
+    }
   >();
   for (const a of atts) {
     if (!FINANCIAL_CATEGORIES.has(a.category)) continue;
@@ -143,7 +150,14 @@ export async function tryAutoCreatePurchaseInvoice(emailId: string): Promise<Aut
         a.amountEur = String(ai.total);
         patch.amountEur = String(ai.total);
       }
-      aiMeta.set(a.id, { invoiceNumber: ai.invoiceNumber, currency: ai.currency, total: ai.total });
+      aiMeta.set(a.id, {
+        invoiceNumber: ai.invoiceNumber,
+        currency: ai.currency,
+        total: ai.total,
+        isLabor: ai.isLabor,
+        hours: ai.hours,
+        projectHint: ai.projectHint,
+      });
       if (Object.keys(patch).length > 0) {
         await db.update(mailAttachments).set(patch).where(eq(mailAttachments.id, a.id));
       }
@@ -170,6 +184,17 @@ export async function tryAutoCreatePurchaseInvoice(emailId: string): Promise<Aut
     result.needsReview = 1;
     return result;
   }
+
+  // Projecten preloaden om de AI-projecthint aan een echt project te matchen.
+  const allProjects = await db.select({ id: projects.id, name: projects.name }).from(projects);
+  const matchProject = (hint: string | null): string | null => {
+    if (!hint) return null;
+    const h = hint.toLowerCase();
+    const m = allProjects.find(
+      (p) => p.name && (h.includes(p.name.toLowerCase()) || p.name.toLowerCase().includes(h)),
+    );
+    return m?.id ?? null;
+  };
 
   for (const a of candidates) {
     try {
@@ -249,6 +274,11 @@ export async function tryAutoCreatePurchaseInvoice(emailId: string): Promise<Aut
           attachments: poAttachments,
           notes: `Auto-aangemaakt uit mail "${mail.subject ?? ""}" (${mail.fromEmail ?? ""}). Bijlage: ${a.filename}${originalNote}`,
           stockAppliedAt: new Date(), // GEEN voorraadmutatie
+          // AI-suggestie: welk project + of het uren of materiaal lijkt, zodat je
+          // het met één klik kunt bevestigen op de inkooporder-pagina.
+          suggestedProjectId: matchProject(ai?.projectHint ?? null),
+          suggestedKind: ai?.isLabor === true ? "labor" : ai?.isLabor === false ? "material" : null,
+          suggestedHours: ai?.hours != null ? String(ai.hours) : null,
         })
         .returning({ id: purchaseOrders.id });
 

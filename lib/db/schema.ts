@@ -775,6 +775,12 @@ export const purchaseOrders = pgTable(
     /** Gekoppeld als arbeid/uren (bv. een bouwer-factuur): telt dan als arbeidskost
      * (via een uren-regel) i.p.v. materiaal, om dubbeltelling te voorkomen. */
     countAsLabor: boolean().notNull().default(false),
+    /** AI-suggestie bij binnenkomst: voorgesteld project om aan te koppelen. */
+    suggestedProjectId: uuid().references((): AnyPgColumn => projects.id, { onDelete: "set null" }),
+    /** AI-suggestie: 'labor' (uren) of 'material'. */
+    suggestedKind: text(),
+    /** AI-suggestie: aantal uren (bij arbeid). */
+    suggestedHours: numeric({ precision: 8, scale: 2 }),
     /** Supplier's order / proforma-invoice number. */
     reference: text(),
     status: purchaseOrderStatus().notNull().default("ordered"),
