@@ -1083,14 +1083,15 @@ export default async function ProjectDetailPage({
               {unlinkedPOs.length > 0 && (
                 <form action={linkPurchaseOrderToProject.bind(null, id)} className="flex flex-wrap items-end gap-2 border-t pt-3">
                   <Field label="Bestaande inkooporder koppelen" className="flex-1">
-                    <Select name="purchaseOrderId" defaultValue="">
-                      <option value="">— kies inkooporder —</option>
-                      {unlinkedPOs.map((p) => (
-                        <option key={p.id} value={p.id}>
-                          {p.supplier}{p.reference ? ` · ${p.reference}` : ""} — {formatEUR(p.subtotal ?? p.total)}
-                        </option>
-                      ))}
-                    </Select>
+                    <Combobox
+                      name="purchaseOrderId"
+                      clearable
+                      placeholder="— kies of zoek een inkooporder —"
+                      options={unlinkedPOs.map((p) => ({
+                        value: p.id,
+                        label: `${p.supplier}${p.reference ? ` · ${p.reference}` : ""} — ${formatEUR(p.subtotal ?? p.total)}`,
+                      }))}
+                    />
                   </Field>
                   <SubmitButton size="sm" variant="secondary" pendingLabel="…">Koppelen</SubmitButton>
                 </form>
