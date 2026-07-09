@@ -508,6 +508,13 @@ export default async function ProjectDetailPage({
                   defaultValue={project.contractPriceEur ? String(project.contractPriceEur).replace(".", ",") : ""}
                 />
               </Field>
+              <Field
+                label="Werf / adres-alias"
+                htmlFor="siteAlias"
+                hint="voor auto-herkenning van facturen (bv. Cap Negre) — komma-gescheiden"
+              >
+                <Input id="siteAlias" name="siteAlias" defaultValue={project.siteAlias ?? ""} placeholder="bv. Cap Negre" />
+              </Field>
               <Field label="Begrote uren (optioneel)" htmlFor="budgetHours">
                 <Input
                   id="budgetHours"

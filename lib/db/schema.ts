@@ -713,6 +713,10 @@ export const projects = pgTable(
     budgetHours: numeric({ precision: 8, scale: 2 }),
     /** Onvoorzien-percentage op de begroting (bv. 8) — als aparte regel meegerekend. */
     contingencyPct: numeric({ precision: 5, scale: 2 }),
+    /** Werf/adres-alias(sen) voor automatische factuurherkenning (komma-gescheiden,
+     * bv. "Cap Negre, Cap Negre nº53"). Zo herkent de AI een bouwfactuur met de
+     * werf-naam als dit project. */
+    siteAlias: text(),
     /** Korte code/sleutel uit Holded (bv. "VER"). */
     code: text(),
     color: text(),

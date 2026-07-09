@@ -13,7 +13,7 @@ import { eq } from "drizzle-orm";
 import { extractInvoiceFieldsWithAI } from "@/lib/ai-invoice-extract";
 import { db } from "@/lib/db";
 import { rateToEur } from "@/lib/fx";
-import { activities, emailInbox, mailAttachments, projects, purchaseOrders } from "@/lib/db/schema";
+import { activities, emailInbox, mailAttachments, projects, properties, purchaseOrders } from "@/lib/db/schema";
 import { buildInvoicePdfAttachment, isExcelAttachment } from "@/lib/excel-to-pdf";
 import { copyMailAttachmentToPoBucket, downloadMailAttachmentBuffer } from "@/lib/storage";
 
@@ -115,6 +115,7 @@ export async function tryAutoCreatePurchaseInvoice(emailId: string): Promise<Aut
       invoiceNumber: string | null;
       currency: string | null;
       total: number | null;
+      subtotal: number | null;
       isLabor: boolean | null;
       hours: number | null;
       projectHint: string | null;
@@ -154,6 +155,7 @@ export async function tryAutoCreatePurchaseInvoice(emailId: string): Promise<Aut
         invoiceNumber: ai.invoiceNumber,
         currency: ai.currency,
         total: ai.total,
+        subtotal: ai.subtotal,
         isLabor: ai.isLabor,
         hours: ai.hours,
         projectHint: ai.projectHint,
@@ -185,14 +187,31 @@ export async function tryAutoCreatePurchaseInvoice(emailId: string): Promise<Aut
     return result;
   }
 
-  // Projecten preloaden om de AI-projecthint aan een echt project te matchen.
-  const allProjects = await db.select({ id: projects.id, name: projects.name }).from(projects);
+  // Projecten preloaden (incl. gekoppeld pand + werf-alias) om de AI-projecthint
+  // te matchen — óók op adres/pand/werf, niet alleen de projectnaam.
+  const allProjects = await db
+    .select({
+      id: projects.id,
+      name: projects.name,
+      code: projects.code,
+      siteAlias: projects.siteAlias,
+      propTitle: properties.title,
+      propRef: properties.reference,
+      propLoc: properties.location,
+    })
+    .from(projects)
+    .leftJoin(properties, eq(projects.propertyId, properties.id));
   const matchProject = (hint: string | null): string | null => {
     if (!hint) return null;
-    const h = hint.toLowerCase();
-    const m = allProjects.find(
-      (p) => p.name && (h.includes(p.name.toLowerCase()) || p.name.toLowerCase().includes(h)),
-    );
+    const h = hint.toLowerCase().trim();
+    if (h.length < 3) return null;
+    const m = allProjects.find((p) => {
+      const needles = [p.name, p.code, p.siteAlias, p.propTitle, p.propRef, p.propLoc]
+        .flatMap((v) => (v ? v.split(/[,;/]/) : []))
+        .map((v) => v.trim().toLowerCase())
+        .filter((v) => v.length >= 3);
+      return needles.some((n) => h.includes(n) || n.includes(h));
+    });
     return m?.id ?? null;
   };
 
@@ -209,10 +228,12 @@ export async function tryAutoCreatePurchaseInvoice(emailId: string): Promise<Aut
       // EUR — zo wordt een USD-factuur nooit meer als EUR opgeslagen.
       const detectedCur = (ai?.currency || "EUR").toUpperCase();
       let total = Number(a.amountEur);
+      let subtotal = ai?.subtotal ?? null; // base imponible (ex. BTW), voor arbeidskosten
       let originalNote = "";
       if (detectedCur !== "EUR" && ai?.total != null && ai.total > 0) {
         const rate = await rateToEur(detectedCur);
         total = Math.round(ai.total * rate * 100) / 100;
+        if (subtotal != null) subtotal = Math.round(subtotal * rate * 100) / 100;
         originalNote = ` · origineel ${detectedCur} ${ai.total.toFixed(2)} (koers ${rate})`;
       }
       const currency = "EUR";
@@ -263,6 +284,7 @@ export async function tryAutoCreatePurchaseInvoice(emailId: string): Promise<Aut
           orderDate: (a.receivedAt ?? mail.receivedAt ?? new Date()).toISOString().slice(0, 10),
           receivedAt: a.receivedAt ?? mail.receivedAt ?? new Date(),
           total: String(total.toFixed(2)),
+          subtotal: subtotal != null ? String(subtotal.toFixed(2)) : null,
           items: [
             {
               name: mail.subject ?? `Factuur ${reference}`,

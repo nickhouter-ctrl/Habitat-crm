@@ -23,6 +23,8 @@ export type AiInvoiceFields = {
   supplier: string | null;
   /** Eindtotaal incl. BTW in de valuta van de factuur. */
   total: number | null;
+  /** Subtotaal / base imponible (EX. BTW) in de valuta van de factuur. */
+  subtotal: number | null;
   currency: string | null;
   invoiceNumber: string | null;
   /** YYYY-MM-DD */
@@ -48,6 +50,7 @@ BELANGRIJK over de leverancier:
 Geef ALLEEN een JSON-object terug — geen markdown, geen uitleg — met exact deze keys:
 - "supplier": string | null — naam van de leverancier/verkoper (niet de klant)
 - "total": number | null — het EINDTOTAAL inclusief BTW dat betaald moet worden
+- "subtotal": number | null — het SUBTOTAAL / base imponible EXCLUSIEF BTW (dus zonder IVA/BTW). Bij btw-verlegd (inversión del sujeto pasivo) is dit gelijk aan het totaal.
 - "currency": string | null — 3-letter ISO-code ("EUR", "USD", …)
 - "invoiceNumber": string | null — het factuurnummer
 - "invoiceDate": string | null — factuurdatum als YYYY-MM-DD
@@ -162,6 +165,7 @@ export async function extractInvoiceFieldsWithAI(args: {
       return {
         supplier: null,
         total: num(raw.total),
+        subtotal: num(raw.subtotal),
         currency: str(raw.currency)?.toUpperCase().slice(0, 3) ?? null,
         invoiceNumber: str(raw.invoiceNumber),
         invoiceDate: str(raw.invoiceDate)?.match(/\d{4}-\d{2}-\d{2}/)?.[0] ?? null,
@@ -171,6 +175,7 @@ export async function extractInvoiceFieldsWithAI(args: {
     return {
       supplier,
       total: num(raw.total),
+      subtotal: num(raw.subtotal),
       currency: str(raw.currency)?.toUpperCase().slice(0, 3) ?? null,
       invoiceNumber: str(raw.invoiceNumber),
       invoiceDate: str(raw.invoiceDate)?.match(/\d{4}-\d{2}-\d{2}/)?.[0] ?? null,
