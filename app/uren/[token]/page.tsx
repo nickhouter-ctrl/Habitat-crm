@@ -7,7 +7,26 @@ import { WorkerHoursForm } from "@/components/worker-hours-form";
 import { deleteOwnEntry } from "./actions";
 
 export const dynamic = "force-dynamic";
-export const metadata = { title: "Uren — Habitat One" };
+
+/** Projectspecifieke metadata → nette linkpreview in WhatsApp (titel + kaart). */
+export async function generateMetadata({ params }: { params: Promise<{ token: string }> }) {
+  const { token } = await params;
+  const ctx = await portalLinkForToken(token).catch(() => null);
+  if (!ctx) return { title: "Uren — Habitat One" };
+  const t = portalT(ctx.worker.portalLang);
+  const title = `${t.hours} — ${ctx.project.name}`;
+  const description =
+    ctx.worker.portalLang === "nl"
+      ? `Vul hier je gewerkte uren in voor ${ctx.project.name}.`
+      : ctx.worker.portalLang === "en"
+        ? `Log your hours for ${ctx.project.name} here.`
+        : `Apunta aquí tus horas de ${ctx.project.name}.`;
+  return {
+    title,
+    description,
+    openGraph: { title: `Habitat One — ${title}`, description },
+  };
+}
 
 /** Maandag van de week waar `d` (YYYY-MM-DD) in valt. */
 function mondayOf(d: string): string {
@@ -52,6 +71,7 @@ export default async function UrenPortaalPage({ params }: { params: Promise<{ to
       note: timeEntries.note,
       workerName: timeEntries.workerName,
       selfLoggedAt: timeEntries.selfLoggedAt,
+      approvedAt: timeEntries.approvedAt,
       createdAt: timeEntries.createdAt,
     })
     .from(timeEntries)
@@ -116,6 +136,7 @@ export default async function UrenPortaalPage({ params }: { params: Promise<{ to
                       {e.note ? <span className="text-stone-400"> · {e.note}</span> : null}
                     </span>
                     <span className="shrink-0 text-sm font-semibold tabular-nums text-stone-800">
+                      {e.selfLoggedAt && !e.approvedAt ? "⏳ " : ""}
                       {Number(e.hours) % 1 === 0 ? Number(e.hours) : e.hours}
                       {t.hoursShort}
                     </span>

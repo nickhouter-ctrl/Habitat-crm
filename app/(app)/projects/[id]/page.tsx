@@ -52,6 +52,8 @@ import {
   addProjectCost,
   addProjectPayment,
   addTimeEntry,
+  approveAllPendingTimeEntries,
+  approveTimeEntry,
   attachDocumentToProject,
   createWorkerPortalLink,
   deleteProject,
@@ -342,8 +344,13 @@ export default async function ProjectDetailPage({
       db.select().from(projectPhases).where(eq(projectPhases.projectId, id)).orderBy(asc(projectPhases.sortOrder)),
     ]);
 
-  const laborHours = timeRows.reduce((s, t) => s + Number(t.hours ?? 0), 0);
-  const laborCost = timeRows.reduce((s, t) => s + Number(t.hours ?? 0) * Number(t.hourlyCostEur ?? 0), 0);
+  // Portaal-uren tellen pas mee na goedkeuring (kantoor controleert eerst).
+  const isPendingEntry = (t: (typeof timeRows)[number]) => t.selfLoggedAt != null && t.approvedAt == null;
+  const approvedTimeRows = timeRows.filter((t) => !isPendingEntry(t));
+  const pendingTimeRows = timeRows.filter(isPendingEntry);
+  const pendingHours = pendingTimeRows.reduce((s, t) => s + Number(t.hours ?? 0), 0);
+  const laborHours = approvedTimeRows.reduce((s, t) => s + Number(t.hours ?? 0), 0);
+  const laborCost = approvedTimeRows.reduce((s, t) => s + Number(t.hours ?? 0) * Number(t.hourlyCostEur ?? 0), 0);
   // Als uren gekoppelde inkooporders tellen NIET als materiaal (ze zitten al als
   // arbeidskost in de uren via een uren-regel) — anders dubbel.
   const materialPOs = linkedPOs.filter((p) => !p.countAsLabor);
@@ -914,6 +921,19 @@ export default async function ProjectDetailPage({
               </span>
             </CardHeader>
             <CardContent className="space-y-4">
+              {pendingTimeRows.length > 0 && (
+                <div className="flex flex-wrap items-center gap-3 rounded-lg border border-amber-300 bg-amber-50/60 px-3 py-2 text-sm">
+                  <span>
+                    ⏱ <strong>{pendingTimeRows.length}</strong> portaal-regel{pendingTimeRows.length === 1 ? "" : "s"} (
+                    {pendingHours.toLocaleString("nl-NL")} uur) te controleren — tellen nog niet mee in de kosten.
+                  </span>
+                  <form action={approveAllPendingTimeEntries.bind(null, id)}>
+                    <SubmitButton size="sm" variant="secondary" pendingLabel="…">
+                      Alles goedkeuren
+                    </SubmitButton>
+                  </form>
+                </div>
+              )}
               {timeRows.length > 0 && (
                 <Table>
                   <THead>
@@ -965,16 +985,28 @@ export default async function ProjectDetailPage({
                           </Tr>
                         );
                       }
+                      const pending = isPendingEntry(t);
                       return (
-                        <Tr key={t.id}>
+                        <Tr key={t.id} className={pending ? "bg-amber-50/60" : undefined}>
                           <Td className="whitespace-nowrap">{new Date(t.date).toLocaleDateString("nl-NL", { day: "numeric", month: "short" })}</Td>
-                          <Td>{t.workerName ?? "—"}{t.note ? <span className="block text-xs text-muted">{t.note}</span> : null}</Td>
+                          <Td>
+                            {t.workerName ?? "—"}
+                            {pending && <Badge tone="warning" className="ml-2">te controleren</Badge>}
+                            {t.note ? <span className="block text-xs text-muted">{t.note}</span> : null}
+                          </Td>
                           <Td className="text-right tabular-nums">{Number(t.hours).toLocaleString("nl-NL")}</Td>
                           <Td className="text-right tabular-nums text-muted">{formatEUR(t.hourlyCostEur)}</Td>
                           <Td className="text-right tabular-nums font-medium">{formatEUR(Number(t.hours) * Number(t.hourlyCostEur))}</Td>
                           <Td><Badge tone={t.paymentMethod === "cash" ? "warning" : "neutral"}>{PAY_LABEL[t.paymentMethod]}</Badge></Td>
                           <Td className="text-right whitespace-nowrap">
                             <div className="flex items-center justify-end gap-1">
+                              {pending && (
+                                <form action={approveTimeEntry.bind(null, id, t.id)}>
+                                  <SubmitButton size="sm" variant="secondary" pendingLabel="…">
+                                    Goedkeuren
+                                  </SubmitButton>
+                                </form>
+                              )}
                               <Link href={`/projects/${id}?edit=${t.id}#uren`} title="Bewerk" className="rounded px-1.5 py-1 text-muted hover:bg-muted/50">
                                 ✎
                               </Link>

@@ -19,6 +19,9 @@ async function main() {
   await db.execute(
     sql`ALTER TABLE workers ADD COLUMN IF NOT EXISTS portal_lang text NOT NULL DEFAULT 'es'`,
   );
+  await db.execute(
+    sql`ALTER TABLE time_entries ADD COLUMN IF NOT EXISTS approved_at timestamp with time zone`,
+  );
   await db.execute(sql`
     CREATE TABLE IF NOT EXISTS worker_portal_links (
       id uuid PRIMARY KEY DEFAULT gen_random_uuid(),

@@ -23,7 +23,7 @@ import {
   Tr,
 } from "@/components/ui";
 import { db } from "@/lib/db";
-import { activities, contacts, deliveries, documents, emailInbox, mailAttachments, products, projects, purchaseOrders, quoteRequests } from "@/lib/db/schema";
+import { activities, contacts, deliveries, documents, emailInbox, mailAttachments, products, projects, purchaseOrders, quoteRequests, timeEntries } from "@/lib/db/schema";
 import { normalizeDocItems } from "@/lib/documents";
 import { purchaseDocsTotalExBTW } from "@/lib/holded/accounting";
 import { getReservedStockByProduct } from "@/lib/stock";
@@ -436,7 +436,19 @@ export default async function DashboardPage() {
     const diff = (new Date(po.expectedDate).getTime() - now.getTime()) / (1000 * 60 * 60 * 24);
     return diff <= 7 && diff >= -1;
   }).length;
+  // Portaal-uren die op controle wachten (melding in het systeem).
+  const [pendingHoursAgg] = await db
+    .select({
+      n: count(),
+      hours: sql<number>`coalesce(sum(${timeEntries.hours}), 0)::float8`,
+      projects: sql<number>`count(distinct ${timeEntries.projectId})`,
+    })
+    .from(timeEntries)
+    .where(and(isNotNull(timeEntries.selfLoggedAt), isNull(timeEntries.approvedAt)));
+  const pendingHoursN = pendingHoursAgg?.n ?? 0;
+
   const anyActions =
+    pendingHoursN > 0 ||
     acceptedN > 0 ||
     (openRequestsAgg?.n ?? 0) > 0 ||
     docAgg.overdueN > 0 ||
@@ -529,6 +541,13 @@ export default async function DashboardPage() {
             <CardTitle>Wat moet er gebeuren</CardTitle>
           </CardHeader>
           <CardContent className="divide-y divide-border/70">
+            {pendingHoursN > 0 && (
+              <ActionRow href="/projects" emoji="⏱" tone="warning">
+                <strong>{pendingHoursN}</strong> portaal-urenregel{pendingHoursN === 1 ? "" : "s"} (
+                {Number(pendingHoursAgg.hours).toLocaleString("nl-NL")} uur, {pendingHoursAgg.projects} project
+                {Number(pendingHoursAgg.projects) === 1 ? "" : "en"}) te controleren.
+              </ActionRow>
+            )}
             {acceptedN > 0 && (
               <ActionRow href="/quotes" emoji="✅" tone="success">
                 <strong>{acceptedN}</strong> geaccepteerde offerte{acceptedN === 1 ? "" : "s"} — klaar om te factureren.

@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { asc, eq } from "drizzle-orm";
+import { and, asc, eq, isNotNull, isNull } from "drizzle-orm";
 import { z } from "zod";
 
 import { auth } from "@/auth";
@@ -226,6 +226,34 @@ export async function deleteTimeEntry(projectId: string, entryId: string) {
   await requireUser();
   await db.delete(timeEntries).where(eq(timeEntries.id, entryId));
   revalidatePath(`/projects/${projectId}`);
+}
+
+/** Keur een portaal-urenregel goed — vanaf dan telt hij mee in de kosten. */
+export async function approveTimeEntry(projectId: string, entryId: string) {
+  await requireUser();
+  await db
+    .update(timeEntries)
+    .set({ approvedAt: new Date(), updatedAt: new Date() })
+    .where(eq(timeEntries.id, entryId));
+  revalidatePath(`/projects/${projectId}`);
+  revalidatePath("/");
+}
+
+/** Keur alle openstaande portaal-uren van dit project in één keer goed. */
+export async function approveAllPendingTimeEntries(projectId: string) {
+  await requireUser();
+  await db
+    .update(timeEntries)
+    .set({ approvedAt: new Date(), updatedAt: new Date() })
+    .where(
+      and(
+        eq(timeEntries.projectId, projectId),
+        isNotNull(timeEntries.selfLoggedAt),
+        isNull(timeEntries.approvedAt),
+      ),
+    );
+  revalidatePath(`/projects/${projectId}`);
+  revalidatePath("/");
 }
 
 /* ------------------------------------------- urenportaal-links (per project) */

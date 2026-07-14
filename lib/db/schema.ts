@@ -919,6 +919,10 @@ export const timeEntries = pgTable(
     /** Gezet als de arbeider dit zelf via het urenportaal (/uren/[token]) heeft
      * ingevoerd — zodat je in het overzicht ziet wat van de jongens zelf komt. */
     selfLoggedAt: timestamp({ withTimezone: true }),
+    /** Portaal-uren tellen pas mee in de kosten na controle door kantoor
+     * (goedkeuren op de projectpagina). Regels van kantoor zelf (selfLoggedAt
+     * null) zijn impliciet goedgekeurd. */
+    approvedAt: timestamp({ withTimezone: true }),
     note: text(),
     ...timestamps,
   },

@@ -151,7 +151,13 @@ export default async function ProjectsPage({
         db
           .select({ projectId: timeEntries.projectId, v: sql<number>`coalesce(sum(${timeEntries.hours} * ${timeEntries.hourlyCostEur}), 0)::float8` })
           .from(timeEntries)
-          .where(inArray(timeEntries.projectId, projectIds))
+          .where(
+            and(
+              inArray(timeEntries.projectId, projectIds),
+              // Portaal-uren tellen pas mee na goedkeuring door kantoor.
+              sql`not (${timeEntries.selfLoggedAt} is not null and ${timeEntries.approvedAt} is null)`,
+            ),
+          )
           .groupBy(timeEntries.projectId),
         db
           .select({ projectId: projectCosts.projectId, v: sql<number>`coalesce(sum(${projectCosts.amountEur}), 0)::float8` })

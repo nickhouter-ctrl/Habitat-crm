@@ -1,10 +1,13 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { headers } from "next/headers";
 import { and, eq, isNotNull, sql } from "drizzle-orm";
 
 import { db } from "@/lib/db";
 import { timeEntries } from "@/lib/db/schema";
+import { COMPANY } from "@/lib/company";
+import { sendEmail } from "@/lib/email";
 import { portalLinkForToken, portalT } from "@/lib/worker-portal";
 
 export type LogHoursState = { ok?: string; error?: string } | null;
@@ -40,6 +43,7 @@ export async function logHours(
   if (date > today) return { error: t.errFuture };
   if (date < monthAgo) return { error: t.errTooOld };
 
+  // approvedAt blijft leeg: kantoor controleert eerst (goedkeuren op de projectpagina).
   await db.insert(timeEntries).values({
     projectId: project.id,
     workerId: worker.id,
@@ -51,6 +55,35 @@ export async function logHours(
     selfLoggedAt: new Date(),
     note: note || null,
   });
+
+  // Melding naar kantoor — mag de invoer nooit blokkeren als de mail faalt.
+  try {
+    const h = await headers();
+    const host = h.get("host") ?? "localhost:3000";
+    const proto = h.get("x-forwarded-proto") ?? (host.includes("localhost") ? "http" : "https");
+    const projectUrl = `${proto}://${host}/projects/${project.id}#uren`;
+    const who = crewName ? `${crewName} (via ${worker.name})` : worker.name;
+    const rows = [
+      ["Project", project.name],
+      ["Wie", who],
+      ["Datum", date],
+      ["Uren", String(hours)],
+      ...(note ? [["Notitie", note]] : []),
+    ]
+      .map(
+        ([k, v]) =>
+          `<tr><td style="padding:4px 12px 4px 0;color:#78716c">${k}</td><td style="padding:4px 0"><strong>${v}</strong></td></tr>`,
+      )
+      .join("");
+    await sendEmail({
+      to: COMPANY.email,
+      subject: `⏱ Uren te controleren — ${who}: ${hours}u op ${project.name}`,
+      html: `<p>Er zijn nieuwe uren ingevuld via het urenportaal. Ze tellen pas mee na goedkeuring.</p><table>${rows}</table><p><a href="${projectUrl}">Controleren en goedkeuren →</a></p>`,
+      text: `Nieuwe portaal-uren: ${who} — ${hours}u op ${date} (${project.name}). Goedkeuren: ${projectUrl}`,
+    });
+  } catch (e) {
+    console.error("[urenportaal] melding-mail mislukt:", e);
+  }
 
   revalidatePath(`/uren/${token}`);
   revalidatePath(`/projects/${project.id}`);
