@@ -455,7 +455,7 @@ export type PdfDoc = {
   subtotalEur: string;
   taxEur: string;
   totalEur: string;
-  items: Array<DocumentLineItem & { sku?: string | null }>;
+  items: Array<DocumentLineItem & { sku?: string | null; dim?: string | null }>;
   notes: string | null;
   /** BTW verlegd — toont de wettelijk verplichte vermelding (inversión del sujeto pasivo). */
   vatReverseCharge?: boolean;
@@ -699,7 +699,9 @@ function DocumentPdf({ doc }: { doc: PdfDoc }) {
                   )}
                   <View style={s.cDesc}>
                     <Text style={s.itemName}>{it.name}</Text>
-                    {it.sku ? <Text style={s.itemSku}>{it.sku}</Text> : null}
+                    {it.sku || it.dim ? (
+                      <Text style={s.itemSku}>{[it.sku, it.dim].filter(Boolean).join("  ·  ")}</Text>
+                    ) : null}
                     {it.description ? <Text style={s.itemDesc}>{it.description}</Text> : null}
                     {!isDelivery && it.discount ? (
                       <Text style={s.itemDesc}>

@@ -3,6 +3,7 @@ import { eq } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { companies, documents } from "@/lib/db/schema";
 import { renderDocumentPdf } from "@/lib/document-pdf";
+import { enrichDocItemsForPdf } from "@/lib/document-pdf-data";
 import { billingAddressLines } from "@/lib/documents";
 
 export const dynamic = "force-dynamic";
@@ -39,6 +40,7 @@ export async function GET(
       })
     : null;
   const { line: addrLine, region: addrRegion } = billingAddressLines(company, doc.contact);
+  const { items } = await enrichDocItemsForPdf(doc.items);
 
   const buf = await renderDocumentPdf({
     kind: doc.kind,
@@ -49,7 +51,7 @@ export async function GET(
     subtotalEur: doc.subtotalEur,
     taxEur: doc.taxEur,
     totalEur: doc.totalEur,
-    items: doc.items ?? [],
+    items,
     notes: doc.notes,
     vatReverseCharge: doc.vatReverseCharge,
     contactName: doc.contact?.name ?? null,

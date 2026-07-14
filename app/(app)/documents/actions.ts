@@ -30,6 +30,7 @@ import {
 import { REVIEW_URL } from "@/lib/review-requests";
 import { recordSentEmail } from "@/lib/sent-email";
 import { renderDocumentPdf } from "@/lib/document-pdf";
+import { enrichDocItemsForPdf } from "@/lib/document-pdf-data";
 import { uploadDocumentFile, deleteDocumentFile, fetchDocumentFileBytes, signDocumentUpload } from "@/lib/storage";
 import { pushDocumentToHolded, updateDocumentInHolded } from "@/lib/holded/sync";
 import { holded } from "@/lib/holded/client";
@@ -985,7 +986,7 @@ export async function sendDocument(id: string) {
         subtotalEur: doc.subtotalEur,
         taxEur: doc.taxEur,
         totalEur: doc.totalEur,
-        items: normalizeDocItems(doc.items),
+        items: (await enrichDocItemsForPdf(doc.items)).items,
         notes: doc.notes,
         vatReverseCharge: doc.vatReverseCharge,
         contactName: doc.contact.name ?? null,
@@ -1119,7 +1120,7 @@ export async function sendDocumentCustom(id: string, formData: FormData) {
         subtotalEur: doc.subtotalEur,
         taxEur: doc.taxEur,
         totalEur: doc.totalEur,
-        items: normalizeDocItems(doc.items),
+        items: (await enrichDocItemsForPdf(doc.items)).items,
         notes: doc.notes,
         vatReverseCharge: doc.vatReverseCharge,
         contactName: doc.contact?.name ?? null,
