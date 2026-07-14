@@ -8,7 +8,12 @@ export type DocKind =
   | "invoice"
   | "creditnote"
   | "salesreceipt"
-  | "deliverynote";
+  | "deliverynote"
+  /** Provisión de fondos — voorschotdocument voor particulieren/buitenlandse
+   * klanten zónder empresario-status (procedure boekhouder, juli 2026): factuur-
+   * layout maar géén factuur, geen enkele BTW-vermelding, eigen PF-nummerreeks
+   * buiten Holded om, en altijd eerst ter controle naar de boekhouder (Paco). */
+  | "fondos";
 
 export const DOC_KIND_PREFIX: Record<DocKind, string> = {
   estimate: "OFF",
@@ -17,6 +22,7 @@ export const DOC_KIND_PREFIX: Record<DocKind, string> = {
   creditnote: "CN",
   salesreceipt: "BON",
   deliverynote: "PAK",
+  fondos: "PF",
 };
 
 /** Round to cents. */

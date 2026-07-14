@@ -96,6 +96,7 @@ const KIND_LABEL: Record<Locale, Record<string, string>> = {
     creditnote: "CREDITNOTA",
     salesreceipt: "BON",
     deliverynote: "PAKBON",
+    fondos: "PROVISIÓN DE FONDOS",
   },
   de: {
     estimate: "ANGEBOT",
@@ -104,6 +105,7 @@ const KIND_LABEL: Record<Locale, Record<string, string>> = {
     creditnote: "GUTSCHRIFT",
     salesreceipt: "BELEG",
     deliverynote: "LIEFERSCHEIN",
+    fondos: "PROVISIÓN DE FONDOS",
   },
   en: {
     estimate: "QUOTATION",
@@ -112,6 +114,7 @@ const KIND_LABEL: Record<Locale, Record<string, string>> = {
     creditnote: "CREDIT NOTE",
     salesreceipt: "RECEIPT",
     deliverynote: "DELIVERY NOTE",
+    fondos: "PROVISIÓN DE FONDOS",
   },
   es: {
     estimate: "PRESUPUESTO",
@@ -120,6 +123,7 @@ const KIND_LABEL: Record<Locale, Record<string, string>> = {
     creditnote: "ABONO",
     salesreceipt: "RECIBO",
     deliverynote: "ALBARÁN",
+    fondos: "PROVISIÓN DE FONDOS",
   },
 };
 
@@ -145,6 +149,7 @@ type Dict = {
   receivedBy: string;
   paymentTitle: string;
   payNote: string;
+  payNoteFondos: string;
   page: string;
 };
 
@@ -171,6 +176,7 @@ const DICT: Record<Locale, Dict> = {
     receivedBy: "Ontvangen door (handtekening)",
     paymentTitle: "Betaalgegevens",
     payNote: "Gelieve te betalen vóór de vervaldatum o.v.v. het factuurnummer.",
+    payNoteFondos: "Gelieve te betalen o.v.v. het documentnummer.",
     page: "Pagina",
   },
   de: {
@@ -195,6 +201,7 @@ const DICT: Record<Locale, Dict> = {
     receivedBy: "Empfangen von (Unterschrift)",
     paymentTitle: "Zahlungsinformationen",
     payNote: "Bitte bis zum Fälligkeitsdatum unter Angabe der Rechnungsnummer bezahlen.",
+    payNoteFondos: "Bitte unter Angabe der Dokumentnummer bezahlen.",
     page: "Seite",
   },
   en: {
@@ -219,6 +226,7 @@ const DICT: Record<Locale, Dict> = {
     receivedBy: "Received by (signature)",
     paymentTitle: "Payment details",
     payNote: "Please pay by the due date, quoting the invoice number.",
+    payNoteFondos: "Please pay quoting the document number.",
     page: "Page",
   },
   es: {
@@ -243,6 +251,7 @@ const DICT: Record<Locale, Dict> = {
     receivedBy: "Recibido por (firma)",
     paymentTitle: "Datos de pago",
     payNote: "Rogamos efectuar el pago antes del vencimiento indicando el número de factura.",
+    payNoteFondos: "Rogamos efectuar el pago indicando el número de documento.",
     page: "Página",
   },
 };
@@ -554,6 +563,9 @@ function DocumentPdf({ doc }: { doc: PdfDoc }) {
   const items = doc.items ?? [];
   const isDelivery = doc.kind === "deliverynote";
   const isInvoice = doc.kind === "invoice";
+  // Provisión de fondos: factuur-layout maar géén factuur — nergens BTW tonen
+  // (geen kolom, geen totaalregel, geen ISP-vermelding), wél betaalgegevens.
+  const isFondos = doc.kind === "fondos";
 
   // Voor-/eindblad met Magic Stone-sfeerimpressie (niet op pakbonnen).
   // [ext, ext] op het voorblad, [int, int] op het eindblad.
@@ -676,7 +688,7 @@ function DocumentPdf({ doc }: { doc: PdfDoc }) {
             {!isDelivery && (
               <>
                 <Text style={[s.thText, s.cNum]}>{t.price}</Text>
-                <Text style={[s.thText, s.cVat]}>{t.vat}</Text>
+                {!isFondos && <Text style={[s.thText, s.cVat]}>{t.vat}</Text>}
                 <Text style={[s.thText, s.cAmt]}>{t.net}</Text>
               </>
             )}
@@ -714,7 +726,7 @@ function DocumentPdf({ doc }: { doc: PdfDoc }) {
                   {!isDelivery && (
                     <>
                       <Text style={s.cNum}>{eur(it.price)}</Text>
-                      <Text style={s.cVat}>{it.taxRate ?? 0}%</Text>
+                      {!isFondos && <Text style={s.cVat}>{it.taxRate ?? 0}%</Text>}
                       <Text style={s.cAmt}>{eur(lineNet(it))}</Text>
                     </>
                   )}
@@ -727,25 +739,29 @@ function DocumentPdf({ doc }: { doc: PdfDoc }) {
           {!isDelivery && (
             <View style={s.bottomRow}>
               <View style={{ flex: 1 }}>
-                {isInvoice ? (
+                {isInvoice || isFondos ? (
                   <View style={s.payBox}>
                     <Text style={s.payTitle}>{t.paymentTitle}</Text>
                     {C.iban ? <Text style={s.payLine}>IBAN: {C.iban}</Text> : null}
                     {C.bic ? <Text style={s.payLine}>BIC: {C.bic}</Text> : null}
                     <Text style={s.payHolder}>{C.legalName}</Text>
-                    <Text style={s.payNote}>{t.payNote}</Text>
+                    <Text style={s.payNote}>{isFondos ? t.payNoteFondos : t.payNote}</Text>
                   </View>
                 ) : null}
               </View>
               <View style={s.totals}>
-                <View style={s.totalRow}>
-                  <Text style={s.muted}>{t.subtotal}</Text>
-                  <Text>{eur(doc.subtotalEur)}</Text>
-                </View>
-                <View style={s.totalRow}>
-                  <Text style={s.muted}>{t.vatTotal}</Text>
-                  <Text>{eur(doc.taxEur)}</Text>
-                </View>
+                {!isFondos && (
+                  <View style={s.totalRow}>
+                    <Text style={s.muted}>{t.subtotal}</Text>
+                    <Text>{eur(doc.subtotalEur)}</Text>
+                  </View>
+                )}
+                {!isFondos && (
+                  <View style={s.totalRow}>
+                    <Text style={s.muted}>{t.vatTotal}</Text>
+                    <Text>{eur(doc.taxEur)}</Text>
+                  </View>
+                )}
                 <View style={s.totalGrand}>
                   <Text style={s.totalGrandText}>{t.total}</Text>
                   <Text style={s.totalGrandText}>{eur(doc.totalEur)}</Text>
@@ -766,6 +782,12 @@ function DocumentPdf({ doc }: { doc: PdfDoc }) {
             </View>
           )}
 
+          {isFondos ? (
+            <Text style={s.notes}>
+              Provisión de fondos para gastos en el proyecto de construcción — este documento no
+              constituye factura.
+            </Text>
+          ) : null}
           {doc.vatReverseCharge ? (
             <Text style={s.notes}>
               Operación con inversión del sujeto pasivo — art. 84.Uno.2º LIVA. IVA a liquidar por el destinatario / BTW

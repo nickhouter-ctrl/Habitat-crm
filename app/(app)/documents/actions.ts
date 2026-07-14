@@ -47,7 +47,7 @@ async function baseUrl(): Promise<string> {
   return `${proto}://${host}`;
 }
 
-const KINDS = ["estimate", "proforma", "invoice", "creditnote", "salesreceipt", "deliverynote"] as const;
+const KINDS = ["estimate", "proforma", "invoice", "creditnote", "salesreceipt", "deliverynote", "fondos"] as const;
 const STATUSES = [
   "draft",
   "sent",
@@ -104,10 +104,13 @@ function revalidateAround(kind: DocKind, id?: string) {
 }
 
 function buildValues(v: z.infer<typeof docSchema>) {
-  const reverseCharge = !!v.vatReverseCharge;
+  // Provisión de fondos (procedure boekhouder): geen omzet, dus nooit BTW en
+  // ook géén ISP-vermelding; telt altijd als voorschot op het project.
+  const isFondos = v.kind === "fondos";
+  const reverseCharge = isFondos ? false : !!v.vatReverseCharge;
   // BTW verlegd → alle regels zonder BTW (0%), zodat de totalen kloppen en de
   // verplichte vermelding op de PDF komt.
-  const items = reverseCharge
+  const items = reverseCharge || isFondos
     ? parseLineItems(v.items).map((it) => ({ ...it, taxRate: 0 }))
     : parseLineItems(v.items);
   const totals = computeTotals(items);
@@ -131,7 +134,7 @@ function buildValues(v: z.infer<typeof docSchema>) {
       items,
       notes: v.notes?.trim() || null,
       sourceDocumentId: v.sourceDocumentId || null,
-      isAdvance: !!v.isAdvance,
+      isAdvance: isFondos ? true : !!v.isAdvance,
       vatReverseCharge: reverseCharge,
     },
     totals,

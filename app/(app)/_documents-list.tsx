@@ -29,6 +29,7 @@ type Kind =
   | "invoice"
   | "proforma"
   | "creditnote"
+  | "fondos"
   | "salesreceipt"
   | "deliverynote";
 

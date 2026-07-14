@@ -32,6 +32,7 @@ const KIND_LABEL: Record<DocKind, string> = {
   proforma: "pro-forma",
   invoice: "factuur",
   creditnote: "creditnota",
+  fondos: "provisión de fondos",
   salesreceipt: "bon",
   deliverynote: "pakbon",
 };

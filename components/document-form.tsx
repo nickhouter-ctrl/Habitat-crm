@@ -27,6 +27,7 @@ const KIND_LABEL: Record<DocKind, string> = {
   proforma: "Pro-forma",
   invoice: "Factuur",
   creditnote: "Creditnota",
+  fondos: "Provisión de fondos",
   salesreceipt: "Bon",
   deliverynote: "Pakbon",
 };
@@ -171,6 +172,22 @@ export function DocumentForm({
               />
             </Field>
           </div>
+
+          {kind === "fondos" && (
+            <div className="rounded-lg border border-amber-300 bg-amber-50/50 p-3 text-sm">
+              <p>
+                <strong>Provisión de fondos</strong> — voorschotdocument, géén factuur: BTW wordt
+                automatisch op 0 gezet en nergens vermeld; telt als voorschot op het project
+                (verrekent op de eindfactuur).
+              </p>
+              <p className="mt-1 text-xs text-muted">
+                ⚠️ Procedure boekhouder: altijd eerst ter controle naar Paco vóórdat het naar de
+                klant gaat. Alleen voor particulieren en klanten zonder Spaanse empresario-status —
+                Spaanse bouwbedrijven mét certificado censal krijgen een echte factuur met BTW
+                verlegd.
+              </p>
+            </div>
+          )}
 
           {(kind === "invoice" || kind === "proforma") && (
             <div className="flex flex-col gap-2 rounded-lg border bg-background/40 p-3 sm:flex-row sm:gap-6">

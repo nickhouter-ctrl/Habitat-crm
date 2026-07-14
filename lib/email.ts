@@ -110,10 +110,10 @@ function logoHeaderHtml(): string {
 }
 
 const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
-const kindNL = (k: string) => (k === "invoice" ? "factuur" : k === "proforma" ? "pro-formafactuur" : k === "creditnote" ? "creditnota" : "offerte");
-const kindEN = (k: string) => (k === "invoice" ? "invoice" : k === "proforma" ? "pro-forma invoice" : k === "creditnote" ? "credit note" : "quote");
-const kindES = (k: string) => (k === "invoice" ? "factura" : k === "proforma" ? "factura proforma" : k === "creditnote" ? "nota de crédito" : "presupuesto");
-const kindDE = (k: string) => (k === "invoice" ? "Rechnung" : k === "proforma" ? "Proforma-Rechnung" : k === "creditnote" ? "Gutschrift" : "Angebot");
+const kindNL = (k: string) => (k === "invoice" ? "factuur" : k === "proforma" ? "pro-formafactuur" : k === "creditnote" ? "creditnota" : k === "fondos" ? "voorschotdocument (provisión de fondos)" : "offerte");
+const kindEN = (k: string) => (k === "invoice" ? "invoice" : k === "proforma" ? "pro-forma invoice" : k === "creditnote" ? "credit note" : k === "fondos" ? "provisión de fondos (funds provision)" : "quote");
+const kindES = (k: string) => (k === "invoice" ? "factura" : k === "proforma" ? "factura proforma" : k === "creditnote" ? "nota de crédito" : k === "fondos" ? "provisión de fondos" : "presupuesto");
+const kindDE = (k: string) => (k === "invoice" ? "Rechnung" : k === "proforma" ? "Proforma-Rechnung" : k === "creditnote" ? "Gutschrift" : k === "fondos" ? "Provisión de fondos" : "Angebot");
 
 const T: Record<
   Lang,

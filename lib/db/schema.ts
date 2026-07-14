@@ -112,6 +112,7 @@ export const documentKind = pgEnum("document_kind", [
   "creditnote",
   "salesreceipt",
   "deliverynote", // pakbon / albarán
+  "fondos", // provisión de fondos — voorschotdocument zonder BTW (géén factuur)
 ]);
 
 export const documentStatus = pgEnum("document_status", [

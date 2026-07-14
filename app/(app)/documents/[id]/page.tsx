@@ -765,6 +765,24 @@ export default async function DocumentDetailPage({
             </CardContent>
           </Card>
 
+          {doc.kind === "fondos" && (
+            <Card className="border-amber-300 bg-amber-50/50">
+              <CardHeader>
+                <CardTitle>Provisión de fondos</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-1.5 text-sm">
+                <p>
+                  Voorschotdocument — <strong>géén factuur</strong> en geen BTW-vermelding
+                  (procedure boekhouder). Blijft buiten Holded en buiten de FAC-reeks.
+                </p>
+                <p className="text-xs text-muted">
+                  ⚠️ Altijd eerst ter controle naar Paco sturen vóórdat het naar de klant gaat.
+                </p>
+              </CardContent>
+            </Card>
+          )}
+
+          {doc.kind !== "fondos" && (
           <Card>
             <CardHeader>
               <CardTitle>Holded</CardTitle>
@@ -821,6 +839,7 @@ export default async function DocumentDetailPage({
               )}
             </CardContent>
           </Card>
+          )}
 
           {(doc.kind === "estimate" || doc.status === "draft") && (
             <form action={removeDoc}>

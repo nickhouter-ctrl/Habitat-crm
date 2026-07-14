@@ -18,6 +18,7 @@ const VALID_KINDS: DocKind[] = [
   "proforma",
   "invoice",
   "creditnote",
+  "fondos",
   "salesreceipt",
   "deliverynote",
 ];
