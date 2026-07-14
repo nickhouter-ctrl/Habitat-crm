@@ -855,11 +855,17 @@ export const workers = pgTable(
     hourlyCostEur: numeric({ precision: 8, scale: 2 }),
     /** Standaard betaalwijze (contant/factuur) — per urenregel te overschrijven. */
     defaultPaymentMethod: paymentMethod().notNull().default("cash"),
+    /** Persoonlijke link-token voor het zzp-urenportaal (/uren/[token]).
+     * Null = geen portaaltoegang. Vernieuwen trekt de oude link in. */
+    portalToken: text(),
     active: boolean().notNull().default(true),
     notes: text(),
     ...timestamps,
   },
-  (t) => [index("workers_active_idx").on(t.active)],
+  (t) => [
+    index("workers_active_idx").on(t.active),
+    uniqueIndex("workers_portal_token_idx").on(t.portalToken),
+  ],
 );
 
 /**
@@ -888,6 +894,9 @@ export const timeEntries = pgTable(
     /** Bron-inkooporder: als deze uren-regel automatisch is gemaakt door een
      * bouwer-inkooporder als arbeid te koppelen. Zo zijn PO en uren echt verbonden. */
     purchaseOrderId: uuid().references((): AnyPgColumn => purchaseOrders.id, { onDelete: "cascade" }),
+    /** Gezet als de arbeider dit zelf via het urenportaal (/uren/[token]) heeft
+     * ingevoerd — zodat je in het overzicht ziet wat van de jongens zelf komt. */
+    selfLoggedAt: timestamp({ withTimezone: true }),
     note: text(),
     ...timestamps,
   },

@@ -1,4 +1,5 @@
 import { asc, desc } from "drizzle-orm";
+import { headers } from "next/headers";
 
 import {
   Card,
@@ -11,11 +12,18 @@ import {
   Select,
   StatTile,
 } from "@/components/ui";
+import { CopyLinkButton } from "@/components/copy-link-button";
 import { SubmitButton } from "@/components/submit-button";
 import { db } from "@/lib/db";
 import { workers } from "@/lib/db/schema";
 import { formatEUR } from "@/lib/utils";
-import { createWorker, toggleWorkerActive, updateWorker } from "./actions";
+import {
+  createWorker,
+  regenerateWorkerPortalToken,
+  revokeWorkerPortalToken,
+  toggleWorkerActive,
+  updateWorker,
+} from "./actions";
 
 export const metadata = { title: "Ploeg" };
 
@@ -26,6 +34,12 @@ export default async function PloegPage() {
     .select()
     .from(workers)
     .orderBy(desc(workers.active), asc(workers.name));
+
+  // Basis-URL voor de urenportaal-links (zelfde aanpak als de offerte-links).
+  const h = await headers();
+  const host = h.get("host") ?? "localhost:3000";
+  const proto = h.get("x-forwarded-proto") ?? (host.includes("localhost") ? "http" : "https");
+  const portalBase = `${proto}://${host}/uren`;
 
   const active = rows.filter((w) => w.active);
   const rated = active.filter((w) => Number(w.hourlyCostEur ?? 0) > 0);
@@ -118,7 +132,7 @@ export default async function PloegPage() {
                     Opslaan
                   </SubmitButton>
                 </div>
-                <div className="lg:col-span-5">
+                <div className="flex flex-wrap items-center gap-x-3 gap-y-1 lg:col-span-5">
                   <button
                     type="submit"
                     formAction={toggleWorkerActive.bind(null, w.id, !w.active)}
@@ -126,7 +140,39 @@ export default async function PloegPage() {
                   >
                     {w.active ? "Op inactief zetten" : "Heractiveren"}
                   </button>
-                  {!w.active && <span className="ml-2 text-xs text-muted">· {PAY_LABEL[w.defaultPaymentMethod]}</span>}
+                  {!w.active && <span className="text-xs text-muted">· {PAY_LABEL[w.defaultPaymentMethod]}</span>}
+                  {w.active && (
+                    <span className="flex flex-wrap items-center gap-2">
+                      <span className="text-xs text-muted">· Urenportaal:</span>
+                      {w.portalToken ? (
+                        <>
+                          <CopyLinkButton url={`${portalBase}/${w.portalToken}`} />
+                          <button
+                            type="submit"
+                            formAction={regenerateWorkerPortalToken.bind(null, w.id)}
+                            className="text-xs text-muted underline-offset-2 hover:underline"
+                          >
+                            Vernieuw link
+                          </button>
+                          <button
+                            type="submit"
+                            formAction={revokeWorkerPortalToken.bind(null, w.id)}
+                            className="text-xs text-muted underline-offset-2 hover:underline"
+                          >
+                            Intrekken
+                          </button>
+                        </>
+                      ) : (
+                        <button
+                          type="submit"
+                          formAction={regenerateWorkerPortalToken.bind(null, w.id)}
+                          className="text-xs text-muted underline-offset-2 hover:underline"
+                        >
+                          Link aanmaken
+                        </button>
+                      )}
+                    </span>
+                  )}
                 </div>
               </form>
             ))}

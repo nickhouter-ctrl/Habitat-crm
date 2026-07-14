@@ -20,7 +20,8 @@ export const authConfig = {
         pathname.startsWith("/api/auth") ||
         pathname.startsWith("/api/webhooks") ||
         pathname.startsWith("/offerte") || // public accept/reject page for clients
-        pathname.startsWith("/book"); // public "pick an appointment slot" page
+        pathname.startsWith("/book") || // public "pick an appointment slot" page
+        pathname.startsWith("/uren"); // zzp-urenportaal (personal token links)
       return isPublic || isLoggedIn;
     },
     jwt({ token, user }) {

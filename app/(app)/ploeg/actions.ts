@@ -69,3 +69,18 @@ export async function toggleWorkerActive(id: string, active: boolean) {
   await db.update(workers).set({ active, updatedAt: new Date() }).where(eq(workers.id, id));
   revalidatePath("/ploeg");
 }
+
+/** (Nieuwe) persoonlijke urenportaal-link — vernieuwen trekt de oude link in. */
+export async function regenerateWorkerPortalToken(id: string) {
+  await requireUser();
+  const token = (crypto.randomUUID() + crypto.randomUUID()).replace(/-/g, "");
+  await db.update(workers).set({ portalToken: token, updatedAt: new Date() }).where(eq(workers.id, id));
+  revalidatePath("/ploeg");
+}
+
+/** Portaaltoegang intrekken. */
+export async function revokeWorkerPortalToken(id: string) {
+  await requireUser();
+  await db.update(workers).set({ portalToken: null, updatedAt: new Date() }).where(eq(workers.id, id));
+  revalidatePath("/ploeg");
+}
