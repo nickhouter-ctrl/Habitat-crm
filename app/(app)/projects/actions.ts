@@ -16,6 +16,7 @@ import {
   projects,
   purchaseOrders,
   timeEntries,
+  workerPortalLinks,
   workers,
   type DocumentLineItem,
   type DocumentPhase,
@@ -224,6 +225,28 @@ export async function updateTimeEntry(projectId: string, entryId: string, formDa
 export async function deleteTimeEntry(projectId: string, entryId: string) {
   await requireUser();
   await db.delete(timeEntries).where(eq(timeEntries.id, entryId));
+  revalidatePath(`/projects/${projectId}`);
+}
+
+/* ------------------------------------------- urenportaal-links (per project) */
+
+/** Verwijs een arbeider/ploegbaas naar dit project: maak z'n portaal-link. */
+export async function createWorkerPortalLink(projectId: string, formData: FormData) {
+  await requireUser();
+  const workerId = uuidOrNull(String(formData.get("workerId") ?? ""));
+  if (!workerId) throw new Error("Kies een arbeider");
+  const token = (crypto.randomUUID() + crypto.randomUUID()).replace(/-/g, "");
+  await db
+    .insert(workerPortalLinks)
+    .values({ workerId, projectId, token })
+    .onConflictDoNothing(); // bestaat de combinatie al, dan blijft de oude link geldig
+  revalidatePath(`/projects/${projectId}`);
+}
+
+/** Portaal-link intrekken (de link werkt daarna direct niet meer). */
+export async function deleteWorkerPortalLink(projectId: string, linkId: string) {
+  await requireUser();
+  await db.delete(workerPortalLinks).where(eq(workerPortalLinks.id, linkId));
   revalidatePath(`/projects/${projectId}`);
 }
 

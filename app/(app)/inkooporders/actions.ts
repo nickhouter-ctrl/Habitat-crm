@@ -187,19 +187,24 @@ export async function linkPurchaseOrderAsHours(id: string, formData: FormData) {
   const hoursRaw = Number(String(formData.get("hours") ?? "").replace(",", "."));
   const hours = hoursRaw > 0 ? hoursRaw : 1; // geen uren opgegeven → 1 post t.w.v. het bedrag
   const rate = amount > 0 ? amount / hours : 0;
+  // "Uren staan al geregistreerd" (bv. via het urenportaal ingevuld): wel als
+  // arbeid koppelen, maar GEEN nieuwe uren-regel maken — anders telt het dubbel.
+  const alreadyLogged = formData.get("alreadyLogged") === "on";
 
   // Idempotent: bestaande uren-regel voor deze inkooporder vervangen.
   await db.delete(timeEntries).where(eq(timeEntries.purchaseOrderId, id));
-  await db.insert(timeEntries).values({
-    projectId,
-    workerName: po.supplier,
-    date: po.orderDate ?? new Date().toISOString().slice(0, 10),
-    hours: String(hours),
-    hourlyCostEur: String(rate),
-    paymentMethod: "invoice",
-    purchaseOrderId: id,
-    note: `Uren via inkooporder${po.reference ? ` ${po.reference}` : ""}`,
-  });
+  if (!alreadyLogged) {
+    await db.insert(timeEntries).values({
+      projectId,
+      workerName: po.supplier,
+      date: po.orderDate ?? new Date().toISOString().slice(0, 10),
+      hours: String(hours),
+      hourlyCostEur: String(rate),
+      paymentMethod: "invoice",
+      purchaseOrderId: id,
+      note: `Uren via inkooporder${po.reference ? ` ${po.reference}` : ""}`,
+    });
+  }
   // Inkooporder aan het project koppelen maar als arbeid markeren (niet als materiaal).
   await db
     .update(purchaseOrders)

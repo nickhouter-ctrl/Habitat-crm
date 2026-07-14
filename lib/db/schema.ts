@@ -855,16 +855,38 @@ export const workers = pgTable(
     hourlyCostEur: numeric({ precision: 8, scale: 2 }),
     /** Standaard betaalwijze (contant/factuur) — per urenregel te overschrijven. */
     defaultPaymentMethod: paymentMethod().notNull().default("cash"),
-    /** Persoonlijke link-token voor het zzp-urenportaal (/uren/[token]).
-     * Null = geen portaaltoegang. Vernieuwen trekt de oude link in. */
-    portalToken: text(),
+    /** Taal van het urenportaal voor deze arbeider: "nl" | "es" | "en". */
+    portalLang: text().notNull().default("es"),
     active: boolean().notNull().default(true),
     notes: text(),
     ...timestamps,
   },
+  (t) => [index("workers_active_idx").on(t.active)],
+);
+
+/**
+ * Urenportaal-links: één persoonlijke link per arbeider PER PROJECT
+ * (/uren/[token]). De ploeg wordt zo aan een project "verwezen" — de link laat
+ * alleen op dát project uren schrijven. Werkt iemand op twee projecten, dan
+ * krijgt hij twee links. Verwijderen = intrekken.
+ */
+export const workerPortalLinks = pgTable(
+  "worker_portal_links",
+  {
+    id: uuid().primaryKey().default(sql`gen_random_uuid()`),
+    workerId: uuid()
+      .notNull()
+      .references(() => workers.id, { onDelete: "cascade" }),
+    projectId: uuid()
+      .notNull()
+      .references((): AnyPgColumn => projects.id, { onDelete: "cascade" }),
+    token: text().notNull(),
+    ...timestamps,
+  },
   (t) => [
-    index("workers_active_idx").on(t.active),
-    uniqueIndex("workers_portal_token_idx").on(t.portalToken),
+    uniqueIndex("worker_portal_links_token_idx").on(t.token),
+    uniqueIndex("worker_portal_links_worker_project_idx").on(t.workerId, t.projectId),
+    index("worker_portal_links_project_idx").on(t.projectId),
   ],
 );
 

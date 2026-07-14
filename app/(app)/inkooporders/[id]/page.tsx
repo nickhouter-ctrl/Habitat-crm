@@ -392,6 +392,11 @@ export default async function PurchaseOrderPage({ params }: { params: Promise<{ 
                     Als uren
                   </SubmitButton>
                 </div>
+                <label className="flex items-center gap-2 text-xs text-muted">
+                  <input type="checkbox" name="alreadyLogged" className="size-3.5" />
+                  Uren staan al op het project (bv. via het urenportaal ingevuld) — alleen als arbeid koppelen,
+                  geen nieuwe urenregel maken
+                </label>
               </form>
 
               <p className="text-xs text-muted">

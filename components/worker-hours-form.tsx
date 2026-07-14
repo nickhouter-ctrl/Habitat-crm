@@ -3,21 +3,24 @@
 import { useActionState, useRef } from "react";
 
 import { logHours, type LogHoursState } from "@/app/uren/[token]/actions";
+import type { PortalStrings } from "@/lib/worker-portal";
 
 const QUICK_HOURS = ["4", "6", "8", "10"];
 
 /**
- * Mobiel-eerst urenformulier voor het zzp-portaal: project, datum, uren, klaar.
- * Grote knoppen, native inputs — moet met werkhandschoenen te bedienen zijn.
+ * Mobiel-eerst urenformulier voor het zzp-portaal: datum, uren, klaar. Het
+ * project ligt vast in de link. Grote knoppen, native inputs — moet met
+ * werkhandschoenen te bedienen zijn. Teksten uit `t` (taal per arbeider).
+ * Het naamveld ("Wie") is voor ploegbazen die voor hun jongens invullen.
  */
 export function WorkerHoursForm({
   token,
-  projects,
   today,
+  t,
 }: {
   token: string;
-  projects: Array<{ id: string; name: string }>;
   today: string;
+  t: PortalStrings;
 }) {
   const [state, formAction, pending] = useActionState<LogHoursState, FormData>(
     logHours.bind(null, token),
@@ -28,26 +31,7 @@ export function WorkerHoursForm({
   return (
     <form action={formAction} className="space-y-4">
       <label className="block">
-        <span className="mb-1 block text-sm font-medium text-stone-600">Project / Proyecto</span>
-        <select
-          name="projectId"
-          required
-          defaultValue={projects.length === 1 ? projects[0].id : ""}
-          className="w-full rounded-xl border border-stone-300 bg-white px-4 py-3 text-base text-stone-800 focus:border-stone-500 focus:outline-none"
-        >
-          <option value="" disabled>
-            Kies project… / Elige proyecto…
-          </option>
-          {projects.map((p) => (
-            <option key={p.id} value={p.id}>
-              {p.name}
-            </option>
-          ))}
-        </select>
-      </label>
-
-      <label className="block">
-        <span className="mb-1 block text-sm font-medium text-stone-600">Datum / Fecha</span>
+        <span className="mb-1 block text-sm font-medium text-stone-600">{t.date}</span>
         <input
           type="date"
           name="date"
@@ -59,7 +43,7 @@ export function WorkerHoursForm({
       </label>
 
       <div>
-        <span className="mb-1 block text-sm font-medium text-stone-600">Uren / Horas</span>
+        <span className="mb-1 block text-sm font-medium text-stone-600">{t.hours}</span>
         <div className="flex gap-2">
           {QUICK_HOURS.map((h) => (
             <button
@@ -86,12 +70,24 @@ export function WorkerHoursForm({
 
       <label className="block">
         <span className="mb-1 block text-sm font-medium text-stone-600">
-          Opmerking / Nota <span className="font-normal text-stone-400">(optioneel / opcional)</span>
+          {t.crewName} <span className="font-normal text-stone-400">{t.optional}</span>
+        </span>
+        <input
+          name="crewName"
+          maxLength={80}
+          placeholder={t.crewNamePlaceholder}
+          className="w-full rounded-xl border border-stone-300 bg-white px-4 py-3 text-base text-stone-800 focus:border-stone-500 focus:outline-none"
+        />
+      </label>
+
+      <label className="block">
+        <span className="mb-1 block text-sm font-medium text-stone-600">
+          {t.note} <span className="font-normal text-stone-400">{t.optional}</span>
         </span>
         <input
           name="note"
           maxLength={500}
-          placeholder="bijv. badkamer boven / p.ej. baño arriba"
+          placeholder={t.notePlaceholder}
           className="w-full rounded-xl border border-stone-300 bg-white px-4 py-3 text-base text-stone-800 focus:border-stone-500 focus:outline-none"
         />
       </label>
@@ -108,7 +104,7 @@ export function WorkerHoursForm({
         disabled={pending}
         className="w-full rounded-xl bg-stone-800 px-4 py-4 text-base font-semibold text-white active:bg-stone-700 disabled:opacity-60"
       >
-        {pending ? "Bezig… / Guardando…" : "Uren opslaan / Guardar horas"}
+        {pending ? t.saving : t.save}
       </button>
     </form>
   );

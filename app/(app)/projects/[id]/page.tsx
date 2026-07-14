@@ -1,8 +1,10 @@
 import { and, asc, desc, eq, inArray, isNull, or } from "drizzle-orm";
+import { headers } from "next/headers";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { ConfirmSubmit } from "@/components/confirm-submit";
+import { CopyLinkButton } from "@/components/copy-link-button";
 import { SubmitButton } from "@/components/submit-button";
 
 import {
@@ -40,6 +42,7 @@ import {
   purchaseOrders,
   timeEntries,
   users,
+  workerPortalLinks,
   workers,
 } from "@/lib/db/schema";
 import { lineCostEur, lineMaterialCostEur, normalizeDocItems } from "@/lib/documents";
@@ -50,10 +53,12 @@ import {
   addProjectPayment,
   addTimeEntry,
   attachDocumentToProject,
+  createWorkerPortalLink,
   deleteProject,
   deleteProjectCost,
   deleteProjectPayment,
   deleteTimeEntry,
+  deleteWorkerPortalLink,
   updateTimeEntry,
   linkPurchaseOrderToProject,
   sendBudgetToClient,
@@ -416,6 +421,25 @@ export default async function ProjectDetailPage({
   const hasBudgetContent = budgetLineCount > 0 || phaseRows.length > 0;
   const begrootMarge = budgetTargetBase - budgetCostTotal;
   const begrootMargePct = budgetTargetBase > 0 ? Math.round((begrootMarge / budgetTargetBase) * 100) : null;
+  // Urenportaal-links van dit project (arbeider → persoonlijke invul-link).
+  const portalLinkRows = await db
+    .select({
+      id: workerPortalLinks.id,
+      token: workerPortalLinks.token,
+      workerId: workerPortalLinks.workerId,
+      workerName: workers.name,
+    })
+    .from(workerPortalLinks)
+    .innerJoin(workers, eq(workers.id, workerPortalLinks.workerId))
+    .where(eq(workerPortalLinks.projectId, id))
+    .orderBy(asc(workers.name));
+  const h = await headers();
+  const host = h.get("host") ?? "localhost:3000";
+  const proto = h.get("x-forwarded-proto") ?? (host.includes("localhost") ? "http" : "https");
+  const portalBase = `${proto}://${host}/uren`;
+  const linkedWorkerIds = new Set(portalLinkRows.map((l) => l.workerId));
+  const unlinkedWorkers = workerRows.filter((w) => !linkedWorkerIds.has(w.id));
+
   const workerOptions = workerRows.map((w) => ({
     value: w.id,
     label: w.name + (w.role ? ` · ${w.role}` : ""),
@@ -999,6 +1023,56 @@ export default async function ProjectDetailPage({
                   </Field>
                 </form>
               )}
+
+              {/* Urenportaal: verwijs een arbeider/ploegbaas naar dit project — hij
+                  krijgt een persoonlijke link en kan alleen hier uren invullen. */}
+              <div className="mt-5 border-t pt-4">
+                <p className="mb-2 text-sm font-medium">
+                  Urenportaal{" "}
+                  <span className="font-normal text-muted">
+                    — persoonlijke invul-link per arbeider, alleen voor dit project (deel via WhatsApp)
+                  </span>
+                </p>
+                {portalLinkRows.length > 0 && (
+                  <ul className="mb-3 space-y-1.5">
+                    {portalLinkRows.map((l) => (
+                      <li key={l.id} className="flex flex-wrap items-center gap-2 text-sm">
+                        <span className="min-w-28">{l.workerName}</span>
+                        <CopyLinkButton url={`${portalBase}/${l.token}`} />
+                        <form action={deleteWorkerPortalLink.bind(null, id, l.id)}>
+                          <SubmitButton size="sm" variant="ghost" className="text-muted" pendingLabel="…">
+                            Intrekken
+                          </SubmitButton>
+                        </form>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+                {unlinkedWorkers.length > 0 ? (
+                  <form action={createWorkerPortalLink.bind(null, id)} className="flex flex-wrap items-end gap-2">
+                    <Field label="Arbeider / ploegbaas">
+                      <Select name="workerId" required>
+                        {unlinkedWorkers.map((w) => (
+                          <option key={w.id} value={w.id}>
+                            {w.name}
+                            {w.role ? ` — ${w.role}` : ""}
+                          </option>
+                        ))}
+                      </Select>
+                    </Field>
+                    <SubmitButton size="sm" variant="secondary" pendingLabel="…">
+                      + Link aanmaken
+                    </SubmitButton>
+                  </form>
+                ) : (
+                  portalLinkRows.length === 0 && (
+                    <p className="text-sm text-muted">
+                      Voeg eerst arbeiders toe in{" "}
+                      <Link href="/ploeg" className="text-accent hover:underline">Ploeg</Link>.
+                    </p>
+                  )
+                )}
+              </div>
             </CardContent>
           </Card>
 

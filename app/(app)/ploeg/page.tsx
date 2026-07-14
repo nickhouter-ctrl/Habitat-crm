@@ -1,5 +1,4 @@
 import { asc, desc } from "drizzle-orm";
-import { headers } from "next/headers";
 
 import {
   Card,
@@ -12,18 +11,11 @@ import {
   Select,
   StatTile,
 } from "@/components/ui";
-import { CopyLinkButton } from "@/components/copy-link-button";
 import { SubmitButton } from "@/components/submit-button";
 import { db } from "@/lib/db";
 import { workers } from "@/lib/db/schema";
 import { formatEUR } from "@/lib/utils";
-import {
-  createWorker,
-  regenerateWorkerPortalToken,
-  revokeWorkerPortalToken,
-  toggleWorkerActive,
-  updateWorker,
-} from "./actions";
+import { createWorker, toggleWorkerActive, updateWorker } from "./actions";
 
 export const metadata = { title: "Ploeg" };
 
@@ -34,12 +26,6 @@ export default async function PloegPage() {
     .select()
     .from(workers)
     .orderBy(desc(workers.active), asc(workers.name));
-
-  // Basis-URL voor de urenportaal-links (zelfde aanpak als de offerte-links).
-  const h = await headers();
-  const host = h.get("host") ?? "localhost:3000";
-  const proto = h.get("x-forwarded-proto") ?? (host.includes("localhost") ? "http" : "https");
-  const portalBase = `${proto}://${host}/uren`;
 
   const active = rows.filter((w) => w.active);
   const rated = active.filter((w) => Number(w.hourlyCostEur ?? 0) > 0);
@@ -69,7 +55,7 @@ export default async function PloegPage() {
           <CardTitle>Arbeider toevoegen</CardTitle>
         </CardHeader>
         <CardContent>
-          <form action={createWorker} className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5 lg:items-end">
+          <form action={createWorker} className="grid gap-3 sm:grid-cols-2 lg:grid-cols-6 lg:items-end">
             <Field label="Naam" htmlFor="w-name">
               <Input id="w-name" name="name" required placeholder="Voornaam Achternaam" />
             </Field>
@@ -83,6 +69,13 @@ export default async function PloegPage() {
               <Select id="w-pay" name="defaultPaymentMethod" defaultValue="cash">
                 <option value="cash">Contant</option>
                 <option value="invoice">Per factuur</option>
+              </Select>
+            </Field>
+            <Field label="Taal urenportaal" htmlFor="w-lang">
+              <Select id="w-lang" name="portalLang" defaultValue="es">
+                <option value="es">Español</option>
+                <option value="nl">Nederlands</option>
+                <option value="en">English</option>
               </Select>
             </Field>
             <SubmitButton pendingLabel="Bezig…">Toevoegen</SubmitButton>
@@ -104,7 +97,7 @@ export default async function PloegPage() {
               <form
                 key={w.id}
                 action={updateWorker.bind(null, w.id)}
-                className={`grid items-end gap-3 px-4 py-3 sm:grid-cols-2 lg:grid-cols-[1.4fr_1fr_0.9fr_0.9fr_auto] ${
+                className={`grid items-end gap-3 px-4 py-3 sm:grid-cols-2 lg:grid-cols-[1.4fr_1fr_0.8fr_0.9fr_0.8fr_auto] ${
                   w.active ? "" : "opacity-60"
                 }`}
               >
@@ -127,12 +120,19 @@ export default async function PloegPage() {
                     <option value="invoice">Per factuur</option>
                   </Select>
                 </Field>
+                <Field label="Taal portaal">
+                  <Select name="portalLang" defaultValue={w.portalLang ?? "es"}>
+                    <option value="es">Español</option>
+                    <option value="nl">Nederlands</option>
+                    <option value="en">English</option>
+                  </Select>
+                </Field>
                 <div className="flex items-center gap-2">
                   <SubmitButton size="sm" variant="secondary" pendingLabel="…">
                     Opslaan
                   </SubmitButton>
                 </div>
-                <div className="flex flex-wrap items-center gap-x-3 gap-y-1 lg:col-span-5">
+                <div className="flex flex-wrap items-center gap-x-3 gap-y-1 lg:col-span-6">
                   <button
                     type="submit"
                     formAction={toggleWorkerActive.bind(null, w.id, !w.active)}
@@ -142,35 +142,8 @@ export default async function PloegPage() {
                   </button>
                   {!w.active && <span className="text-xs text-muted">· {PAY_LABEL[w.defaultPaymentMethod]}</span>}
                   {w.active && (
-                    <span className="flex flex-wrap items-center gap-2">
-                      <span className="text-xs text-muted">· Urenportaal:</span>
-                      {w.portalToken ? (
-                        <>
-                          <CopyLinkButton url={`${portalBase}/${w.portalToken}`} />
-                          <button
-                            type="submit"
-                            formAction={regenerateWorkerPortalToken.bind(null, w.id)}
-                            className="text-xs text-muted underline-offset-2 hover:underline"
-                          >
-                            Vernieuw link
-                          </button>
-                          <button
-                            type="submit"
-                            formAction={revokeWorkerPortalToken.bind(null, w.id)}
-                            className="text-xs text-muted underline-offset-2 hover:underline"
-                          >
-                            Intrekken
-                          </button>
-                        </>
-                      ) : (
-                        <button
-                          type="submit"
-                          formAction={regenerateWorkerPortalToken.bind(null, w.id)}
-                          className="text-xs text-muted underline-offset-2 hover:underline"
-                        >
-                          Link aanmaken
-                        </button>
-                      )}
+                    <span className="text-xs text-muted">
+                      · Urenportaal-links maak je op de projectpagina (Uren &amp; kosten → Urenportaal)
                     </span>
                   )}
                 </div>

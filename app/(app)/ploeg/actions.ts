@@ -27,6 +27,7 @@ const workerSchema = z.object({
   role: z.string().trim().optional(),
   hourlyCostEur: z.string().trim().optional(),
   defaultPaymentMethod: z.enum(["cash", "invoice"]).default("cash"),
+  portalLang: z.enum(["nl", "es", "en"]).default("es"),
   notes: z.string().trim().optional(),
 });
 
@@ -40,6 +41,7 @@ export async function createWorker(formData: FormData) {
     role: d.role || null,
     hourlyCostEur: moneyOrNull(d.hourlyCostEur),
     defaultPaymentMethod: d.defaultPaymentMethod,
+    portalLang: d.portalLang,
     notes: d.notes || null,
   });
   revalidatePath("/ploeg");
@@ -57,6 +59,7 @@ export async function updateWorker(id: string, formData: FormData) {
       role: d.role || null,
       hourlyCostEur: moneyOrNull(d.hourlyCostEur),
       defaultPaymentMethod: d.defaultPaymentMethod,
+      portalLang: d.portalLang,
       notes: d.notes || null,
       updatedAt: new Date(),
     })
@@ -70,17 +73,3 @@ export async function toggleWorkerActive(id: string, active: boolean) {
   revalidatePath("/ploeg");
 }
 
-/** (Nieuwe) persoonlijke urenportaal-link — vernieuwen trekt de oude link in. */
-export async function regenerateWorkerPortalToken(id: string) {
-  await requireUser();
-  const token = (crypto.randomUUID() + crypto.randomUUID()).replace(/-/g, "");
-  await db.update(workers).set({ portalToken: token, updatedAt: new Date() }).where(eq(workers.id, id));
-  revalidatePath("/ploeg");
-}
-
-/** Portaaltoegang intrekken. */
-export async function revokeWorkerPortalToken(id: string) {
-  await requireUser();
-  await db.update(workers).set({ portalToken: null, updatedAt: new Date() }).where(eq(workers.id, id));
-  revalidatePath("/ploeg");
-}
