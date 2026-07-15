@@ -2,14 +2,15 @@
 
 import { revalidatePath } from "next/cache";
 import { eq } from "drizzle-orm";
+import { requireWriteUser } from "@/lib/auth/guards";
 
 import { auth } from "@/auth";
 import { db } from "@/lib/db";
 import { mailAttachments } from "@/lib/db/schema";
 
 async function requireUser() {
-  const session = await auth();
-  if (!session?.user) throw new Error("Niet ingelogd");
+  // Centrale guard: ingelogd én geen alleen-lezen (viewer) account.
+  return requireWriteUser();
 }
 
 export async function updateAttachmentCategory(args: {

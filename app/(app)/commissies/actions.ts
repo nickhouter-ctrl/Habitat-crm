@@ -4,14 +4,15 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { eq } from "drizzle-orm";
 import { z } from "zod";
+import { requireWriteUser } from "@/lib/auth/guards";
 
 import { auth } from "@/auth";
 import { db } from "@/lib/db";
 import { commissionEntries, referrals } from "@/lib/db/schema";
 
 async function requireUser() {
-  const session = await auth();
-  if (!session?.user) redirect("/login");
+  // Centrale guard: ingelogd én geen alleen-lezen (viewer) account.
+  return requireWriteUser();
 }
 
 function pctOrDefault(v: unknown, dflt: number): string {

@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { eq } from "drizzle-orm";
 import { z } from "zod";
+import { requireWriteUser } from "@/lib/auth/guards";
 
 import { auth } from "@/auth";
 import { contactDisplayName } from "@/lib/contact-name";
@@ -13,8 +14,8 @@ import { accountRequests, companies, contacts, customerAccounts } from "@/lib/db
 import { sendMail } from "@/lib/gmail";
 
 async function requireUser() {
-  const session = await auth();
-  if (!session?.user) redirect("/login");
+  // Centrale guard: ingelogd én geen alleen-lezen (viewer) account.
+  return requireWriteUser();
 }
 
 const WEBSITE_URL = process.env.WEBSITE_URL || "https://www.habitat-one.com";

@@ -6,6 +6,7 @@ import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { after } from "next/server";
 import { z } from "zod";
+import { requireWriteUser } from "@/lib/auth/guards";
 
 import { auth } from "@/auth";
 import { db } from "@/lib/db";
@@ -97,8 +98,7 @@ function listPathFor(kind: DocKind): string {
   if (kind === "invoice") return "/invoices";
   if (kind === "estimate") return "/quotes";
   if (kind === "deliverynote") return "/pakbonnen";
-  // Proforma's/fondos hebben geen eigen lijst — dashboard is de veilige landing
-  // (er bestaat geen /documents-overzicht; daarheen redirecten gaf een 404).
+  if (kind === "proforma" || kind === "fondos") return "/voorschotten";
   return "/";
 }
 
@@ -148,9 +148,8 @@ function buildValues(v: z.infer<typeof docSchema>) {
 }
 
 async function requireUser() {
-  const session = await auth();
-  if (!session?.user) redirect("/login");
-  return session.user;
+  // Centrale guard: ingelogd én geen alleen-lezen (viewer) account.
+  return requireWriteUser();
 }
 
 /** Markeer aanbetalingen die op deze factuur worden verrekend (regels met

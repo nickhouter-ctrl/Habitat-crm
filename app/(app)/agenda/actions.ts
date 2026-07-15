@@ -3,14 +3,15 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { eq } from "drizzle-orm";
+import { requireWriteUser } from "@/lib/auth/guards";
 
 import { auth } from "@/auth";
 import { db } from "@/lib/db";
 import { activities, appointments } from "@/lib/db/schema";
 
 async function requireUser() {
-  const session = await auth();
-  if (!session?.user) redirect("/login");
+  // Centrale guard: ingelogd én geen alleen-lezen (viewer) account.
+  return requireWriteUser();
 }
 
 /** Combineer een date-input (YYYY-MM-DD) + optionele time-input (HH:MM) → Date. */

@@ -31,7 +31,7 @@ import {
   UserCog,
   Percent,
   X,
-} from "lucide-react";
+ HandCoins } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -66,6 +66,7 @@ const NAV = [
   { href: "/shipments", label: "Shipments", icon: Boxes },
   { href: "/quotes", label: "Offertes", icon: FileText },
   { href: "/invoices", label: "Facturen", icon: Receipt },
+  { href: "/voorschotten", label: "Voorschotten", icon: HandCoins },
   { href: "/pakbonnen", label: "Pakbonnen", icon: Truck },
   { href: "/leveringen", label: "Leveringen", icon: PackageCheck },
   { href: "/rapporten", label: "Rapporten", icon: BarChart3 },

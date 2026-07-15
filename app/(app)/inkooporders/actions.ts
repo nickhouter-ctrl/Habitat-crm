@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { and, asc, eq, ilike, isNotNull, isNull, sql } from "drizzle-orm";
 import { z } from "zod";
+import { requireWriteUser } from "@/lib/auth/guards";
 
 import { auth } from "@/auth";
 import { db } from "@/lib/db";
@@ -65,9 +66,8 @@ function dateOrNull(v?: string) {
 }
 
 async function requireUser() {
-  const session = await auth();
-  if (!session?.user) redirect("/login");
-  return session.user as { id?: string };
+  // Centrale guard: ingelogd én geen alleen-lezen (viewer) account.
+  return requireWriteUser();
 }
 
 export async function createPurchaseOrder(formData: FormData) {
@@ -452,13 +452,32 @@ async function reverseAppliedStock(poId: string, userId?: string) {
   let reversed = 0;
   for (const it of parsePoLineItems(po.items)) {
     if (!it.productId || !it.units) continue;
-    await db
-      .update(products)
-      .set({
-        stockQty: sql`coalesce(${products.stockQty}, 0) - ${String(it.units)}`,
-        updatedAt: new Date(),
-      })
-      .where(eq(products.id, it.productId));
+    // Spiegel van applyStock: kits op componentniveau terugdraaien.
+    const prod = await db.query.products.findFirst({ where: eq(products.id, it.productId) });
+    const hasVariants =
+      Array.isArray(prod?.additionalSizes) && (prod!.additionalSizes as unknown[]).length > 0;
+    const kit = !hasVariants
+      ? ((prod?.components as Array<{ sku: string; qty: number }> | null) ?? null)
+      : null;
+    if (kit && kit.length > 0) {
+      for (const comp of kit) {
+        await db
+          .update(products)
+          .set({
+            stockQty: sql`coalesce(${products.stockQty}, 0) - ${String(Number(it.units) * Number(comp.qty))}`,
+            updatedAt: new Date(),
+          })
+          .where(eq(products.sku, comp.sku));
+      }
+    } else {
+      await db
+        .update(products)
+        .set({
+          stockQty: sql`coalesce(${products.stockQty}, 0) - ${String(it.units)}`,
+          updatedAt: new Date(),
+        })
+        .where(eq(products.id, it.productId));
+    }
     reversed++;
   }
   if (reversed > 0) {
@@ -489,14 +508,34 @@ async function applyStock(poId: string, userId?: string) {
   let applied = 0;
   for (const it of parsePoLineItems(po.items)) {
     if (!it.productId || !it.units) continue;
-    const res = await db
-      .update(products)
-      .set({
-        stockQty: sql`coalesce(${products.stockQty}, 0) + ${String(it.units)}`,
-        updatedAt: new Date(),
-      })
-      .where(eq(products.id, it.productId));
-    void res;
+    // Zelfde kit-logica als het verkooppad: een pure kit (componenten, geen
+    // varianten) wordt op COMPONENTniveau ontvangen — de set-voorraad wordt
+    // immers ook uit de componenten berekend en verkoop boekt daar af.
+    const prod = await db.query.products.findFirst({ where: eq(products.id, it.productId) });
+    const hasVariants =
+      Array.isArray(prod?.additionalSizes) && (prod!.additionalSizes as unknown[]).length > 0;
+    const kit = !hasVariants
+      ? ((prod?.components as Array<{ sku: string; qty: number }> | null) ?? null)
+      : null;
+    if (kit && kit.length > 0) {
+      for (const comp of kit) {
+        await db
+          .update(products)
+          .set({
+            stockQty: sql`coalesce(${products.stockQty}, 0) + ${String(Number(it.units) * Number(comp.qty))}`,
+            updatedAt: new Date(),
+          })
+          .where(eq(products.sku, comp.sku));
+      }
+    } else {
+      await db
+        .update(products)
+        .set({
+          stockQty: sql`coalesce(${products.stockQty}, 0) + ${String(it.units)}`,
+          updatedAt: new Date(),
+        })
+        .where(eq(products.id, it.productId));
+    }
     applied++;
   }
 

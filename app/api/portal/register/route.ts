@@ -4,6 +4,7 @@ import { db } from "@/lib/db";
 import { accountRequests } from "@/lib/db/schema";
 import { sendMail } from "@/lib/gmail";
 import { jsonCors, portalCors } from "@/lib/portal/api";
+import { clientIp, rateLimit, RATE_LIMITED } from "@/lib/rate-limit";
 
 /** Publieke endpoint: accountaanvraag vanaf habitat-one.com. */
 
@@ -33,6 +34,10 @@ export async function OPTIONS(req: Request) {
 
 export async function POST(req: Request) {
   const origin = req.headers.get("origin");
+  // Elke aanvraag triggert intern een mail — begrens per IP tegen spam.
+  if (!(await rateLimit(`portal-register:ip:${clientIp(req)}`, 5, 3600))) {
+    return jsonCors(RATE_LIMITED, 429, origin);
+  }
   let payload: unknown;
   try {
     payload = await req.json();

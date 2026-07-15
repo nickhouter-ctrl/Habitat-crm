@@ -2,8 +2,8 @@
 
 import { and, asc, eq, isNotNull, sql } from "drizzle-orm";
 import { redirect } from "next/navigation";
+import { requireWriteUser } from "@/lib/auth/guards";
 
-import { auth } from "@/auth";
 import { COMPANY } from "@/lib/company";
 import { db } from "@/lib/db";
 import { contacts, products } from "@/lib/db/schema";
@@ -13,8 +13,7 @@ import { renderPricelistPdf, type PricelistItem, type PricelistLocale } from "@/
 const LOCALES: PricelistLocale[] = ["nl", "de", "en", "es"];
 
 export async function mailPricelist(formData: FormData) {
-  const session = await auth();
-  if (!session?.user) redirect("/login");
+  await requireWriteUser();
 
   const contactId = String(formData.get("contactId") ?? "");
   const subject = String(formData.get("subject") ?? "").trim() || "Prijslijst verkoop";

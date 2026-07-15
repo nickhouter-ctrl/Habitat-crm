@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { eq, sql } from "drizzle-orm";
+import { requireWriteUser } from "@/lib/auth/guards";
 
 import { auth } from "@/auth";
 import { extractInvoiceFieldsWithAI } from "@/lib/ai-invoice-extract";
@@ -14,9 +15,8 @@ import { runImapPoll, type ImapPollResult } from "@/lib/imap-poll";
 import { copyMailAttachmentToPoBucket } from "@/lib/storage";
 
 async function requireUser() {
-  const session = await auth();
-  if (!session?.user?.id) throw new Error("Niet ingelogd");
-  return session.user;
+  // Centrale guard: ingelogd én geen alleen-lezen (viewer) account.
+  return requireWriteUser();
 }
 
 /** Link de mail aan een purchase order. Optioneel zet PO direct op "in_transit". */

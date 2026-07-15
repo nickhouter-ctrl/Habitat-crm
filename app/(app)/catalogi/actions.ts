@@ -1,13 +1,14 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { requireWriteUser } from "@/lib/auth/guards";
 
 import { auth } from "@/auth";
 import { deleteCatalogFile, uploadCatalogFile } from "@/lib/storage";
 
 async function requireUser() {
-  const session = await auth();
-  if (!session?.user?.id) throw new Error("Niet ingelogd");
+  // Centrale guard: ingelogd én geen alleen-lezen (viewer) account.
+  return requireWriteUser();
 }
 
 /** Upload een catalogus/brochure-PDF naar de catalogi-bibliotheek. */

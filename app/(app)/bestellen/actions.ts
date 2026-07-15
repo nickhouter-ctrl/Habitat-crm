@@ -3,6 +3,7 @@
 import { and, eq, ilike, inArray, sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import { requireWriteUser } from "@/lib/auth/guards";
 
 import { auth } from "@/auth";
 import { db } from "@/lib/db";
@@ -20,9 +21,8 @@ import { getReservedStockByProduct } from "@/lib/stock";
 import { supplierForSku, supplierGroupForSku } from "@/lib/suppliers";
 
 async function requireUser() {
-  const session = await auth();
-  if (!session?.user?.id) redirect("/login");
-  return session.user;
+  // Centrale guard: ingelogd én geen alleen-lezen (viewer) account.
+  return requireWriteUser();
 }
 
 const UNITS = ["stuk", "doos", "m2"] as const;

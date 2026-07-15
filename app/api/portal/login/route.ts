@@ -5,6 +5,7 @@ import { db } from "@/lib/db";
 import { customerAccounts } from "@/lib/db/schema";
 import { verifyPassword } from "@/lib/auth/password";
 import { jsonCors, portalCors } from "@/lib/portal/api";
+import { clientIp, rateLimit, RATE_LIMITED } from "@/lib/rate-limit";
 import { signPortalToken } from "@/lib/portal/token";
 
 const schema = z.object({ email: z.string().trim().email(), password: z.string().min(1) });
@@ -24,6 +25,11 @@ export async function POST(req: Request) {
   const parsed = schema.safeParse(payload);
   if (!parsed.success) return jsonCors({ ok: false, error: "validation" }, 400, origin);
   const { email, password } = parsed.data;
+
+  // Brute-force-rem: per IP én per account (voorkomt onbeperkt wachtwoord-raden).
+  const ipOk = await rateLimit(`portal-login:ip:${clientIp(req)}`, 10, 300);
+  const mailOk = await rateLimit(`portal-login:email:${email.toLowerCase()}`, 5, 900);
+  if (!ipOk || !mailOk) return jsonCors(RATE_LIMITED, 429, origin);
 
   const acc = await db.query.customerAccounts.findFirst({
     where: eq(customerAccounts.email, email.toLowerCase()),

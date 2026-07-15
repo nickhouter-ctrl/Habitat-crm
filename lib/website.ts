@@ -4,6 +4,7 @@
  */
 export async function revalidateWebsite(
   paths: string[] = ["/properties"],
+  tags: string[] = [],
 ): Promise<void> {
   const url = process.env.WEBSITE_REVALIDATE_URL;
   const secret = process.env.WEBSITE_REVALIDATE_SECRET;
@@ -15,10 +16,11 @@ export async function revalidateWebsite(
         "content-type": "application/json",
         "x-revalidate-secret": secret,
       },
-      body: JSON.stringify({ paths }),
+      body: JSON.stringify({ paths, tags }),
       cache: "no-store",
     });
   } catch (err) {
     console.warn("[habitat-crm] website revalidation failed:", err);
   }
 }
+

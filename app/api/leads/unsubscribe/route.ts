@@ -1,4 +1,5 @@
 import { eq, sql } from "drizzle-orm";
+import { clientIp, rateLimit } from "@/lib/rate-limit";
 
 import { db } from "@/lib/db";
 import { emailSuppressions, prospects } from "@/lib/db/schema";
@@ -68,6 +69,9 @@ export async function GET(req: Request) {
 
 export async function POST(req: Request) {
   // List-Unsubscribe-Post: One-Click stuurt een POST; token zit in de query.
+  if (!(await rateLimit(`unsubscribe:ip:${clientIp(req)}`, 30, 3600))) {
+    return new Response("Too many requests", { status: 429 });
+  }
   const token = new URL(req.url).searchParams.get("token");
   return unsubscribe(token);
 }

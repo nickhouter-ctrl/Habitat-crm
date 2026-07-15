@@ -3,6 +3,7 @@
 import { eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import { requireWriteUser } from "@/lib/auth/guards";
 
 import { auth } from "@/auth";
 import { db } from "@/lib/db";
@@ -10,8 +11,8 @@ import { documents, products } from "@/lib/db/schema";
 import { normalizeDocItems } from "@/lib/documents";
 
 async function requireUser() {
-  const session = await auth();
-  if (!session?.user) redirect("/login");
+  // Centrale guard: ingelogd én geen alleen-lezen (viewer) account.
+  return requireWriteUser();
 }
 
 const ORIENTS = ["S1", "S2", "S3", "S4"] as const;

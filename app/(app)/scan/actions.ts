@@ -3,6 +3,7 @@
 import { and, desc, eq, inArray, isNull, ne, or, sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import { requireWriteUser } from "@/lib/auth/guards";
 
 import { auth } from "@/auth";
 import { db } from "@/lib/db";
@@ -10,9 +11,8 @@ import { activities, documents, products, type DocumentLineItem } from "@/lib/db
 import { setDeliveryNoteDelivered } from "../documents/actions";
 
 async function requireUser() {
-  const session = await auth();
-  if (!session?.user?.id) redirect("/login");
-  return session.user;
+  // Centrale guard: ingelogd én geen alleen-lezen (viewer) account.
+  return requireWriteUser();
 }
 
 export type ScannedProduct = {

@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { and, asc, eq, isNotNull, isNull } from "drizzle-orm";
 import { z } from "zod";
+import { requireWriteUser } from "@/lib/auth/guards";
 
 import { auth } from "@/auth";
 import { db } from "@/lib/db";
@@ -28,8 +29,8 @@ import { sendEmail } from "@/lib/email";
 import { COMPANY } from "@/lib/company";
 
 async function requireUser() {
-  const session = await auth();
-  if (!session?.user) redirect("/login");
+  // Centrale guard: ingelogd én geen alleen-lezen (viewer) account.
+  return requireWriteUser();
 }
 
 /** Bedrag-string normaliseren (NL-komma → punt); leeg → null. */

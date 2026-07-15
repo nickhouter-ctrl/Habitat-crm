@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
+import { clientIp, rateLimit, RATE_LIMITED } from "@/lib/rate-limit";
 
 import { db } from "@/lib/db";
 import { quoteRequests } from "@/lib/db/schema";
@@ -55,6 +56,10 @@ export async function OPTIONS(req: Request) {
 
 export async function POST(req: Request) {
   const origin = req.headers.get("origin");
+  // Elke aanvraag stuurt mails (intern + bevestiging) — begrens per IP.
+  if (!(await rateLimit(`quote-request:ip:${clientIp(req)}`, 5, 3600))) {
+    return NextResponse.json(RATE_LIMITED, { status: 429, headers: corsHeaders(origin) });
+  }
   let payload: unknown;
   try { payload = await req.json(); } catch {
     return NextResponse.json({ ok: false, error: "invalid-json" }, { status: 400, headers: corsHeaders(origin) });

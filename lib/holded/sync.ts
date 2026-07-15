@@ -339,9 +339,22 @@ export async function pullDocumentsFromHolded(
       });
 
       if (existing) {
+        // Lokale beslissingen beschermen: een geannuleerde factuur niet
+        // heropenen, en de status alleen vooruit bewegen (betaling uit Holded);
+        // een lokaal 'overdue'/'paid' niet terug naar 'sent' platslaan.
+        if (existing.status === "void") {
+          updated++;
+          continue;
+        }
+        const nextStatus =
+          data.status === "paid" || data.status === "partially_paid"
+            ? data.status
+            : existing.status === "overdue" || existing.status === "paid" || existing.status === "partially_paid"
+              ? existing.status
+              : data.status;
         await db
           .update(documents)
-          .set({ ...data, contactId: contactId ?? existing.contactId })
+          .set({ ...data, status: nextStatus, contactId: contactId ?? existing.contactId })
           .where(eq(documents.id, existing.id));
         await upsertSyncMap({
           entityType: "document",
@@ -430,10 +443,32 @@ export async function pullPurchaseOrdersFromHolded(): Promise<PullResult> {
       where: eq(purchaseOrders.holdedId, d.id),
     });
     if (existing) {
-      // paidAt niet overschrijven als 'ie al gezet is — de eerste keer telt.
+      // Lokale staat beschermen bij her-pull:
+      //  - stockAppliedAt NOOIT aanpassen (nullen → dubbele boeking bij opnieuw
+      //    ontvangen; zetten → ontvangst zonder echte voorraadboeking);
+      //  - een lokaal al ontvangen PO niet terugzetten naar concept;
+      //  - productId-koppelingen op de regels behouden (Holded kent die niet);
+      //  - paidAt/paidEur alleen vooruit (eerste betaling telt).
+      const localItems = (existing.items ?? []) as PurchaseOrderLineItem[];
+      const mergedItems = items.map((it) => {
+        const match = localItems.find(
+          (l) =>
+            (l.sku && it.sku && l.sku === it.sku) ||
+            (l.name && it.name && l.name.trim().toLowerCase() === it.name.trim().toLowerCase()),
+        );
+        return match?.productId ? { ...it, productId: match.productId } : it;
+      });
       await db
         .update(purchaseOrders)
-        .set({ ...data, paidAt: existing.paidAt ?? data.paidAt })
+        .set({
+          ...data,
+          items: mergedItems,
+          status: existing.status === "received" ? "received" : data.status,
+          stockAppliedAt: existing.stockAppliedAt,
+          receivedAt: existing.receivedAt ?? data.receivedAt,
+          paidAt: existing.paidAt ?? data.paidAt,
+          paidEur: existing.paidEur ?? data.paidEur,
+        })
         .where(eq(purchaseOrders.id, existing.id));
       updated++;
     } else {

@@ -4,8 +4,8 @@ import { and, eq, inArray, ne } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
+import { requireWriteUser } from "@/lib/auth/guards";
 
-import { auth } from "@/auth";
 import { contactDisplayName } from "@/lib/contact-name";
 import { db } from "@/lib/db";
 import { activities, companies, contacts, documents, holdedSyncMap } from "@/lib/db/schema";
@@ -43,8 +43,7 @@ function clean<T extends Record<string, unknown>>(obj: T): T {
 }
 
 export async function createContact(formData: FormData) {
-  const session = await auth();
-  if (!session?.user) redirect("/login");
+  const guardUser = await requireWriteUser();
 
   const parsed = newContactSchema.safeParse(Object.fromEntries(formData));
   if (!parsed.success) {
@@ -77,7 +76,7 @@ export async function createContact(formData: FormData) {
           city: v.city || "",
           province: v.province || "",
           country: "ES",
-          ownerId: session.user.id,
+          ownerId: guardUser.id,
         }),
       )
       .returning({ id: companies.id });
@@ -102,7 +101,7 @@ export async function createContact(formData: FormData) {
         country: "ES",
         notes: v.notes || "",
         companyId,
-        ownerId: session.user.id,
+        ownerId: guardUser.id,
       }),
     )
     .returning({ id: contacts.id });
@@ -113,8 +112,7 @@ export async function createContact(formData: FormData) {
 }
 
 export async function updateContact(id: string, formData: FormData) {
-  const session = await auth();
-  if (!session?.user) redirect("/login");
+  const guardUser = await requireWriteUser();
 
   const parsed = newContactSchema.safeParse(Object.fromEntries(formData));
   if (!parsed.success) {
@@ -154,7 +152,7 @@ export async function updateContact(id: string, formData: FormData) {
     } else {
       const [co] = await db
         .insert(companies)
-        .values({ ...coData, type: "client", ownerId: session.user.id })
+        .values({ ...coData, type: "client", ownerId: guardUser.id })
         .returning({ id: companies.id });
       companyId = co.id;
     }
@@ -191,8 +189,7 @@ export async function updateContact(id: string, formData: FormData) {
 }
 
 export async function addContactNote(contactId: string, body: string) {
-  const session = await auth();
-  if (!session?.user) redirect("/login");
+  const guardUser = await requireWriteUser();
 
   const text = body.trim();
   if (!text) return;
@@ -201,7 +198,7 @@ export async function addContactNote(contactId: string, body: string) {
     type: "note",
     body: text,
     contactId,
-    authorId: session.user.id,
+    authorId: guardUser.id,
   });
   await db
     .update(contacts)
@@ -212,8 +209,7 @@ export async function addContactNote(contactId: string, body: string) {
 }
 
 export async function deleteContact(id: string) {
-  const session = await auth();
-  if (!session?.user) redirect("/login");
+  const guardUser = await requireWriteUser();
 
   // Beschermd: niet verwijderen als er verstuurde/betaalde facturen aan hangen.
   const blocking = await db.query.documents.findFirst({
