@@ -285,7 +285,10 @@ export default async function EditProductPage({
             {variants.length > 0 && (
               <div>
                 <p className="mb-1.5 text-xs font-medium uppercase tracking-wide text-muted">
-                  Voorraad per draairichting
+                  {/* Draairichting is een deur-begrip; andere producten hebben gewoon varianten. */}
+                  {(product.sku ?? "").toUpperCase().startsWith("DR-")
+                    ? "Voorraad per draairichting"
+                    : "Voorraad per variant"}
                 </p>
                 <ul className="divide-y rounded-md border">
                   {variants.map((v, i) => (

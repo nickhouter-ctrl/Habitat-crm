@@ -138,9 +138,16 @@ export default async function ProductsPage({
   // Gereserveerde stuks per product (uit geaccepteerde, nog niet afgeboekte offertes).
   const reservedByProduct = await getReservedStockByProduct();
 
-  // Set-producten (met uitvoeringen): verkocht zónder gekozen draairichting → melding.
+  // Deur-sets (met uitvoeringen): verkocht zónder gekozen draairichting → melding.
+  // Alleen deuren (DR-…) — andere producten met varianten (bv. Flexible Stone-
+  // maten) hebben geen draairichting; zelfde afbakening als het dashboard.
   const variantSetIds = rows
-    .filter((r) => Array.isArray(r.additionalSizes) && (r.additionalSizes as unknown[]).length >= 2)
+    .filter(
+      (r) =>
+        (r.sku ?? "").toUpperCase().startsWith("DR-") &&
+        Array.isArray(r.additionalSizes) &&
+        (r.additionalSizes as unknown[]).length >= 2,
+    )
     .map((r) => r.id);
   const unassignedDirByProduct = await getUnassignedDirectionSales(variantSetIds);
 
