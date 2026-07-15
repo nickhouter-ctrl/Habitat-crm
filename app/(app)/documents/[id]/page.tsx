@@ -226,7 +226,10 @@ export default async function DocumentDetailPage({
   // Regels met te weinig / (bijna) geen voorraad t.o.v. het bestelde aantal.
   // Niet tonen zodra de voorraad van dit document al is afgeboekt — dan is de
   // verkoop al uit de voorraad gehaald en zou de melding dubbel tellen.
-  const lowStock = (doc.stockAppliedAt ? [] : items)
+  // Ook niet op creditnota's/fondos: die verbruiken geen voorraad (een
+  // creditnota boekt juist terug), dus "nodig X / bestellen" slaat daar nergens op.
+  const consumesStock = doc.kind !== "creditnote" && doc.kind !== "fondos";
+  const lowStock = (doc.stockAppliedAt || !consumesStock ? [] : items)
     .map((it) => {
       const info = it.productId
         ? stockByKey.get(it.productId)
@@ -680,7 +683,7 @@ export default async function DocumentDetailPage({
                   </p>
                 </form>
               )}
-              {doc.kind !== "deliverynote" && (
+              {doc.kind !== "deliverynote" && doc.kind !== "creditnote" && doc.kind !== "fondos" && (
                 <form action={makeDeliveryNote}>
                   <SubmitButton size="sm" variant="secondary" pendingLabel="Bezig…">
                     → Maak pakbon
