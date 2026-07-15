@@ -484,7 +484,10 @@ export async function pushPurchaseOrderToHolded(poId: string): Promise<string> {
     const exact = matches.find(
       (c) => (c.name ?? "").toLowerCase().trim() === po.supplier.toLowerCase().trim(),
     );
-    contactRef = (exact ?? matches[0])?.id;
+    // Nooit blind de eerste fuzzy treffer pakken (zelfde regel als het
+    // document-pad): geen exacte naam-match → contactName meesturen en Holded
+    // laat de gebruiker koppelen.
+    contactRef = exact?.id;
   } catch {
     /* zoeken is best-effort — anders sturen we contactName */
   }
@@ -1019,7 +1022,13 @@ export async function refreshInvoicePaymentFromHolded(
 
   const paidEur = String(d.paymentsTotal ?? 0);
   const payStatus = holdedDocStatus(d); // "paid" | "partially_paid" | "sent"
-  const patch: Partial<typeof documents.$inferInsert> = { paidEur, updatedAt: new Date() };
+  const patch: Partial<typeof documents.$inferInsert> = { updatedAt: new Date() };
+  // paidEur alleen VOORUIT bewegen: een factuur die in het CRM al (handmatig)
+  // op betaald staat terwijl Holded (nog) geen betaling kent, mag door een
+  // webhook-event niet terug naar €0 springen.
+  if (Number(paidEur) > 0 || local.status !== "paid") {
+    patch.paidEur = paidEur;
+  }
   // Alleen vooruit schuiven op betaling — een 'overdue'/'sent' niet platslaan
   // tenzij er nu (deels) betaald is.
   if (payStatus === "paid") {

@@ -41,6 +41,10 @@ function newToken(): string {
 }
 
 async function baseUrl(): Promise<string> {
+  // Vaste APP_URL heeft voorrang: links in klant-mails mogen nooit uit de
+  // (te spoofen) Host-header komen.
+  const fixed = process.env.APP_URL?.trim().replace(/\/$/, "");
+  if (fixed) return fixed;
   const h = await headers();
   const host = h.get("host") ?? "localhost:3001";
   const proto = h.get("x-forwarded-proto") ?? (host.includes("localhost") ? "http" : "https");
@@ -93,7 +97,9 @@ function listPathFor(kind: DocKind): string {
   if (kind === "invoice") return "/invoices";
   if (kind === "estimate") return "/quotes";
   if (kind === "deliverynote") return "/pakbonnen";
-  return "/documents";
+  // Proforma's/fondos hebben geen eigen lijst — dashboard is de veilige landing
+  // (er bestaat geen /documents-overzicht; daarheen redirecten gaf een 404).
+  return "/";
 }
 
 function revalidateAround(kind: DocKind, id?: string) {
@@ -626,7 +632,9 @@ export async function sendAccountReminder(
   const invoices = docs.filter(
     (d) => d.kind === "invoice" && d.status !== "draft" && openOf(d) > 0.01,
   );
-  const credits = docs.filter((d) => d.kind === "creditnote" && openOf(d) > 0.01);
+  const credits = docs.filter(
+    (d) => d.kind === "creditnote" && d.status !== "draft" && d.status !== "rejected" && openOf(d) > 0.01,
+  );
   if (invoices.length === 0) {
     return { ok: false, error: "Geen openstaande facturen voor deze klant." };
   }
@@ -748,7 +756,7 @@ export async function setDocumentStatus(id: string, formData: FormData) {
 
   const doc = await db.query.documents.findFirst({
     where: eq(documents.id, id),
-    columns: { totalEur: true, kind: true, dealId: true, holdedId: true, sentAt: true, projectId: true, docNumber: true, isAdvance: true },
+    columns: { totalEur: true, kind: true, dealId: true, holdedId: true, sentAt: true, projectId: true, docNumber: true, isAdvance: true, stockAppliedAt: true },
   });
   if (!doc) return;
 
@@ -825,6 +833,11 @@ export async function setDocumentStatus(id: string, formData: FormData) {
   } else if (doc.kind === "creditnote" && (status === "sent" || status === "paid")) {
     // Creditnota = retour → voorraad weer bijboeken (idempotent).
     await bookStockInForCreditNote(id, user.id, { auto: true });
+  } else if ((status === "void" || status === "draft") && doc.stockAppliedAt) {
+    // Geannuleerd of terug naar concept terwijl de voorraad al geboekt was →
+    // boeking richting-bewust terugdraaien; anders blijft de voorraad scheef
+    // staan (en blokkeert de achtergebleven marker de keten-guard voorgoed).
+    await reverseStockOutFromDocument(id);
   }
 
   revalidateAround(doc.kind as DocKind, id);
@@ -846,7 +859,7 @@ export async function markDocumentSentNoEmail(id: string) {
     columns: { kind: true, status: true, sentAt: true, dealId: true, totalEur: true },
   });
   if (!doc) return;
-  if (doc.kind !== "invoice" && doc.kind !== "creditnote") return;
+  if (doc.kind !== "invoice" && doc.kind !== "creditnote" && doc.kind !== "fondos") return;
 
   await db
     .update(documents)
@@ -860,9 +873,10 @@ export async function markDocumentSentNoEmail(id: string) {
 
   if (doc.kind === "invoice") {
     await bookStockOutInternal(id, user.id, { auto: true });
-  } else {
+  } else if (doc.kind === "creditnote") {
     await bookStockInForCreditNote(id, user.id, { auto: true });
   }
+  // fondos: geen voorraadeffect — puur status → verstuurd.
 
   await syncDealFromDocument(doc.dealId, { kind: doc.kind, status: "sent", totalEur: doc.totalEur });
   revalidateAround(doc.kind as DocKind, id);
@@ -894,7 +908,7 @@ export async function deleteDocument(id: string) {
   await requireUser();
   const doc = await db.query.documents.findFirst({
     where: eq(documents.id, id),
-    columns: { kind: true, status: true },
+    columns: { kind: true, status: true, stockAppliedAt: true },
   });
   if (!doc) redirect("/quotes");
   // Veilig verwijderen: offertes mogen altijd weg; facturen e.d. alleen zolang
@@ -902,6 +916,11 @@ export async function deleteDocument(id: string) {
   const deletable = doc.kind === "estimate" || doc.status === "draft";
   if (!deletable) {
     redirect(`/documents/${id}?verwijderen=beschermd`);
+  }
+  // Hangt er nog een voorraadboeking aan (bv. verstuurd geweest en terug naar
+  // concept gezet)? Eerst terugdraaien — anders verdwijnt de afboeking spoorloos.
+  if (doc.stockAppliedAt) {
+    await reverseStockOutFromDocument(id);
   }
   // Holded-koppeling opruimen zodat het document niet terug-synct.
   await db
@@ -935,7 +954,8 @@ export async function sendDocument(id: string) {
 
   const token = doc.acceptToken ?? newToken();
   const url = `${await baseUrl()}/offerte/${token}`;
-  const kindLabel = doc.kind === "invoice" ? "Factuur" : "Offerte";
+  const kindLabel =
+    doc.kind === "invoice" ? "Factuur" : doc.kind === "fondos" ? "Provision-de-fondos" : doc.kind === "creditnote" ? "Creditnota" : "Offerte";
 
   await db
     .update(documents)
@@ -1061,7 +1081,8 @@ export async function sendDocumentCustom(id: string, formData: FormData) {
 
   const token = doc.acceptToken ?? newToken();
   const url = `${await baseUrl()}/offerte/${token}`;
-  const kindLabel = doc.kind === "invoice" ? "Factuur" : "Offerte";
+  const kindLabel =
+    doc.kind === "invoice" ? "Factuur" : doc.kind === "fondos" ? "Provision-de-fondos" : doc.kind === "creditnote" ? "Creditnota" : "Offerte";
 
   await db
     .update(documents)
@@ -1216,31 +1237,44 @@ export async function createInvoiceFromEstimate(estimateId: string, formData?: F
     titleSuffix = ` — ${pct}% van ${est.docNumber ?? "offerte"}`;
   }
 
-  // Reeds betaalde voorschotten (proforma's gekoppeld aan deze offerte) als
-  // negatieve "reeds betaald"-regels verrekenen — btw komt op deze eindfactuur.
+  // Reeds betaalde, nog niet verrekende voorschotten verrekenen als negatieve
+  // regels. Zelfde semantiek als de nieuwe-factuur-pagina: aftrek van het
+  // NETTObedrag mét het btw-tarief van het voorschot (niet incl. btw als
+  // 0%-regel — dat drukte de omzet en verhoogde de af te dragen btw), mét
+  // `advanceRef` zodat het voorschot als verrekend gemarkeerd wordt, en met
+  // filter op `advanceSettledAt` zodat een tweede deelfactuur het niet nóg
+  // eens aftrekt. Naast proforma's tellen ook isAdvance-facturen en
+  // fondos-documenten (die staan als isAdvance) mee.
   const paidVoorschotten = await db.query.documents.findMany({
     where: and(
-      eq(documents.sourceDocumentId, estimateId),
-      eq(documents.kind, "proforma"),
       eq(documents.status, "paid"),
+      isNull(documents.advanceSettledAt),
+      or(eq(documents.kind, "proforma"), eq(documents.isAdvance, true)),
+      est.projectId
+        ? or(eq(documents.sourceDocumentId, estimateId), eq(documents.projectId, est.projectId))
+        : eq(documents.sourceDocumentId, estimateId),
     ),
-    columns: { docNumber: true, totalEur: true },
+    columns: { id: true, docNumber: true, subtotalEur: true, taxEur: true, totalEur: true },
   });
   for (const v of paidVoorschotten) {
-    const amt = Number(v.totalEur ?? 0);
-    if (amt > 0) {
-      items = [
-        ...items,
-        {
-          name: `Reeds betaald voorschot ${v.docNumber ?? ""}`.trim(),
-          units: 1,
-          price: -amt,
-          discount: 0,
-          taxRate: 0,
-          category: "materiaal",
-        },
-      ];
-    }
+    const net = Number(v.subtotalEur ?? 0) || Number(v.totalEur ?? 0);
+    if (net <= 0) continue;
+    const rate =
+      Number(v.subtotalEur ?? 0) > 0
+        ? Math.round((Number(v.taxEur ?? 0) / Number(v.subtotalEur)) * 100)
+        : 0;
+    items = [
+      ...items,
+      {
+        name: `Reeds betaald voorschot ${v.docNumber ?? ""}`.trim(),
+        units: 1,
+        price: -net,
+        discount: 0,
+        taxRate: rate,
+        category: "materiaal",
+        advanceRef: v.id,
+      },
+    ];
   }
 
   const totals = computeTotals(items);
@@ -1270,6 +1304,10 @@ export async function createInvoiceFromEstimate(estimateId: string, formData?: F
     items,
     notes: est.notes,
   });
+
+  // Verrekende voorschotten direct markeren (zelfde gedrag als createDocument),
+  // zodat een tweede (deel)factuur ze niet nóg eens aftrekt.
+  await settleReferencedAdvances(items);
 
   revalidateAround("invoice");
   revalidatePath(`/documents/${estimateId}`);
@@ -1424,6 +1462,9 @@ export async function approveEstimateToInvoice(estimateId: string) {
 /** Create a draft delivery note (pakbon) copied from another document's lines. */
 /** Internal: clone a document as a pakbon and return the new id (no redirect). */
 export async function createDeliveryNoteInternal(sourceId: string): Promise<string | null> {
+  // Ook al is dit een "interne" helper: elke export in een "use server"-bestand
+  // is van buitenaf aanroepbaar, dus zelf authenticeren.
+  await requireUser();
   const src = await db.query.documents.findFirst({ where: eq(documents.id, sourceId) });
   if (!src) return null;
 
@@ -1515,25 +1556,43 @@ async function bookStockOutInternal(
   // losse factuur) heeft een eigen wortel en boekt dus wél opnieuw af. De atomaire
   // claim verderop borgt bovendien dat één document nooit twee keer afboekt.
   const rootId = doc.sourceDocumentId ?? docId;
-  const alreadyBooked = await db.query.documents.findFirst({
-    where: and(
-      or(eq(documents.id, rootId), eq(documents.sourceDocumentId, rootId)),
-      isNotNull(documents.stockAppliedAt),
-      ne(documents.id, docId),
-    ),
-    columns: { docNumber: true },
+  // Keten-check + claim in één transactie achter een advisory-lock per keten:
+  // twee documenten op dezelfde wortel (aanbetaling + restfactuur, twee tabs)
+  // kunnen anders allebei de check passeren en samen dubbel afboeken.
+  const claim = await db.transaction(async (tx) => {
+    await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${`stock:${rootId}`}))`);
+    const bookedInChain = await tx
+      .select({ docNumber: documents.docNumber, items: documents.items })
+      .from(documents)
+      .where(
+        and(
+          or(eq(documents.id, rootId), eq(documents.sourceDocumentId, rootId)),
+          isNotNull(documents.stockAppliedAt),
+          ne(documents.id, docId),
+          // Alleen FACTUREN blokkeren: een creditnota in de keten boekte juist
+          // terug en mag een (her)afboeking niet tegenhouden.
+          eq(documents.kind, "invoice"),
+        ),
+      );
+    // Fase-/deelfacturen met DISJUNCTE regels dekken andere goederen en mogen wél
+    // boeken; alleen blokkeren als een al-geboekte factuur (deels) dezelfde
+    // producten bevat (percentage-deelfacturen: zelfde producten → blokkeert).
+    const myProductIds = new Set(lines.map((it) => it.productId!));
+    const overlapping = bookedInChain.find((b) =>
+      normalizeDocItems(b.items).some((it) => it.productId && myProductIds.has(it.productId)),
+    );
+    if (overlapping) return { blockedBy: overlapping.docNumber ?? null };
+    const [claimed] = await tx
+      .update(documents)
+      .set({ stockAppliedAt: new Date() })
+      .where(and(eq(documents.id, docId), isNull(documents.stockAppliedAt)))
+      .returning({ id: documents.id });
+    return { claimed: !!claimed };
   });
-  if (alreadyBooked) {
-    return { ok: false, reason: "deal-already-booked", otherDoc: alreadyBooked.docNumber };
+  if ("blockedBy" in claim) {
+    return { ok: false, reason: "deal-already-booked", otherDoc: claim.blockedBy };
   }
-
-  // Atomair claimen: alleen de eerste boekt af.
-  const [claimed] = await db
-    .update(documents)
-    .set({ stockAppliedAt: new Date() })
-    .where(and(eq(documents.id, docId), isNull(documents.stockAppliedAt)))
-    .returning({ id: documents.id });
-  if (!claimed) return { ok: false, reason: "already-booked" };
+  if (!claim.claimed) return { ok: false, reason: "already-booked" };
 
   let applied = 0;
   const negatives: string[] = [];
@@ -1676,6 +1735,18 @@ async function bookStockInForCreditNote(
   const lines = normalizeDocItems(doc.items).filter((it) => it.productId && it.units);
   if (lines.length === 0) return { ok: false, reason: "no-products" };
 
+  // Alleen terugboeken als de bronfactuur ooit is afgeboekt — een creditnota op
+  // een concept-factuur zou anders voorraad bijboeken die nooit weg is geweest.
+  if (doc.sourceDocumentId) {
+    const src = await db.query.documents.findFirst({
+      where: eq(documents.id, doc.sourceDocumentId),
+      columns: { stockAppliedAt: true, kind: true },
+    });
+    if (src && src.kind === "invoice" && !src.stockAppliedAt) {
+      return { ok: false, reason: "no-products" };
+    }
+  }
+
   // Atomair claimen: alleen de eerste boekt bij (geen dubbele klik / dubbele boeking).
   const [claimed] = await db
     .update(documents)
@@ -1703,6 +1774,14 @@ async function bookStockInForCreditNote(
 /** Push dit verkoopdocument naar Holded (maakt/koppelt de Holded-factuur). */
 export async function pushDocumentToHoldedAction(id: string) {
   const user = await requireUser();
+  // Externe facturen (zusterbedrijven) horen niet in Habitats Holded.
+  const target0 = await db.query.documents.findFirst({
+    where: eq(documents.id, id),
+    columns: { isExternal: true },
+  });
+  if (target0?.isExternal) {
+    redirect(`/documents/${id}?holdedError=${encodeURIComponent("Externe factuur — hoort niet in Habitats Holded.")}`);
+  }
   let target: string;
   try {
     const hid = await pushDocumentToHolded(id);
@@ -1796,6 +1875,21 @@ export async function reverseStockOutFromDocument(id: string) {
   const doc = await db.query.documents.findFirst({ where: eq(documents.id, id) });
   if (!doc) return;
 
+  // Heeft een creditnota op deze factuur de voorraad al teruggeboekt? Dan zou
+  // hier terugdraaien de retour DUBBEL binnenbrengen — overslaan. (Geldt voor
+  // alle annuleer-paden: de annuleer-knop én de status-dropdown.)
+  if (doc.kind === "invoice") {
+    const bookedCredit = await db.query.documents.findFirst({
+      where: and(
+        eq(documents.sourceDocumentId, id),
+        eq(documents.kind, "creditnote"),
+        isNotNull(documents.stockAppliedAt),
+      ),
+      columns: { id: true },
+    });
+    if (bookedCredit) return;
+  }
+
   // Atomair claimen: alleen één keer terugdraaien (voorkomt dubbel terugboeken).
   const [claimed] = await db
     .update(documents)
@@ -1857,7 +1951,8 @@ export async function cancelSaleReturnStock(id: string) {
   const doc = await db.query.documents.findFirst({ where: eq(documents.id, id) });
   if (!doc) return;
 
-  // 1. Voorraad terugboeken als die was afgeboekt (idempotent via stockAppliedAt).
+  // 1. Voorraad terugboeken als die was afgeboekt (idempotent via stockAppliedAt;
+  //    de creditnota-guard zit in reverseStockOutFromDocument zelf).
   if (doc.stockAppliedAt) await reverseStockOutFromDocument(id);
 
   // 2. Document op 'void' zetten (geannuleerd).

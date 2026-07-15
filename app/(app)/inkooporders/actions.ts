@@ -145,6 +145,9 @@ export async function updatePurchaseOrder(id: string, formData: FormData) {
 
   if (d.status === "received" && !existing.stockAppliedAt) {
     await applyStock(id, user.id);
+  } else if (d.status !== "received" && existing.stockAppliedAt) {
+    // Via het bewerkformulier terug van "ontvangen" → bijgeboekte voorraad eraf.
+    await reverseAppliedStock(id, user.id);
   }
 
   revalidatePath("/inkooporders");
@@ -183,7 +186,9 @@ export async function linkPurchaseOrderAsHours(id: string, formData: FormData) {
   const po = await db.query.purchaseOrders.findFirst({ where: eq(purchaseOrders.id, id) });
   if (!po) return;
 
-  const amount = Number(po.subtotal ?? po.total ?? 0);
+  // `subtotal` kan als string "0" binnenkomen (Holded-pull zonder subtotal) —
+  // dan is het bedrag niet nul maar onbekend: terugvallen op het totaal.
+  const amount = Number(po.subtotal) || Number(po.total) || 0;
   const hoursRaw = Number(String(formData.get("hours") ?? "").replace(",", "."));
   const hours = hoursRaw > 0 ? hoursRaw : 1; // geen uren opgegeven → 1 post t.w.v. het bedrag
   const rate = amount > 0 ? amount / hours : 0;
@@ -233,6 +238,10 @@ export async function setPurchaseOrderStatus(id: string, status: (typeof PO_STAT
 
   if (status === "received" && !existing.stockAppliedAt) {
     await applyStock(id, user.id);
+  } else if (status !== "received" && existing.status === "received" && existing.stockAppliedAt) {
+    // Ontvangst teruggedraaid (bv. per ongeluk op "ontvangen" gezet) → de
+    // bijgeboekte voorraad weer eraf, anders blijft die spoken.
+    await reverseAppliedStock(id, user.id);
   }
 
   revalidatePath("/inkooporders");
@@ -248,13 +257,16 @@ export async function markPurchaseOrderPaid(id: string) {
   const user = await requireUser();
   const po = await db.query.purchaseOrders.findFirst({ where: eq(purchaseOrders.id, id) });
   if (!po) throw new Error("Inkooporder niet gevonden");
-  if (po.paidAt) return; // al betaald
 
   const amount = Number(po.total ?? 0);
-  await db
+  // Atomair claimen (WHERE paid_at IS NULL): een dubbelklik of gelijktijdige
+  // submit zou anders twee keer een betaling in Holded registreren.
+  const [claimed] = await db
     .update(purchaseOrders)
     .set({ paidAt: new Date(), paidEur: po.total ?? "0", updatedAt: new Date() })
-    .where(eq(purchaseOrders.id, id));
+    .where(and(eq(purchaseOrders.id, id), isNull(purchaseOrders.paidAt)))
+    .returning({ id: purchaseOrders.id });
+  if (!claimed) return; // al betaald
 
   // Betaling doorzetten naar Holded — best-effort, faalt zacht.
   let holdedNote = "";
@@ -331,7 +343,7 @@ export async function pushAllPendingToHolded(): Promise<{ pushed: number; failed
   const pending = await db
     .select({ id: purchaseOrders.id, supplier: purchaseOrders.supplier, reference: purchaseOrders.reference })
     .from(purchaseOrders)
-    .where(sql`${purchaseOrders.holdedId} IS NULL`);
+    .where(sql`${purchaseOrders.holdedId} IS NULL AND ${purchaseOrders.status} NOT IN ('draft', 'cancelled')`);
 
   let pushed = 0;
   let failed = 0;
@@ -411,16 +423,52 @@ export async function createProductFromPoLine(
 }
 
 export async function deletePurchaseOrder(id: string) {
-  await requireUser();
+  const user = await requireUser();
   const existing = await db.query.purchaseOrders.findFirst({
     where: eq(purchaseOrders.id, id),
-    columns: { attachments: true },
+    columns: { attachments: true, stockAppliedAt: true },
   });
+  // Bijgeboekte ontvangst eerst terugdraaien — anders blijft de voorraad
+  // verhoogd zonder spoor van de bron.
+  if (existing?.stockAppliedAt) await reverseAppliedStock(id, user.id);
   for (const a of normalizePoAttachments(existing?.attachments)) await deletePurchaseOrderFile(a.path);
   await db.delete(purchaseOrders).where(eq(purchaseOrders.id, id));
   revalidatePath("/inkooporders");
   revalidatePath("/");
   redirect("/inkooporders");
+}
+
+/** Draai een eerder bijgeboekte PO-ontvangst terug; idempotent via stockAppliedAt. */
+async function reverseAppliedStock(poId: string, userId?: string) {
+  // Atomair claimen: alleen terugdraaien wat echt bijgeboekt is.
+  const [claimed] = await db
+    .update(purchaseOrders)
+    .set({ stockAppliedAt: null })
+    .where(and(eq(purchaseOrders.id, poId), isNotNull(purchaseOrders.stockAppliedAt)))
+    .returning({ id: purchaseOrders.id });
+  if (!claimed) return;
+  const po = await db.query.purchaseOrders.findFirst({ where: eq(purchaseOrders.id, poId) });
+  if (!po) return;
+  let reversed = 0;
+  for (const it of parsePoLineItems(po.items)) {
+    if (!it.productId || !it.units) continue;
+    await db
+      .update(products)
+      .set({
+        stockQty: sql`coalesce(${products.stockQty}, 0) - ${String(it.units)}`,
+        updatedAt: new Date(),
+      })
+      .where(eq(products.id, it.productId));
+    reversed++;
+  }
+  if (reversed > 0) {
+    await db.insert(activities).values({
+      type: "note",
+      subject: `Voorraad-ontvangst teruggedraaid — inkooporder ${po.reference ?? po.supplier}`,
+      body: `${reversed} productregel(s) weer uit de voorraad gehaald.`,
+      authorId: userId ?? null,
+    });
+  }
 }
 
 /** Add each line's `units` to the linked product's stock; idempotent per PO. */

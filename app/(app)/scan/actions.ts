@@ -1,6 +1,6 @@
 "use server";
 
-import { and, desc, eq, inArray, isNull, ne, or } from "drizzle-orm";
+import { and, desc, eq, inArray, isNull, ne, or, sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
@@ -170,7 +170,18 @@ export async function adjustStock(
   if (!p) return { ok: false };
   const cur = Number(p.stockQty ?? 0);
   const next = mode === "set" ? a : mode === "in" ? cur + a : cur - a;
-  await db.update(products).set({ stockQty: String(next), updatedAt: new Date() }).where(eq(products.id, productId));
+  // In/uit als ATOMISCHE delta (coalesce ± x) — een read-modify-write zou een
+  // gelijktijdige factuur-afboeking overschrijven (lost update). "Geteld"
+  // blijft bewust een absolute stand.
+  if (mode === "set") {
+    await db.update(products).set({ stockQty: String(a), updatedAt: new Date() }).where(eq(products.id, productId));
+  } else {
+    const delta = mode === "in" ? a : -a;
+    await db
+      .update(products)
+      .set({ stockQty: sql`coalesce(${products.stockQty}, 0) + ${String(delta)}`, updatedAt: new Date() })
+      .where(eq(products.id, productId));
+  }
   await db.insert(activities).values({
     type: "note",
     subject: `Voorraad via scan — ${p.sku ?? p.name}`,

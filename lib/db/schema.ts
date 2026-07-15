@@ -679,6 +679,10 @@ export const documents = pgTable(
     reminderLevel: integer().notNull().default(0),
     /** Factuur/levering: review-verzoek verstuurd op (zodat we maar één keer vragen). */
     reviewRequestedAt: timestamp({ withTimezone: true }),
+    /** Externe factuur (bv. van zusterbedrijf Creadores, alleen ter registratie
+     * op een project): telt als omzet-registratie maar mag NOOIT naar Habitats
+     * Holded gepusht worden — het is geen omzet van Habitat zelf. */
+    isExternal: boolean().notNull().default(false),
     /** Convenience copy of the Holded id; the source of truth mapping lives in holded_sync_map. */
     holdedId: text(),
     ...timestamps,

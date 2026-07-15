@@ -36,6 +36,8 @@ export async function syncHoldedNow(): Promise<{ ok: boolean; message: string }>
         inArray(documents.kind, ["invoice", "creditnote"]),
         notInArray(documents.status, ["draft", "void"]),
         isNull(documents.holdedId),
+        // Externe facturen (zusterbedrijven) zijn geen Habitat-omzet — nooit pushen.
+        eq(documents.isExternal, false),
       ),
     );
   let pushed = 0;
