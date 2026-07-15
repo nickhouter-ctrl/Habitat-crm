@@ -146,7 +146,7 @@ export default async function ProjectsPage({
   const aggById = new Map(aggRows.map((a) => [a.projectId, a]));
 
   // 3. Kosten- en ontvangst-aggregaten per project (ex. btw; ontvangsten incl. btw).
-  const [laborAgg, looseAgg, poAgg, budgetAgg, receivedAgg, costDocs] = projectIds.length
+  const [laborAgg, looseAgg, poAgg, budgetAgg, receivedAgg, costDocs, invAdvanceAgg] = projectIds.length
     ? await Promise.all([
         db
           .select({ projectId: timeEntries.projectId, v: sql<number>`coalesce(sum(${timeEntries.hours} * ${timeEntries.hourlyCostEur}), 0)::float8` })
@@ -167,7 +167,14 @@ export default async function ProjectsPage({
         db
           .select({ projectId: purchaseOrders.projectId, v: sql<number>`coalesce(sum(coalesce(${purchaseOrders.subtotal}, ${purchaseOrders.total})), 0)::float8` })
           .from(purchaseOrders)
-          .where(inArray(purchaseOrders.projectId, projectIds))
+          .where(
+            and(
+              inArray(purchaseOrders.projectId, projectIds),
+              // Arbeid-PO's tellen via time_entries — hier meetellen zou dubbel
+              // zijn (zelfde filter als het projectdetail).
+              eq(purchaseOrders.countAsLabor, false),
+            ),
+          )
           .groupBy(purchaseOrders.projectId),
         db
           .select({ projectId: projectBudgetLines.projectId, v: sql<number>`coalesce(sum(${projectBudgetLines.amountEur}), 0)::float8` })
@@ -198,8 +205,25 @@ export default async function ProjectsPage({
               inArray(documents.kind, ["estimate", "invoice", "creditnote"]),
             ),
           ),
+        db
+          .select({
+            projectId: projectPayments.projectId,
+            v: sql<number>`coalesce(sum(${projectPayments.amountEur}), 0)::float8`,
+          })
+          .from(projectPayments)
+          .innerJoin(
+            documents,
+            and(
+              eq(documents.projectId, projectPayments.projectId),
+              eq(documents.kind, "invoice"),
+              eq(documents.isAdvance, true),
+              sql`${projectPayments.description} = 'Voorschot ' || ${documents.docNumber}`,
+            ),
+          )
+          .where(and(inArray(projectPayments.projectId, projectIds), eq(projectPayments.method, "advance")))
+          .groupBy(projectPayments.projectId),
       ])
-    : [[], [], [], [], [], []];
+    : [[], [], [], [], [], [], []];
 
   const mapBy = (rows: { projectId: string | null; v: number }[]) =>
     new Map(rows.map((r) => [r.projectId as string, Number(r.v ?? 0)]));
@@ -208,6 +232,7 @@ export default async function ProjectsPage({
   const poBy = mapBy(poAgg);
   const budgetBy = mapBy(budgetAgg);
   const receivedBy = mapBy(receivedAgg);
+  const invAdvanceBy = mapBy(invAdvanceAgg);
 
   // Kostprijs eigen producten: koppel offerte-/factuurregels aan de productcatalogus
   // (op productId of op SKU=omschrijving). Verwacht = max(gefactureerd, offerte).
@@ -274,6 +299,9 @@ export default async function ProjectsPage({
       const a = aggById.get(p.id);
       const invoiced = Number(a?.invoiced ?? 0);
       const received = receivedBy.get(p.id) ?? 0;
+      // Ontvangsten uit betaalde voorschot-FACTUREN zitten al in `invoiced` —
+      // niet dubbel aftrekken in "nog te factureren".
+      const receivedFromInvoicedAdvances = invAdvanceBy.get(p.id) ?? 0;
       const laborCost = laborBy.get(p.id) ?? 0;
       const materialCost = (poBy.get(p.id) ?? 0) + (looseBy.get(p.id) ?? 0);
       const ownProductCost = ownProductCostByProject.get(p.id) ?? 0;
@@ -283,7 +311,7 @@ export default async function ProjectsPage({
         budgetBase: budgetBy.get(p.id) ?? 0,
         estimateSubtotal: Number(a?.estimateSubtotal ?? 0),
         invoicedSubtotal: invoiced,
-        received,
+        received: received - receivedFromInvoicedAdvances,
         laborCost,
         materialCost,
         ownProductCost,

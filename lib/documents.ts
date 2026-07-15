@@ -191,7 +191,9 @@ export function normaliseLineItem(raw: unknown): DocumentLineItem | null {
       typeof r.description === "string" && r.description.trim()
         ? r.description.trim().slice(0, 2000)
         : undefined,
-    units: Number.isFinite(units) && units > 0 ? units : 1,
+    // Negatieve aantallen zijn geldig (retour-/correctieregels); alleen een
+    // niet-numerieke invoer valt terug op 1.
+    units: Number.isFinite(units) ? units : 1,
     price: Number.isFinite(price) ? round2(price) : 0,
     discount: discount > 0 ? round2(discount) : undefined,
     taxRate: Number.isFinite(taxRate) && taxRate >= 0 ? taxRate : 21,
@@ -200,6 +202,12 @@ export function normaliseLineItem(raw: unknown): DocumentLineItem | null {
     costEur: numOrU(r.costEur),
     supplierPriceEur: numOrU(r.supplierPriceEur),
     marginPct: numOrU(r.marginPct),
+    // Fase-koppeling en voorschot-verwijzing moeten het opslaan overleven:
+    // fase-facturatie filtert op `phase`, en `advanceRef` markeert het voorschot
+    // als verrekend (anders dubbele aftrek op de volgende factuur).
+    phase: typeof r.phase === "string" && r.phase.trim() ? r.phase.trim().slice(0, 100) : undefined,
+    advanceRef:
+      typeof r.advanceRef === "string" && r.advanceRef.trim() ? r.advanceRef.trim() : undefined,
   };
 }
 

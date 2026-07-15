@@ -41,6 +41,7 @@ export async function getReportsData() {
                coalesce(sum(case when kind='creditnote' then subtotal_eur else 0 end),0)::text as credited
         from documents
         where issue_date is not null and issue_date >= ${from}
+          and status not in ('draft','void')
         group by ym order by ym
       `),
       db
@@ -51,6 +52,7 @@ export async function getReportsData() {
         })
         .from(documents)
         .leftJoin(contacts, eq(contacts.id, documents.contactId))
+        .where(sql`${documents.status} not in ('draft','void')`)
         .groupBy(contacts.id, contacts.name)
         .orderBy(desc(sql`sum(case when ${documents.kind}='invoice' then ${documents.subtotalEur} when ${documents.kind}='creditnote' then -${documents.subtotalEur} else 0 end)`))
         .limit(10),
@@ -59,7 +61,7 @@ export async function getReportsData() {
                sum((item->>'units')::numeric) as units,
                sum((item->>'units')::numeric * (item->>'price')::numeric * (1 - coalesce((item->>'discount')::numeric,0)/100)) as revenue
         from documents d, jsonb_array_elements(case when jsonb_typeof(d.items) = 'array' then d.items else '[]'::jsonb end) as item
-        where d.kind='invoice' and item->>'name' is not null
+        where d.kind='invoice' and d.status not in ('draft','void') and item->>'name' is not null
         group by item->>'name'
         order by revenue desc nulls last
         limit 10
@@ -104,7 +106,7 @@ export async function getReportsData() {
         })
         .from(documents)
         .leftJoin(contacts, eq(contacts.id, documents.contactId))
-        .where(sql`${documents.kind} in ('invoice','creditnote') and ${documents.issueDate} >= ${from}`),
+        .where(sql`${documents.kind} in ('invoice','creditnote') and ${documents.status} not in ('draft','void') and ${documents.issueDate} >= ${from}`),
     ]);
 
   // Inkoop per maand (Holded-grootboek)
@@ -124,7 +126,7 @@ export async function getReportsData() {
   );
   const revenueChart = months.map((m) => ({
     month: m.label,
-    value: Math.max(0, (rev.get(m.key)?.invoiced ?? 0) - (rev.get(m.key)?.credited ?? 0)),
+    value: (rev.get(m.key)?.invoiced ?? 0) - (rev.get(m.key)?.credited ?? 0),
   }));
   const totalRev = revenueChart.reduce((s, r) => s + r.value, 0);
   const grossMargin = totalRev > 0 ? Math.round(((totalRev - totalPur) / totalRev) * 100) : null;

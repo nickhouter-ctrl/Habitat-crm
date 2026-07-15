@@ -55,6 +55,10 @@ type Row = {
   costEur?: string;
   supplierPriceEur?: string;
   marginPct?: string;
+  /** Verwijzing naar het voorschot dat deze (negatieve) regel verrekent —
+   * moet het opslaan overleven, anders wordt het voorschot nooit als
+   * verrekend gemarkeerd en trekt een volgende factuur het nóg een keer af. */
+  advanceRef?: string;
 };
 
 /** Kozijn-import: +15% handling en +40% invoer bovenop de leveranciersprijs. */
@@ -136,6 +140,7 @@ export function LineItemsEditor({
           costEur: it.costEur != null ? String(it.costEur) : undefined,
           supplierPriceEur: it.supplierPriceEur != null ? String(it.supplierPriceEur) : undefined,
           marginPct: it.marginPct != null ? String(it.marginPct) : undefined,
+          advanceRef: it.advanceRef ?? undefined,
         }))
       : [emptyRow()],
   );
@@ -426,6 +431,13 @@ export function LineItemsEditor({
             category: r.category,
             productId: r.productId,
             phase: r.phase.trim() || undefined,
+            // Stille-datavelden meesturen — anders wist elke UI-save de
+            // kostprijzen (marge!) en de voorschot-verrekening uit de regels.
+            costEur: r.costEur != null && r.costEur !== "" ? Number(r.costEur) : undefined,
+            supplierPriceEur:
+              r.supplierPriceEur != null && r.supplierPriceEur !== "" ? Number(r.supplierPriceEur) : undefined,
+            marginPct: r.marginPct != null && r.marginPct !== "" ? Number(r.marginPct) : undefined,
+            advanceRef: r.advanceRef || undefined,
           })),
         )}
       />

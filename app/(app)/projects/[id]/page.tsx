@@ -208,6 +208,9 @@ export default async function ProjectDetailPage({
     if (d.kind === "estimate") continue;
     const marginCost = docMarginCost(d.items);
     marginByDoc.set(d.id, { margin: rev - marginCost, pct: rev > 0 ? Math.round(((rev - marginCost) / rev) * 100) : null });
+    // Concepten en geannuleerde documenten tellen niet als omzet (zelfde filter
+    // als de projectenlijst) — de marge-badge hierboven blijft wel zichtbaar.
+    if (d.status === "draft" || d.status === "void") continue;
     const sign = d.kind === "creditnote" ? -1 : 1;
     projRevenue += sign * rev;
     projCost += sign * docMaterialCost(d.items);
@@ -387,7 +390,17 @@ export default async function ProjectDetailPage({
   // Wat de klant al heeft betaald (ontvangsten) telt — net als wat al formeel is
   // gefactureerd — mee als "afgehandeld" richting de aanneemprijs. Zo beweegt
   // "nog te factureren" mee zodra er een ontvangst wordt geboekt.
-  const settledToTarget = projRevenue + receivedTotal;
+  // Ontvangsten uit een betaald voorschot-FACTUUR zitten al in projRevenue
+  // (gefactureerd) — die niet nogmaals aftrekken richting de aanneemprijs.
+  const invoiceAdvanceMarkers = new Set(
+    advanceDocs
+      .filter((a) => a.kind === "invoice" && a.status === "paid")
+      .map((a) => `Voorschot ${a.docNumber ?? ""}`.trim()),
+  );
+  const receivedFromInvoicedAdvances = paymentRows
+    .filter((p) => p.method === "advance" && p.description && invoiceAdvanceMarkers.has(p.description))
+    .reduce((s, p) => s + Number(p.amountEur ?? 0), 0);
+  const settledToTarget = projRevenue + receivedTotal - receivedFromInvoicedAdvances;
   const toInvoice = Math.max(0, targetRevenue - settledToTarget);
 
   // Resultaat TOT NU TOE = doel − werkelijke (gerealiseerde) kosten tot nu toe.
@@ -802,10 +815,12 @@ export default async function ProjectDetailPage({
                       <Link href={`/documents/${a.id}`} className="font-medium hover:underline">
                         {a.docNumber ?? "—"}
                       </Link>
-                      <span className="block text-xs text-muted">{a.kind === "proforma" ? "proforma" : "factuur"}</span>
+                      <span className="block text-xs text-muted">
+                        {a.kind === "proforma" ? "proforma" : a.kind === "fondos" ? "provisión de fondos" : "factuur"}
+                      </span>
                     </Td>
                     <Td className="tabular-nums">{formatEUR(Number(a.totalEur ?? 0))}</Td>
-                    <Td>{a.vatReverseCharge ? "verlegd" : "met btw"}</Td>
+                    <Td>{a.kind === "fondos" ? "geen btw" : a.vatReverseCharge ? "verlegd" : "met btw"}</Td>
                     <Td>
                       <Badge tone={a.status === "paid" ? "success" : "neutral"}>
                         {a.status === "paid" ? "Betaald" : a.status === "sent" ? "Verstuurd" : "Concept"}
@@ -1282,6 +1297,14 @@ export default async function ProjectDetailPage({
                   className="text-xs"
                 >
                   + Voorschot (proforma)
+                </LinkButton>
+                <LinkButton
+                  href={`/documents/new?kind=fondos&projectId=${id}${project.contactId ? `&contactId=${project.contactId}` : ""}${project.propertyId ? `&propertyId=${project.propertyId}` : ""}`}
+                  variant="ghost"
+                  className="text-xs"
+                  title="Voorschotdocument zonder btw voor particulieren/buitenlandse klanten — eerst langs Paco"
+                >
+                  + Provisión de fondos
                 </LinkButton>
                 <LinkButton
                   href={`/documents/new?kind=invoice&projectId=${id}${project.contactId ? `&contactId=${project.contactId}` : ""}${project.propertyId ? `&propertyId=${project.propertyId}` : ""}`}

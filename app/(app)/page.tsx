@@ -1,4 +1,4 @@
-import { and, count, desc, eq, gte, inArray, isNotNull, isNull, ne, sql } from "drizzle-orm";
+import { and, count, desc, eq, gte, inArray, isNotNull, isNull, ne, notInArray, sql } from "drizzle-orm";
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { AlertTriangle, CheckCircle2, Clock, TrendingUp, Wallet } from "lucide-react";
@@ -120,7 +120,8 @@ export default async function DashboardPage() {
           overdueV: sql<string>`coalesce(sum(case when ${openExpr} and ${documents.dueDate} < ${today} then ${documents.totalEur} - ${documents.paidEur} else 0 end), 0)`,
         })
         .from(documents)
-        .where(eq(documents.kind, "invoice")),
+        // Concepten/geannuleerd tellen niet als omzet.
+        .where(and(eq(documents.kind, "invoice"), notInArray(documents.status, ["draft", "void"]))),
       // Credit notes to subtract from revenue (ex BTW).
       db
         .select({
@@ -128,7 +129,7 @@ export default async function DashboardPage() {
           revenueMonth: sql<string>`coalesce(sum(case when ${documents.issueDate} >= ${monthStart} then ${documents.subtotalEur} else 0 end), 0)`,
         })
         .from(documents)
-        .where(eq(documents.kind, "creditnote")),
+        .where(and(eq(documents.kind, "creditnote"), notInArray(documents.status, ["draft", "void"]))),
       // Lokale PO's die nog niet in Holded staan — die zijn al "besteld + betaald"
       // maar zitten nog niet in de Holded-aankoopfacturen, dus tellen we los bij op.
       db
@@ -470,7 +471,7 @@ export default async function DashboardPage() {
         value: sql<string>`coalesce(sum(${documents.subtotalEur}), 0)`,
       })
       .from(documents)
-      .where(and(eq(documents.kind, "invoice"), gte(documents.issueDate, since12)))
+      .where(and(eq(documents.kind, "invoice"), notInArray(documents.status, ["draft", "void"]), gte(documents.issueDate, since12)))
       .groupBy(sql`to_char(${documents.issueDate}, 'YYYY-MM')`),
     db
       .select({

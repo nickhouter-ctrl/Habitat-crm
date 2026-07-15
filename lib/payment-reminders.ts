@@ -5,7 +5,7 @@
  * 7 dagen per klant (documents.payment_reminder_at). Niveau loopt automatisch op.
  */
 import "server-only";
-import { and, eq, inArray, ne, notInArray, sql } from "drizzle-orm";
+import { and, eq, inArray, notInArray, sql } from "drizzle-orm";
 
 import { db } from "@/lib/db";
 import { activities, contacts, documents } from "@/lib/db/schema";
@@ -75,7 +75,9 @@ export async function runPaymentReminders(): Promise<{
         .where(
           and(
             eq(documents.kind, "creditnote"),
-            ne(documents.status, "void"),
+            // Concept-/afgewezen creditnota's zijn nooit naar de klant gestuurd —
+            // die mogen het te betalen bedrag in de herinnering niet verlagen.
+            notInArray(documents.status, ["void", "draft", "rejected"]),
             inArray(documents.contactId, contactIds),
             sql`coalesce(${documents.totalEur}, 0) - coalesce(${documents.paidEur}, 0) > 0.01`,
           ),
