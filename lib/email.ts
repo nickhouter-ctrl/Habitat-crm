@@ -208,7 +208,9 @@ export function offerteEmail(args: {
     : "es";
   const t = T[lang];
   const kind = args.kind ?? "estimate";
-  const isProforma = kind === "proforma";
+  // Fondos (provisión de fondos) is net als een proforma een betaalverzoek:
+  // zelfde bankblok + verrekentekst in de mail.
+  const isProforma = kind === "proforma" || kind === "fondos";
   const nr = args.docNumber || "—";
   const subject = args.subject?.trim() || t.subject(nr, kind);
   const introText = args.message?.trim() || (isProforma ? PROFORMA_TEXT[lang].intro : t.intro(kind));

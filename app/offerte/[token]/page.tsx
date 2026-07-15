@@ -117,12 +117,15 @@ export default async function PublicOffertePage({
     : "es";
   const t = T[lang];
   const items = doc.items ?? [];
+  const isFondos = doc.kind === "fondos";
   const kindLabel =
     doc.kind === "invoice"
       ? t.invoice
       : doc.kind === "deliverynote"
         ? "Pakbon"
-        : t.quote;
+        : isFondos
+          ? "Provisión de fondos"
+          : t.quote;
   const isClosed = doc.status === "void";
   const accept = acceptOfferte.bind(null, token);
   const reject = rejectOfferte.bind(null, token);
@@ -171,7 +174,7 @@ export default async function PublicOffertePage({
                 <th className="py-2">{t.description}</th>
                 <th className="py-2 pr-6 text-right">{t.qty}</th>
                 <th className="py-2 text-right">{t.price}</th>
-                <th className="py-2 text-right">{t.vat}%</th>
+                {!isFondos && <th className="py-2 text-right">{t.vat}%</th>}
                 <th className="py-2 text-right">{t.net}</th>
               </tr>
             </thead>
@@ -186,7 +189,7 @@ export default async function PublicOffertePage({
                   </td>
                   <td className="py-2.5 pr-6 text-right tabular-nums">{it.units}</td>
                   <td className="py-2.5 text-right tabular-nums">{formatEUR(it.price)}</td>
-                  <td className="py-2.5 text-right tabular-nums">{it.taxRate ?? 0}%</td>
+                  {!isFondos && <td className="py-2.5 text-right tabular-nums">{it.taxRate ?? 0}%</td>}
                   <td className="py-2.5 text-right tabular-nums">{formatEUR(lineNet(it))}</td>
                 </tr>
               ))}
@@ -195,14 +198,18 @@ export default async function PublicOffertePage({
         </div>
 
         <div className="mt-4 ml-auto w-full max-w-xs space-y-1 border-t pt-3 text-sm">
-          <div className="flex justify-between">
-            <span className="text-muted">{t.subtotal}</span>
-            <span className="tabular-nums">{formatEUR(doc.subtotalEur)}</span>
-          </div>
-          <div className="flex justify-between">
-            <span className="text-muted">{t.vat}</span>
-            <span className="tabular-nums">{formatEUR(doc.taxEur)}</span>
-          </div>
+          {!isFondos && (
+            <div className="flex justify-between">
+              <span className="text-muted">{t.subtotal}</span>
+              <span className="tabular-nums">{formatEUR(doc.subtotalEur)}</span>
+            </div>
+          )}
+          {!isFondos && (
+            <div className="flex justify-between">
+              <span className="text-muted">{t.vat}</span>
+              <span className="tabular-nums">{formatEUR(doc.taxEur)}</span>
+            </div>
+          )}
           <div className="flex justify-between border-t pt-1 text-base font-semibold">
             <span>{t.total}</span>
             <span className="tabular-nums">{formatEUR(doc.totalEur)}</span>

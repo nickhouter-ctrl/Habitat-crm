@@ -95,7 +95,8 @@ export async function GET(
     lineImages,
   });
 
-  const label = doc.kind === "invoice" ? "Factuur" : "Offerte";
+  const label =
+    doc.kind === "invoice" ? "Factuur" : doc.kind === "fondos" ? "Provision-de-fondos" : doc.kind === "creditnote" ? "Creditnota" : "Offerte";
   const filename = `${label}-${doc.docNumber ?? doc.id.slice(0, 8)}.pdf`;
   return new Response(new Uint8Array(buf), {
     headers: {

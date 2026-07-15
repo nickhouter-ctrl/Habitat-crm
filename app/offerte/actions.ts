@@ -30,6 +30,10 @@ async function notifyTeam(subject: string, html: string) {
 export async function acceptOfferte(token: string) {
   const doc = await loadByToken(token);
   if (!doc) return;
+  // Alleen offertes kennen accepteren/afwijzen — een factuur/fondos-link mag
+  // hiermee nooit van status veranderen (de knop is verborgen, maar de server
+  // action is publiek aanroepbaar met een geldig token).
+  if (doc.kind !== "estimate") return;
   if (!doc.acceptedAt) {
     await db
       .update(documents)
@@ -73,6 +77,7 @@ export async function rejectOfferte(token: string, formData: FormData) {
   const reason = String(formData.get("reason") ?? "").trim().slice(0, 1000) || null;
   const doc = await loadByToken(token);
   if (!doc) return;
+  if (doc.kind !== "estimate") return;
   if (!doc.rejectedAt) {
     await db
       .update(documents)

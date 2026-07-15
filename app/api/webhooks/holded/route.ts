@@ -17,14 +17,17 @@ export const dynamic = "force-dynamic";
  * (or send the secret as an `X-Webhook-Secret` header).
  */
 export async function POST(request: Request) {
+  // Fail-closed: zonder geconfigureerd secret accepteren we NIETS — anders zou
+  // een vergeten env-var de webhook voor iedereen openzetten.
   const expected = process.env.HOLDED_WEBHOOK_SECRET;
-  if (expected) {
-    const url = new URL(request.url);
-    const provided =
-      url.searchParams.get("key") ?? request.headers.get("x-webhook-secret");
-    if (provided !== expected) {
-      return NextResponse.json({ error: "unauthorized" }, { status: 401 });
-    }
+  if (!expected) {
+    return NextResponse.json({ error: "webhook secret not configured" }, { status: 503 });
+  }
+  const url = new URL(request.url);
+  const provided =
+    url.searchParams.get("key") ?? request.headers.get("x-webhook-secret");
+  if (provided !== expected) {
+    return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
 
   let payload: HoldedWebhookPayload | null = null;

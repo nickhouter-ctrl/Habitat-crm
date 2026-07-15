@@ -733,15 +733,17 @@ export default async function DocumentDetailPage({
                 </div>
               ) : (
                 <>
-                  {(doc.kind === "invoice" || doc.kind === "creditnote") &&
+                  {(doc.kind === "invoice" || doc.kind === "creditnote" || doc.kind === "fondos") &&
                     doc.status === "draft" && (
                       <form action={markDocumentSentNoEmail.bind(null, id)} className="pt-1">
                         <SubmitButton size="sm" variant="primary" pendingLabel="Bezig…">
                           ✓ Markeer als verstuurd (zonder mail)
                         </SubmitButton>
                         <p className="mt-1 text-[11px] text-muted">
-                          Voor wanneer je de factuur persoonlijk of per app hebt afgegeven — boekt ook de
-                          voorraad {doc.kind === "creditnote" ? "terug" : "af"}.
+                          Voor wanneer je het document persoonlijk of per app hebt afgegeven
+                          {doc.kind === "fondos"
+                            ? " — geen voorraadeffect."
+                            : ` — boekt ook de voorraad ${doc.kind === "creditnote" ? "terug" : "af"}.`}
                         </p>
                       </form>
                     )}
@@ -785,7 +787,19 @@ export default async function DocumentDetailPage({
             </Card>
           )}
 
-          {doc.kind !== "fondos" && (
+          {doc.isExternal && (
+            <Card className="border-amber-300 bg-amber-50/50">
+              <CardHeader>
+                <CardTitle>Externe factuur</CardTitle>
+              </CardHeader>
+              <CardContent className="text-sm">
+                Factuur van een andere administratie (bv. Creadores) — alleen ter registratie op
+                het project. Wordt bewust <strong>niet</strong> naar Habitats Holded gepusht.
+              </CardContent>
+            </Card>
+          )}
+
+          {doc.kind !== "fondos" && !doc.isExternal && (
           <Card>
             <CardHeader>
               <CardTitle>Holded</CardTitle>

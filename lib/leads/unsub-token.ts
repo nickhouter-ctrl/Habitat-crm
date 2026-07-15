@@ -7,7 +7,11 @@
 import { createHmac } from "node:crypto";
 
 function secret(): string {
-  return process.env.AUTH_SECRET || process.env.NEXTAUTH_SECRET || "habitat-one-unsub-fallback";
+  // Fail-closed: zonder secret geen tokens — een publiek bekende fallback zou
+  // afmeldtokens voor elk adres vervalsbaar maken.
+  const s = process.env.AUTH_SECRET || process.env.NEXTAUTH_SECRET;
+  if (!s) throw new Error("AUTH_SECRET ontbreekt — unsubscribe-tokens kunnen niet gesigneerd worden.");
+  return s;
 }
 
 export function signEmailToken(email: string): string {

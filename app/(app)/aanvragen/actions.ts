@@ -22,6 +22,8 @@ function newToken(): string {
 }
 
 async function baseUrl(): Promise<string> {
+  const fixed = process.env.APP_URL?.trim().replace(/\/$/, "");
+  if (fixed) return fixed;
   const h = await headers();
   const host = h.get("host") ?? "localhost:3001";
   const proto = h.get("x-forwarded-proto") ?? (host.includes("localhost") ? "http" : "https");

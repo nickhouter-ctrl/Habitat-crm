@@ -63,7 +63,8 @@ export async function GET(
     locale: doc.contact?.preferredLanguage ?? "es",
   });
 
-  const label = doc.kind === "invoice" ? "Factuur" : "Offerte";
+  const label =
+    doc.kind === "invoice" ? "Factuur" : doc.kind === "fondos" ? "Provision-de-fondos" : doc.kind === "creditnote" ? "Creditnota" : "Offerte";
   const filename = `${label}-${doc.docNumber ?? token.slice(0, 8)}.pdf`;
   return new Response(new Uint8Array(buf), {
     headers: {
