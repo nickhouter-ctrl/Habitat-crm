@@ -186,9 +186,22 @@ export async function linkPurchaseOrderAsHours(id: string, formData: FormData) {
   const po = await db.query.purchaseOrders.findFirst({ where: eq(purchaseOrders.id, id) });
   if (!po) return;
 
-  // `subtotal` kan als string "0" binnenkomen (Holded-pull zonder subtotal) —
-  // dan is het bedrag niet nul maar onbekend: terugvallen op het totaal.
-  const amount = Number(po.subtotal) || Number(po.total) || 0;
+  // Arbeidskost is ALTIJD ex. btw. Zonder subtotaal: totaal − btw; als ook de
+  // btw onbekend is, 21% aannemen en dat op de regel vermelden — nooit het
+  // incl.-btw-totaal als arbeidskost boeken (dat gaf 21% te hoge projectkosten).
+  const sub = Number(po.subtotal) || 0;
+  const tax = Number(po.tax) || 0;
+  const tot = Number(po.total) || 0;
+  let amount = 0;
+  let vatAssumed = false;
+  if (sub > 0) {
+    amount = sub;
+  } else if (tot > 0 && tax > 0) {
+    amount = Math.round((tot - tax) * 100) / 100;
+  } else if (tot > 0) {
+    amount = Math.round((tot / 1.21) * 100) / 100;
+    vatAssumed = true;
+  }
   const hoursRaw = Number(String(formData.get("hours") ?? "").replace(",", "."));
   const hours = hoursRaw > 0 ? hoursRaw : 1; // geen uren opgegeven → 1 post t.w.v. het bedrag
   const rate = amount > 0 ? amount / hours : 0;
@@ -207,7 +220,7 @@ export async function linkPurchaseOrderAsHours(id: string, formData: FormData) {
       hourlyCostEur: String(rate),
       paymentMethod: "invoice",
       purchaseOrderId: id,
-      note: `Uren via inkooporder${po.reference ? ` ${po.reference}` : ""}`,
+      note: `Uren via inkooporder${po.reference ? ` ${po.reference}` : ""}${vatAssumed ? " — ex. btw afgeleid van het totaal (21% aangenomen; controleer de factuur)" : ""}`,
     });
   }
   // Inkooporder aan het project koppelen maar als arbeid markeren (niet als materiaal).
