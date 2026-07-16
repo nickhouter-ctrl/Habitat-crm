@@ -224,13 +224,194 @@ export default async function DashboardPage() {
   // onder 0 zit. Eén lijst dekt zowel negatieve voorraad als reserveringen boven
   // de voorraad — het tekort = gereserveerd − voorraad. Order-only (op bestelling
   // gemaakt) telt niet mee.
-  const reservedByProduct = await getReservedStockByProduct();
-  const toOrder = (
-    await db
+  // Alle resterende dashboard-queries zijn onafhankelijk van elkaar — start ze
+  // hier ALLEMAAL tegelijk. Voorheen liepen ze ná elkaar (13 aparte database-
+  // rondreizen van elk ~50-150 ms) en dat was de hoofdoorzaak van het trage
+  // dashboard. Promise.resolve(...) dwingt de lazy drizzle-builders om direct
+  // te beginnen; de awaits verderop pakken alleen nog het resultaat.
+  const since12 = new Date(now.getFullYear(), now.getMonth() - 11, 1).toISOString().slice(0, 10);
+  const pReservedByProduct = getReservedStockByProduct();
+  const pActiveProducts = Promise.resolve(
+    db
       .select({ id: products.id, sku: products.sku, name: products.name, stockQty: products.stockQty })
       .from(products)
-      .where(eq(products.isActive, true))
-  )
+      .where(eq(products.isActive, true)),
+  );
+  const pEstimateRows = Promise.resolve(
+    db
+      .select({
+        id: documents.id,
+        docNumber: documents.docNumber,
+        title: documents.title,
+        totalEur: documents.totalEur,
+        contactName: contacts.name,
+      })
+      .from(documents)
+      .leftJoin(contacts, eq(documents.contactId, contacts.id))
+      .where(and(eq(documents.kind, "estimate"), eq(documents.status, "accepted"))),
+  );
+  const pInvoicedSumRows = Promise.resolve(
+    db
+      .select({
+        src: documents.sourceDocumentId,
+        invoiced: sql<number>`coalesce(sum(${documents.totalEur}), 0)::float8`,
+      })
+      .from(documents)
+      .where(
+        and(
+          eq(documents.kind, "invoice"),
+          ne(documents.status, "void"),
+          isNotNull(documents.sourceDocumentId),
+        ),
+      )
+      .groupBy(documents.sourceDocumentId),
+  );
+  const pOpenOffertes = Promise.resolve(
+    db
+      .select({
+        id: documents.id,
+        docNumber: documents.docNumber,
+        title: documents.title,
+        totalEur: documents.totalEur,
+        issueDate: documents.issueDate,
+        contactName: contacts.name,
+      })
+      .from(documents)
+      .leftJoin(contacts, eq(documents.contactId, contacts.id))
+      .where(and(eq(documents.kind, "estimate"), eq(documents.status, "sent")))
+      .orderBy(desc(documents.issueDate))
+      .limit(50),
+  );
+  const pOpenSalesInvoices = Promise.resolve(
+    db
+      .select({
+        id: documents.id,
+        docNumber: documents.docNumber,
+        totalEur: documents.totalEur,
+        paidEur: documents.paidEur,
+        dueDate: documents.dueDate,
+        status: documents.status,
+        contactName: contacts.name,
+      })
+      .from(documents)
+      .leftJoin(contacts, eq(documents.contactId, contacts.id))
+      .where(
+        and(
+          eq(documents.kind, "invoice"),
+          inArray(documents.status, ["sent", "partially_paid", "overdue"]),
+        ),
+      )
+      .orderBy(documents.dueDate)
+      .limit(50),
+  );
+  const pPlannedDeliveries = Promise.resolve(
+    db
+      .select({
+        id: deliveries.id,
+        plannedDate: deliveries.plannedDate,
+        method: deliveries.method,
+        status: deliveries.status,
+        notifiedAt: deliveries.notifiedAt,
+        docId: documents.id,
+        docNumber: documents.docNumber,
+        contactName: contacts.name,
+      })
+      .from(deliveries)
+      .leftJoin(documents, eq(documents.id, deliveries.documentId))
+      .leftJoin(contacts, eq(contacts.id, deliveries.contactId))
+      .where(inArray(deliveries.status, ["gepland", "onderweg"]))
+      .orderBy(deliveries.plannedDate),
+  );
+  const pDeliveredDocIds = Promise.resolve(db.select({ id: deliveries.documentId }).from(deliveries));
+  const pToPlanRows = Promise.resolve(
+    db
+      .select({
+        id: documents.id,
+        docNumber: documents.docNumber,
+        title: documents.title,
+        items: documents.items,
+        issueDate: documents.issueDate,
+        contactName: contacts.name,
+        projectName: projects.name,
+      })
+      .from(documents)
+      .leftJoin(contacts, eq(contacts.id, documents.contactId))
+      .leftJoin(projects, eq(projects.id, documents.projectId))
+      .where(
+        and(
+          eq(documents.kind, "invoice"),
+          inArray(documents.status, ["sent", "paid", "partially_paid", "overdue"]),
+        ),
+      )
+      .orderBy(desc(documents.issueDate)),
+  );
+  const pDoorProducts = Promise.resolve(
+    db.select({ id: products.id }).from(products).where(sql`${products.sku} like 'DR-00%'`),
+  );
+  const pDoorInvoiceRows = Promise.resolve(
+    db
+      .select({
+        id: documents.id,
+        docNumber: documents.docNumber,
+        items: documents.items,
+        projectName: projects.name,
+      })
+      .from(documents)
+      .leftJoin(projects, eq(documents.projectId, projects.id))
+      .where(eq(documents.kind, "invoice")),
+  );
+  const pProductCostRows = Promise.resolve(
+    db.select({ id: products.id, costEur: products.costEur }).from(products),
+  );
+  const pCogsRows = Promise.resolve(
+    db
+      .select({ items: documents.items, issueDate: documents.issueDate, kind: documents.kind })
+      .from(documents)
+      .where(inArray(documents.kind, ["invoice", "creditnote"])),
+  );
+  const pPendingHours = Promise.resolve(
+    db
+      .select({
+        n: count(),
+        hours: sql<number>`coalesce(sum(${timeEntries.hours}), 0)::float8`,
+        projects: sql<number>`count(distinct ${timeEntries.projectId})`,
+      })
+      .from(timeEntries)
+      .where(and(isNotNull(timeEntries.selfLoggedAt), isNull(timeEntries.approvedAt))),
+  );
+  const pRevByMonth = Promise.resolve(
+    db
+      .select({
+        ym: sql<string>`to_char(${documents.issueDate}, 'YYYY-MM')`,
+        value: sql<string>`coalesce(sum(${documents.subtotalEur}), 0)`,
+      })
+      .from(documents)
+      .where(and(eq(documents.kind, "invoice"), notInArray(documents.status, ["draft", "void"]), gte(documents.issueDate, since12)))
+      .groupBy(sql`to_char(${documents.issueDate}, 'YYYY-MM')`),
+  );
+  const pEstByMonth = Promise.resolve(
+    db
+      .select({
+        ym: sql<string>`to_char(${documents.issueDate}, 'YYYY-MM')`,
+        value: sql<string>`coalesce(sum(${documents.subtotalEur}), 0)`,
+      })
+      .from(documents)
+      .where(and(eq(documents.kind, "estimate"), gte(documents.issueDate, since12)))
+      .groupBy(sql`to_char(${documents.issueDate}, 'YYYY-MM')`),
+  );
+  const pEstConv = Promise.resolve(
+    db
+      .select({
+        total: sql<number>`count(*)::int`,
+        accepted: sql<number>`count(case when ${documents.status} = 'accepted' then 1 end)::int`,
+        acceptedValue: sql<string>`coalesce(sum(case when ${documents.status} = 'accepted' then ${documents.subtotalEur} else 0 end), 0)`,
+      })
+      .from(documents)
+      .where(eq(documents.kind, "estimate")),
+  );
+
+  const reservedByProduct = await pReservedByProduct;
+  const toOrder = (await pActiveProducts)
     .map((p) => {
       const reserved = reservedByProduct.get(p.id) ?? 0;
       const stock = Number(p.stockQty ?? 0);
@@ -242,31 +423,8 @@ export default async function DashboardPage() {
 
   // Nog af te rekenen: offertes die deels gefactureerd zijn (gekoppelde facturen
   // < offertebedrag) → er moet nog een eindafrekening komen.
-  const estimateRows = await db
-    .select({
-      id: documents.id,
-      docNumber: documents.docNumber,
-      title: documents.title,
-      totalEur: documents.totalEur,
-      contactName: contacts.name,
-    })
-    .from(documents)
-    .leftJoin(contacts, eq(documents.contactId, contacts.id))
-    .where(and(eq(documents.kind, "estimate"), eq(documents.status, "accepted")));
-  const invoicedSumRows = await db
-    .select({
-      src: documents.sourceDocumentId,
-      invoiced: sql<number>`coalesce(sum(${documents.totalEur}), 0)::float8`,
-    })
-    .from(documents)
-    .where(
-      and(
-        eq(documents.kind, "invoice"),
-        ne(documents.status, "void"),
-        isNotNull(documents.sourceDocumentId),
-      ),
-    )
-    .groupBy(documents.sourceDocumentId);
+  const estimateRows = await pEstimateRows;
+  const invoicedSumRows = await pInvoicedSumRows;
   const invoicedByEstimate = new Map(invoicedSumRows.map((r) => [r.src, Number(r.invoiced)]));
   const toSettle = estimateRows
     .map((e) => {
@@ -278,87 +436,19 @@ export default async function DashboardPage() {
     .slice(0, 50);
 
   // Open offertes: uitgebracht (verstuurd) en wachtend op antwoord.
-  const openOffertes = await db
-    .select({
-      id: documents.id,
-      docNumber: documents.docNumber,
-      title: documents.title,
-      totalEur: documents.totalEur,
-      issueDate: documents.issueDate,
-      contactName: contacts.name,
-    })
-    .from(documents)
-    .leftJoin(contacts, eq(documents.contactId, contacts.id))
-    .where(and(eq(documents.kind, "estimate"), eq(documents.status, "sent")))
-    .orderBy(desc(documents.issueDate))
-    .limit(50);
+  const openOffertes = await pOpenOffertes;
 
   // Openstaande verkoopfacturen — verzonden/deels betaald/vervallen, nog te ontvangen.
-  const openSalesInvoices = await db
-    .select({
-      id: documents.id,
-      docNumber: documents.docNumber,
-      totalEur: documents.totalEur,
-      paidEur: documents.paidEur,
-      dueDate: documents.dueDate,
-      status: documents.status,
-      contactName: contacts.name,
-    })
-    .from(documents)
-    .leftJoin(contacts, eq(documents.contactId, contacts.id))
-    .where(
-      and(
-        eq(documents.kind, "invoice"),
-        inArray(documents.status, ["sent", "partially_paid", "overdue"]),
-      ),
-    )
-    .orderBy(documents.dueDate)
-    .limit(50);
+  const openSalesInvoices = await pOpenSalesInvoices;
 
   // Geplande leveringen (gepland/onderweg) — eerstvolgende bovenaan.
-  const plannedDeliveries = await db
-    .select({
-      id: deliveries.id,
-      plannedDate: deliveries.plannedDate,
-      method: deliveries.method,
-      status: deliveries.status,
-      notifiedAt: deliveries.notifiedAt,
-      docId: documents.id,
-      docNumber: documents.docNumber,
-      contactName: contacts.name,
-    })
-    .from(deliveries)
-    .leftJoin(documents, eq(documents.id, deliveries.documentId))
-    .leftJoin(contacts, eq(contacts.id, deliveries.contactId))
-    .where(inArray(deliveries.status, ["gepland", "onderweg"]))
-    .orderBy(deliveries.plannedDate);
+  const plannedDeliveries = await pPlannedDeliveries;
 
   // Te plannen: verkochte facturen met productregels die nog geen levering hebben.
   const deliveredDocIds = new Set(
-    (await db.select({ id: deliveries.documentId }).from(deliveries))
-      .map((r) => r.id)
-      .filter(Boolean) as string[],
+    (await pDeliveredDocIds).map((r) => r.id).filter(Boolean) as string[],
   );
-  const toPlanRows = await db
-    .select({
-      id: documents.id,
-      docNumber: documents.docNumber,
-      title: documents.title,
-      items: documents.items,
-      issueDate: documents.issueDate,
-      contactName: contacts.name,
-      projectName: projects.name,
-    })
-    .from(documents)
-    .leftJoin(contacts, eq(contacts.id, documents.contactId))
-    .leftJoin(projects, eq(projects.id, documents.projectId))
-    .where(
-      and(
-        eq(documents.kind, "invoice"),
-        inArray(documents.status, ["sent", "paid", "partially_paid", "overdue"]),
-      ),
-    )
-    .orderBy(desc(documents.issueDate));
+  const toPlanRows = await pToPlanRows;
   const toPlan = toPlanRows
     .filter(
       (d) =>
@@ -370,21 +460,8 @@ export default async function DashboardPage() {
   // Facturen met een deur/deur-set-regel waarvan de draairichting (S1–S4) nog
   // niet gekozen is — zodat je een set kunt factureren en de richting later
   // aangeeft. We detecteren het direct uit de regels (geen losse notitie nodig).
-  const doorProductIds = new Set(
-    (await db.select({ id: products.id }).from(products).where(sql`${products.sku} like 'DR-00%'`)).map(
-      (r) => r.id,
-    ),
-  );
-  const doorInvoiceRows = await db
-    .select({
-      id: documents.id,
-      docNumber: documents.docNumber,
-      items: documents.items,
-      projectName: projects.name,
-    })
-    .from(documents)
-    .leftJoin(projects, eq(documents.projectId, projects.id))
-    .where(eq(documents.kind, "invoice"));
+  const doorProductIds = new Set((await pDoorProducts).map((r) => r.id));
+  const doorInvoiceRows = await pDoorInvoiceRows;
   const doorOrientationDocs = doorInvoiceRows
     .map((d) => {
       const units = normalizeDocItems(d.items)
@@ -406,12 +483,9 @@ export default async function DashboardPage() {
   // Marge = omzet − kostprijs van de verkochte producten (COGS uit de
   // factuurregels × products.costEur). Creditnota's draaien de marge terug.
   // Regels zonder gekoppeld product (bv. arbeid) tellen niet mee in de COGS.
-  const productCostRows = await db.select({ id: products.id, costEur: products.costEur }).from(products);
+  const productCostRows = await pProductCostRows;
   const costMap = new Map(productCostRows.map((p) => [p.id, Number(p.costEur) || 0]));
-  const cogsRows = await db
-    .select({ items: documents.items, issueDate: documents.issueDate, kind: documents.kind })
-    .from(documents)
-    .where(inArray(documents.kind, ["invoice", "creditnote"]));
+  const cogsRows = await pCogsRows;
   let cogsAll = 0;
   let cogsMonth = 0;
   for (const d of cogsRows) {
@@ -438,14 +512,7 @@ export default async function DashboardPage() {
     return diff <= 7 && diff >= -1;
   }).length;
   // Portaal-uren die op controle wachten (melding in het systeem).
-  const [pendingHoursAgg] = await db
-    .select({
-      n: count(),
-      hours: sql<number>`coalesce(sum(${timeEntries.hours}), 0)::float8`,
-      projects: sql<number>`count(distinct ${timeEntries.projectId})`,
-    })
-    .from(timeEntries)
-    .where(and(isNotNull(timeEntries.selfLoggedAt), isNull(timeEntries.approvedAt)));
+  const [pendingHoursAgg] = await pPendingHours;
   const pendingHoursN = pendingHoursAgg?.n ?? 0;
 
   const anyActions =
@@ -463,33 +530,7 @@ export default async function DashboardPage() {
     toPlan.length > 0;
 
   // --- Grafieken: omzet & offerte-waarde per maand (12 mnd) + conversie ---
-  const since12 = new Date(now.getFullYear(), now.getMonth() - 11, 1).toISOString().slice(0, 10);
-  const [revByMonthRows, estByMonthRows, [estConv]] = await Promise.all([
-    db
-      .select({
-        ym: sql<string>`to_char(${documents.issueDate}, 'YYYY-MM')`,
-        value: sql<string>`coalesce(sum(${documents.subtotalEur}), 0)`,
-      })
-      .from(documents)
-      .where(and(eq(documents.kind, "invoice"), notInArray(documents.status, ["draft", "void"]), gte(documents.issueDate, since12)))
-      .groupBy(sql`to_char(${documents.issueDate}, 'YYYY-MM')`),
-    db
-      .select({
-        ym: sql<string>`to_char(${documents.issueDate}, 'YYYY-MM')`,
-        value: sql<string>`coalesce(sum(${documents.subtotalEur}), 0)`,
-      })
-      .from(documents)
-      .where(and(eq(documents.kind, "estimate"), gte(documents.issueDate, since12)))
-      .groupBy(sql`to_char(${documents.issueDate}, 'YYYY-MM')`),
-    db
-      .select({
-        total: sql<number>`count(*)::int`,
-        accepted: sql<number>`count(case when ${documents.status} = 'accepted' then 1 end)::int`,
-        acceptedValue: sql<string>`coalesce(sum(case when ${documents.status} = 'accepted' then ${documents.subtotalEur} else 0 end), 0)`,
-      })
-      .from(documents)
-      .where(eq(documents.kind, "estimate")),
-  ]);
+  const [revByMonthRows, estByMonthRows, [estConv]] = await Promise.all([pRevByMonth, pEstByMonth, pEstConv]);
   const revSeries = monthSeries(now, revByMonthRows);
   const estSeries = monthSeries(now, estByMonthRows);
   const convPct = estConv && estConv.total > 0 ? Math.round((estConv.accepted / estConv.total) * 100) : 0;

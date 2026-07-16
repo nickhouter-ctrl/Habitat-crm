@@ -8,6 +8,7 @@
  *   7xxxxxxx → Ingresos (omzet)
  */
 import { holded } from "./client";
+import { unstable_cache } from "next/cache";
 
 interface LedgerLine {
   entryNumber?: number;
@@ -128,14 +129,7 @@ const DOCS_TIMEOUT_MS = 2000;
 async function fetchPurchaseDocs(): Promise<DocsCache> {
   if (_docsCache && Date.now() - _docsCache.fetchedAt < TTL_MS) return _docsCache;
   try {
-    const docs = await Promise.race([
-      holded.request<Array<{ subtotal?: number; date?: number; currency?: string }>>(
-        `/invoicing/v1/documents/purchase`,
-      ),
-      new Promise<never>((_, rej) =>
-        setTimeout(() => rej(new Error("Holded purchase-docs timeout")), DOCS_TIMEOUT_MS),
-      ),
-    ]);
+    const docs = await fetchPurchaseDocsCached();
     let subtotal = 0;
     const byMonth: Record<string, number> = {};
     for (const d of docs ?? []) {
@@ -154,6 +148,27 @@ async function fetchPurchaseDocs(): Promise<DocsCache> {
     return _docsCache ?? { fetchedAt: 0, subtotal: 0, byMonth: {} };
   }
 }
+
+/**
+ * De ruwe Holded-fetch achter Next's data-cache (gedeeld over alle serverless-
+ * instances, 30 min): zonder dit betaalde elke koude instance ~0,7 s Holded-
+ * latency bij de eerste dashboard-load.
+ */
+const fetchPurchaseDocsCached = unstable_cache(
+  async () => {
+    const docs = await Promise.race([
+      holded.request<Array<{ subtotal?: number; date?: number; currency?: string }>>(
+        `/invoicing/v1/documents/purchase`,
+      ),
+      new Promise<never>((_, rej) =>
+        setTimeout(() => rej(new Error("Holded purchase-docs timeout")), DOCS_TIMEOUT_MS),
+      ),
+    ]);
+    return docs;
+  },
+  ["holded-purchase-docs"],
+  { revalidate: 1800 },
+);
 
 export async function purchaseDocsTotalExBTW(): Promise<number> {
   const c = await fetchPurchaseDocs();
