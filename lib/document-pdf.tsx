@@ -812,7 +812,7 @@ function DocumentPdf({ doc }: { doc: PdfDoc }) {
 
       {showExtras && endImgs.length > 0 ? (
         <Page size="A4" style={cs.endPage}>
-          <Text style={cs.endHeading}>Flexibel Stone</Text>
+          <Text style={cs.endHeading}>Flexible Stone</Text>
           <Text style={cs.endSub}>{endTxt.sub}</Text>
           <View style={cs.grid}>
             {endImgs.map((img, i) => (
