@@ -8,7 +8,7 @@
  *   7xxxxxxx → Ingresos (omzet)
  */
 import { holded } from "./client";
-import { unstable_cache } from "next/cache";
+import { kvGet, kvSet, withTimeout } from "@/lib/kv-cache";
 
 interface LedgerLine {
   entryNumber?: number;
@@ -128,8 +128,25 @@ const DOCS_TIMEOUT_MS = 2000;
 
 async function fetchPurchaseDocs(): Promise<DocsCache> {
   if (_docsCache && Date.now() - _docsCache.fetchedAt < TTL_MS) return _docsCache;
+
+  // 1. Gedeelde DB-cache (over alle serverless-instances heen, 30 min).
+  //    LET OP: géén unstable_cache — een fetch dáárbinnen bleef op Vercel
+  //    hangen, waardoor elke dashboard-request pas na de maxDuration van 60 s
+  //    afsloot én de Holded-cijfers leeg bleven.
+  const cached = await kvGet<DocsCache>("holded-purchase-docs");
+  if (cached && Date.now() - cached.fetchedAt < TTL_MS) {
+    _docsCache = cached;
+    return cached;
+  }
+
   try {
-    const docs = await fetchPurchaseDocsCached();
+    const docs = await withTimeout(
+      holded.request<Array<{ subtotal?: number; date?: number; currency?: string }>>(
+        `/invoicing/v1/documents/purchase`,
+      ),
+      DOCS_TIMEOUT_MS,
+      "Holded purchase-docs timeout",
+    );
     let subtotal = 0;
     const byMonth: Record<string, number> = {};
     for (const d of docs ?? []) {
@@ -141,34 +158,14 @@ async function fetchPurchaseDocs(): Promise<DocsCache> {
       }
     }
     _docsCache = { fetchedAt: Date.now(), subtotal, byMonth };
+    await kvSet("holded-purchase-docs", _docsCache);
     return _docsCache;
   } catch {
-    // Niet cachen — geef de laatste bekende waarde terug, anders 0 (subtotaal),
-    // en laat de volgende request de fetch opnieuw proberen.
-    return _docsCache ?? { fetchedAt: 0, subtotal: 0, byMonth: {} };
+    // Niet vers cachen — geef de laatst bekende (evt. verlopen) waarde terug,
+    // en laat de volgende request het opnieuw proberen.
+    return _docsCache ?? cached ?? { fetchedAt: 0, subtotal: 0, byMonth: {} };
   }
 }
-
-/**
- * De ruwe Holded-fetch achter Next's data-cache (gedeeld over alle serverless-
- * instances, 30 min): zonder dit betaalde elke koude instance ~0,7 s Holded-
- * latency bij de eerste dashboard-load.
- */
-const fetchPurchaseDocsCached = unstable_cache(
-  async () => {
-    const docs = await Promise.race([
-      holded.request<Array<{ subtotal?: number; date?: number; currency?: string }>>(
-        `/invoicing/v1/documents/purchase`,
-      ),
-      new Promise<never>((_, rej) =>
-        setTimeout(() => rej(new Error("Holded purchase-docs timeout")), DOCS_TIMEOUT_MS),
-      ),
-    ]);
-    return docs;
-  },
-  ["holded-purchase-docs"],
-  { revalidate: 1800 },
-);
 
 export async function purchaseDocsTotalExBTW(): Promise<number> {
   const c = await fetchPurchaseDocs();
