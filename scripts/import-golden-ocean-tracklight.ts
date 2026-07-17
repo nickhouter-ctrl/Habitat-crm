@@ -5,7 +5,8 @@
  *  - inkoop = USD-prijs × live USD→EUR-koers (ECB)
  *  - kostprijs = inkoop + 15% handling + 40% invoer  (×1,55 — zelfde als kozijnen;
  *    vastgelegd via purchaseCostEur + dutyPct 55 zodat het bewerkscherm gelijk rekent)
- *  - verkoop ex btw = kostprijs / 0,40  (60% marge op de verkoopprijs — systeemdefinitie)
+ *  - verkoop ex btw = kostprijs × 1,60  (60% bovenop de kostprijs — bevestigd door Nick
+ *    17-07; als marge-op-verkoopprijs is dat 37,5%, dus targetMarginPct 37.5)
  *  - aannemersprijs = verkoop × 0,80 (vaste regel)
  * SKU's = de Item No's van de leverancier. 3 SKU's staan dubbel op de PI
  * (wit+zwart zonder kleur-suffix) → één product met beide kleuren in de naam.
@@ -19,7 +20,6 @@ import { inArray } from "drizzle-orm";
 import { db } from "../lib/db";
 import { products, purchaseOrders } from "../lib/db/schema";
 import { rateToEur } from "../lib/fx";
-import { suggestedPrice } from "../lib/pricing";
 
 const APPLY = process.argv.includes("--apply");
 const r2 = (n: number) => Math.round(n * 100) / 100;
@@ -112,7 +112,7 @@ async function main() {
     totUsd += usd * qty;
     const inkoopEur = r2(usd * rate);
     const kostEur = r2(inkoopEur * 1.55);
-    const verkoopEur = suggestedPrice(kostEur, 60); // kost / 0,40
+    const verkoopEur = r2(kostEur * 1.6); // 60% bovenop de kostprijs
     const tradeEur = r2(verkoopEur * 0.8);
     const status = have.has(sku) ? "BESTAAT AL — overslaan" : "";
     console.log(
@@ -130,7 +130,7 @@ async function main() {
       vatRate: 21,
       purchaseCostEur: String(inkoopEur),
       dutyPct: "55", // 15% handling + 40% invoer op de inkoop → kost = inkoop × 1,55
-      targetMarginPct: "60",
+      targetMarginPct: "37.5", // 60% opslag op kost = 37,5% marge op verkoopprijs
       costEur: String(kostEur),
       description: `Ultra Thin Magnetic Track systeem — ${desc}. Leverancier: Golden Ocean Lighting (PI GOV260716, $${usd}/st).`,
       stockQty: "0",
