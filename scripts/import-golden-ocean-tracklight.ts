@@ -5,8 +5,8 @@
  *  - inkoop = USD-prijs × live USD→EUR-koers (ECB)
  *  - kostprijs = inkoop + 15% handling + 40% invoer  (×1,55 — zelfde als kozijnen;
  *    vastgelegd via purchaseCostEur + dutyPct 55 zodat het bewerkscherm gelijk rekent)
- *  - verkoop ex btw = kostprijs / 0,40  (60% MARGE VAN DE VERKOOPPRIJS — definitief
- *    bevestigd door Nick 17-07 via keuzevraag; targetMarginPct 60)
+ *  - verkoop ex btw = kostprijs / 0,20  (80% MARGE VAN DE VERKOOPPRIJS —
+ *    verhoogd door Nick 17-07, was eerst 60%; targetMarginPct 80)
  *  - aannemersprijs = verkoop × 0,80 (vaste regel)
  * SKU's = de Item No's van de leverancier. 3 SKU's staan dubbel op de PI
  * (wit+zwart zonder kleur-suffix) → één product met beide kleuren in de naam.
@@ -112,7 +112,7 @@ async function main() {
     totUsd += usd * qty;
     const inkoopEur = r2(usd * rate);
     const kostEur = r2(inkoopEur * 1.55);
-    const verkoopEur = r2(kostEur / 0.4); // 60% marge van de verkoopprijs
+    const verkoopEur = r2(kostEur / 0.2); // 80% marge van de verkoopprijs
     const tradeEur = r2(verkoopEur * 0.8);
     const status = have.has(sku) ? "BESTAAT AL — overslaan" : "";
     console.log(
@@ -130,7 +130,7 @@ async function main() {
       vatRate: 21,
       purchaseCostEur: String(inkoopEur),
       dutyPct: "55", // 15% handling + 40% invoer op de inkoop → kost = inkoop × 1,55
-      targetMarginPct: "60",
+      targetMarginPct: "80",
       costEur: String(kostEur),
       description: `Ultra Thin Magnetic Track systeem — ${desc}. Leverancier: Golden Ocean Lighting (PI GOV260716, $${usd}/st).`,
       stockQty: "0",
