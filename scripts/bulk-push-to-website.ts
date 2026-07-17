@@ -8,7 +8,7 @@
  *   npx tsx scripts/bulk-push-to-website.ts --apply
  */
 import "./load-env";
-import { eq, isNotNull, isNull, and } from "drizzle-orm";
+import { eq, ilike, isNotNull, isNull, and, or } from "drizzle-orm";
 import { db } from "../lib/db";
 import { products } from "../lib/db/schema";
 import { commitFiles, getTextFile } from "../lib/website/github-client";
@@ -78,6 +78,10 @@ interface WC { id: number; name: string; slug: string; parent_id: number | null;
 interface WPC { id: number; product_id: number; category_id: number; is_primary: boolean; created_at: string; }
 
 async function main() {
+  // Optioneel: --filter=<tekst> beperkt tot producten waarvan de omschrijving of
+  // collectie de tekst bevat (bv. --filter="PI GOV260716" voor één leverancier).
+  const filterArg = process.argv.find((a) => a.startsWith("--filter="))?.slice(9) ?? null;
+
   // 1. Selecteer kandidaten: actief, met SKU, géén website-id
   const candidates = await db
     .select({
@@ -88,8 +92,17 @@ async function main() {
       lengthMm: products.lengthMm, thicknessMm: products.thicknessMm,
     })
     .from(products)
-    .where(and(eq(products.isActive, true), isNotNull(products.sku), isNull(products.websiteProductId)));
-  console.log(`Kandidaten: ${candidates.length}`);
+    .where(
+      and(
+        eq(products.isActive, true),
+        isNotNull(products.sku),
+        isNull(products.websiteProductId),
+        filterArg
+          ? or(ilike(products.description, `%${filterArg}%`), ilike(products.collection, `%${filterArg}%`))
+          : undefined,
+      ),
+    );
+  console.log(`Kandidaten: ${candidates.length}${filterArg ? ` (filter: ${filterArg})` : ""}`);
 
   if (!candidates.length) { console.log("Niets te doen."); process.exit(0); }
 
@@ -138,7 +151,8 @@ async function main() {
       }
     }
 
-    const photoPath: string | null = (() => {
+    const wid = nextPid++;
+    let photoPath: string | null = (() => {
       const u = (c.imageUrl ?? "").trim();
       if (!u) return null;
       if (u.startsWith("/products/")) return u.replace(/^\/products\//, "");
@@ -147,9 +161,22 @@ async function main() {
       const m = u.match(/\/products\/(v\/[^/]+|[^/]+)$/);
       return m ? m[1] : null;
     })();
+    // Supabase-/externe foto: binary ophalen en mee-committen naar
+    // public/products/<websiteId>.<ext> (zelfde conventie als pushProductToWebsite).
+    if (!photoPath && c.imageUrl && APPLY) {
+      const img = await fetchProductImageBytes(c.imageUrl);
+      if (img) {
+        const ext = /png/.test(img.contentType) ? "png" : /webp/.test(img.contentType) ? "webp" : "jpg";
+        const fileName = `${wid}.${ext}`;
+        filesToCommit.push({ path: `public/products/${fileName}`, content: img.bytes });
+        photoPath = fileName;
+      }
+    } else if (!photoPath && c.imageUrl) {
+      photoPath = "(wordt geüpload bij --apply)";
+    }
 
     const entry: WP = {
-      id: nextPid++,
+      id: wid,
       name: c.name,
       slug: `${slugify(c.name) || `product-${nextPid}`}-${Date.now()}`,
       description: c.description ?? null,
@@ -187,9 +214,14 @@ async function main() {
       min_stock_level: 0,
     });
 
-    // Category-mapping (best-effort op naam)
-    const catName = (c.category ?? c.collection ?? "").trim();
-    const matched = catName ? categories.find((cat) => normName(cat.name) === normName(catName)) : undefined;
+    // Category-mapping (best-effort op naam) — eerst de categorie, en als die
+    // niet bestaat op de site de collectie (bv. category "Magnetic Track" →
+    // collectie "Verlichting").
+    const matched = [c.category, c.collection]
+      .map((x) => (x ?? "").trim())
+      .filter(Boolean)
+      .map((nm) => categories.find((cat) => normName(cat.name) === normName(nm)))
+      .find(Boolean);
     if (matched) {
       prodCats.push({
         id: nextRowId++,
