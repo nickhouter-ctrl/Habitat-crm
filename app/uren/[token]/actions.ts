@@ -58,10 +58,17 @@ export async function logHours(
 
   // Melding naar kantoor — mag de invoer nooit blokkeren als de mail faalt.
   try {
-    const h = await headers();
-    const host = h.get("host") ?? "localhost:3000";
-    const proto = h.get("x-forwarded-proto") ?? (host.includes("localhost") ? "http" : "https");
-    const projectUrl = `${proto}://${host}/projects/${project.id}#uren`;
+    // Vaste APP_URL zodat de goedkeur-link in de mail altijd naar productie
+    // wijst — de Host-header kan een testserver zijn (localhost) of gespooft.
+    const fixed = process.env.APP_URL?.trim().replace(/\/$/, "");
+    let base = fixed;
+    if (!base) {
+      const h = await headers();
+      const host = h.get("host") ?? "localhost:3000";
+      const proto = h.get("x-forwarded-proto") ?? (host.includes("localhost") ? "http" : "https");
+      base = `${proto}://${host}`;
+    }
+    const projectUrl = `${base}/projects/${project.id}#uren`;
     const who = crewName ? `${crewName} (via ${worker.name})` : worker.name;
     const rows = [
       ["Project", project.name],
