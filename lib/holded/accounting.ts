@@ -8,7 +8,7 @@
  *   7xxxxxxx → Ingresos (omzet)
  */
 import { holded } from "./client";
-import { kvGet, kvSet, withTimeout } from "@/lib/kv-cache";
+import { kvGet, kvSet } from "@/lib/kv-cache";
 
 interface LedgerLine {
   entryNumber?: number;
@@ -124,7 +124,7 @@ export async function expensesYTD(): Promise<number> {
  */
 type DocsCache = { fetchedAt: number; subtotal: number; byMonth: Record<string, number> };
 let _docsCache: DocsCache | null = null;
-const DOCS_TIMEOUT_MS = 2000;
+const DOCS_TIMEOUT_MS = 8000;
 
 async function fetchPurchaseDocs(): Promise<DocsCache> {
   if (_docsCache && Date.now() - _docsCache.fetchedAt < TTL_MS) return _docsCache;
@@ -140,13 +140,12 @@ async function fetchPurchaseDocs(): Promise<DocsCache> {
   }
 
   try {
-    const docs = await withTimeout(
-      holded.request<Array<{ subtotal?: number; date?: number; currency?: string }>>(
-        `/invoicing/v1/documents/purchase`,
-      ),
-      DOCS_TIMEOUT_MS,
-      "Holded purchase-docs timeout",
+    const t0 = Date.now();
+    const docs = await holded.request<Array<{ subtotal?: number; date?: number; currency?: string }>>(
+      `/invoicing/v1/documents/purchase`,
+      { timeoutMs: DOCS_TIMEOUT_MS },
     );
+    console.log(`[holded] purchase-docs opgehaald in ${Date.now() - t0} ms (${docs?.length ?? 0} docs)`);
     let subtotal = 0;
     const byMonth: Record<string, number> = {};
     for (const d of docs ?? []) {
@@ -160,7 +159,8 @@ async function fetchPurchaseDocs(): Promise<DocsCache> {
     _docsCache = { fetchedAt: Date.now(), subtotal, byMonth };
     await kvSet("holded-purchase-docs", _docsCache);
     return _docsCache;
-  } catch {
+  } catch (err) {
+    console.warn("[holded] purchase-docs fetch mislukt:", err instanceof Error ? err.message : String(err));
     // Niet vers cachen — geef de laatst bekende (evt. verlopen) waarde terug,
     // en laat de volgende request het opnieuw proberen.
     return _docsCache ?? cached ?? { fetchedAt: 0, subtotal: 0, byMonth: {} };

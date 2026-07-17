@@ -94,6 +94,7 @@ function ActionRow({
 }
 
 export default async function DashboardPage() {
+  const t0 = Date.now();
   const now = new Date();
   const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0, 10);
   const today = now.toISOString().slice(0, 10);
@@ -410,6 +411,7 @@ export default async function DashboardPage() {
       .where(eq(documents.kind, "estimate")),
   );
 
+  console.log(`[dash] eerste golf klaar na ${Date.now() - t0} ms`);
   const reservedByProduct = await pReservedByProduct;
   const toOrder = (await pActiveProducts)
     .map((p) => {
@@ -531,6 +533,7 @@ export default async function DashboardPage() {
 
   // --- Grafieken: omzet & offerte-waarde per maand (12 mnd) + conversie ---
   const [revByMonthRows, estByMonthRows, [estConv]] = await Promise.all([pRevByMonth, pEstByMonth, pEstConv]);
+  console.log(`[dash] alle data klaar na ${Date.now() - t0} ms`);
   const revSeries = monthSeries(now, revByMonthRows);
   const estSeries = monthSeries(now, estByMonthRows);
   const convPct = estConv && estConv.total > 0 ? Math.round((estConv.accepted / estConv.total) * 100) : 0;

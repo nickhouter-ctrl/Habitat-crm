@@ -45,6 +45,8 @@ async function request<T>(
     method?: "GET" | "POST" | "PUT" | "DELETE";
     query?: Query;
     body?: unknown;
+    /** Harde timeout in ms — de fetch wordt dan ECHT afgebroken (abort). */
+    timeoutMs?: number;
   } = {},
 ): Promise<T> {
   const url = new URL(`${BASE}${path}`);
@@ -53,6 +55,9 @@ async function request<T>(
   }
 
   const hasBody = init.body !== undefined;
+  // Abort i.p.v. alleen een race verliezen: een achtergelaten fetch bleef op
+  // Vercel als "pending werk" hangen en hield de response-stream open tot de
+  // maxDuration (dashboard dat pas na 60 s afsloot).
   const res = await fetch(url, {
     method: init.method ?? "GET",
     headers: {
@@ -63,6 +68,7 @@ async function request<T>(
     body: hasBody ? JSON.stringify(init.body) : undefined,
     // Holded data is mutable — never serve a cached response.
     cache: "no-store",
+    signal: AbortSignal.timeout(init.timeoutMs ?? 15000),
   });
 
   const text = await res.text();
