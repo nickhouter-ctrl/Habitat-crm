@@ -231,14 +231,18 @@ export default async function DashboardPage() {
   // dashboard. Promise.resolve(...) dwingt de lazy drizzle-builders om direct
   // te beginnen; de awaits verderop pakken alleen nog het resultaat.
   const since12 = new Date(now.getFullYear(), now.getMonth() - 11, 1).toISOString().slice(0, 10);
-  const pReservedByProduct = getReservedStockByProduct();
-  const pActiveProducts = Promise.resolve(
+
+  console.log(`[dash] eerste golf klaar na ${Date.now() - t0} ms`);
+  // Tweede golf: één Promise.all, net als de eerste golf. Losse
+  // Promise.resolve-kickoffs + een volle pool lieten postgres.js queries
+  // pipelinen waarvan er één in protocol-limbo bleef (server: ClientRead)
+  // — de response sloot dan pas bij de functie-timeout van 60 s.
+  const [reservedByProduct, activeProductRows, estimateRows, invoicedSumRows, openOffertes, openSalesInvoices, plannedDeliveries, deliveredDocRows, toPlanRows, doorProductRows, doorInvoiceRows, productCostRows, cogsRows, [pendingHoursAgg], revByMonthRows, estByMonthRows, [estConv]] = await Promise.all([
+    getReservedStockByProduct(),
     db
       .select({ id: products.id, sku: products.sku, name: products.name, stockQty: products.stockQty })
       .from(products)
       .where(eq(products.isActive, true)),
-  );
-  const pEstimateRows = Promise.resolve(
     db
       .select({
         id: documents.id,
@@ -250,8 +254,6 @@ export default async function DashboardPage() {
       .from(documents)
       .leftJoin(contacts, eq(documents.contactId, contacts.id))
       .where(and(eq(documents.kind, "estimate"), eq(documents.status, "accepted"))),
-  );
-  const pInvoicedSumRows = Promise.resolve(
     db
       .select({
         src: documents.sourceDocumentId,
@@ -266,8 +268,6 @@ export default async function DashboardPage() {
         ),
       )
       .groupBy(documents.sourceDocumentId),
-  );
-  const pOpenOffertes = Promise.resolve(
     db
       .select({
         id: documents.id,
@@ -282,8 +282,6 @@ export default async function DashboardPage() {
       .where(and(eq(documents.kind, "estimate"), eq(documents.status, "sent")))
       .orderBy(desc(documents.issueDate))
       .limit(50),
-  );
-  const pOpenSalesInvoices = Promise.resolve(
     db
       .select({
         id: documents.id,
@@ -304,8 +302,6 @@ export default async function DashboardPage() {
       )
       .orderBy(documents.dueDate)
       .limit(50),
-  );
-  const pPlannedDeliveries = Promise.resolve(
     db
       .select({
         id: deliveries.id,
@@ -322,9 +318,7 @@ export default async function DashboardPage() {
       .leftJoin(contacts, eq(contacts.id, deliveries.contactId))
       .where(inArray(deliveries.status, ["gepland", "onderweg"]))
       .orderBy(deliveries.plannedDate),
-  );
-  const pDeliveredDocIds = Promise.resolve(db.select({ id: deliveries.documentId }).from(deliveries));
-  const pToPlanRows = Promise.resolve(
+    db.select({ id: deliveries.documentId }).from(deliveries),
     db
       .select({
         id: documents.id,
@@ -345,11 +339,7 @@ export default async function DashboardPage() {
         ),
       )
       .orderBy(desc(documents.issueDate)),
-  );
-  const pDoorProducts = Promise.resolve(
     db.select({ id: products.id }).from(products).where(sql`${products.sku} like 'DR-00%'`),
-  );
-  const pDoorInvoiceRows = Promise.resolve(
     db
       .select({
         id: documents.id,
@@ -360,17 +350,11 @@ export default async function DashboardPage() {
       .from(documents)
       .leftJoin(projects, eq(documents.projectId, projects.id))
       .where(eq(documents.kind, "invoice")),
-  );
-  const pProductCostRows = Promise.resolve(
     db.select({ id: products.id, costEur: products.costEur }).from(products),
-  );
-  const pCogsRows = Promise.resolve(
     db
       .select({ items: documents.items, issueDate: documents.issueDate, kind: documents.kind })
       .from(documents)
       .where(inArray(documents.kind, ["invoice", "creditnote"])),
-  );
-  const pPendingHours = Promise.resolve(
     db
       .select({
         n: count(),
@@ -379,8 +363,6 @@ export default async function DashboardPage() {
       })
       .from(timeEntries)
       .where(and(isNotNull(timeEntries.selfLoggedAt), isNull(timeEntries.approvedAt))),
-  );
-  const pRevByMonth = Promise.resolve(
     db
       .select({
         ym: sql<string>`to_char(${documents.issueDate}, 'YYYY-MM')`,
@@ -389,8 +371,6 @@ export default async function DashboardPage() {
       .from(documents)
       .where(and(eq(documents.kind, "invoice"), notInArray(documents.status, ["draft", "void"]), gte(documents.issueDate, since12)))
       .groupBy(sql`to_char(${documents.issueDate}, 'YYYY-MM')`),
-  );
-  const pEstByMonth = Promise.resolve(
     db
       .select({
         ym: sql<string>`to_char(${documents.issueDate}, 'YYYY-MM')`,
@@ -399,8 +379,6 @@ export default async function DashboardPage() {
       .from(documents)
       .where(and(eq(documents.kind, "estimate"), gte(documents.issueDate, since12)))
       .groupBy(sql`to_char(${documents.issueDate}, 'YYYY-MM')`),
-  );
-  const pEstConv = Promise.resolve(
     db
       .select({
         total: sql<number>`count(*)::int`,
@@ -409,11 +387,9 @@ export default async function DashboardPage() {
       })
       .from(documents)
       .where(eq(documents.kind, "estimate")),
-  );
-
-  console.log(`[dash] eerste golf klaar na ${Date.now() - t0} ms`);
-  const reservedByProduct = await pReservedByProduct;
-  const toOrder = (await pActiveProducts)
+  ]);
+  console.log(`[dash] tweede golf klaar na ${Date.now() - t0} ms`);
+  const toOrder = activeProductRows
     .map((p) => {
       const reserved = reservedByProduct.get(p.id) ?? 0;
       const stock = Number(p.stockQty ?? 0);
@@ -425,8 +401,6 @@ export default async function DashboardPage() {
 
   // Nog af te rekenen: offertes die deels gefactureerd zijn (gekoppelde facturen
   // < offertebedrag) → er moet nog een eindafrekening komen.
-  const estimateRows = await pEstimateRows;
-  const invoicedSumRows = await pInvoicedSumRows;
   const invoicedByEstimate = new Map(invoicedSumRows.map((r) => [r.src, Number(r.invoiced)]));
   const toSettle = estimateRows
     .map((e) => {
@@ -438,19 +412,13 @@ export default async function DashboardPage() {
     .slice(0, 50);
 
   // Open offertes: uitgebracht (verstuurd) en wachtend op antwoord.
-  const openOffertes = await pOpenOffertes;
 
   // Openstaande verkoopfacturen — verzonden/deels betaald/vervallen, nog te ontvangen.
-  const openSalesInvoices = await pOpenSalesInvoices;
 
   // Geplande leveringen (gepland/onderweg) — eerstvolgende bovenaan.
-  const plannedDeliveries = await pPlannedDeliveries;
 
   // Te plannen: verkochte facturen met productregels die nog geen levering hebben.
-  const deliveredDocIds = new Set(
-    (await pDeliveredDocIds).map((r) => r.id).filter(Boolean) as string[],
-  );
-  const toPlanRows = await pToPlanRows;
+  const deliveredDocIds = new Set(deliveredDocRows.map((r) => r.id).filter(Boolean) as string[]);
   const toPlan = toPlanRows
     .filter(
       (d) =>
@@ -462,8 +430,7 @@ export default async function DashboardPage() {
   // Facturen met een deur/deur-set-regel waarvan de draairichting (S1–S4) nog
   // niet gekozen is — zodat je een set kunt factureren en de richting later
   // aangeeft. We detecteren het direct uit de regels (geen losse notitie nodig).
-  const doorProductIds = new Set((await pDoorProducts).map((r) => r.id));
-  const doorInvoiceRows = await pDoorInvoiceRows;
+  const doorProductIds = new Set(doorProductRows.map((r) => r.id));
   const doorOrientationDocs = doorInvoiceRows
     .map((d) => {
       const units = normalizeDocItems(d.items)
@@ -485,9 +452,7 @@ export default async function DashboardPage() {
   // Marge = omzet − kostprijs van de verkochte producten (COGS uit de
   // factuurregels × products.costEur). Creditnota's draaien de marge terug.
   // Regels zonder gekoppeld product (bv. arbeid) tellen niet mee in de COGS.
-  const productCostRows = await pProductCostRows;
   const costMap = new Map(productCostRows.map((p) => [p.id, Number(p.costEur) || 0]));
-  const cogsRows = await pCogsRows;
   let cogsAll = 0;
   let cogsMonth = 0;
   for (const d of cogsRows) {
@@ -514,7 +479,6 @@ export default async function DashboardPage() {
     return diff <= 7 && diff >= -1;
   }).length;
   // Portaal-uren die op controle wachten (melding in het systeem).
-  const [pendingHoursAgg] = await pPendingHours;
   const pendingHoursN = pendingHoursAgg?.n ?? 0;
 
   const anyActions =
@@ -532,8 +496,6 @@ export default async function DashboardPage() {
     toPlan.length > 0;
 
   // --- Grafieken: omzet & offerte-waarde per maand (12 mnd) + conversie ---
-  const [revByMonthRows, estByMonthRows, [estConv]] = await Promise.all([pRevByMonth, pEstByMonth, pEstConv]);
-  console.log(`[dash] alle data klaar na ${Date.now() - t0} ms`);
   const revSeries = monthSeries(now, revByMonthRows);
   const estSeries = monthSeries(now, estByMonthRows);
   const convPct = estConv && estConv.total > 0 ? Math.round((estConv.accepted / estConv.total) * 100) : 0;
