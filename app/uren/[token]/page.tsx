@@ -61,6 +61,7 @@ export default async function UrenPortaalPage({ params }: { params: Promise<{ to
   const today = now.toISOString().slice(0, 10);
   const weekStart = mondayOf(today);
   const twoWeeksAgo = new Date(now.getTime() - 14 * 24 * 3600 * 1000).toISOString().slice(0, 10);
+  const fiveWeeksAgo = new Date(now.getTime() - 35 * 24 * 3600 * 1000).toISOString().slice(0, 10);
 
   // Alleen de eigen uren op dít project — één link = één project.
   const recent = await db
@@ -73,16 +74,39 @@ export default async function UrenPortaalPage({ params }: { params: Promise<{ to
       selfLoggedAt: timeEntries.selfLoggedAt,
       approvedAt: timeEntries.approvedAt,
       createdAt: timeEntries.createdAt,
+      hourlyCostEur: timeEntries.hourlyCostEur,
+      purchaseOrderId: timeEntries.purchaseOrderId,
     })
     .from(timeEntries)
     .where(
       and(
         eq(timeEntries.workerId, worker.id),
         eq(timeEntries.projectId, project.id),
-        gte(timeEntries.date, twoWeeksAgo),
+        gte(timeEntries.date, fiveWeeksAgo),
       ),
     )
     .orderBy(desc(timeEntries.date), desc(timeEntries.createdAt));
+
+  // Weektotalen (ma-zo) van de eigen portaal-uren — voor de weekfactuur van de
+  // bouwer: uren + bedrag ex btw, en of ze al aan een factuur gekoppeld zijn.
+  const weekAgg = new Map<string, { hours: number; amount: number; open: number; openAmount: number }>();
+  for (const e of recent) {
+    if (!e.selfLoggedAt) continue;
+    const wk = mondayOf(e.date);
+    const agg = weekAgg.get(wk) ?? { hours: 0, amount: 0, open: 0, openAmount: 0 };
+    const h = Number(e.hours);
+    const amt = h * Number(e.hourlyCostEur ?? 0);
+    agg.hours += h;
+    agg.amount += amt;
+    if (!e.purchaseOrderId) {
+      agg.open += h;
+      agg.openAmount += amt;
+    }
+    weekAgg.set(wk, agg);
+  }
+  const weekList = [...weekAgg.entries()].sort((a, b) => (a[0] < b[0] ? 1 : -1)).slice(0, 5);
+  const eur = (n: number) =>
+    new Intl.NumberFormat("nl-NL", { style: "currency", currency: "EUR" }).format(n);
 
   const weekHours = recent
     .filter((e) => e.date >= weekStart)
@@ -112,13 +136,46 @@ export default async function UrenPortaalPage({ params }: { params: Promise<{ to
           <WorkerHoursForm token={token} today={today} t={t} />
         </section>
 
+        {weekList.length > 0 && (
+          <section className="rounded-2xl border border-stone-200 bg-white p-5 shadow-sm">
+            <h2 className="text-base font-semibold text-stone-800">{t.weekTotals}</h2>
+            <p className="mb-3 text-xs text-stone-400">{t.weekTotalsHint}</p>
+            <ul className="divide-y divide-stone-100">
+              {weekList.map(([wk, agg]) => {
+                const [, m, d] = wk.split("-");
+                const fullyInvoiced = agg.open === 0;
+                return (
+                  <li key={wk} className="flex items-center gap-3 py-2.5">
+                    <span className="w-20 shrink-0 text-sm text-stone-500">
+                      {t.weekWord} {d}/{m}
+                    </span>
+                    <span className="min-w-0 flex-1 text-sm text-stone-700">
+                      {agg.hours % 1 === 0 ? agg.hours : agg.hours.toFixed(2)} {t.hoursUnit}
+                    </span>
+                    <span className="shrink-0 text-sm font-semibold tabular-nums text-stone-800">
+                      {eur(agg.amount)}
+                    </span>
+                    <span
+                      className={`shrink-0 rounded-full px-2 py-0.5 text-[11px] font-medium ${
+                        fullyInvoiced ? "bg-emerald-50 text-emerald-700" : "bg-amber-50 text-amber-700"
+                      }`}
+                    >
+                      {fullyInvoiced ? `✓ ${t.invoiced}` : `${t.toInvoice}: ${eur(agg.openAmount)}`}
+                    </span>
+                  </li>
+                );
+              })}
+            </ul>
+          </section>
+        )}
+
         <section className="rounded-2xl border border-stone-200 bg-white p-5 shadow-sm">
           <h2 className="mb-3 text-base font-semibold text-stone-800">{t.recentTitle}</h2>
           {recent.length === 0 ? (
             <p className="text-sm text-stone-500">{t.empty}</p>
           ) : (
             <ul className="divide-y divide-stone-100">
-              {recent.map((e) => {
+              {recent.filter((e) => e.date >= twoWeeksAgo).map((e) => {
                 const dayName = t.days[new Date(`${e.date}T12:00:00Z`).getUTCDay()];
                 const [, m, d] = e.date.split("-");
                 const crewLabel = e.workerName && e.workerName !== worker.name ? e.workerName : null;

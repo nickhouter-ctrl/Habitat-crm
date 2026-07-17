@@ -8,7 +8,7 @@ import { requireWriteUser } from "@/lib/auth/guards";
 
 import { auth } from "@/auth";
 import { db } from "@/lib/db";
-import { activities, emailInbox, mailAttachments, products, purchaseOrders, timeEntries } from "@/lib/db/schema";
+import { activities, emailInbox, mailAttachments, products, purchaseOrders, timeEntries, workers } from "@/lib/db/schema";
 import type { PurchaseOrderAttachment } from "@/lib/db/schema";
 import { nextSequentialSku } from "@/lib/products";
 import { normalizePoAttachments, parsePoLineItems, poTotal, PO_STATUSES } from "@/lib/purchase-orders";
@@ -209,8 +209,46 @@ export async function linkPurchaseOrderAsHours(id: string, formData: FormData) {
   // arbeid koppelen, maar GEEN nieuwe uren-regel maken — anders telt het dubbel.
   const alreadyLogged = formData.get("alreadyLogged") === "on";
 
-  // Idempotent: bestaande uren-regel voor deze inkooporder vervangen.
-  await db.delete(timeEntries).where(eq(timeEntries.purchaseOrderId, id));
+  // Idempotent: eerder DOOR DEZE KOPPELING gegenereerde regel vervangen — maar
+  // NOOIT portaal-uren (selfLoggedAt) verwijderen die aan deze PO hangen.
+  await db
+    .delete(timeEntries)
+    .where(and(eq(timeEntries.purchaseOrderId, id), isNull(timeEntries.selfLoggedAt)));
+  if (alreadyLogged) {
+    // Weekfactuur van een bouwer wiens uren al via het portaal binnenkwamen:
+    // koppel de nog niet-gefactureerde portaal-uren van deze leverancier op dit
+    // project aan deze inkooporder. Zo is zichtbaar welke uren de factuur dekt
+    // en telt niets dubbel.
+    // Naam-match leverancier ↔ arbeider: bevat-elkaar (factuur "Zerghini
+    // Abdelmjid" ↔ arbeider "Abdelmjid"); bij twijfel (0 of 2+ matches) niets
+    // koppelen — liever handmatig dan verkeerd.
+    const allWorkers = await db.query.workers.findMany({ columns: { id: true, name: true } });
+    const sup = po.supplier.trim().toLowerCase();
+    const matches = allWorkers.filter((w) => {
+      const n = w.name.trim().toLowerCase();
+      return n.length >= 4 && (sup.includes(n) || n.includes(sup));
+    });
+    const worker = matches.length === 1 ? matches[0] : null;
+    if (matches.length > 1) {
+      console.warn(`[inkooporder] meerdere arbeiders matchen leverancier "${po.supplier}" — uren niet automatisch gekoppeld`);
+    }
+    if (worker) {
+      const linked = await db
+        .update(timeEntries)
+        .set({ purchaseOrderId: id, updatedAt: new Date() })
+        .where(
+          and(
+            eq(timeEntries.projectId, projectId),
+            eq(timeEntries.workerId, worker.id),
+            isNotNull(timeEntries.selfLoggedAt),
+            isNull(timeEntries.purchaseOrderId),
+            po.orderDate ? sql`${timeEntries.date} <= ${po.orderDate}` : undefined,
+          ),
+        )
+        .returning({ id: timeEntries.id });
+      console.log(`[inkooporder] ${linked.length} portaal-urenregels gekoppeld aan ${po.reference ?? id}`);
+    }
+  }
   if (!alreadyLogged) {
     await db.insert(timeEntries).values({
       projectId,
@@ -294,6 +332,12 @@ export async function markPurchaseOrderPaid(id: string) {
       console.error("[markPurchaseOrderPaid] Holded pay failed:", e);
     }
   }
+
+  // Gekoppelde (portaal-)uren als afgerekend markeren.
+  await db
+    .update(timeEntries)
+    .set({ paidAt: new Date(), updatedAt: new Date() })
+    .where(and(eq(timeEntries.purchaseOrderId, id), isNull(timeEntries.paidAt)));
 
   await db.insert(activities).values({
     type: "note",
