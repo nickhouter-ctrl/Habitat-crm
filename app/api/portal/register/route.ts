@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { NOTIFY_RECIPIENTS, NOTIFY_TO } from "@/lib/mail-bcc";
 
 import { db } from "@/lib/db";
 import { accountRequests } from "@/lib/db/schema";
@@ -80,7 +81,8 @@ export async function POST(req: Request) {
     ];
     const kindLabel = v.kind === "zakelijk" ? "zakelijk" : "particulier";
     await sendMail({
-      to: process.env.NOTIFY_EMAIL?.trim() || "nick@habitat-one.com",
+      to: NOTIFY_TO,
+      bcc: NOTIFY_RECIPIENTS.slice(1).join(", ") || undefined,
       replyTo: v.email,
       subject: `Nieuwe accountaanvraag — accepteer of weiger (${v.name})`,
       html: `<div style="font-family:Arial,Helvetica,sans-serif;color:#2a2620;max-width:560px">

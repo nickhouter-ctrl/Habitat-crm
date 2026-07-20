@@ -2,6 +2,7 @@
 
 import { eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
+import { NOTIFY_RECIPIENTS, NOTIFY_TO } from "@/lib/mail-bcc";
 
 import { COMPANY } from "@/lib/company";
 import { db } from "@/lib/db";
@@ -19,12 +20,12 @@ async function loadByToken(token: string) {
 }
 
 async function notifyTeam(subject: string, html: string) {
-  const to = process.env.NOTIFY_EMAIL || COMPANY.email;
-  if (to) {
-    await sendEmail({ to, subject, html });
-  } else {
-    console.log(`[habitat-crm] (notify stub) ${subject}`);
-  }
+  await sendEmail({
+    to: NOTIFY_TO,
+    bcc: NOTIFY_RECIPIENTS.slice(1).join(", ") || undefined,
+    subject,
+    html,
+  });
 }
 
 export async function acceptOfferte(token: string) {

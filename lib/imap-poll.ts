@@ -15,6 +15,7 @@ import { db } from "@/lib/db";
 import { emailInbox, emailSyncState, mailAttachments } from "@/lib/db/schema";
 import { storeMailAttachments } from "@/lib/email-attachments";
 import { fetchNewMails, getMailAccounts, type MailAccount, type ParsedEmail } from "@/lib/gmail";
+import { ALWAYS_BCC } from "@/lib/mail-bcc";
 
 export type ImapPollResult = {
   ok: boolean;
@@ -46,8 +47,22 @@ export async function ingestMails(mails: ParsedEmail[]): Promise<IngestStats> {
     attachmentsStored: 0, invoicesAutoCreated: 0, invoicesNeedReview: 0,
     firstFailedUid: null,
   };
+  // Onze eigen verzendadressen — mail die HIERVANDAAN komt is een interne
+  // melding of BCC-kopie (bv. accountaanvragen naar hi@) en hoort NIET in de
+  // inbox-verwerking (anders klutter + risico op auto-inkoopfacturen uit onze
+  // eigen offerte-/factuur-PDF's).
+  const ownAddresses = new Set(
+    [process.env.GMAIL_USER, process.env.GMAIL_PURCHASE_USER, ...ALWAYS_BCC]
+      .map((a) => a?.trim().toLowerCase())
+      .filter(Boolean) as string[],
+  );
+
   for (const m of mails) {
     try {
+      if (m.fromEmail && ownAddresses.has(m.fromEmail.trim().toLowerCase())) {
+        s.duplicates++; // niet echt een duplicaat, maar telt als "overgeslagen"
+        continue;
+      }
       const [row] = await db
         .insert(emailInbox)
         .values({
