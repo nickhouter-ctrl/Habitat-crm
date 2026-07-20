@@ -779,6 +779,10 @@ export const purchaseOrders = pgTable(
       .primaryKey()
       .default(sql`gen_random_uuid()`),
     supplier: text().notNull(),
+    /** Soort inkoopdocument: "order" (bestelling met regels/voorraad) of
+     * "invoice" (binnengekomen factuur/bon — bv. van een werknemer of voor
+     * materialen — met alleen een bedrag, geen voorraadregels). */
+    kind: text().notNull().default("order"),
     /** Optioneel gekoppeld project — telt dan mee als materiaal/inkoopkost op de klus. */
     projectId: uuid().references((): AnyPgColumn => projects.id, { onDelete: "set null" }),
     /** Gekoppeld als arbeid/uren (bv. een bouwer-factuur): telt dan als arbeidskost

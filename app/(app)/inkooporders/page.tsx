@@ -144,7 +144,7 @@ export default async function PurchaseOrdersPage({
             <LinkButton href="/inkooporders/bestellen" variant="secondary">
               Bijbestellen
             </LinkButton>
-            <LinkButton href="/inkooporders/new">Nieuwe bestelling</LinkButton>
+            <LinkButton href="/inkooporders/new">Toevoegen</LinkButton>
           </>
         }
       />
@@ -164,7 +164,7 @@ export default async function PurchaseOrdersPage({
         <EmptyState
           title="Nog geen inkooporders"
           description="Voeg een leveranciersbestelling toe (bv. een KKR/Magic Stone proforma) of synchroniseer met Holded om aankoopfacturen op te halen."
-          action={<LinkButton href="/inkooporders/new">Nieuwe bestelling</LinkButton>}
+          action={<LinkButton href="/inkooporders/new">Toevoegen</LinkButton>}
         />
       ) : (
         <>
@@ -262,6 +262,11 @@ export default async function PurchaseOrdersPage({
                           <Link href={`/inkooporders/${po.id}`} className="hover:underline">
                             {po.supplier}
                           </Link>
+                          {po.kind === "invoice" && (
+                            <Badge tone="neutral" className="ml-2">
+                              factuur
+                            </Badge>
+                          )}
                           {po.suggestedKind && !po.projectId && (
                             <Badge tone="accent" className="ml-2">
                               voorstel: {po.suggestedKind === "labor" ? "uren" : "materiaal"}

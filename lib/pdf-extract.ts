@@ -20,12 +20,18 @@ export type ParsedPurchaseOrder = {
   expectedDate?: string; // YYYY-MM-DD
   currency?: string;
   items: ParsedPurchaseOrderItem[];
+  /** Documentsoort: bestelling/proforma (met regels) of een gewone factuur/bon. */
+  docKind?: "order" | "invoice";
+  /** Eindtotaal incl. btw (voor facturen zonder duidelijke productregels). */
+  total?: number;
+  /** Subtotaal ex. btw / base imponible. */
+  subtotal?: number;
 };
 
 const API_URL = "https://api.anthropic.com/v1/messages";
 const MODEL = process.env.ANTHROPIC_MODEL ?? "claude-sonnet-4-6";
 
-const PROMPT = `You are extracting structured data from a supplier's proforma invoice / purchase order (often from a Chinese manufacturer such as KingKonree or a "Magic Stone" supplier).
+const PROMPT = `You are extracting structured data from a supplier document. It is EITHER a proforma invoice / purchase order (often from a Chinese manufacturer such as KingKonree or a "Magic Stone" supplier, with many product line items) OR a plain incoming invoice / receipt (e.g. a builder invoicing worked hours, or a materials bill — few or no product line items, just amounts).
 
 Return ONLY a JSON object — no markdown, no commentary — with exactly these keys:
 - "supplier": string — the seller / manufacturer company name
@@ -33,6 +39,9 @@ Return ONLY a JSON object — no markdown, no commentary — with exactly these 
 - "orderDate": string | null — the document date as YYYY-MM-DD
 - "expectedDate": string | null — when the goods are expected ready/shipped (production lead time / "valid until" is NOT this; use the production-ready date if mentioned, else null), YYYY-MM-DD
 - "currency": string — 3-letter ISO code (e.g. "USD", "EUR")
+- "docKind": "order" | "invoice" — "order" if it is a proforma/purchase order with itemised products to be manufactured/shipped; "invoice" if it is a normal incoming bill (labour/hours, services, or a materials invoice) that just needs to be paid
+- "total": number | null — the grand total INCLUDING VAT/tax that must be paid (for an invoice). null for a pure proforma with only line items.
+- "subtotal": number | null — the net subtotal / base imponible EXCLUDING VAT. With reverse-charge VAT (inversión del sujeto pasivo / btw verlegd) this equals the total.
 - "items": array of objects, each:
    - "name": string — the product item name/description (concise)
    - "sku": string | null — the item code / model number
@@ -123,12 +132,17 @@ export async function extractPurchaseOrderFromPdf(
 
     const raw = JSON.parse(stripFences(text)) as Record<string, unknown>;
     const items = Array.isArray(raw.items) ? raw.items : [];
+    const totalNum = raw.total == null ? undefined : num(raw.total) || undefined;
+    const subtotalNum = raw.subtotal == null ? undefined : num(raw.subtotal) || undefined;
     return {
       supplier: str(raw.supplier),
       reference: str(raw.reference),
       orderDate: isoDate(raw.orderDate),
       expectedDate: isoDate(raw.expectedDate),
       currency: str(raw.currency)?.toUpperCase().slice(0, 3),
+      docKind: raw.docKind === "invoice" ? "invoice" : "order",
+      total: totalNum,
+      subtotal: subtotalNum,
       items: items
         .map((it) => {
           const o = (it ?? {}) as Record<string, unknown>;

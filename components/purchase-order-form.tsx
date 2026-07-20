@@ -59,6 +59,9 @@ type ParseResult = {
     orderDate?: string;
     expectedDate?: string;
     currency?: string;
+    docKind?: "order" | "invoice";
+    total?: number;
+    subtotal?: number;
     items: (PurchaseOrderLineItem & { productId?: string })[];
   } | null;
   note?: string;
@@ -74,10 +77,20 @@ export function PurchaseOrderForm({
   products: POProductOption[];
   action: (formData: FormData) => void | Promise<void>;
 }) {
+  const [kind, setKind] = useState<"order" | "invoice">(
+    (order?.kind as "order" | "invoice") ?? "order",
+  );
   const [supplier, setSupplier] = useState(order?.supplier ?? "");
   const [reference, setReference] = useState(order?.reference ?? "");
-  const [status, setStatus] = useState(order?.status ?? "ordered");
+  const [status, setStatus] = useState(order?.status ?? (order?.kind === "invoice" ? "received" : "ordered"));
   const [currency, setCurrency] = useState(order?.currency ?? "EUR");
+  // Factuurmodus: bedragen die direct worden ingevuld (i.p.v. uit productregels).
+  const [amountTotal, setAmountTotal] = useState(
+    order?.kind === "invoice" && order?.total != null ? String(order.total) : "",
+  );
+  const [amountSubtotal, setAmountSubtotal] = useState(
+    order?.kind === "invoice" && order?.subtotal != null ? String(order.subtotal) : "",
+  );
   const [orderDate, setOrderDate] = useState(order?.orderDate ?? "");
   const [expectedDate, setExpectedDate] = useState(order?.expectedDate ?? "");
   const [notes, setNotes] = useState(order?.notes ?? "");
@@ -128,6 +141,13 @@ export function PurchaseOrderForm({
         if (p.currency) setCurrency(p.currency);
         if (p.orderDate && !orderDate) setOrderDate(p.orderDate);
         if (p.expectedDate && !expectedDate) setExpectedDate(p.expectedDate);
+        // Factuur/bon: schakel naar factuurmodus en vul het bedrag voor.
+        if (p.docKind === "invoice") {
+          setKind("invoice");
+          if (status === "ordered") setStatus("received");
+          if (p.total != null) setAmountTotal(String(p.total));
+          if (p.subtotal != null) setAmountSubtotal(String(p.subtotal));
+        }
         if (p.items.length) {
           setRows((rs) => {
             const existing = rowsToItems(rs);
@@ -148,8 +168,44 @@ export function PurchaseOrderForm({
 
   return (
     <form action={action} className="space-y-6">
-      <input type="hidden" name="items" value={JSON.stringify(items)} />
+      <input type="hidden" name="kind" value={kind} />
+      <input type="hidden" name="items" value={JSON.stringify(kind === "invoice" ? [] : items)} />
       <input type="hidden" name="attachments" value={JSON.stringify(attachments)} />
+      {kind === "invoice" && (
+        <>
+          <input type="hidden" name="amountTotal" value={amountTotal} />
+          <input type="hidden" name="amountSubtotal" value={amountSubtotal} />
+        </>
+      )}
+
+      {/* Type: bestelling (met productregels) of binnengekomen factuur/bon (bedrag) */}
+      <div className="inline-flex rounded-lg border bg-surface/40 p-0.5 text-sm">
+        {([
+          ["order", "Bestelling"],
+          ["invoice", "Factuur / bon"],
+        ] as const).map(([v, label]) => (
+          <button
+            key={v}
+            type="button"
+            onClick={() => {
+              setKind(v);
+              if (v === "invoice" && status === "ordered") setStatus("received");
+            }}
+            className={cn(
+              "rounded-md px-3 py-1.5 font-medium transition-colors",
+              kind === v ? "bg-accent text-white shadow-sm" : "text-muted hover:text-ink",
+            )}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+      {kind === "invoice" && (
+        <p className="-mt-3 text-xs text-muted">
+          Voor een binnengekomen factuur of bon (werknemer, materialen…): vul het bedrag in en hang de
+          PDF eronder. Geen productregels of voorraad.
+        </p>
+      )}
 
       {/* Upload / auto-read */}
       <div className="rounded-lg border border-dashed bg-surface/50 p-4">
@@ -162,11 +218,12 @@ export function PurchaseOrderForm({
             onClick={() => fileRef.current?.click()}
           >
             {uploading ? <Loader2 className="size-4 animate-spin" /> : <Upload className="size-4" />}
-            {uploading ? "Bezig met uitlezen…" : "Proforma / PI uploaden"}
+            {uploading ? "Bezig met uitlezen…" : "Document uploaden (PDF)"}
           </Button>
           <span className="text-xs text-muted">
-            PDF wordt automatisch uitgelezen (leverancier, regels, aantallen). Excel/afbeelding wordt
-            alleen als bijlage bewaard.
+            Proforma, factuur of bon. De PDF wordt automatisch uitgelezen (leverancier, bedrag,
+            {kind === "order" ? " regels, aantallen" : " datum"}). Excel/afbeelding wordt alleen als
+            bijlage bewaard.
           </span>
           <input
             ref={fileRef}
@@ -268,6 +325,30 @@ export function PurchaseOrderForm({
         </Field>
       </div>
 
+      {kind === "invoice" ? (
+        <div className="grid gap-4 sm:grid-cols-2">
+          <Field label={`Bedrag totaal (incl. btw, ${currency})`} htmlFor="amountTotal">
+            <Input
+              id="amountTotal"
+              inputMode="decimal"
+              value={amountTotal}
+              onChange={(e) => setAmountTotal(e.target.value)}
+              placeholder="1.210,00"
+              className="text-right"
+            />
+          </Field>
+          <Field label={`Subtotaal (ex. btw, ${currency})`} htmlFor="amountSubtotal" hint="leeg = gelijk aan totaal (bv. btw verlegd)">
+            <Input
+              id="amountSubtotal"
+              inputMode="decimal"
+              value={amountSubtotal}
+              onChange={(e) => setAmountSubtotal(e.target.value)}
+              placeholder="1.000,00"
+              className="text-right"
+            />
+          </Field>
+        </div>
+      ) : (
       <div>
         <div className="mb-2 flex items-center justify-between">
           <h2 className="text-sm font-semibold">Regels</h2>
@@ -353,6 +434,7 @@ export function PurchaseOrderForm({
           <span className="font-semibold tabular-nums">{formatMoney(total, currency)}</span>
         </div>
       </div>
+      )}
 
       <Field label="Notities" htmlFor="notes">
         <Textarea
@@ -366,7 +448,9 @@ export function PurchaseOrderForm({
       </Field>
 
       <div className="flex gap-2">
-        <SubmitButton pendingLabel="Opslaan…">{order ? "Opslaan" : "Bestelling aanmaken"}</SubmitButton>
+        <SubmitButton pendingLabel="Opslaan…">
+          {order ? "Opslaan" : kind === "invoice" ? "Factuur toevoegen" : "Bestelling aanmaken"}
+        </SubmitButton>
       </div>
     </form>
   );

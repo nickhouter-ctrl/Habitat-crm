@@ -142,6 +142,7 @@ export default async function PurchaseOrderPage({ params }: { params: Promise<{ 
         title={
           <span className="flex items-center gap-2">
             {po.supplier}
+            {po.kind === "invoice" && <Badge tone="neutral">Factuur / bon</Badge>}
             <Badge tone={meta.tone}>{meta.label}</Badge>
             {payBadge && <Badge tone={payBadge.tone}>{payBadge.label}</Badge>}
           </span>

@@ -6,7 +6,7 @@ import { db } from "@/lib/db";
 import { products } from "@/lib/db/schema";
 import { createPurchaseOrder } from "../actions";
 
-export const metadata = { title: "Nieuwe inkooporder" };
+export const metadata = { title: "Inkoop toevoegen" };
 
 export default async function NewPurchaseOrderPage() {
   const productOptions = await db
@@ -16,7 +16,7 @@ export default async function NewPurchaseOrderPage() {
 
   return (
     <>
-      <PageHeader title="Nieuwe inkooporder" subtitle="Leveranciersbestelling toevoegen." />
+      <PageHeader title="Inkoop toevoegen" subtitle="Bestelling, of een binnengekomen factuur/bon (werknemer, materialen…) met de PDF eronder." />
       <Card className="p-5">
         <PurchaseOrderForm products={productOptions} action={createPurchaseOrder} />
       </Card>

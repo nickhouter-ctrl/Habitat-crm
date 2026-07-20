@@ -26,13 +26,41 @@ const schema = z.object({
   supplier: z.string().trim().min(1, "Leverancier is verplicht"),
   reference: z.string().trim().optional(),
   status: z.enum(PO_STATUSES).default("ordered"),
+  // "order" = bestelling met productregels; "invoice" = binnengekomen factuur/bon
+  // met alleen een bedrag (werknemer/materialen), geen voorraadregels.
+  kind: z.enum(["order", "invoice"]).default("order"),
   currency: z.string().trim().min(1).max(3).default("EUR"),
   orderDate: z.string().trim().optional(),
   expectedDate: z.string().trim().optional(),
   notes: z.string().trim().optional(),
   items: z.string().optional(),
+  // Alleen bij kind=invoice: bedragen die de gebruiker direct invult (NL-komma toegestaan).
+  amountTotal: z.string().trim().optional(),
+  amountSubtotal: z.string().trim().optional(),
   attachments: z.string().optional(),
 });
+
+/** Bedrag-string (NL-komma of punt) → number; leeg/ongeldig → null. */
+function amountOrNull(v?: string): number | null {
+  const s = (v ?? "").trim().replace(/\s/g, "").replace(/\.(?=\d{3}\b)/g, "").replace(",", ".");
+  if (!s) return null;
+  const n = Number(s);
+  return Number.isFinite(n) ? Math.round(n * 100) / 100 : null;
+}
+
+/** Bereken de bedragen voor een PO uit het formulier: bij een factuur uit de
+ *  ingevulde totaal/subtotaal, bij een bestelling uit de productregels. */
+function computePoAmounts(d: z.infer<typeof schema>) {
+  const items = parsePoLineItems(d.items);
+  if (d.kind === "invoice") {
+    const total = amountOrNull(d.amountTotal) ?? 0;
+    const subtotal = amountOrNull(d.amountSubtotal) ?? total;
+    const tax = Math.round((total - subtotal) * 100) / 100;
+    return { items: [] as typeof items, total, subtotal, tax: tax > 0 ? tax : 0 };
+  }
+  const total = poTotal(items);
+  return { items, total, subtotal: null as number | null, tax: null as number | null };
+}
 
 function parseAttachments(raw: unknown): PurchaseOrderAttachment[] {
   let arr: unknown = raw;
@@ -77,7 +105,7 @@ export async function createPurchaseOrder(formData: FormData) {
     throw new Error(parsed.error.issues.map((i) => i.message).join(", "));
   }
   const d = parsed.data;
-  const items = parsePoLineItems(d.items);
+  const { items, total, subtotal, tax } = computePoAmounts(d);
   const attachments = parseAttachments(d.attachments);
 
   const [row] = await db
@@ -85,6 +113,7 @@ export async function createPurchaseOrder(formData: FormData) {
     .values({
       supplier: d.supplier,
       reference: d.reference || null,
+      kind: d.kind,
       status: d.status,
       currency: d.currency.toUpperCase(),
       orderDate: dateOrNull(d.orderDate),
@@ -92,12 +121,16 @@ export async function createPurchaseOrder(formData: FormData) {
       notes: d.notes || null,
       items,
       attachments,
-      total: String(poTotal(items)),
+      total: String(total),
+      subtotal: subtotal != null ? String(subtotal) : null,
+      tax: tax != null ? String(tax) : null,
       receivedAt: d.status === "received" ? new Date() : null,
     })
     .returning({ id: purchaseOrders.id });
 
-  if (d.status === "received") await applyStock(row.id, user.id);
+  // Een factuur/bon zonder productregels raakt geen voorraad — alleen echte
+  // bestellingen boeken bij ontvangst voorraad in.
+  if (d.status === "received" && d.kind === "order") await applyStock(row.id, user.id);
 
   revalidatePath("/inkooporders");
   revalidatePath("/");
@@ -111,7 +144,7 @@ export async function updatePurchaseOrder(id: string, formData: FormData) {
     throw new Error(parsed.error.issues.map((i) => i.message).join(", "));
   }
   const d = parsed.data;
-  const items = parsePoLineItems(d.items);
+  const { items, total, subtotal, tax } = computePoAmounts(d);
   const attachments = parseAttachments(d.attachments);
 
   const existing = await db.query.purchaseOrders.findFirst({
@@ -130,6 +163,7 @@ export async function updatePurchaseOrder(id: string, formData: FormData) {
     .set({
       supplier: d.supplier,
       reference: d.reference || null,
+      kind: d.kind,
       status: d.status,
       currency: d.currency.toUpperCase(),
       orderDate: dateOrNull(d.orderDate),
@@ -137,13 +171,15 @@ export async function updatePurchaseOrder(id: string, formData: FormData) {
       notes: d.notes || null,
       items,
       attachments,
-      total: String(poTotal(items)),
+      total: String(total),
+      subtotal: subtotal != null ? String(subtotal) : d.kind === "order" ? existing.subtotal : null,
+      tax: tax != null ? String(tax) : d.kind === "order" ? existing.tax : null,
       receivedAt:
         d.status === "received" ? existing.receivedAt ?? new Date() : existing.receivedAt,
     })
     .where(eq(purchaseOrders.id, id));
 
-  if (d.status === "received" && !existing.stockAppliedAt) {
+  if (d.status === "received" && d.kind === "order" && !existing.stockAppliedAt) {
     await applyStock(id, user.id);
   } else if (d.status !== "received" && existing.stockAppliedAt) {
     // Via het bewerkformulier terug van "ontvangen" → bijgeboekte voorraad eraf.

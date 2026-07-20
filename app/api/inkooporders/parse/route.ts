@@ -119,6 +119,33 @@ export async function POST(req: Request) {
     items.push({ ...it, productId: row.id });
   }
 
+  // Factuur/bon (arbeid/materialen) zonder bruikbare productregels: geef het
+  // documenttype + de bedragen terug zodat het formulier naar factuurmodus
+  // schakelt en het bedrag voorinvult.
+  const usableItems = items.filter((it) => (it.units ?? 0) !== 0 || (it.unitPrice ?? 0) !== 0);
+  const isInvoice = parsed.docKind === "invoice" || usableItems.length === 0;
+  if (isInvoice) {
+    const total = parsed.total != null ? r2(fxToEur(parsed.total)) : undefined;
+    const subtotal = parsed.subtotal != null ? r2(fxToEur(parsed.subtotal)) : undefined;
+    return NextResponse.json({
+      attachment,
+      parsed: {
+        supplier: parsed.supplier,
+        reference: parsed.reference,
+        orderDate: parsed.orderDate,
+        currency: "EUR",
+        docKind: "invoice" as const,
+        total,
+        subtotal,
+        items: [],
+      },
+      note:
+        "Factuur/bon uitgelezen" +
+        (total != null ? ` — totaal ${total.toLocaleString("nl-NL", { style: "currency", currency: "EUR" })}` : "") +
+        ". Controleer het bedrag.",
+    });
+  }
+
   return NextResponse.json({
     attachment,
     parsed: { ...parsed, items },
