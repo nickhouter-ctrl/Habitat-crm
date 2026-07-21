@@ -12,7 +12,7 @@ import {
   PageHeader,
   StatTile,
 } from "@/components/ui";
-import { getSeoData, scConfigured } from "@/lib/searchconsole";
+import { getSeoData, scAccessibleSites, scConfigured } from "@/lib/searchconsole";
 import { cn } from "@/lib/utils";
 
 export const metadata = { title: "SEO" };
@@ -69,10 +69,15 @@ export default async function SeoPage({
 
   let data: Awaited<ReturnType<typeof getSeoData>> | null = null;
   let error: string | null = null;
+  let accessibleSites: { site: string; level: string }[] = [];
   try {
     data = await getSeoData(single ? { date: datum } : { days: dagen });
   } catch (e) {
     error = e instanceof Error ? e.message : String(e);
+    // Bij een toegangsfout: laat zien welke properties het account WÉL mag zien.
+    if (/\(403\)|permission/i.test(error)) {
+      accessibleSites = await scAccessibleSites().catch(() => []);
+    }
   }
 
   const t = data?.totals;
@@ -128,7 +133,29 @@ export default async function SeoPage({
 
       {error && (
         <Card className="mb-5 border-danger/30 bg-danger/5 p-4 text-sm text-danger">
-          Kon de data niet ophalen: {error}
+          <p>Kon de data niet ophalen: {error}</p>
+          {accessibleSites.length > 0 && (
+            <div className="mt-3 text-foreground">
+              <p className="font-medium">
+                Dit Google-account heeft toegang tot deze properties — zet <code>SC_SITE_URL</code> op
+                één hiervan (exact overnemen):
+              </p>
+              <ul className="mt-1.5 space-y-0.5">
+                {accessibleSites.map((s) => (
+                  <li key={s.site} className="font-mono text-xs">
+                    {s.site} <span className="text-muted">· {s.level}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+          {error.includes("(403)") && accessibleSites.length === 0 && (
+            <p className="mt-2 text-foreground">
+              Het gekoppelde Google-account ziet géén enkele property — voeg het als gebruiker toe in
+              Search Console (Instellingen → Gebruikers en machtigingen), of vernieuw de koppeling
+              (SC_REFRESH_TOKEN) met een account dat toegang heeft.
+            </p>
+          )}
         </Card>
       )}
 

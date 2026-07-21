@@ -51,6 +51,16 @@ async function accessToken(): Promise<string> {
   return json.access_token;
 }
 
+/** Lees Google's eigenlijke foutreden uit de JSON-body (bv. bij 403). */
+async function googleErrorReason(res: Response): Promise<string> {
+  try {
+    const j = (await res.json()) as { error?: { message?: string; status?: string } };
+    return j.error?.message?.trim() || j.error?.status || "";
+  } catch {
+    return "";
+  }
+}
+
 async function query(token: string, body: Record<string, unknown>): Promise<ScRow[]> {
   const url = `https://searchconsole.googleapis.com/webmasters/v3/sites/${encodeURIComponent(
     SITE as string,
@@ -61,9 +71,38 @@ async function query(token: string, body: Record<string, unknown>): Promise<ScRo
     body: JSON.stringify(body),
     cache: "no-store",
   });
-  if (!res.ok) throw new Error(`Search Console-query mislukt (${res.status})`);
+  if (!res.ok) {
+    const reason = await googleErrorReason(res);
+    // 403 = het gekoppelde Google-account heeft geen toegang tot deze property,
+    // of SC_SITE_URL komt niet exact overeen met een geverifieerde property.
+    const hint =
+      res.status === 403
+        ? ` — controleer dat het gekoppelde Google-account toegang heeft tot "${SITE}" in Search Console, en dat SC_SITE_URL exact die property is (bv. "sc-domain:habitat-one.com" voor een domein-property, of "https://www.habitat-one.com/" mét https en trailing slash).`
+        : "";
+    throw new Error(`Search Console-query mislukt (${res.status})${reason ? `: ${reason}` : ""}${hint}`);
+  }
   const json = (await res.json()) as { rows?: ScRow[] };
   return json.rows ?? [];
+}
+
+/**
+ * Diagnose: geef de properties terug waar het gekoppelde account WÉL toegang toe
+ * heeft. Handig om SC_SITE_URL mee te vergelijken bij een 403.
+ */
+export async function scAccessibleSites(): Promise<{ site: string; level: string }[]> {
+  const token = await accessToken();
+  const res = await fetch("https://searchconsole.googleapis.com/webmasters/v3/sites", {
+    headers: { Authorization: `Bearer ${token}` },
+    cache: "no-store",
+  });
+  if (!res.ok) throw new Error(`Kon de propertylijst niet ophalen (${res.status})`);
+  const json = (await res.json()) as {
+    siteEntry?: { siteUrl?: string; permissionLevel?: string }[];
+  };
+  return (json.siteEntry ?? []).map((s) => ({
+    site: s.siteUrl ?? "",
+    level: s.permissionLevel ?? "",
+  }));
 }
 
 const ymd = (d: Date) => d.toISOString().slice(0, 10);
