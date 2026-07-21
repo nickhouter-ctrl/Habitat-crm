@@ -1,15 +1,32 @@
 /**
+ * Het centrale bedrijfsadres leest ALTIJD elke uitgaande mail mee, ongeacht de
+ * env-config. Zo komt er nooit een mail buiten hi@ om.
+ */
+export const COMPANY_INBOX = "hi@habitat-one.com";
+
+/**
  * Vaste, altijd-aanwezige BCC op ELKE uitgaande mail, ongeacht het transport
  * (Gmail SMTP, Resend-fallback of stub). Zo wordt er intern altijd meegelezen.
- * Standaard nick@habitat-one.com; te overschrijven/aan te vullen via env
- * EMAIL_BCC_ALWAYS (komma-gescheiden). Bewust in een los, dependency-vrij module
- * zodat zowel lib/gmail.ts als lib/email.ts het kunnen importeren zonder
- * nodemailer/imap eager te laden.
+ * Bevat standaard nick@habitat-one.com (aan te vullen/overschrijven via env
+ * EMAIL_BCC_ALWAYS, komma-gescheiden) én ALTIJD het bedrijfsadres hi@ — ook als
+ * de env is overschreven. Bewust in een los, dependency-vrij module zodat zowel
+ * lib/gmail.ts als lib/email.ts het kunnen importeren zonder nodemailer/imap
+ * eager te laden.
  */
-export const ALWAYS_BCC = (process.env.EMAIL_BCC_ALWAYS?.trim() || "nick@habitat-one.com")
-  .split(",")
-  .map((a) => a.trim())
-  .filter(Boolean);
+export const ALWAYS_BCC = (() => {
+  const configured = (process.env.EMAIL_BCC_ALWAYS?.trim() || "nick@habitat-one.com")
+    .split(",")
+    .map((a) => a.trim())
+    .filter(Boolean);
+  // hi@ leest altijd mee — dedup case-insensitive, volgorde behouden.
+  const seen = new Set<string>();
+  return [...configured, COMPANY_INBOX].filter((a) => {
+    const low = a.toLowerCase();
+    if (seen.has(low)) return false;
+    seen.add(low);
+    return true;
+  });
+})();
 
 /**
  * Ontvangers van INTERNE meldingen (accountaanvragen, offerte-aanvragen,
