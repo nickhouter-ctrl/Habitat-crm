@@ -97,23 +97,52 @@ export async function approveAccountRequest(requestId: string, formData: FormDat
     contactId = c.id;
   }
 
+  const email = req.email.toLowerCase();
   const token = newToken();
-  await db.insert(customerAccounts).values({
-    contactId,
-    email: req.email.toLowerCase(),
-    priceTier: tier,
-    status: "pending",
-    businessName: req.businessName,
-    vatNumber: req.vatNumber,
-    activationToken: token,
-    activationExpires: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+  const expires = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+
+  // Idempotent: bestaat er al een account voor dit e-mailadres (bv. een eerdere
+  // aanvraag of een half-afgeronde goedkeuring), dan hergebruiken we dat i.p.v.
+  // een dubbele rij te forceren (email is uniek → zou de action laten crashen).
+  const existingAccount = await db.query.customerAccounts.findFirst({
+    where: eq(customerAccounts.email, email),
   });
+  if (existingAccount) {
+    // Alleen een nieuwe activatielink uitgeven als het account nog niet actief
+    // is; een al-actief account laten we met rust (geen wachtwoord-reset).
+    if (existingAccount.status !== "active") {
+      await db
+        .update(customerAccounts)
+        .set({
+          contactId: existingAccount.contactId ?? contactId,
+          priceTier: tier,
+          activationToken: token,
+          activationExpires: expires,
+          updatedAt: new Date(),
+        })
+        .where(eq(customerAccounts.id, existingAccount.id));
+    }
+  } else {
+    await db.insert(customerAccounts).values({
+      contactId,
+      email,
+      priceTier: tier,
+      status: "pending",
+      businessName: req.businessName,
+      vatNumber: req.vatNumber,
+      activationToken: token,
+      activationExpires: expires,
+    });
+  }
   await db.update(accountRequests).set({ status: "approved", contactId, updatedAt: new Date() }).where(eq(accountRequests.id, requestId));
 
-  try {
-    await sendActivationMail(req.email, req.name, token, tier);
-  } catch (err) {
-    console.warn("[accounts] activatiemail mislukt:", err);
+  // Activatiemail alleen sturen als er een verse (niet-actieve) link is.
+  if (!existingAccount || existingAccount.status !== "active") {
+    try {
+      await sendActivationMail(req.email, req.name, token, tier);
+    } catch (err) {
+      console.warn("[accounts] activatiemail mislukt:", err);
+    }
   }
   revalidatePath("/accounts");
 }
