@@ -29,7 +29,7 @@ import {
 } from "@/components/ui";
 import { Combobox, type ComboOption } from "@/components/combobox";
 import { TabsRoot, TabsBar, TabPanel } from "@/components/tabs";
-import { LayoutDashboard, Wallet, Clock, FileText, Settings } from "lucide-react";
+import { LayoutDashboard, Wallet, Clock, FileText, Settings, Check, ArrowLeft, RotateCcw, Printer, Send } from "lucide-react";
 import { db } from "@/lib/db";
 import {
   contacts,
@@ -505,18 +505,18 @@ export default async function ProjectDetailPage({
             {project.status === "completed" ? (
               <form action={setProjectStatus.bind(null, id, "active")}>
                 <SubmitButton variant="secondary" pendingLabel="…">
-                  Heropenen
+                  <RotateCcw className="size-4" /> Heropenen
                 </SubmitButton>
               </form>
             ) : (
               <form action={setProjectStatus.bind(null, id, "completed")}>
                 <SubmitButton variant="secondary" pendingLabel="Afronden…">
-                  ✓ Afronden
+                  <Check className="size-4" /> Afronden
                 </SubmitButton>
               </form>
             )}
             <LinkButton href="/projects" variant="ghost">
-              ← Overzicht
+              <ArrowLeft className="size-4" /> Overzicht
             </LinkButton>
           </div>
         }
@@ -781,11 +781,11 @@ export default async function ProjectDetailPage({
               {hasBudgetContent && (
                 <>
                   <LinkButton href={`/projects/${id}/begroting/pdf`} target="_blank" variant="secondary">
-                    📄 Printen
+                    <Printer className="size-4" /> Printen
                   </LinkButton>
                   <form action={sendBudgetToClient.bind(null, id)}>
                     <SubmitButton variant="secondary" pendingLabel="Versturen…">
-                      ✉ Versturen naar klant
+                      <Send className="size-4" /> Versturen naar klant
                     </SubmitButton>
                   </form>
                 </>
