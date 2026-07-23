@@ -27,7 +27,7 @@ export default async function PrijslijstPage({
   const sent = sp.sent === "1";
   const error = typeof sp.error === "string" ? sp.error : null;
 
-  const [collections, categories, contactsList] = await Promise.all([
+  const [collections, categories, wandpaneelSeries, contactsList] = await Promise.all([
     db
       .select({ name: products.collection })
       .from(products)
@@ -38,6 +38,12 @@ export default async function PrijslijstPage({
       .select({ name: products.category })
       .from(products)
       .where(sql`${products.category} is not null`)
+      .groupBy(products.category)
+      .orderBy(products.category),
+    db
+      .select({ name: products.category })
+      .from(products)
+      .where(sql`${products.collection} = 'Wandpanelen' and ${products.category} is not null and ${products.isActive} = true`)
       .groupBy(products.category)
       .orderBy(products.category),
     db.select({ id: contacts.id, name: contacts.name, email: contacts.email }).from(contacts).orderBy(contacts.name),
@@ -105,6 +111,38 @@ export default async function PrijslijstPage({
           </CardContent>
         </Card>
       </div>
+
+      <Card className="mt-5 max-w-5xl border-[#e8dfd0] bg-[#fdfaf5]">
+        <CardHeader>
+          <CardTitle>🧱 Flexibel Stone — groothandelbrochure</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <p className="mb-4 max-w-2xl text-sm text-muted">
+            Gebrande prijsbrochure voor groothandelklanten: per wandpaneel jouw inkoop bij Habitat en de
+            adviesprijs voor de consument (ex/incl btw, ook per m²). Geldig bij afname per halve of hele
+            container; alle prijzen ex btw.
+          </p>
+          <form method="GET" action="/prijslijst/groothandel/pdf" className="flex flex-wrap items-end gap-4" target="_blank">
+            <Field label="Serie" htmlFor="gh-category">
+              <Select id="gh-category" name="category" defaultValue="">
+                <option value="">— Volledige collectie —</option>
+                {wandpaneelSeries.map((c) => (
+                  <option key={c.name} value={c.name!}>{c.name}</option>
+                ))}
+              </Select>
+            </Field>
+            <Field label="Taal van de PDF" htmlFor="gh-lang">
+              <Select id="gh-lang" name="lang" defaultValue="nl">
+                <option value="nl">🇳🇱 Nederlands</option>
+                <option value="de">🇩🇪 Duits (Deutsch)</option>
+                <option value="en">🇬🇧 Engels (English)</option>
+                <option value="es">🇪🇸 Spaans (Español)</option>
+              </Select>
+            </Field>
+            <Button type="submit">Download brochure</Button>
+          </form>
+        </CardContent>
+      </Card>
     </>
   );
 }
