@@ -32,6 +32,7 @@ import {
   Percent,
   X,
  HandCoins } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -41,38 +42,79 @@ import { signOutAction } from "@/lib/auth/actions";
 import { GlobalSearch } from "@/components/global-search";
 import { cn, initials } from "@/lib/utils";
 
-const NAV = [
-  { href: "/", label: "Dashboard", icon: LayoutDashboard, exact: true },
-  { href: "/scan", label: "Scannen", icon: ScanLine },
-  { href: "/contacts", label: "Contacten", icon: Users },
-  { href: "/aanvragen", label: "Aanvragen", icon: Inbox },
-  { href: "/accounts", label: "Klant-accounts", icon: UserCog },
-  { href: "/leads", label: "Leads", icon: Megaphone },
-  { href: "/commissies", label: "Commissies", icon: Percent },
-  { href: "/agenda", label: "Agenda", icon: CalendarDays },
-  { href: "/inbox", label: "Mail-inbox", icon: Mail },
-  { href: "/archief", label: "Archief", icon: FileText },
-  { href: "/projects", label: "Projecten", icon: Briefcase },
-  { href: "/ploeg", label: "Ploeg", icon: HardHat },
-  { href: "/properties", label: "Panden", icon: Building2 },
-  { href: "/products", label: "Producten", icon: Boxes },
-  { href: "/samples", label: "Samples", icon: Layers },
-  { href: "/wederverkopers", label: "Wederverkopers", icon: Store },
-  { href: "/samplecatalogus", label: "Samplecatalogus", icon: Layers },
-  { href: "/prijslijst", label: "Prijslijst", icon: Tag },
-  { href: "/catalogi", label: "Catalogi", icon: BookOpen },
-  { href: "/bestellen", label: "Bestellen", icon: ShoppingCart },
-  { href: "/inkooporders", label: "Inkooporders", icon: PackagePlus },
-  { href: "/shipments", label: "Shipments", icon: Boxes },
-  { href: "/quotes", label: "Offertes", icon: FileText },
-  { href: "/invoices", label: "Facturen", icon: Receipt },
-  { href: "/voorschotten", label: "Voorschotten", icon: HandCoins },
-  { href: "/pakbonnen", label: "Pakbonnen", icon: Truck },
-  { href: "/leveringen", label: "Leveringen", icon: PackageCheck },
-  { href: "/rapporten", label: "Rapporten", icon: BarChart3 },
-  { href: "/rapporten/seo", label: "SEO", icon: LineChart },
-  { href: "/rapporten/analytics", label: "Analytics", icon: Activity },
-  { href: "/rapporten/business", label: "Bedrijfsprofiel", icon: Store },
+type NavItem = { href: string; label: string; icon: LucideIcon; exact?: boolean };
+const NAV_GROUPS: { label: string | null; items: NavItem[] }[] = [
+  {
+    label: null,
+    items: [
+      { href: "/", label: "Dashboard", icon: LayoutDashboard, exact: true },
+      { href: "/scan", label: "Scannen", icon: ScanLine },
+      { href: "/agenda", label: "Agenda", icon: CalendarDays },
+    ],
+  },
+  {
+    label: "Klanten",
+    items: [
+      { href: "/contacts", label: "Contacten", icon: Users },
+      { href: "/accounts", label: "Klant-accounts", icon: UserCog },
+      { href: "/aanvragen", label: "Aanvragen", icon: Inbox },
+      { href: "/leads", label: "Leads", icon: Megaphone },
+      { href: "/commissies", label: "Commissies", icon: Percent },
+    ],
+  },
+  {
+    label: "Projecten",
+    items: [
+      { href: "/projects", label: "Projecten", icon: Briefcase },
+      { href: "/ploeg", label: "Ploeg", icon: HardHat },
+      { href: "/properties", label: "Panden", icon: Building2 },
+    ],
+  },
+  {
+    label: "Verkoop",
+    items: [
+      { href: "/quotes", label: "Offertes", icon: FileText },
+      { href: "/invoices", label: "Facturen", icon: Receipt },
+      { href: "/voorschotten", label: "Voorschotten", icon: HandCoins },
+      { href: "/prijslijst", label: "Prijslijst", icon: Tag },
+      { href: "/catalogi", label: "Catalogi", icon: BookOpen },
+    ],
+  },
+  {
+    label: "Producten",
+    items: [
+      { href: "/products", label: "Producten", icon: Boxes },
+      { href: "/samples", label: "Samples", icon: Layers },
+      { href: "/samplecatalogus", label: "Samplecatalogus", icon: Layers },
+      { href: "/wederverkopers", label: "Wederverkopers", icon: Store },
+    ],
+  },
+  {
+    label: "Inkoop & logistiek",
+    items: [
+      { href: "/bestellen", label: "Bestellen", icon: ShoppingCart },
+      { href: "/inkooporders", label: "Inkooporders", icon: PackagePlus },
+      { href: "/shipments", label: "Shipments", icon: Boxes },
+      { href: "/pakbonnen", label: "Pakbonnen", icon: Truck },
+      { href: "/leveringen", label: "Leveringen", icon: PackageCheck },
+    ],
+  },
+  {
+    label: "Communicatie",
+    items: [
+      { href: "/inbox", label: "Mail-inbox", icon: Mail },
+      { href: "/archief", label: "Archief", icon: FileText },
+    ],
+  },
+  {
+    label: "Rapporten",
+    items: [
+      { href: "/rapporten", label: "Rapporten", icon: BarChart3 },
+      { href: "/rapporten/seo", label: "SEO", icon: LineChart },
+      { href: "/rapporten/analytics", label: "Analytics", icon: Activity },
+      { href: "/rapporten/business", label: "Bedrijfsprofiel", icon: Store },
+    ],
+  },
 ];
 
 export function AppSidebar({
@@ -91,29 +133,38 @@ export function AppSidebar({
 
   const navBody = (onNavigate?: () => void) => (
     <>
-      <nav className="flex-1 space-y-0.5 overflow-y-auto px-2 py-1 pt-2">
-        {NAV.map((item) => {
-          const active = isActive(item.href, item.exact);
-          return (
-            <Link
-              key={item.href}
-              href={item.href}
-              onClick={onNavigate}
-              className={cn(
-                "flex items-center gap-2.5 rounded-md px-2.5 py-2 text-sm transition-colors",
-                active ? "bg-accent/10 font-medium text-accent" : "text-foreground hover:bg-background",
-              )}
-            >
-              <item.icon className="size-4 shrink-0" />
-              <span className="truncate">{item.label}</span>
-              {(badges[item.href] ?? 0) > 0 && (
-                <span className="ml-auto grid h-5 min-w-5 shrink-0 place-items-center rounded-full bg-red-500 px-1.5 text-xs font-semibold text-white">
-                  {badges[item.href] > 99 ? "99+" : badges[item.href]}
-                </span>
-              )}
-            </Link>
-          );
-        })}
+      <nav className="flex-1 space-y-4 overflow-y-auto px-2 py-3">
+        {NAV_GROUPS.map((group, gi) => (
+          <div key={gi} className="space-y-0.5">
+            {group.label && (
+              <p className="px-2.5 pb-1 text-[10px] font-semibold uppercase tracking-wider text-muted/60">
+                {group.label}
+              </p>
+            )}
+            {group.items.map((item) => {
+              const active = isActive(item.href, item.exact);
+              return (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  onClick={onNavigate}
+                  className={cn(
+                    "flex items-center gap-2.5 rounded-md px-2.5 py-1.5 text-sm transition-colors",
+                    active ? "bg-accent/10 font-medium text-accent" : "text-foreground hover:bg-background",
+                  )}
+                >
+                  <item.icon className={cn("size-4 shrink-0", active ? "text-accent" : "text-muted")} />
+                  <span className="truncate">{item.label}</span>
+                  {(badges[item.href] ?? 0) > 0 && (
+                    <span className="ml-auto grid h-5 min-w-5 shrink-0 place-items-center rounded-full bg-red-500 px-1.5 text-xs font-semibold text-white">
+                      {badges[item.href] > 99 ? "99+" : badges[item.href]}
+                    </span>
+                  )}
+                </Link>
+              );
+            })}
+          </div>
+        ))}
       </nav>
 
       <div className="border-t px-2 py-2">

@@ -31,6 +31,7 @@ import {
   PO_STATUS_META,
 } from "@/lib/purchase-orders";
 import { purchaseOrderFileUrl } from "@/lib/storage";
+import { Combobox } from "@/components/combobox";
 import { ConfirmSubmit } from "@/components/confirm-submit";
 import { SubmitButton } from "@/components/submit-button";
 import {
@@ -358,14 +359,13 @@ export default async function PurchaseOrderPage({ params }: { params: Promise<{ 
               {/* Als materiaalkost */}
               <form action={setPurchaseOrderProject.bind(null, id)} className="flex items-end gap-2">
                 <div className="flex-1">
-                  <Select name="projectId" defaultValue={po.projectId ?? ""}>
-                    <option value="">— geen project —</option>
-                    {projectRows.map((p) => (
-                      <option key={p.id} value={p.id}>
-                        {p.name}
-                      </option>
-                    ))}
-                  </Select>
+                  <Combobox
+                    name="projectId"
+                    defaultValue={po.projectId ?? ""}
+                    clearable
+                    placeholder="Zoek een project…"
+                    options={projectRows.map((p) => ({ value: p.id, label: p.name }))}
+                  />
                 </div>
                 <SubmitButton size="sm" variant="secondary" pendingLabel="…">
                   Koppel als materiaal
@@ -377,14 +377,13 @@ export default async function PurchaseOrderPage({ params }: { params: Promise<{ 
                 <p className="text-xs font-medium text-muted">Koppel als uren / arbeid (bv. een bouwer-factuur)</p>
                 <div className="flex items-end gap-2">
                   <div className="flex-1">
-                    <Select name="projectId" defaultValue={po.projectId ?? ""}>
-                      <option value="">— kies project —</option>
-                      {projectRows.map((p) => (
-                        <option key={p.id} value={p.id}>
-                          {p.name}
-                        </option>
-                      ))}
-                    </Select>
+                    <Combobox
+                      name="projectId"
+                      defaultValue={po.projectId ?? ""}
+                      clearable
+                      placeholder="Zoek een project…"
+                      options={projectRows.map((p) => ({ value: p.id, label: p.name }))}
+                    />
                   </div>
                   <div className="w-24">
                     <Input name="hours" type="number" step="0.5" min="0" placeholder="uren" />
