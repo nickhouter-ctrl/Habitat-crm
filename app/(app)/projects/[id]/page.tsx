@@ -28,6 +28,8 @@ import {
   Textarea,
 } from "@/components/ui";
 import { Combobox, type ComboOption } from "@/components/combobox";
+import { TabsRoot, TabsBar, TabPanel } from "@/components/tabs";
+import { LayoutDashboard, Wallet, Clock, FileText, Settings } from "lucide-react";
 import { db } from "@/lib/db";
 import {
   contacts,
@@ -520,10 +522,31 @@ export default async function ProjectDetailPage({
         }
       />
 
-      {/* Hoofdgegevens — bovenaan, volle breedte */}
-      <Card className="mb-5">
-        <CardContent className="p-5">
-          <form action={action} className="space-y-4">
+      <TabsRoot
+        defaultTab="overzicht"
+        ids={["overzicht", "betalingen", "uren", "documenten", "gegevens"]}
+        className="flex flex-col"
+      >
+        <TabsBar
+          className="order-2"
+          tabs={[
+            { id: "overzicht", label: "Overzicht", icon: <LayoutDashboard /> },
+            { id: "betalingen", label: "Betalingen", icon: <Wallet /> },
+            { id: "uren", label: "Uren & kosten", icon: <Clock /> },
+            { id: "documenten", label: "Documenten", icon: <FileText />, badge: linkedDocs.length },
+            { id: "gegevens", label: "Gegevens", icon: <Settings /> },
+          ]}
+        />
+
+        {/* ── Tab: Gegevens — projectinstellingen (bewerken) ── */}
+        <TabPanel id="gegevens" className="order-3">
+          <Card className="mb-5">
+            <CardHeader>
+              <CardTitle>Projectgegevens</CardTitle>
+              <span className="text-xs text-muted">naam, klant, planning en projectinstellingen</span>
+            </CardHeader>
+            <CardContent className="p-5">
+              <form action={action} className="space-y-4">
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
               <Field label="Naam" htmlFor="name">
                 <Input id="name" name="name" required defaultValue={project.name} />
@@ -617,53 +640,37 @@ export default async function ProjectDetailPage({
                 </ConfirmSubmit>
               )}
             </div>
-          </form>
-        </CardContent>
-      </Card>
+              </form>
+            </CardContent>
+          </Card>
+        </TabPanel>
 
-      <div className="mb-5 grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <StatTile
-          label={contractPrice != null ? "Aanneemprijs" : targetIsImplicit ? "Doel (= gefactureerd)" : "Offerte (doel)"}
-          value={formatEUR(targetRevenue)}
-          hint={contractPrice != null ? "afgesproken · ex. BTW" : targetIsImplicit ? "nog geen offerte/aanneemprijs" : "offertetotaal · ex. BTW"}
-          tone="info"
-        />
-        <StatTile label="Gefactureerd" value={formatEUR(projRevenue)} hint="ex. BTW" tone="neutral" href="#documenten" />
-        <StatTile
-          label="Openstaande facturen"
-          value={formatEUR(openOutstanding)}
-          hint={`${openInvoiceCount} open factu${openInvoiceCount === 1 ? "ur" : "ren"} · ex. BTW`}
-          tone={openOutstanding > 0 ? "warning" : "neutral"}
-          href="#documenten"
-        />
-        <StatTile
-          label="Ontvangen (klant)"
-          value={formatEUR(receivedTotal)}
-          hint={`${paymentRows.length} ${paymentRows.length === 1 ? "betaling" : "betalingen"} · incl. BTW`}
-          tone={receivedTotal > 0 ? "success" : "neutral"}
-          href="#ontvangen"
-        />
-        <StatTile label="Nog te factureren" value={formatEUR(toInvoice)} hint="doel − gefactureerd − ontvangen" tone={toInvoice > 0 ? "warning" : "neutral"} href="#geldstroom" />
-        <StatTile label="Kosten tot nu toe" value={formatEUR(realizedCost)} hint="arbeid + inkoop + eigen producten" tone="neutral" href="#urenkosten" />
-        <StatTile label="Arbeid" value={formatEUR(laborCost)} hint={`${laborHours.toLocaleString("nl-NL")} uur`} tone="neutral" href="#uren" />
-        <StatTile label="Inkoop / materiaal" value={formatEUR(materialCost)} hint="gekoppelde inkoop + kostenregels" tone="neutral" href="#kosten" />
-        <StatTile
-          label="Eigen producten"
-          value={formatEUR(ownProductCostRealized)}
-          hint="kostprijs op facturen"
-          tone="neutral"
-          href="#documenten"
-        />
-        <StatTile
-          label="Resultaat tot nu toe"
-          value={`${formatEUR(resultToDate)}${resultMarginPct != null ? ` · ${resultMarginPct}%` : ""}`}
-          hint="doel − kosten tot nu toe"
-          tone={resultTone}
-          href="#resultaat"
-        />
-      </div>
+        {/* KPI-strip — de kerncijfers, altijd zichtbaar onder de tabbalk */}
+        <div className="order-1 mb-6 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+          <StatTile
+            label={contractPrice != null ? "Aanneemprijs" : targetIsImplicit ? "Doel" : "Offerte (doel)"}
+            value={formatEUR(targetRevenue)}
+            hint="ex. BTW"
+            tone="info"
+          />
+          <StatTile label="Gefactureerd" value={formatEUR(projRevenue)} hint={`nog ${formatEUR(toInvoice)} te doen`} tone="neutral" />
+          <StatTile
+            label="Ontvangen"
+            value={formatEUR(receivedTotal)}
+            hint={`${paymentRows.length} ${paymentRows.length === 1 ? "betaling" : "betalingen"}`}
+            tone={receivedTotal > 0 ? "success" : "neutral"}
+          />
+          <StatTile label="Kosten" value={formatEUR(realizedCost)} hint="arbeid + inkoop + materiaal" tone="neutral" />
+          <StatTile
+            label="Resultaat"
+            value={`${formatEUR(resultToDate)}${resultMarginPct != null ? ` · ${resultMarginPct}%` : ""}`}
+            hint="doel − kosten"
+            tone={resultTone}
+          />
+        </div>
 
-      {/* ─────────────── Geldstroom: eruit / ontvangen / nog te factureren ─────────────── */}
+        {/* ── Tab: Overzicht — geldstroom, resultaat, begroting ── */}
+        <TabPanel id="overzicht" className="order-3">
       <Card id="geldstroom" className="mb-5 scroll-mt-24">
         <CardHeader>
           <CardTitle>Geldstroom dit project</CardTitle>
@@ -788,7 +795,10 @@ export default async function ProjectDetailPage({
         </CardHeader>
       </Card>
 
-      {/* ─────────────── Aanbetalingen / voorschotten ─────────────── */}
+        </TabPanel>
+
+        {/* ── Tab: Betalingen — aanbetalingen + ontvangen ── */}
+        <TabPanel id="betalingen" className="order-3">
       {advanceDocs.length > 0 && (
         <Card id="aanbetalingen" className="mb-5 scroll-mt-24">
           <CardHeader>
@@ -913,18 +923,10 @@ export default async function ProjectDetailPage({
         </CardContent>
       </Card>
 
-      {/* ─────────────── Uren & kosten ─────────────── */}
-      <details id="urenkosten" open={isConstruction} className="group mb-5 scroll-mt-24">
-        <summary className="mb-3 cursor-pointer list-none text-lg font-semibold marker:content-none">
-          <span className="inline-flex items-center gap-2">
-            <span className="text-muted transition group-open:rotate-90">▶</span>
-            Uren &amp; kosten
-            <span className="text-xs font-normal text-muted">
-              {isConstruction ? "(bouwproject)" : "(klik om te openen)"}
-            </span>
-          </span>
-        </summary>
+        </TabPanel>
 
+        {/* ── Tab: Uren & kosten ── */}
+        <TabPanel id="uren" className="order-3">
         <div className="grid gap-5">
           {/* Uren */}
           <Card id="uren" className="scroll-mt-24">
@@ -1230,10 +1232,10 @@ export default async function ProjectDetailPage({
             </CardContent>
           </Card>
         </div>
-      </details>
+        </TabPanel>
 
-      <div>
-        <div className="space-y-5">
+        {/* ── Gegevens-tab (vervolg): metadata ── */}
+        <TabPanel id="gegevens" className="order-3">
           <Card>
             <CardHeader>
               <CardTitle>Gegevens</CardTitle>
@@ -1261,7 +1263,10 @@ export default async function ProjectDetailPage({
               )}
             </CardContent>
           </Card>
+        </TabPanel>
 
+        {/* ── Tab: Documenten — facturen, offertes, producten ── */}
+        <TabPanel id="documenten" className="order-3">
           <Card id="documenten" className="scroll-mt-24">
             <CardHeader>
               <CardTitle>Documenten in dit project</CardTitle>
@@ -1318,21 +1323,18 @@ export default async function ProjectDetailPage({
               {/* Bestaand document (factuur/offerte) aan dit project koppelen. */}
               {unlinkedDocs.length > 0 && (
                 <form action={attachDocumentToProject.bind(null, id)} className="flex items-center gap-2 rounded-md bg-background px-2 py-2">
-                  <Select name="documentId" defaultValue="" className="h-8 flex-1 text-xs" required>
-                    <option value="" disabled>
-                      Bestaande factuur/offerte koppelen…
-                    </option>
-                    {unlinkedDocs.map((d) => {
+                  <Combobox
+                    name="documentId"
+                    className="flex-1"
+                    placeholder="Zoek een bestaande factuur/offerte om te koppelen…"
+                    options={unlinkedDocs.map((d) => {
                       const k = d.kind === "invoice" ? "Factuur" : d.kind === "estimate" ? "Offerte" : "Creditnota";
-                      return (
-                        <option key={d.id} value={d.id}>
-                          {k} {d.docNumber ?? "(geen nr.)"}
-                          {d.title ? ` — ${d.title}` : ""} · €{" "}
-                          {Number(d.totalEur ?? 0).toLocaleString("nl-NL", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                        </option>
-                      );
+                      return {
+                        value: d.id,
+                        label: `${k} ${d.docNumber ?? "(geen nr.)"}${d.title ? ` — ${d.title}` : ""} · € ${Number(d.totalEur ?? 0).toLocaleString("nl-NL", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+                      };
                     })}
-                  </Select>
+                  />
                   <SubmitButton pendingLabel="Koppelen…" className="h-8 px-3 text-xs">
                     Koppel
                   </SubmitButton>
@@ -1457,8 +1459,6 @@ export default async function ProjectDetailPage({
               )}
             </CardContent>
           </Card>
-        </div>
-      </div>
 
       {(reservedProducts.length > 0 || soldProducts.length > 0) && (
         <div className="mt-5 grid gap-5 lg:grid-cols-2">
@@ -1533,6 +1533,8 @@ export default async function ProjectDetailPage({
           </Card>
         </div>
       )}
+        </TabPanel>
+      </TabsRoot>
     </>
   );
 }
