@@ -366,6 +366,10 @@ export default async function ProjectDetailPage({
   // Ontvangen betalingen van de klant (incl. btw) — informatief, los van de
   // factuurgebaseerde omzet/marge hierboven.
   const receivedTotal = paymentRows.reduce((s, p) => s + Number(p.amountEur ?? 0), 0);
+  // Betalingen worden incl. btw geboekt; de projectsamenvattingen rekenen ex. btw
+  // (21%), zodat ze vergelijkbaar zijn met kosten/omzet.
+  const VAT_DIVISOR = 1.21;
+  const receivedTotalEx = receivedTotal / VAT_DIVISOR;
 
   // Eigen-productkost: gerealiseerd = op facturen; verwacht = het meest complete
   // beeld (offerte als die hoger is dan wat al gefactureerd is). Voorkomt zowel
@@ -402,7 +406,7 @@ export default async function ProjectDetailPage({
   const receivedFromInvoicedAdvances = paymentRows
     .filter((p) => p.method === "advance" && p.description && invoiceAdvanceMarkers.has(p.description))
     .reduce((s, p) => s + Number(p.amountEur ?? 0), 0);
-  const settledToTarget = projRevenue + receivedTotal - receivedFromInvoicedAdvances;
+  const settledToTarget = projRevenue + (receivedTotal - receivedFromInvoicedAdvances) / VAT_DIVISOR;
   const toInvoice = Math.max(0, targetRevenue - settledToTarget);
 
   // Resultaat TOT NU TOE = doel − werkelijke (gerealiseerde) kosten tot nu toe.
@@ -656,9 +660,9 @@ export default async function ProjectDetailPage({
           <StatTile label="Gefactureerd" value={formatEUR(projRevenue)} hint={`nog ${formatEUR(toInvoice)} te doen`} tone="neutral" />
           <StatTile
             label="Ontvangen"
-            value={formatEUR(receivedTotal)}
-            hint={`${paymentRows.length} ${paymentRows.length === 1 ? "betaling" : "betalingen"}`}
-            tone={receivedTotal > 0 ? "success" : "neutral"}
+            value={formatEUR(receivedTotalEx)}
+            hint={`${paymentRows.length} ${paymentRows.length === 1 ? "betaling" : "betalingen"} · ex. btw`}
+            tone={receivedTotalEx > 0 ? "success" : "neutral"}
           />
           <StatTile label="Kosten" value={formatEUR(realizedCost)} hint="arbeid + inkoop + materiaal" tone="neutral" />
           <StatTile
@@ -687,21 +691,21 @@ export default async function ProjectDetailPage({
             </div>
             <div className="rounded-lg border bg-background p-3">
               <p className="text-xs text-muted">Ontvangen van klant</p>
-              <p className="text-lg font-semibold tabular-nums text-success">+ {formatEUR(receivedTotal)}</p>
-              <p className="text-xs text-muted">{paymentRows.length} {paymentRows.length === 1 ? "betaling" : "betalingen"} · incl. btw</p>
+              <p className="text-lg font-semibold tabular-nums text-success">+ {formatEUR(receivedTotalEx)}</p>
+              <p className="text-xs text-muted">{paymentRows.length} {paymentRows.length === 1 ? "betaling" : "betalingen"} · ex. btw</p>
             </div>
             <div className="rounded-lg border bg-background p-3">
               <p className="text-xs text-muted">Saldo (ontvangen − eruit)</p>
-              <p className={`text-lg font-semibold tabular-nums ${receivedTotal - realizedCost < 0 ? "text-danger" : "text-success"}`}>
-                {formatEUR(receivedTotal - realizedCost)}
+              <p className={`text-lg font-semibold tabular-nums ${receivedTotalEx - realizedCost < 0 ? "text-danger" : "text-success"}`}>
+                {formatEUR(receivedTotalEx - realizedCost)}
               </p>
-              <p className="text-xs text-muted">kaspositie op dit project</p>
+              <p className="text-xs text-muted">saldo op dit project · ex. btw</p>
             </div>
             <div className="rounded-lg border bg-background p-3">
               <p className="text-xs text-muted">Nog te factureren</p>
               <p className={`text-lg font-semibold tabular-nums ${toInvoice > 0 ? "text-warning" : ""}`}>{formatEUR(toInvoice)}</p>
               <p className="text-xs text-muted">
-                {contractPrice != null ? "aanneemprijs" : "doel"} {formatEUR(targetRevenue)} − gefactureerd {formatEUR(projRevenue)} − ontvangen {formatEUR(receivedTotal)}
+                {contractPrice != null ? "aanneemprijs" : "doel"} {formatEUR(targetRevenue)} − gefactureerd {formatEUR(projRevenue)} − ontvangen {formatEUR(receivedTotalEx)}
               </p>
             </div>
           </div>
@@ -858,7 +862,7 @@ export default async function ProjectDetailPage({
         <CardHeader>
           <CardTitle>Ontvangen betalingen</CardTitle>
           <span className="text-xs text-muted">
-            wat de klant al heeft betaald · {formatEUR(receivedTotal)} totaal · incl. btw · telt niet mee in omzet/marge
+            wat de klant al heeft betaald · {formatEUR(receivedTotalEx)} ex. btw ({formatEUR(receivedTotal)} incl.) · telt niet mee in omzet/marge
           </span>
         </CardHeader>
         <CardContent className="space-y-4">
