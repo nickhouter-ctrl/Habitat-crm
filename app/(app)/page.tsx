@@ -1,7 +1,7 @@
 import { and, count, desc, eq, gte, inArray, isNotNull, isNull, ne, notInArray, sql } from "drizzle-orm";
 import Link from "next/link";
 import type { ReactNode } from "react";
-import { AlertTriangle, CheckCircle2, Clock, TrendingUp, Wallet } from "lucide-react";
+import { AlertTriangle, CheckCircle2, Clock, TrendingUp, Wallet, LayoutDashboard, ShoppingCart, Activity } from "lucide-react";
 
 import { MonthlyAmountChart } from "@/components/rapporten-charts";
 
@@ -22,6 +22,7 @@ import {
   THead,
   Tr,
 } from "@/components/ui";
+import { TabsRoot, TabsBar, TabPanel } from "@/components/tabs";
 import { db } from "@/lib/db";
 import { activities, contacts, deliveries, documents, emailInbox, mailAttachments, products, projects, purchaseOrders, quoteRequests, timeEntries } from "@/lib/db/schema";
 import { normalizeDocItems } from "@/lib/documents";
@@ -509,8 +510,13 @@ export default async function DashboardPage() {
         actions={<LinkButton href="/contacts/new">Nieuw contact</LinkButton>}
       />
 
-      {/* KPI's bovenaan — geen omzetdoelen, puur de stand van zaken. */}
-      <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+      <TabsRoot
+        defaultTab="vandaag"
+        ids={["vandaag", "verkoop", "inkoop", "activiteit"]}
+        className="flex flex-col"
+      >
+      {/* KPI's — altijd zichtbaar onder de tabbalk */}
+      <div className="order-1 mb-6 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
         <StatTile label="Omzet deze maand" value={formatEUR(revenueMonth)} hint={marginPctMonth != null ? `${marginPctMonth}% marge · ex. BTW` : "ex. BTW"} tone="success" icon={<TrendingUp className="size-5" />} />
         <StatTile label="Openstaande facturen" value={docAgg.outstandingN} hint={formatEUR(docAgg.outstandingV)} tone="warning" icon={<Clock className="size-5" />} />
         <StatTile label="Vervallen facturen" value={docAgg.overdueN} hint={formatEUR(docAgg.overdueV)} tone="danger" icon={<AlertTriangle className="size-5" />} />
@@ -518,6 +524,18 @@ export default async function DashboardPage() {
         <StatTile label="Totale omzet" value={formatEUR(revenueAll)} hint={marginPctAll != null ? `${marginPctAll}% marge · dit jaar` : "ex. BTW · dit jaar"} tone="info" icon={<Wallet className="size-5" />} />
       </div>
 
+        <TabsBar
+          className="order-2"
+          tabs={[
+            { id: "vandaag", label: "Vandaag", icon: <LayoutDashboard /> },
+            { id: "verkoop", label: "Verkoop", icon: <TrendingUp /> },
+            { id: "inkoop", label: "Inkoop", icon: <ShoppingCart /> },
+            { id: "activiteit", label: "Activiteit", icon: <Activity /> },
+          ]}
+        />
+
+        {/* ── Tab: Vandaag — cijfers, acties, aanmaningen ── */}
+        <TabPanel id="vandaag" className="order-3">
       <details className="mb-6 -mt-3">
         <summary className="cursor-pointer select-none text-xs text-muted transition-colors hover:text-foreground">
           Meer cijfers — inkoop, projecten, contacten
@@ -722,6 +740,10 @@ export default async function DashboardPage() {
       )}
 
       {/* Open offertes + openstaande verkoopfacturen */}
+        </TabPanel>
+
+        {/* ── Tab: Verkoop — offertes, leveringen, omzet ── */}
+        <TabPanel id="verkoop" className="order-3">
       <div className="mb-6 grid gap-4 lg:grid-cols-2">
         <Card>
           <CardHeader>
@@ -956,6 +978,10 @@ export default async function DashboardPage() {
         />
       </div>
 
+        </TabPanel>
+
+        {/* ── Tab: Inkoop — orders, proforma's, inkoopfacturen ── */}
+        <TabPanel id="inkoop" className="order-3">
       {openPurchaseOrders.length > 0 && (
         <Card className="mt-6">
           <CardHeader>
@@ -1117,6 +1143,10 @@ export default async function DashboardPage() {
         )}
       </Card>
 
+        </TabPanel>
+
+        {/* ── Tab: Activiteit — recente activiteit + projecten ── */}
+        <TabPanel id="activiteit" className="order-3">
       <div className="mt-6 grid gap-4 lg:grid-cols-2">
         <Card>
           <CardHeader>
@@ -1209,6 +1239,8 @@ export default async function DashboardPage() {
           )}
         </Card>
       </div>
+        </TabPanel>
+      </TabsRoot>
     </>
   );
 }
