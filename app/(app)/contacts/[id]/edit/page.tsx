@@ -48,6 +48,7 @@ export default async function EditContactPage({
     lastName: contact.lastName,
     companyName: company?.name ?? null,
     companyVat: company?.vatNumber ?? null,
+    taxId: contact.taxId,
     email: contact.email,
     phone: contact.phone,
     addressLine: contact.addressLine,

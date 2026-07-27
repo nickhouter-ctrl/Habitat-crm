@@ -25,6 +25,7 @@ import { db } from "@/lib/db";
 import { documents, holdedSyncMap, products } from "@/lib/db/schema";
 import { SubmitButton } from "@/components/submit-button";
 import { lineCostEur, lineNet, lineTax, normalizeDocItems } from "@/lib/documents";
+import { missingBillingFields } from "@/lib/invoice-validation";
 import { labelForCategory } from "@/lib/products";
 import { formatDate, formatEUR } from "@/lib/utils";
 import {
@@ -96,8 +97,8 @@ export default async function DocumentDetailPage({
   const doc = await db.query.documents.findFirst({
     where: eq(documents.id, id),
     with: {
-      contact: { columns: { id: true, name: true, email: true } },
-      company: { columns: { id: true, name: true } },
+      contact: { columns: { id: true, name: true, email: true, taxId: true, addressLine: true, postalCode: true, city: true, country: true } },
+      company: { columns: { id: true, name: true, vatNumber: true, addressLine: true, postalCode: true, city: true, country: true } },
       deal: { columns: { id: true, title: true } },
       property: { columns: { id: true, title: true } },
       project: { columns: { id: true, name: true } },
@@ -268,6 +269,9 @@ export default async function DocumentDetailPage({
 
   const partyName = doc.contact?.name ?? doc.company?.name ?? null;
   const kindLabel = documentKindMeta[doc.kind];
+  // Facturatie-check: welke verplichte klantgegevens ontbreken (blokkeert versturen).
+  const invoiceMissing =
+    doc.kind === "invoice" || doc.kind === "creditnote" ? missingBillingFields(doc.contact, doc.company) : [];
 
   const changeStatus = setDocumentStatus.bind(null, id);
   const removeDoc = deleteDocument.bind(null, id);
@@ -313,6 +317,26 @@ export default async function DocumentDetailPage({
           </>
         }
       />
+
+      {typeof sp.fout === "string" && sp.fout && (
+        <div className="mb-4 rounded-lg border border-red-300 bg-red-50 px-4 py-3 text-sm text-danger">
+          ⚠ {sp.fout}
+        </div>
+      )}
+
+      {invoiceMissing.length > 0 && (
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+          <span>
+            <strong>Klantgegevens onvolledig</strong> — deze factuur kan niet verstuurd of goedgekeurd worden. Ontbreekt:{" "}
+            <strong>{invoiceMissing.join(", ")}</strong>.
+          </span>
+          {doc.contact?.id && (
+            <LinkButton href={`/contacts/${doc.contact.id}/edit`} variant="secondary" className="shrink-0 text-xs">
+              Klant aanvullen
+            </LinkButton>
+          )}
+        </div>
+      )}
 
       {lowStock.length > 0 && (
         <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 p-4">

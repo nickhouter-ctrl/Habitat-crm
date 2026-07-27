@@ -286,6 +286,10 @@ export const contacts = pgTable(
     phone: text(),
     mobile: text(),
     jobTitle: text(),
+    /** NIF/CIF (Spaanse klant) of buitenlands btw-nummer met landcode — verplicht
+     *  voor het versturen van een factuur. Bedrijfsklanten kunnen dit ook op de
+     *  company (vatNumber) hebben staan. */
+    taxId: text(),
     type: contactType().notNull().default("lead"),
     /** Pipeline stage — only meaningful while `type` is `lead`. */
     stage: leadStage().notNull().default("new"),

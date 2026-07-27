@@ -12,6 +12,7 @@ import { auth } from "@/auth";
 import { db } from "@/lib/db";
 import { activities, companies, contacts, deals, deliveries, documents, holdedSyncMap, products, projectPayments, type DocumentLineItem } from "@/lib/db/schema";
 import { syncDealFromDocument } from "@/lib/deals";
+import { missingBillingFields } from "@/lib/invoice-validation";
 import {
   billingAddressLines,
   computeTotals,
@@ -748,10 +749,44 @@ export async function sendReviewRequestNow(
   return { ok: true };
 }
 
+/**
+ * Blokkeert het versturen/goedkeuren van een factuur (of creditnota) als de
+ * klantgegevens niet compleet zijn: naam, NIF/CIF of buitenlands btw-nummer, en
+ * een volledig adres. Redirect terug naar het document met een foutmelding.
+ */
+async function assertInvoiceClientComplete(docId: string) {
+  const doc = await db.query.documents.findFirst({
+    where: eq(documents.id, docId),
+    columns: { kind: true, contactId: true, companyId: true },
+  });
+  if (!doc || (doc.kind !== "invoice" && doc.kind !== "creditnote")) return;
+  const [contact, company] = await Promise.all([
+    doc.contactId
+      ? db.query.contacts.findFirst({
+          where: eq(contacts.id, doc.contactId),
+          columns: { name: true, taxId: true, addressLine: true, postalCode: true, city: true, country: true },
+        })
+      : null,
+    doc.companyId
+      ? db.query.companies.findFirst({
+          where: eq(companies.id, doc.companyId),
+          columns: { name: true, vatNumber: true, addressLine: true, postalCode: true, city: true, country: true },
+        })
+      : null,
+  ]);
+  const missing = missingBillingFields(contact, company);
+  if (missing.length) {
+    redirect(`/documents/${docId}?fout=${encodeURIComponent(`Klantgegevens onvolledig — vul eerst aan: ${missing.join(", ")}`)}`);
+  }
+}
+
 export async function setDocumentStatus(id: string, formData: FormData) {
   const user = await requireUser();
   const status = String(formData.get("status") ?? "");
   if (!(STATUSES as readonly string[]).includes(status)) return;
+
+  // Factuur mag niet verstuurd/betaald gemarkeerd worden bij incomplete klant.
+  if (status === "sent" || status === "paid") await assertInvoiceClientComplete(id);
 
   const doc = await db.query.documents.findFirst({
     where: eq(documents.id, id),
@@ -853,6 +888,7 @@ export async function setDocumentStatus(id: string, formData: FormData) {
  */
 export async function markDocumentSentNoEmail(id: string) {
   const user = await requireUser();
+  await assertInvoiceClientComplete(id);
   const doc = await db.query.documents.findFirst({
     where: eq(documents.id, id),
     columns: { kind: true, status: true, sentAt: true, dealId: true, totalEur: true },
@@ -1056,6 +1092,7 @@ export async function sendDocument(id: string) {
 /** Versturen vanuit het preview-scherm: aangepast onderwerp/bericht + extra bijlagen. */
 export async function sendDocumentCustom(id: string, formData: FormData) {
   const user = await requireUser();
+  await assertInvoiceClientComplete(id);
   const doc = await db.query.documents.findFirst({
     where: eq(documents.id, id),
     with: {

@@ -22,6 +22,7 @@ export type ContactFormInitial = {
   lastName?: string | null;
   companyName?: string | null;
   companyVat?: string | null;
+  taxId?: string | null;
   email?: string | null;
   phone?: string | null;
   addressLine?: string | null;
@@ -130,6 +131,16 @@ export function ContactCreateForm({
             />
           </Field>
         </div>
+      )}
+
+      {type !== "zakelijk" && (
+        <Field
+          label="NIF / CIF (fiscaal nummer)"
+          htmlFor="taxId"
+          hint="Verplicht op facturen — DNI/NIF voor particulieren, of buitenlands btw-nummer met landcode."
+        >
+          <Input id="taxId" name="taxId" placeholder="bv. 12345678Z of NL123456789B01" defaultValue={initial?.taxId ?? ""} />
+        </Field>
       )}
 
       <div className="grid gap-4 sm:grid-cols-2">

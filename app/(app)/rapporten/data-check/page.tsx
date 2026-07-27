@@ -3,8 +3,9 @@ import Link from "next/link";
 
 import { Badge, Card, LinkButton, PageHeader } from "@/components/ui";
 import { db } from "@/lib/db";
-import { documents, products } from "@/lib/db/schema";
+import { companies, contacts, documents, products } from "@/lib/db/schema";
 import { normalizeDocItems } from "@/lib/documents";
+import { missingBillingFields } from "@/lib/invoice-validation";
 import { getReservedStockByProduct } from "@/lib/stock";
 import { cn } from "@/lib/utils";
 
@@ -243,6 +244,31 @@ export default async function DataCheckPage() {
     );
   const fd = furnitureDescRows[0] ?? { total: 0, done: 0 };
 
+  // Klanten die facturen/offertes krijgen maar onvolledige factuurgegevens hebben.
+  const clientDocRows = await db.query.documents.findMany({
+    where: inArray(documents.kind, ["invoice", "estimate", "proforma", "creditnote"]),
+    columns: { contactId: true },
+  });
+  const clientIds = [...new Set(clientDocRows.map((d) => d.contactId).filter(Boolean))] as string[];
+  const clientRows = clientIds.length
+    ? await db.query.contacts.findMany({
+        where: inArray(contacts.id, clientIds),
+        columns: { id: true, name: true, taxId: true, addressLine: true, postalCode: true, city: true, country: true, companyId: true },
+      })
+    : [];
+  const coIds = [...new Set(clientRows.map((c) => c.companyId).filter(Boolean))] as string[];
+  const coRows = coIds.length
+    ? await db.query.companies.findMany({
+        where: inArray(companies.id, coIds),
+        columns: { id: true, name: true, vatNumber: true, addressLine: true, postalCode: true, city: true, country: true },
+      })
+    : [];
+  const coById = new Map(coRows.map((c) => [c.id, c]));
+  const incompleteClients = clientRows
+    .map((c) => ({ c, missing: missingBillingFields(c, c.companyId ? coById.get(c.companyId) : null) }))
+    .filter((x) => x.missing.length > 0)
+    .sort((a, b) => a.c.name.localeCompare(b.c.name));
+
   return (
     <>
       <PageHeader
@@ -254,6 +280,35 @@ export default async function DataCheckPage() {
           </LinkButton>
         }
       />
+
+      {incompleteClients.length > 0 && (
+        <Card className="mb-5 border-amber-300">
+          <div className="border-b border-amber-200 bg-amber-50/60 px-5 py-3">
+            <h3 className="text-sm font-semibold text-amber-900">
+              Klanten met onvolledige factuurgegevens ({incompleteClients.length})
+            </h3>
+            <p className="text-xs text-amber-800/80">
+              Deze klanten krijgen facturen/offertes maar missen verplichte gegevens (NIF/CIF of adres) — een factuur kan
+              pas verstuurd worden als dit is aangevuld.
+            </p>
+          </div>
+          <ul className="divide-y text-sm">
+            {incompleteClients.map(({ c, missing }) => (
+              <li key={c.id} className="flex flex-wrap items-center justify-between gap-2 px-5 py-2.5">
+                <Link href={`/contacts/${c.id}`} className="font-medium hover:underline">
+                  {c.name}
+                </Link>
+                <span className="flex items-center gap-2">
+                  <span className="text-xs text-amber-700">ontbreekt: {missing.join(", ")}</span>
+                  <LinkButton href={`/contacts/${c.id}/edit`} variant="secondary" className="text-xs">
+                    Aanvullen
+                  </LinkButton>
+                </span>
+              </li>
+            ))}
+          </ul>
+        </Card>
+      )}
 
       {totalIssues === 0 ? (
         <div className="rounded-lg border border-success/30 bg-success/5 px-4 py-3 text-sm font-medium text-success">
