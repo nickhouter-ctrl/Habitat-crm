@@ -4,7 +4,8 @@ import Link from "next/link";
 import { useRef, useState } from "react";
 
 import type { AddressSuggestion } from "@/app/(app)/documents/actions";
-import { findDuplicateContact } from "@/app/(app)/contacts/actions";
+import { findDuplicateContact, validateVatNumber } from "@/app/(app)/contacts/actions";
+import type { ViesResult } from "@/lib/vies";
 import { SubmitButton } from "@/components/submit-button";
 import { Field, Input, Select, Textarea } from "@/components/ui";
 import { cn } from "@/lib/utils";
@@ -60,6 +61,30 @@ export function ContactCreateForm({
       /* stil falen — de check is hulp, geen blokkade */
     }
   }
+  const [vies, setVies] = useState<ViesResult | null>(null);
+  const [viesLoading, setViesLoading] = useState(false);
+  async function checkVies(value: string) {
+    setVies(null);
+    if (!value.trim()) return;
+    setViesLoading(true);
+    try {
+      setVies(await validateVatNumber(value));
+    } catch {
+      /* stil falen */
+    } finally {
+      setViesLoading(false);
+    }
+  }
+  const viesIndicator =
+    viesLoading ? (
+      <p className="mt-1 text-xs text-muted">VIES controleren…</p>
+    ) : vies ? (
+      vies.valid ? (
+        <p className="mt-1 text-xs text-success">✓ Geldig EU-btw-nummer (VIES){vies.name ? ` — ${vies.name}` : ""}</p>
+      ) : (
+        <p className="mt-1 text-xs text-danger">✗ Dit btw-nummer is niet geldig volgens VIES</p>
+      )
+    ) : null;
   const [addr, setAddr] = useState(initial?.addressLine ?? "");
   const [postcode, setPostcode] = useState(initial?.postalCode ?? "");
   const [city, setCity] = useState(initial?.city ?? "");
@@ -137,13 +162,15 @@ export function ContactCreateForm({
               defaultValue={initial?.companyName ?? ""}
             />
           </Field>
-          <Field label="CIF / NIF (btw-nummer)" htmlFor="companyVat" hint="Verplicht op facturen in Spanje.">
+          <Field label="CIF / NIF (btw-nummer)" htmlFor="companyVat" hint="Verplicht op facturen in Spanje. Buitenlands nummer met landcode wordt tegen VIES gecheckt.">
             <Input
               id="companyVat"
               name="companyVat"
-              placeholder="bv. B12345678"
+              placeholder="bv. B12345678 of NL123456789B01"
               defaultValue={initial?.companyVat ?? ""}
+              onBlur={(e) => checkVies(e.currentTarget.value)}
             />
+            {viesIndicator}
           </Field>
         </div>
       )}
@@ -154,7 +181,14 @@ export function ContactCreateForm({
           htmlFor="taxId"
           hint="Verplicht op facturen — DNI/NIF voor particulieren, of buitenlands btw-nummer met landcode."
         >
-          <Input id="taxId" name="taxId" placeholder="bv. 12345678Z of NL123456789B01" defaultValue={initial?.taxId ?? ""} />
+          <Input
+            id="taxId"
+            name="taxId"
+            placeholder="bv. 12345678Z of NL123456789B01"
+            defaultValue={initial?.taxId ?? ""}
+            onBlur={(e) => checkVies(e.currentTarget.value)}
+          />
+          {viesIndicator}
         </Field>
       )}
 

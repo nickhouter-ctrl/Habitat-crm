@@ -7,6 +7,7 @@ import { z } from "zod";
 import { requireWriteUser } from "@/lib/auth/guards";
 
 import { contactDisplayName } from "@/lib/contact-name";
+import { checkVatVies, type ViesResult } from "@/lib/vies";
 import { db } from "@/lib/db";
 import { activities, companies, contacts, documents, holdedSyncMap } from "@/lib/db/schema";
 
@@ -65,6 +66,12 @@ export async function findDuplicateContact(
     columns: { id: true, name: true },
   });
   return row ?? null;
+}
+
+/** Valideert een (EU-)btw-nummer tegen VIES. Null = geen EU-btw-formaat. */
+export async function validateVatNumber(vat: string): Promise<ViesResult | null> {
+  await requireWriteUser();
+  return checkVatVies(vat);
 }
 
 export async function createContact(formData: FormData) {
