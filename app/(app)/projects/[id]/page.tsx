@@ -366,8 +366,7 @@ export default async function ProjectDetailPage({
   // Ontvangen betalingen van de klant (incl. btw) — informatief, los van de
   // factuurgebaseerde omzet/marge hierboven.
   const receivedTotal = paymentRows.reduce((s, p) => s + Number(p.amountEur ?? 0), 0);
-  // Betalingen worden incl. btw geboekt; de projectsamenvattingen rekenen ex. btw
-  // (21%), zodat ze vergelijkbaar zijn met kosten/omzet.
+  // Betalingen worden incl. btw geboekt; de samenvattingen rekenen ex. btw (÷1,21).
   const VAT_DIVISOR = 1.21;
   const receivedTotalEx = receivedTotal / VAT_DIVISOR;
 
@@ -406,7 +405,14 @@ export default async function ProjectDetailPage({
   const receivedFromInvoicedAdvances = paymentRows
     .filter((p) => p.method === "advance" && p.description && invoiceAdvanceMarkers.has(p.description))
     .reduce((s, p) => s + Number(p.amountEur ?? 0), 0);
-  const settledToTarget = projRevenue + (receivedTotal - receivedFromInvoicedAdvances) / VAT_DIVISOR;
+  // Alleen NIET-gefactureerde voorschotten tellen mee richting de aanneemprijs.
+  // Gewone factuurbetalingen zitten al in 'gefactureerd' (projRevenue) — die er
+  // óók van aftrekken zou het betaalde bedrag dubbel tellen.
+  const advanceReceived = paymentRows
+    .filter((p) => p.method === "advance")
+    .reduce((s, p) => s + Number(p.amountEur ?? 0), 0);
+  const notInvoicedAdvancesEx = Math.max(0, advanceReceived - receivedFromInvoicedAdvances) / VAT_DIVISOR;
+  const settledToTarget = projRevenue + notInvoicedAdvancesEx;
   const toInvoice = Math.max(0, targetRevenue - settledToTarget);
 
   // Resultaat TOT NU TOE = doel − werkelijke (gerealiseerde) kosten tot nu toe.
@@ -705,7 +711,8 @@ export default async function ProjectDetailPage({
               <p className="text-xs text-muted">Nog te factureren</p>
               <p className={`text-lg font-semibold tabular-nums ${toInvoice > 0 ? "text-warning" : ""}`}>{formatEUR(toInvoice)}</p>
               <p className="text-xs text-muted">
-                {contractPrice != null ? "aanneemprijs" : "doel"} {formatEUR(targetRevenue)} − gefactureerd {formatEUR(projRevenue)} − ontvangen {formatEUR(receivedTotalEx)}
+                {contractPrice != null ? "aanneemprijs" : "doel"} {formatEUR(targetRevenue)} − gefactureerd {formatEUR(projRevenue)}
+                {notInvoicedAdvancesEx > 0 ? ` − voorschotten ${formatEUR(notInvoicedAdvancesEx)}` : ""}
               </p>
             </div>
           </div>
