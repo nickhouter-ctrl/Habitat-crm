@@ -1,6 +1,7 @@
 import { and, eq, inArray, sql } from "drizzle-orm";
 import Link from "next/link";
 
+import { ReportsNav } from "@/components/reports-nav";
 import { Badge, Card, LinkButton, PageHeader } from "@/components/ui";
 import { db } from "@/lib/db";
 import { companies, contacts, documents, products } from "@/lib/db/schema";
@@ -280,6 +281,7 @@ export default async function DataCheckPage() {
           </LinkButton>
         }
       />
+      <ReportsNav active="/rapporten/data-check" />
 
       {incompleteClients.length > 0 && (
         <Card className="mb-5 border-amber-300">

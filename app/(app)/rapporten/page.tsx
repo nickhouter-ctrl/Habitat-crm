@@ -14,6 +14,7 @@ import {
   Tr,
 } from "@/components/ui";
 import { HorizontalBarChart, MonthlyAmountChart } from "@/components/rapporten-charts";
+import { ReportsNav } from "@/components/reports-nav";
 import { getReportsData } from "@/lib/reports-data";
 import { formatEUR } from "@/lib/utils";
 
@@ -63,6 +64,7 @@ export default async function RapportenPage() {
           </div>
         }
       />
+      <ReportsNav active="/rapporten" />
 
       <div className="mb-5 grid grid-cols-2 gap-3 sm:grid-cols-4">
         <StatTile label="Omzet (12 mnd)" value={formatEUR(totalRev)} hint="ex. BTW · facturen − creditnota's" />

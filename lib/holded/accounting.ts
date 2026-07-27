@@ -75,6 +75,36 @@ export async function expensesByMonth(months = 12): Promise<{ ym: string; total:
   return out;
 }
 
+/**
+ * BTW per maand uit Holded's grootboek (Spaanse IVA-rekeningen):
+ *  - 477x = IVA repercutido (btw op omzet / output) — creditzijde
+ *  - 472x = IVA soportado (btw op inkoop / input) — debetzijde
+ * "Af te dragen" = output − input.
+ */
+export async function vatByMonth(months = 12): Promise<{ ym: string; output: number; input: number }[]> {
+  const now = new Date();
+  const start = new Date(now.getFullYear(), now.getMonth() - (months - 1), 1);
+  const lines = await fetchLedger(Math.floor(start.getTime() / 1000), Math.floor(Date.now() / 1000));
+  const byMonth = new Map<string, { output: number; input: number }>();
+  for (const r of lines) {
+    if (!r.timestamp) continue;
+    const acc = String(r.account ?? "");
+    const ym = ymKey(r.timestamp);
+    const b = byMonth.get(ym) ?? { output: 0, input: 0 };
+    if (acc.startsWith("477")) b.output += Number(r.credit || 0) - Number(r.debit || 0);
+    else if (acc.startsWith("472")) b.input += Number(r.debit || 0) - Number(r.credit || 0);
+    byMonth.set(ym, b);
+  }
+  const out: { ym: string; output: number; input: number }[] = [];
+  for (let i = months - 1; i >= 0; i--) {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    const ym = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+    const b = byMonth.get(ym) ?? { output: 0, input: 0 };
+    out.push({ ym, output: Math.round(b.output * 100) / 100, input: Math.round(b.input * 100) / 100 });
+  }
+  return out;
+}
+
 /** Omzet (ingresos) per maand uit Holded's grootboek, in EUR. */
 export async function revenueByMonth(months = 12): Promise<{ ym: string; total: number }[]> {
   const now = new Date();

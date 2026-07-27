@@ -17,6 +17,7 @@ import {
   THead,
   Tr,
 } from "@/components/ui";
+import { ReportsNav } from "@/components/reports-nav";
 import { db } from "@/lib/db";
 import { products } from "@/lib/db/schema";
 import { formatEUR } from "@/lib/utils";
@@ -72,6 +73,7 @@ export default async function InkoopMargePage() {
           </LinkButton>
         }
       />
+      <ReportsNav active="/rapporten/inkoop-marge" />
 
       <div className="mb-5 grid grid-cols-2 gap-3 sm:grid-cols-3">
         <StatTile label={`Marge onder ${WARN_PCT}%`} value={rows.length} hint="producten met krappe marge" tone="warning" />
