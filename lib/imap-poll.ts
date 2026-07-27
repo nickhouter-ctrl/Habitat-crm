@@ -56,10 +56,17 @@ export async function ingestMails(mails: ParsedEmail[]): Promise<IngestStats> {
       .map((a) => a?.trim().toLowerCase())
       .filter(Boolean) as string[],
   );
+  // Mail NAAR de inkoop-mailbox is (bijna) altijd een doorgestuurde/ontvangen
+  // inkoopfactuur en moet verwerkt worden — óók als een collega 'm vanaf een
+  // eigen adres (hi@) doorstuurt. Die override ontbrak, waardoor zulke facturen
+  // stilletjes werden overgeslagen.
+  const purchaseInbox = process.env.GMAIL_PURCHASE_USER?.trim().toLowerCase() || "";
 
   for (const m of mails) {
     try {
-      if (m.fromEmail && ownAddresses.has(m.fromEmail.trim().toLowerCase())) {
+      const toPurchase =
+        !!purchaseInbox && `${m.toEmail ?? ""} ${m.ccEmail ?? ""}`.toLowerCase().includes(purchaseInbox);
+      if (!toPurchase && m.fromEmail && ownAddresses.has(m.fromEmail.trim().toLowerCase())) {
         s.duplicates++; // niet echt een duplicaat, maar telt als "overgeslagen"
         continue;
       }
