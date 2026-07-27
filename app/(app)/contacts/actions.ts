@@ -1,6 +1,6 @@
 "use server";
 
-import { and, eq, inArray, ne } from "drizzle-orm";
+import { and, eq, inArray, ne, or, sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
@@ -41,6 +41,30 @@ function clean<T extends Record<string, unknown>>(obj: T): T {
     (out as Record<string, unknown>)[k] = v === "" ? null : v;
   }
   return out;
+}
+
+/**
+ * Live dubbel-check voor het contactformulier: bestaat er al een contact met dit
+ * e-mailadres of telefoonnummer? Voorkomt de dubbele-accounts die door imports
+ * ontstonden. `excludeId` sluit het eigen contact uit bij bewerken.
+ */
+export async function findDuplicateContact(
+  email: string,
+  phone: string,
+  excludeId?: string,
+): Promise<{ id: string; name: string } | null> {
+  await requireWriteUser();
+  const e = email.trim().toLowerCase();
+  const p = phone.replace(/\s/g, "");
+  const conds = [];
+  if (e) conds.push(sql`lower(${contacts.email}) = ${e}`);
+  if (p) conds.push(sql`regexp_replace(coalesce(${contacts.phone}, ''), '\\s', '', 'g') = ${p}`);
+  if (!conds.length) return null;
+  const row = await db.query.contacts.findFirst({
+    where: excludeId ? and(or(...conds), ne(contacts.id, excludeId)) : or(...conds),
+    columns: { id: true, name: true },
+  });
+  return row ?? null;
 }
 
 export async function createContact(formData: FormData) {

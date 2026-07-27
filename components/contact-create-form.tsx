@@ -1,8 +1,10 @@
 "use client";
 
+import Link from "next/link";
 import { useRef, useState } from "react";
 
 import type { AddressSuggestion } from "@/app/(app)/documents/actions";
+import { findDuplicateContact } from "@/app/(app)/contacts/actions";
 import { SubmitButton } from "@/components/submit-button";
 import { Field, Input, Select, Textarea } from "@/components/ui";
 import { cn } from "@/lib/utils";
@@ -45,6 +47,19 @@ export function ContactCreateForm({
   submitLabel?: string;
 }) {
   const [type, setType] = useState<Klanttype>(initial?.klanttype ?? "particulier");
+  const isEdit = !!initial;
+  const [dup, setDup] = useState<{ id: string; name: string } | null>(null);
+  async function checkDup(form: HTMLFormElement | null) {
+    if (isEdit || !form) return;
+    const email = (form.elements.namedItem("email") as HTMLInputElement | null)?.value ?? "";
+    const phone = (form.elements.namedItem("phone") as HTMLInputElement | null)?.value ?? "";
+    if (!email.trim() && !phone.trim()) return setDup(null);
+    try {
+      setDup(await findDuplicateContact(email, phone));
+    } catch {
+      /* stil falen — de check is hulp, geen blokkade */
+    }
+  }
   const [addr, setAddr] = useState(initial?.addressLine ?? "");
   const [postcode, setPostcode] = useState(initial?.postalCode ?? "");
   const [city, setCity] = useState(initial?.city ?? "");
@@ -145,12 +160,22 @@ export function ContactCreateForm({
 
       <div className="grid gap-4 sm:grid-cols-2">
         <Field label="E-mail" htmlFor="email">
-          <Input id="email" name="email" type="email" autoComplete="email" defaultValue={initial?.email ?? ""} />
+          <Input id="email" name="email" type="email" autoComplete="email" defaultValue={initial?.email ?? ""} onBlur={(e) => checkDup(e.currentTarget.form)} />
         </Field>
         <Field label="Telefoon" htmlFor="phone">
-          <Input id="phone" name="phone" type="tel" defaultValue={initial?.phone ?? ""} />
+          <Input id="phone" name="phone" type="tel" defaultValue={initial?.phone ?? ""} onBlur={(e) => checkDup(e.currentTarget.form)} />
         </Field>
       </div>
+
+      {dup && !isEdit && (
+        <div className="rounded-lg border border-amber-300 bg-amber-50 px-4 py-2.5 text-sm text-amber-900">
+          Er bestaat al een contact met deze gegevens:{" "}
+          <Link href={`/contacts/${dup.id}`} className="font-semibold underline" target="_blank">
+            {dup.name}
+          </Link>
+          . Controleer of je geen dubbele aanmaakt.
+        </div>
+      )}
 
       <Field
         label="Adres (straat + nr.)"
