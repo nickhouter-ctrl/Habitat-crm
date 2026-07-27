@@ -270,6 +270,21 @@ export default async function DataCheckPage() {
     .filter((x) => x.missing.length > 0)
     .sort((a, b) => a.c.name.localeCompare(b.c.name));
 
+  // Mogelijke dubbele contacten (zelfde e-mailadres) — kan ook een gedeeld
+  // bedrijfs-e-mail zijn, dus ter controle.
+  const dupEmailRows = await db
+    .select({
+      email: sql<string>`lower(trim(${contacts.email}))`,
+      n: sql<number>`count(*)::int`,
+      names: sql<string>`string_agg(${contacts.name}, ' · ')`,
+    })
+    .from(contacts)
+    .where(sql`coalesce(trim(${contacts.email}), '') <> ''`)
+    .groupBy(sql`lower(trim(${contacts.email}))`)
+    .having(sql`count(*) > 1`)
+    .orderBy(sql`count(*) desc`)
+    .limit(15);
+
   return (
     <>
       <PageHeader
@@ -305,6 +320,31 @@ export default async function DataCheckPage() {
                   <LinkButton href={`/contacts/${c.id}/edit`} variant="secondary" className="text-xs">
                     Aanvullen
                   </LinkButton>
+                </span>
+              </li>
+            ))}
+          </ul>
+        </Card>
+      )}
+
+      {dupEmailRows.length > 0 && (
+        <Card className="mb-5 border-amber-300">
+          <div className="border-b border-amber-200 bg-amber-50/60 px-5 py-3">
+            <h3 className="text-sm font-semibold text-amber-900">Mogelijke dubbele contacten ({dupEmailRows.length})</h3>
+            <p className="text-xs text-amber-800/80">
+              Contacten met hetzelfde e-mailadres — controleer of het dubbelen zijn (kan ook een gedeeld bedrijfs-e-mail
+              zijn).
+            </p>
+          </div>
+          <ul className="divide-y text-sm">
+            {dupEmailRows.map((r) => (
+              <li key={r.email} className="flex flex-wrap items-center justify-between gap-2 px-5 py-2.5">
+                <span>
+                  <span className="font-medium">{r.names}</span>{" "}
+                  <span className="text-xs text-muted">· {r.email}</span>
+                </span>
+                <span className="shrink-0 rounded-full bg-amber-100 px-2 py-0.5 text-xs font-semibold text-amber-800">
+                  {r.n}×
                 </span>
               </li>
             ))}
