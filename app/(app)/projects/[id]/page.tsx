@@ -242,8 +242,9 @@ export default async function ProjectDetailPage({
     openOutstanding += total > 0 ? Number(d.subtotalEur ?? 0) * ((total - paid) / total) : 0;
     openInvoiceCount += 1;
   }
-  const projMargin = projRevenue - projCost;
-  const projMarginPct = projRevenue > 0 ? Math.round((projMargin / projRevenue) * 100) : null;
+  // Let op: géén projRevenue − projCost meer als "marge". Dat telde regels zonder
+  // kostprijs (bv. de aanbetaling FAC-2026-0028) als 100% marge. De marge op eigen
+  // producten wordt gemeten met docProductMargin — zie `margins` verderop.
 
   // Producten in dit project: gereserveerd (uit gemarkeerd-gereserveerde offertes) vs.
   // verkocht (uit facturen − creditnota's). Geeft inzicht in wat er naar de klus
@@ -1439,19 +1440,25 @@ export default async function ProjectDetailPage({
               <span className="text-xs text-muted">{linkedDocs.length}</span>
             </CardHeader>
             <CardContent className="space-y-2 text-sm">
-              {invoiceDocs.length > 0 && (
-                <div className="flex items-center justify-between rounded-md bg-background px-3 py-2 text-xs">
-                  <span className="text-muted">Marge (intern · gefactureerd)</span>
-                  <span
-                    className={`tabular-nums font-medium ${projMargin < 0 ? "text-danger" : "text-foreground"}`}
-                  >
-                    €{" "}
-                    {projMargin.toLocaleString("nl-NL", {
-                      minimumFractionDigits: 2,
-                      maximumFractionDigits: 2,
-                    })}
-                    {projMarginPct != null ? ` · ${projMarginPct}%` : ""}
-                  </span>
+              {invoiceDocs.length > 0 && margins.productRevenue > 0 && (
+                <div className="rounded-md bg-background px-3 py-2 text-xs">
+                  <div className="flex items-center justify-between">
+                    <span className="text-muted">Marge op eigen producten (gefactureerd)</span>
+                    <span
+                      className={`tabular-nums font-medium ${margins.productMargin < 0 ? "text-danger" : "text-foreground"}`}
+                    >
+                      {formatEUR(margins.productMargin)}
+                      {margins.productMarginPct != null
+                        ? ` · ${margins.productMarginPct.toFixed(1).replace(".", ",")}%`
+                        : ""}
+                    </span>
+                  </div>
+                  {margins.uncostedProductRevenue > 0 && (
+                    <p className="mt-1 text-muted">
+                      {formatEUR(margins.uncostedProductRevenue)} gefactureerd zonder kostprijs (bv. een
+                      aanbetaling) — niet meegeteld, anders zou dat als 100% marge tellen.
+                    </p>
+                  )}
                 </div>
               )}
               <div className="flex flex-wrap gap-2">
