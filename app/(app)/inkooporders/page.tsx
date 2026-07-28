@@ -18,7 +18,7 @@ import {
 } from "@/components/ui";
 import { db } from "@/lib/db";
 import { emailInbox, mailAttachments, purchaseOrders } from "@/lib/db/schema";
-import { formatMoney, PO_OPEN_STATUSES, PO_STATUS_META } from "@/lib/purchase-orders";
+import { formatMoney, poExVat, poExVatAmount, PO_OPEN_STATUSES, PO_STATUS_META } from "@/lib/purchase-orders";
 import { cn, formatEUR } from "@/lib/utils";
 
 import { SyncHoldedButton } from "./sync-holded-button";
@@ -78,7 +78,7 @@ export default async function PurchaseOrdersPage({
   // Aggregaten op de VOLLEDIGE set (overzicht blijft stabiel los van het filter).
   const eurRows = rows.filter((r) => (r.currency ?? "EUR") === "EUR");
   const sumEx = (rs: typeof eurRows) =>
-    rs.filter((r) => r.status !== "draft").reduce((s, r) => s + Number(r.subtotal ?? r.total ?? 0), 0);
+    rs.filter((r) => r.status !== "draft").reduce((s, r) => s + poExVatAmount(r), 0);
   const sumIncl = (rs: typeof eurRows) =>
     rs.filter((r) => r.status !== "draft").reduce((s, r) => s + Number(r.total ?? 0), 0);
   const totalEurEx = sumEx(eurRows);
@@ -277,7 +277,17 @@ export default async function PurchaseOrdersPage({
                         <Td className="text-muted">{fmtDate(po.orderDate)}</Td>
                         <Td className="text-muted">{fmtDate(po.expectedDate)}</Td>
                         <Td className="text-right tabular-nums text-muted">{po.items?.length ?? 0}</Td>
-                        <Td className="text-right tabular-nums">{formatMoney(po.subtotal ?? po.total, po.currency)}</Td>
+                        <Td className="text-right tabular-nums">
+                          {formatMoney(poExVatAmount(po), po.currency)}
+                          {poExVat(po).vatUnknown && (
+                            <span
+                              className="ml-1 cursor-help text-xs text-warning"
+                              title="Geen btw/subtotaal op deze inkooporder — dit is het factuurtotaal en zit er dus mogelijk incl. btw in."
+                            >
+                              btw?
+                            </span>
+                          )}
+                        </Td>
                         <Td className="text-right tabular-nums">{formatMoney(po.total, po.currency)}</Td>
                         <Td>
                           <Badge tone={meta.tone}>{meta.label}</Badge>

@@ -11,7 +11,7 @@ import { db } from "@/lib/db";
 import { activities, emailInbox, mailAttachments, products, purchaseOrders, timeEntries, workers } from "@/lib/db/schema";
 import type { PurchaseOrderAttachment } from "@/lib/db/schema";
 import { nextSequentialSku } from "@/lib/products";
-import { normalizePoAttachments, parsePoLineItems, poTotal, PO_STATUSES } from "@/lib/purchase-orders";
+import { normalizePoAttachments, parsePoLineItems, poExVatAssumingSpanishVat, poTotal, PO_STATUSES } from "@/lib/purchase-orders";
 import { copyMailAttachmentToPoBucket, deletePurchaseOrderFile, downloadMailAttachmentBuffer, downloadPurchaseOrderBuffer } from "@/lib/storage";
 import { buildInvoicePdfAttachment, isExcelAttachment, pdfNameFor } from "@/lib/excel-to-pdf";
 import { buildPurchaseReference } from "@/lib/auto-purchase-invoice";
@@ -222,22 +222,11 @@ export async function linkPurchaseOrderAsHours(id: string, formData: FormData) {
   const po = await db.query.purchaseOrders.findFirst({ where: eq(purchaseOrders.id, id) });
   if (!po) return;
 
-  // Arbeidskost is ALTIJD ex. btw. Zonder subtotaal: totaal − btw; als ook de
-  // btw onbekend is, 21% aannemen en dat op de regel vermelden — nooit het
-  // incl.-btw-totaal als arbeidskost boeken (dat gaf 21% te hoge projectkosten).
-  const sub = Number(po.subtotal) || 0;
-  const tax = Number(po.tax) || 0;
-  const tot = Number(po.total) || 0;
-  let amount = 0;
-  let vatAssumed = false;
-  if (sub > 0) {
-    amount = sub;
-  } else if (tot > 0 && tax > 0) {
-    amount = Math.round((tot - tax) * 100) / 100;
-  } else if (tot > 0) {
-    amount = Math.round((tot / 1.21) * 100) / 100;
-    vatAssumed = true;
-  }
+  // Arbeidskost is ALTIJD ex. btw — nooit het incl.-btw-totaal als arbeidskost
+  // boeken (dat gaf 21% te hoge projectkosten). Een uren-/arbeidsfactuur komt hier
+  // altijd van een lokale (Spaanse) partij, dus zonder uitgelezen btw is 21%
+  // aannemen juister dan het totaal; dat wordt op de regel vermeld.
+  const { amount, vatAssumed } = poExVatAssumingSpanishVat(po);
   const hoursRaw = Number(String(formData.get("hours") ?? "").replace(",", "."));
   const hours = hoursRaw > 0 ? hoursRaw : 1; // geen uren opgegeven → 1 post t.w.v. het bedrag
   const rate = amount > 0 ? amount / hours : 0;

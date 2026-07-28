@@ -27,6 +27,7 @@ import {
   formatMoney,
   normalizePoAttachments,
   parsePoLineItems,
+  poExVat,
   poLineTotal,
   PO_STATUS_META,
 } from "@/lib/purchase-orders";
@@ -118,6 +119,8 @@ export default async function PurchaseOrderPage({ params }: { params: Promise<{ 
   // Komt automatisch binnen via de Holded-sync (Holded ↔ bank); lokaal kun je 'm
   // handmatig op betaald zetten.
   const poTotal = Number(po.total ?? 0);
+  // Kosten/marges rekenen ex. btw; toon dat bedrag hier expliciet naast het totaal.
+  const exVat = poExVat(po);
   const poPaid = Number(po.paidEur ?? 0);
   const poPaidFull = !!po.paidAt || (poTotal > 0 && poPaid >= poTotal - 0.01);
   const payBadge =
@@ -220,8 +223,22 @@ export default async function PurchaseOrderPage({ params }: { params: Promise<{ 
                 );
               })}
               <Tr>
+                <Td className="text-muted" colSpan={4}>
+                  Ex. btw{" "}
+                  {exVat.vatUnknown && (
+                    <span className="text-xs text-warning">
+                      btw onbekend — vul het subtotaal in via Bewerken › Factuur / bon
+                    </span>
+                  )}
+                </Td>
+                <Td className="text-right tabular-nums text-muted">
+                  {formatMoney(exVat.amount, po.currency)}
+                </Td>
+                <Td />
+              </Tr>
+              <Tr>
                 <Td className="font-semibold" colSpan={4}>
-                  Totaal
+                  Totaal <span className="text-xs font-normal text-muted">incl. btw</span>
                 </Td>
                 <Td className="text-right font-semibold tabular-nums">
                   {formatMoney(po.total, po.currency)}

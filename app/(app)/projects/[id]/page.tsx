@@ -48,6 +48,8 @@ import {
   workers,
 } from "@/lib/db/schema";
 import { lineCostEur, lineMaterialCostEur, normalizeDocItems } from "@/lib/documents";
+import { poExVat, poExVatAmount } from "@/lib/purchase-orders";
+import { DEFAULT_LABOR_MARGIN_PCT, deriveMarginSplit } from "@/lib/project-financials";
 import type { DocumentLineItem } from "@/lib/db/schema";
 import { formatEUR } from "@/lib/utils";
 import {
@@ -336,6 +338,8 @@ export default async function ProjectDetailPage({
           reference: purchaseOrders.reference,
           total: purchaseOrders.total,
           subtotal: purchaseOrders.subtotal,
+          tax: purchaseOrders.tax,
+          items: purchaseOrders.items,
           status: purchaseOrders.status,
         })
         .from(purchaseOrders)
@@ -359,7 +363,7 @@ export default async function ProjectDetailPage({
   // Als uren gekoppelde inkooporders tellen NIET als materiaal (ze zitten al als
   // arbeidskost in de uren via een uren-regel) — anders dubbel.
   const materialPOs = linkedPOs.filter((p) => !p.countAsLabor);
-  const poCost = materialPOs.reduce((s, p) => s + Number(p.subtotal ?? p.total ?? 0), 0); // ex. BTW, EUR
+  const poCost = materialPOs.reduce((s, p) => s + poExVatAmount(p), 0); // ex. btw, EUR
   const looseCost = costRows.reduce((s, c) => s + Number(c.amountEur ?? 0), 0);
   const materialCost = poCost + looseCost;
 
@@ -431,6 +435,17 @@ export default async function ProjectDetailPage({
         : resultMarginPct < MIN_MARGIN_PCT
           ? "warning"
           : "success";
+
+  // Uitsplitsing van het resultaat: de uren krijgen een vaste marge-norm, wat er
+  // van het doel overblijft is de ruimte voor materiaal/inkoop. Samen tellen ze
+  // op tot `resultToDate`.
+  const split = deriveMarginSplit({
+    targetRevenue,
+    laborCost,
+    materialCost,
+    ownProductCost: ownProductCostRealized,
+    laborMarginPct: project.laborMarginPct != null ? Number(project.laborMarginPct) : null,
+  });
 
   const isConstruction = project.kind === "construction";
   const PAY_LABEL = { cash: "Contant", invoice: "Per factuur" } as const;
@@ -598,6 +613,19 @@ export default async function ProjectDetailPage({
                   name="budgetHours"
                   inputMode="decimal"
                   defaultValue={project.budgetHours ? String(project.budgetHours).replace(".", ",") : ""}
+                />
+              </Field>
+              <Field
+                label="Marge op uren (%)"
+                htmlFor="laborMarginPct"
+                hint={`marge ÷ verkoopprijs — leeg = ${DEFAULT_LABOR_MARGIN_PCT}%`}
+              >
+                <Input
+                  id="laborMarginPct"
+                  name="laborMarginPct"
+                  inputMode="decimal"
+                  placeholder={String(DEFAULT_LABOR_MARGIN_PCT)}
+                  defaultValue={project.laborMarginPct ? String(project.laborMarginPct).replace(".", ",") : ""}
                 />
               </Field>
               <Field label="Verantwoordelijke" htmlFor="ownerId">
@@ -770,6 +798,70 @@ export default async function ProjectDetailPage({
             kosten zijn {costRatio != null ? `${Math.round(costRatio * 100)}%` : "—"} van het doel
             {costHeadroom < 0 ? ` · ${formatEUR(Math.abs(costHeadroom))} boven het ${MIN_MARGIN_PCT}%-plafond` : ` · nog ${formatEUR(costHeadroom)} ruimte tot het plafond`}.
           </div>
+
+          {/* Uren en materiaal los van elkaar: elk met eigen kost, opbrengst en marge. */}
+          {targetRevenue > 0 && (
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div className="rounded-lg border bg-background p-3">
+                <div className="mb-2 flex items-baseline justify-between gap-2">
+                  <p className="text-sm font-semibold">Uren — arbeid</p>
+                  <span className="text-xs text-muted">norm {split.laborMarginPct}%</span>
+                </div>
+                <dl className="space-y-1 text-sm">
+                  <div className="flex justify-between gap-2">
+                    <dt className="text-muted">Kosten</dt>
+                    <dd className="tabular-nums">{formatEUR(split.laborCost)}</dd>
+                  </div>
+                  <div className="flex justify-between gap-2">
+                    <dt className="text-muted">Verkoopwaarde</dt>
+                    <dd className="tabular-nums">{formatEUR(split.laborRevenue)}</dd>
+                  </div>
+                  <div className="flex justify-between gap-2 border-t pt-1 font-semibold">
+                    <dt>Marge op uren</dt>
+                    <dd className="tabular-nums text-success">
+                      {formatEUR(split.laborMargin)}
+                      <span className="ml-1 text-xs font-normal text-muted">{split.laborMarginPct}%</span>
+                    </dd>
+                  </div>
+                </dl>
+                <p className="mt-2 text-xs text-muted">
+                  {laborHours.toLocaleString("nl-NL")} uur · doorbelast tegen kost ÷ {(1 - split.laborMarginPct / 100).toFixed(2).replace(".", ",")}
+                </p>
+              </div>
+
+              <div className="rounded-lg border bg-background p-3">
+                <div className="mb-2 flex items-baseline justify-between gap-2">
+                  <p className="text-sm font-semibold">Materiaal &amp; inkoop</p>
+                  {split.materialMarginPct != null && (
+                    <span className={`text-xs ${split.materialMarginPct < MIN_MARGIN_PCT ? "text-warning" : "text-muted"}`}>
+                      {split.materialMarginPct.toFixed(1).replace(".", ",")}%
+                    </span>
+                  )}
+                </div>
+                <dl className="space-y-1 text-sm">
+                  <div className="flex justify-between gap-2">
+                    <dt className="text-muted">Kosten</dt>
+                    <dd className="tabular-nums">{formatEUR(split.materialCost)}</dd>
+                  </div>
+                  <div className="flex justify-between gap-2">
+                    <dt className="text-muted">Ruimte in het doel</dt>
+                    <dd className="tabular-nums">{formatEUR(split.materialRevenue)}</dd>
+                  </div>
+                  <div className="flex justify-between gap-2 border-t pt-1 font-semibold">
+                    <dt>Marge op materiaal</dt>
+                    <dd className={`tabular-nums ${split.materialMargin < 0 ? "text-danger" : "text-success"}`}>
+                      {formatEUR(split.materialMargin)}
+                    </dd>
+                  </div>
+                </dl>
+                <p className="mt-2 text-xs text-muted">
+                  {split.laborExceedsTarget
+                    ? "de uren claimen het hele doel — er blijft niets over voor materiaal"
+                    : `doel ${formatEUR(targetRevenue)} − verkoopwaarde uren ${formatEUR(split.laborRevenue)}`}
+                </p>
+              </div>
+            </div>
+          )}
         </CardContent>
       </Card>
 
@@ -946,6 +1038,9 @@ export default async function ProjectDetailPage({
               <span className="text-xs text-muted">
                 {laborHours.toLocaleString("nl-NL")} uur · {formatEUR(laborCost)} kosten
                 {project.budgetHours ? ` · begroot ${Number(project.budgetHours).toLocaleString("nl-NL")} u` : ""}
+                {laborCost > 0
+                  ? ` · door te belasten ${formatEUR(split.laborRevenue)} (${split.laborMarginPct}% marge = ${formatEUR(split.laborMargin)})`
+                  : ""}
               </span>
             </CardHeader>
             <CardContent className="space-y-4">
@@ -1142,6 +1237,10 @@ export default async function ProjectDetailPage({
               <CardTitle>Kosten &amp; inkoop</CardTitle>
               <span className="text-xs text-muted">
                 gekoppelde inkoop {formatEUR(poCost)} + losse kosten {formatEUR(looseCost)} = {formatEUR(materialCost)}
+                {" · alle bedragen ex. btw"}
+                {targetRevenue > 0
+                  ? ` · marge op materiaal ${formatEUR(split.materialMargin)}${split.materialMarginPct != null ? ` (${split.materialMarginPct.toFixed(1).replace(".", ",")}%)` : ""}`
+                  : ""}
               </span>
             </CardHeader>
             <CardContent className="space-y-4">
@@ -1150,20 +1249,35 @@ export default async function ProjectDetailPage({
                   <p className="mb-1 text-xs font-medium uppercase tracking-wide text-muted">Gekoppelde inkooporders</p>
                   <Table>
                     <TBody>
-                      {linkedPOs.map((p) => (
+                      {linkedPOs.map((p) => {
+                        const ex = poExVat(p);
+                        return (
                         <Tr key={p.id}>
                           <Td>
                             <Link href={`/inkooporders/${p.id}`} className="text-accent hover:underline">{p.supplier}</Link>
                             {p.reference ? <span className="ml-1 text-xs text-muted">{p.reference}</span> : null}
+                            {p.countAsLabor ? <span className="ml-1 text-xs text-muted">· telt als uren</span> : null}
                           </Td>
-                          <Td className="text-right tabular-nums">{formatEUR(p.subtotal ?? p.total)}</Td>
+                          <Td className="text-right tabular-nums">
+                            {formatEUR(ex.amount)}
+                            {ex.vatUnknown ? (
+                              <Link
+                                href={`/inkooporders/${p.id}/edit`}
+                                className="ml-1 cursor-help text-xs text-warning"
+                                title="Op deze inkooporder staat geen btw/subtotaal — dit bedrag is het factuurtotaal en zit er dus mogelijk incl. btw in. Vul het subtotaal (ex. btw) in."
+                              >
+                                btw?
+                              </Link>
+                            ) : null}
+                          </Td>
                           <Td className="text-right">
                             <form action={unlinkPurchaseOrder.bind(null, id, p.id)}>
                               <SubmitButton size="sm" variant="ghost" className="text-muted" pendingLabel="…">ontkoppel</SubmitButton>
                             </form>
                           </Td>
                         </Tr>
-                      ))}
+                        );
+                      })}
                     </TBody>
                   </Table>
                 </div>
@@ -1233,7 +1347,7 @@ export default async function ProjectDetailPage({
                       placeholder="— kies of zoek een inkooporder —"
                       options={unlinkedPOs.map((p) => ({
                         value: p.id,
-                        label: `${p.supplier}${p.reference ? ` · ${p.reference}` : ""} — ${formatEUR(p.subtotal ?? p.total)}`,
+                        label: `${p.supplier}${p.reference ? ` · ${p.reference}` : ""} — ${formatEUR(poExVatAmount(p))} ex. btw`,
                       }))}
                     />
                   </Field>
@@ -1306,13 +1420,6 @@ export default async function ProjectDetailPage({
                   className="text-xs"
                 >
                   + Nieuwe offerte
-                </LinkButton>
-                <LinkButton
-                  href={`/documents/new?kind=proforma&projectId=${id}${project.contactId ? `&contactId=${project.contactId}` : ""}${project.propertyId ? `&propertyId=${project.propertyId}` : ""}`}
-                  variant="ghost"
-                  className="text-xs"
-                >
-                  + Voorschot (proforma)
                 </LinkButton>
                 <LinkButton
                   href={`/documents/new?kind=fondos&projectId=${id}${project.contactId ? `&contactId=${project.contactId}` : ""}${project.propertyId ? `&propertyId=${project.propertyId}` : ""}`}

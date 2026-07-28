@@ -85,11 +85,12 @@ export function PurchaseOrderForm({
   const [status, setStatus] = useState(order?.status ?? (order?.kind === "invoice" ? "received" : "ordered"));
   const [currency, setCurrency] = useState(order?.currency ?? "EUR");
   // Factuurmodus: bedragen die direct worden ingevuld (i.p.v. uit productregels).
-  const [amountTotal, setAmountTotal] = useState(
-    order?.kind === "invoice" && order?.total != null ? String(order.total) : "",
-  );
+  // Ook voorvullen bij kind="order": zo blijft het bedrag staan als je een uit
+  // mail aangemaakte bestelling omzet naar factuurmodus om het subtotaal (ex.
+  // btw) te corrigeren — anders zou het totaal op 0 komen.
+  const [amountTotal, setAmountTotal] = useState(order?.total != null ? String(order.total) : "");
   const [amountSubtotal, setAmountSubtotal] = useState(
-    order?.kind === "invoice" && order?.subtotal != null ? String(order.subtotal) : "",
+    order?.subtotal != null ? String(order.subtotal) : "",
   );
   const [orderDate, setOrderDate] = useState(order?.orderDate ?? "");
   const [expectedDate, setExpectedDate] = useState(order?.expectedDate ?? "");

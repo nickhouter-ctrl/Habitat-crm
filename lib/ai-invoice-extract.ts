@@ -117,13 +117,22 @@ export async function extractInvoiceFieldsWithAI(args: {
   filename: string;
   contentType: string;
 }): Promise<AiInvoiceFields | null> {
+  const buffer = await downloadMailAttachmentBuffer(args.storagePath);
+  if (!buffer) return null;
+  return extractInvoiceFieldsFromBuffer({ ...args, buffer });
+}
+
+/** Zelfde uitlezing, maar op een al ingeladen bestand (bv. een bijlage uit de
+ *  inkooporder-bucket i.p.v. de mail-bucket). */
+export async function extractInvoiceFieldsFromBuffer(args: {
+  buffer: Buffer;
+  filename: string;
+  contentType: string;
+}): Promise<AiInvoiceFields | null> {
   const key = process.env.ANTHROPIC_API_KEY;
   if (!key) return null;
 
-  const buffer = await downloadMailAttachmentBuffer(args.storagePath);
-  if (!buffer) return null;
-
-  const content = buildContent(buffer, args.filename, args.contentType);
+  const content = buildContent(args.buffer, args.filename, args.contentType);
   if (!content) return null;
 
   try {

@@ -8,6 +8,7 @@ import { db } from "@/lib/db";
 import { contacts, documents, products, purchaseOrders } from "@/lib/db/schema";
 import { normalizeDocItems } from "@/lib/documents";
 import { purchaseDocsByMonth } from "@/lib/holded/accounting";
+import { poExVatSql } from "@/lib/purchase-orders-sql";
 import { prettySupplierName } from "@/lib/supplier-name";
 
 const MONTH_LABELS = ["jan", "feb", "mrt", "apr", "mei", "jun", "jul", "aug", "sep", "okt", "nov", "dec"];
@@ -69,13 +70,13 @@ export async function getReportsData() {
       db
         .select({
           supplier: purchaseOrders.supplier,
-          spend: sql<string>`coalesce(sum(coalesce(${purchaseOrders.subtotal}, ${purchaseOrders.total})),0)::text`,
+          spend: sql<string>`coalesce(sum(${poExVatSql}),0)::text`,
           docs: sql<number>`count(*)::int`,
         })
         .from(purchaseOrders)
         .where(sql`${purchaseOrders.currency} = 'EUR' and ${purchaseOrders.status} <> 'draft'`)
         .groupBy(purchaseOrders.supplier)
-        .orderBy(desc(sql`sum(coalesce(${purchaseOrders.subtotal}, ${purchaseOrders.total}))`))
+        .orderBy(desc(sql`sum(${poExVatSql})`))
         .limit(10),
       db
         .select({ source: contacts.source, n: sql<number>`count(*)::int` })

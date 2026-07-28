@@ -73,3 +73,74 @@ export function deriveProjectFinancials(i: ProjectFinancialsInput): ProjectFinan
     tone,
   };
 }
+
+/* ─────────────── Marge-uitsplitsing: uren vs. materiaal ─────────────── */
+
+/** Standaard marge op gewerkte uren, als percentage VAN DE VERKOOPPRIJS. */
+export const DEFAULT_LABOR_MARGIN_PCT = 15;
+
+export type MarginSplit = {
+  laborMarginPct: number;
+  laborCost: number;
+  /** Wat de uren moeten opbrengen: kost ÷ (1 − pct). */
+  laborRevenue: number;
+  laborMargin: number;
+  /** Het deel van het doel dat overblijft voor materiaal/inkoop. */
+  materialRevenue: number;
+  /** Materiaal + inkoop + kostprijs eigen producten. */
+  materialCost: number;
+  materialMargin: number;
+  /** Marge materiaal als % van `materialRevenue`; null als daar geen ruimte voor is. */
+  materialMarginPct: number | null;
+  /** Er is geen ruimte meer voor materiaal: de uren claimen het hele doel. */
+  laborExceedsTarget: boolean;
+};
+
+/**
+ * Splitst het projectresultaat in "marge op uren" en "marge op materiaal".
+ *
+ * De uren krijgen een NORM: ze horen `laborMarginPct` procent van hun eigen
+ * verkoopprijs op te leveren, dus verkoopwaarde = kost ÷ (1 − pct). Wat er van
+ * het doel overblijft is de ruimte voor materiaal en inkoop; het verschil met de
+ * werkelijke materiaalkost is de marge daarop.
+ *
+ * Zo blijft de optelling kloppen: margeUren + margeMateriaal = resultToDate.
+ * Draait een project verlies, dan zie je meteen of dat aan de inkoop ligt (de
+ * urenmarge is immers een vaste norm).
+ */
+export function deriveMarginSplit(i: {
+  targetRevenue: number;
+  laborCost: number;
+  materialCost: number;
+  ownProductCost: number;
+  /** null/undefined → {@link DEFAULT_LABOR_MARGIN_PCT}. */
+  laborMarginPct?: number | null;
+}): MarginSplit {
+  // Boven de 100% zou de deling ontploffen; onder 0 is er geen marge-norm.
+  const pct = Math.min(95, Math.max(0, i.laborMarginPct ?? DEFAULT_LABOR_MARGIN_PCT));
+  const laborCost = i.laborCost;
+  const laborRevenue = round2(laborCost / (1 - pct / 100));
+  const laborMargin = round2(laborRevenue - laborCost);
+
+  const materialCost = i.materialCost + i.ownProductCost;
+  const materialRevenue = round2(i.targetRevenue - laborRevenue);
+  const materialMargin = round2(materialRevenue - materialCost);
+  const materialMarginPct =
+    materialRevenue > 0 ? Math.round((materialMargin / materialRevenue) * 1000) / 10 : null;
+
+  return {
+    laborMarginPct: pct,
+    laborCost,
+    laborRevenue,
+    laborMargin,
+    materialRevenue,
+    materialCost,
+    materialMargin,
+    materialMarginPct,
+    laborExceedsTarget: materialRevenue <= 0 && i.targetRevenue > 0,
+  };
+}
+
+function round2(n: number): number {
+  return Math.round(n * 100) / 100;
+}

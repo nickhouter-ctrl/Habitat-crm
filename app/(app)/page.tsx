@@ -29,6 +29,7 @@ import { normalizeDocItems } from "@/lib/documents";
 import { purchaseDocsTotalExBTW } from "@/lib/holded/accounting";
 import { getReservedStockByProduct } from "@/lib/stock";
 import { formatMoney, PO_OPEN_STATUSES, PO_STATUS_META } from "@/lib/purchase-orders";
+import { poExVatSql } from "@/lib/purchase-orders-sql";
 import { formatDate, formatEUR } from "@/lib/utils";
 import { documentKindMeta } from "./_meta";
 import { SubmitButton } from "@/components/submit-button";
@@ -137,7 +138,7 @@ export default async function DashboardPage() {
       db
         .select({
           n: count(),
-          totalEur: sql<string>`coalesce(sum(case when ${purchaseOrders.currency} = 'EUR' and ${purchaseOrders.holdedId} is null and ${purchaseOrders.status} not in ('draft', 'cancelled') then coalesce(${purchaseOrders.subtotal}, ${purchaseOrders.total}) else 0 end), 0)`,
+          totalEur: sql<string>`coalesce(sum(case when ${purchaseOrders.currency} = 'EUR' and ${purchaseOrders.holdedId} is null and ${purchaseOrders.status} not in ('draft', 'cancelled') then ${poExVatSql} else 0 end), 0)`,
         })
         .from(purchaseOrders),
       // Actieve producten zonder barcode + actieve producten onder de drempel.

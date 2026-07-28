@@ -722,6 +722,9 @@ export const projects = pgTable(
     budgetHours: numeric({ precision: 8, scale: 2 }),
     /** Onvoorzien-percentage op de begroting (bv. 8) — als aparte regel meegerekend. */
     contingencyPct: numeric({ precision: 5, scale: 2 }),
+    /** Margepercentage op gewerkte uren (marge ÷ verkoopprijs, bv. 15). Bepaalt de
+     * verkoopwaarde van de uren: kost ÷ (1 − pct). Leeg = de standaard (15%). */
+    laborMarginPct: numeric({ precision: 5, scale: 2 }),
     /** Werf/adres-alias(sen) voor automatische factuurherkenning (komma-gescheiden,
      * bv. "Cap Negre, Cap Negre nº53"). Zo herkent de AI een bouwfactuur met de
      * werf-naam als dit project. */
@@ -811,9 +814,11 @@ export const purchaseOrders = pgTable(
     paidAt: timestamp({ withTimezone: true }),
     /** Reeds betaald bedrag — voor deelbetalingen / Holded-sync. */
     paidEur: numeric({ precision: 14, scale: 2 }),
-    /** Sum of the line totals (incl. BTW), in `currency`. */
+    /** Factuurtotaal (incl. btw) bij een factuur/bon; bij een bestelling met
+     *  catalogusregels de som van de regels (inkoopprijzen, dus al ex. btw). */
     total: numeric({ precision: 14, scale: 2 }).notNull().default("0"),
-    /** Subtotal (ex. BTW). Door Holded geleverd; voor handmatige PO's gelijk aan total. */
+    /** Subtotaal (ex. btw). Door Holded/AI geleverd; kan null zijn — gebruik nooit
+     *  rauw `total` als kost, maar `poExVat()` uit `lib/purchase-orders.ts`. */
     subtotal: numeric({ precision: 14, scale: 2 }),
     /** BTW-bedrag, in `currency`. */
     tax: numeric({ precision: 14, scale: 2 }),

@@ -29,7 +29,8 @@ import {
   users,
 } from "@/lib/db/schema";
 import { normalizeDocItems } from "@/lib/documents";
-import { deriveProjectFinancials } from "@/lib/project-financials";
+import { deriveMarginSplit, deriveProjectFinancials } from "@/lib/project-financials";
+import { poExVatSql } from "@/lib/purchase-orders-sql";
 import { formatEUR } from "@/lib/utils";
 
 export const metadata = { title: "Projecten" };
@@ -111,6 +112,7 @@ export default async function ProjectsPage({
       status: projects.status,
       contractPriceEur: projects.contractPriceEur,
       contingencyPct: projects.contingencyPct,
+      laborMarginPct: projects.laborMarginPct,
       startDate: projects.startDate,
       endDate: projects.endDate,
       updatedAt: projects.updatedAt,
@@ -165,7 +167,7 @@ export default async function ProjectsPage({
           .where(inArray(projectCosts.projectId, projectIds))
           .groupBy(projectCosts.projectId),
         db
-          .select({ projectId: purchaseOrders.projectId, v: sql<number>`coalesce(sum(coalesce(${purchaseOrders.subtotal}, ${purchaseOrders.total})), 0)::float8` })
+          .select({ projectId: purchaseOrders.projectId, v: sql<number>`coalesce(sum(${poExVatSql}), 0)::float8` })
           .from(purchaseOrders)
           .where(
             and(
@@ -316,12 +318,21 @@ export default async function ProjectsPage({
         materialCost,
         ownProductCost,
       });
+      // Uren en materiaal los van elkaar — zelfde norm als op het detailscherm.
+      const split = deriveMarginSplit({
+        targetRevenue: fin.targetRevenue,
+        laborCost,
+        materialCost,
+        ownProductCost,
+        laborMarginPct: p.laborMarginPct != null ? Number(p.laborMarginPct) : null,
+      });
       const lastActivity =
         a?.lastDocAt && new Date(a.lastDocAt) > new Date(p.updatedAt)
           ? a.lastDocAt
           : (p.updatedAt as unknown as string);
       return {
         ...p,
+        split,
         docCount: a?.docCount ?? 0,
         invoiced,
         outstanding: Number(a?.outstanding ?? 0),
@@ -426,6 +437,8 @@ export default async function ProjectsPage({
                 <Th className="text-right">Openstaand</Th>
                 <Th className="text-right">Open facturen</Th>
                 <Th className="text-right">Nog te factureren</Th>
+                <Th className="text-right">Marge uren</Th>
+                <Th className="text-right">Marge materiaal</Th>
                 <Th className="text-right">Resultaat tot nu toe</Th>
                 <Th>Op koers</Th>
                 <Th>Status</Th>
@@ -489,6 +502,32 @@ export default async function ProjectsPage({
                     </Td>
                     <Td className="text-right tabular-nums">
                       {p.fin.toInvoice > 0 ? formatEUR(p.fin.toInvoice) : <span className="text-muted">—</span>}
+                    </Td>
+                    <Td className="text-right tabular-nums">
+                      {p.split.laborCost > 0 ? (
+                        <span title={`${p.split.laborMarginPct}% norm · kosten ${formatEUR(p.split.laborCost)} → ${formatEUR(p.split.laborRevenue)}`}>
+                          {formatEUR(p.split.laborMargin)}
+                        </span>
+                      ) : (
+                        <span className="text-muted">—</span>
+                      )}
+                    </Td>
+                    <Td className="text-right tabular-nums">
+                      {p.fin.targetRevenue > 0 && (p.split.materialCost > 0 || p.split.materialRevenue > 0) ? (
+                        <span
+                          className={p.split.materialMargin < 0 ? "font-medium text-danger" : undefined}
+                          title={`ruimte ${formatEUR(p.split.materialRevenue)} − kosten ${formatEUR(p.split.materialCost)}`}
+                        >
+                          {formatEUR(p.split.materialMargin)}
+                          {p.split.materialMarginPct != null && (
+                            <span className="ml-1 text-xs text-muted">
+                              {p.split.materialMarginPct.toFixed(0)}%
+                            </span>
+                          )}
+                        </span>
+                      ) : (
+                        <span className="text-muted">—</span>
+                      )}
                     </Td>
                     <Td className="text-right tabular-nums">
                       {p.fin.tone === "neutral" ? (

@@ -137,7 +137,8 @@ export default async function DocumentDetailPage({
       : [];
   // Facturen tellen als "gefactureerd"; proforma-voorschotten los tonen.
   const linkedInvoices = linkedDocs.filter((d) => d.kind === "invoice");
-  const linkedVoorschotten = linkedDocs.filter((d) => d.kind === "proforma");
+  // Nieuwe voorschotten zijn 'fondos'; oude proforma's blijven zichtbaar.
+  const linkedVoorschotten = linkedDocs.filter((d) => d.kind === "proforma" || d.kind === "fondos");
   const sourceEstimate =
     (doc.kind === "invoice" || doc.kind === "proforma") && doc.sourceDocumentId
       ? await db.query.documents.findFirst({
@@ -633,15 +634,15 @@ export default async function DocumentDetailPage({
                     </ul>
                   ) : (
                     <p className="mb-2 text-[11px] text-muted">
-                      Een proforma-voorschot dat aan deze offerte hangt en op de eindfactuur wordt verrekend.
+                      Een voorschot dat aan deze offerte hangt en op de eindfactuur wordt verrekend.
                     </p>
                   )}
                   <LinkButton
-                    href={`/documents/new?kind=proforma&sourceDocumentId=${id}${doc.projectId ? `&projectId=${doc.projectId}` : ""}${doc.contactId ? `&contactId=${doc.contactId}` : ""}`}
+                    href={`/documents/new?kind=fondos&sourceDocumentId=${id}${doc.projectId ? `&projectId=${doc.projectId}` : ""}${doc.contactId ? `&contactId=${doc.contactId}` : ""}`}
                     size="sm"
                     variant="secondary"
                   >
-                    + Voorschot (proforma)
+                    + Provisión de fondos
                   </LinkButton>
                 </div>
               )}
