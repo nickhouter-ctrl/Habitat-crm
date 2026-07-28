@@ -49,7 +49,7 @@ import {
 } from "@/lib/db/schema";
 import { docProductMargin, lineCostEur, lineMaterialCostEur, normalizeDocItems } from "@/lib/documents";
 import { poExVat, poExVatAmount } from "@/lib/purchase-orders";
-import { DEFAULT_LABOR_MARGIN_PCT, deriveProjectMargins } from "@/lib/project-financials";
+import { DEFAULT_LABOR_MARGIN_PCT, DEFAULT_PURCHASE_MARGIN_PCT, deriveProjectMargins } from "@/lib/project-financials";
 import type { DocumentLineItem } from "@/lib/db/schema";
 import { formatEUR } from "@/lib/utils";
 import {
@@ -455,6 +455,7 @@ export default async function ProjectDetailPage({
     productCost: ownCost,
     uncostedProductRevenue: ownUncostedRevenue,
     purchaseCost: materialCost,
+    purchaseMarginPct: project.purchaseMarginPct != null ? Number(project.purchaseMarginPct) : null,
   });
 
   const isConstruction = project.kind === "construction";
@@ -623,6 +624,19 @@ export default async function ProjectDetailPage({
                   name="budgetHours"
                   inputMode="decimal"
                   defaultValue={project.budgetHours ? String(project.budgetHours).replace(".", ",") : ""}
+                />
+              </Field>
+              <Field
+                label="Marge op inkoop derden (%)"
+                htmlFor="purchaseMarginPct"
+                hint={`marge \u00f7 verkoopprijs \u2014 leeg = ${DEFAULT_PURCHASE_MARGIN_PCT}%`}
+              >
+                <Input
+                  id="purchaseMarginPct"
+                  name="purchaseMarginPct"
+                  inputMode="decimal"
+                  placeholder={String(DEFAULT_PURCHASE_MARGIN_PCT)}
+                  defaultValue={project.purchaseMarginPct ? String(project.purchaseMarginPct).replace(".", ",") : ""}
                 />
               </Field>
               <Field
@@ -885,27 +899,49 @@ export default async function ProjectDetailPage({
             <div className="rounded-lg border bg-background p-3">
               <div className="mb-2 flex items-baseline justify-between gap-2">
                 <p className="text-sm font-semibold">Inkoop derden</p>
-                <span className="text-xs text-muted">kost</span>
+                <span className="text-xs text-muted">norm {margins.purchaseMarginPct}%</span>
               </div>
               <dl className="space-y-1 text-sm">
                 <div className="flex justify-between gap-2">
-                  <dt className="text-muted">Inkooporders</dt>
-                  <dd className="tabular-nums">{formatEUR(poCost)}</dd>
+                  <dt className="text-muted">Kostprijs</dt>
+                  <dd className="tabular-nums">{formatEUR(margins.purchaseCost)}</dd>
                 </div>
                 <div className="flex justify-between gap-2">
-                  <dt className="text-muted">Losse kosten</dt>
-                  <dd className="tabular-nums">{formatEUR(looseCost)}</dd>
+                  <dt className="text-muted">Door te belasten</dt>
+                  <dd className="tabular-nums">{formatEUR(margins.purchaseRevenue)}</dd>
                 </div>
                 <div className="flex justify-between gap-2 border-t pt-1 font-semibold">
-                  <dt>Samen</dt>
-                  <dd className="tabular-nums">{formatEUR(margins.purchaseCost)}</dd>
+                  <dt>Marge op inkoop</dt>
+                  <dd className="tabular-nums text-success">
+                    {formatEUR(margins.purchaseMargin)}
+                    <span className="ml-1 text-xs font-normal text-muted">{margins.purchaseMarginPct}%</span>
+                  </dd>
                 </div>
               </dl>
               <p className="mt-2 text-xs text-muted">
-                doorbelast via de aanneemprijs \u2014 hier zit geen eigen marge op
+                inkooporders {formatEUR(poCost)} + losse kosten {formatEUR(looseCost)}
               </p>
             </div>
           </div>
+
+          {/* Wat de klus tot nu toe minimaal moet opbrengen om alle drie de marges te halen. */}
+          {margins.totalRevenue > 0 && (
+            <div className="rounded-lg border bg-background p-3 text-sm">
+              <div className="flex flex-wrap items-baseline justify-between gap-2">
+                <span className="font-semibold">Minimaal door te belasten tot nu toe</span>
+                <span className="tabular-nums font-semibold">{formatEUR(margins.totalRevenue)}</span>
+              </div>
+              <p className="mt-1 text-xs text-muted">
+                uren {formatEUR(margins.laborRevenue)} + inkoop {formatEUR(margins.purchaseRevenue)} + eigen producten{" "}
+                {formatEUR(margins.productRevenue)} \u00b7 samen {formatEUR(margins.totalMargin)} marge
+                {targetRevenue > 0
+                  ? margins.totalRevenue > targetRevenue
+                    ? ` \u00b7 \u26a0 dat is ${formatEUR(margins.totalRevenue - targetRevenue)} MEER dan de aanneemprijs van ${formatEUR(targetRevenue)}`
+                    : ` \u00b7 past binnen de aanneemprijs van ${formatEUR(targetRevenue)} (nog ${formatEUR(targetRevenue - margins.totalRevenue)} ruimte)`
+                  : ""}
+              </p>
+            </div>
+          )}
         </CardContent>
       </Card>
 
@@ -1282,7 +1318,7 @@ export default async function ProjectDetailPage({
               <span className="text-xs text-muted">
                 gekoppelde inkoop {formatEUR(poCost)} + losse kosten {formatEUR(looseCost)} = {formatEUR(materialCost)}
                 {" · alle bedragen ex. btw"}
-                {" · inkoop derden, geen eigen marge"}
+                {` · door te belasten ${formatEUR(margins.purchaseRevenue)} (${margins.purchaseMarginPct}% marge = ${formatEUR(margins.purchaseMargin)})`}
               </span>
             </CardHeader>
             <CardContent className="space-y-4">

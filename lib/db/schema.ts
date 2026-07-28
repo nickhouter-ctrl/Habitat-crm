@@ -725,6 +725,9 @@ export const projects = pgTable(
     /** Margepercentage op gewerkte uren (marge ÷ verkoopprijs, bv. 15). Bepaalt de
      * verkoopwaarde van de uren: kost ÷ (1 − pct). Leeg = de standaard (15%). */
     laborMarginPct: numeric({ precision: 5, scale: 2 }),
+    /** Idem voor inkoop bij derden (inkooporders + losse projectkosten): die wordt
+     * doorbelast tegen kost ÷ (1 − pct). Leeg = de standaard (15%). */
+    purchaseMarginPct: numeric({ precision: 5, scale: 2 }),
     /** Werf/adres-alias(sen) voor automatische factuurherkenning (komma-gescheiden,
      * bv. "Cap Negre, Cap Negre nº53"). Zo herkent de AI een bouwfactuur met de
      * werf-naam als dit project. */

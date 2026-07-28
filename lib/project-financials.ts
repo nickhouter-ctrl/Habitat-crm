@@ -79,6 +79,9 @@ export function deriveProjectFinancials(i: ProjectFinancialsInput): ProjectFinan
 /** Standaard marge op gewerkte uren, als percentage VAN DE VERKOOPPRIJS. */
 export const DEFAULT_LABOR_MARGIN_PCT = 15;
 
+/** Idem voor inkoop bij derden — die wordt met opslag doorbelast, niet tegen kostprijs. */
+export const DEFAULT_PURCHASE_MARGIN_PCT = 15;
+
 export type ProjectMargins = {
   /* Uren — normatief: er is geen aparte verkoopprijs per uur, dus we rekenen met
      een vaste marge-norm op de kostprijs. */
@@ -97,9 +100,19 @@ export type ProjectMargins = {
   /** Gefactureerde productomzet zonder bekende kostprijs — valt buiten de meting. */
   uncostedProductRevenue: number;
 
-  /* Inkoop derden — kosten zonder eigen verkoopprijs; die worden gedekt door de
-     aanneemprijs, niet door een eigen marge. */
+  /* Inkoop derden — normatief, net als de uren: wat we inkopen belasten we door
+     met opslag, niet tegen kostprijs. */
+  purchaseMarginPct: number;
   purchaseCost: number;
+  /** Wat de inkoop moet opbrengen: kost ÷ (1 − pct). */
+  purchaseRevenue: number;
+  purchaseMargin: number;
+
+  /* Totalen */
+  /** Alles bij elkaar door te belasten: uren + inkoop + gefactureerde producten. */
+  totalRevenue: number;
+  /** De drie marges samen. */
+  totalMargin: number;
 
   /** Totale kosten (uren + inkoop + kostprijs eigen producten). */
   costToDate: number;
@@ -113,12 +126,16 @@ export type ProjectMargins = {
  *   daaruit af.
  * - **Eigen producten**: gemeten. Verkoopprijs en kostprijs staan allebei op de
  *   factuurregel, dus dit is de echte marge — geen aanname.
- * - **Inkoop derden**: alleen kosten. Daar zit geen eigen verkoopprijs op; die
- *   wordt uit de aanneemprijs betaald.
+ * - **Inkoop derden**: normatief. Wat we bij derden inkopen belasten we door met
+ *   opslag (`purchaseMarginPct`), net als de uren — niet tegen kostprijs.
  *
  * Bewust GEEN restpost-marge tegen de aanneemprijs: die prijs dekt de hele klus
  * (uren, inkoop, producten samen), dus "doel − uren = ruimte voor materiaal"
  * geeft op een pas begonnen project een onzinnig hoog percentage.
+ *
+ * `totalRevenue` is wat de klus tot nu toe minimaal moet opbrengen om alle drie
+ * de marges te halen — vergelijk dat met de aanneemprijs om te zien of je goed
+ * zit.
  */
 export function deriveProjectMargins(i: {
   laborCost: number;
@@ -129,25 +146,40 @@ export function deriveProjectMargins(i: {
   uncostedProductRevenue?: number;
   /** Inkooporders (ex. btw) + losse projectkosten. */
   purchaseCost: number;
+  /** null/undefined → {@link DEFAULT_PURCHASE_MARGIN_PCT}. */
+  purchaseMarginPct?: number | null;
 }): ProjectMargins {
   // Boven de 100% zou de deling ontploffen; onder 0 is er geen marge-norm.
-  const pct = Math.min(95, Math.max(0, i.laborMarginPct ?? DEFAULT_LABOR_MARGIN_PCT));
-  const laborRevenue = round2(i.laborCost / (1 - pct / 100));
+  const laborPct = clampPct(i.laborMarginPct ?? DEFAULT_LABOR_MARGIN_PCT);
+  const purchasePct = clampPct(i.purchaseMarginPct ?? DEFAULT_PURCHASE_MARGIN_PCT);
+  const laborRevenue = round2(i.laborCost / (1 - laborPct / 100));
+  const purchaseRevenue = round2(i.purchaseCost / (1 - purchasePct / 100));
+  const laborMargin = round2(laborRevenue - i.laborCost);
+  const purchaseMargin = round2(purchaseRevenue - i.purchaseCost);
   const productMargin = round2(i.productRevenue - i.productCost);
 
   return {
-    laborMarginPct: pct,
+    laborMarginPct: laborPct,
     laborCost: i.laborCost,
     laborRevenue,
-    laborMargin: round2(laborRevenue - i.laborCost),
+    laborMargin,
     productRevenue: i.productRevenue,
     productCost: i.productCost,
     productMargin,
     productMarginPct: i.productRevenue > 0 ? Math.round((productMargin / i.productRevenue) * 1000) / 10 : null,
     uncostedProductRevenue: i.uncostedProductRevenue ?? 0,
+    purchaseMarginPct: purchasePct,
     purchaseCost: i.purchaseCost,
+    purchaseRevenue,
+    purchaseMargin,
+    totalRevenue: round2(laborRevenue + purchaseRevenue + i.productRevenue),
+    totalMargin: round2(laborMargin + purchaseMargin + productMargin),
     costToDate: round2(i.laborCost + i.purchaseCost + i.productCost),
   };
+}
+
+function clampPct(n: number): number {
+  return Math.min(95, Math.max(0, n));
 }
 
 function round2(n: number): number {

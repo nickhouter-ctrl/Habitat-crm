@@ -114,6 +114,7 @@ export default async function ProjectsPage({
       contractPriceEur: projects.contractPriceEur,
       contingencyPct: projects.contingencyPct,
       laborMarginPct: projects.laborMarginPct,
+      purchaseMarginPct: projects.purchaseMarginPct,
       startDate: projects.startDate,
       endDate: projects.endDate,
       updatedAt: projects.updatedAt,
@@ -339,6 +340,7 @@ export default async function ProjectsPage({
         productCost: own.cost,
         uncostedProductRevenue: own.uncosted,
         purchaseCost: materialCost,
+        purchaseMarginPct: p.purchaseMarginPct != null ? Number(p.purchaseMarginPct) : null,
       });
       const lastActivity =
         a?.lastDocAt && new Date(a.lastDocAt) > new Date(p.updatedAt)
@@ -452,6 +454,7 @@ export default async function ProjectsPage({
                 <Th className="text-right">Open facturen</Th>
                 <Th className="text-right">Nog te factureren</Th>
                 <Th className="text-right">Marge uren</Th>
+                <Th className="text-right">Marge inkoop</Th>
                 <Th className="text-right">Marge eigen producten</Th>
                 <Th className="text-right">Resultaat tot nu toe</Th>
                 <Th>Op koers</Th>
@@ -521,6 +524,15 @@ export default async function ProjectsPage({
                       {p.margins.laborCost > 0 ? (
                         <span title={`${p.margins.laborMarginPct}% norm · kostprijs ${formatEUR(p.margins.laborCost)} → door te belasten ${formatEUR(p.margins.laborRevenue)}`}>
                           {formatEUR(p.margins.laborMargin)}
+                        </span>
+                      ) : (
+                        <span className="text-muted">—</span>
+                      )}
+                    </Td>
+                    <Td className="text-right tabular-nums">
+                      {p.margins.purchaseCost > 0 ? (
+                        <span title={`${p.margins.purchaseMarginPct}% norm · kostprijs ${formatEUR(p.margins.purchaseCost)} → door te belasten ${formatEUR(p.margins.purchaseRevenue)}`}>
+                          {formatEUR(p.margins.purchaseMargin)}
                         </span>
                       ) : (
                         <span className="text-muted">—</span>
