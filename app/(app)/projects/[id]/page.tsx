@@ -47,9 +47,9 @@ import {
   workerPortalLinks,
   workers,
 } from "@/lib/db/schema";
-import { lineCostEur, lineMaterialCostEur, normalizeDocItems } from "@/lib/documents";
+import { docProductMargin, lineCostEur, lineMaterialCostEur, normalizeDocItems } from "@/lib/documents";
 import { poExVat, poExVatAmount } from "@/lib/purchase-orders";
-import { DEFAULT_LABOR_MARGIN_PCT, deriveMarginSplit } from "@/lib/project-financials";
+import { DEFAULT_LABOR_MARGIN_PCT, deriveProjectMargins } from "@/lib/project-financials";
 import type { DocumentLineItem } from "@/lib/db/schema";
 import { formatEUR } from "@/lib/utils";
 import {
@@ -206,6 +206,11 @@ export default async function ProjectDetailPage({
   };
   let projRevenue = 0;
   let projCost = 0; // materiaal-/productkostprijs op facturen (gerealiseerd) — arbeid komt uit de uren
+  // Eigen producten apart: verkoop én kostprijs per regel, zodat we de ECHTE
+  // marge op wat we zelf leveren kunnen tonen (arbeidregels blijven erbuiten).
+  let ownRevenue = 0;
+  let ownCost = 0;
+  let ownUncostedRevenue = 0;
   const marginByDoc = new Map<string, { margin: number; pct: number | null }>();
   for (const d of marginDocs) {
     const rev = Number(d.subtotalEur ?? 0);
@@ -218,6 +223,10 @@ export default async function ProjectDetailPage({
     const sign = d.kind === "creditnote" ? -1 : 1;
     projRevenue += sign * rev;
     projCost += sign * docMaterialCost(d.items);
+    const pm = docProductMargin(d.items, productCostOf);
+    ownRevenue += sign * pm.revenue;
+    ownCost += sign * pm.cost;
+    ownUncostedRevenue += sign * pm.uncostedRevenue;
   }
   // invoiceDocs = alleen facturen/creditnota's (voor de gefactureerd-lijst onderaan).
   const invoiceDocs = marginDocs.filter((d) => d.kind !== "estimate");
@@ -436,15 +445,15 @@ export default async function ProjectDetailPage({
           ? "warning"
           : "success";
 
-  // Uitsplitsing van het resultaat: de uren krijgen een vaste marge-norm, wat er
-  // van het doel overblijft is de ruimte voor materiaal/inkoop. Samen tellen ze
-  // op tot `resultToDate`.
-  const split = deriveMarginSplit({
-    targetRevenue,
+  // Marge per stroom: uren tegen een norm, eigen producten echt gemeten, inkoop
+  // derden puur als kost (die zit in de aanneemprijs, niet in een eigen marge).
+  const margins = deriveProjectMargins({
     laborCost,
-    materialCost,
-    ownProductCost: ownProductCostRealized,
     laborMarginPct: project.laborMarginPct != null ? Number(project.laborMarginPct) : null,
+    productRevenue: ownRevenue,
+    productCost: ownCost,
+    uncostedProductRevenue: ownUncostedRevenue,
+    purchaseCost: materialCost,
   });
 
   const isConstruction = project.kind === "construction";
@@ -799,69 +808,103 @@ export default async function ProjectDetailPage({
             {costHeadroom < 0 ? ` · ${formatEUR(Math.abs(costHeadroom))} boven het ${MIN_MARGIN_PCT}%-plafond` : ` · nog ${formatEUR(costHeadroom)} ruimte tot het plafond`}.
           </div>
 
-          {/* Uren en materiaal los van elkaar: elk met eigen kost, opbrengst en marge. */}
-          {targetRevenue > 0 && (
-            <div className="grid gap-3 sm:grid-cols-2">
-              <div className="rounded-lg border bg-background p-3">
-                <div className="mb-2 flex items-baseline justify-between gap-2">
-                  <p className="text-sm font-semibold">Uren — arbeid</p>
-                  <span className="text-xs text-muted">norm {split.laborMarginPct}%</span>
-                </div>
-                <dl className="space-y-1 text-sm">
-                  <div className="flex justify-between gap-2">
-                    <dt className="text-muted">Kosten</dt>
-                    <dd className="tabular-nums">{formatEUR(split.laborCost)}</dd>
-                  </div>
-                  <div className="flex justify-between gap-2">
-                    <dt className="text-muted">Verkoopwaarde</dt>
-                    <dd className="tabular-nums">{formatEUR(split.laborRevenue)}</dd>
-                  </div>
-                  <div className="flex justify-between gap-2 border-t pt-1 font-semibold">
-                    <dt>Marge op uren</dt>
-                    <dd className="tabular-nums text-success">
-                      {formatEUR(split.laborMargin)}
-                      <span className="ml-1 text-xs font-normal text-muted">{split.laborMarginPct}%</span>
-                    </dd>
-                  </div>
-                </dl>
-                <p className="mt-2 text-xs text-muted">
-                  {laborHours.toLocaleString("nl-NL")} uur · doorbelast tegen kost ÷ {(1 - split.laborMarginPct / 100).toFixed(2).replace(".", ",")}
-                </p>
+          {/* Drie stromen apart: uren (norm), eigen producten (gemeten), inkoop (kost). */}
+          <div className="grid gap-3 lg:grid-cols-3">
+            <div className="rounded-lg border bg-background p-3">
+              <div className="mb-2 flex items-baseline justify-between gap-2">
+                <p className="text-sm font-semibold">Uren \u2014 arbeid</p>
+                <span className="text-xs text-muted">norm {margins.laborMarginPct}%</span>
               </div>
-
-              <div className="rounded-lg border bg-background p-3">
-                <div className="mb-2 flex items-baseline justify-between gap-2">
-                  <p className="text-sm font-semibold">Materiaal &amp; inkoop</p>
-                  {split.materialMarginPct != null && (
-                    <span className={`text-xs ${split.materialMarginPct < MIN_MARGIN_PCT ? "text-warning" : "text-muted"}`}>
-                      {split.materialMarginPct.toFixed(1).replace(".", ",")}%
-                    </span>
-                  )}
+              <dl className="space-y-1 text-sm">
+                <div className="flex justify-between gap-2">
+                  <dt className="text-muted">Kostprijs</dt>
+                  <dd className="tabular-nums">{formatEUR(margins.laborCost)}</dd>
                 </div>
-                <dl className="space-y-1 text-sm">
-                  <div className="flex justify-between gap-2">
-                    <dt className="text-muted">Kosten</dt>
-                    <dd className="tabular-nums">{formatEUR(split.materialCost)}</dd>
-                  </div>
-                  <div className="flex justify-between gap-2">
-                    <dt className="text-muted">Ruimte in het doel</dt>
-                    <dd className="tabular-nums">{formatEUR(split.materialRevenue)}</dd>
-                  </div>
-                  <div className="flex justify-between gap-2 border-t pt-1 font-semibold">
-                    <dt>Marge op materiaal</dt>
-                    <dd className={`tabular-nums ${split.materialMargin < 0 ? "text-danger" : "text-success"}`}>
-                      {formatEUR(split.materialMargin)}
-                    </dd>
-                  </div>
-                </dl>
-                <p className="mt-2 text-xs text-muted">
-                  {split.laborExceedsTarget
-                    ? "de uren claimen het hele doel — er blijft niets over voor materiaal"
-                    : `doel ${formatEUR(targetRevenue)} − verkoopwaarde uren ${formatEUR(split.laborRevenue)}`}
-                </p>
-              </div>
+                <div className="flex justify-between gap-2">
+                  <dt className="text-muted">Door te belasten</dt>
+                  <dd className="tabular-nums">{formatEUR(margins.laborRevenue)}</dd>
+                </div>
+                <div className="flex justify-between gap-2 border-t pt-1 font-semibold">
+                  <dt>Marge op uren</dt>
+                  <dd className="tabular-nums text-success">
+                    {formatEUR(margins.laborMargin)}
+                    <span className="ml-1 text-xs font-normal text-muted">{margins.laborMarginPct}%</span>
+                  </dd>
+                </div>
+              </dl>
+              <p className="mt-2 text-xs text-muted">
+                {laborHours.toLocaleString("nl-NL")} uur \u00b7 norm, geen gemeten verkoopprijs per uur
+              </p>
             </div>
-          )}
+
+            <div className="rounded-lg border bg-background p-3">
+              <div className="mb-2 flex items-baseline justify-between gap-2">
+                <p className="text-sm font-semibold">Eigen producten</p>
+                {margins.productMarginPct != null && (
+                  <span className={`text-xs ${margins.productMarginPct < MIN_MARGIN_PCT ? "text-warning" : "text-muted"}`}>
+                    {margins.productMarginPct.toFixed(1).replace(".", ",")}%
+                  </span>
+                )}
+              </div>
+              {margins.productRevenue > 0 ? (
+                <>
+                  <dl className="space-y-1 text-sm">
+                    <div className="flex justify-between gap-2">
+                      <dt className="text-muted">Gefactureerd</dt>
+                      <dd className="tabular-nums">{formatEUR(margins.productRevenue)}</dd>
+                    </div>
+                    <div className="flex justify-between gap-2">
+                      <dt className="text-muted">Kostprijs</dt>
+                      <dd className="tabular-nums">{formatEUR(margins.productCost)}</dd>
+                    </div>
+                    <div className="flex justify-between gap-2 border-t pt-1 font-semibold">
+                      <dt>Marge op producten</dt>
+                      <dd className={`tabular-nums ${margins.productMargin < 0 ? "text-danger" : "text-success"}`}>
+                        {formatEUR(margins.productMargin)}
+                      </dd>
+                    </div>
+                  </dl>
+                  <p className="mt-2 text-xs text-muted">
+                    gemeten uit de factuurregels
+                    {margins.uncostedProductRevenue > 0
+                      ? ` \u00b7 ${formatEUR(margins.uncostedProductRevenue)} zonder kostprijs, niet meegeteld`
+                      : ""}
+                  </p>
+                </>
+              ) : (
+                <p className="text-sm text-muted">
+                  Nog niets van onszelf gefactureerd op dit project.
+                  {margins.uncostedProductRevenue > 0
+                    ? ` ${formatEUR(margins.uncostedProductRevenue)} gefactureerd zonder kostprijs \u2014 vul die op de regels in om de marge te zien.`
+                    : ""}
+                </p>
+              )}
+            </div>
+
+            <div className="rounded-lg border bg-background p-3">
+              <div className="mb-2 flex items-baseline justify-between gap-2">
+                <p className="text-sm font-semibold">Inkoop derden</p>
+                <span className="text-xs text-muted">kost</span>
+              </div>
+              <dl className="space-y-1 text-sm">
+                <div className="flex justify-between gap-2">
+                  <dt className="text-muted">Inkooporders</dt>
+                  <dd className="tabular-nums">{formatEUR(poCost)}</dd>
+                </div>
+                <div className="flex justify-between gap-2">
+                  <dt className="text-muted">Losse kosten</dt>
+                  <dd className="tabular-nums">{formatEUR(looseCost)}</dd>
+                </div>
+                <div className="flex justify-between gap-2 border-t pt-1 font-semibold">
+                  <dt>Samen</dt>
+                  <dd className="tabular-nums">{formatEUR(margins.purchaseCost)}</dd>
+                </div>
+              </dl>
+              <p className="mt-2 text-xs text-muted">
+                doorbelast via de aanneemprijs \u2014 hier zit geen eigen marge op
+              </p>
+            </div>
+          </div>
         </CardContent>
       </Card>
 
@@ -1039,7 +1082,7 @@ export default async function ProjectDetailPage({
                 {laborHours.toLocaleString("nl-NL")} uur · {formatEUR(laborCost)} kosten
                 {project.budgetHours ? ` · begroot ${Number(project.budgetHours).toLocaleString("nl-NL")} u` : ""}
                 {laborCost > 0
-                  ? ` · door te belasten ${formatEUR(split.laborRevenue)} (${split.laborMarginPct}% marge = ${formatEUR(split.laborMargin)})`
+                  ? ` · door te belasten ${formatEUR(margins.laborRevenue)} (${margins.laborMarginPct}% marge = ${formatEUR(margins.laborMargin)})`
                   : ""}
               </span>
             </CardHeader>
@@ -1238,9 +1281,7 @@ export default async function ProjectDetailPage({
               <span className="text-xs text-muted">
                 gekoppelde inkoop {formatEUR(poCost)} + losse kosten {formatEUR(looseCost)} = {formatEUR(materialCost)}
                 {" · alle bedragen ex. btw"}
-                {targetRevenue > 0
-                  ? ` · marge op materiaal ${formatEUR(split.materialMargin)}${split.materialMarginPct != null ? ` (${split.materialMarginPct.toFixed(1).replace(".", ",")}%)` : ""}`
-                  : ""}
+                {" · inkoop derden, geen eigen marge"}
               </span>
             </CardHeader>
             <CardContent className="space-y-4">

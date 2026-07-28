@@ -89,6 +89,36 @@ export function lineMaterialCostEur(
   return 0;
 }
 
+/**
+ * Omzet én kostprijs van de EIGEN PRODUCTEN op een document — de basis voor
+ * "wat verdienen we op wat we zelf leveren".
+ *
+ * Arbeid-regels tellen niet mee (hun kost zit in de uren, hun marge in de
+ * uren-norm). Regels zonder bekende kostprijs tellen ook niet mee in de marge —
+ * die zouden anders als 100% marge binnenkomen; hun omzet komt apart terug in
+ * `uncostedRevenue` zodat zichtbaar blijft hoeveel er buiten de meting valt.
+ */
+export function docProductMargin(
+  items: unknown,
+  productCost?: (item: DocumentLineItem) => number | undefined,
+): { revenue: number; cost: number; uncostedRevenue: number } {
+  let revenue = 0;
+  let cost = 0;
+  let uncostedRevenue = 0;
+  for (const it of normalizeDocItems(items)) {
+    if (isLaborLine(it)) continue;
+    const net = lineNet(it);
+    const c = lineMaterialCostEur(it, productCost);
+    if (c > 0) {
+      revenue += net;
+      cost += c;
+    } else {
+      uncostedRevenue += net;
+    }
+  }
+  return { revenue: round2(revenue), cost: round2(cost), uncostedRevenue: round2(uncostedRevenue) };
+}
+
 type AddressParts = { addressLine?: string | null; postalCode?: string | null; city?: string | null };
 
 /**

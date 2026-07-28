@@ -28,8 +28,9 @@ import {
   timeEntries,
   users,
 } from "@/lib/db/schema";
-import { normalizeDocItems } from "@/lib/documents";
-import { deriveMarginSplit, deriveProjectFinancials } from "@/lib/project-financials";
+import { docProductMargin, normalizeDocItems } from "@/lib/documents";
+import type { DocumentLineItem } from "@/lib/db/schema";
+import { deriveProjectMargins, deriveProjectFinancials } from "@/lib/project-financials";
 import { poExVatSql } from "@/lib/purchase-orders-sql";
 import { formatEUR } from "@/lib/utils";
 
@@ -280,19 +281,30 @@ export default async function ProjectsPage({
   }
   const reservedByProject = new Map<string, number>();
   const ownProductCostByProject = new Map<string, number>();
+  // Verkoop én kostprijs van de eigen producten — zelfde meting als het detailscherm.
+  const ownProductMarginByProject = new Map<string, { revenue: number; cost: number; uncosted: number }>();
+  const productCostOf = (it: DocumentLineItem) =>
+    (it.productId ? pCostById.get(it.productId) : undefined) ??
+    (it.description ? pCostBySku.get(it.description.trim()) : undefined);
   for (const [pid, docs] of docsByProject) {
     reservedByProject.set(pid, computeReservedNet(docs as ReservedDoc[]));
     // Kostprijs eigen producten TOT NU TOE = gerealiseerd op facturen (− creditnota's).
     let realized = 0;
+    const own = { revenue: 0, cost: 0, uncosted: 0 };
     for (const d of docs) {
-      const c = lineCost(d.items);
-      if (d.kind === "invoice" && d.status !== "draft" && d.status !== "void") {
-        realized += c;
-      } else if (d.kind === "creditnote" && d.status !== "void") {
-        realized -= c;
-      }
+      const live =
+        (d.kind === "invoice" && d.status !== "draft" && d.status !== "void") ||
+        (d.kind === "creditnote" && d.status !== "void");
+      if (!live) continue;
+      const sign = d.kind === "creditnote" ? -1 : 1;
+      realized += sign * lineCost(d.items);
+      const pm = docProductMargin(d.items, productCostOf);
+      own.revenue += sign * pm.revenue;
+      own.cost += sign * pm.cost;
+      own.uncosted += sign * pm.uncostedRevenue;
     }
     ownProductCostByProject.set(pid, realized);
+    ownProductMarginByProject.set(pid, own);
   }
 
   // 4. Samenvoegen + per-project financiën afleiden (zelfde formule als detailscherm).
@@ -318,13 +330,15 @@ export default async function ProjectsPage({
         materialCost,
         ownProductCost,
       });
-      // Uren en materiaal los van elkaar — zelfde norm als op het detailscherm.
-      const split = deriveMarginSplit({
-        targetRevenue: fin.targetRevenue,
+      // Marge per stroom — zelfde meting als op het detailscherm.
+      const own = ownProductMarginByProject.get(p.id) ?? { revenue: 0, cost: 0, uncosted: 0 };
+      const margins = deriveProjectMargins({
         laborCost,
-        materialCost,
-        ownProductCost,
         laborMarginPct: p.laborMarginPct != null ? Number(p.laborMarginPct) : null,
+        productRevenue: own.revenue,
+        productCost: own.cost,
+        uncostedProductRevenue: own.uncosted,
+        purchaseCost: materialCost,
       });
       const lastActivity =
         a?.lastDocAt && new Date(a.lastDocAt) > new Date(p.updatedAt)
@@ -332,7 +346,7 @@ export default async function ProjectsPage({
           : (p.updatedAt as unknown as string);
       return {
         ...p,
-        split,
+        margins,
         docCount: a?.docCount ?? 0,
         invoiced,
         outstanding: Number(a?.outstanding ?? 0),
@@ -438,7 +452,7 @@ export default async function ProjectsPage({
                 <Th className="text-right">Open facturen</Th>
                 <Th className="text-right">Nog te factureren</Th>
                 <Th className="text-right">Marge uren</Th>
-                <Th className="text-right">Marge materiaal</Th>
+                <Th className="text-right">Marge eigen producten</Th>
                 <Th className="text-right">Resultaat tot nu toe</Th>
                 <Th>Op koers</Th>
                 <Th>Status</Th>
@@ -504,24 +518,24 @@ export default async function ProjectsPage({
                       {p.fin.toInvoice > 0 ? formatEUR(p.fin.toInvoice) : <span className="text-muted">—</span>}
                     </Td>
                     <Td className="text-right tabular-nums">
-                      {p.split.laborCost > 0 ? (
-                        <span title={`${p.split.laborMarginPct}% norm · kosten ${formatEUR(p.split.laborCost)} → ${formatEUR(p.split.laborRevenue)}`}>
-                          {formatEUR(p.split.laborMargin)}
+                      {p.margins.laborCost > 0 ? (
+                        <span title={`${p.margins.laborMarginPct}% norm · kostprijs ${formatEUR(p.margins.laborCost)} → door te belasten ${formatEUR(p.margins.laborRevenue)}`}>
+                          {formatEUR(p.margins.laborMargin)}
                         </span>
                       ) : (
                         <span className="text-muted">—</span>
                       )}
                     </Td>
                     <Td className="text-right tabular-nums">
-                      {p.fin.targetRevenue > 0 && (p.split.materialCost > 0 || p.split.materialRevenue > 0) ? (
+                      {p.margins.productRevenue > 0 ? (
                         <span
-                          className={p.split.materialMargin < 0 ? "font-medium text-danger" : undefined}
-                          title={`ruimte ${formatEUR(p.split.materialRevenue)} − kosten ${formatEUR(p.split.materialCost)}`}
+                          className={p.margins.productMargin < 0 ? "font-medium text-danger" : undefined}
+                          title={`gefactureerd ${formatEUR(p.margins.productRevenue)} − kostprijs ${formatEUR(p.margins.productCost)}`}
                         >
-                          {formatEUR(p.split.materialMargin)}
-                          {p.split.materialMarginPct != null && (
+                          {formatEUR(p.margins.productMargin)}
+                          {p.margins.productMarginPct != null && (
                             <span className="ml-1 text-xs text-muted">
-                              {p.split.materialMarginPct.toFixed(0)}%
+                              {p.margins.productMarginPct.toFixed(0)}%
                             </span>
                           )}
                         </span>
