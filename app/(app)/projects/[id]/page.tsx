@@ -48,7 +48,7 @@ import {
   workers,
 } from "@/lib/db/schema";
 import { docProductMargin, lineCostEur, lineMaterialCostEur, normalizeDocItems } from "@/lib/documents";
-import { poExVat, poExVatAmount } from "@/lib/purchase-orders";
+import { poExVat, poExVatAmount, poExVatAssumingSpanishVat } from "@/lib/purchase-orders";
 import { DEFAULT_LABOR_MARGIN_PCT, DEFAULT_PURCHASE_MARGIN_PCT, deriveProjectMargins } from "@/lib/project-financials";
 import type { DocumentLineItem } from "@/lib/db/schema";
 import { formatEUR } from "@/lib/utils";
@@ -1328,7 +1328,14 @@ export default async function ProjectDetailPage({
                   <Table>
                     <TBody>
                       {linkedPOs.map((p) => {
-                        const ex = poExVat(p);
+                        // Uren-PO's worden als arbeid geboekt MET de 21%-aanname als de btw
+                        // ontbreekt; toon hier dus hetzelfde bedrag als wat er meetelt.
+                        const ex = p.countAsLabor
+                          ? (() => {
+                              const a = poExVatAssumingSpanishVat(p);
+                              return { amount: a.amount, vatUnknown: false, vatAssumed: a.vatAssumed };
+                            })()
+                          : { ...poExVat(p), vatAssumed: false };
                         return (
                         <Tr key={p.id}>
                           <Td>
@@ -1345,6 +1352,14 @@ export default async function ProjectDetailPage({
                                 title="Op deze inkooporder staat geen btw/subtotaal — dit bedrag is het factuurtotaal en zit er dus mogelijk incl. btw in. Vul het subtotaal (ex. btw) in."
                               >
                                 btw?
+                              </Link>
+                            ) : ex.vatAssumed ? (
+                              <Link
+                                href={`/inkooporders/${p.id}/edit`}
+                                className="ml-1 cursor-help text-xs text-muted"
+                                title={`Geen btw uitgelezen — ex. btw afgeleid van het factuurtotaal ${formatEUR(p.total)} met 21% aangenomen, net als bij de urenboeking. Vul het echte subtotaal in om de aanname te vervangen.`}
+                              >
+                                21%?
                               </Link>
                             ) : null}
                           </Td>
