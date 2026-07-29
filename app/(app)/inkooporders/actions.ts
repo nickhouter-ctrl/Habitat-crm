@@ -15,6 +15,7 @@ import { normalizePoAttachments, parsePoLineItems, poExVatAssumingSpanishVat, po
 import { copyMailAttachmentToPoBucket, deletePurchaseOrderFile, downloadMailAttachmentBuffer, downloadPurchaseOrderBuffer } from "@/lib/storage";
 import { buildInvoicePdfAttachment, isExcelAttachment, pdfNameFor } from "@/lib/excel-to-pdf";
 import { buildPurchaseReference } from "@/lib/auto-purchase-invoice";
+import { extractInvoiceFieldsWithAI } from "@/lib/ai-invoice-extract";
 import { holded } from "@/lib/holded/client";
 import { pushPurchaseOrderToHolded as syncPushToHolded } from "@/lib/holded/sync";
 
@@ -768,6 +769,29 @@ export async function createPoFromEmail(emailId: string) {
     }
   }
 
+  // Btw uitlezen uit de bronfactuur — zonder subtotaal zou deze inkoop als
+  // kost met het INCL.-btw-totaal in de projectcijfers landen. Dezelfde
+  // uitlezing als de automatische route; faalt 'ie, dan blijft subtotaal leeg
+  // en markeert de UI de regel met "btw?".
+  let subtotal: number | null = null;
+  if (primary && total > 0) {
+    try {
+      const ai = await extractInvoiceFieldsWithAI({
+        storagePath: primary.storagePath,
+        filename: primary.filename,
+        contentType: primary.contentType ?? "application/pdf",
+      });
+      // De AI kan een ander bedrag als "totaal" aanwijzen dan wij; reken daarom
+      // met de VERHOUDING en toets die op plausibiliteit (0% t/m 26% btw).
+      if (ai?.subtotal != null && ai.subtotal > 0 && ai.total != null && ai.total > 0) {
+        const ratio = ai.subtotal / ai.total;
+        if (ratio > 0.79 && ratio <= 1.001) subtotal = Math.round(total * ratio * 100) / 100;
+      }
+    } catch (e) {
+      console.warn("[inkooporder uit mail] btw-uitlezing mislukt:", e instanceof Error ? e.message : e);
+    }
+  }
+
   const orderDate = (mail.receivedAt ?? new Date()).toISOString().slice(0, 10);
   const [po] = await db
     .insert(purchaseOrders)
@@ -779,6 +803,8 @@ export async function createPoFromEmail(emailId: string) {
       orderDate,
       receivedAt: mail.receivedAt ?? new Date(),
       total: total.toFixed(2),
+      subtotal: subtotal != null ? subtotal.toFixed(2) : null,
+      tax: subtotal != null ? (Math.round((total - subtotal) * 100) / 100).toFixed(2) : null,
       items: [{ name: mail.subject ?? `Factuur ${reference}`, units: 1, unitPrice: total, note: primary ? `Bron: ${primary.filename}` : undefined }],
       attachments: poAttachments,
       notes: `Handmatig uit mail "${mail.subject ?? ""}" (${mail.fromEmail ?? ""}).`,
@@ -790,7 +816,12 @@ export async function createPoFromEmail(emailId: string) {
   await db.insert(activities).values({
     type: "note",
     subject: `Inkoopfactuur uit mail: ${supplier}${reference ? ` · ${reference}` : ""}`,
-    body: `Bedrag: €${total.toFixed(2)} · controleer en stel zo nodig bij. Nog niet naar Holded gesynced.`,
+    body:
+      `Bedrag: €${total.toFixed(2)}` +
+      (subtotal != null
+        ? ` (ex. btw €${subtotal.toFixed(2)})`
+        : " · btw niet uitgelezen — vul het subtotaal in") +
+      " · controleer en stel zo nodig bij. Nog niet naar Holded gesynced.",
   });
 
   revalidatePath("/inkooporders");
