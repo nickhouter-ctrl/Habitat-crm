@@ -270,6 +270,32 @@ export default async function DataCheckPage() {
     .filter((x) => x.missing.length > 0)
     .sort((a, b) => a.c.name.localeCompare(b.c.name));
 
+  // Al VERSTUURDE facturen zonder btw-nummer op de PDF. De blokkade geldt vanaf
+  // nu, maar wat er al uit is moet zichtbaar blijven: in Spanje hoort er een
+  // NIF/CIF van de klant op elke factuur.
+  const verstuurdeFacturen = await db.execute<{
+    id: string;
+    docNumber: string | null;
+    issueDate: string | null;
+    totalEur: string | null;
+    klant: string | null;
+    contactId: string | null;
+    reden: string;
+  }>(sql`
+    select d.id, d.doc_number as "docNumber", d.issue_date::text as "issueDate",
+           d.total_eur as "totalEur", c.name as klant, c.id as "contactId",
+           case when c.tax_id is not null then 'NIF staat bij de klant maar niet op de PDF'
+                else 'geen NIF/CIF bekend' end as reden
+    from documents d
+    join contacts c on c.id = d.contact_id
+    left join companies co on co.id = c.company_id
+    where d.kind in ('invoice', 'creditnote')
+      and d.status not in ('draft', 'void')
+      and co.vat_number is null
+    order by d.issue_date desc nulls last
+    limit 100
+  `);
+
   // Mogelijke dubbele contacten (zelfde e-mailadres) — kan ook een gedeeld
   // bedrijfs-e-mail zijn, dus ter controle.
   const dupEmailRows = await db
@@ -320,6 +346,42 @@ export default async function DataCheckPage() {
                   <LinkButton href={`/contacts/${c.id}/edit`} variant="secondary" className="text-xs">
                     Aanvullen
                   </LinkButton>
+                </span>
+              </li>
+            ))}
+          </ul>
+        </Card>
+      )}
+
+      {verstuurdeFacturen.length > 0 && (
+        <Card className="mb-5 border-amber-300">
+          <div className="border-b border-amber-200 bg-amber-50/60 px-5 py-3">
+            <h3 className="text-sm font-semibold text-amber-900">
+              Verstuurde facturen zonder btw-nummer op de PDF ({verstuurdeFacturen.length})
+            </h3>
+            <p className="text-xs text-amber-800/80">
+              In Spanje hoort er een NIF/CIF van de klant op elke factuur. Deze zijn al verstuurd, dus ze zijn hier alleen
+              ter controle — vul het nummer bij de klant aan, dan staat het er bij een nieuwe download wél op. Nieuwe
+              facturen kunnen sinds kort niet meer zonder verstuurd worden.
+            </p>
+          </div>
+          <ul className="divide-y text-sm">
+            {verstuurdeFacturen.map((f) => (
+              <li key={f.id} className="flex flex-wrap items-center justify-between gap-2 px-5 py-2.5">
+                <span className="min-w-0">
+                  <Link href={`/documents/${f.id}`} className="font-medium hover:underline">
+                    {f.docNumber ?? f.id.slice(0, 8)}
+                  </Link>
+                  <span className="ml-2 text-muted">{f.klant ?? "—"}</span>
+                  <span className="ml-2 text-xs text-muted">{f.issueDate ?? ""}</span>
+                </span>
+                <span className="flex items-center gap-2">
+                  <span className="text-xs text-amber-700">{f.reden}</span>
+                  {f.contactId && (
+                    <LinkButton href={`/contacts/${f.contactId}/edit`} variant="secondary" className="text-xs">
+                      NIF aanvullen
+                    </LinkButton>
+                  )}
                 </span>
               </li>
             ))}

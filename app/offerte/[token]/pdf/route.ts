@@ -25,6 +25,7 @@ export async function GET(
           postalCode: true,
           city: true,
           preferredLanguage: true,
+          taxId: true,
         },
       },
       project: { columns: { name: true } },
@@ -58,7 +59,11 @@ export async function GET(
     contactAddressLine: addrLine,
     contactAddressRegion: addrRegion,
     companyName: company?.name ?? null,
-    contactVat: company?.vatNumber ?? null,
+    // Bedrijfsklant heeft het btw-nummer op de company, particulier op het
+    // contact zelf. Zonder die tweede bron blijft CIF/NIF leeg op de PDF terwijl
+    // de validatie het contact-NIF wél als geldig ziet — een factuur zonder
+    // fiscaal nummer is in Spanje niet in orde.
+    contactVat: company?.vatNumber ?? doc.contact?.taxId ?? null,
     projectName: doc.project?.name ?? null,
     locale: doc.contact?.preferredLanguage ?? "es",
   });

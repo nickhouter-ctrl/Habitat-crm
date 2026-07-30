@@ -969,6 +969,10 @@ export async function deleteDocument(id: string) {
 /** Mark a document as sent, generate (or reuse) the public accept link, e-mail the client. */
 export async function sendDocument(id: string) {
   const user = await requireUser();
+  // Een factuur mailen is hetzelfde moment als 'm op verstuurd zetten: zonder
+  // volledige klantgegevens (naam, NIF/CIF, adres) is dat in Spanje geen geldige
+  // factuur. Deze guard ontbrak hier, waardoor mailen de controle omzeilde.
+  await assertInvoiceClientComplete(id);
   const doc = await db.query.documents.findFirst({
     where: eq(documents.id, id),
     with: {
@@ -981,6 +985,7 @@ export async function sendDocument(id: string) {
           addressLine: true,
           postalCode: true,
           city: true,
+          taxId: true,
         },
       },
     },
@@ -1051,7 +1056,11 @@ export async function sendDocument(id: string) {
         contactAddressLine: addrLine,
         contactAddressRegion: addrRegion,
         companyName: company?.name ?? null,
-        contactVat: company?.vatNumber ?? null,
+        // Bedrijfsklant heeft het btw-nummer op de company, particulier op het
+    // contact zelf. Zonder die tweede bron blijft CIF/NIF leeg op de PDF terwijl
+    // de validatie het contact-NIF wél als geldig ziet — een factuur zonder
+    // fiscaal nummer is in Spanje niet in orde.
+    contactVat: company?.vatNumber ?? doc.contact?.taxId ?? null,
         locale: doc.contact.preferredLanguage ?? "es",
       });
       attachments = [
@@ -1105,6 +1114,7 @@ export async function sendDocumentCustom(id: string, formData: FormData) {
           addressLine: true,
           postalCode: true,
           city: true,
+          taxId: true,
         },
       },
     },
@@ -1187,7 +1197,11 @@ export async function sendDocumentCustom(id: string, formData: FormData) {
         contactAddressLine: addrLine,
         contactAddressRegion: addrRegion,
         companyName: company?.name ?? null,
-        contactVat: company?.vatNumber ?? null,
+        // Bedrijfsklant heeft het btw-nummer op de company, particulier op het
+    // contact zelf. Zonder die tweede bron blijft CIF/NIF leeg op de PDF terwijl
+    // de validatie het contact-NIF wél als geldig ziet — een factuur zonder
+    // fiscaal nummer is in Spanje niet in orde.
+    contactVat: company?.vatNumber ?? doc.contact?.taxId ?? null,
         locale: doc.contact?.preferredLanguage ?? "es",
       });
       attachments.push({
@@ -1810,6 +1824,9 @@ async function bookStockInForCreditNote(
 /** Push dit verkoopdocument naar Holded (maakt/koppelt de Holded-factuur). */
 export async function pushDocumentToHoldedAction(id: string) {
   const user = await requireUser();
+  // Ook naar de boekhouding niet zonder complete klantgegevens: daar is de fout
+  // achteraf een stuk lastiger te herstellen dan hier.
+  await assertInvoiceClientComplete(id);
   // Externe facturen (zusterbedrijven) horen niet in Habitats Holded.
   const target0 = await db.query.documents.findFirst({
     where: eq(documents.id, id),
