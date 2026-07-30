@@ -13,6 +13,7 @@ import { db } from "@/lib/db";
 import { activities, companies, contacts, deals, deliveries, documents, holdedSyncMap, products, projectPayments, type DocumentLineItem } from "@/lib/db/schema";
 import { syncDealFromDocument } from "@/lib/deals";
 import { missingBillingFields } from "@/lib/invoice-validation";
+import { syncProjectReceiptFromDocument } from "@/lib/project-receipts";
 import {
   billingAddressLines,
   computeTotals,
@@ -831,30 +832,24 @@ export async function setDocumentStatus(id: string, formData: FormData) {
   }
   await syncDealFromDocument(doc.dealId, { kind: doc.kind, status, totalEur: doc.totalEur });
 
-  // Betaald voorschot (proforma OF een als voorschot gemarkeerde factuur) →
-  // automatisch een ontvangst (advance) op het project, zodat het meteen in de
-  // ontvangsten telt en "nog te factureren" daalt. Idempotent via de
-  // marker-omschrijving; teruggedraaid = weer weg.
-  if ((doc.kind === "proforma" || doc.isAdvance) && doc.projectId) {
-    const marker = `Voorschot ${doc.docNumber ?? id.slice(0, 8)}`;
-    if (status === "paid") {
-      const existing = await db.query.projectPayments.findFirst({
-        where: and(eq(projectPayments.projectId, doc.projectId), eq(projectPayments.description, marker)),
-      });
-      if (!existing) {
-        await db.insert(projectPayments).values({
-          projectId: doc.projectId,
-          amountEur: doc.totalEur ?? "0",
-          method: "advance",
-          date: new Date().toISOString().slice(0, 10),
-          description: marker,
-          note: "Automatisch via betaald voorschot",
-        });
-      }
-    } else {
+  // Betaalde factuur, creditnota of voorschot → ontvangst op het project, zodat
+  // "Ontvangen van klant" klopt zonder dat iemand het nog een keer intikt.
+  // Gold eerst alleen voor voorschotten; een gewone betaalde factuur bleef
+  // daardoor buiten de geldstroom van het project staan.
+  if (doc.projectId) {
+    await syncProjectReceiptFromDocument(id);
+    // Een voorschotregel van vóór de documentkoppeling heeft geen document_id;
+    // die verdwijnt dus niet automatisch als de betaling wordt teruggedraaid.
+    if (status !== "paid" && status !== "partially_paid") {
       await db
         .delete(projectPayments)
-        .where(and(eq(projectPayments.projectId, doc.projectId), eq(projectPayments.description, marker)));
+        .where(
+          and(
+            eq(projectPayments.projectId, doc.projectId),
+            isNull(projectPayments.documentId),
+            eq(projectPayments.description, `Voorschot ${doc.docNumber ?? id.slice(0, 8)}`),
+          ),
+        );
     }
     revalidatePath(`/projects/${doc.projectId}`);
   }

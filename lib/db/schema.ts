@@ -1015,9 +1015,19 @@ export const projectPayments = pgTable(
     /** Omschrijving zoals de klant/boekhouding 'm noemt (bv. "factuur F26009 creadores"). */
     description: text(),
     note: text(),
+    /**
+     * De factuur/creditnota waar deze ontvangst uit voortkomt. Gezet zodra een
+     * document op betaald gaat, zodat de ontvangst automatisch verschijnt én
+     * verdwijnt als de betaling wordt teruggedraaid — en niet nog eens
+     * handmatig geboekt wordt.
+     */
+    documentId: uuid().references(() => documents.id, { onDelete: "set null" }),
     ...timestamps,
   },
-  (t) => [index("project_payments_project_idx").on(t.projectId)],
+  (t) => [
+    index("project_payments_project_idx").on(t.projectId),
+    uniqueIndex("project_payments_document_idx").on(t.documentId),
+  ],
 );
 
 /**

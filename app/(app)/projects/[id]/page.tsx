@@ -342,7 +342,23 @@ export default async function ProjectDetailPage({
     await Promise.all([
       db.select().from(timeEntries).where(eq(timeEntries.projectId, id)).orderBy(desc(timeEntries.date)),
       db.select().from(projectCosts).where(eq(projectCosts.projectId, id)).orderBy(desc(projectCosts.date)),
-      db.select().from(projectPayments).where(eq(projectPayments.projectId, id)).orderBy(desc(projectPayments.date)),
+      // Ontvangsten mét het document waar ze uit voortkomen, zodat je ziet welke
+      // regels automatisch uit een betaalde factuur komen.
+      db
+        .select({
+          id: projectPayments.id,
+          date: projectPayments.date,
+          amountEur: projectPayments.amountEur,
+          method: projectPayments.method,
+          description: projectPayments.description,
+          note: projectPayments.note,
+          documentId: projectPayments.documentId,
+          docNumber: documents.docNumber,
+        })
+        .from(projectPayments)
+        .leftJoin(documents, eq(documents.id, projectPayments.documentId))
+        .where(eq(projectPayments.projectId, id))
+        .orderBy(desc(projectPayments.date)),
       db
         .select()
         .from(projectBudgetLines)
@@ -1062,7 +1078,8 @@ export default async function ProjectDetailPage({
         <CardHeader>
           <CardTitle>Ontvangen betalingen</CardTitle>
           <span className="text-xs text-muted">
-            wat de klant al heeft betaald · {formatEUR(receivedTotalEx)} ex. btw ({formatEUR(receivedTotal)} incl.) · telt niet mee in omzet/marge
+            wat de klant al heeft betaald · {formatEUR(receivedTotalEx)} ex. btw ({formatEUR(receivedTotal)} incl.) · betaalde
+            facturen komen er automatisch bij · telt niet mee in omzet/marge
           </span>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -1084,7 +1101,13 @@ export default async function ProjectDetailPage({
                       {p.date ? new Date(p.date).toLocaleDateString("nl-NL", { day: "numeric", month: "short", year: "numeric" }) : "—"}
                     </Td>
                     <Td>
-                      {p.description ?? "—"}
+                      {p.documentId ? (
+                        <Link href={`/documents/${p.documentId}`} className="hover:underline">
+                          {p.description ?? p.docNumber ?? "—"}
+                        </Link>
+                      ) : (
+                        (p.description ?? "—")
+                      )}
                       {p.note ? <span className="block text-xs text-muted">{p.note}</span> : null}
                     </Td>
                     <Td>
@@ -1094,9 +1117,16 @@ export default async function ProjectDetailPage({
                     </Td>
                     <Td className="text-right tabular-nums font-medium">{formatEUR(p.amountEur)}</Td>
                     <Td className="text-right">
-                      <form action={deleteProjectPayment.bind(null, id, p.id)}>
-                        <SubmitButton size="sm" variant="ghost" className="text-muted" pendingLabel="…">×</SubmitButton>
-                      </form>
+                      {/* Een ontvangst die uit een betaalde factuur komt kun je hier
+                          niet weghalen — hij komt terug bij de volgende synchronisatie.
+                          Zet de factuur terug op verstuurd als het niet klopt. */}
+                      {p.documentId ? (
+                        <span className="text-xs text-muted">via factuur</span>
+                      ) : (
+                        <form action={deleteProjectPayment.bind(null, id, p.id)}>
+                          <SubmitButton size="sm" variant="ghost" className="text-muted" pendingLabel="…">×</SubmitButton>
+                        </form>
+                      )}
                     </Td>
                   </Tr>
                 ))}

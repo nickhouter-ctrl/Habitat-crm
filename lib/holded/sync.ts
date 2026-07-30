@@ -27,6 +27,7 @@ import {
 } from "@/lib/db/schema";
 import { parsePoLineItems } from "@/lib/purchase-orders";
 import { normalizeDocItems } from "@/lib/documents";
+import { syncProjectReceiptFromDocument } from "@/lib/project-receipts";
 
 import { holded, holdedListAll, HoldedError } from "./client";
 import type {
@@ -1072,6 +1073,9 @@ export async function refreshInvoicePaymentFromHolded(
     patch.status = "partially_paid";
   }
   await db.update(documents).set(patch).where(eq(documents.id, local.id));
+  // Een betaling die uit Holded komt (bankkoppeling) moet net zo goed als
+  // ontvangst op het project landen als een betaling die hier wordt afgeboekt.
+  await syncProjectReceiptFromDocument(local.id);
   return patch.status ?? local.status;
 }
 
