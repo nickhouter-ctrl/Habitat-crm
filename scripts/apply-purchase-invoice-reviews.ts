@@ -65,6 +65,12 @@ import { sql } from "drizzle-orm";
     sql`create index if not exists purchase_invoice_reviews_reference_idx on purchase_invoice_reviews (proposed_reference)`,
   );
 
+  // Verdeling van één inkoopfactuur over meerdere projecten: de kostenregel
+  // onthoudt uit welke inkooporder hij komt.
+  await db.execute(
+    sql`alter table project_costs add column if not exists purchase_order_id uuid references purchase_orders(id) on delete set null`,
+  );
+
   // Threading van een afkeurmail: de References-header van de binnenkomende mail
   // bewaren, anders valt een langere heen-en-weer uit elkaar in Gmail.
   await db.execute(sql`alter table email_inbox add column if not exists references_header text`);

@@ -969,6 +969,11 @@ export const projectCosts = pgTable(
     category: projectCostCategory().notNull().default("material"),
     description: text().notNull(),
     supplier: text(),
+    /** Gezet als deze kostenregel het deel van een inkoopfactuur is dat op DIT
+     *  project hoort. Een weekfactuur van een leverancier kan over meerdere
+     *  werven lopen; de inkooporder blijft dan zelf ongekoppeld (anders telt het
+     *  hele bedrag op één project) en de verdeling staat in deze regels. */
+    purchaseOrderId: uuid().references((): AnyPgColumn => purchaseOrders.id, { onDelete: "set null" }),
     /** Bedrag ex. BTW. */
     amountEur: numeric({ precision: 14, scale: 2 }).notNull().default("0"),
     paymentMethod: paymentMethod().notNull().default("invoice"),

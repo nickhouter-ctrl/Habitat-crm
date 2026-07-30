@@ -87,9 +87,30 @@ export type AiInvoiceFields = {
   /** ISO2 van de taal van het document — bepaalt de taal van de afkeurmail. */
   language: string | null;
 
+  /* ---- Verdeling over projecten ---- */
+  /** Onderaannemers sturen weekfacturen: in één week kan er op meerdere werven
+   *  gewerkt zijn. Elke regel met een eigen werf/project komt hier apart terug,
+   *  zodat de kosten bij goedkeuring op het juiste project belanden in plaats
+   *  van allemaal op één. Eén werf op de factuur → één regel. */
+  lines: AiInvoiceLine[];
+
   /* ---- Leeskwaliteit: "staat er niet" vs "ik kon het niet lezen" ---- */
   legible: boolean | null;
   readNotes: string | null;
+};
+
+/** Eén werf-/projectregel op een factuur. */
+export type AiInvoiceLine = {
+  /** De werf-/projectaanduiding zoals die bij deze regel staat. */
+  projectHint: string | null;
+  description: string | null;
+  hours: number | null;
+  /** Uurtarief bij een urenregel. */
+  rate: number | null;
+  /** Bedrag van deze regel, EX. btw. */
+  amount: number | null;
+  periodFrom: string | null;
+  periodTo: string | null;
 };
 
 /** Waarom een uitlezing technisch mislukte — géén oordeel over de factuur. */
@@ -117,7 +138,7 @@ export type AiInvoiceRead =
 
 /** Bump dit bij elke prompt-wijziging: het wordt per factuur meegeschreven, zodat
  *  je later weet welke facturen met welke versie zijn gelezen. */
-export const PROMPT_VERSION = 2;
+export const PROMPT_VERSION = 3;
 
 const PROMPT = `Je leest één inkoopfactuur (van een leverancier aan ons bedrijf).
 
@@ -157,6 +178,7 @@ Geef ALLEEN een JSON-object terug — geen markdown, geen uitleg — met exact d
 - "hoursPeriodFrom" / "hoursPeriodTo": string | null — begin- en einddatum (YYYY-MM-DD) van de periode waarop gewerkte uren betrekking hebben
 - "documentKind": string | null — een van: "factura", "simplificada" (ticket/bon zonder klantgegevens), "proforma", "presupuesto" (offerte), "albaran" (pakbon), "recibo", "other"
 - "language": string | null — 2-letter taalcode van het document ("es", "nl", "en")
+- "lines": array — de verdeling over werven/projecten. Onderaannemers sturen WEEKFACTUREN en kunnen in één week op meerdere werven gewerkt hebben. Geef per werf/project één object: {"projectHint": string|null, "description": string|null, "hours": number|null, "rate": number|null, "amount": number|null, "periodFrom": string|null, "periodTo": string|null}. "amount" is het bedrag van die regel EX. btw. Staat er maar één werf op de factuur, geef dan precies één object. Kun je de bedragen per werf niet los zien, geef dan wel de regels met hun uren maar laat "amount" null.
 - "legible": boolean — true als je het document goed kon lezen; false bij een onscherpe/afgesneden/gedraaide scan
 - "readNotes": string | null — korte notitie als er iets mis was met de leesbaarheid
 
@@ -416,11 +438,32 @@ function mapFields(raw: Record<string, unknown>): AiInvoiceFields {
     documentKind: str(raw.documentKind)?.toLowerCase() ?? null,
     language: str(raw.language)?.toLowerCase().slice(0, 2) ?? null,
 
+    lines: mapLines(raw.lines),
+
     // Ontbreekt het veld, dan gaan we uit van leesbaar — anders zou elke oudere
     // prompt-versie ineens als onleesbaar gelden.
     legible: typeof raw.legible === "boolean" ? raw.legible : true,
     readNotes: str(raw.readNotes),
   };
+}
+
+function mapLines(v: unknown): AiInvoiceLine[] {
+  if (!Array.isArray(v)) return [];
+  const out: AiInvoiceLine[] = [];
+  for (const r of v) {
+    if (!r || typeof r !== "object") continue;
+    const o = r as Record<string, unknown>;
+    out.push({
+      projectHint: str(o.projectHint),
+      description: str(o.description)?.slice(0, 300) ?? null,
+      hours: num(o.hours),
+      rate: num(o.rate),
+      amount: num(o.amount),
+      periodFrom: isoDate(o.periodFrom),
+      periodTo: isoDate(o.periodTo),
+    });
+  }
+  return out;
 }
 
 function isoDate(v: unknown): string | null {
