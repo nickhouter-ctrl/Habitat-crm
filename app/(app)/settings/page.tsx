@@ -26,7 +26,14 @@ import { TeamMemberRoleSelect } from "@/components/team-member-role";
 import { db } from "@/lib/db";
 import { users, webhookEvents } from "@/lib/db/schema";
 import { formatDate } from "@/lib/utils";
-import { createTeamMember, deleteTeamMember, setTeamMemberRole } from "./actions";
+import { SubmitButton } from "@/components/submit-button";
+import {
+  createTeamMember,
+  deleteTeamMember,
+  setTeamMemberPassword,
+  setTeamMemberPhone,
+  setTeamMemberRole,
+} from "./actions";
 
 export const metadata = { title: "Instellingen" };
 
@@ -45,8 +52,11 @@ export default async function SettingsPage() {
   const [recentEvents, teamMembers] = await Promise.all([
     db.query.webhookEvents.findMany({ orderBy: desc(webhookEvents.receivedAt), limit: 15 }),
     isAdmin
-      ? db.select({ id: users.id, name: users.name, email: users.email, role: users.role, createdAt: users.createdAt }).from(users).orderBy(asc(users.email))
-      : Promise.resolve([] as { id: string; name: string | null; email: string; role: string; createdAt: Date }[]),
+      ? db
+          .select({ id: users.id, name: users.name, email: users.email, role: users.role, phone: users.phone, createdAt: users.createdAt })
+          .from(users)
+          .orderBy(asc(users.email))
+      : Promise.resolve([] as { id: string; name: string | null; email: string; role: string; phone: string | null; createdAt: Date }[]),
   ]);
 
   return (
@@ -65,6 +75,8 @@ export default async function SettingsPage() {
                 <Th>Naam</Th>
                 <Th>E-mail</Th>
                 <Th>Rol</Th>
+                <Th>Telefoon</Th>
+                <Th>Wachtwoord</Th>
                 <Th />
               </tr>
             </THead>
@@ -87,6 +99,37 @@ export default async function SettingsPage() {
                           roles={Object.entries(ROLE_META).map(([value, m]) => ({ value, label: m.label }))}
                         />
                       )}
+                    </Td>
+                    <Td>
+                      {/* Telefoonnummer komt onder de voorschotbrief te staan. */}
+                      <form action={setTeamMemberPhone.bind(null, u.id)} className="flex items-center gap-1">
+                        <Input
+                          name="phone"
+                          defaultValue={u.phone ?? ""}
+                          placeholder="+34 6…"
+                          className="h-8 w-36 text-xs"
+                        />
+                        <SubmitButton size="sm" variant="ghost" pendingLabel="…">
+                          ✓
+                        </SubmitButton>
+                      </form>
+                    </Td>
+                    <Td>
+                      {/* Een bestaand wachtwoord is niet op te vragen — het staat als
+                          bcrypt-hash in de database. Alleen een nieuw wachtwoord zetten. */}
+                      <form action={setTeamMemberPassword.bind(null, u.id)} className="flex items-center gap-1">
+                        <Input
+                          name="password"
+                          type="text"
+                          minLength={8}
+                          required
+                          placeholder="nieuw, min. 8"
+                          className="h-8 w-40 text-xs"
+                        />
+                        <SubmitButton size="sm" variant="secondary" pendingLabel="…">
+                          Zet
+                        </SubmitButton>
+                      </form>
                     </Td>
                     <Td className="text-right">
                       {!isSelf && (
@@ -126,6 +169,7 @@ export default async function SettingsPage() {
               <Button type="submit">Toevoegen</Button>
             </form>
             <p className="mt-2 text-xs text-muted">
+              Een vergeten wachtwoord is niet op te zoeken (ook niet in Supabase): het staat als bcrypt-hash opgeslagen. Zet er hierboven een nieuw voor die medewerker.
               De medewerker logt in op dit CRM met dit e-mailadres en wachtwoord. Rollen: Beheerder (alles, incl. medewerkers beheren), Medewerker (dagelijks gebruik), Alleen lezen.
             </p>
           </CardContent>

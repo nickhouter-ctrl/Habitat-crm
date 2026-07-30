@@ -7,7 +7,7 @@ import { z } from "zod";
 import { auth } from "@/auth";
 import { hashPassword } from "@/lib/auth/password";
 import { db } from "@/lib/db";
-import { users } from "@/lib/db/schema";
+import { activities, users } from "@/lib/db/schema";
 
 const ROLES = ["admin", "agent", "viewer"] as const;
 
@@ -57,5 +57,42 @@ export async function deleteTeamMember(id: string) {
   const admin = await requireAdmin();
   if (id === admin.id) throw new Error("Je kunt je eigen account niet verwijderen.");
   await db.delete(users).where(eq(users.id, id));
+  revalidatePath("/settings");
+}
+
+/**
+ * Nieuw wachtwoord voor een medewerker. Er is geen "wachtwoord opvragen": het
+ * staat als bcrypt-hash in de database en is dus onomkeerbaar. Alleen een
+ * beheerder mag dit, en het wordt vastgelegd in het logboek — een ander z'n
+ * wachtwoord wijzigen hoort niet stil te gebeuren.
+ */
+export async function setTeamMemberPassword(id: string, formData: FormData) {
+  const admin = await requireAdmin();
+  const password = z
+    .string()
+    .min(8, "Wachtwoord moet minstens 8 tekens zijn")
+    .parse(String(formData.get("password") ?? ""));
+
+  const target = await db.query.users.findFirst({
+    where: eq(users.id, id),
+    columns: { id: true, email: true, name: true },
+  });
+  if (!target) throw new Error("Medewerker niet gevonden.");
+
+  await db.update(users).set({ passwordHash: await hashPassword(password) }).where(eq(users.id, id));
+  await db.insert(activities).values({
+    type: "note",
+    subject: `Wachtwoord opnieuw ingesteld: ${target.name ?? target.email}`,
+    body: id === admin.id ? "Eigen wachtwoord gewijzigd." : `Ingesteld door een beheerder.`,
+    authorId: admin.id,
+  });
+  revalidatePath("/settings");
+}
+
+/** Telefoonnummer van een medewerker — komt onder de voorschotbrief te staan. */
+export async function setTeamMemberPhone(id: string, formData: FormData) {
+  await requireAdmin();
+  const phone = String(formData.get("phone") ?? "").trim();
+  await db.update(users).set({ phone: phone || null }).where(eq(users.id, id));
   revalidatePath("/settings");
 }
