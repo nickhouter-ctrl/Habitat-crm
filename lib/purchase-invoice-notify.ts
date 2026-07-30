@@ -15,19 +15,26 @@ import { and, asc, eq, inArray, isNull, sql } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { purchaseInvoiceReviews } from "@/lib/db/schema";
 import { brandedEmail, escapeHtml, sendEmail } from "@/lib/email";
-import { NOTIFY_RECIPIENTS } from "@/lib/mail-bcc";
 import { formatEUR } from "@/lib/utils";
 import { crmUrl } from "@/lib/crm-url";
 
 const APP_URL = crmUrl();
 
-/** Ontvangers van factuurmeldingen: eigen env, anders de algemene notify-lijst. */
+/**
+ * Wie facturen keurt: Nick en Hans. Staat hier hard in plaats van alleen in
+ * INVOICE_NOTIFY_EMAILS, omdat een niet-gezette env-variabele anders stil
+ * terugvalt op de algemene notify-lijst (hi@ + nick@) en Hans de melding dan
+ * nooit ziet — precies wat er bij de eerste test gebeurde.
+ */
+const KEURDERS = ["nick@habitat-one.com", "hans@habitat-one.com"];
+
+/** Ontvangers van factuurmeldingen: eigen env, anders de vaste keurders. */
 function ontvangers(): { to: string; bcc?: string } {
   const eigen = (process.env.INVOICE_NOTIFY_EMAILS ?? "")
     .split(",")
     .map((e) => e.trim())
     .filter(Boolean);
-  const lijst = eigen.length > 0 ? eigen : NOTIFY_RECIPIENTS;
+  const lijst = eigen.length > 0 ? eigen : KEURDERS;
   return { to: lijst[0], bcc: lijst.slice(1).join(", ") || undefined };
 }
 
