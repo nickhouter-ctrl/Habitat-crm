@@ -61,6 +61,8 @@ import { sql } from "drizzle-orm";
   );
   await db.execute(sql`create index if not exists purchase_invoice_reviews_status_idx on purchase_invoice_reviews (status)`);
   await db.execute(sql`create index if not exists purchase_invoice_reviews_email_idx on purchase_invoice_reviews (email_id)`);
+  // Net als de rest van de database: niets via de PostgREST-API.
+  await db.execute(sql`alter table purchase_invoice_reviews enable row level security`);
   await db.execute(
     sql`create index if not exists purchase_invoice_reviews_reference_idx on purchase_invoice_reviews (proposed_reference)`,
   );

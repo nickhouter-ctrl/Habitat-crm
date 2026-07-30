@@ -215,6 +215,9 @@ export default async function ProductsPage({
                   <LinkButton href={`/print-labels${qs}`} variant="secondary">
                     Labels printen
                   </LinkButton>
+                  <LinkButton href="/products/afboeken" variant="secondary">
+                    Voorraad afboeken
+                  </LinkButton>
                 </>
               );
             })()}

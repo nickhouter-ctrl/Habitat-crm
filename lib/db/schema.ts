@@ -170,6 +170,18 @@ export const projectCostCategory = pgEnum("project_cost_category", [
   "equipment", // huur materieel/gereedschap
   "other",
 ]);
+/**
+ * Waarom voorraad zonder verkoop is afgeboekt. Geen "verkoop" in deze lijst:
+ * dat loopt altijd via een factuur, anders verdwijnt de omzet uit beeld.
+ */
+export const stockWriteoffReason = pgEnum("stock_writeoff_reason", [
+  "showroom", // in de showroom gezet / eigen presentatie
+  "own_use", // eigen gebruik (kantoor, woning, bedrijfsmiddel)
+  "sample", // weggegeven als monster
+  "damage", // breuk, beschadigd, afgekeurd
+  "correction", // telverschil rechtzetten
+  "other",
+]);
 /** Status van een uitgegeven sample: uit (borg uitstaand) / retour / verkocht. */
 export const sampleMovementStatus = pgEnum("sample_movement_status", ["out", "returned", "sold"]);
 /** Manier waarop een ontvangen klantbetaling binnenkwam. */
@@ -545,6 +557,51 @@ export const sampleMovements = pgTable(
     index("sample_movements_status_idx").on(t.status),
   ],
 );
+
+/**
+ * Voorraad die eraf gaat zonder verkoop: showroommodel, eigen gebruik, breuk.
+ *
+ * Bestaat omdat voorraad alleen via een verkoopfactuur kon dalen. Wie een bank
+ * in de showroom zette, paste het aantal met de hand aan op het product — geen
+ * spoor van waarom, door wie, en de kostprijs verdween stil uit de
+ * voorraadwaarde. Elke afboeking legt hier de kostprijs van dat moment vast,
+ * want de kostprijs op het product kan later wijzigen.
+ */
+export const stockWriteoffs = pgTable(
+  "stock_writeoffs",
+  {
+    id: uuid().primaryKey().default(sql`gen_random_uuid()`),
+    productId: uuid().references(() => products.id, { onDelete: "set null" }),
+    /** Naam en SKU meegeschreven: een verwijderd product mag de historie niet wissen. */
+    productName: text().notNull(),
+    sku: text(),
+    qty: numeric({ precision: 14, scale: 3 }).notNull(),
+    reason: stockWriteoffReason().notNull().default("showroom"),
+    /** Kostprijs per stuk op het moment van afboeken. */
+    unitCostEur: numeric({ precision: 14, scale: 2 }),
+    /** qty x unitCostEur — vastgelegd, niet herrekend. */
+    totalCostEur: numeric({ precision: 14, scale: 2 }),
+    /** Optioneel op een project geboekt (bv. de showroom als project). */
+    projectId: uuid().references(() => projects.id, { onDelete: "set null" }),
+    /** De kostenregel die hierbij op het project is gezet, zodat terugdraaien 'm meeneemt. */
+    projectCostId: uuid(),
+    date: date().notNull(),
+    note: text(),
+    createdBy: uuid().references(() => users.id, { onDelete: "set null" }),
+    /** Gezet bij terugdraaien; de regel blijft staan als spoor. */
+    reversedAt: timestamp({ withTimezone: true }),
+    reversedBy: uuid().references(() => users.id, { onDelete: "set null" }),
+    ...timestamps,
+  },
+  (t) => [
+    index("stock_writeoffs_product_idx").on(t.productId),
+    index("stock_writeoffs_date_idx").on(t.date),
+    index("stock_writeoffs_project_idx").on(t.projectId),
+  ],
+);
+
+export type StockWriteoff = typeof stockWriteoffs.$inferSelect;
+
 
 /* -------------------------------------------------------------------- deals */
 
