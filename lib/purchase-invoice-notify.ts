@@ -8,6 +8,8 @@
  * - **Ochtendsamenvatting**: alles wat openstaat, oudste eerst. Verstuurt niets
  *   als er niets openstaat.
  */
+import { randomBytes } from "node:crypto";
+
 import { and, asc, eq, inArray, isNull, sql } from "drizzle-orm";
 
 import { db } from "@/lib/db";
@@ -28,6 +30,28 @@ function ontvangers(): { to: string; bcc?: string } {
   return { to: lijst[0], bcc: lijst.slice(1).join(", ") || undefined };
 }
 
+/**
+ * Token voor de knoppen in de mail: beoordelen zonder inloggen. Vervalt na twee
+ * weken en wordt ongeldig zodra de factuur is afgehandeld.
+ *
+ * Let op: de LINK doet niets — die opent een bevestigingspagina. Mailscanners
+ * halen links in mail automatisch op, dus een link die zélf goedkeurt zou
+ * facturen goedkeuren die niemand heeft gezien.
+ */
+async function ensureActionToken(reviewId: string, bestaand: string | null): Promise<string> {
+  if (bestaand) return bestaand;
+  const token = randomBytes(24).toString("base64url");
+  await db
+    .update(purchaseInvoiceReviews)
+    .set({
+      actionToken: token,
+      actionTokenExpiresAt: new Date(Date.now() + 14 * 86_400_000),
+      updatedAt: new Date(),
+    })
+    .where(eq(purchaseInvoiceReviews.id, reviewId));
+  return token;
+}
+
 const VERDICT_LABEL: Record<string, string> = {
   ok: "✅ compleet",
   warn: "⚠️ let op",
@@ -44,6 +68,8 @@ type Regel = {
   verdict: string;
   findings: unknown;
   dagen: number;
+  /** Voor de knoppen in de mail; wordt aangemaakt bij de eerste melding. */
+  token?: string | null;
 };
 
 function ontbrekend(findings: unknown): string {
@@ -65,7 +91,12 @@ function tabel(regels: Regel[], toonLeeftijd = false): string {
           <span style="color:#888;font-size:12px">${escapeHtml(r.reference ?? "")}${toonLeeftijd && r.dagen > 0 ? ` · wacht ${r.dagen} dag${r.dagen === 1 ? "" : "en"}` : ""}</span></td>
         <td style="padding:6px 10px;border-bottom:1px solid #eee;text-align:right;white-space:nowrap">${r.total ? formatEUR(Number(r.total)) : "—"}</td>
         <td style="padding:6px 10px;border-bottom:1px solid #eee">${VERDICT_LABEL[r.verdict] ?? r.verdict}${mist ? `<br><span style="color:#888;font-size:12px">${escapeHtml(mist)}</span>` : ""}</td>
-        <td style="padding:6px 10px;border-bottom:1px solid #eee"><a href="${APP_URL}/inkooporders/te-verwerken">beoordelen</a></td>
+        <td style="padding:6px 10px;border-bottom:1px solid #eee;white-space:nowrap">${
+          r.token
+            ? `<a href="${APP_URL}/inkoop/keuren/${r.token}" style="display:inline-block;padding:6px 12px;background:#3a2a20;color:#fff;border-radius:6px;text-decoration:none;font-size:13px">Goedkeuren</a>
+               <a href="${APP_URL}/inkoop/keuren/${r.token}#afkeuren" style="display:inline-block;padding:6px 12px;border:1px solid #ccc;border-radius:6px;text-decoration:none;color:#333;font-size:13px;margin-left:4px">Afkeuren</a>`
+            : `<a href="${APP_URL}/inkooporders/te-verwerken">beoordelen</a>`
+        }</td>
       </tr>`;
     })
     .join("");
@@ -89,6 +120,7 @@ export async function notifyNewInvoiceReviews(reviewIds: string[]): Promise<{ se
       total: purchaseInvoiceReviews.proposedTotal,
       verdict: purchaseInvoiceReviews.verdict,
       findings: purchaseInvoiceReviews.findings,
+      token: purchaseInvoiceReviews.actionToken,
       dagen: sql<number>`0`,
     })
     .from(purchaseInvoiceReviews)
@@ -101,12 +133,18 @@ export async function notifyNewInvoiceReviews(reviewIds: string[]): Promise<{ se
     );
   if (regels.length === 0) return { sent: false, count: 0 };
 
+  // Tokens aanmaken zodat de knoppen in de mail werken. Een bestaande token
+  // hergebruiken, anders zou de link uit een eerdere melding dood raken.
+  const metToken = await Promise.all(
+    regels.map(async (r) => ({ ...r, token: await ensureActionToken(r.id, r.token) })),
+  );
+
   const { to, bcc } = ontvangers();
   const aantal = regels.length;
   const som = regels.reduce((s, r) => s + Number(r.total ?? 0), 0);
   const html = brandedEmail(`
     <p><strong>${aantal} nieuwe inkoopfactu${aantal === 1 ? "ur" : "ren"}</strong> ter goedkeuring — samen ${escapeHtml(formatEUR(som))}.</p>
-    ${tabel(regels)}
+    ${tabel(metToken)}
     <p style="color:#888;font-size:13px">Zolang een factuur niet is goedgekeurd telt hij niet mee in de projectkosten en gaat hij niet naar Holded.</p>
     <p><a href="${APP_URL}/inkooporders/te-verwerken">Alle facturen beoordelen</a></p>
   `);
@@ -158,6 +196,7 @@ export async function runPurchaseInvoiceDigest(): Promise<{
       total: purchaseInvoiceReviews.proposedTotal,
       verdict: purchaseInvoiceReviews.verdict,
       findings: purchaseInvoiceReviews.findings,
+      token: purchaseInvoiceReviews.actionToken,
       dagen: sql<number>`greatest(0, extract(day from now() - ${purchaseInvoiceReviews.createdAt})::int)`,
     })
     .from(purchaseInvoiceReviews)
@@ -166,6 +205,10 @@ export async function runPurchaseInvoiceDigest(): Promise<{
 
   // Niets te melden = geen mail. Het dashboard is de altijd-zichtbare waarheid.
   if (regels.length === 0) return { ok: true, pending: 0, sent: false, reason: "niets openstaand" };
+
+  const metToken = await Promise.all(
+    regels.map(async (r) => ({ ...r, token: await ensureActionToken(r.id, r.token) })),
+  );
 
   const { to, bcc } = ontvangers();
   const som = regels.reduce((s, r) => s + Number(r.total ?? 0), 0);
@@ -178,7 +221,7 @@ export async function runPurchaseInvoiceDigest(): Promise<{
     ${oud.length > 0 ? `<p style="color:#b6552d"><strong>${oud.length}</strong> wacht${oud.length === 1 ? "" : "en"} al langer dan een week.</p>` : ""}
     ${incompleet.length > 0 ? `<p>${incompleet.length} incompleet — terug te sturen naar de leverancier.</p>` : ""}
     ${onleesbaar.length > 0 ? `<p>${onleesbaar.length} kon de uitlezing niet lezen — handmatig bekijken.</p>` : ""}
-    ${tabel(regels, true)}
+    ${tabel(metToken, true)}
     <p><a href="${APP_URL}/inkooporders/te-verwerken">Beoordelen</a></p>
   `);
   const text = [
