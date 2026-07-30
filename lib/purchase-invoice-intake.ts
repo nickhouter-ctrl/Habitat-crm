@@ -97,6 +97,79 @@ function cleanFactoryName(raw: string): string {
   return s.replace(/\S+/g, (w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase());
 }
 
+/**
+ * Bestaat deze factuur al als inkooporder? Vergelijkt NIET letterlijk op de
+ * referentie: dezelfde factuur van Ferhaoui stond twee keer in de administratie
+ * als "0011/2026" (handmatig ingevoerd) en "Ferhaoui Mohamed 0011/2026" (via de
+ * mail), samen € 6.940,50 arbeid voor een factuur van € 3.800. Daarom drie
+ * signalen, van hard naar zacht:
+ *  1. exact dezelfde referentie;
+ *  2. hetzelfde factuurnummer bij dezelfde leverancier (opmaak weggedacht) —
+ *     "0011/2026" zit in "Ferhaoui Mohamed 0011/2026";
+ *  3. dezelfde leverancier met exact hetzelfde bedrag.
+ * Signaal 3 kan een terechte tweede factuur raken (een bouwer die twee weken
+ * hetzelfde factureert), dus dat blijft een WAARSCHUWING in de wachtrij — het
+ * blokkeert niets automatisch.
+ */
+export async function findExistingPurchaseOrder(args: {
+  supplier: string | null;
+  reference: string | null;
+  invoiceNumber: string | null;
+  total: number | null;
+  /**
+   * Signaal 3 (zelfde leverancier én bedrag) meenemen. Alleen voor de
+   * WAARSCHUWING in de wachtrij — nooit voor de harde grens bij goedkeuren: een
+   * bouwer die twee weken achter elkaar hetzelfde bedrag factureert zou dan
+   * stilzwijgend geweigerd worden.
+   */
+  matchOnAmount?: boolean;
+}): Promise<{ id: string; reference: string | null; reason: string } | null> {
+  const norm = (v: string | null | undefined) => (v ?? "").replace(/[^0-9a-z]/gi, "").toLowerCase();
+
+  if (args.reference) {
+    const exact = await db.query.purchaseOrders.findFirst({
+      where: eq(purchaseOrders.reference, args.reference),
+      columns: { id: true, reference: true },
+    });
+    if (exact) return { ...exact, reason: "zelfde referentie" };
+  }
+
+  const leverancier = norm(args.supplier);
+  if (!leverancier) return null;
+  // Kandidaten van deze leverancier ophalen en in code vergelijken: de
+  // normalisatie (streepjes, spaties, hoofdletters) is in SQL niet te doen
+  // zonder functie-index, en het gaat om een handvol rijen per leverancier.
+  const kandidaten = await db
+    .select({
+      id: purchaseOrders.id,
+      reference: purchaseOrders.reference,
+      supplier: purchaseOrders.supplier,
+      total: purchaseOrders.total,
+      orderDate: purchaseOrders.orderDate,
+    })
+    .from(purchaseOrders)
+    .where(sql`lower(regexp_replace(${purchaseOrders.supplier}, '[^0-9a-zA-Z]', '', 'g')) = ${leverancier}`);
+
+  const nummer = norm(args.invoiceNumber);
+  if (nummer.length >= 4) {
+    for (const k of kandidaten) {
+      const ref = norm(k.reference);
+      if (ref && (ref.includes(nummer) || nummer.includes(ref))) {
+        return { id: k.id, reference: k.reference, reason: `zelfde factuurnummer (${args.invoiceNumber})` };
+      }
+    }
+  }
+
+  if (args.matchOnAmount && args.total != null && args.total !== 0) {
+    for (const k of kandidaten) {
+      if (Math.abs(Number(k.total ?? 0) - args.total) < 0.02) {
+        return { id: k.id, reference: k.reference, reason: "zelfde leverancier en bedrag" };
+      }
+    }
+  }
+  return null;
+}
+
 /* ─────────────────────────── voorstel opbouwen ─────────────────────────── */
 
 export type ProposalLine = {
@@ -209,10 +282,13 @@ export async function buildInvoiceProposal(args: {
   const distinctProjects = new Set(lines.map((l) => l.projectId).filter(Boolean));
   const projectId = wholeMatch.kind === "match" ? wholeMatch.projectId : null;
 
-  // Dubbelcontrole: bestaat er al een inkooporder met deze referentie?
-  const dup = await db.query.purchaseOrders.findFirst({
-    where: eq(purchaseOrders.reference, reference),
-    columns: { id: true },
+  // Dubbelcontrole: bestaat deze factuur al als inkooporder?
+  const dup = await findExistingPurchaseOrder({
+    supplier,
+    reference,
+    invoiceNumber: f?.invoiceNumber ?? null,
+    total,
+    matchOnAmount: true,
   });
 
   // Stuurt een bouwer alleen een totaalbedrag? Reken de uren terug met het
@@ -453,12 +529,15 @@ export async function approveInvoiceReview(args: {
   const total = o.total ?? (review.proposedTotal != null ? Number(review.proposedTotal) : 0);
   const subtotal = o.subtotal ?? (review.proposedSubtotal != null ? Number(review.proposedSubtotal) : null);
 
-  // Dubbelcontrole als harde grens: bestaat de referentie al, dan koppelen we de
-  // mail aan die inkooporder in plaats van een tweede aan te maken.
-  if (reference) {
-    const bestaand = await db.query.purchaseOrders.findFirst({
-      where: eq(purchaseOrders.reference, reference),
-      columns: { id: true },
+  // Dubbelcontrole als harde grens: bestaat deze factuur al, dan koppelen we de
+  // mail aan die inkooporder in plaats van een tweede aan te maken. Kijkt door de
+  // opmaak van de referentie heen — zie findExistingPurchaseOrder.
+  {
+    const bestaand = await findExistingPurchaseOrder({
+      supplier,
+      reference,
+      invoiceNumber: (review.aiFields as AiInvoiceFields | null)?.invoiceNumber ?? null,
+      total,
     });
     if (bestaand) {
       await db
@@ -540,7 +619,10 @@ export async function approveInvoiceReview(args: {
         workerName: supplier,
         date: review.proposedInvoiceDate ?? new Date().toISOString().slice(0, 10),
         hours: String(uren),
-        hourlyCostEur: (deel.amount / uren).toFixed(2),
+        // Zes decimalen, want de geboekte kost moet EXACT het factuurbedrag zijn.
+        // Met twee decimalen werd € 3.000 ÷ 107,14 uur afgerond op € 28,00 en
+        // boekte het systeem € 2.999,92 — 8 cent minder dan de leverancier vraagt.
+        hourlyCostEur: (deel.amount / uren).toFixed(6),
         purchaseOrderId: po.id,
         note: `Uren via inkoopfactuur${reference ? ` ${reference}` : ""}`,
       });

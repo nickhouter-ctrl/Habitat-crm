@@ -879,7 +879,7 @@ export const workers = pgTable(
     /** Functie/rol (bv. tegelzetter, schilder). Vrij veld. */
     role: text(),
     /** Kostentarief per uur (ex. BTW) — wat de arbeider ons kost. */
-    hourlyCostEur: numeric({ precision: 8, scale: 2 }),
+    hourlyCostEur: numeric({ precision: 12, scale: 6 }),
     /** Standaard betaalwijze (contant/factuur) — per urenregel te overschrijven. */
     defaultPaymentMethod: paymentMethod().notNull().default("cash"),
     /** Taal van het urenportaal voor deze arbeider: "nl" | "es" | "en". */
@@ -936,7 +936,7 @@ export const timeEntries = pgTable(
     date: date().notNull(),
     hours: numeric({ precision: 6, scale: 2 }).notNull(),
     /** Tarief-snapshot op het moment van invoeren. */
-    hourlyCostEur: numeric({ precision: 8, scale: 2 }).notNull().default("0"),
+    hourlyCostEur: numeric({ precision: 12, scale: 6 }).notNull().default("0"),
     paymentMethod: paymentMethod().notNull().default("cash"),
     /** Gezet zodra afgerekend (contant betaald / factuur voldaan). */
     paidAt: timestamp({ withTimezone: true }),
