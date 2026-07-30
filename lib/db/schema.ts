@@ -1589,6 +1589,9 @@ export const sentEmails = pgTable(
     body: text(),
     contactId: uuid(),
     documentId: uuid(),
+    /** Bij welk project deze mail hoort — zodat een voorschotverzoek terug te
+     *  vinden is op de projectpagina en niet alleen op de klantkaart. */
+    projectId: uuid(),
     ...timestamps,
   },
   (t) => [

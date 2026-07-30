@@ -6,13 +6,14 @@
  * tekstvak staat gaat er letterlijk uit — hetzelfde stramien als het
  * afkeurscherm van de inkoopfacturen, waar dat zich bewijst.
  */
-import { eq } from "drizzle-orm";
+import { and, desc, eq, like } from "drizzle-orm";
+import Link from "next/link";
 
 import { Card, CardContent, CardHeader, CardTitle, Field, Input, Textarea } from "@/components/ui";
 import { SubmitButton } from "@/components/submit-button";
 import { auth } from "@/auth";
 import { db } from "@/lib/db";
-import { companies, contacts, users } from "@/lib/db/schema";
+import { companies, contacts, sentEmails, users } from "@/lib/db/schema";
 import { buildAdvanceRequestEmail } from "@/lib/advance-request";
 import { formatEUR } from "@/lib/utils";
 import { sendAdvanceRequest } from "../actions";
@@ -43,7 +44,7 @@ export async function AdvanceRequestCard({
   const termLabel = params.vtermijn?.trim() || "";
   const agreementDate = params.vdatum?.trim() || contractDate;
 
-  const [klant, ondertekenaar] = await Promise.all([
+  const [klant, ondertekenaar, eerder] = await Promise.all([
     contactId
       ? db
           .select({
@@ -66,6 +67,18 @@ export async function AdvanceRequestCard({
       const row = await db.select({ name: users.name, phone: users.phone }).from(users).where(eq(users.id, id)).limit(1);
       return row[0] ?? null;
     }),
+    // Wat er eerder is opgevraagd — hier terug te vinden, niet alleen op de klantkaart.
+    db
+      .select({
+        id: sentEmails.id,
+        subject: sentEmails.subject,
+        toEmail: sentEmails.toEmail,
+        createdAt: sentEmails.createdAt,
+      })
+      .from(sentEmails)
+      .where(and(eq(sentEmails.projectId, projectId), like(sentEmails.subject, "Voorschot: %")))
+      .orderBy(desc(sentEmails.createdAt))
+      .limit(10),
   ]);
 
   // De klant zoals de boekhouder hem in de brief wil: bij een vennootschap de
@@ -74,8 +87,10 @@ export async function AdvanceRequestCard({
   const clientTaxId = klant?.companyVat ?? klant?.taxId ?? null;
   const to = klant?.email ?? klant?.companyEmail ?? null;
 
-  // De werf zoals de klant hem kent; de alias is meestal de straat.
-  const projectLabel = siteAlias?.trim() ? `${siteAlias.trim()}` : projectName;
+  // De werf zoals de klant hem kent. Alleen het EERSTE deel van de alias: die
+  // bevat vaak alle schrijfwijzen achter elkaar ("Gershwin 39c, Villa Gershwin,
+  // Balcón al Mar C 39, Bacon del Mar") en dan wordt de brief onleesbaar.
+  const projectLabel = siteAlias?.split(",")[0]?.trim() || projectName;
 
   const concept =
     amount != null && termLabel
@@ -113,6 +128,35 @@ export async function AdvanceRequestCard({
           <p className="rounded-md bg-warning/10 p-3 text-sm">
             Deze klant heeft geen e-mailadres. Vul het aan bij de klantgegevens, of vul hieronder zelf een adres in.
           </p>
+        )}
+
+        {eerder.length > 0 && (
+          <div className="rounded-md border bg-background/50 p-3 text-sm">
+            <p className="mb-1 text-xs font-medium text-muted">Eerder opgevraagd</p>
+            <ul className="space-y-1">
+              {eerder.map((m) => (
+                <li key={m.id} className="flex flex-wrap items-baseline gap-x-2">
+                  <span className="tabular-nums text-xs text-muted">
+                    {m.createdAt.toLocaleDateString("nl-NL", { day: "numeric", month: "short", year: "numeric" })}
+                  </span>
+                  <Link href={`/sent-mail/${m.id}`} className="text-accent hover:underline">
+                    {(m.subject ?? "").replace(/^Voorschot:\s*/, "")}
+                  </Link>
+                  <span className="text-xs text-muted">→ {m.toEmail}</span>
+                </li>
+              ))}
+            </ul>
+            <p className="mt-2 text-xs text-muted">
+              Is het bedrag binnen? Boek het bij Ontvangen betalingen en maak dan het formele stuk:{" "}
+              <Link
+                href={`/documents/new?kind=fondos&projectId=${projectId}${contactId ? `&contactId=${contactId}` : ""}`}
+                className="text-accent hover:underline"
+              >
+                + Provisión de fondos
+              </Link>
+              .
+            </p>
+          </div>
         )}
 
         {/* Stap 1 — wat vragen we op? GET, zodat er niets stiekem wordt bewaard. */}

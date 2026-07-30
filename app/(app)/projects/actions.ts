@@ -629,6 +629,7 @@ export async function sendAdvanceRequest(projectId: string, formData: FormData) 
       html,
       text: d.text,
       contactId: project.contactId ?? null,
+      projectId,
     });
     await db.insert(activities).values({
       type: "note",
