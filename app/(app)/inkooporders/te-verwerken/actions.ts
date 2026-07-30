@@ -95,7 +95,7 @@ export async function rejectReviewAction(reviewId: string, formData: FormData) {
           attachInvoice: formData.get("attachInvoice") === "on",
         }
       : undefined,
-    sender: { email: user.email, name: user.name },
+    sender: { name: user.name },
   });
   refresh();
 }

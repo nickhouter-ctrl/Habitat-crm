@@ -388,9 +388,9 @@ export function ReviewCard({
                 <span>De originele factuur als bijlage meesturen</span>
               </label>
               <p className="text-xs text-muted">
-                Gaat als antwoord in dezelfde mailthread. Verstuurd vanaf jouw eigen adres als dat is ingesteld, anders
-                vanaf purchase@habitat-one.com met jouw naam erbij. Antwoorden komen altijd op purchase@ binnen, zodat een
-                gecorrigeerde factuur weer in deze wachtrij belandt.
+                Gaat als antwoord in dezelfde mailthread, vanaf purchase@habitat-one.com met jouw naam erbij. Het antwoord
+                van de leverancier — met de gecorrigeerde factuur — komt daar dus meteen weer binnen en belandt terug in
+                deze wachtrij.
               </p>
             </div>
           )}
