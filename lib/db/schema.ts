@@ -1509,7 +1509,12 @@ export const emailInbox = pgTable(
     id: uuid().primaryKey().default(sql`gen_random_uuid()`),
     messageId: text().notNull(),
     imapUid: integer(),
+    /** Gmail's X-GM-THRID — handig om in ons eigen scherm te groeperen, maar
+     *  GEEN RFC-header: hiermee kun je niet threaden bij het beantwoorden. */
     threadId: text(),
+    /** De RFC References-header van de binnenkomende mail. Nodig om een antwoord
+     *  (bv. een afgekeurde inkoopfactuur) in dezelfde thread te laten landen. */
+    referencesHeader: text(),
     fromEmail: text(),
     fromName: text(),
     toEmail: text(),
@@ -1628,6 +1633,103 @@ export const mailAttachments = pgTable(
 
 export type MailAttachment = typeof mailAttachments.$inferSelect;
 export type NewMailAttachment = typeof mailAttachments.$inferInsert;
+
+/* ---------------------------------------- goedkeuringspoort inkoopfacturen */
+
+/**
+ * Wachtrij vóór de inkoopadministratie: elke binnengekomen factuurbijlage komt
+ * hier eerst te staan met het AI-oordeel erbij. Pas bij GOEDKEURING ontstaat er
+ * een rij in `purchase_orders` — daarvóór telt de factuur nergens mee (niet in
+ * projectkosten, niet op het dashboard, niet naar Holded).
+ *
+ * Eén rij per BIJLAGE, niet per mail: een Allpack-mail bevat goederen, handling
+ * en vracht als losse facturen die los beoordeeld moeten kunnen worden.
+ *
+ * De bijlage zelf blijft in de mail-bucket staan en wordt pas bij goedkeuring
+ * naar de inkoop-bucket gekopieerd — afkeuren kan dus nooit een bestand
+ * kwijtmaken. NB: deze rijen cascaden mee met `email_inbox`; niets in de
+ * codebase verwijdert die rijen, en dat moet zo blijven.
+ */
+export const purchaseInvoiceReviews = pgTable(
+  "purchase_invoice_reviews",
+  {
+    id: uuid().primaryKey().default(sql`gen_random_uuid()`),
+    emailId: uuid()
+      .notNull()
+      .references(() => emailInbox.id, { onDelete: "cascade" }),
+    /** Uniek — dit is meteen de dedupe: de poll draait elke 15 min. */
+    mailAttachmentId: uuid()
+      .notNull()
+      .references(() => mailAttachments.id, { onDelete: "cascade" }),
+    /** pending | approved | rejected | ignored | superseded */
+    status: text().notNull().default("pending"),
+    /** auto (uit de mailpoll) of manual (iemand klikte 'maak inkooporder'). */
+    source: text().notNull().default("auto"),
+
+    /* Voorstel — wat de inkooporder wórdt bij goedkeuring. */
+    proposedSupplier: text(),
+    proposedReference: text(),
+    proposedTotal: numeric({ precision: 14, scale: 2 }),
+    /** Ex. btw, in EUR. */
+    proposedSubtotal: numeric({ precision: 14, scale: 2 }),
+    /** Valuta zoals op de factuur; bedragen hierboven staan altijd in EUR. */
+    proposedCurrency: text(),
+    proposedTotalOriginal: numeric({ precision: 14, scale: 2 }),
+    fxRate: numeric({ precision: 14, scale: 6 }),
+    proposedInvoiceDate: date(),
+    suggestedProjectId: uuid().references((): AnyPgColumn => projects.id, { onDelete: "set null" }),
+    /** labor | material */
+    suggestedKind: text(),
+    suggestedHours: numeric({ precision: 8, scale: 2 }),
+
+    /* Oordeel. `aiFields` is de waarheid; `findings` is de momentopname van de
+     * regels zoals ze golden toen we beoordeelden. De UI herberekent uit
+     * aiFields (gratis), findings bewaren we om te kunnen zien wát we de
+     * leverancier destijds hebben geschreven. */
+    aiFields: jsonb(),
+    /** false = de uitlezing zelf mislukte (geen sleutel, HTTP-fout) — dan NOOIT afkeuren. */
+    aiReadOk: boolean(),
+    aiError: text(),
+    aiModel: text(),
+    aiPromptVersion: integer(),
+    aiCheckedAt: timestamp({ withTimezone: true }),
+    aiAttempts: integer().notNull().default(0),
+    /** ok | warn | reject | unreadable | pending */
+    verdict: text().notNull().default("pending"),
+    findings: jsonb(),
+    duplicateOfPoId: uuid().references((): AnyPgColumn => purchaseOrders.id, { onDelete: "set null" }),
+
+    /* Leverancier bereiken bij afkeuring. */
+    supplierEmail: text(),
+    /** Waar dat adres vandaan komt: invoice | company | contact | history | sender */
+    supplierEmailSource: text(),
+
+    /* Uitkomst. */
+    purchaseOrderId: uuid().references((): AnyPgColumn => purchaseOrders.id, { onDelete: "set null" }),
+    decidedBy: uuid().references((): AnyPgColumn => users.id, { onDelete: "set null" }),
+    decidedAt: timestamp({ withTimezone: true }),
+    /** app | mail — besloten in het CRM of via de knop in de meldingsmail. */
+    decidedVia: text(),
+    decisionNote: text(),
+    rejectMessageId: text(),
+
+    /* Meldingen + de knop in de mail. */
+    notifiedAt: timestamp({ withTimezone: true }),
+    /** Token voor de bevestigingspagina in de meldingsmail (geen login nodig). */
+    actionToken: text().unique(),
+    actionTokenExpiresAt: timestamp({ withTimezone: true }),
+    ...timestamps,
+  },
+  (t) => [
+    uniqueIndex("purchase_invoice_reviews_attachment_idx").on(t.mailAttachmentId),
+    index("purchase_invoice_reviews_status_idx").on(t.status),
+    index("purchase_invoice_reviews_email_idx").on(t.emailId),
+    index("purchase_invoice_reviews_reference_idx").on(t.proposedReference),
+  ],
+);
+
+export type PurchaseInvoiceReview = typeof purchaseInvoiceReviews.$inferSelect;
+export type NewPurchaseInvoiceReview = typeof purchaseInvoiceReviews.$inferInsert;
 
 /* ============================================================================
  * Samplecatalogus (Magic Stone e.a.) — referentiecatalogus, GEEN voorraad.
