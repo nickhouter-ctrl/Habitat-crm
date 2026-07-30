@@ -202,6 +202,9 @@ export const users = pgTable("users", {
   image: text(),
   passwordHash: text(),
   role: userRole().notNull().default("agent"),
+  /** Telefoonnummer voor de ondertekening van brieven (voorschotverzoeken).
+   *  Leeg → het algemene bedrijfsnummer uit lib/company.ts. */
+  phone: text(),
   ...timestamps,
 });
 
@@ -722,6 +725,9 @@ export const projects = pgTable(
     budgetHours: numeric({ precision: 8, scale: 2 }),
     /** Onvoorzien-percentage op de begroting (bv. 8) — als aparte regel meegerekend. */
     contingencyPct: numeric({ precision: 5, scale: 2 }),
+    /** Datum van de aannemingsovereenkomst — komt op het voorschotverzoek te
+     *  staan ("conform overeenkomst 12-07-2026"). */
+    contractDate: date(),
     /** Margepercentage op gewerkte uren (marge ÷ verkoopprijs, bv. 15). Bepaalt de
      * verkoopwaarde van de uren: kost ÷ (1 − pct). Leeg = de standaard (15%). */
     laborMarginPct: numeric({ precision: 5, scale: 2 }),

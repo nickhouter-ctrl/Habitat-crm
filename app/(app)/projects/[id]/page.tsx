@@ -72,6 +72,7 @@ import {
   unlinkPurchaseOrder,
   updateProject,
 } from "../actions";
+import { AdvanceRequestCard } from "./advance-request-card";
 import {
   applyStockOutFromDocument,
   approveEstimateToInvoice,
@@ -87,10 +88,18 @@ export default async function ProjectDetailPage({
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ edit?: string }>;
+  searchParams: Promise<{
+    edit?: string;
+    // Voorschot opvragen: bedrag/termijn/datum staan in de URL, zodat het
+    // concept server-side opgebouwd wordt zonder verborgen toestand.
+    vbedrag?: string;
+    vtermijn?: string;
+    vdatum?: string;
+    vmail?: string;
+  }>;
 }) {
   const { id } = await params;
-  const { edit: editEntryId } = await searchParams;
+  const { edit: editEntryId, ...voorschotParams } = await searchParams;
   const project = await db.query.projects.findFirst({ where: eq(projects.id, id) });
   if (!project) notFound();
 
@@ -685,6 +694,9 @@ export default async function ProjectDetailPage({
               <Field label="Einddatum (gepland)" htmlFor="endDate">
                 <Input id="endDate" name="endDate" type="date" defaultValue={project.endDate ?? ""} />
               </Field>
+              <Field label="Overeenkomst" htmlFor="contractDate" hint="datum van de aannemingsovereenkomst — komt in de voorschotbrief">
+                <Input id="contractDate" name="contractDate" type="date" defaultValue={project.contractDate ?? ""} />
+              </Field>
             </div>
             <Field label="Omschrijving" htmlFor="description">
               <Textarea id="description" name="description" rows={3} defaultValue={project.description ?? ""} />
@@ -1035,6 +1047,15 @@ export default async function ProjectDetailPage({
           </CardContent>
         </Card>
       )}
+
+      <AdvanceRequestCard
+        projectId={id}
+        projectName={project.name}
+        siteAlias={project.siteAlias}
+        contactId={project.contactId}
+        contractDate={project.contractDate}
+        params={voorschotParams}
+      />
 
       {/* ─────────────── Ontvangen betalingen (van klant) ─────────────── */}
       <Card id="ontvangen" className="mb-5 scroll-mt-24">

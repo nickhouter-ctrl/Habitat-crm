@@ -9,6 +9,7 @@ import { requireWriteUser } from "@/lib/auth/guards";
 import { auth } from "@/auth";
 import { db } from "@/lib/db";
 import {
+  activities,
   documents,
   projectBudgetLines,
   projectCosts,
@@ -25,7 +26,8 @@ import {
 import { computeTotals } from "@/lib/documents";
 import { insertNumberedDocument } from "@/lib/doc-number";
 import { renderBudgetPdf } from "@/lib/budget-pdf";
-import { sendEmail } from "@/lib/email";
+import { brandedEmail, escapeHtml, sendEmail } from "@/lib/email";
+import { recordSentEmail } from "@/lib/sent-email";
 import { COMPANY } from "@/lib/company";
 
 async function requireUser() {
@@ -96,6 +98,7 @@ const updateSchema = z.object({
   propertyId: z.string().trim().optional(),
   startDate: z.string().trim().optional(),
   endDate: z.string().trim().optional(),
+  contractDate: z.string().trim().optional(),
 });
 
 function uuidOrNull(v?: string) {
@@ -129,6 +132,7 @@ export async function updateProject(id: string, formData: FormData) {
       propertyId: uuidOrNull(d.propertyId),
       startDate: dateOrNull(d.startDate),
       endDate: dateOrNull(d.endDate),
+      contractDate: dateOrNull(d.contractDate),
       updatedAt: new Date(),
     })
     .where(eq(projects.id, id));
@@ -569,4 +573,72 @@ export async function createEstimateFromBudget(projectId: string) {
   });
   revalidatePath(`/projects/${projectId}`);
   redirect(`/documents/${id}/edit`);
+}
+
+/* ------------------------------------------------ voorschot bij de klant opvragen */
+
+const advanceRequestSchema = z.object({
+  to: z.string().trim().email("Vul een geldig e-mailadres in"),
+  subject: z.string().trim().min(1, "Onderwerp is verplicht"),
+  /** De brief zoals hij op het scherm stond — dit gaat er letterlijk uit. */
+  text: z.string().trim().min(20, "De brief is leeg"),
+  amountEur: z.string().trim().optional(),
+  termLabel: z.string().trim().optional(),
+});
+
+/**
+ * Verstuurt het voorschotverzoek (NL + ES) aan de klant.
+ *
+ * De HTML wordt hier uit de BEWERKTE tekst opgebouwd, niet uit een meegestuurd
+ * concept: anders kan de klant een andere brief lezen dan degene die is nagelezen.
+ */
+export async function sendAdvanceRequest(projectId: string, formData: FormData) {
+  const user = await requireUser();
+  const parsed = advanceRequestSchema.safeParse(Object.fromEntries(formData));
+  if (!parsed.success) throw new Error(parsed.error.issues.map((i) => i.message).join(", "));
+  const d = parsed.data;
+
+  const project = await db.query.projects.findFirst({ where: eq(projects.id, projectId) });
+  if (!project) redirect("/projects");
+
+  // Regeleinden bewaren; de scheidingslijn tussen NL en ES als echte streep.
+  const html = brandedEmail(
+    d.text
+      .split(/\n{2,}/)
+      .map((blok) =>
+        /^—{3,}$/.test(blok.trim())
+          ? `<hr style="border:none;border-top:1px solid #e8dfd0;margin:24px 0">`
+          : `<p style="margin:0 0 12px;white-space:pre-line">${escapeHtml(blok)}</p>`,
+      )
+      .join(""),
+  );
+
+  const res = await sendEmail({
+    to: d.to,
+    subject: d.subject,
+    html,
+    text: d.text,
+    fromUser: { name: user.name },
+  });
+
+  if (res.sent) {
+    await recordSentEmail({
+      kind: "other",
+      toEmail: d.to,
+      subject: d.subject,
+      html,
+      text: d.text,
+      contactId: project.contactId ?? null,
+    });
+    await db.insert(activities).values({
+      type: "note",
+      subject: `Voorschot opgevraagd: ${project.name}${d.termLabel ? ` (${d.termLabel})` : ""}`,
+      body: `${d.amountEur ? `Bedrag: €${d.amountEur} · ` : ""}Verstuurd aan ${d.to}.`,
+      contactId: project.contactId ?? null,
+      authorId: user.id,
+    });
+  }
+
+  revalidatePath(`/projects/${projectId}`);
+  redirect(`/projects/${projectId}?vmail=${res.sent ? "ok" : "mislukt"}#voorschot-opvragen`);
 }
