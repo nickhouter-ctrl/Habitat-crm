@@ -24,6 +24,14 @@ export async function sendEmail(input: {
   bcc?: string;
   /** Verstuur vanaf het inkoop-postvak i.p.v. hi@ (bv. een afgekeurde factuur). */
   fromPurchase?: boolean;
+  /**
+   * Verstuur namens deze persoon. Heeft die een eigen postvak in
+   * GMAIL_SENDER_ACCOUNTS, dan gaat de mail daar vandaan; anders vanaf het
+   * gedeelde postvak met zijn naam in de From-header.
+   */
+  fromUser?: { email?: string | null; name?: string | null };
+  /** Antwoorden hierheen sturen (bv. purchase@, zodat een correctie in de pijplijn komt). */
+  replyTo?: string;
   /** Antwoord in dezelfde thread: Message-ID en References van de bronmail. */
   inReplyTo?: string;
   references?: string;
@@ -45,19 +53,30 @@ export async function sendEmail(input: {
   // altijd in het CRM blijft staan.
   if (process.env.GMAIL_USER && process.env.GMAIL_APP_PASSWORD) {
     try {
-      const { sendMail, getPurchaseAccount } = await import("@/lib/gmail");
+      const { sendMail, getPurchaseAccount, getSenderAccount } = await import("@/lib/gmail");
       // Vanaf purchase@ versturen vereist dat dat postvak is geconfigureerd —
       // stil terugvallen op hi@ zou de leverancier op het verkeerde adres laten
       // antwoorden, dus dan liever een duidelijke fout.
       let account;
-      if (input.fromPurchase) {
+      let fromName: string | undefined;
+      // Eigen postvak van de afzender heeft voorrang: een leverancier ziet dan
+      // van wie het bericht komt in plaats van een gedeeld adres.
+      if (input.fromUser?.email) {
+        account = getSenderAccount(input.fromUser.email) ?? undefined;
+        fromName = input.fromUser.name?.trim() || undefined;
+      }
+      if (!account && input.fromPurchase) {
         account = getPurchaseAccount() ?? undefined;
         if (!account) return { sent: false, reason: "purchase-postvak-niet-geconfigureerd" };
+        // Geen eigen postvak: dan wél zichtbaar wie het verstuurde.
+        if (input.fromUser?.name) fromName = `${input.fromUser.name.trim()} · Habitat One`;
       }
       const res = await sendMail({
         to: input.to,
         bcc,
         account,
+        fromName,
+        replyTo: input.replyTo,
         subject: input.subject,
         html: input.html,
         text: input.text,

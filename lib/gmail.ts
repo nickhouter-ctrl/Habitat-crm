@@ -62,6 +62,40 @@ export function createImapClient(account?: MailAccount): ImapFlow {
 }
 
 /**
+ * Extra verzend-postvakken, zodat een mail vanaf het adres van de persoon zelf
+ * kan gaan (nick@, hans@) in plaats van vanaf een gedeeld adres.
+ *
+ * Formaat van `GMAIL_SENDER_ACCOUNTS`: `adres:app-wachtwoord` per postvak,
+ * gescheiden door `;`. Bijvoorbeeld:
+ *   nick@habitat-one.com:abcd efgh ijkl mnop;hans@habitat-one.com:qrst uvwx yz12 3456
+ *
+ * Gmail weigert een From-adres dat niet het ingelogde account is (of een
+ * geverifieerde alias), dus per postvak is een eigen app-wachtwoord nodig. Staat
+ * een adres er niet bij, dan valt het versturen terug op een gedeeld postvak en
+ * komt de naam van de afzender in de From-naam te staan.
+ */
+export function getSenderAccount(email: string | null | undefined): MailAccount | null {
+  const wanted = (email ?? "").trim().toLowerCase();
+  if (!wanted) return null;
+  for (const entry of (process.env.GMAIL_SENDER_ACCOUNTS ?? "").split(";")) {
+    const idx = entry.indexOf(":");
+    if (idx < 1) continue;
+    const user = entry.slice(0, idx).trim();
+    const pass = entry.slice(idx + 1).replace(/\s/g, "");
+    if (user.toLowerCase() === wanted && pass) return { user, pass };
+  }
+  // Ook de twee vaste postvakken meenemen, zodat hi@ en purchase@ hier ook uit komen.
+  const vast = [
+    { user: process.env.GMAIL_USER?.trim(), pass: process.env.GMAIL_APP_PASSWORD?.replace(/\s/g, "") },
+    { user: process.env.GMAIL_PURCHASE_USER?.trim(), pass: process.env.GMAIL_PURCHASE_APP_PASSWORD?.replace(/\s/g, "") },
+  ];
+  for (const a of vast) {
+    if (a.user && a.pass && a.user.toLowerCase() === wanted) return { user: a.user, pass: a.pass };
+  }
+  return null;
+}
+
+/**
  * Het inkoop-postvak (purchase@), als dat is geconfigureerd. Nodig om een
  * afgekeurde inkoopfactuur te beantwoorden vanaf het adres waar de leverancier
  * hem naartoe stuurde.
@@ -233,6 +267,8 @@ export async function sendMail(args: {
   bcc?: string;
   /** Verstuur vanaf een ander postvak (bv. purchase@) i.p.v. het hoofdaccount. */
   account?: MailAccount;
+  /** Naam in de From-header; standaard "Habitat One". */
+  fromName?: string;
   subject: string;
   text?: string;
   html?: string;
@@ -246,7 +282,7 @@ export async function sendMail(args: {
   const account = args.account ?? getCreds();
   const t = createSmtpTransporter(account);
   const info = await t.sendMail({
-    from: `Habitat One <${account.user}>`,
+    from: `${args.fromName?.trim() || "Habitat One"} <${account.user}>`,
     to: args.to,
     bcc: withMandatoryBcc(args.bcc, args.to),
     subject: args.subject,

@@ -597,6 +597,8 @@ export async function rejectInvoiceReview(args: {
   messageId?: string | null;
   /** Terugsturen naar de leverancier; leeg = alleen intern afkeuren. */
   mail?: { to: string; subject: string; html: string; text: string; attachInvoice?: boolean };
+  /** Namens wie de mail uitgaat — bepaalt het From-adres en de naam. */
+  sender?: { email?: string | null; name?: string | null };
 }): Promise<{ ok: boolean; mailSent?: boolean; mailReason?: string }> {
   const claimed = await db
     .update(purchaseInvoiceReviews)
@@ -641,6 +643,11 @@ export async function rejectInvoiceReview(args: {
       text: args.mail.text,
       attachments: bijlagen,
       fromPurchase: true,
+      fromUser: args.sender,
+      // Antwoorden (en een gecorrigeerde factuur) horen naar het inkoop-postvak
+      // te gaan, ook als de mail vanaf een persoonlijk adres uitgaat — anders
+      // komt de nieuwe factuur niet in de wachtrij terecht.
+      replyTo: process.env.GMAIL_PURCHASE_USER?.trim() || undefined,
       inReplyTo: mail?.messageId ? ensureAngles(mail.messageId) : undefined,
       references: [mail?.referencesHeader, mail?.messageId ? ensureAngles(mail.messageId) : null]
         .filter(Boolean)
