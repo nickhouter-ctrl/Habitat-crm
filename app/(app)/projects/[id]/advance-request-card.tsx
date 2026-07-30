@@ -18,6 +18,18 @@ import { buildAdvanceRequestEmail } from "@/lib/advance-request";
 import { formatEUR } from "@/lib/utils";
 import { sendAdvanceRequest } from "../actions";
 
+/**
+ * De termijn uit het mailonderwerp vissen. Het onderwerp is
+ * "Voorschot: <werf> conform overeenkomst <datum> <termijn>"; alles vóór de
+ * datum is ruis in een lijstje op de projectpagina — je weet al welk project je
+ * bekijkt. Lukt het niet, dan tonen we het onderwerp zoals het is.
+ */
+function termijnUit(subject: string | null): string {
+  const s = (subject ?? "").replace(/^Voorschot:\s*/, "");
+  const m = s.match(/conform overeenkomst\s+\d{2}-\d{2}-\d{4}\s+(.*)$/);
+  return (m?.[1] ?? s).trim() || "voorschotverzoek";
+}
+
 /** Bedrag uit de URL: "50000" of "50.000,00" of "50000.00". */
 function parseAmount(raw: string | undefined): number | null {
   if (!raw) return null;
@@ -73,6 +85,7 @@ export async function AdvanceRequestCard({
         id: sentEmails.id,
         subject: sentEmails.subject,
         toEmail: sentEmails.toEmail,
+        amountEur: sentEmails.amountEur,
         createdAt: sentEmails.createdAt,
       })
       .from(sentEmails)
@@ -139,8 +152,13 @@ export async function AdvanceRequestCard({
                   <span className="tabular-nums text-xs text-muted">
                     {m.createdAt.toLocaleDateString("nl-NL", { day: "numeric", month: "short", year: "numeric" })}
                   </span>
+                  <span className="font-medium tabular-nums">
+                    {m.amountEur != null ? formatEUR(Number(m.amountEur)) : "bedrag onbekend"}
+                  </span>
                   <Link href={`/sent-mail/${m.id}`} className="text-accent hover:underline">
-                    {(m.subject ?? "").replace(/^Voorschot:\s*/, "")}
+                    {/* Alleen de termijn, niet de hele werf + overeenkomstdatum die
+                        ook in het onderwerp staan — die regel werd anders een zin. */}
+                    {termijnUit(m.subject)}
                   </Link>
                   <span className="text-xs text-muted">→ {m.toEmail}</span>
                 </li>

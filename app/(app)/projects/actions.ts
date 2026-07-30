@@ -600,6 +600,7 @@ export async function sendAdvanceRequest(projectId: string, formData: FormData) 
 
   const project = await db.query.projects.findFirst({ where: eq(projects.id, projectId) });
   if (!project) redirect("/projects");
+  const bedrag = d.amountEur ? Number(moneyOrNull(d.amountEur)) : null;
 
   // Regeleinden bewaren; de scheidingslijn tussen NL en ES als echte streep.
   const html = brandedEmail(
@@ -630,6 +631,7 @@ export async function sendAdvanceRequest(projectId: string, formData: FormData) 
       text: d.text,
       contactId: project.contactId ?? null,
       projectId,
+      amountEur: bedrag,
     });
     await db.insert(activities).values({
       type: "note",

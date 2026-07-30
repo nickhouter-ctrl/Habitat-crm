@@ -16,6 +16,8 @@ export async function recordSentEmail(args: {
   documentId?: string | null;
   /** Zodat de mail ook op de projectpagina terug te vinden is (voorschotbrief). */
   projectId?: string | null;
+  /** Bedrag waar de mail over gaat, voor de lijstweergave. */
+  amountEur?: number | null;
 }): Promise<void> {
   try {
     await db.insert(sentEmails).values({
@@ -27,6 +29,7 @@ export async function recordSentEmail(args: {
       contactId: args.contactId ?? null,
       documentId: args.documentId ?? null,
       projectId: args.projectId ?? null,
+      amountEur: args.amountEur != null ? args.amountEur.toFixed(2) : null,
     });
   } catch {
     /* archief is bijzaak — nooit de mail-actie laten falen */

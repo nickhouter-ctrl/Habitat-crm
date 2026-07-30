@@ -1592,6 +1592,8 @@ export const sentEmails = pgTable(
     /** Bij welk project deze mail hoort — zodat een voorschotverzoek terug te
      *  vinden is op de projectpagina en niet alleen op de klantkaart. */
     projectId: uuid(),
+    /** Waar de mail over ging in geld (voorschotverzoek, aanmaning). */
+    amountEur: numeric({ precision: 14, scale: 2 }),
     ...timestamps,
   },
   (t) => [
