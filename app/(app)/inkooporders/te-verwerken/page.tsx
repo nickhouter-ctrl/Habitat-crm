@@ -1,101 +1,107 @@
-import { and, desc, eq, inArray, isNull, ne } from "drizzle-orm";
+/**
+ * De goedkeuringspoort: binnengekomen inkoopfacturen die op beoordeling wachten.
+ *
+ * Zolang een factuur hier staat, bestaat er géén inkooporder — hij telt dus niet
+ * mee in projectkosten, staat niet op het dashboard als openstaande post en gaat
+ * niet naar Holded. Dat gebeurt pas bij goedkeuren.
+ */
+import { asc, desc, eq, ne } from "drizzle-orm";
 
-import {
-  Badge,
-  Card,
-  CardContent,
-  EmptyState,
-  LinkButton,
-  PageHeader,
-} from "@/components/ui";
-import { SubmitButton } from "@/components/submit-button";
+import { Badge, Card, CardContent, CardHeader, CardTitle, EmptyState, LinkButton, PageHeader } from "@/components/ui";
 import { db } from "@/lib/db";
-import { emailInbox, mailAttachments } from "@/lib/db/schema";
+import { emailInbox, mailAttachments, projects, purchaseInvoiceReviews } from "@/lib/db/schema";
 import { formatEUR } from "@/lib/utils";
-import { createPoFromEmail, dismissEmailFromQueue } from "../actions";
+import { ReviewCard, type ReviewCardData, type ReviewCheck, type ReviewLine } from "./review-card";
 
-export const metadata = { title: "Te verwerken — inkoop" };
+export const metadata = { title: "Facturen keuren — inkoop" };
+export const dynamic = "force-dynamic";
 
-const FINANCIAL = ["supplier-invoice", "freight-invoice", "agent-fee-china", "agent-fee-spain", "opex"];
-const isProforma = (f: string) => /\bproforma\b|\bquotation\b|\bquote\b|^PI[\s._-]|\bPI\s+for\b/i.test(f);
-
-const CAT_LABEL: Record<string, string> = {
-  "supplier-invoice": "Leveranciersfactuur",
-  "freight-invoice": "Vracht",
-  "agent-fee-china": "Allpack / handling",
-  "agent-fee-spain": "Agent (ES)",
-  opex: "Kosten",
-};
-
-const fmtDate = (d: Date | null) =>
+const fmtDate = (d: Date | string | null) =>
   d ? new Date(d).toLocaleDateString("nl-NL", { day: "numeric", month: "short", year: "numeric" }) : "—";
 
-export default async function TeVerwerkenPage() {
-  const rows = await db
-    .select({
-      emailId: emailInbox.id,
-      subject: emailInbox.subject,
-      fromName: emailInbox.fromName,
-      fromEmail: emailInbox.fromEmail,
-      receivedAt: emailInbox.receivedAt,
-      attId: mailAttachments.id,
-      filename: mailAttachments.filename,
-      category: mailAttachments.category,
-      supplierTag: mailAttachments.supplierTag,
-      amountEur: mailAttachments.amountEur,
-    })
-    .from(mailAttachments)
-    .innerJoin(emailInbox, eq(emailInbox.id, mailAttachments.emailId))
-    .where(
-      and(
-        isNull(emailInbox.linkedPurchaseOrderId),
-        ne(emailInbox.status, "archived"),
-        inArray(mailAttachments.category, FINANCIAL),
-      ),
-    )
-    .orderBy(desc(emailInbox.receivedAt));
+const dagenSinds = (d: Date | string | null) =>
+  d ? Math.floor((Date.now() - new Date(d).getTime()) / 86_400_000) : 0;
 
-  // Groepeer per e-mail; proforma's tellen niet mee als te-betalen.
-  type Item = {
-    emailId: string;
-    subject: string | null;
-    from: string;
-    receivedAt: Date | null;
-    supplier: string | null;
-    categories: Set<string>;
-    amount: number;
-    files: string[];
-  };
-  const byEmail = new Map<string, Item>();
+export default async function FacturenKeurenPage() {
+  const [rows, projectRows] = await Promise.all([
+    db
+      .select({
+        review: purchaseInvoiceReviews,
+        attachmentName: mailAttachments.filename,
+        mailId: emailInbox.id,
+        subject: emailInbox.subject,
+        fromEmail: emailInbox.fromEmail,
+        fromName: emailInbox.fromName,
+        receivedAt: emailInbox.receivedAt,
+      })
+      .from(purchaseInvoiceReviews)
+      .innerJoin(mailAttachments, eq(mailAttachments.id, purchaseInvoiceReviews.mailAttachmentId))
+      .innerJoin(emailInbox, eq(emailInbox.id, purchaseInvoiceReviews.emailId))
+      .where(eq(purchaseInvoiceReviews.status, "pending"))
+      .orderBy(desc(emailInbox.receivedAt)),
+    db
+      .select({ id: projects.id, name: projects.name })
+      .from(projects)
+      .where(ne(projects.status, "archived"))
+      .orderBy(asc(projects.name)),
+  ]);
+
+  // Eén kaart per mail; een mail kan meerdere facturen bevatten (Allpack stuurt
+  // goederen, handling en vracht in één bericht).
+  const perMail = new Map<
+    string,
+    { subject: string | null; from: string; receivedAt: Date | string | null; items: ReviewCardData[] }
+  >();
   for (const r of rows) {
-    if (isProforma(r.filename)) continue;
-    let it = byEmail.get(r.emailId);
-    if (!it) {
-      it = {
-        emailId: r.emailId,
+    const groep =
+      perMail.get(r.mailId) ??
+      {
         subject: r.subject,
-        from: r.fromName || r.fromEmail || "—",
+        from: r.fromName ? `${r.fromName} <${r.fromEmail ?? ""}>` : (r.fromEmail ?? "onbekend"),
         receivedAt: r.receivedAt,
-        supplier: r.supplierTag,
-        categories: new Set(),
-        amount: 0,
-        files: [],
+        items: [] as ReviewCardData[],
       };
-      byEmail.set(r.emailId, it);
-    }
-    it.categories.add(r.category);
-    it.files.push(r.filename);
-    const amt = Number(r.amountEur ?? 0);
-    if (amt > it.amount) it.amount = amt;
-    if (!it.supplier && r.supplierTag) it.supplier = r.supplierTag;
+    const v = r.review;
+    const fields = (v.aiFields ?? null) as { lines?: ReviewLine[] } | null;
+    groep.items.push({
+      id: v.id,
+      supplier: v.proposedSupplier,
+      reference: v.proposedReference,
+      total: v.proposedTotal != null ? Number(v.proposedTotal) : null,
+      subtotal: v.proposedSubtotal != null ? Number(v.proposedSubtotal) : null,
+      currency: v.proposedCurrency,
+      totalOriginal: v.proposedTotalOriginal != null ? Number(v.proposedTotalOriginal) : null,
+      fxRate: v.fxRate != null ? Number(v.fxRate) : null,
+      invoiceDate: v.proposedInvoiceDate,
+      verdict: (v.verdict ?? "pending") as ReviewCardData["verdict"],
+      checks: (Array.isArray(v.findings) ? v.findings : []) as ReviewCheck[],
+      projectId: v.suggestedProjectId,
+      kind: (v.suggestedKind as "labor" | "material" | null) ?? null,
+      hours: v.suggestedHours != null ? Number(v.suggestedHours) : null,
+      lines: Array.isArray(fields?.lines) ? (fields.lines as ReviewLine[]) : [],
+      attachmentId: v.mailAttachmentId,
+      attachmentName: r.attachmentName,
+      duplicateOfPoId: v.duplicateOfPoId,
+      supplierEmail: v.supplierEmail,
+      wachtDagen: dagenSinds(r.receivedAt),
+    });
+    perMail.set(r.mailId, groep);
   }
-  const items = [...byEmail.values()];
+
+  const totaal = rows.reduce((s, r) => s + (r.review.proposedTotal != null ? Number(r.review.proposedTotal) : 0), 0);
+  const afkeuren = rows.filter((r) => r.review.verdict === "reject").length;
+  const onleesbaar = rows.filter((r) => r.review.verdict === "unreadable").length;
+  const oudste = rows.reduce((max, r) => Math.max(max, dagenSinds(r.receivedAt)), 0);
 
   return (
     <>
       <PageHeader
-        title="Te verwerken"
-        subtitle={`${items.length} e-mail(s) met een factuur-bijlage die nog niet aan een inkooporder hangen`}
+        title="Facturen keuren"
+        subtitle={
+          rows.length === 0
+            ? "Geen inkoopfacturen die op beoordeling wachten."
+            : `${rows.length} factu${rows.length === 1 ? "ur" : "ren"} · ${formatEUR(totaal)} · pas na goedkeuring komen ze in de inkoop`
+        }
         actions={
           <LinkButton href="/inkooporders" variant="ghost">
             ← Inkooporders
@@ -103,51 +109,35 @@ export default async function TeVerwerkenPage() {
         }
       />
 
-      {items.length === 0 ? (
+      {rows.length > 0 && (
+        <div className="mb-5 flex flex-wrap gap-2 text-xs">
+          {afkeuren > 0 && <Badge tone="danger">{afkeuren} incompleet — terugsturen</Badge>}
+          {onleesbaar > 0 && <Badge tone="neutral">{onleesbaar} niet gelezen — handmatig bekijken</Badge>}
+          {oudste >= 7 && <Badge tone="warning">oudste wacht {oudste} dagen</Badge>}
+        </div>
+      )}
+
+      {rows.length === 0 ? (
         <EmptyState
-          title="Niets te verwerken"
-          description="Alle binnengekomen factuur-mails zijn aan een inkooporder gekoppeld of geseponeerd."
+          title="Niets te keuren"
+          description="Zodra er een factuur op purchase@habitat-one.com binnenkomt, wordt die uitgelezen en verschijnt hij hier. Tot je 'm goedkeurt telt hij niet mee in de projectkosten en gaat hij niet naar Holded."
           action={<LinkButton href="/inkooporders">Naar inkooporders</LinkButton>}
         />
       ) : (
-        <div className="space-y-3">
-          {items.map((it) => (
-            <Card key={it.emailId}>
-              <CardContent className="flex flex-wrap items-start justify-between gap-4 p-4">
-                <div className="min-w-0 flex-1">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <span className="font-medium">{it.supplier ?? "(leverancier onbekend)"}</span>
-                    {[...it.categories].map((c) => (
-                      <Badge key={c} tone={c === "agent-fee-china" ? "info" : "neutral"}>
-                        {CAT_LABEL[c] ?? c}
-                      </Badge>
-                    ))}
-                    {it.amount > 0 ? (
-                      <span className="text-sm font-semibold tabular-nums">{formatEUR(it.amount)}</span>
-                    ) : (
-                      <span className="text-xs text-warning">bedrag niet uitgelezen</span>
-                    )}
-                  </div>
-                  <p className="mt-0.5 truncate text-sm text-muted" title={it.subject ?? ""}>
-                    {it.subject ?? "(geen onderwerp)"}
-                  </p>
-                  <p className="text-xs text-muted">
-                    {it.from} · {fmtDate(it.receivedAt)} · {it.files.length} bijlage{it.files.length === 1 ? "" : "n"}
-                  </p>
-                  <p className="mt-1 break-all text-[11px] text-muted">{it.files.join(" · ")}</p>
-                </div>
-                <div className="flex shrink-0 items-center gap-2">
-                  <form action={createPoFromEmail.bind(null, it.emailId)}>
-                    <SubmitButton size="sm" variant="primary" pendingLabel="Bezig…">
-                      → Maak inkooporder
-                    </SubmitButton>
-                  </form>
-                  <form action={dismissEmailFromQueue.bind(null, it.emailId)}>
-                    <SubmitButton size="sm" variant="ghost" className="text-muted" pendingLabel="…">
-                      Negeren
-                    </SubmitButton>
-                  </form>
-                </div>
+        <div className="grid gap-5">
+          {[...perMail.entries()].map(([mailId, groep]) => (
+            <Card key={mailId}>
+              <CardHeader>
+                <CardTitle>{groep.subject || "(geen onderwerp)"}</CardTitle>
+                <span className="text-xs text-muted">
+                  van {groep.from} · {fmtDate(groep.receivedAt)}
+                  {groep.items.length > 1 ? ` · ${groep.items.length} facturen in deze mail` : ""}
+                </span>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {groep.items.map((item) => (
+                  <ReviewCard key={item.id} data={item} projects={projectRows} />
+                ))}
               </CardContent>
             </Card>
           ))}

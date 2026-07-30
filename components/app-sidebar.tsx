@@ -31,7 +31,9 @@ import {
   UserCog,
   Percent,
   X,
- HandCoins } from "lucide-react";
+  HandCoins,
+  FileCheck,
+} from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
@@ -94,6 +96,7 @@ const NAV_GROUPS: { label: string | null; items: NavItem[] }[] = [
     items: [
       { href: "/bestellen", label: "Bestellen", icon: ShoppingCart },
       { href: "/inkooporders", label: "Inkooporders", icon: PackagePlus },
+      { href: "/inkooporders/te-verwerken", label: "Facturen keuren", icon: FileCheck },
       { href: "/shipments", label: "Shipments", icon: Boxes },
       { href: "/pakbonnen", label: "Pakbonnen", icon: Truck },
       { href: "/leveringen", label: "Leveringen", icon: PackageCheck },

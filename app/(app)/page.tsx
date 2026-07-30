@@ -24,7 +24,7 @@ import {
 } from "@/components/ui";
 import { TabsRoot, TabsBar, TabPanel } from "@/components/tabs";
 import { db } from "@/lib/db";
-import { activities, contacts, deliveries, documents, emailInbox, mailAttachments, products, projects, purchaseOrders, quoteRequests, timeEntries } from "@/lib/db/schema";
+import { activities, contacts, deliveries, documents, emailInbox, mailAttachments, products, projects, purchaseInvoiceReviews, purchaseOrders, quoteRequests, timeEntries } from "@/lib/db/schema";
 import { normalizeDocItems } from "@/lib/documents";
 import { purchaseDocsTotalExBTW } from "@/lib/holded/accounting";
 import { getReservedStockByProduct } from "@/lib/stock";
@@ -171,19 +171,18 @@ export default async function DashboardPage() {
         .where(eq(quoteRequests.status, "pending")),
       // Inkoopfacturen die handmatige review nodig hebben — mails met financiële
       // bijlages die nog niet aan een PO gelinkt zijn
+      // Inkoopfacturen die op goedkeuring wachten. Die staan nog NIET in
+      // purchase_orders, dus ze tellen nergens anders mee — deze teller is de
+      // enige plek waar ze zichtbaar zijn op het dashboard.
       db
         .select({
-          n: sql<number>`count(distinct ${emailInbox.id})::int`,
+          n: sql<number>`count(*)::int`,
+          afkeuren: sql<number>`count(*) filter (where verdict = 'reject')::int`,
+          onleesbaar: sql<number>`count(*) filter (where verdict = 'unreadable')::int`,
+          oudsteDagen: sql<number>`coalesce(max(extract(day from now() - created_at)), 0)::int`,
         })
-        .from(emailInbox)
-        .innerJoin(mailAttachments, eq(mailAttachments.emailId, emailInbox.id))
-        .where(
-          and(
-            isNull(emailInbox.linkedPurchaseOrderId),
-            sql`${mailAttachments.category} IN ('supplier-invoice','freight-invoice','agent-fee-china','agent-fee-spain','opex','contractor','quote-proforma')`,
-            sql`${emailInbox.status} != 'archived'`,
-          ),
-        ),
+        .from(purchaseInvoiceReviews)
+        .where(eq(purchaseInvoiceReviews.status, "pending")),
       // Openstaande inkoopfacturen — nog te betalen (nieuwste eerst)
       db
         .select()
@@ -605,8 +604,16 @@ export default async function DashboardPage() {
               </ActionRow>
             )}
             {(invoiceReviewAgg?.n ?? 0) > 0 && (
-              <ActionRow href="/inbox?status=new" emoji="🧾" tone="warning">
-                <strong>{invoiceReviewAgg!.n}</strong> mail{invoiceReviewAgg!.n === 1 ? "" : "s"} met factuur/proforma-bijlage — in inkoop zetten?
+              <ActionRow
+                href="/inkooporders/te-verwerken"
+                emoji="🧾"
+                tone={(invoiceReviewAgg!.oudsteDagen ?? 0) >= 7 ? "danger" : "warning"}
+              >
+                <strong>{invoiceReviewAgg!.n}</strong> inkoopfactu{invoiceReviewAgg!.n === 1 ? "ur" : "ren"} wacht
+                {invoiceReviewAgg!.n === 1 ? "" : "en"} op goedkeuring
+                {(invoiceReviewAgg!.afkeuren ?? 0) > 0 ? ` · ${invoiceReviewAgg!.afkeuren} incompleet` : ""}
+                {(invoiceReviewAgg!.onleesbaar ?? 0) > 0 ? ` · ${invoiceReviewAgg!.onleesbaar} niet gelezen` : ""}
+                {(invoiceReviewAgg!.oudsteDagen ?? 0) >= 7 ? ` · oudste wacht ${invoiceReviewAgg!.oudsteDagen} dagen` : ""}
               </ActionRow>
             )}
             {poSoon > 0 && (

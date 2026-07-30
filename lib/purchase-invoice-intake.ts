@@ -12,7 +12,7 @@
  * Bewust géén `server-only`: de scripts in scripts/ moeten deze functies kunnen
  * aanroepen om de poort te testen zonder de hele app te starten.
  */
-import { and, eq, isNotNull, ne, sql } from "drizzle-orm";
+import { and, desc, eq, isNotNull, ne, sql } from "drizzle-orm";
 
 import { readInvoiceWithAI, type AiInvoiceFields } from "@/lib/ai-invoice-extract";
 import { db } from "@/lib/db";
@@ -26,6 +26,7 @@ import {
   purchaseInvoiceReviews,
   purchaseOrders,
   timeEntries,
+  workers,
   type PurchaseInvoiceReview,
 } from "@/lib/db/schema";
 import { buildInvoicePdfAttachment, isExcelAttachment } from "@/lib/excel-to-pdf";
@@ -119,6 +120,8 @@ export type InvoiceProposal = {
   projectId: string | null;
   kind: "labor" | "material" | null;
   hours: number | null;
+  /** Gevuld als de uren zijn terugberekend uit het bedrag i.p.v. van de factuur gelezen. */
+  hoursDerivedFrom: string | null;
   lines: ProposalLine[];
   fields: AiInvoiceFields | null;
   verdict: InvoiceVerdict;
@@ -210,6 +213,21 @@ export async function buildInvoiceProposal(args: {
     columns: { id: true },
   });
 
+  // Stuurt een bouwer alleen een totaalbedrag? Reken de uren terug met het
+  // bekende uurtarief — anders staat er een urenregel van "1 post" op het
+  // project en klopt het uurtarief niet.
+  const kind = f?.isLabor === true ? "labor" : f?.isLabor === false ? "material" : null;
+  let hours = f?.hours ?? null;
+  let hoursDerivedFrom: string | null = null;
+  const exBtw = subtotal ?? total;
+  if (kind === "labor" && (hours == null || hours <= 0) && exBtw != null && exBtw > 0) {
+    const tarief = await guessHourlyRate(supplier);
+    if (tarief) {
+      hours = Math.round((exBtw / tarief.rate) * 100) / 100;
+      hoursDerivedFrom = `${hours} uur afgeleid uit €${exBtw.toFixed(2)} ÷ €${tarief.rate.toFixed(2)}/uur (${tarief.source})`;
+    }
+  }
+
   const verdict = evaluateInvoice(read, {
     projectMatched: !!projectId || distinctProjects.size > 0,
     knownIbans: f?.supplierTaxId ? await knownIbansFor(f.supplierTaxId) : [],
@@ -228,8 +246,9 @@ export async function buildInvoiceProposal(args: {
     fxRate,
     invoiceDate: f?.invoiceDate ?? null,
     projectId,
-    kind: f?.isLabor === true ? "labor" : f?.isLabor === false ? "material" : null,
-    hours: f?.hours ?? null,
+    kind,
+    hours,
+    hoursDerivedFrom,
     lines: distinctProjects.size > 1 ? lines : [],
     fields: f,
     verdict,
@@ -239,6 +258,66 @@ export async function buildInvoiceProposal(args: {
     aiModel: read.ok ? read.model : null,
     aiPromptVersion: read.ok ? read.promptVersion : null,
   };
+}
+
+/**
+ * Grenzen waarbinnen een bedrag een gelóófwaardig uurtarief is. Nodig omdat een
+ * factuur zónder urenopgave in dit systeem als "1 post" wordt geboekt met het
+ * hele factuurbedrag als tarief — zie de conventie bij time_entries. Zouden we
+ * dat als uurtarief overnemen, dan rekent de terugrekening altijd 1 uur uit.
+ */
+const MIN_UURTARIEF = 8;
+const MAX_UURTARIEF = 150;
+
+/**
+ * Uurtarief van deze bouwer, om uren terug te rekenen als de factuur alleen een
+ * totaalbedrag noemt. Eerst het vastgelegde kostentarief van de arbeider, anders
+ * wat er de vorige keer voor dezelfde leverancier is geboekt.
+ */
+export async function guessHourlyRate(
+  supplier: string | null,
+): Promise<{ rate: number; source: string } | null> {
+  const sup = (supplier ?? "").trim().toLowerCase();
+  if (sup.length < 4) return null;
+
+  // Naam-match arbeider ↔ leverancier: bevat-elkaar, zoals bij het koppelen van
+  // een weekfactuur ("Zerghini Abdelmjid" ↔ arbeider "Abdelmjid").
+  const alleWorkers = await db
+    .select({ name: workers.name, rate: workers.hourlyCostEur })
+    .from(workers)
+    .where(eq(workers.active, true));
+  const treffers = alleWorkers.filter((w) => {
+    const n = w.name.trim().toLowerCase();
+    const tarief = Number(w.rate);
+    return (
+      n.length >= 4 &&
+      (sup.includes(n) || n.includes(sup)) &&
+      tarief >= MIN_UURTARIEF &&
+      tarief <= MAX_UURTARIEF
+    );
+  });
+  if (treffers.length === 1) {
+    return { rate: Number(treffers[0].rate), source: `tarief van ${treffers[0].name}` };
+  }
+
+  // Anders: het laatst geboekte tarief voor deze leverancier. Alleen regels met
+  // écht getelde uren en een plausibel tarief — een "1 post"-regel zegt niets
+  // over het uurtarief.
+  const [laatste] = await db
+    .select({ rate: timeEntries.hourlyCostEur, date: timeEntries.date, hours: timeEntries.hours })
+    .from(timeEntries)
+    .innerJoin(purchaseOrders, eq(purchaseOrders.id, timeEntries.purchaseOrderId))
+    .where(
+      sql`lower(${purchaseOrders.supplier}) = ${sup}
+        and ${timeEntries.hours}::numeric > 1
+        and ${timeEntries.hourlyCostEur}::numeric between ${MIN_UURTARIEF} and ${MAX_UURTARIEF}`,
+    )
+    .orderBy(desc(timeEntries.date))
+    .limit(1);
+  if (laatste) {
+    return { rate: Number(laatste.rate), source: `vorige factuur (${laatste.date})` };
+  }
+  return null;
 }
 
 /** IBAN's die deze leverancier eerder gebruikte — een afwijking is een fraudesignaal. */
@@ -288,7 +367,21 @@ export async function upsertInvoiceReview(p: InvoiceProposal, source: "auto" | "
     aiPromptVersion: p.aiPromptVersion,
     aiCheckedAt: new Date(),
     verdict: p.verdict.status,
-    findings: p.verdict.checks as unknown,
+    findings: [
+      ...p.verdict.checks,
+      ...(p.hoursDerivedFrom
+        ? [
+            {
+              key: "hours_derived",
+              label: p.hoursDerivedFrom,
+              severity: "warning" as const,
+              ok: false,
+              internal: true,
+              es: "",
+            },
+          ]
+        : []),
+    ] as unknown,
     duplicateOfPoId: p.duplicateOfPoId,
     supplierEmail: p.supplierEmail,
     supplierEmailSource: p.supplierEmailSource,

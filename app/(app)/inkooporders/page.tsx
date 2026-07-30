@@ -17,7 +17,7 @@ import {
   Tr,
 } from "@/components/ui";
 import { db } from "@/lib/db";
-import { emailInbox, mailAttachments, purchaseOrders } from "@/lib/db/schema";
+import { emailInbox, mailAttachments, purchaseInvoiceReviews, purchaseOrders } from "@/lib/db/schema";
 import { formatMoney, poExVat, poExVatAmount, PO_OPEN_STATUSES, PO_STATUS_META } from "@/lib/purchase-orders";
 import { cn, formatEUR } from "@/lib/utils";
 
@@ -62,18 +62,12 @@ export default async function PurchaseOrdersPage({
 
   const pendingHolded = rows.filter((r) => !r.holdedId).length;
 
-  // Aantal nog te verwerken factuur-mails (financiële bijlage, niet gekoppeld).
+  // Facturen die op goedkeuring wachten. Die staan NIET in purchase_orders — pas
+  // na goedkeuring ontstaat daar een rij.
   const [{ n: queueCount }] = await db
-    .select({ n: sql<number>`count(distinct ${emailInbox.id})::int` })
-    .from(mailAttachments)
-    .innerJoin(emailInbox, eq(emailInbox.id, mailAttachments.emailId))
-    .where(
-      and(
-        isNull(emailInbox.linkedPurchaseOrderId),
-        ne(emailInbox.status, "archived"),
-        inArray(mailAttachments.category, ["supplier-invoice", "freight-invoice", "agent-fee-china", "agent-fee-spain", "opex"]),
-      ),
-    );
+    .select({ n: sql<number>`count(*)::int` })
+    .from(purchaseInvoiceReviews)
+    .where(eq(purchaseInvoiceReviews.status, "pending"));
 
   // Aggregaten op de VOLLEDIGE set (overzicht blijft stabiel los van het filter).
   const eurRows = rows.filter((r) => (r.currency ?? "EUR") === "EUR");
@@ -138,7 +132,7 @@ export default async function PurchaseOrdersPage({
             <SyncHoldedButton pendingCount={pendingHolded} />
             {queueCount > 0 && (
               <LinkButton href="/inkooporders/te-verwerken" variant="secondary">
-                📥 Te verwerken ({queueCount})
+                📥 Te keuren ({queueCount})
               </LinkButton>
             )}
             <LinkButton href="/inkooporders/bestellen" variant="secondary">

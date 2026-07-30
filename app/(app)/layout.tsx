@@ -3,7 +3,7 @@ import { and, count, eq, isNull, ne } from "drizzle-orm";
 
 import { auth } from "@/auth";
 import { db } from "@/lib/db";
-import { emailInbox, purchaseOrders, quoteRequests } from "@/lib/db/schema";
+import { emailInbox, purchaseInvoiceReviews, purchaseOrders, quoteRequests } from "@/lib/db/schema";
 import { AppSidebar } from "@/components/app-sidebar";
 import { GlobalSearch } from "@/components/global-search";
 
@@ -19,19 +19,25 @@ export default async function AppLayout({
   const session = await auth();
   if (!session?.user) redirect("/login");
 
-  // Badge-tellers in de zijbalk: open aanvragen, nieuwe mails, te-betalen inkoop.
-  const [[pending], [inboxNew], [poUnpaid]] = await Promise.all([
+  // Badge-tellers in de zijbalk: open aanvragen, nieuwe mails, te-betalen inkoop
+  // en inkoopfacturen die op goedkeuring wachten.
+  const [[pending], [inboxNew], [poUnpaid], [teKeuren]] = await Promise.all([
     db.select({ value: count() }).from(quoteRequests).where(eq(quoteRequests.status, "pending")),
     db.select({ value: count() }).from(emailInbox).where(eq(emailInbox.status, "new")),
     db
       .select({ value: count() })
       .from(purchaseOrders)
       .where(and(ne(purchaseOrders.status, "draft"), isNull(purchaseOrders.paidAt))),
+    db
+      .select({ value: count() })
+      .from(purchaseInvoiceReviews)
+      .where(eq(purchaseInvoiceReviews.status, "pending")),
   ]);
   const badges: Record<string, number> = {
     "/aanvragen": pending?.value ?? 0,
     "/inbox": inboxNew?.value ?? 0,
     "/inkooporders": poUnpaid?.value ?? 0,
+    "/inkooporders/te-verwerken": teKeuren?.value ?? 0,
   };
 
   return (
