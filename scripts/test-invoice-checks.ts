@@ -171,5 +171,44 @@ console.log("Regelset inkoopfacturen\n");
   assert("IBAN met tikfout ongeldig", !isValidIban("ES0900492537602514049802"));
 }
 
+/* 9. Import van buiten de EU: de Spaanse factuureisen gelden daar niet */
+{
+  const china: AiInvoiceFields = {
+    ...compleet,
+    supplier: "Hebei Zengyi New Building Materials",
+    supplierLegalName: "Hebei Zengyi New Building Materials Co., Ltd",
+    supplierTaxId: null,
+    supplierCountry: "CN",
+    supplierAddress: "Liulinju Village, Liugezhuang Town, Dachang, Hebei",
+    recipientName: "ALLPACK ENTERPRISES LIMITED",
+    recipientTaxId: null,
+    currency: "USD",
+    vatRate: null,
+    vatAmount: null,
+    vatExemptionNote: null,
+    subtotal: 25436.6,
+    total: 25436.6,
+    iban: "50695014040001019",
+    isLabor: false,
+    hours: null,
+    hoursPeriodFrom: null,
+    hoursPeriodTo: null,
+    descriptionText: "XPS waterproof backing board 1200x600x10mm, 480 sheets",
+    documentKind: "factura",
+  };
+  const v = evaluateInvoice(lees(china), { projectMatched: true });
+  const keys = v.checks.filter((c) => !c.ok && !c.skipped).map((c) => c.key);
+  assert("import → geen NIF-eis", !keys.includes("supplier_tax_id"), keys.join(", "));
+  assert("import → geen IVA-eis", !keys.includes("vat"));
+  assert("import → onze naam hoeft er niet op", !keys.includes("recipient_name"));
+  assert("import → adres zonder huisnummer mag", !keys.includes("supplier_address"));
+  assert("import → geen IBAN-checksum", !keys.includes("iban_checksum"));
+  assert("import met alles erop → ok", v.status === "ok", `kreeg ${v.status}: ${keys.join(", ")}`);
+
+  // Maar een Spaanse leverancier moet nog steeds voldoen.
+  const spanjaard = evaluateInvoice(lees({ ...compleet, supplierTaxId: null, supplierCountry: "ES" }), ctx);
+  assert("ES zonder NIF blijft afgekeurd", spanjaard.status === "reject");
+}
+
 console.log(`\n${ok} geslaagd, ${fail} mislukt`);
 process.exit(fail === 0 ? 0 : 1);

@@ -64,6 +64,35 @@ export type InvoiceVerdict = {
   readError: AiReadError | null;
 };
 
+/**
+ * Onder welk regime valt deze factuur? De Spaanse factuureisen gelden niet voor
+ * een Chinese exportfactuur: die heeft geen NIF, geen IVA en is vaak aan onze
+ * agent geadresseerd in plaats van aan ons. Zulke facturen daarop afkeuren zou
+ * betekenen dat élke importzending een verwijt oplevert.
+ */
+export type InvoiceRegime = "spanish" | "eu" | "import";
+
+const EU_LANDEN = new Set([
+  "AT","BE","BG","CY","CZ","DE","DK","EE","FI","FR","GR","HR","HU","IE","IT",
+  "LT","LU","LV","MT","NL","PL","PT","RO","SE","SI","SK",
+]);
+
+/** Leidt het regime af uit land, valuta en de vorm van het btw-nummer. */
+export function detectRegime(f: {
+  supplierCountry?: string | null;
+  supplierTaxId?: string | null;
+  currency?: string | null;
+}): InvoiceRegime {
+  const land = (f.supplierCountry ?? "").toUpperCase().slice(0, 2);
+  if (land === "ES") return "spanish";
+  if (land && EU_LANDEN.has(land)) return "eu";
+  if (land) return "import";
+  // Geen land uitgelezen: val terug op de valuta en het btw-nummer.
+  const val = (f.currency ?? "EUR").toUpperCase();
+  if (val !== "EUR") return "import";
+  return isPlausibleTaxId(f.supplierTaxId) ? "spanish" : "import";
+}
+
 export type CheckContext = {
   /** Zoektermen van alle projecten — zie `matchProjectFromHint`. */
   projectMatched: boolean;
@@ -71,6 +100,8 @@ export type CheckContext = {
   knownIbans?: string[];
   /** Referentie van een bestaande inkooporder met hetzelfde factuurnummer. */
   duplicateOf?: string | null;
+  /** Overschrijf het automatisch bepaalde regime (zie {@link detectRegime}). */
+  regime?: InvoiceRegime;
 };
 
 const norm = (s: string | null | undefined) =>
@@ -190,6 +221,8 @@ export function evaluateInvoice(read: AiInvoiceRead, ctx: CheckContext): Invoice
     };
   }
 
+  const regime = ctx.regime ?? detectRegime(f);
+  const spaans = regime === "spanish";
   const isSimplified = norm(f.documentKind) === "simplificada";
   const notAnInvoice = ["proforma", "presupuesto", "albaran"].includes(norm(f.documentKind));
   // Btw-verlegging (inversión del sujeto pasivo) betekent wettelijk GEEN btw op
@@ -225,9 +258,12 @@ export function evaluateInvoice(read: AiInvoiceRead, ctx: CheckContext): Invoice
     }),
     check({
       key: "supplier_tax_id",
-      label: "NIF/CIF van de leverancier",
+      label: spaans ? "NIF/CIF van de leverancier" : "Btw-nummer van de leverancier",
       severity: "blocking",
-      ok: isPlausibleTaxId(f.supplierTaxId),
+      // Een leverancier buiten de EU heeft geen btw-nummer; daar is een
+      // bedrijfsnaam + adres het enige wat we kunnen eisen.
+      skipped: regime === "import",
+      ok: regime === "import" || isPlausibleTaxId(f.supplierTaxId),
       found: f.supplierTaxId,
       es: "el NIF/CIF del emisor",
     }),
@@ -235,8 +271,11 @@ export function evaluateInvoice(read: AiInvoiceRead, ctx: CheckContext): Invoice
       key: "supplier_address",
       label: "Adres van de leverancier",
       severity: "blocking",
-      // Een adres zonder cijfer is bijna altijd onvolledig (geen huisnummer).
-      ok: (f.supplierAddress ?? "").trim().length >= 10 && /\d/.test(f.supplierAddress ?? ""),
+      // In Spanje is een adres zonder cijfer bijna altijd onvolledig (geen
+      // huisnummer). Buiten Europa zijn adressen zonder nummer heel gewoon.
+      ok:
+        (f.supplierAddress ?? "").trim().length >= 10 &&
+        (regime === "import" || /\d/.test(f.supplierAddress ?? "")),
       found: f.supplierAddress,
       es: "el domicilio fiscal completo del emisor",
     }),
@@ -245,8 +284,9 @@ export function evaluateInvoice(read: AiInvoiceRead, ctx: CheckContext): Invoice
       label: "Onze naam als ontvanger",
       severity: "blocking",
       // Een factura simplificada (ticket) hoeft wettelijk geen klantgegevens te
-      // bevatten — die dus niet afkeuren, wel signaleren.
-      skipped: isSimplified,
+      // bevatten. Bij import staat vaak onze inkoopagent als geadresseerde op de
+      // exportfactuur — ook dat is geen gebrek aan de factuur.
+      skipped: isSimplified || regime === "import",
       ok: isSimplified || /habitatone|creadores|sorprendentes/.test(norm(f.recipientName).replace(/[^a-z]/g, "")),
       found: f.recipientName,
       es: `los datos completos del destinatario: ${COMPANY.legalName}`,
@@ -255,9 +295,10 @@ export function evaluateInvoice(read: AiInvoiceRead, ctx: CheckContext): Invoice
       key: "recipient_tax_id",
       label: "Ons NIF als ontvanger",
       severity: "blocking",
-      skipped: isSimplified,
+      skipped: isSimplified || regime === "import",
       ok:
         isSimplified ||
+        regime === "import" ||
         (f.recipientTaxId ?? "").toUpperCase().replace(/[^0-9A-Z]/g, "").replace(/^ES/, "") === OWN_TAX_ID,
       found: f.recipientTaxId,
       es: `el NIF del destinatario: ${COMPANY.vatNumber}`,
@@ -272,9 +313,12 @@ export function evaluateInvoice(read: AiInvoiceRead, ctx: CheckContext): Invoice
     }),
     check({
       key: "vat",
-      label: vatExempt ? "Btw-verlegging vermeld" : "IVA-tarief en -bedrag",
+      label: vatExempt ? "Btw-verlegging vermeld" : regime === "import" ? "Btw (niet van toepassing bij import)" : "IVA-tarief en -bedrag",
       severity: "blocking",
-      ok: vatExempt || (f.vatRate != null && f.vatAmount != null),
+      // Een exportfactuur van buiten de EU draagt geen btw: die wordt bij invoer
+      // geheven, niet door de leverancier in rekening gebracht.
+      skipped: regime === "import",
+      ok: regime === "import" || vatExempt || (f.vatRate != null && f.vatAmount != null),
       found: vatExempt ? f.vatExemptionNote : f.vatRate != null ? `${f.vatRate}% · ${f.vatAmount ?? "?"}` : null,
       es: "el tipo de IVA aplicado (%) y la cuota de IVA en euros",
     }),
@@ -340,8 +384,10 @@ export function evaluateInvoice(read: AiInvoiceRead, ctx: CheckContext): Invoice
       key: "iban_checksum",
       label: "IBAN-controlegetal klopt",
       severity: "warning",
-      skipped: !iban,
-      ok: !iban || isValidIban(iban),
+      // Buiten Europa bestaat het IBAN-stelsel niet; daar is een rekeningnummer
+      // gewoon een reeks cijfers.
+      skipped: !iban || regime === "import",
+      ok: !iban || regime === "import" || isValidIban(iban),
       found: iban,
       internal: true,
       es: "",

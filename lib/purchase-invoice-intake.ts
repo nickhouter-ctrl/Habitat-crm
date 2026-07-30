@@ -8,12 +8,13 @@
  * Dit bestand is de enige plek die uit een mail-bijlage een inkooporder maakt.
  * Vóór de poort deden drie routes dat elk net iets anders, met drie verschillende
  * referentie-opbouw en dus lekkende dubbelcontrole.
+ *
+ * Bewust géén `server-only`: de scripts in scripts/ moeten deze functies kunnen
+ * aanroepen om de poort te testen zonder de hele app te starten.
  */
-import "server-only";
 import { and, eq, isNotNull, ne, sql } from "drizzle-orm";
 
 import { readInvoiceWithAI, type AiInvoiceFields } from "@/lib/ai-invoice-extract";
-import { buildPurchaseReference } from "@/lib/auto-purchase-invoice";
 import { db } from "@/lib/db";
 import {
   activities,
@@ -47,6 +48,50 @@ export const FINANCIAL_CATEGORIES = [
 /** Proforma's/offertes zijn nooit een te-betalen post. */
 export function isProformaOrQuote(filename: string): boolean {
   return /\bproforma\b|\bquotation\b|\bquote\b|^PI[\s._-]|\bPI\s+for\b/i.test(filename);
+}
+
+/**
+ * Bouw een nette referentie "Fabrieksnaam Factuurnummer" uit het mail-onderwerp.
+ *
+ * Agent-facturen (Allpack) hebben onderwerpen als:
+ *   "PI +CI for PJ0050481-22044646 ,Factory:GEORGELIGHTING&ELECTRICITY"
+ * → wordt "Georgelighting PJ0050481-22044646".
+ *
+ * Valt terug op de bestandsnaam als het onderwerp geen herkenbaar patroon
+ * heeft, zodat leveranciers met een net factuurnummer in de bestandsnaam
+ * (SHN, Hollandse Meesters, ...) ongewijzigd blijven. Handling-cost-facturen
+ * krijgen een suffix zodat ze los van de goederenfactuur herkenbaar blijven.
+ */
+export function buildPurchaseReference(subject: string | null, filename: string): string {
+  const subj = (subject ?? "").trim();
+  // Factuurnummer: na "for " het eerste code-achtige token (bevat een cijfer).
+  const numMatch = subj.match(/\bfor\s+([A-Za-z0-9][\w./-]*\d[\w./-]*)/i);
+  // Fabriek: na "Factory:" tot komma/regeleinde.
+  const facMatch = subj.match(/Factory\s*[:：]\s*([^,\n]+)/i);
+
+  let base: string;
+  if (numMatch) {
+    const invoiceNo = numMatch[1].replace(/[.,;]+$/, "");
+    const factory = facMatch ? cleanFactoryName(facMatch[1]) : "";
+    base = factory ? `${factory} ${invoiceNo}` : invoiceNo;
+  } else {
+    // Nummer moet met een cijfer beginnen — voorkomt dat "factuur…" de
+    // "FAC"-prefix triggert en "tuur" oplevert.
+    const refMatch = filename.match(/(?:FAC[_-]?|Factura[_\s]*|Invoice[_\s]*)(\d[\w-]*)/i);
+    base = refMatch?.[1] ?? filename.replace(/\.[a-z]+$/i, "");
+  }
+
+  // Handling-cost-factuur apart herkenbaar maken (zelfde order, eigen regel).
+  if (/handling/i.test(filename)) base += " (handlingcost)";
+  return base.trim();
+}
+
+/** Maak een fabrieksnaam leesbaar: drop "&…"-staart en Co./Ltd, en title-case. */
+function cleanFactoryName(raw: string): string {
+  let s = raw.split("&")[0].trim();
+  s = s.replace(/[,\s]*\b(Co\.?,?\s*Ltd\.?|Limited|Inc\.?|Company|LLC)\b/gi, "").trim();
+  s = s.replace(/\s{2,}/g, " ").replace(/[.,\s]+$/, "");
+  return s.replace(/\S+/g, (w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase());
 }
 
 /* ─────────────────────────── voorstel opbouwen ─────────────────────────── */
