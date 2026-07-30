@@ -210,5 +210,15 @@ console.log("Regelset inkoopfacturen\n");
   assert("ES zonder NIF blijft afgekeurd", spanjaard.status === "reject");
 }
 
+/* 10. Standaardformuleringen zonder inhoud (gevonden op echte Ferhaoui-facturen) */
+{
+  for (const leeg of ["TRABAJOS REALIZADOS", "Obra ejecutada", "Servicios prestados", "trabajos efectuados"]) {
+    assert(`"${leeg}" is te vaag`, gefaald({ ...compleet, descriptionText: leeg }).includes("work_description"));
+  }
+  for (const goed of ["Trabajos realizados en Villa Gershwin", "Mano de obra tegelwerk Silvestre"]) {
+    assert(`"${goed}" is bruikbaar`, !gefaald({ ...compleet, descriptionText: goed }).includes("work_description"));
+  }
+}
+
 console.log(`\n${ok} geslaagd, ${fail} mislukt`);
 process.exit(fail === 0 ? 0 : 1);

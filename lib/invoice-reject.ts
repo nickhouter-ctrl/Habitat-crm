@@ -173,7 +173,7 @@ export function buildInvoiceRejectEmail(args: {
     "",
     ...punten.map((p) => `  • ${p}`),
     "",
-    args.extraNote?.trim() ? `${args.extraNote.trim()}\n` : "",
+    ...(args.extraNote?.trim() ? [args.extraNote.trim(), ""] : []),
     t.slot,
     "",
     `${t.gegevensKop} ${eigenGegevens()}`,

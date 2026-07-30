@@ -118,7 +118,11 @@ const norm = (s: string | null | undefined) =>
  * materiaal) is het bruikbaar.
  */
 const VAGUE_WORD =
-  "(?:trabajos?|mano de obra|varios|servicios?|obra|reforma|materiales?|horas|jornales?|suministros?|factura|de|del|la|el|los|las|y|en|por)";
+  "(?:trabajos?|mano de obra|varios|servicios?|obras?|reforma|materiales?|horas|jornales?|suministros?|factura|" +
+  // "trabajos realizados" / "obra ejecutada" zeggen niets meer dan "trabajos":
+  // het zijn de standaardformuleringen op een factuur zonder inhoud.
+  "realizad[oa]s?|efectuad[oa]s?|ejecutad[oa]s?|prestad[oa]s?|" +
+  "de|del|la|el|los|las|y|en|por)";
 const VAGUE = new RegExp(`^${VAGUE_WORD}(?:[\\s.,;:-]+${VAGUE_WORD})*[\\s.,;:-]*$`);
 
 /**
