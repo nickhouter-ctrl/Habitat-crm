@@ -24,11 +24,13 @@ export { buildPurchaseReference };
 export interface AutoInvoiceResult {
   created: number;
   needsReview: number;
+  /** Nieuwe wachtrij-rijen, zodat de poller er één melding over kan sturen. */
+  reviewIds: string[];
   errors: string[];
 }
 
 export async function tryAutoCreatePurchaseInvoice(emailId: string): Promise<AutoInvoiceResult> {
-  const result: AutoInvoiceResult = { created: 0, needsReview: 0, errors: [] };
+  const result: AutoInvoiceResult = { created: 0, needsReview: 0, reviewIds: [], errors: [] };
 
   const mail = await db.query.emailInbox.findFirst({ where: eq(emailInbox.id, emailId) });
   if (!mail) return result;
@@ -48,7 +50,8 @@ export async function tryAutoCreatePurchaseInvoice(emailId: string): Promise<Aut
     try {
       const proposal = await buildInvoiceProposal({ emailId, attachmentId: a.id });
       if (!proposal) continue;
-      await upsertInvoiceReview(proposal, "auto");
+      const reviewId = await upsertInvoiceReview(proposal, "auto");
+      result.reviewIds.push(reviewId);
       result.created++;
 
       // De uitgelezen gegevens ook op de bijlage bijwerken, zodat de bestaande

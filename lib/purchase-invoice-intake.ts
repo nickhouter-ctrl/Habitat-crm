@@ -34,6 +34,8 @@ import { rateToEur } from "@/lib/fx";
 import { evaluateInvoice, type Check, type InvoiceVerdict } from "@/lib/invoice-checks";
 import { matchProject, type ProjectNeedle } from "@/lib/project-match";
 import { poExVatAssumingSpanishVat } from "@/lib/purchase-orders";
+import { sendEmail } from "@/lib/email";
+import { recordSentEmail } from "@/lib/sent-email";
 import { copyMailAttachmentToPoBucket, downloadMailAttachmentBuffer } from "@/lib/storage";
 
 /** Bijlagecategorieën die een te-betalen post kúnnen zijn. */
@@ -593,7 +595,9 @@ export async function rejectInvoiceReview(args: {
   userId: string | null;
   via: "app" | "mail";
   messageId?: string | null;
-}): Promise<{ ok: boolean }> {
+  /** Terugsturen naar de leverancier; leeg = alleen intern afkeuren. */
+  mail?: { to: string; subject: string; html: string; text: string; attachInvoice?: boolean };
+}): Promise<{ ok: boolean; mailSent?: boolean; mailReason?: string }> {
   const claimed = await db
     .update(purchaseInvoiceReviews)
     .set({
@@ -610,6 +614,56 @@ export async function rejectInvoiceReview(args: {
   const review = claimed[0];
   if (!review) return { ok: false };
 
+  // Terugsturen naar de leverancier, als antwoord in dezelfde thread vanaf het
+  // inkoop-postvak — daar stuurde hij de factuur immers naartoe.
+  let mailSent: boolean | undefined;
+  let mailReason: string | undefined;
+  let messageId = args.messageId ?? null;
+  if (args.mail?.to) {
+    const mail = await db.query.emailInbox.findFirst({
+      where: eq(emailInbox.id, review.emailId),
+      columns: { messageId: true, referencesHeader: true },
+    });
+    const att = args.mail.attachInvoice
+      ? await db.query.mailAttachments.findFirst({ where: eq(mailAttachments.id, review.mailAttachmentId) })
+      : null;
+    const bijlagen = att
+      ? await (async () => {
+          const buf = await downloadMailAttachmentBuffer(att.storagePath);
+          return buf ? [{ filename: att.filename, content: buf, contentType: att.contentType ?? undefined }] : [];
+        })()
+      : [];
+
+    const res = await sendEmail({
+      to: args.mail.to,
+      subject: args.mail.subject,
+      html: args.mail.html,
+      text: args.mail.text,
+      attachments: bijlagen,
+      fromPurchase: true,
+      inReplyTo: mail?.messageId ? ensureAngles(mail.messageId) : undefined,
+      references: [mail?.referencesHeader, mail?.messageId ? ensureAngles(mail.messageId) : null]
+        .filter(Boolean)
+        .join(" ") || undefined,
+    });
+    mailSent = res.sent;
+    mailReason = res.reason;
+    messageId = res.messageId ?? messageId;
+    if (res.sent) {
+      await recordSentEmail({
+        kind: "other",
+        toEmail: args.mail.to,
+        subject: args.mail.subject,
+        html: args.mail.html,
+        text: args.mail.text,
+      });
+    }
+  }
+
+  await db
+    .update(purchaseInvoiceReviews)
+    .set({ rejectMessageId: messageId, updatedAt: new Date() })
+    .where(eq(purchaseInvoiceReviews.id, review.id));
   await db
     .update(emailInbox)
     .set({ status: "archived", updatedAt: new Date() })
@@ -617,10 +671,22 @@ export async function rejectInvoiceReview(args: {
   await db.insert(activities).values({
     type: "note",
     subject: `Inkoopfactuur afgekeurd: ${review.proposedSupplier ?? "onbekend"}${review.proposedReference ? ` · ${review.proposedReference}` : ""}`,
-    body: args.reason,
+    body:
+      args.reason +
+      (args.mail?.to
+        ? mailSent
+          ? `\n\nTeruggestuurd naar ${args.mail.to}.`
+          : `\n\nMail naar ${args.mail.to} MISLUKT (${mailReason ?? "onbekend"}) — handmatig versturen.`
+        : "\n\nNiet gemaild; alleen intern afgekeurd."),
     authorId: args.userId,
   });
-  return { ok: true };
+  return { ok: true, mailSent, mailReason };
+}
+
+/** Message-ID's moeten tussen punthaken staan; sommige bronnen leveren ze zonder. */
+function ensureAngles(id: string): string {
+  const v = id.trim();
+  return v.startsWith("<") ? v : `<${v}>`;
 }
 
 export async function ignoreInvoiceReview(args: { reviewId: string; userId: string | null }): Promise<void> {

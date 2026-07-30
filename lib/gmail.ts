@@ -61,9 +61,24 @@ export function createImapClient(account?: MailAccount): ImapFlow {
   });
 }
 
-/** Maak een SMTP-transporter (nodemailer). */
-export function createSmtpTransporter(): Transporter {
-  const { user, pass } = getCreds();
+/**
+ * Het inkoop-postvak (purchase@), als dat is geconfigureerd. Nodig om een
+ * afgekeurde inkoopfactuur te beantwoorden vanaf het adres waar de leverancier
+ * hem naartoe stuurde.
+ *
+ * Let op: Gmail weigert een From-adres dat niet het ingelogde account is, dus
+ * hiervoor moet er écht als purchase@ ingelogd worden — alleen de From-header
+ * omzetten werkt niet.
+ */
+export function getPurchaseAccount(): MailAccount | null {
+  const user = process.env.GMAIL_PURCHASE_USER?.trim();
+  const pass = process.env.GMAIL_PURCHASE_APP_PASSWORD?.replace(/\s/g, "");
+  return user && pass ? { user, pass } : null;
+}
+
+/** Maak een SMTP-transporter (nodemailer), standaard voor het hoofdpostvak. */
+export function createSmtpTransporter(account?: MailAccount): Transporter {
+  const { user, pass } = account ?? getCreds();
   return nodemailer.createTransport({
     host: HOST_SMTP,
     port: 587,
@@ -83,6 +98,8 @@ export interface ParsedEmail {
   messageId: string;
   imapUid: number;
   threadId: string | null;
+  /** RFC References-header — nodig om later in dezelfde thread te antwoorden. */
+  referencesHeader: string | null;
   fromEmail: string | null;
   fromName: string | null;
   toEmail: string | null;
@@ -187,6 +204,9 @@ export async function fetchNewMails(
         messageId: clean(parsed.messageId ?? msg.envelope?.messageId) ?? `imap-uid-${msg.uid}`,
         imapUid: msg.uid,
         threadId: msg.threadId ?? null,
+        referencesHeader: clean(
+          Array.isArray(parsed.references) ? parsed.references.join(" ") : (parsed.references ?? null),
+        ),
         fromEmail: clean(parsed.from?.value?.[0]?.address),
         fromName: clean(parsed.from?.value?.[0]?.name),
         toEmail: clean(joinAddresses(parsed.to)),
@@ -211,6 +231,8 @@ export async function fetchNewMails(
 export async function sendMail(args: {
   to: string;
   bcc?: string;
+  /** Verstuur vanaf een ander postvak (bv. purchase@) i.p.v. het hoofdaccount. */
+  account?: MailAccount;
   subject: string;
   text?: string;
   html?: string;
@@ -221,10 +243,10 @@ export async function sendMail(args: {
   headers?: Record<string, string>;
   attachments?: { filename: string; content: Buffer | Uint8Array; contentType?: string }[];
 }): Promise<{ messageId: string }> {
-  const { user } = getCreds();
-  const t = createSmtpTransporter();
+  const account = args.account ?? getCreds();
+  const t = createSmtpTransporter(account);
   const info = await t.sendMail({
-    from: `Habitat One <${user}>`,
+    from: `Habitat One <${account.user}>`,
     to: args.to,
     bcc: withMandatoryBcc(args.bcc, args.to),
     subject: args.subject,

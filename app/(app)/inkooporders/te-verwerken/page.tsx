@@ -10,6 +10,7 @@ import { asc, desc, eq, ne } from "drizzle-orm";
 import { Badge, Card, CardContent, CardHeader, CardTitle, EmptyState, LinkButton, PageHeader } from "@/components/ui";
 import { db } from "@/lib/db";
 import { emailInbox, mailAttachments, projects, purchaseInvoiceReviews } from "@/lib/db/schema";
+import { buildInvoiceRejectEmail, supplierEmailCandidates, type EmailCandidate } from "@/lib/invoice-reject";
 import { formatEUR } from "@/lib/utils";
 import { ReviewCard, type ReviewCardData, type ReviewCheck, type ReviewLine } from "./review-card";
 
@@ -45,6 +46,41 @@ export default async function FacturenKeurenPage() {
       .where(ne(projects.status, "archived"))
       .orderBy(asc(projects.name)),
   ]);
+
+  // Adressen en conceptmail per factuur voorbereiden. Dit gebeurt hier op de
+  // server, zodat het scherm de tekst direct kan tonen zonder extra ronde.
+  const extras = new Map<string, { candidates: EmailCandidate[]; draft: { subject: string; text: string } | null }>();
+  await Promise.all(
+    rows.map(async (r) => {
+      const v = r.review;
+      const f = (v.aiFields ?? null) as {
+        supplierTaxId?: string | null;
+        supplierEmail?: string | null;
+        language?: string | null;
+      } | null;
+      const candidates = await supplierEmailCandidates({
+        emailId: v.emailId,
+        supplier: v.proposedSupplier,
+        supplierTaxId: f?.supplierTaxId ?? null,
+        invoiceEmail: v.supplierEmail ?? f?.supplierEmail ?? null,
+      });
+      const checks = (Array.isArray(v.findings) ? v.findings : []) as ReviewCheck[];
+      const missing = checks.filter((c) => !c.ok && !c.skipped && !c.internal && c.es);
+      const draft = missing.length
+        ? (() => {
+            const m = buildInvoiceRejectEmail({
+              lang: (f?.language as "es" | "nl" | "en" | null) ?? "es",
+              supplier: v.proposedSupplier,
+              reference: v.proposedReference,
+              invoiceDate: v.proposedInvoiceDate,
+              missing,
+            });
+            return { subject: m.subject, text: m.text };
+          })()
+        : null;
+      extras.set(v.id, { candidates, draft });
+    }),
+  );
 
   // Eén kaart per mail; een mail kan meerdere facturen bevatten (Allpack stuurt
   // goederen, handling en vracht in één bericht).
@@ -83,6 +119,8 @@ export default async function FacturenKeurenPage() {
       attachmentName: r.attachmentName,
       duplicateOfPoId: v.duplicateOfPoId,
       supplierEmail: v.supplierEmail,
+      emailCandidates: extras.get(v.id)?.candidates ?? [],
+      draft: extras.get(v.id)?.draft ?? null,
       wachtDagen: dagenSinds(r.receivedAt),
     });
     perMail.set(r.mailId, groep);

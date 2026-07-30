@@ -36,6 +36,8 @@ type IngestStats = {
   attachmentsStored: number;
   invoicesAutoCreated: number;
   invoicesNeedReview: number;
+  /** Nieuwe wachtrij-rijen deze ronde, voor één samenvattende melding. */
+  reviewIds: string[];
   /** Laagste UID van een mislukte (niet-duplicate) mail — cursor mag hier niet voorbij. */
   firstFailedUid: number | null;
 };
@@ -44,7 +46,7 @@ type IngestStats = {
 export async function ingestMails(mails: ParsedEmail[]): Promise<IngestStats> {
   const s: IngestStats = {
     inserted: 0, duplicates: 0, failed: 0,
-    attachmentsStored: 0, invoicesAutoCreated: 0, invoicesNeedReview: 0,
+    attachmentsStored: 0, invoicesAutoCreated: 0, invoicesNeedReview: 0, reviewIds: [] as string[],
     firstFailedUid: null,
   };
   // Onze eigen verzendadressen — mail die HIERVANDAAN komt is een interne
@@ -76,6 +78,7 @@ export async function ingestMails(mails: ParsedEmail[]): Promise<IngestStats> {
           messageId: m.messageId,
           imapUid: m.imapUid,
           threadId: m.threadId,
+          referencesHeader: m.referencesHeader,
           fromEmail: m.fromEmail,
           fromName: m.fromName,
           toEmail: m.toEmail,
@@ -138,6 +141,7 @@ export async function ingestMails(mails: ParsedEmail[]): Promise<IngestStats> {
           const r = await tryAutoCreatePurchaseInvoice(row.id);
           s.invoicesAutoCreated += r.created;
           s.invoicesNeedReview += r.needsReview;
+          s.reviewIds.push(...r.reviewIds);
         } catch (e: any) {
           console.error(`Auto-invoice fail voor ${m.subject}:`, e?.message);
         }
@@ -213,7 +217,7 @@ function withDeadline<T>(p: Promise<T>, ms: number, label: string): Promise<T> {
 export async function runImapPoll(): Promise<ImapPollResult> {
   const totals = {
     fetched: 0, inserted: 0, duplicates: 0, failed: 0,
-    attachmentsStored: 0, invoicesAutoCreated: 0, invoicesNeedReview: 0,
+    attachmentsStored: 0, invoicesAutoCreated: 0, invoicesNeedReview: 0, reviewIds: [] as string[],
   };
   const errors: string[] = [];
 
@@ -250,6 +254,19 @@ export async function runImapPoll(): Promise<ImapPollResult> {
           set: { lastPolledAt: new Date(), errorMessage: msg, updatedAt: new Date() },
         })
         .catch(() => {});
+    }
+  }
+
+  // Eén melding per ronde over de nieuwe facturen — niet één per factuur, anders
+  // levert een inhaalslag van twintig facturen twintig mails op.
+  if (totals.reviewIds.length > 0) {
+    try {
+      const { notifyNewInvoiceReviews } = await import("@/lib/purchase-invoice-notify");
+      await notifyNewInvoiceReviews(totals.reviewIds);
+    } catch (e) {
+      // Een mislukte melding mag de poll nooit laten falen: de facturen staan al
+      // in de wachtrij en zijn zichtbaar op het dashboard.
+      console.error("Melding inkoopfacturen mislukt:", e instanceof Error ? e.message : e);
     }
   }
 

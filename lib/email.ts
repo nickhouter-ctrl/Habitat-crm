@@ -22,7 +22,12 @@ export async function sendEmail(input: {
   attachments?: EmailAttachment[];
   /** Extra BCC bovenop de standaard bedrijfs-BCC. */
   bcc?: string;
-}): Promise<{ sent: boolean; reason?: string }> {
+  /** Verstuur vanaf het inkoop-postvak i.p.v. hi@ (bv. een afgekeurde factuur). */
+  fromPurchase?: boolean;
+  /** Antwoord in dezelfde thread: Message-ID en References van de bronmail. */
+  inReplyTo?: string;
+  references?: string;
+}): Promise<{ sent: boolean; reason?: string; messageId?: string }> {
   // Elke uitgaande mail krijgt een VERBORGEN kopie (BCC) naar het bedrijf
   // (EMAIL_BCC, anders NOTIFY_EMAIL of het verzendadres hi@habitat-one.com), zodat
   // je altijd meeleest zonder dat de klant het meeziet. Niet naar de ontvanger
@@ -40,16 +45,27 @@ export async function sendEmail(input: {
   // altijd in het CRM blijft staan.
   if (process.env.GMAIL_USER && process.env.GMAIL_APP_PASSWORD) {
     try {
-      const { sendMail } = await import("@/lib/gmail");
-      await sendMail({
+      const { sendMail, getPurchaseAccount } = await import("@/lib/gmail");
+      // Vanaf purchase@ versturen vereist dat dat postvak is geconfigureerd —
+      // stil terugvallen op hi@ zou de leverancier op het verkeerde adres laten
+      // antwoorden, dus dan liever een duidelijke fout.
+      let account;
+      if (input.fromPurchase) {
+        account = getPurchaseAccount() ?? undefined;
+        if (!account) return { sent: false, reason: "purchase-postvak-niet-geconfigureerd" };
+      }
+      const res = await sendMail({
         to: input.to,
         bcc,
+        account,
         subject: input.subject,
         html: input.html,
         text: input.text,
         attachments: input.attachments,
+        inReplyTo: input.inReplyTo,
+        references: input.references,
       });
-      return { sent: true };
+      return { sent: true, messageId: res.messageId };
     } catch (err) {
       console.warn("[habitat-crm] gmail send error:", err);
       return { sent: false, reason: "gmail-exception" };
@@ -730,7 +746,7 @@ export function deliveryReminderEmail(args: {
   return { subject: r.subject, html, text };
 }
 
-function escapeHtml(s: string): string {
+export function escapeHtml(s: string): string {
   return s.replace(/[&<>"']/g, (c) =>
     ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!,
   );
@@ -741,7 +757,7 @@ function pickLang(l?: string | null): Lang {
 }
 
 /** Gebrande e-mail-shell (cream achtergrond, wordmark-header). */
-function brandedEmail(inner: string): string {
+export function brandedEmail(inner: string): string {
   return `<div style="font-family:Helvetica,Arial,sans-serif;background:${COMPANY.cream};padding:24px 0">
   <div style="max-width:560px;margin:0 auto;background:#fff;border-radius:12px;overflow:hidden;color:#1c1c1a">
     <div style="background:${COMPANY.cream};padding:22px 28px">

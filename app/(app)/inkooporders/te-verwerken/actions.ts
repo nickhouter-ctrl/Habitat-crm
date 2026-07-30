@@ -72,8 +72,35 @@ export async function rejectReviewAction(reviewId: string, formData: FormData) {
   const user = await requireWriteUser();
   const reason = String(formData.get("reason") ?? "").trim();
   if (!reason) return; // zonder reden afkeuren zegt de leverancier niets
-  await rejectInvoiceReview({ reviewId, reason, userId: user.id, via: "app" });
+
+  // Terugsturen is optioneel: soms wil je alleen intern blokkeren en zelf mailen.
+  const to = String(formData.get("mailTo") ?? "").trim();
+  const subject = String(formData.get("mailSubject") ?? "").trim();
+  const body = String(formData.get("mailBody") ?? "").trim();
+  const verstuur = formData.get("sendMail") === "on" && to.includes("@") && subject && body;
+
+  await rejectInvoiceReview({
+    reviewId,
+    reason,
+    userId: user.id,
+    via: "app",
+    mail: verstuur
+      ? {
+          to,
+          subject,
+          text: body,
+          // De bewerkte tekst is platte tekst; als HTML alleen de regelovergangen
+          // omzetten, zodat wat de gebruiker las ook verstuurd wordt.
+          html: `<div style="white-space:pre-wrap">${escapeForHtml(body)}</div>`,
+          attachInvoice: formData.get("attachInvoice") === "on",
+        }
+      : undefined,
+  });
   refresh();
+}
+
+function escapeForHtml(s: string): string {
+  return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
 
 export async function ignoreReviewAction(reviewId: string) {

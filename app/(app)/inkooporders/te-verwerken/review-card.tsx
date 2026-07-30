@@ -53,6 +53,10 @@ export type ReviewCardData = {
   attachmentName: string;
   duplicateOfPoId: string | null;
   supplierEmail: string | null;
+  /** Kandidaat-adressen voor de afkeurmail, beste eerst. */
+  emailCandidates: { email: string; source: string; uncertain: boolean }[];
+  /** Voorgeschreven concept: onderwerp en tekst. */
+  draft: { subject: string; text: string } | null;
   wachtDagen: number;
 };
 
@@ -74,6 +78,9 @@ export function ReviewCard({
   const [kind, setKind] = useState<"labor" | "material" | "">(data.kind ?? "");
   const [split, setSplit] = useState(data.lines.length > 1);
   const [rejecting, setRejecting] = useState(false);
+  const [sendMail, setSendMail] = useState(true);
+  const [mailTo, setMailTo] = useState(data.emailCandidates[0]?.email ?? "");
+  const gekozen = data.emailCandidates.find((c) => c.email === mailTo);
 
   const verdict = VERDICT[data.verdict];
   // De intake zet de terugrekening als bevinding neer; die tonen we bij het
@@ -311,31 +318,84 @@ export function ReviewCard({
         </form>
       )}
 
-      {/* Afkeuren */}
+      {/* Afkeuren, met de mail naar de leverancier erbij */}
       {rejecting && (
         <form action={rejectReviewAction.bind(null, data.id)} className="space-y-3 border-t pt-3">
-          <p className="text-sm font-medium">Afkeuren — wat mankeert er?</p>
-          {teMelden.length > 0 && (
-            <p className="text-xs text-muted">
-              De controle vond dit: {teMelden.map((c) => c.label.toLowerCase()).join(", ")}. Zet het hieronder in je eigen
-              woorden; het versturen naar de leverancier bouw ik in de volgende stap.
-            </p>
+          <p className="text-sm font-medium">Afkeuren</p>
+
+          <Field label="Interne reden" htmlFor={`why-${data.id}`} hint="komt in het logboek, niet in de mail">
+            <Textarea
+              id={`why-${data.id}`}
+              name="reason"
+              rows={2}
+              required
+              defaultValue={
+                teMelden.length > 0
+                  ? `Incompleet: ${teMelden.map((c) => c.label.toLowerCase()).join(", ")}.`
+                  : ""
+              }
+            />
+          </Field>
+
+          <label className="flex items-center gap-2 text-sm">
+            <input type="checkbox" name="sendMail" checked={sendMail} onChange={(e) => setSendMail(e.target.checked)} />
+            <span>Terugsturen naar de leverancier met de vraag om aanpassing</span>
+          </label>
+
+          {sendMail && (
+            <div className="space-y-3 rounded-md bg-surface/50 p-3">
+              {data.emailCandidates.length === 0 ? (
+                <p className="text-xs text-warning">
+                  We kennen geen e-mailadres van deze leverancier. Vul er zelf een in, of keur alleen intern af en mail
+                  zelf.
+                </p>
+              ) : null}
+              <Field label="Aan" htmlFor={`to-${data.id}`}>
+                <Select
+                  id={`to-${data.id}`}
+                  name="mailTo"
+                  value={mailTo}
+                  onChange={(e) => setMailTo(e.target.value)}
+                >
+                  {data.emailCandidates.map((c) => (
+                    <option key={c.email} value={c.email}>
+                      {c.email} — {c.source}
+                      {c.uncertain ? " ⚠ mogelijk de doorstuurder" : ""}
+                    </option>
+                  ))}
+                  <option value="">— zelf invullen —</option>
+                </Select>
+              </Field>
+              {mailTo === "" && (
+                <Field label="E-mailadres" htmlFor={`toManual-${data.id}`}>
+                  <Input id={`toManual-${data.id}`} name="mailTo" type="email" placeholder="leverancier@example.es" />
+                </Field>
+              )}
+              {gekozen?.uncertain && (
+                <p className="rounded-md bg-warning/10 p-2 text-xs text-warning">
+                  Dit adres lijkt van de partij die de factuur alleen dóórstuurde, niet van de leverancier zelf. Controleer
+                  het voordat je verstuurt — anders krijgt de verkeerde partij dit bericht.
+                </p>
+              )}
+              <Field label="Onderwerp" htmlFor={`subj-${data.id}`}>
+                <Input id={`subj-${data.id}`} name="mailSubject" defaultValue={data.draft?.subject ?? ""} />
+              </Field>
+              <Field label="Bericht" htmlFor={`body-${data.id}`} hint="pas aan wat je wilt — dit gaat er letterlijk uit">
+                <Textarea id={`body-${data.id}`} name="mailBody" rows={12} defaultValue={data.draft?.text ?? ""} />
+              </Field>
+              <label className="flex items-center gap-2 text-xs text-muted">
+                <input type="checkbox" name="attachInvoice" />
+                <span>De originele factuur als bijlage meesturen</span>
+              </label>
+              <p className="text-xs text-muted">
+                Gaat als antwoord in dezelfde mailthread, vanaf purchase@habitat-one.com.
+              </p>
+            </div>
           )}
-          <Textarea
-            name="reason"
-            rows={4}
-            required
-            defaultValue={
-              teMelden.length > 0
-                ? `Factuur ${data.reference ?? ""} kan niet verwerkt worden. Ontbreekt: ${teMelden
-                    .map((c) => c.label.toLowerCase())
-                    .join(", ")}.`
-                : ""
-            }
-          />
+
           <div className="flex flex-wrap gap-2">
-            <SubmitButton variant="primary" pendingLabel="Afkeuren…">
-              Afkeuren
+            <SubmitButton variant="primary" pendingLabel="Bezig…">
+              {sendMail ? "Afkeuren en versturen" : "Alleen afkeuren"}
             </SubmitButton>
             <button type="button" onClick={() => setRejecting(false)} className={buttonClass({ variant: "ghost" })}>
               Terug
