@@ -17,8 +17,9 @@ import { purchaseInvoiceReviews } from "@/lib/db/schema";
 import { brandedEmail, escapeHtml, sendEmail } from "@/lib/email";
 import { NOTIFY_RECIPIENTS } from "@/lib/mail-bcc";
 import { formatEUR } from "@/lib/utils";
+import { crmUrl } from "@/lib/crm-url";
 
-const APP_URL = process.env.APP_URL?.replace(/\/$/, "") ?? "https://crm.habitat-one.com";
+const APP_URL = crmUrl();
 
 /** Ontvangers van factuurmeldingen: eigen env, anders de algemene notify-lijst. */
 function ontvangers(): { to: string; bcc?: string } {

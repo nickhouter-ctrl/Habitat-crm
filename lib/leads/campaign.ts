@@ -6,12 +6,13 @@
  */
 import { COMPANY } from "@/lib/company";
 import type { CampaignGroup } from "@/lib/leads/groups";
+import { crmUrl } from "@/lib/crm-url";
 
 const WEBSITE = `https://www.${COMPANY.website.replace(/^https?:\/\/(www\.)?/, "")}`;
 
 /** Publieke basis-URL van het CRM (waar de afmeldroute leeft). */
 export function crmBaseUrl(): string {
-  return (process.env.APP_URL || "https://habitat-crm-delta.vercel.app").replace(/\/$/, "");
+  return crmUrl();
 }
 
 export function unsubscribeUrl(token: string): string {

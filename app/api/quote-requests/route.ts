@@ -7,6 +7,7 @@ import { db } from "@/lib/db";
 import { quoteRequests } from "@/lib/db/schema";
 import { sendMail } from "@/lib/gmail";
 import { appointmentReceivedEmail, quoteRequestReceivedEmail } from "@/lib/email";
+import { crmUrl } from "@/lib/crm-url";
 
 /**
  * Publieke endpoint waar habitat-one (of een andere bron) een offerte-aanvraag
@@ -97,7 +98,7 @@ export async function POST(req: Request) {
   // In try/catch — een mail-fout mag het opslaan van de aanvraag nooit breken.
   let mailStatus = "skipped";
   try {
-    const crmUrl = process.env.APP_URL || "https://habitat-crm-delta.vercel.app";
+    const base = crmUrl();
     const kindLabel =
       v.kind === "contact"
         ? "Nieuw contactbericht"
@@ -126,11 +127,11 @@ export async function POST(req: Request) {
         `<tr><td style="padding:6px 10px;color:#7a6a58;vertical-align:top;white-space:nowrap">${k}</td><td style="padding:6px 10px;white-space:pre-wrap">${escapeHtml(val)}</td></tr>`,
     )
     .join("")}</table>
-  <p style="margin:20px 0 0"><a href="${crmUrl}/aanvragen/${row.id}" style="background:#b5532b;color:#fff;padding:11px 20px;border-radius:8px;text-decoration:none;font-size:14px">Bekijk in het CRM</a></p>
+  <p style="margin:20px 0 0"><a href="${base}/aanvragen/${row.id}" style="background:#b5532b;color:#fff;padding:11px 20px;border-radius:8px;text-decoration:none;font-size:14px">Bekijk in het CRM</a></p>
 </div>`,
       text:
         rows.map(([k, val]) => `${k}: ${val}`).join("\n") +
-        `\n\nCRM: ${crmUrl}/aanvragen/${row.id}`,
+        `\n\nCRM: ${base}/aanvragen/${row.id}`,
     });
     mailStatus = "sent";
   } catch (err) {

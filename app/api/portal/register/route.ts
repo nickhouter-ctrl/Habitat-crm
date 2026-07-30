@@ -6,6 +6,7 @@ import { accountRequests } from "@/lib/db/schema";
 import { sendMail } from "@/lib/gmail";
 import { jsonCors, portalCors } from "@/lib/portal/api";
 import { clientIp, rateLimit, RATE_LIMITED } from "@/lib/rate-limit";
+import { crmUrl } from "@/lib/crm-url";
 
 /** Publieke endpoint: accountaanvraag vanaf habitat-one.com. */
 
@@ -68,7 +69,7 @@ export async function POST(req: Request) {
 
   // Team-melding (mag nooit de opslag breken).
   try {
-    const crmUrl = process.env.APP_URL || "https://habitat-crm-delta.vercel.app";
+    const base = crmUrl();
     const rows: [string, string][] = [
       ["Naam", v.name],
       ["E-mail", v.email],
@@ -91,10 +92,10 @@ export async function POST(req: Request) {
   <table style="border-collapse:collapse;width:100%;font-size:14px">${rows
     .map(([k, val]) => `<tr><td style="padding:6px 10px;color:#7a6a58;white-space:nowrap;vertical-align:top">${k}</td><td style="padding:6px 10px;white-space:pre-wrap">${escapeHtml(val)}</td></tr>`)
     .join("")}</table>
-  <p style="margin:22px 0 0"><a href="${crmUrl}/accounts" style="background:#b5532b;color:#fff;padding:11px 20px;border-radius:8px;text-decoration:none;font-size:14px">Accepteren of weigeren →</a></p>
+  <p style="margin:22px 0 0"><a href="${base}/accounts" style="background:#b5532b;color:#fff;padding:11px 20px;border-radius:8px;text-decoration:none;font-size:14px">Accepteren of weigeren →</a></p>
   <p style="margin:12px 0 0;font-size:12px;color:#9a8a78">Je kunt ook direct op deze mail antwoorden om de klant te bereiken.</p>
 </div>`,
-      text: `Er wil een nieuwe klant (${kindLabel}) een account aanmaken. Accepteer of weiger de aanvraag in het CRM:\n\n${rows.map(([k, val]) => `${k}: ${val}`).join("\n")}\n\nBeoordelen: ${crmUrl}/accounts`,
+      text: `Er wil een nieuwe klant (${kindLabel}) een account aanmaken. Accepteer of weiger de aanvraag in het CRM:\n\n${rows.map(([k, val]) => `${k}: ${val}`).join("\n")}\n\nBeoordelen: ${base}/accounts`,
     });
   } catch (err) {
     console.warn("[portal/register] meldings-mail mislukt:", err);
