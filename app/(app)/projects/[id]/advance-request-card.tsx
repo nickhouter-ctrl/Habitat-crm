@@ -9,7 +9,7 @@
 import { and, desc, eq, inArray, like, sql } from "drizzle-orm";
 import Link from "next/link";
 
-import { Card, CardContent, CardHeader, CardTitle, Field, Input, Textarea } from "@/components/ui";
+import { Card, CardContent, CardHeader, CardTitle, Field, Input, LinkButton, Textarea } from "@/components/ui";
 import { SubmitButton } from "@/components/submit-button";
 import { auth } from "@/auth";
 import { db } from "@/lib/db";
@@ -209,75 +209,99 @@ export async function AdvanceRequestCard({
         )}
 
         {eerder.length > 0 && (
-          <div className="rounded-md border bg-background/50 p-3 text-sm">
-            <p className="mb-1 text-xs font-medium text-muted">Eerder opgevraagd</p>
-            <ul className="space-y-1">
-              {eerder.map((m) => (
-                <li key={m.id} className="flex flex-wrap items-baseline gap-x-2">
-                  <span className="tabular-nums text-xs text-muted">
-                    {m.createdAt.toLocaleDateString("nl-NL", { day: "numeric", month: "short", year: "numeric" })}
-                  </span>
-                  <span className="font-medium tabular-nums">
-                    {m.amountEur != null ? formatEUR(Number(m.amountEur)) : "bedrag onbekend"}
-                  </span>
-                  <Link href={`/sent-mail/${m.id}`} className="text-accent hover:underline">
-                    {/* Alleen de termijn, niet de hele werf + overeenkomstdatum die
-                        ook in het onderwerp staan — die regel werd anders een zin. */}
-                    {termijnUit(m.subject)}
-                  </Link>
-                  {(() => {
-                    const gevraagd = m.amountEur != null ? Number(m.amountEur) : null;
-                    const binnen = ontvangenPerVerzoek.get(m.id) ?? 0;
-                    if (gevraagd == null) return null;
-                    const open = Math.round((gevraagd - binnen) * 100) / 100;
-                    if (binnen === 0) return <span className="text-xs text-muted">nog niets ontvangen</span>;
-                    return open > 0.01 ? (
+          <div className="space-y-2">
+            <p className="text-xs font-medium text-muted">Eerder opgevraagd</p>
+            {eerder.map((m) => {
+              const gevraagd = m.amountEur != null ? Number(m.amountEur) : null;
+              const binnen = ontvangenPerVerzoek.get(m.id) ?? 0;
+              const open = gevraagd != null ? Math.round((gevraagd - binnen) * 100) / 100 : null;
+              const pct = gevraagd && gevraagd > 0 ? Math.min(100, Math.round((binnen / gevraagd) * 100)) : 0;
+              const voldaan = open != null && open <= 0.01;
+              return (
+                <div key={m.id} className="rounded-md border bg-background/50 p-3">
+                  <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+                    <span className="text-base font-semibold tabular-nums">
+                      {gevraagd != null ? formatEUR(gevraagd) : "bedrag onbekend"}
+                    </span>
+                    <span className="text-sm">{termijnUit(m.subject)}</span>
+                    <span className="text-xs text-muted">
+                      {m.createdAt.toLocaleDateString("nl-NL", { day: "numeric", month: "short", year: "numeric" })} ·{" "}
+                      {m.toEmail}
+                    </span>
+                  </div>
+
+                  {gevraagd != null && (
+                    <div className="mt-2">
+                      {/* Balkje: in één oogopslag zien hoever een voorschot binnen is. */}
+                      <div className="h-1.5 w-full overflow-hidden rounded-full bg-border">
+                        <div
+                          className={voldaan ? "h-full bg-success" : "h-full bg-warning"}
+                          style={{ width: `${Math.max(pct, binnen > 0 ? 4 : 0)}%` }}
+                        />
+                      </div>
+                      <p className="mt-1 text-xs">
+                        {binnen === 0 ? (
+                          <span className="text-muted">nog niets ontvangen</span>
+                        ) : voldaan ? (
+                          <span className="text-success">volledig ontvangen</span>
+                        ) : (
+                          <span className="text-warning">
+                            {formatEUR(binnen)} ontvangen · nog {formatEUR(open ?? 0)} open
+                          </span>
+                        )}
+                      </p>
+                    </div>
+                  )}
+
+                  <div className="mt-3 flex flex-wrap items-center gap-2">
+                    {binnen > 0 && !voldaan && (
                       <>
-                        <span className="text-xs text-warning">
-                          {formatEUR(binnen)} ontvangen · nog {formatEUR(open)} open
-                        </span>
-                        <Link
+                        <LinkButton
                           href={`?vstand=${m.id}#voorschot-opvragen`}
-                          className="text-xs text-accent hover:underline"
+                          variant="secondary"
+                          size="sm"
                           scroll={false}
                         >
-                          ontvangst bevestigen
-                        </Link>
-                        <Link
+                          Ontvangst bevestigen
+                        </LinkButton>
+                        <LinkButton
                           href={`?vrestant=${m.id}#voorschot-opvragen`}
-                          className="text-xs text-accent hover:underline"
+                          variant="secondary"
+                          size="sm"
                           scroll={false}
                         >
-                          restant opvragen
-                        </Link>
+                          Restant opvragen
+                        </LinkButton>
                       </>
-                    ) : (
-                      <span className="text-xs text-success">volledig ontvangen</span>
-                    );
-                  })()}
-                  <span className="text-xs text-muted">→ {m.toEmail}</span>
-                </li>
-              ))}
-            </ul>
-            <p className="mt-2 text-xs text-muted">
+                    )}
+                    {voldaan && (
+                      <LinkButton
+                        href={`/documents/new?kind=fondos&projectId=${projectId}${contactId ? `&contactId=${contactId}` : ""}`}
+                        variant="primary"
+                        size="sm"
+                      >
+                        + Provisión de fondos
+                      </LinkButton>
+                    )}
+                    <LinkButton href={`/sent-mail/${m.id}`} variant="ghost" size="sm">
+                      Brief bekijken
+                    </LinkButton>
+                  </div>
+                </div>
+              );
+            })}
+            <p className="text-xs text-muted">
               Deel ontvangen? Boek dat bedrag bij Ontvangen betalingen en kies daar dit verzoek — dan loopt de stand
-              hierboven mee. Is alles binnen, maak dan het formele stuk:{" "}
-              <Link
-                href={`/documents/new?kind=fondos&projectId=${projectId}${contactId ? `&contactId=${contactId}` : ""}`}
-                className="text-accent hover:underline"
-              >
-                + Provisión de fondos
-              </Link>
-              .
+              hierboven mee. Het formele stuk (provisión de fondos) maak je pas als alles binnen is.
             </p>
           </div>
         )}
 
         {standConcept && (
-          <form action={sendAdvanceRequest.bind(null, projectId)} className="space-y-3 rounded-md border border-warning/40 bg-warning/5 p-3">
+          <form action={sendAdvanceRequest.bind(null, projectId)} className="space-y-3 rounded-md border border-success/40 bg-success/5 p-3">
             <p className="text-sm">
-              <strong>Stand doorgeven</strong> — bevestigt de ontvangst van {formatEUR(standBinnen)} en vraagt het
-              restant van {formatEUR(Math.round((standGevraagd - standBinnen) * 100) / 100)}.
+              <strong>Ontvangst bevestigen</strong> — bedankt voor {formatEUR(standBinnen)} en meldt dat er nog{" "}
+              {formatEUR(Math.round((standGevraagd - standBinnen) * 100) / 100)} openstaat. Vraagt er niet om.
             </p>
             <input type="hidden" name="amountEur" value={String(Math.round((standGevraagd - standBinnen) * 100) / 100)} />
             <input type="hidden" name="termLabel" value={termijnUit(standVerzoek?.subject ?? null)} />
@@ -290,7 +314,7 @@ export async function AdvanceRequestCard({
               </Field>
             </div>
             <Field label="Bericht" htmlFor="stand-text" hint="dit gaat er letterlijk uit — Nederlands en Spaans">
-              <Textarea id="stand-text" name="text" rows={20} defaultValue={standConcept.text} className="font-mono text-xs" />
+              <Textarea id="stand-text" name="text" rows={18} defaultValue={standConcept.text} className="font-mono text-xs" />
             </Field>
             <div className="flex flex-wrap items-center gap-3">
               <SubmitButton variant="primary" pendingLabel="Versturen…">
