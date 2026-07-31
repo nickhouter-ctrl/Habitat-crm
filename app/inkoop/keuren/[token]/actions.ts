@@ -15,7 +15,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
 import { db } from "@/lib/db";
-import { purchaseInvoiceReviews } from "@/lib/db/schema";
+import { purchaseInvoiceReviews, users } from "@/lib/db/schema";
 import { approveInvoiceReview, rejectInvoiceReview, type ApprovalOverrides } from "@/lib/purchase-invoice-intake";
 
 function amountOrNull(v: FormDataEntryValue | null): number | null {
@@ -28,6 +28,19 @@ function amountOrNull(v: FormDataEntryValue | null): number | null {
 function uuidOrNull(v: FormDataEntryValue | null): string | null {
   const s = String(v ?? "").trim();
   return s.length === 36 ? s : null;
+}
+
+/**
+ * Wie klikte er? De meldingsmail gaat naar iedere keurder apart, met een link
+ * waar zijn eigen gebruikers-id in zit. Dat is geen beveiliging — de token is
+ * het bewijs dat je mag beslissen — maar wel het verschil tussen "goedgekeurd
+ * door Hans" en een lege naam in het logboek, wat eerder gebeurde.
+ */
+async function actorFrom(formData: FormData): Promise<string | null> {
+  const id = uuidOrNull(formData.get("w"));
+  if (!id) return null;
+  const u = await db.query.users.findFirst({ where: eq(users.id, id), columns: { id: true } });
+  return u?.id ?? null;
 }
 
 /** Token → review, mits nog openstaand en niet verlopen. */
@@ -57,9 +70,11 @@ export async function approveViaTokenAction(token: string, formData: FormData) {
     kind: formData.get("kind") === "labor" ? "labor" : formData.get("kind") === "material" ? "material" : null,
     hours: amountOrNull(formData.get("hours")),
   };
-  await approveInvoiceReview({ reviewId: review.id, overrides, userId: null, via: "mail" });
+  await approveInvoiceReview({ reviewId: review.id, overrides, userId: await actorFrom(formData), via: "mail" });
   refresh();
-  redirect(`/inkoop/keuren/${token}`);
+  // Met ?gedaan=goedgekeurd toont de pagina een bevestiging in plaats van de
+  // kale melding "al afgehandeld" — die las als een foutmelding op je eigen klik.
+  redirect(`/inkoop/keuren/${token}?gedaan=goedgekeurd`);
 }
 
 export async function rejectViaTokenAction(token: string, formData: FormData) {
@@ -77,7 +92,7 @@ export async function rejectViaTokenAction(token: string, formData: FormData) {
   await rejectInvoiceReview({
     reviewId: review.id,
     reason,
-    userId: null,
+    userId: await actorFrom(formData),
     via: "mail",
     mail: verstuur
       ? {
@@ -89,5 +104,5 @@ export async function rejectViaTokenAction(token: string, formData: FormData) {
       : undefined,
   });
   refresh();
-  redirect(`/inkoop/keuren/${token}`);
+  redirect(`/inkoop/keuren/${token}?gedaan=afgekeurd`);
 }

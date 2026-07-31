@@ -13,7 +13,7 @@ import { randomBytes } from "node:crypto";
 import { and, asc, eq, inArray, isNull, sql } from "drizzle-orm";
 
 import { db } from "@/lib/db";
-import { purchaseInvoiceReviews } from "@/lib/db/schema";
+import { purchaseInvoiceReviews, users } from "@/lib/db/schema";
 import { brandedEmail, escapeHtml, sendEmail } from "@/lib/email";
 import { formatEUR } from "@/lib/utils";
 import { crmUrl } from "@/lib/crm-url";
@@ -29,13 +29,29 @@ const APP_URL = crmUrl();
 const KEURDERS = ["nick@habitat-one.com", "hans@habitat-one.com"];
 
 /** Ontvangers van factuurmeldingen: eigen env, anders de vaste keurders. */
-function ontvangers(): { to: string; bcc?: string } {
+function ontvangerLijst(): string[] {
   const eigen = (process.env.INVOICE_NOTIFY_EMAILS ?? "")
     .split(",")
     .map((e) => e.trim())
     .filter(Boolean);
-  const lijst = eigen.length > 0 ? eigen : KEURDERS;
-  return { to: lijst[0], bcc: lijst.slice(1).join(", ") || undefined };
+  return eigen.length > 0 ? eigen : KEURDERS;
+}
+
+/**
+ * Ieder zijn eigen mail, met zijn eigen gebruikers-id in de knoppen.
+ *
+ * Eén mail met de tweede ontvanger in bcc was goedkoper, maar dan is de link
+ * voor iedereen gelijk en weet het systeem niet wie er heeft goedgekeurd — dat
+ * gebeurde bij de Iberdrola-factuur, die zonder naam in het logboek belandde.
+ */
+async function ontvangersMetId(): Promise<{ email: string; userId: string | null }[]> {
+  const lijst = ontvangerLijst();
+  const rijen = await db
+    .select({ id: users.id, email: users.email })
+    .from(users)
+    .where(inArray(sql`lower(${users.email})`, lijst.map((e) => e.toLowerCase())));
+  const perEmail = new Map(rijen.map((r) => [r.email.toLowerCase(), r.id]));
+  return lijst.map((email) => ({ email, userId: perEmail.get(email.toLowerCase()) ?? null }));
 }
 
 /**
@@ -89,7 +105,8 @@ function ontbrekend(findings: unknown): string {
     .join(", ");
 }
 
-function tabel(regels: Regel[], toonLeeftijd = false): string {
+function tabel(regels: Regel[], toonLeeftijd = false, wie: string | null = null): string {
+  const wieParam = wie ? `?w=${wie}` : "";
   const rijen = regels
     .slice(0, 25)
     .map((r) => {
@@ -101,8 +118,8 @@ function tabel(regels: Regel[], toonLeeftijd = false): string {
         <td style="padding:6px 10px;border-bottom:1px solid #eee">${VERDICT_LABEL[r.verdict] ?? r.verdict}${mist ? `<br><span style="color:#888;font-size:12px">${escapeHtml(mist)}</span>` : ""}</td>
         <td style="padding:6px 10px;border-bottom:1px solid #eee;white-space:nowrap">${
           r.token
-            ? `<a href="${APP_URL}/inkoop/keuren/${r.token}" style="display:inline-block;padding:6px 12px;background:#3a2a20;color:#fff;border-radius:6px;text-decoration:none;font-size:13px">Goedkeuren</a>
-               <a href="${APP_URL}/inkoop/keuren/${r.token}#afkeuren" style="display:inline-block;padding:6px 12px;border:1px solid #ccc;border-radius:6px;text-decoration:none;color:#333;font-size:13px;margin-left:4px">Afkeuren</a>`
+            ? `<a href="${APP_URL}/inkoop/keuren/${r.token}${wieParam}" style="display:inline-block;padding:6px 12px;background:#3a2a20;color:#fff;border-radius:6px;text-decoration:none;font-size:13px">Goedkeuren</a>
+               <a href="${APP_URL}/inkoop/keuren/${r.token}${wieParam}#afkeuren" style="display:inline-block;padding:6px 12px;border:1px solid #ccc;border-radius:6px;text-decoration:none;color:#333;font-size:13px;margin-left:4px">Afkeuren</a>`
             : `<a href="${APP_URL}/inkooporders/te-verwerken">beoordelen</a>`
         }</td>
       </tr>`;
@@ -147,12 +164,12 @@ export async function notifyNewInvoiceReviews(reviewIds: string[]): Promise<{ se
     regels.map(async (r) => ({ ...r, token: await ensureActionToken(r.id, r.token) })),
   );
 
-  const { to, bcc } = ontvangers();
+  const ontvangers = await ontvangersMetId();
   const aantal = regels.length;
   const som = regels.reduce((s, r) => s + Number(r.total ?? 0), 0);
-  const html = brandedEmail(`
+  const htmlVoor = (wie: string | null) => brandedEmail(`
     <p><strong>${aantal} nieuwe inkoopfactu${aantal === 1 ? "ur" : "ren"}</strong> ter goedkeuring — samen ${escapeHtml(formatEUR(som))}.</p>
-    ${tabel(metToken)}
+    ${tabel(metToken, false, wie)}
     <p style="color:#888;font-size:13px">Zolang een factuur niet is goedgekeurd telt hij niet mee in de projectkosten en gaat hij niet naar Holded.</p>
     <p><a href="${APP_URL}/inkooporders/te-verwerken">Alle facturen beoordelen</a></p>
   `);
@@ -167,13 +184,19 @@ export async function notifyNewInvoiceReviews(reviewIds: string[]): Promise<{ se
     `${APP_URL}/inkooporders/te-verwerken`,
   ].join("\n");
 
-  const res = await sendEmail({
-    to,
-    bcc,
-    subject: `${aantal} inkoopfactu${aantal === 1 ? "ur" : "ren"} ter goedkeuring`,
-    html,
-    text,
-  });
+  // Eén mail per keurder — zie ontvangersMetId: alleen zo weten we achteraf wie
+  // er op Goedkeuren heeft gedrukt.
+  const resultaten = await Promise.all(
+    ontvangers.map((o) =>
+      sendEmail({
+        to: o.email,
+        subject: `${aantal} inkoopfactu${aantal === 1 ? "ur" : "ren"} ter goedkeuring`,
+        html: htmlVoor(o.userId),
+        text,
+      }),
+    ),
+  );
+  const res = { sent: resultaten.some((r) => r.sent) };
 
   // Ook bij een mislukte verzending markeren: liever een gemiste melding dan
   // elke ronde opnieuw dezelfde mail.
@@ -218,18 +241,18 @@ export async function runPurchaseInvoiceDigest(): Promise<{
     regels.map(async (r) => ({ ...r, token: await ensureActionToken(r.id, r.token) })),
   );
 
-  const { to, bcc } = ontvangers();
+  const ontvangers = await ontvangersMetId();
   const som = regels.reduce((s, r) => s + Number(r.total ?? 0), 0);
   const oud = regels.filter((r) => r.dagen >= 7);
   const incompleet = regels.filter((r) => r.verdict === "reject");
   const onleesbaar = regels.filter((r) => r.verdict === "unreadable");
 
-  const html = brandedEmail(`
+  const htmlVoor = (wie: string | null) => brandedEmail(`
     <p><strong>${regels.length} inkoopfactu${regels.length === 1 ? "ur" : "ren"}</strong> wacht${regels.length === 1 ? "" : "en"} op goedkeuring — samen ${escapeHtml(formatEUR(som))}.</p>
     ${oud.length > 0 ? `<p style="color:#b6552d"><strong>${oud.length}</strong> wacht${oud.length === 1 ? "" : "en"} al langer dan een week.</p>` : ""}
     ${incompleet.length > 0 ? `<p>${incompleet.length} incompleet — terug te sturen naar de leverancier.</p>` : ""}
     ${onleesbaar.length > 0 ? `<p>${onleesbaar.length} kon de uitlezing niet lezen — handmatig bekijken.</p>` : ""}
-    ${tabel(metToken, true)}
+    ${tabel(metToken, true, wie)}
     <p><a href="${APP_URL}/inkooporders/te-verwerken">Beoordelen</a></p>
   `);
   const text = [
@@ -246,12 +269,21 @@ export async function runPurchaseInvoiceDigest(): Promise<{
     .filter(Boolean)
     .join("\n");
 
-  const res = await sendEmail({
-    to,
-    bcc,
-    subject: `${regels.length} inkoopfactu${regels.length === 1 ? "ur" : "ren"} te keuren${oud.length ? ` · ${oud.length} langer dan een week` : ""}`,
-    html,
-    text,
-  });
-  return { ok: true, pending: regels.length, sent: res.sent, reason: res.reason };
+  // Ook hier per keurder, zodat een besluit uit de ochtendmail een naam krijgt.
+  const resultaten = await Promise.all(
+    ontvangers.map((o) =>
+      sendEmail({
+        to: o.email,
+        subject: `${regels.length} inkoopfactu${regels.length === 1 ? "ur" : "ren"} te keuren${oud.length ? ` · ${oud.length} langer dan een week` : ""}`,
+        html: htmlVoor(o.userId),
+        text,
+      }),
+    ),
+  );
+  return {
+    ok: true,
+    pending: regels.length,
+    sent: resultaten.some((r) => r.sent),
+    reason: resultaten.find((r) => !r.sent)?.reason,
+  };
 }

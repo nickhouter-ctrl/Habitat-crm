@@ -23,8 +23,15 @@ export const dynamic = "force-dynamic";
 
 type Check = { key: string; label: string; severity: string; ok: boolean; skipped?: boolean; es: string; internal?: boolean };
 
-export default async function KeurenViaMailPage({ params }: { params: Promise<{ token: string }> }) {
+export default async function KeurenViaMailPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ token: string }>;
+  searchParams: Promise<{ gedaan?: string; w?: string }>;
+}) {
   const { token } = await params;
+  const { gedaan, w } = await searchParams;
 
   const row = await db
     .select({
@@ -54,6 +61,26 @@ export default async function KeurenViaMailPage({ params }: { params: Promise<{ 
 
   const v = found.review;
   const verlopen = found.verlopen;
+
+  if (v.status !== "pending" && gedaan) {
+    // Net zelf gedaan: bevestigen, niet vermanen.
+    return (
+      <Melding title={gedaan === "afgekeurd" ? "Afgekeurd en verstuurd" : "Goedgekeurd"}>
+        {gedaan === "afgekeurd"
+          ? "De factuur is afgekeurd en komt niet in de inkoopadministratie. Is er een bericht aan de leverancier meegestuurd, dan is dat verzonden."
+          : "De factuur staat nu als inkooporder in de administratie en telt mee in de projectkosten."}
+        {v.purchaseOrderId ? (
+          <>
+            {" "}
+            <Link href={`/inkooporders/${v.purchaseOrderId}`} className="text-accent hover:underline">
+              Bekijk de inkooporder
+            </Link>
+            .
+          </>
+        ) : null}
+      </Melding>
+    );
+  }
 
   if (v.status !== "pending") {
     return (
@@ -157,6 +184,8 @@ export default async function KeurenViaMailPage({ params }: { params: Promise<{ 
 
           {/* Goedkeuren */}
           <form action={approveViaTokenAction.bind(null, token)} className="space-y-3 border-t pt-4">
+            {/* Wie klikte: komt uit de persoonlijke link in de meldingsmail. */}
+            <input type="hidden" name="w" value={w ?? ""} />
             <div className="grid gap-3 sm:grid-cols-2">
               <Field label="Project" htmlFor="projectId" hint={v.suggestedProjectId ? "herkend op de factuur" : "niet herkend — kies zelf"}>
                 <Select id="projectId" name="projectId" defaultValue={v.suggestedProjectId ?? ""}>
@@ -203,6 +232,7 @@ export default async function KeurenViaMailPage({ params }: { params: Promise<{ 
           <details className="border-t pt-4">
             <summary className="cursor-pointer text-sm font-medium">Afkeuren en de leverancier berichten</summary>
             <form action={rejectViaTokenAction.bind(null, token)} className="mt-3 space-y-3">
+              <input type="hidden" name="w" value={w ?? ""} />
               <Field label="Interne reden" htmlFor="reason" hint="komt in het logboek, niet in de mail">
                 <Textarea
                   id="reason"

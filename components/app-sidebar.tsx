@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  History,
   Activity,
   BarChart3,
   BookOpen,
@@ -116,6 +117,7 @@ const NAV_GROUPS: { label: string | null; items: NavItem[] }[] = [
       { href: "/rapporten/seo", label: "SEO", icon: LineChart },
       { href: "/rapporten/analytics", label: "Analytics", icon: Activity },
       { href: "/rapporten/business", label: "Bedrijfsprofiel", icon: Store },
+      { href: "/rapporten/logboek", label: "Logboek", icon: History },
     ],
   },
 ];

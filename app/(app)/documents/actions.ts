@@ -531,7 +531,7 @@ export async function sendPaymentReminderNow(
   id: string,
   level?: ReminderLevel,
 ): Promise<{ ok: boolean; error?: string }> {
-  await requireUser();
+  const actor = await requireUser();
   const doc = await db.query.documents.findFirst({
     where: and(eq(documents.id, id), eq(documents.kind, "invoice")),
     columns: {
@@ -583,6 +583,7 @@ export async function sendPaymentReminderNow(
   await db.insert(activities).values({
     type: "email",
     subject: `${REMINDER_NAME[lvl]} verstuurd — ${doc.docNumber ?? ""}`,
+    authorId: actor.id,
     body: `Verstuurd naar ${email}. Openstaand ${formatEUR(open)}${
       doc.dueDate ? ` · vervallen op ${formatDate(doc.dueDate)}` : ""
     }.`,
@@ -604,7 +605,7 @@ export async function sendAccountReminder(
   contactId: string,
   level?: ReminderLevel,
 ): Promise<{ ok: boolean; error?: string }> {
-  await requireUser();
+  const actor = await requireUser();
   const contact = await db.query.contacts.findFirst({
     where: eq(contacts.id, contactId),
     columns: { name: true, email: true, preferredLanguage: true },
@@ -687,6 +688,7 @@ export async function sendAccountReminder(
   await db.insert(activities).values({
     type: "email",
     subject: `Verzamelherinnering verstuurd (${REMINDER_NAME[lvl]})`,
+    authorId: actor.id,
     body: `${invoices.length} factu${invoices.length === 1 ? "ur" : "ren"}${
       credits.length ? ` − ${credits.length} creditnota('s)` : ""
     } · totaal te voldoen ${formatEUR(total)}. Naar ${contact.email}.`,
@@ -701,7 +703,7 @@ export async function sendAccountReminder(
 export async function sendReviewRequestNow(
   contactId: string,
 ): Promise<{ ok: boolean; error?: string }> {
-  await requireUser();
+  const actor = await requireUser();
   const contact = await db.query.contacts.findFirst({
     where: eq(contacts.id, contactId),
     columns: { name: true, email: true, preferredLanguage: true },
@@ -743,6 +745,7 @@ export async function sendReviewRequestNow(
   await db.insert(activities).values({
     type: "email",
     subject: "Review-verzoek verstuurd",
+    authorId: actor.id,
     body: `Handmatig verstuurd naar ${contact.email}.`,
     contactId,
   });

@@ -1,4 +1,4 @@
-import { and, asc, eq, ilike, inArray, isNotNull } from "drizzle-orm";
+import { and, asc, desc, eq, ilike, inArray, isNotNull } from "drizzle-orm";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
@@ -21,7 +21,7 @@ import {
   Tr,
 } from "@/components/ui";
 import { db } from "@/lib/db";
-import { products, projects, purchaseOrders } from "@/lib/db/schema";
+import { products, projects, purchaseInvoiceReviews, purchaseOrders, users } from "@/lib/db/schema";
 import { nextSequentialSku } from "@/lib/products";
 import {
   formatMoney,
@@ -64,6 +64,22 @@ export default async function PurchaseOrderPage({ params }: { params: Promise<{ 
   const { id } = await params;
   const po = await db.query.purchaseOrders.findFirst({ where: eq(purchaseOrders.id, id) });
   if (!po) notFound();
+
+  // Wie heeft deze factuur goedgekeurd? Staat op de beoordeling uit de wachtrij;
+  // inkopen van vóór de goedkeuringspoort (of uit Holded) hebben die niet.
+  const [keuring] = await db
+    .select({
+      status: purchaseInvoiceReviews.status,
+      decidedAt: purchaseInvoiceReviews.decidedAt,
+      decidedVia: purchaseInvoiceReviews.decidedVia,
+      door: users.name,
+      doorEmail: users.email,
+    })
+    .from(purchaseInvoiceReviews)
+    .leftJoin(users, eq(users.id, purchaseInvoiceReviews.decidedBy))
+    .where(eq(purchaseInvoiceReviews.purchaseOrderId, id))
+    .orderBy(desc(purchaseInvoiceReviews.decidedAt))
+    .limit(1);
 
   // Projecten om deze inkoop aan te koppelen (telt dan mee als materiaalkost).
   const projectRows = await db
@@ -151,7 +167,20 @@ export default async function PurchaseOrderPage({ params }: { params: Promise<{ 
             {payBadge && <Badge tone={payBadge.tone}>{payBadge.label}</Badge>}
           </span>
         }
-        subtitle={po.reference ? `Referentie ${po.reference}` : undefined}
+        subtitle={
+          <span>
+            {po.reference ? `Referentie ${po.reference}` : ""}
+            {keuring?.decidedAt && (
+              <span className="text-muted">
+                {po.reference ? " · " : ""}
+                {keuring.status === "approved" || keuring.status === "superseded" ? "goedgekeurd" : keuring.status} door{" "}
+                {keuring.door ?? keuring.doorEmail ?? "onbekend"} op{" "}
+                {keuring.decidedAt.toLocaleDateString("nl-NL", { day: "numeric", month: "short", year: "numeric" })}
+                {keuring.decidedVia === "mail" ? " (via de knop in de melding)" : ""}
+              </span>
+            )}
+          </span>
+        }
         actions={
           <>
             <LinkButton href="/inkooporders" variant="ghost">
