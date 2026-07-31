@@ -9,7 +9,14 @@ import { asc, desc, eq, ne } from "drizzle-orm";
 
 import { Badge, Card, CardContent, CardHeader, CardTitle, EmptyState, LinkButton, PageHeader } from "@/components/ui";
 import { db } from "@/lib/db";
-import { emailInbox, mailAttachments, projects, purchaseInvoiceReviews } from "@/lib/db/schema";
+import {
+  emailInbox,
+  mailAttachments,
+  overheadSuppliers,
+  overheadSupplierKey,
+  projects,
+  purchaseInvoiceReviews,
+} from "@/lib/db/schema";
 import { buildInvoiceRejectEmail, supplierEmailCandidates, type EmailCandidate } from "@/lib/invoice-reject";
 import { formatEUR } from "@/lib/utils";
 import { ReviewCard, type ReviewCardData, type ReviewCheck, type ReviewLine } from "./review-card";
@@ -82,6 +89,12 @@ export default async function FacturenKeurenPage() {
     }),
   );
 
+  // Leveranciers die al als vaste last bekend staan (energie, telefonie): dan
+  // staat het vinkje "algemene kosten" meteen goed.
+  const overheadKeys = new Set(
+    (await db.select({ key: overheadSuppliers.supplierKey }).from(overheadSuppliers)).map((o) => o.key),
+  );
+
   // Eén kaart per mail; een mail kan meerdere facturen bevatten (Allpack stuurt
   // goederen, handling en vracht in één bericht).
   const perMail = new Map<
@@ -114,6 +127,8 @@ export default async function FacturenKeurenPage() {
       projectId: v.suggestedProjectId,
       kind: (v.suggestedKind as "labor" | "material" | null) ?? null,
       hours: v.suggestedHours != null ? Number(v.suggestedHours) : null,
+      // Al bekend als vaste last? Dan staat het vinkje meteen goed.
+      overhead: overheadKeys.has(overheadSupplierKey(v.proposedSupplier ?? "")),
       lines: Array.isArray(fields?.lines) ? (fields.lines as ReviewLine[]) : [],
       attachmentId: v.mailAttachmentId,
       attachmentName: r.attachmentName,

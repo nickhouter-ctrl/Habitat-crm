@@ -48,6 +48,8 @@ export type ReviewCardData = {
   projectId: string | null;
   kind: "labor" | "material" | null;
   hours: number | null;
+  /** Leverancier staat al bekend als vaste last (energie, telefonie, …). */
+  overhead: boolean;
   lines: ReviewLine[];
   attachmentId: string;
   attachmentName: string;
@@ -225,6 +227,13 @@ export function ReviewCard({
                       </option>
                     ))}
                   </Select>
+                  {/* Vaste lasten horen bij geen enkele werf. Eén keer aanvinken
+                      en het systeem vraagt bij de volgende factuur van deze
+                      leverancier niet meer om een werfreferentie. */}
+                  <label className="mt-1.5 flex items-center gap-2 text-xs text-muted">
+                    <input type="checkbox" name="overhead" defaultChecked={data.overhead} />
+                    <span>Algemene kosten (energie, telefoon, verzekering — hoort bij geen project)</span>
+                  </label>
                 </Field>
                 {kind === "labor" && (
                   <Field

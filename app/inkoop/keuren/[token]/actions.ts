@@ -74,6 +74,7 @@ export async function approveViaTokenAction(token: string, formData: FormData) {
     projectId: uuidOrNull(formData.get("projectId")),
     kind: formData.get("kind") === "labor" ? "labor" : formData.get("kind") === "material" ? "material" : null,
     hours: amountOrNull(formData.get("hours")),
+    overhead: formData.get("overhead") === "on",
   };
   await approveInvoiceReview({ reviewId: review.id, overrides, userId: await actorFrom(formData), via: "mail" });
   refresh();

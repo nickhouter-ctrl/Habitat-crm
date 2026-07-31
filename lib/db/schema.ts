@@ -554,6 +554,35 @@ export const loginTokens = pgTable(
   (t) => [index("login_tokens_user_idx").on(t.userId)],
 );
 
+/**
+ * Leveranciers van vaste lasten (energie, water, telefonie, verzekering,
+ * boekhouder, huur). Hun facturen horen bij géén project, dus de controle op een
+ * werf-/projectreferentie wordt voor hen overgeslagen — anders krijgt elke
+ * energierekening een waarschuwing die nergens over gaat.
+ *
+ * De lijst groeit vanzelf: vink bij het goedkeuren "algemene kosten" aan en de
+ * leverancier komt erin.
+ */
+export const overheadSuppliers = pgTable("overhead_suppliers", {
+  id: uuid().primaryKey().default(sql`gen_random_uuid()`),
+  /** Genormaliseerde naam (kleine letters, zonder leestekens) — de sleutel. */
+  supplierKey: text().notNull().unique(),
+  supplierName: text().notNull(),
+  taxId: text(),
+  note: text(),
+  createdBy: uuid().references(() => users.id, { onDelete: "set null" }),
+  ...timestamps,
+});
+
+/** Naam → sleutel voor {@link overheadSuppliers}. */
+export function overheadSupplierKey(naam: string): string {
+  return naam
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^0-9a-z]/gi, "")
+    .toLowerCase();
+}
+
 export const sampleMovements = pgTable(
   "sample_movements",
   {

@@ -61,6 +61,7 @@ export async function approveReviewAction(reviewId: string, formData: FormData) 
     kind: formData.get("kind") === "labor" ? "labor" : formData.get("kind") === "material" ? "material" : null,
     hours: amountOrNull(formData.get("hours")),
     hoursAlreadyLogged: formData.get("hoursAlreadyLogged") === "on",
+    overhead: formData.get("overhead") === "on",
     split: split.length > 1 ? split : undefined,
   };
 

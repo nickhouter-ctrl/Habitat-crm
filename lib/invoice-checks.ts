@@ -102,6 +102,11 @@ export type CheckContext = {
   duplicateOf?: string | null;
   /** Overschrijf het automatisch bepaalde regime (zie {@link detectRegime}). */
   regime?: InvoiceRegime;
+  /**
+   * Vaste last (energie, water, telefonie, verzekering, huur): hoort bij geen
+   * enkel project, dus vragen om een werfreferentie slaat nergens op.
+   */
+  overhead?: boolean;
 };
 
 const norm = (s: string | null | undefined) =>
@@ -371,7 +376,10 @@ export function evaluateInvoice(read: AiInvoiceRead, ctx: CheckContext): Invoice
       key: "project_reference",
       label: "Herkenbare werf-/projectreferentie",
       severity: "warning",
-      ok: ctx.projectMatched,
+      // Vaste lasten overslaan: een energierekening hoort bij het bedrijf, niet
+      // bij een werf.
+      skipped: ctx.overhead === true,
+      ok: ctx.overhead === true || ctx.projectMatched,
       found: f.projectHint,
       es: "la referencia de la obra o proyecto (p. ej. «Silvestre», «Cap Negre»)",
     }),

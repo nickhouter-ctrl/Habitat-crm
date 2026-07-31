@@ -23,6 +23,8 @@ import {
   projectCosts,
   projects,
   properties,
+  overheadSuppliers,
+  overheadSupplierKey,
   purchaseInvoiceReviews,
   purchaseOrders,
   timeEntries,
@@ -170,6 +172,38 @@ export async function findExistingPurchaseOrder(args: {
   return null;
 }
 
+
+/** Staat deze leverancier op de lijst met vaste lasten (energie, telefonie, …)? */
+export async function isOverheadSupplier(supplier: string | null): Promise<boolean> {
+  if (!supplier?.trim()) return false;
+  const key = overheadSupplierKey(supplier);
+  if (!key) return false;
+  const rij = await db.query.overheadSuppliers.findFirst({
+    where: eq(overheadSuppliers.supplierKey, key),
+    columns: { id: true },
+  });
+  return !!rij;
+}
+
+/** Zet een leverancier op die lijst — gebeurt bij goedkeuren als "algemene kosten". */
+export async function markOverheadSupplier(args: {
+  supplier: string;
+  taxId?: string | null;
+  userId: string | null;
+}): Promise<void> {
+  const key = overheadSupplierKey(args.supplier);
+  if (!key) return;
+  await db
+    .insert(overheadSuppliers)
+    .values({
+      supplierKey: key,
+      supplierName: args.supplier.trim(),
+      taxId: args.taxId ?? null,
+      createdBy: args.userId,
+    })
+    .onConflictDoNothing();
+}
+
 /* ─────────────────────────── voorstel opbouwen ─────────────────────────── */
 
 export type ProposalLine = {
@@ -306,8 +340,10 @@ export async function buildInvoiceProposal(args: {
     }
   }
 
+  const isOverhead = await isOverheadSupplier(supplier);
   const verdict = evaluateInvoice(read, {
     projectMatched: !!projectId || distinctProjects.size > 0,
+    overhead: isOverhead,
     knownIbans: f?.supplierTaxId ? await knownIbansFor(f.supplierTaxId) : [],
     duplicateOf: dup?.id ?? null,
   });
@@ -497,6 +533,12 @@ export type ApprovalOverrides = {
   hoursAlreadyLogged?: boolean;
   /** Verdeling over meerdere werven; overschrijft `projectId` als 'ie gevuld is. */
   split?: { projectId: string; hours?: number | null; amount: number }[];
+  /**
+   * Vaste last (energie, telefonie, verzekering): hoort bij geen project. Zet de
+   * leverancier op de overhead-lijst, zodat de volgende factuur van dezelfde
+   * partij niet opnieuw om een werfreferentie vraagt.
+   */
+  overhead?: boolean;
 };
 
 /**
@@ -570,6 +612,16 @@ export async function approveInvoiceReview(args: {
         console.error("Excel→PDF mislukt:", e instanceof Error ? e.message : e);
       }
     }
+  }
+
+  // "Algemene kosten" aangevinkt: onthouden voor de volgende keer. Bewust vóór
+  // de inkooporder, zodat het ook klopt als de rest hierna misgaat.
+  if (o.overhead) {
+    await markOverheadSupplier({
+      supplier,
+      taxId: (review.aiFields as AiInvoiceFields | null)?.supplierTaxId ?? null,
+      userId: args.userId,
+    });
   }
 
   const kind = o.kind ?? (review.suggestedKind as "labor" | "material" | null);

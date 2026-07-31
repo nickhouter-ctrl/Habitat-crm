@@ -15,6 +15,7 @@ import { SubmitButton } from "@/components/submit-button";
 import { db } from "@/lib/db";
 import { emailInbox, mailAttachments, projects, purchaseInvoiceReviews } from "@/lib/db/schema";
 import { buildInvoiceRejectEmail, supplierEmailCandidates } from "@/lib/invoice-reject";
+import { isOverheadSupplier } from "@/lib/purchase-invoice-intake";
 import { formatEUR } from "@/lib/utils";
 import { approveViaTokenAction, rejectViaTokenAction } from "./actions";
 
@@ -120,6 +121,7 @@ export default async function KeurenViaMailPage({
     language?: string | null;
   } | null;
 
+  const isOverhead = await isOverheadSupplier(v.proposedSupplier);
   const [projectRows, kandidaten] = await Promise.all([
     db.select({ id: projects.id, name: projects.name }).from(projects).orderBy(projects.name),
     supplierEmailCandidates({
@@ -223,6 +225,13 @@ export default async function KeurenViaMailPage({
                 />
               </Field>
             </div>
+            {/* Vaste lasten (energie, telefonie, verzekering) horen bij geen werf.
+                Eén keer aanvinken en de volgende factuur van deze leverancier
+                vraagt er niet meer om. */}
+            <label className="flex items-center gap-2 text-sm">
+              <input type="checkbox" name="overhead" defaultChecked={isOverhead} />
+              <span>Algemene kosten — hoort bij geen project</span>
+            </label>
             <SubmitButton variant="primary" pendingLabel="Goedkeuren…">
               Goedkeuren
             </SubmitButton>
