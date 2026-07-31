@@ -27,6 +27,7 @@ import {
   Tr,
   Textarea,
 } from "@/components/ui";
+import { Combobox, type ComboOption } from "@/components/combobox";
 import { SubmitButton } from "@/components/submit-button";
 import { ConfirmSubmit } from "@/components/confirm-submit";
 import { db } from "@/lib/db";
@@ -88,6 +89,14 @@ export default async function VoorraadAfboekenPage({
       .where(and(isNotNull(stockWriteoffs.id), sql`${stockWriteoffs.reversedAt} is null`)),
   ]);
 
+  // Voorraad en kostprijs als hint in de lijst: dan zie je meteen of afboeken
+  // kan en wat het kost, zonder eerst het product te openen.
+  const productOptions: ComboOption[] = voorraadProducten.map((p) => ({
+    value: p.id,
+    label: p.sku ? `${p.name} · ${p.sku}` : p.name,
+    hint: `${Number(p.stockQty)} ${p.unit ?? "st"}${p.costEur != null ? ` · ${formatEUR(Number(p.costEur))}` : ""}`,
+  }));
+
   const som = totaal[0] ?? { aantal: 0, kosten: 0 };
   const vandaag = new Date().toISOString().slice(0, 10);
 
@@ -127,18 +136,14 @@ export default async function VoorraadAfboekenPage({
         </CardHeader>
         <CardContent>
           <form action={writeOffStockAction} className="grid gap-3 lg:grid-cols-[2fr_0.7fr_1fr_1.2fr_0.9fr_auto] lg:items-end">
-            <Field label="Product" htmlFor="productId">
-              <Select id="productId" name="productId" required defaultValue="">
-                <option value="" disabled>
-                  — kies een product —
-                </option>
-                {voorraadProducten.map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {p.name}
-                    {p.sku ? ` · ${p.sku}` : ""} ({Number(p.stockQty)} {p.unit ?? "st"})
-                  </option>
-                ))}
-              </Select>
+            <Field label="Product" hint="typ een naam of SKU">
+              <Combobox
+                name="productId"
+                options={productOptions}
+                placeholder="zoek product…"
+                clearable
+                menuClassName="w-[28rem]"
+              />
             </Field>
             <Field label="Aantal" htmlFor="qty">
               <Input id="qty" name="qty" inputMode="decimal" required className="text-right" placeholder="1" />
