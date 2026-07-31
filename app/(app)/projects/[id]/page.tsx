@@ -97,6 +97,7 @@ export default async function ProjectDetailPage({
     vtermijn?: string;
     vdatum?: string;
     vmail?: string;
+    vstand?: string;
   }>;
 }) {
   const { id } = await params;

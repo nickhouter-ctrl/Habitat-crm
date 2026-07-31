@@ -14,7 +14,7 @@ import { SubmitButton } from "@/components/submit-button";
 import { auth } from "@/auth";
 import { db } from "@/lib/db";
 import { companies, contacts, projectPayments, sentEmails, users } from "@/lib/db/schema";
-import { buildAdvanceRequestEmail } from "@/lib/advance-request";
+import { buildAdvanceRequestEmail, buildAdvanceStatusEmail } from "@/lib/advance-request";
 import { formatEUR } from "@/lib/utils";
 import { sendAdvanceRequest } from "../actions";
 
@@ -50,7 +50,7 @@ export async function AdvanceRequestCard({
   siteAlias: string | null;
   contactId: string | null;
   contractDate: string | null;
-  params: { vbedrag?: string; vtermijn?: string; vdatum?: string; vmail?: string };
+  params: { vbedrag?: string; vtermijn?: string; vdatum?: string; vmail?: string; vstand?: string };
 }) {
   const amount = parseAmount(params.vbedrag);
   const termLabel = params.vtermijn?.trim() || "";
@@ -128,6 +128,27 @@ export async function AdvanceRequestCard({
   // Balcón al Mar C 39, Bacon del Mar") en dan wordt de brief onleesbaar.
   const projectLabel = siteAlias?.split(",")[0]?.trim() || projectName;
 
+  // Stand doorgeven na een deelbetaling: bevestigen wat binnen is, herinneren
+  // aan het restant. Alleen mogelijk als er ook echt iets ontvangen is.
+  const standVerzoek = params.vstand ? eerder.find((e) => e.id === params.vstand) : null;
+  const standBinnen = standVerzoek ? (ontvangenPerVerzoek.get(standVerzoek.id) ?? 0) : 0;
+  const standGevraagd = standVerzoek?.amountEur != null ? Number(standVerzoek.amountEur) : 0;
+  const standConcept =
+    standVerzoek && standGevraagd > 0 && standBinnen > 0
+      ? buildAdvanceStatusEmail({
+          projectLabel,
+          termLabel: termijnUit(standVerzoek.subject),
+          amountEur: standGevraagd,
+          receivedEur: standBinnen,
+          openEur: Math.round((standGevraagd - standBinnen) * 100) / 100,
+          agreementDate,
+          clientName,
+          senderName: ondertekenaar?.name ?? null,
+          senderPhone: ondertekenaar?.phone ?? null,
+          dateLabel: new Date().toLocaleDateString("nl-NL", { day: "2-digit", month: "2-digit", year: "numeric" }),
+        })
+      : null;
+
   const concept =
     amount != null && termLabel
       ? buildAdvanceRequestEmail({
@@ -190,9 +211,18 @@ export async function AdvanceRequestCard({
                     const open = Math.round((gevraagd - binnen) * 100) / 100;
                     if (binnen === 0) return <span className="text-xs text-muted">nog niets ontvangen</span>;
                     return open > 0.01 ? (
-                      <span className="text-xs text-warning">
-                        {formatEUR(binnen)} ontvangen · nog {formatEUR(open)} open
-                      </span>
+                      <>
+                        <span className="text-xs text-warning">
+                          {formatEUR(binnen)} ontvangen · nog {formatEUR(open)} open
+                        </span>
+                        <Link
+                          href={`?vstand=${m.id}#voorschot-opvragen`}
+                          className="text-xs text-accent hover:underline"
+                          scroll={false}
+                        >
+                          stand doorgeven
+                        </Link>
+                      </>
                     ) : (
                       <span className="text-xs text-success">volledig ontvangen</span>
                     );
@@ -213,6 +243,36 @@ export async function AdvanceRequestCard({
               .
             </p>
           </div>
+        )}
+
+        {standConcept && (
+          <form action={sendAdvanceRequest.bind(null, projectId)} className="space-y-3 rounded-md border border-warning/40 bg-warning/5 p-3">
+            <p className="text-sm">
+              <strong>Stand doorgeven</strong> — bevestigt de ontvangst van {formatEUR(standBinnen)} en vraagt het
+              restant van {formatEUR(Math.round((standGevraagd - standBinnen) * 100) / 100)}.
+            </p>
+            <input type="hidden" name="amountEur" value={String(Math.round((standGevraagd - standBinnen) * 100) / 100)} />
+            <input type="hidden" name="termLabel" value={termijnUit(standVerzoek?.subject ?? null)} />
+            <div className="grid gap-3 sm:grid-cols-2">
+              <Field label="Aan" htmlFor="stand-to">
+                <Input id="stand-to" name="to" type="email" defaultValue={standVerzoek?.toEmail ?? to ?? ""} required />
+              </Field>
+              <Field label="Onderwerp" htmlFor="stand-subject">
+                <Input id="stand-subject" name="subject" defaultValue={standConcept.subject} required />
+              </Field>
+            </div>
+            <Field label="Bericht" htmlFor="stand-text" hint="dit gaat er letterlijk uit — Nederlands en Spaans">
+              <Textarea id="stand-text" name="text" rows={20} defaultValue={standConcept.text} className="font-mono text-xs" />
+            </Field>
+            <div className="flex flex-wrap items-center gap-3">
+              <SubmitButton variant="primary" pendingLabel="Versturen…">
+                Versturen naar de klant
+              </SubmitButton>
+              <Link href="#voorschot-opvragen" className="text-sm text-muted hover:underline">
+                Annuleren
+              </Link>
+            </div>
+          </form>
         )}
 
         {/* Stap 1 — wat vragen we op? GET, zodat er niets stiekem wordt bewaard. */}
