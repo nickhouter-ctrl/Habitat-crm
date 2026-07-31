@@ -530,6 +530,30 @@ export const consignments = pgTable(
  * (`sold`) blijft de sample weg en is de borg definitief (omzet). "Waar zijn de
  * samples" = regels met status `out`, per ontvanger.
  */
+/**
+ * Inloglink voor in de mail: één klik in plaats van je wachtwoord opzoeken.
+ *
+ * Bewust géén automatische login op de link zelf. Mailscanners van Gmail en
+ * Outlook halen links vooraf op; een GET die inlogt zou dan een sessie voor de
+ * scanner aanmaken en de link opbranden. De link opent een pagina met één knop.
+ */
+export const loginTokens = pgTable(
+  "login_tokens",
+  {
+    id: uuid().primaryKey().default(sql`gen_random_uuid()`),
+    userId: uuid()
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    token: text().notNull().unique(),
+    /** Waar de link vandaan kwam (bv. "inkoopfactuur-melding") — om na te zoeken. */
+    purpose: text(),
+    expiresAt: timestamp({ withTimezone: true }).notNull(),
+    lastUsedAt: timestamp({ withTimezone: true }),
+    ...timestamps,
+  },
+  (t) => [index("login_tokens_user_idx").on(t.userId)],
+);
+
 export const sampleMovements = pgTable(
   "sample_movements",
   {

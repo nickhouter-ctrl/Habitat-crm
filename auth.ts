@@ -8,6 +8,7 @@ import { authConfig } from "./auth.config";
 import { db } from "./lib/db";
 import { accounts, sessions, users, verificationTokens } from "./lib/db/schema";
 import { verifyPassword } from "./lib/auth/password";
+import { markLoginTokenUsed, resolveLoginToken } from "./lib/login-links";
 
 const credentialsSchema = z.object({
   email: z.string().email(),
@@ -23,7 +24,9 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     verificationTokensTable: verificationTokens,
   }),
   // Credentials provider requires the JWT session strategy.
-  session: { strategy: "jwt" },
+  // 30 dagen, en de sessie schuift mee bij gebruik: wie via de inloglink uit een
+  // melding binnenkomt hoeft daarna niet telkens opnieuw in te loggen.
+  session: { strategy: "jwt", maxAge: 30 * 24 * 60 * 60, updateAge: 24 * 60 * 60 },
   providers: [
     Credentials({
       credentials: {
@@ -50,6 +53,23 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           image: user.image,
           role: user.role,
         };
+      },
+    }),
+    /**
+     * Inloggen met de link uit een melding-mail. De token doet het werk; er is
+     * geen wachtwoord. De knop op /login/link/[token] POST hierheen — nooit een
+     * GET, want mailscanners halen links vooraf op.
+     */
+    Credentials({
+      id: "maillink",
+      name: "Inloglink",
+      credentials: { token: { label: "Token", type: "text" } },
+      async authorize(raw) {
+        const token = typeof raw?.token === "string" ? raw.token : "";
+        const user = await resolveLoginToken(token);
+        if (!user) return null;
+        await markLoginTokenUsed(token);
+        return { id: user.id, name: user.name, email: user.email, image: null, role: user.role };
       },
     }),
   ],

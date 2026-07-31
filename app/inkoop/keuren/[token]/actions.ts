@@ -14,6 +14,7 @@ import { eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
+import { auth } from "@/auth";
 import { db } from "@/lib/db";
 import { purchaseInvoiceReviews, users } from "@/lib/db/schema";
 import { approveInvoiceReview, rejectInvoiceReview, type ApprovalOverrides } from "@/lib/purchase-invoice-intake";
@@ -37,6 +38,10 @@ function uuidOrNull(v: FormDataEntryValue | null): string | null {
  * door Hans" en een lege naam in het logboek, wat eerder gebeurde.
  */
 async function actorFrom(formData: FormData): Promise<string | null> {
+  // Ben je gewoon ingelogd (bv. via de inloglink in dezelfde mail), dan is dat
+  // de betrouwbaarste bron; de id uit de link is de terugval.
+  const sessie = await auth();
+  if (sessie?.user?.id) return sessie.user.id;
   const id = uuidOrNull(formData.get("w"));
   if (!id) return null;
   const u = await db.query.users.findFirst({ where: eq(users.id, id), columns: { id: true } });

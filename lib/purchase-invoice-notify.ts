@@ -17,6 +17,7 @@ import { purchaseInvoiceReviews, users } from "@/lib/db/schema";
 import { brandedEmail, escapeHtml, sendEmail } from "@/lib/email";
 import { formatEUR } from "@/lib/utils";
 import { crmUrl } from "@/lib/crm-url";
+import { getLoginToken } from "@/lib/login-links";
 
 const APP_URL = crmUrl();
 
@@ -26,7 +27,12 @@ const APP_URL = crmUrl();
  * terugvalt op de algemene notify-lijst (hi@ + nick@) en Hans de melding dan
  * nooit ziet — precies wat er bij de eerste test gebeurde.
  */
-const KEURDERS = ["nick@habitat-one.com", "hans@habitat-one.com"];
+const KEURDERS = [
+  "nick@habitat-one.com",
+  "hans@habitat-one.com",
+  "frederique@habitat-one.com",
+  "hi@habitat-one.com",
+];
 
 /** Ontvangers van factuurmeldingen: eigen env, anders de vaste keurders. */
 function ontvangerLijst(): string[] {
@@ -44,14 +50,34 @@ function ontvangerLijst(): string[] {
  * voor iedereen gelijk en weet het systeem niet wie er heeft goedgekeurd — dat
  * gebeurde bij de Iberdrola-factuur, die zonder naam in het logboek belandde.
  */
-async function ontvangersMetId(): Promise<{ email: string; userId: string | null }[]> {
+async function ontvangersMetId(): Promise<{ email: string; userId: string | null; loginToken: string | null }[]> {
   const lijst = ontvangerLijst();
   const rijen = await db
     .select({ id: users.id, email: users.email })
     .from(users)
     .where(inArray(sql`lower(${users.email})`, lijst.map((e) => e.toLowerCase())));
   const perEmail = new Map(rijen.map((r) => [r.email.toLowerCase(), r.id]));
-  return lijst.map((email) => ({ email, userId: perEmail.get(email.toLowerCase()) ?? null }));
+  return Promise.all(
+    lijst.map(async (email) => {
+      const userId = perEmail.get(email.toLowerCase()) ?? null;
+      return {
+        email,
+        userId,
+        // Persoonlijke inloglink: scheelt het opzoeken van een wachtwoord als je
+        // vanuit de mail door wilt naar de rest van het CRM.
+        loginToken: userId ? await getLoginToken(userId, "inkoopfactuur-melding") : null,
+      };
+    }),
+  );
+}
+
+/** Voettekst met de inloglink; leeg als het adres geen account heeft. */
+function inlogRegel(loginToken: string | null, doel: string): string {
+  if (!loginToken) return "";
+  return `<p style="margin-top:18px;font-size:13px;color:#7a6f63">
+    <a href="${APP_URL}/login/link/${loginToken}?next=${encodeURIComponent(doel)}">Open het CRM zonder wachtwoord</a>
+    — persoonlijke link, niet doorsturen.
+  </p>`;
 }
 
 /**
@@ -167,11 +193,12 @@ export async function notifyNewInvoiceReviews(reviewIds: string[]): Promise<{ se
   const ontvangers = await ontvangersMetId();
   const aantal = regels.length;
   const som = regels.reduce((s, r) => s + Number(r.total ?? 0), 0);
-  const htmlVoor = (wie: string | null) => brandedEmail(`
+  const htmlVoor = (wie: string | null, loginToken: string | null) => brandedEmail(`
     <p><strong>${aantal} nieuwe inkoopfactu${aantal === 1 ? "ur" : "ren"}</strong> ter goedkeuring — samen ${escapeHtml(formatEUR(som))}.</p>
     ${tabel(metToken, false, wie)}
     <p style="color:#888;font-size:13px">Zolang een factuur niet is goedgekeurd telt hij niet mee in de projectkosten en gaat hij niet naar Holded.</p>
     <p><a href="${APP_URL}/inkooporders/te-verwerken">Alle facturen beoordelen</a></p>
+    ${inlogRegel(loginToken, "/inkooporders/te-verwerken")}
   `);
   const text = [
     `${aantal} nieuwe inkoopfactu${aantal === 1 ? "ur" : "ren"} ter goedkeuring (samen ${formatEUR(som)}):`,
@@ -191,7 +218,7 @@ export async function notifyNewInvoiceReviews(reviewIds: string[]): Promise<{ se
       sendEmail({
         to: o.email,
         subject: `${aantal} inkoopfactu${aantal === 1 ? "ur" : "ren"} ter goedkeuring`,
-        html: htmlVoor(o.userId),
+        html: htmlVoor(o.userId, o.loginToken),
         text,
       }),
     ),
@@ -247,13 +274,14 @@ export async function runPurchaseInvoiceDigest(): Promise<{
   const incompleet = regels.filter((r) => r.verdict === "reject");
   const onleesbaar = regels.filter((r) => r.verdict === "unreadable");
 
-  const htmlVoor = (wie: string | null) => brandedEmail(`
+  const htmlVoor = (wie: string | null, loginToken: string | null) => brandedEmail(`
     <p><strong>${regels.length} inkoopfactu${regels.length === 1 ? "ur" : "ren"}</strong> wacht${regels.length === 1 ? "" : "en"} op goedkeuring — samen ${escapeHtml(formatEUR(som))}.</p>
     ${oud.length > 0 ? `<p style="color:#b6552d"><strong>${oud.length}</strong> wacht${oud.length === 1 ? "" : "en"} al langer dan een week.</p>` : ""}
     ${incompleet.length > 0 ? `<p>${incompleet.length} incompleet — terug te sturen naar de leverancier.</p>` : ""}
     ${onleesbaar.length > 0 ? `<p>${onleesbaar.length} kon de uitlezing niet lezen — handmatig bekijken.</p>` : ""}
     ${tabel(metToken, true, wie)}
     <p><a href="${APP_URL}/inkooporders/te-verwerken">Beoordelen</a></p>
+    ${inlogRegel(loginToken, "/inkooporders/te-verwerken")}
   `);
   const text = [
     `${regels.length} inkoopfacturen wachten op goedkeuring (samen ${formatEUR(som)}).`,
@@ -275,7 +303,7 @@ export async function runPurchaseInvoiceDigest(): Promise<{
       sendEmail({
         to: o.email,
         subject: `${regels.length} inkoopfactu${regels.length === 1 ? "ur" : "ren"} te keuren${oud.length ? ` · ${oud.length} langer dan een week` : ""}`,
-        html: htmlVoor(o.userId),
+        html: htmlVoor(o.userId, o.loginToken),
         text,
       }),
     ),
