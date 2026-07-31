@@ -1079,6 +1079,12 @@ export const projectPayments = pgTable(
      * handmatig geboekt wordt.
      */
     documentId: uuid().references(() => documents.id, { onDelete: "set null" }),
+    /**
+     * Het voorschotVERZOEK (de verstuurde brief) waar deze ontvangst bij hoort.
+     * Een klant betaalt een voorschot soms in delen; hiermee is per verzoek te
+     * zien wat er binnen is en wat nog openstaat.
+     */
+    advanceRequestId: uuid().references((): AnyPgColumn => sentEmails.id, { onDelete: "set null" }),
     ...timestamps,
   },
   (t) => [

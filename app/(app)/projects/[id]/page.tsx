@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, inArray, isNull, or } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, isNull, like, or, sql } from "drizzle-orm";
 import { headers } from "next/headers";
 import Link from "next/link";
 import { notFound } from "next/navigation";
@@ -38,6 +38,7 @@ import {
   projectBudgetLines,
   projectCosts,
   projectPayments,
+  sentEmails,
   projectPhases,
   projects,
   properties,
@@ -404,6 +405,32 @@ export default async function ProjectDetailPage({
 
   // Ontvangen betalingen van de klant (incl. btw) — informatief, los van de
   // factuurgebaseerde omzet/marge hierboven.
+  // Voorschotverzoeken waar nog iets op openstaat — om een (deel)betaling aan
+  // te kunnen hangen. Een klant maakt op een verzoek van € 50.000 soms eerst
+  // € 30.000 over; zonder deze koppeling zie je nergens wat er nog moet komen.
+  const advanceRequestRows = await db
+    .select({
+      id: sentEmails.id,
+      subject: sentEmails.subject,
+      amountEur: sentEmails.amountEur,
+      ontvangen: sql<number>`(
+        select coalesce(sum(pp.amount_eur), 0)::float8
+        from project_payments pp where pp.advance_request_id = ${sentEmails.id}
+      )`,
+    })
+    .from(sentEmails)
+    .where(and(eq(sentEmails.projectId, id), like(sentEmails.subject, "Voorschot: %")))
+    .orderBy(desc(sentEmails.createdAt))
+    .limit(10);
+  const openAdvanceRequests = advanceRequestRows
+    .map((v) => {
+      const gevraagd = v.amountEur != null ? Number(v.amountEur) : 0;
+      const open = Math.round((gevraagd - Number(v.ontvangen)) * 100) / 100;
+      const termijn = (v.subject ?? "").replace(/^Voorschot:\s*/, "").match(/\d{2}-\d{2}-\d{4}\s+(.*)$/)?.[1];
+      return { id: v.id, open, label: `${termijn ?? "voorschot"} — nog ${formatEUR(open)} van ${formatEUR(gevraagd)}` };
+    })
+    .filter((v) => v.open > 0.01);
+
   const receivedTotal = paymentRows.reduce((s, p) => s + Number(p.amountEur ?? 0), 0);
   // Betalingen worden incl. btw geboekt; de samenvattingen rekenen ex. btw (÷1,21).
   const VAT_DIVISOR = 1.21;
@@ -1133,12 +1160,24 @@ export default async function ProjectDetailPage({
               </TBody>
             </Table>
           )}
-          <form action={addProjectPayment.bind(null, id)} className="grid gap-3 sm:grid-cols-2 lg:grid-cols-[0.9fr_1.6fr_1fr_0.9fr_auto] lg:items-end">
+          <form action={addProjectPayment.bind(null, id)} className="grid gap-3 sm:grid-cols-2 lg:grid-cols-[0.9fr_1.4fr_1.2fr_1fr_0.9fr_auto] lg:items-end">
             <Field label="Datum">
               <Input name="date" type="date" />
             </Field>
             <Field label="Omschrijving">
               <Input name="description" placeholder="bijv. factuur F26009 / voorschot" />
+            </Field>
+            {/* Deelbetaling op een voorschotverzoek: dan loopt de stand
+                "nog open" bij Voorschot opvragen mee. */}
+            <Field label="Hoort bij" hint={openAdvanceRequests.length ? "voorschotverzoek" : "geen open verzoek"}>
+              <Select name="advanceRequestId" defaultValue="" disabled={openAdvanceRequests.length === 0}>
+                <option value="">— los —</option>
+                {openAdvanceRequests.map((v) => (
+                  <option key={v.id} value={v.id}>
+                    {v.label}
+                  </option>
+                ))}
+              </Select>
             </Field>
             <Field label="Wijze">
               <Select name="method" defaultValue="bank">

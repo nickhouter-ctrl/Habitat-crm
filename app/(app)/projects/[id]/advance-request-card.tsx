@@ -6,14 +6,14 @@
  * tekstvak staat gaat er letterlijk uit — hetzelfde stramien als het
  * afkeurscherm van de inkoopfacturen, waar dat zich bewijst.
  */
-import { and, desc, eq, like } from "drizzle-orm";
+import { and, desc, eq, inArray, like, sql } from "drizzle-orm";
 import Link from "next/link";
 
 import { Card, CardContent, CardHeader, CardTitle, Field, Input, Textarea } from "@/components/ui";
 import { SubmitButton } from "@/components/submit-button";
 import { auth } from "@/auth";
 import { db } from "@/lib/db";
-import { companies, contacts, sentEmails, users } from "@/lib/db/schema";
+import { companies, contacts, projectPayments, sentEmails, users } from "@/lib/db/schema";
 import { buildAdvanceRequestEmail } from "@/lib/advance-request";
 import { formatEUR } from "@/lib/utils";
 import { sendAdvanceRequest } from "../actions";
@@ -94,6 +94,29 @@ export async function AdvanceRequestCard({
       .limit(10),
   ]);
 
+  // Wat er op elk verzoek al binnen is. Een klant betaalt een voorschot soms in
+  // delen, dus "opgevraagd" zegt op zichzelf niets over wat er staat.
+  const ontvangenPerVerzoek = new Map<string, number>();
+  if (eerder.length > 0) {
+    const rijen = await db
+      .select({
+        advanceRequestId: projectPayments.advanceRequestId,
+        som: sql<number>`coalesce(sum(${projectPayments.amountEur}), 0)::float8`,
+      })
+      .from(projectPayments)
+      .where(
+        and(
+          eq(projectPayments.projectId, projectId),
+          inArray(
+            projectPayments.advanceRequestId,
+            eerder.map((e) => e.id),
+          ),
+        ),
+      )
+      .groupBy(projectPayments.advanceRequestId);
+    for (const r of rijen) if (r.advanceRequestId) ontvangenPerVerzoek.set(r.advanceRequestId, Number(r.som));
+  }
+
   // De klant zoals de boekhouder hem in de brief wil: bij een vennootschap de
   // statutaire naam met NIF/CIF, anders de contactpersoon.
   const clientName = klant?.companyName ?? klant?.name ?? null;
@@ -160,12 +183,27 @@ export async function AdvanceRequestCard({
                         ook in het onderwerp staan — die regel werd anders een zin. */}
                     {termijnUit(m.subject)}
                   </Link>
+                  {(() => {
+                    const gevraagd = m.amountEur != null ? Number(m.amountEur) : null;
+                    const binnen = ontvangenPerVerzoek.get(m.id) ?? 0;
+                    if (gevraagd == null) return null;
+                    const open = Math.round((gevraagd - binnen) * 100) / 100;
+                    if (binnen === 0) return <span className="text-xs text-muted">nog niets ontvangen</span>;
+                    return open > 0.01 ? (
+                      <span className="text-xs text-warning">
+                        {formatEUR(binnen)} ontvangen · nog {formatEUR(open)} open
+                      </span>
+                    ) : (
+                      <span className="text-xs text-success">volledig ontvangen</span>
+                    );
+                  })()}
                   <span className="text-xs text-muted">→ {m.toEmail}</span>
                 </li>
               ))}
             </ul>
             <p className="mt-2 text-xs text-muted">
-              Is het bedrag binnen? Boek het bij Ontvangen betalingen en maak dan het formele stuk:{" "}
+              Deel ontvangen? Boek dat bedrag bij Ontvangen betalingen en kies daar dit verzoek — dan loopt de stand
+              hierboven mee. Is alles binnen, maak dan het formele stuk:{" "}
               <Link
                 href={`/documents/new?kind=fondos&projectId=${projectId}${contactId ? `&contactId=${contactId}` : ""}`}
                 className="text-accent hover:underline"

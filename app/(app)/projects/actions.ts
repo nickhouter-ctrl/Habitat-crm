@@ -331,6 +331,8 @@ const paymentSchema = z.object({
   method: z.enum(["cash", "bank", "invoice", "advance", "other"]).default("bank"),
   description: z.string().trim().optional(),
   note: z.string().trim().optional(),
+  /** Hoort deze ontvangst bij een eerder verstuurd voorschotverzoek? */
+  advanceRequestId: z.string().trim().optional(),
 });
 
 export async function addProjectPayment(projectId: string, formData: FormData) {
@@ -338,13 +340,17 @@ export async function addProjectPayment(projectId: string, formData: FormData) {
   const parsed = paymentSchema.safeParse(Object.fromEntries(formData));
   if (!parsed.success) throw new Error(parsed.error.issues.map((i) => i.message).join(", "));
   const d = parsed.data;
+  const advanceRequestId = uuidOrNull(d.advanceRequestId);
   await db.insert(projectPayments).values({
     projectId,
     date: dateOrNull(d.date),
     amountEur: numOrZero(d.amountEur),
-    method: d.method,
+    // Hoort de ontvangst bij een voorschotverzoek, dan is het per definitie een
+    // voorschot — anders zou hetzelfde bedrag als 'bank' de voorschotstand niet raken.
+    method: advanceRequestId ? "advance" : d.method,
     description: d.description || null,
     note: d.note || null,
+    advanceRequestId,
   });
   revalidatePath(`/projects/${projectId}`);
 }
