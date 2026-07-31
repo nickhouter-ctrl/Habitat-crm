@@ -172,12 +172,13 @@ export function buildAdvanceRequestEmail(i: AdvanceRequestInput): {
 }
 
 /**
- * Stand van zaken na een DEELBETALING: bevestigen wat binnen is en herinneren
- * aan wat nog openstaat.
+ * BEVESTIGING na een deelbetaling: melden wat er binnen is, en wat er van het
+ * afgesproken voorschot nog openstaat.
  *
- * Bewust geen aanmaning: dit is een bevestiging met een vriendelijk restant. De
- * bankgegevens en dezelfde referentie staan er weer bij, zodat de klant voor de
- * tweede overboeking niet hoeft te zoeken.
+ * Bewust géén verzoek om het restant over te maken en geen bankgegevens — dat
+ * leest als een aanmaning terwijl de klant net betaald heeft (keuze van Nick,
+ * 31-07-2026). Wil je er wél om vragen, dan is dat een aparte stap:
+ * {@link buildAdvanceReminderEmail}.
  */
 export function buildAdvanceStatusEmail(
   i: AdvanceRequestInput & { receivedEur: number; openEur: number },
@@ -204,11 +205,7 @@ export function buildAdvanceStatusEmail(
     "",
     `Hartelijk dank voor uw betaling. Wij hebben € ${ontvangen} in goede orde ontvangen voor ons bouwproject in ${i.projectLabel}.`,
     "",
-    `Van het afgesproken voorschot van € ${gevraagd} staat daarmee nog € ${open} open. Wij verzoeken u vriendelijk dit resterende bedrag over te maken op:`,
-    `Rekeninghouder: ${COMPANY.legalName}`,
-    `IBAN: ${COMPANY.iban}`,
-    `BIC: ${COMPANY.bic}`,
-    `Onder vermelding van: ${referentie}`,
+    `Van het afgesproken voorschot van € ${gevraagd} staat daarmee nog € ${open} open.`,
     "",
     "Bij de uiteindelijke afrekening wordt het volledige voorschot verrekend in de definitieve factuur.",
     "",
@@ -225,11 +222,7 @@ export function buildAdvanceStatusEmail(
     "",
     `Muchas gracias por su pago. Hemos recibido correctamente ${ontvangen} € para nuestro proyecto de construcción en ${i.projectLabel}.`,
     "",
-    `Del anticipo acordado de ${gevraagd} € queda pendiente ${open} €. Le rogamos que transfiera el importe restante a:`,
-    `Titular de la cuenta: ${COMPANY.legalName}`,
-    `IBAN: ${COMPANY.iban}`,
-    `BIC: ${COMPANY.bic}`,
-    `Concepto: ${referentie}`,
+    `Del anticipo acordado de ${gevraagd} € queda pendiente ${open} €.`,
     "",
     "En la liquidación final, el anticipo completo se descontará de la factura definitiva.",
     "",
@@ -253,13 +246,6 @@ export function buildAdvanceStatusEmail(
       )
       .join("")}</table>`;
 
-  const bank: [string, string][] = [
-    ["Rekeninghouder", COMPANY.legalName],
-    ["IBAN", COMPANY.iban],
-    ["BIC", COMPANY.bic],
-    ["Onder vermelding van", referentie],
-  ];
-
   const html = brandedEmail(`
     <p style="margin:0 0 4px"><strong>${escapeHtml(kop)}</strong></p>
     <p style="margin:0 0 18px;color:#7a6f63;font-size:13px">${escapeHtml(plaats)}, ${escapeHtml(i.dateLabel)}</p>
@@ -268,10 +254,8 @@ export function buildAdvanceStatusEmail(
     ${standHtml([
       ["Afgesproken voorschot", gevraagd],
       ["Ontvangen", ontvangen],
-      ["Nog te voldoen", open],
+      ["Nog openstaand", open],
     ])}
-    ${alinea("Wij verzoeken u vriendelijk het resterende bedrag over te maken op:")}
-    ${bankHtml(bank)}
     ${alinea("Bij de uiteindelijke afrekening wordt het volledige voorschot verrekend in de definitieve factuur.")}
     ${alinea("Mocht u vragen hebben, dan horen wij dat graag.")}
     ${alinea("Met vriendelijke groet,")}
@@ -288,10 +272,112 @@ export function buildAdvanceStatusEmail(
       ["Recibido", ontvangen],
       ["Pendiente", open],
     ])}
-    ${alinea("Le rogamos que transfiera el importe restante a:")}
-    ${bankHtml([["Titular de la cuenta", COMPANY.legalName], ["IBAN", COMPANY.iban], ["BIC", COMPANY.bic], ["Concepto", referentie]])}
     ${alinea("En la liquidación final, el anticipo completo se descontará de la factura definitiva.")}
     ${alinea("Si tiene alguna pregunta, quedamos a su disposición.")}
+    ${alinea("Un cordial saludo,")}
+    <p style="margin:0;font-size:14px">${ondertekening.map(escapeHtml).join("<br>")}</p>
+  `);
+
+  return {
+    subject: kop,
+    html,
+    text: `${nl}\n\n${"—".repeat(40)}\n\n${kopEs}\n\n${es}`,
+    reference: referentie,
+  };
+}
+
+/**
+ * HERINNERING aan het openstaande deel van een voorschot — een aparte stap,
+ * bewust los van de bevestiging: die mag niet als aanmaning lezen terwijl de
+ * klant net heeft betaald. Deze brief vraagt er wél om, met de bankgegevens en
+ * dezelfde referentie erbij zodat er niets opgezocht hoeft te worden.
+ */
+export function buildAdvanceReminderEmail(
+  i: AdvanceRequestInput & { receivedEur: number; openEur: number },
+): { subject: string; html: string; text: string; reference: string } {
+  const gevraagd = euro(i.amountEur);
+  const ontvangen = euro(i.receivedEur);
+  const open = euro(i.openEur);
+  const referentie = advanceReference(i);
+  const plaats = i.place ?? "Jávea";
+  const ondertekening = [
+    COMPANY.legalName,
+    COMPANY.vatNumber.replace(/^ES/, ""),
+    i.senderName ?? "",
+    i.senderPhone ?? COMPANY.phone,
+  ].filter(Boolean);
+
+  const kop = `Voorschot restant: ${i.projectLabel} ${i.termLabel}`.replace(/\s+/g, " ").trim();
+  const kopEs = `Anticipo pendiente: ${i.projectLabel} ${i.termLabel}`.replace(/\s+/g, " ").trim();
+
+  const bank: [string, string][] = [
+    ["Rekeninghouder", COMPANY.legalName],
+    ["IBAN", COMPANY.iban],
+    ["BIC", COMPANY.bic],
+    ["Onder vermelding van", referentie],
+  ];
+
+  const nl = [
+    `${plaats}, ${i.dateLabel}`,
+    "",
+    `Beste ${i.clientName ?? "relatie"},`,
+    "",
+    `Van het afgesproken voorschot van € ${gevraagd} voor ons bouwproject in ${i.projectLabel} hebben wij € ${ontvangen} ontvangen. Daarmee staat nog € ${open} open.`,
+    "",
+    "Wij verzoeken u vriendelijk dit resterende bedrag over te maken op:",
+    ...bank.map(([k, v]) => `${k}: ${v}`),
+    "",
+    "Is de betaling inmiddels onderweg, dan kunt u dit bericht als afgehandeld beschouwen. Bij de uiteindelijke afrekening wordt het volledige voorschot verrekend in de definitieve factuur.",
+    "",
+    "Met vriendelijke groet,",
+    ...ondertekening,
+  ].join("\n");
+
+  const es = [
+    `${plaats}, ${i.dateLabel}`,
+    "",
+    `Estimada/o ${i.clientName ?? "cliente"},`,
+    "",
+    `Del anticipo acordado de ${gevraagd} € para nuestro proyecto de construcción en ${i.projectLabel} hemos recibido ${ontvangen} €. Queda pendiente ${open} €.`,
+    "",
+    "Le rogamos que transfiera el importe restante a:",
+    `Titular de la cuenta: ${COMPANY.legalName}`,
+    `IBAN: ${COMPANY.iban}`,
+    `BIC: ${COMPANY.bic}`,
+    `Concepto: ${referentie}`,
+    "",
+    "Si el pago ya está en camino, puede considerar este mensaje como atendido. En la liquidación final, el anticipo completo se descontará de la factura definitiva.",
+    "",
+    "Un cordial saludo,",
+    ...ondertekening,
+  ].join("\n");
+
+  const alinea = (t: string) => `<p style="margin:0 0 12px">${escapeHtml(t)}</p>`;
+  const bankHtml = (labels: [string, string][]) =>
+    `<table style="font-size:14px;margin:8px 0">${labels
+      .map(([k, v]) => `<tr><td style="padding:1px 8px 1px 0"><strong>${escapeHtml(k)}:</strong></td><td>${escapeHtml(v)}</td></tr>`)
+      .join("")}</table>`;
+
+  const html = brandedEmail(`
+    <p style="margin:0 0 4px"><strong>${escapeHtml(kop)}</strong></p>
+    <p style="margin:0 0 18px;color:#7a6f63;font-size:13px">${escapeHtml(plaats)}, ${escapeHtml(i.dateLabel)}</p>
+    ${alinea(`Beste ${i.clientName ?? "relatie"},`)}
+    ${alinea(`Van het afgesproken voorschot van € ${gevraagd} voor ons bouwproject in ${i.projectLabel} hebben wij € ${ontvangen} ontvangen. Daarmee staat nog € ${open} open.`)}
+    ${alinea("Wij verzoeken u vriendelijk dit resterende bedrag over te maken op:")}
+    ${bankHtml(bank)}
+    ${alinea("Is de betaling inmiddels onderweg, dan kunt u dit bericht als afgehandeld beschouwen. Bij de uiteindelijke afrekening wordt het volledige voorschot verrekend in de definitieve factuur.")}
+    ${alinea("Met vriendelijke groet,")}
+    <p style="margin:0 0 24px;font-size:14px">${ondertekening.map(escapeHtml).join("<br>")}</p>
+
+    <hr style="border:none;border-top:1px solid #e8dfd0;margin:24px 0">
+
+    <p style="margin:0 0 4px"><strong>${escapeHtml(kopEs)}</strong></p>
+    <p style="margin:0 0 18px;color:#7a6f63;font-size:13px">${escapeHtml(plaats)}, ${escapeHtml(i.dateLabel)}</p>
+    ${alinea(`Estimada/o ${i.clientName ?? "cliente"},`)}
+    ${alinea(`Del anticipo acordado de ${gevraagd} € para nuestro proyecto de construcción en ${i.projectLabel} hemos recibido ${ontvangen} €. Queda pendiente ${open} €.`)}
+    ${alinea("Le rogamos que transfiera el importe restante a:")}
+    ${bankHtml([["Titular de la cuenta", COMPANY.legalName], ["IBAN", COMPANY.iban], ["BIC", COMPANY.bic], ["Concepto", referentie]])}
+    ${alinea("Si el pago ya está en camino, puede considerar este mensaje como atendido. En la liquidación final, el anticipo completo se descontará de la factura definitiva.")}
     ${alinea("Un cordial saludo,")}
     <p style="margin:0;font-size:14px">${ondertekening.map(escapeHtml).join("<br>")}</p>
   `);

@@ -14,7 +14,7 @@ import { SubmitButton } from "@/components/submit-button";
 import { auth } from "@/auth";
 import { db } from "@/lib/db";
 import { companies, contacts, projectPayments, sentEmails, users } from "@/lib/db/schema";
-import { buildAdvanceRequestEmail, buildAdvanceStatusEmail } from "@/lib/advance-request";
+import { buildAdvanceReminderEmail, buildAdvanceRequestEmail, buildAdvanceStatusEmail } from "@/lib/advance-request";
 import { formatEUR } from "@/lib/utils";
 import { sendAdvanceRequest } from "../actions";
 
@@ -50,7 +50,7 @@ export async function AdvanceRequestCard({
   siteAlias: string | null;
   contactId: string | null;
   contractDate: string | null;
-  params: { vbedrag?: string; vtermijn?: string; vdatum?: string; vmail?: string; vstand?: string };
+  params: { vbedrag?: string; vtermijn?: string; vdatum?: string; vmail?: string; vstand?: string; vrestant?: string };
 }) {
   const amount = parseAmount(params.vbedrag);
   const termLabel = params.vtermijn?.trim() || "";
@@ -149,6 +149,27 @@ export async function AdvanceRequestCard({
         })
       : null;
 
+  // Het verzoek om het restant is een APARTE stap: de bevestiging hierboven mag
+  // niet als aanmaning lezen terwijl de klant net betaald heeft.
+  const restantVerzoek = params.vrestant ? eerder.find((e) => e.id === params.vrestant) : null;
+  const restantBinnen = restantVerzoek ? (ontvangenPerVerzoek.get(restantVerzoek.id) ?? 0) : 0;
+  const restantGevraagd = restantVerzoek?.amountEur != null ? Number(restantVerzoek.amountEur) : 0;
+  const restantConcept =
+    restantVerzoek && restantGevraagd > 0
+      ? buildAdvanceReminderEmail({
+          projectLabel,
+          termLabel: termijnUit(restantVerzoek.subject),
+          amountEur: restantGevraagd,
+          receivedEur: restantBinnen,
+          openEur: Math.round((restantGevraagd - restantBinnen) * 100) / 100,
+          agreementDate,
+          clientName,
+          senderName: ondertekenaar?.name ?? null,
+          senderPhone: ondertekenaar?.phone ?? null,
+          dateLabel: new Date().toLocaleDateString("nl-NL", { day: "2-digit", month: "2-digit", year: "numeric" }),
+        })
+      : null;
+
   const concept =
     amount != null && termLabel
       ? buildAdvanceRequestEmail({
@@ -220,7 +241,14 @@ export async function AdvanceRequestCard({
                           className="text-xs text-accent hover:underline"
                           scroll={false}
                         >
-                          stand doorgeven
+                          ontvangst bevestigen
+                        </Link>
+                        <Link
+                          href={`?vrestant=${m.id}#voorschot-opvragen`}
+                          className="text-xs text-accent hover:underline"
+                          scroll={false}
+                        >
+                          restant opvragen
                         </Link>
                       </>
                     ) : (
@@ -263,6 +291,36 @@ export async function AdvanceRequestCard({
             </div>
             <Field label="Bericht" htmlFor="stand-text" hint="dit gaat er letterlijk uit — Nederlands en Spaans">
               <Textarea id="stand-text" name="text" rows={20} defaultValue={standConcept.text} className="font-mono text-xs" />
+            </Field>
+            <div className="flex flex-wrap items-center gap-3">
+              <SubmitButton variant="primary" pendingLabel="Versturen…">
+                Versturen naar de klant
+              </SubmitButton>
+              <Link href="#voorschot-opvragen" className="text-sm text-muted hover:underline">
+                Annuleren
+              </Link>
+            </div>
+          </form>
+        )}
+
+        {restantConcept && (
+          <form action={sendAdvanceRequest.bind(null, projectId)} className="space-y-3 rounded-md border border-accent/40 bg-accent/5 p-3">
+            <p className="text-sm">
+              <strong>Restant opvragen</strong> — vraagt om de resterende{" "}
+              {formatEUR(Math.round((restantGevraagd - restantBinnen) * 100) / 100)}, mét de bankgegevens erbij.
+            </p>
+            <input type="hidden" name="amountEur" value={String(Math.round((restantGevraagd - restantBinnen) * 100) / 100)} />
+            <input type="hidden" name="termLabel" value={termijnUit(restantVerzoek?.subject ?? null)} />
+            <div className="grid gap-3 sm:grid-cols-2">
+              <Field label="Aan" htmlFor="rest-to">
+                <Input id="rest-to" name="to" type="email" defaultValue={restantVerzoek?.toEmail ?? to ?? ""} required />
+              </Field>
+              <Field label="Onderwerp" htmlFor="rest-subject">
+                <Input id="rest-subject" name="subject" defaultValue={restantConcept.subject} required />
+              </Field>
+            </div>
+            <Field label="Bericht" htmlFor="rest-text" hint="dit gaat er letterlijk uit — Nederlands en Spaans">
+              <Textarea id="rest-text" name="text" rows={20} defaultValue={restantConcept.text} className="font-mono text-xs" />
             </Field>
             <div className="flex flex-wrap items-center gap-3">
               <SubmitButton variant="primary" pendingLabel="Versturen…">

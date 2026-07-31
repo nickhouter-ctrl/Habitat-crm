@@ -639,13 +639,17 @@ export async function sendAdvanceRequest(projectId: string, formData: FormData) 
       projectId,
       amountEur: bedrag,
     });
-    // Zelfde actie, twee brieven: het verzoek zelf en de stand na een
-    // deelbetaling. Het onderwerp verraadt welke het is.
-    const isStand = /^Voorschotstand/i.test(d.subject);
+    // Zelfde actie, drie brieven: het verzoek, de bevestiging na een
+    // deelbetaling, en het verzoek om het restant. Het onderwerp verraadt welke.
+    const soort = /^Voorschotstand/i.test(d.subject)
+      ? "Ontvangst bevestigd"
+      : /^Voorschot restant/i.test(d.subject)
+        ? "Restant opgevraagd"
+        : "Voorschot opgevraagd";
     await db.insert(activities).values({
       type: "note",
-      subject: `${isStand ? "Voorschotstand doorgegeven" : "Voorschot opgevraagd"}: ${project.name}${d.termLabel ? ` (${d.termLabel})` : ""}`,
-      body: `${d.amountEur ? `${isStand ? "Nog open" : "Bedrag"}: €${d.amountEur} · ` : ""}Verstuurd aan ${d.to}.`,
+      subject: `${soort}: ${project.name}${d.termLabel ? ` (${d.termLabel})` : ""}`,
+      body: `${d.amountEur ? `${soort === "Voorschot opgevraagd" ? "Bedrag" : "Nog open"}: €${d.amountEur} · ` : ""}Verstuurd aan ${d.to}.`,
       contactId: project.contactId ?? null,
       authorId: user.id,
     });
