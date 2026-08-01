@@ -35,6 +35,14 @@ export async function sendEmail(input: {
   /** Antwoord in dezelfde thread: Message-ID en References van de bronmail. */
   inReplyTo?: string;
   references?: string;
+  /**
+   * Sla de vaste bedrijfs-BCC over. Alleen voor INTERNE mail met iets
+   * persoonlijks erin — een meldingsmail bevat een inloglink die op naam staat,
+   * en die hoort niet in het gedeelde postvak te liggen waar een collega ermee
+   * als jou kan inloggen. Nooit gebruiken voor mail aan klanten of leveranciers:
+   * daar is meelezen juist het punt.
+   */
+  noCompanyBcc?: boolean;
 }): Promise<{ sent: boolean; reason?: string; messageId?: string }> {
   // Elke uitgaande mail krijgt een VERBORGEN kopie (BCC) naar het bedrijf
   // (EMAIL_BCC, anders NOTIFY_EMAIL of het verzendadres hi@habitat-one.com), zodat
@@ -46,7 +54,7 @@ export async function sendEmail(input: {
     .join(", ") || undefined;
   // Voeg de vaste bedrijfs-BCC (nick@) toe op ELK transport — ook Resend/stub, die
   // lib/gmail.ts overslaan. Op het Gmail-pad dedupliceert sendMail dit nog eens.
-  const bcc = withMandatoryBcc(bccBase, input.to);
+  const bcc = input.noCompanyBcc ? bccBase : withMandatoryBcc(bccBase, input.to);
 
   // Voorkeur: Gmail (verstuurt vanaf GMAIL_USER, bv. hi@habitat-one.com). Valt
   // terug op Resend; en als niets is ingesteld een stub, zodat de accept-link
@@ -67,6 +75,7 @@ export async function sendEmail(input: {
       const res = await sendMail({
         to: input.to,
         bcc,
+        noCompanyBcc: input.noCompanyBcc,
         account,
         fromName,
         replyTo: input.replyTo,

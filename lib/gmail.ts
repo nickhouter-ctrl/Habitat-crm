@@ -243,6 +243,9 @@ export async function sendMail(args: {
   references?: string;
   /** Extra SMTP-headers, bv. List-Unsubscribe voor campagnes. */
   headers?: Record<string, string>;
+  /** Vaste bedrijfs-BCC overslaan — alleen voor interne mail met een
+   *  persoonlijke inloglink erin. Zie lib/email.ts. */
+  noCompanyBcc?: boolean;
   attachments?: { filename: string; content: Buffer | Uint8Array; contentType?: string }[];
 }): Promise<{ messageId: string }> {
   const account = args.account ?? getCreds();
@@ -250,7 +253,7 @@ export async function sendMail(args: {
   const info = await t.sendMail({
     from: `${args.fromName?.trim() || "Habitat One"} <${account.user}>`,
     to: args.to,
-    bcc: withMandatoryBcc(args.bcc, args.to),
+    bcc: args.noCompanyBcc ? args.bcc : withMandatoryBcc(args.bcc, args.to),
     subject: args.subject,
     text: args.text,
     html: args.html,
