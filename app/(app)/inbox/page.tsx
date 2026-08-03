@@ -1,8 +1,8 @@
 import { and, desc, eq, ilike, or, sql } from "drizzle-orm";
-import { Mail, RefreshCw, Paperclip } from "lucide-react";
+import { Mail, RefreshCw, Paperclip, Search } from "lucide-react";
 import Link from "next/link";
 
-import { Badge, Card, EmptyState, PageHeader, TBody, Table, Td, Th, THead, Tr } from "@/components/ui";
+import { Badge, Button, Card, EmptyState, Input, PageHeader, TBody, Table, Td, Th, THead, Tr } from "@/components/ui";
 import { db } from "@/lib/db";
 import { emailInbox, emailSyncState } from "@/lib/db/schema";
 import { cn } from "@/lib/utils";
@@ -43,6 +43,7 @@ export default async function InboxPage({
 }) {
   const params = await searchParams;
   const statusFilter = typeof params.status === "string" ? params.status : "all";
+  const q = (typeof params.q === "string" ? params.q : "").trim();
   const mailboxFilter = typeof params.mailbox === "string" ? params.mailbox : "all";
 
   // Mailbox-filter:
@@ -83,6 +84,17 @@ export default async function InboxPage({
         and(
           statusFilter === "all" ? undefined : eq(emailInbox.status, statusFilter),
           mailboxClause,
+          // Zoeken in afzender, onderwerp én de tekst van de mail. De body kan
+          // megabytes groot zijn, maar het filteren gebeurt in de database —
+          // alleen de eerste 200 tekens komen mee als preview.
+          q
+            ? or(
+                ilike(emailInbox.subject, `%${q}%`),
+                ilike(emailInbox.fromName, `%${q}%`),
+                ilike(emailInbox.fromEmail, `%${q}%`),
+                ilike(emailInbox.bodyText, `%${q}%`),
+              )
+            : undefined,
         ),
       )
       .orderBy(desc(emailInbox.receivedAt))
@@ -128,6 +140,24 @@ export default async function InboxPage({
         actions={<FetchMailsButton />}
       />
 
+      <form method="get" className="mb-4 flex max-w-lg items-center gap-2">
+        {/* Zoeken door afzender, onderwerp en de tekst van de mail. */}
+        {mailboxFilter !== "all" && <input type="hidden" name="mailbox" value={mailboxFilter} />}
+        {statusFilter !== "all" && <input type="hidden" name="status" value={statusFilter} />}
+        <div className="relative flex-1">
+          <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted" />
+          <Input name="q" defaultValue={q} placeholder="Zoek in afzender, onderwerp of tekst…" className="pl-9" />
+        </div>
+        <Button type="submit" variant="secondary">
+          Zoeken
+        </Button>
+        {q && (
+          <Link href="/inbox" className="text-sm text-muted hover:underline">
+            wissen
+          </Link>
+        )}
+      </form>
+
       <Card className="mb-4 space-y-3 px-4 py-3 text-sm">
         {/* Mailbox-tabs: hi@ / purchase@ / alle */}
         <div className="flex items-center justify-between gap-3 border-b border-border pb-2">
@@ -140,6 +170,7 @@ export default async function InboxPage({
               const sp = new URLSearchParams();
               if (m.key !== "all") sp.set("mailbox", m.key);
               if (statusFilter !== "all") sp.set("status", statusFilter);
+              if (q) sp.set("q", q);
               return (
                 <Link
                   key={m.key}
@@ -181,6 +212,7 @@ export default async function InboxPage({
             { key: "all", label: "Alles" },
           ].map((tab) => {
             const sp = new URLSearchParams();
+              if (q) sp.set("q", q);
             sp.set("status", tab.key);
             if (mailboxFilter !== "all") sp.set("mailbox", mailboxFilter);
             return (
