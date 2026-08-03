@@ -96,6 +96,7 @@ const NAV_GROUPS: { label: string | null; items: NavItem[] }[] = [
     label: "Inkoop & logistiek",
     items: [
       { href: "/bestellen", label: "Bestellen", icon: ShoppingCart },
+      { href: "/leveranciers", label: "Leveranciers & ploeg", icon: HardHat },
       { href: "/inkooporders", label: "Inkooporders", icon: PackagePlus },
       { href: "/inkooporders/te-verwerken", label: "Facturen keuren", icon: FileCheck },
       { href: "/shipments", label: "Shipments", icon: Boxes },

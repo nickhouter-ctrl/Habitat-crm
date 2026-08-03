@@ -1,4 +1,5 @@
 import { asc, desc } from "drizzle-orm";
+import Link from "next/link";
 
 import {
   Card,
@@ -14,6 +15,7 @@ import {
 import { SubmitButton } from "@/components/submit-button";
 import { db } from "@/lib/db";
 import { workers } from "@/lib/db/schema";
+import { supplierKey } from "@/lib/supplier-key";
 import { formatEUR } from "@/lib/utils";
 import { createWorker, toggleWorkerActive, updateWorker } from "./actions";
 
@@ -141,6 +143,13 @@ export default async function PloegPage() {
                     {w.active ? "Op inactief zetten" : "Heractiveren"}
                   </button>
                   {!w.active && <span className="text-xs text-muted">· {PAY_LABEL[w.defaultPaymentMethod]}</span>}
+                  {/* Alles van deze bouwer bij elkaar: facturen, openstaand, werven. */}
+                  <Link
+                    href={`/leveranciers/${supplierKey(w.name)}`}
+                    className="text-xs text-accent underline-offset-2 hover:underline"
+                  >
+                    · Facturen &amp; uren van {w.name.split(" ")[0]}
+                  </Link>
                   {w.active && (
                     <span className="text-xs text-muted">
                       · Urenportaal-links maak je op de projectpagina (Uren &amp; kosten → Urenportaal)
