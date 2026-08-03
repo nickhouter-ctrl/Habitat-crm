@@ -433,6 +433,12 @@ export default async function ProjectDetailPage({
     })
     .filter((v) => v.open > 0.01);
 
+  // 15% "marge" betekent hier: 15% van de VERKOOPPRIJS (kost ÷ 0,85), niet 15%
+  // bovenop de kostprijs (kost × 1,15). Dat scheelt op Silvestre € 2.179 en werd
+  // verward, dus we zetten allebei de getallen erbij.
+  const opslagPct = (margePct: number) =>
+    margePct >= 100 ? null : Math.round((margePct / (100 - margePct)) * 1000) / 10;
+
   const receivedTotal = paymentRows.reduce((s, p) => s + Number(p.amountEur ?? 0), 0);
   // Betalingen worden incl. btw geboekt; de samenvattingen rekenen ex. btw (÷1,21).
   const VAT_DIVISOR = 1.21;
@@ -832,7 +838,9 @@ export default async function ProjectDetailPage({
       <Card id="resultaat" className="mb-5 scroll-mt-24">
         <CardHeader>
           <CardTitle>Resultaat — zitten we goed?</CardTitle>
-          <span className="text-xs text-muted">norm: minimaal {MIN_MARGIN_PCT}% marge · alle bedragen ex. BTW</span>
+          <span className="text-xs text-muted">
+            norm: minimaal {MIN_MARGIN_PCT}% marge van de verkoopprijs (= kostprijs ÷ {(1 - MIN_MARGIN_PCT / 100).toFixed(2).replace(".", ",")}) · alle bedragen ex. BTW
+          </span>
         </CardHeader>
         <CardContent className="space-y-3">
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
@@ -1211,7 +1219,7 @@ export default async function ProjectDetailPage({
                 {laborHours.toLocaleString("nl-NL")} uur · {formatEUR(laborCost)} kosten
                 {project.budgetHours ? ` · begroot ${Number(project.budgetHours).toLocaleString("nl-NL")} u` : ""}
                 {laborCost > 0
-                  ? ` · door te belasten ${formatEUR(margins.laborRevenue)} (${margins.laborMarginPct}% marge = ${formatEUR(margins.laborMargin)})`
+                  ? ` · door te belasten ${formatEUR(margins.laborRevenue)} — ${margins.laborMarginPct}% marge op de verkoopprijs = ${formatEUR(margins.laborMargin)} (oftewel ${opslagPct(margins.laborMarginPct)}% bovenop de kostprijs)`
                   : ""}
               </span>
             </CardHeader>
@@ -1411,7 +1419,7 @@ export default async function ProjectDetailPage({
               <span className="text-xs text-muted">
                 gekoppelde inkoop {formatEUR(poCost)} + losse kosten {formatEUR(looseCost)} = {formatEUR(materialCost)}
                 {" · alle bedragen ex. btw"}
-                {` · door te belasten ${formatEUR(margins.purchaseRevenue)} (${margins.purchaseMarginPct}% marge = ${formatEUR(margins.purchaseMargin)})`}
+                {` · door te belasten ${formatEUR(margins.purchaseRevenue)} — ${margins.purchaseMarginPct}% marge op de verkoopprijs = ${formatEUR(margins.purchaseMargin)} (oftewel ${opslagPct(margins.purchaseMarginPct)}% bovenop de kostprijs)`}
               </span>
             </CardHeader>
             <CardContent className="space-y-4">
