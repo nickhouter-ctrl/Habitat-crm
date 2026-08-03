@@ -7,6 +7,7 @@ import {
   Select,
   Textarea,
 } from "@/components/ui";
+import { Combobox } from "@/components/combobox";
 import type { Property } from "@/lib/db/schema";
 import { propertyStatusMeta, propertyTypeMeta } from "@/app/(app)/_meta";
 
@@ -134,19 +135,15 @@ export function PropertyForm({
           </div>
 
           <div className="grid gap-4 sm:grid-cols-2">
-            <Field label="Eigenaar (contact)" htmlFor="ownerContactId">
-              <Select
-                id="ownerContactId"
+            <Field label="Eigenaar (contact)" hint="typ een naam">
+              {/* Zoekveld, geen uitklaplijst: er staan honderden contacten in. */}
+              <Combobox
                 name="ownerContactId"
                 defaultValue={property?.ownerContactId ?? ""}
-              >
-                <option value="">— geen —</option>
-                {contacts.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.name}
-                  </option>
-                ))}
-              </Select>
+                clearable
+                placeholder="Zoek een contact…"
+                options={contacts.map((c) => ({ value: c.id, label: c.name }))}
+              />
             </Field>
             <Field label="Verantwoordelijke" htmlFor="ownerId">
               <Select id="ownerId" name="ownerId" defaultValue={property?.ownerId ?? ""}>

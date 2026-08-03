@@ -157,15 +157,13 @@ export default async function VoorraadAfboekenPage({
                 ))}
               </Select>
             </Field>
-            <Field label="Project" htmlFor="projectId" hint="optioneel — dan telt de kostprijs daar mee">
-              <Select id="projectId" name="projectId" defaultValue="">
-                <option value="">— geen project —</option>
-                {projectOpts.map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {p.name}
-                  </option>
-                ))}
-              </Select>
+            <Field label="Project" hint="optioneel — dan telt de kostprijs daar mee">
+              <Combobox
+                name="projectId"
+                clearable
+                placeholder="Zoek een project…"
+                options={projectOpts.map((p) => ({ value: p.id, label: p.name }))}
+              />
             </Field>
             <Field label="Datum" htmlFor="date">
               <Input id="date" name="date" type="date" defaultValue={vandaag} />

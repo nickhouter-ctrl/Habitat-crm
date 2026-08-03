@@ -1323,11 +1323,11 @@ export default async function ProjectDetailPage({
               ) : (
                 <form action={addTimeEntry.bind(null, id)} className="grid gap-3 sm:grid-cols-2 lg:grid-cols-[1.4fr_0.8fr_0.9fr_1fr_auto] lg:items-end">
                   <Field label="Arbeider">
-                    <Select name="workerId" required>
-                      {workerOptions.map((w) => (
-                        <option key={w.value} value={w.value}>{w.label}</option>
-                      ))}
-                    </Select>
+                    <Combobox
+                      name="workerId"
+                      placeholder="Zoek een arbeider…"
+                      options={workerOptions.map((w) => ({ value: w.value, label: w.label }))}
+                    />
                   </Field>
                   <Field label="Uren">
                     <Input name="hours" inputMode="decimal" required placeholder="8" />
@@ -1378,14 +1378,15 @@ export default async function ProjectDetailPage({
                 {unlinkedWorkers.length > 0 ? (
                   <form action={createWorkerPortalLink.bind(null, id)} className="flex flex-wrap items-end gap-2">
                     <Field label="Arbeider / ploegbaas">
-                      <Select name="workerId" required>
-                        {unlinkedWorkers.map((w) => (
-                          <option key={w.id} value={w.id}>
-                            {w.name}
-                            {w.role ? ` — ${w.role}` : ""}
-                          </option>
-                        ))}
-                      </Select>
+                      <Combobox
+                        name="workerId"
+                        placeholder="Zoek een arbeider…"
+                        options={unlinkedWorkers.map((w) => ({
+                          value: w.id,
+                          label: w.name,
+                          hint: w.role ?? undefined,
+                        }))}
+                      />
                     </Field>
                     <SubmitButton size="sm" variant="secondary" pendingLabel="…">
                       + Link aanmaken

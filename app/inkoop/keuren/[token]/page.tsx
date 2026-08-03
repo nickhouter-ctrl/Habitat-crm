@@ -11,6 +11,7 @@ import { eq, sql } from "drizzle-orm";
 import Link from "next/link";
 
 import { Badge, Card, CardContent, CardHeader, CardTitle, Field, Input, Select, Textarea } from "@/components/ui";
+import { Combobox } from "@/components/combobox";
 import { SubmitButton } from "@/components/submit-button";
 import { db } from "@/lib/db";
 import { emailInbox, mailAttachments, projects, purchaseInvoiceReviews } from "@/lib/db/schema";
@@ -189,15 +190,14 @@ export default async function KeurenViaMailPage({
             {/* Wie klikte: komt uit de persoonlijke link in de meldingsmail. */}
             <input type="hidden" name="w" value={w ?? ""} />
             <div className="grid gap-3 sm:grid-cols-2">
-              <Field label="Project" htmlFor="projectId" hint={v.suggestedProjectId ? "herkend op de factuur" : "niet herkend — kies zelf"}>
-                <Select id="projectId" name="projectId" defaultValue={v.suggestedProjectId ?? ""}>
-                  <option value="">— geen project —</option>
-                  {projectRows.map((p) => (
-                    <option key={p.id} value={p.id}>
-                      {p.name}
-                    </option>
-                  ))}
-                </Select>
+              <Field label="Project" hint={v.suggestedProjectId ? "herkend op de factuur" : "niet herkend — kies zelf"}>
+                <Combobox
+                  name="projectId"
+                  defaultValue={v.suggestedProjectId ?? ""}
+                  clearable
+                  placeholder="Zoek een werf…"
+                  options={projectRows.map((p) => ({ value: p.id, label: p.name }))}
+                />
               </Field>
               <Field label="Soort" htmlFor="kind">
                 <Select id="kind" name="kind" defaultValue={v.suggestedKind ?? ""}>

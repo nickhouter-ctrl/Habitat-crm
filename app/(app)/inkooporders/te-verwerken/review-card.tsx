@@ -10,6 +10,7 @@
 import { useState } from "react";
 
 import { Badge, Field, Input, Select, Textarea, buttonClass } from "@/components/ui";
+import { Combobox } from "@/components/combobox";
 import { SubmitButton } from "@/components/submit-button";
 import { formatEUR } from "@/lib/utils";
 import { approveReviewAction, ignoreReviewAction, rejectReviewAction } from "./actions";
@@ -219,14 +220,14 @@ export function ReviewCard({
                   htmlFor={`proj-${data.id}`}
                   hint={data.projectId ? "herkend op de factuur" : "staat niet op de factuur — kies zelf"}
                 >
-                  <Select id={`proj-${data.id}`} name="projectId" defaultValue={data.projectId ?? ""}>
-                    <option value="">— geen project —</option>
-                    {projects.map((p) => (
-                      <option key={p.id} value={p.id}>
-                        {p.name}
-                      </option>
-                    ))}
-                  </Select>
+                  <Combobox
+                    name="projectId"
+                    defaultValue={data.projectId ?? ""}
+                    clearable
+                    placeholder="Zoek een werf…"
+                    options={projects.map((p) => ({ value: p.id, label: p.name }))}
+                    menuClassName="w-72"
+                  />
                   {/* Vaste lasten horen bij geen enkele werf. Eén keer aanvinken
                       en het systeem vraagt bij de volgende factuur van deze
                       leverancier niet meer om een werfreferentie. */}

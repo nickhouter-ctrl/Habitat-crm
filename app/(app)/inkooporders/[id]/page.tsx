@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, ilike, inArray, isNotNull } from "drizzle-orm";
+import { and, asc, desc, eq, ilike, inArray, isNotNull, sql } from "drizzle-orm";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
@@ -21,7 +21,7 @@ import {
   Tr,
 } from "@/components/ui";
 import { db } from "@/lib/db";
-import { products, projects, purchaseInvoiceReviews, purchaseOrders, users } from "@/lib/db/schema";
+import { products, projects, purchaseInvoiceReviews, purchaseOrders, timeEntries, users } from "@/lib/db/schema";
 import { nextSequentialSku } from "@/lib/products";
 import {
   formatMoney,
@@ -33,6 +33,7 @@ import {
 } from "@/lib/purchase-orders";
 import { purchaseOrderFileUrl } from "@/lib/storage";
 import { Combobox } from "@/components/combobox";
+import { PurchaseProjectLink } from "@/components/purchase-project-link";
 import { ConfirmSubmit } from "@/components/confirm-submit";
 import { SubmitButton } from "@/components/submit-button";
 import {
@@ -80,6 +81,14 @@ export default async function PurchaseOrderPage({ params }: { params: Promise<{ 
     .where(eq(purchaseInvoiceReviews.purchaseOrderId, id))
     .orderBy(desc(purchaseInvoiceReviews.decidedAt))
     .limit(1);
+
+  // Uren die via deze inkooporder op het project staan — om te tonen wat er is
+  // geboekt zonder het formulier open te klappen.
+  const [urenRij] = await db
+    .select({ uren: sql<number>`coalesce(sum(${timeEntries.hours}), 0)::float8` })
+    .from(timeEntries)
+    .where(eq(timeEntries.purchaseOrderId, id));
+  const geboekteUren = urenRij?.uren ? Number(urenRij.uren) : null;
 
   // Projecten om deze inkoop aan te koppelen (telt dan mee als materiaalkost).
   const projectRows = await db
@@ -278,6 +287,38 @@ export default async function PurchaseOrderPage({ params }: { params: Promise<{ 
           </Table>
         </Card>
 
+        <Card>
+          <CardHeader>
+            <CardTitle>Bij welk project hoort deze factuur?</CardTitle>
+            <span className="text-xs text-muted">
+              bepaalt waar de kosten landen — materiaal telt als inkoop, uren als arbeid
+            </span>
+          </CardHeader>
+          <CardContent>
+            <PurchaseProjectLink
+              projects={projectRows}
+              current={{
+                projectId: po.projectId,
+                projectName: projectRows.find((p) => p.id === po.projectId)?.name ?? null,
+                countAsLabor: po.countAsLabor,
+                hours: geboekteUren,
+              }}
+              suggestion={
+                po.suggestedKind || po.suggestedProjectId
+                  ? {
+                      projectId: po.suggestedProjectId,
+                      projectName: projectRows.find((p) => p.id === po.suggestedProjectId)?.name ?? null,
+                      kind: (po.suggestedKind as "labor" | "material" | null) ?? null,
+                      hours: po.suggestedHours != null ? Number(po.suggestedHours) : null,
+                    }
+                  : null
+              }
+              linkAsMaterial={setPurchaseOrderProject.bind(null, id)}
+              linkAsHours={linkPurchaseOrderAsHours.bind(null, id)}
+            />
+          </CardContent>
+        </Card>
+
         <div className="space-y-5">
           <Card>
             <CardHeader>
@@ -343,113 +384,6 @@ export default async function PurchaseOrderPage({ params }: { params: Promise<{ 
                   Bij ‘Ontvangen’ worden de aantallen van gekoppelde producten bij de voorraad opgeteld.
                 </p>
               )}
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <CardTitle>Project</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              {po.projectId && (
-                <p className="text-sm">
-                  Gekoppeld ·{" "}
-                  <Badge tone={po.countAsLabor ? "accent" : "neutral"}>
-                    {po.countAsLabor ? "geboekt als uren/arbeid" : "materiaalkost"}
-                  </Badge>
-                </p>
-              )}
-
-              {/* AI-voorstel bij binnenkomst — één klik bevestigen */}
-              {!po.projectId && po.suggestedKind && (
-                <div className="rounded-lg border border-accent/30 bg-accent/5 p-3">
-                  <p className="text-sm font-medium text-accent">AI-voorstel</p>
-                  {(() => {
-                    const suggName = projectRows.find((p) => p.id === po.suggestedProjectId)?.name ?? null;
-                    const asLabor = po.suggestedKind === "labor";
-                    return (
-                      <>
-                        <p className="mb-2 mt-1 text-sm">
-                          Lijkt <strong>{asLabor ? "uren/arbeid" : "materiaal"}</strong>
-                          {po.suggestedHours ? ` (${Number(po.suggestedHours)} uur)` : ""}
-                          {suggName ? (
-                            <>
-                              {" "}voor project <strong>{suggName}</strong>
-                            </>
-                          ) : (
-                            " — geen project herkend, kies hieronder"
-                          )}
-                          .
-                        </p>
-                        {po.suggestedProjectId && (
-                          <form
-                            action={
-                              asLabor
-                                ? linkPurchaseOrderAsHours.bind(null, id)
-                                : setPurchaseOrderProject.bind(null, id)
-                            }
-                          >
-                            <input type="hidden" name="projectId" value={po.suggestedProjectId} />
-                            {asLabor && <input type="hidden" name="hours" value={po.suggestedHours ?? ""} />}
-                            <SubmitButton size="sm" variant="primary" pendingLabel="…">
-                              Bevestig {asLabor ? "als uren" : "als materiaal"}
-                            </SubmitButton>
-                          </form>
-                        )}
-                      </>
-                    );
-                  })()}
-                </div>
-              )}
-
-              {/* Als materiaalkost */}
-              <form action={setPurchaseOrderProject.bind(null, id)} className="flex items-end gap-2">
-                <div className="flex-1">
-                  <Combobox
-                    name="projectId"
-                    defaultValue={po.projectId ?? ""}
-                    clearable
-                    placeholder="Zoek een project…"
-                    options={projectRows.map((p) => ({ value: p.id, label: p.name }))}
-                  />
-                </div>
-                <SubmitButton size="sm" variant="secondary" pendingLabel="…">
-                  Koppel als materiaal
-                </SubmitButton>
-              </form>
-
-              {/* Als uren/arbeid (bv. bouwer-factuur) */}
-              <form action={linkPurchaseOrderAsHours.bind(null, id)} className="space-y-2 border-t pt-3">
-                <p className="text-xs font-medium text-muted">Koppel als uren / arbeid (bv. een bouwer-factuur)</p>
-                <div className="flex items-end gap-2">
-                  <div className="flex-1">
-                    <Combobox
-                      name="projectId"
-                      defaultValue={po.projectId ?? ""}
-                      clearable
-                      placeholder="Zoek een project…"
-                      options={projectRows.map((p) => ({ value: p.id, label: p.name }))}
-                    />
-                  </div>
-                  <div className="w-24">
-                    <Input name="hours" type="number" step="0.5" min="0" placeholder="uren" />
-                  </div>
-                  <SubmitButton size="sm" variant="secondary" pendingLabel="…">
-                    Als uren
-                  </SubmitButton>
-                </div>
-                <label className="flex items-center gap-2 text-xs text-muted">
-                  <input type="checkbox" name="alreadyLogged" className="size-3.5" />
-                  Uren staan al op het project (bv. via het urenportaal ingevuld) — alleen als arbeid koppelen,
-                  geen nieuwe urenregel maken
-                </label>
-              </form>
-
-              <p className="text-xs text-muted">
-                <strong>Materiaal</strong> telt als inkoopkost. <strong>Uren</strong> maakt een arbeidsregel op het
-                project (bedrag ÷ uren = tarief; uren leeg = het hele bedrag als 1 post) en telt niet dubbel als
-                materiaal.
-              </p>
             </CardContent>
           </Card>
 

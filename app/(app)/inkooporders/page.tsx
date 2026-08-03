@@ -17,7 +17,7 @@ import {
   Tr,
 } from "@/components/ui";
 import { db } from "@/lib/db";
-import { emailInbox, mailAttachments, purchaseInvoiceReviews, purchaseOrders } from "@/lib/db/schema";
+import { emailInbox, mailAttachments, projects, purchaseInvoiceReviews, purchaseOrders } from "@/lib/db/schema";
 import { formatMoney, poExVat, poExVatAmount, PO_OPEN_STATUSES, PO_STATUS_META } from "@/lib/purchase-orders";
 import { cn, formatEUR } from "@/lib/utils";
 
@@ -59,6 +59,12 @@ export default async function PurchaseOrdersPage({
     .from(purchaseOrders)
     .orderBy(desc(purchaseOrders.orderDate), desc(purchaseOrders.createdAt))
     .limit(2000);
+
+  // Naam van het gekoppelde project erbij: in de lijst wil je zien wáár een
+  // inkoop op geboekt is zonder elke regel te openen.
+  const projectNamen = new Map(
+    (await db.select({ id: projects.id, name: projects.name }).from(projects)).map((p) => [p.id, p.name]),
+  );
 
   const pendingHolded = rows.filter((r) => !r.holdedId).length;
 
@@ -222,6 +228,7 @@ export default async function PurchaseOrdersPage({
                 <tr>
                   <Th>Leverancier</Th>
                   <Th>Referentie</Th>
+                  <Th>Project</Th>
                   <Th>Datum</Th>
                   <Th>Verwacht</Th>
                   <Th className="text-right">Regels</Th>
@@ -234,7 +241,7 @@ export default async function PurchaseOrdersPage({
               <TBody>
                 {filtered.length === 0 ? (
                   <Tr>
-                    <Td className="text-muted" colSpan={9}>
+                    <Td className="text-muted" colSpan={10}>
                       Geen inkooporders gevonden voor deze zoekopdracht/filter.
                     </Td>
                   </Tr>
@@ -268,6 +275,20 @@ export default async function PurchaseOrdersPage({
                           )}
                         </Td>
                         <Td className="text-muted">{po.reference ?? "—"}</Td>
+                        <Td>
+                          {po.projectId ? (
+                            <Link
+                              href={`/projects/${po.projectId}`}
+                              className="hover:underline"
+                              title={po.countAsLabor ? "geboekt als uren/arbeid" : "geboekt als materiaalkost"}
+                            >
+                              {projectNamen.get(po.projectId) ?? "—"}
+                              {po.countAsLabor && <span className="block text-xs text-muted">uren</span>}
+                            </Link>
+                          ) : (
+                            <span className="text-xs text-muted">—</span>
+                          )}
+                        </Td>
                         <Td className="text-muted">{fmtDate(po.orderDate)}</Td>
                         <Td className="text-muted">{fmtDate(po.expectedDate)}</Td>
                         <Td className="text-right tabular-nums text-muted">{po.items?.length ?? 0}</Td>
