@@ -169,8 +169,9 @@ export default async function SettingsPage() {
               <Button type="submit">Toevoegen</Button>
             </form>
             <p className="mt-2 text-xs text-muted">
-              Een vergeten wachtwoord is niet op te zoeken (ook niet in Supabase): het staat als bcrypt-hash opgeslagen. Zet er hierboven een nieuw voor die medewerker.
-              De medewerker logt in op dit CRM met dit e-mailadres en wachtwoord. Rollen: Beheerder (alles, incl. medewerkers beheren), Medewerker (dagelijks gebruik), Alleen lezen.
+              Rollen: <strong>Beheerder</strong> mag alles, incl. medewerkers beheren · <strong>Medewerker</strong> is
+              dagelijks gebruik · <strong>Alleen lezen</strong> kan niets wijzigen. Een vergeten wachtwoord is nergens
+              op te zoeken — zet er hierboven een nieuw.
             </p>
           </CardContent>
         </Card>
