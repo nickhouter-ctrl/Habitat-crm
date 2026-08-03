@@ -1,4 +1,4 @@
-import { and, desc, eq, ilike, isNotNull, isNull, or } from "drizzle-orm";
+import { and, desc, eq, ilike, isNotNull, isNull, or, sql } from "drizzle-orm";
 import { Search } from "lucide-react";
 import Link from "next/link";
 
@@ -9,6 +9,7 @@ import {
   Input,
   LinkButton,
   PageHeader,
+  StatTile,
   TBody,
   Table,
   Td,
@@ -75,6 +76,18 @@ export default async function ContactsPage({
     },
   });
 
+  // Kengetallen boven de lijst: het scherm toonde alleen een tabel, zonder enig
+  // idee hoe het klantenbestand ervoor staat.
+  const [kengetallen] = await db
+    .select({
+      totaal: sql<number>`count(*)::int`,
+      klanten: sql<number>`count(*) filter (where ${contacts.type} = 'customer')::int`,
+      leads: sql<number>`count(*) filter (where ${contacts.type} = 'lead')::int`,
+      zakelijk: sql<number>`count(*) filter (where ${contacts.companyId} is not null)::int`,
+      nieuwDezeMaand: sql<number>`count(*) filter (where ${contacts.createdAt} > date_trunc('month', now()))::int`,
+    })
+    .from(contacts);
+
   const filterHref = (next: { type?: string; soort?: string }) => {
     const sp = new URLSearchParams();
     if (q) sp.set("q", q);
@@ -99,6 +112,14 @@ export default async function ContactsPage({
           </>
         }
       />
+
+      <div className="mb-5 grid grid-cols-2 gap-3 sm:grid-cols-5">
+        <StatTile label="Contacten" value={kengetallen.totaal} />
+        <StatTile label="Klanten" value={kengetallen.klanten} />
+        <StatTile label="Leads" value={kengetallen.leads} hint="nog geen klant" />
+        <StatTile label="Zakelijk" value={kengetallen.zakelijk} hint="aan een bedrijf gekoppeld" />
+        <StatTile label="Nieuw deze maand" value={kengetallen.nieuwDezeMaand} />
+      </div>
 
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <div className="flex flex-wrap items-center gap-3">

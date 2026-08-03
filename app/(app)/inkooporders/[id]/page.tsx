@@ -210,6 +210,31 @@ export default async function PurchaseOrderPage({ params }: { params: Promise<{ 
       />
 
       <div className="grid gap-5 lg:grid-cols-[1fr_18rem]">
+        {items.length === 0 ? (
+          // Een factuur van een bouwer heeft vaak geen regels: alleen een
+          // totaalbedrag op de PDF. Een lege tabel met kolomkoppen ziet eruit
+          // alsof er iets stuk is; dit vertelt wat er aan de hand is.
+          <Card>
+            <CardHeader>
+              <CardTitle>Bedrag</CardTitle>
+              <span className="text-xs text-muted">geen regels op deze factuur — alleen een totaal</span>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <div className="flex flex-wrap items-end justify-between gap-4">
+                <div>
+                  <p className="text-3xl font-semibold tabular-nums">{formatMoney(po.total, po.currency)}</p>
+                  <p className="text-sm text-muted">
+                    incl. btw · {formatMoney(exVat.amount, po.currency)} ex. btw
+                    {exVat.vatUnknown && <span className="ml-1 text-warning">(btw niet uitgelezen)</span>}
+                  </p>
+                </div>
+                {attachments.length > 0 && (
+                  <p className="text-sm text-muted">De regels staan op de bijlage hiernaast.</p>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+        ) : (
         <Card className="overflow-hidden">
           <Table>
             <THead>
@@ -286,6 +311,7 @@ export default async function PurchaseOrderPage({ params }: { params: Promise<{ 
             </TBody>
           </Table>
         </Card>
+        )}
 
         <Card>
           <CardHeader>
