@@ -358,6 +358,8 @@ export default async function ProjectDetailPage({
           note: projectPayments.note,
           documentId: projectPayments.documentId,
           docNumber: documents.docNumber,
+          docSubtotal: documents.subtotalEur,
+          docTotal: documents.totalEur,
         })
         .from(projectPayments)
         .leftJoin(documents, eq(documents.id, projectPayments.documentId))
@@ -443,7 +445,27 @@ export default async function ProjectDetailPage({
   const receivedTotal = paymentRows.reduce((s, p) => s + Number(p.amountEur ?? 0), 0);
   // Betalingen worden incl. btw geboekt; de samenvattingen rekenen ex. btw (÷1,21).
   const VAT_DIVISOR = 1.21;
-  const receivedTotalEx = receivedTotal / VAT_DIVISOR;
+  /**
+   * Ex. btw per ontvangst, niet blind alles ÷ 1,21:
+   *  - contant: daar zit geen btw op (opgave van Nick, 04-08-2026);
+   *  - hangt de ontvangst aan een factuur: de verhouding van díé factuur, dus
+   *    ook goed bij btw verlegd of een provisión de fondos zonder btw;
+   *  - de rest: 21% aannemen, zoals het altijd al ging.
+   */
+  const exBtwVanOntvangst = (p: {
+    method: string;
+    amountEur: string | number | null;
+    docSubtotal?: string | null;
+    docTotal?: string | null;
+  }) => {
+    const bedrag = Number(p.amountEur ?? 0);
+    if (p.method === "cash") return bedrag;
+    const sub = Number(p.docSubtotal ?? 0);
+    const tot = Number(p.docTotal ?? 0);
+    if (sub > 0 && tot > 0) return Math.round(bedrag * (sub / tot) * 100) / 100;
+    return bedrag / VAT_DIVISOR;
+  };
+  const receivedTotalEx = paymentRows.reduce((s, p) => s + exBtwVanOntvangst(p), 0);
 
   // Eigen-productkost: gerealiseerd = op facturen; verwacht = het meest complete
   // beeld (offerte als die hoger is dan wat al gefactureerd is). Voorkomt zowel
@@ -1116,8 +1138,9 @@ export default async function ProjectDetailPage({
         <CardHeader>
           <CardTitle>Ontvangen betalingen</CardTitle>
           <span className="text-xs text-muted">
-            wat de klant al heeft betaald · {formatEUR(receivedTotalEx)} ex. btw ({formatEUR(receivedTotal)} incl.) · betaalde
-            facturen komen er automatisch bij · telt niet mee in omzet/marge
+            wat de klant al heeft betaald · {formatEUR(receivedTotal)} ontvangen, waarvan {formatEUR(receivedTotalEx)} ex.
+            btw (contant = geen btw, factuurbetalingen volgen hun eigen factuur) · betaalde facturen komen er automatisch
+            bij · telt niet mee in omzet/marge
           </span>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -1129,6 +1152,7 @@ export default async function ProjectDetailPage({
                   <Th>Omschrijving</Th>
                   <Th>Wijze</Th>
                   <Th className="text-right">Bedrag</Th>
+                  <Th className="text-right">waarvan ex. btw</Th>
                   <Th />
                 </tr>
               </THead>
@@ -1154,6 +1178,10 @@ export default async function ProjectDetailPage({
                       </Badge>
                     </Td>
                     <Td className="text-right tabular-nums font-medium">{formatEUR(p.amountEur)}</Td>
+                    <Td className="text-right tabular-nums text-muted">
+                      {formatEUR(exBtwVanOntvangst(p))}
+                      {p.method === "cash" && <span className="block text-xs">geen btw</span>}
+                    </Td>
                     <Td className="text-right">
                       {/* Een ontvangst die uit een betaalde factuur komt kun je hier
                           niet weghalen — hij komt terug bij de volgende synchronisatie.
