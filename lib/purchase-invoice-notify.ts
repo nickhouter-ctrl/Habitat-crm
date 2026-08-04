@@ -161,7 +161,12 @@ function tabel(regels: Regel[], toonLeeftijd = false, wie: string | null = null)
  * ongeacht of de mail aankwam (at-most-once, zoals bij de leveringsherinneringen).
  */
 export async function notifyNewInvoiceReviews(reviewIds: string[]): Promise<{ sent: boolean; count: number }> {
-  if (reviewIds.length === 0) return { sent: false, count: 0 };
+  // Bewust NIET filteren op de meegegeven ids: alles wat openstaat en nog niet
+  // gemeld is gaat mee. Reden — de poll heeft 60 seconden en het uitlezen van
+  // een grote Excel kan daar overheen gaan. Dan staat de factuur al in de
+  // wachtrij maar is de functie afgekapt vóór de melding, en hoort niemand er
+  // ooit meer iets van. Nu haalt de volgende ronde 'm alsnog op.
+  void reviewIds;
 
   const regels = await db
     .select({
@@ -176,11 +181,7 @@ export async function notifyNewInvoiceReviews(reviewIds: string[]): Promise<{ se
     })
     .from(purchaseInvoiceReviews)
     .where(
-      and(
-        inArray(purchaseInvoiceReviews.id, reviewIds),
-        isNull(purchaseInvoiceReviews.notifiedAt),
-        eq(purchaseInvoiceReviews.status, "pending"),
-      ),
+      and(isNull(purchaseInvoiceReviews.notifiedAt), eq(purchaseInvoiceReviews.status, "pending")),
     );
   if (regels.length === 0) return { sent: false, count: 0 };
 

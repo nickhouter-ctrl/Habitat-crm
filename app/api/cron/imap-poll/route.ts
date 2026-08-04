@@ -12,7 +12,11 @@ import { NextResponse } from "next/server";
 import { runImapPoll } from "@/lib/imap-poll";
 
 export const dynamic = "force-dynamic";
-export const maxDuration = 60;
+// 300 s: het uitlezen van een factuur door de AI duurt seconden, en bij een
+// mail met meerdere bijlagen (of een Excel van een halve MB) haalde de poll de
+// oude limiet van 60 s niet — de facturen stonden dan wél in de wachtrij, maar
+// de melding erover werd nooit verstuurd.
+export const maxDuration = 300;
 
 export async function GET(req: Request) {
   // Beveiliging: in productie alleen Vercel Cron (header authorization)
