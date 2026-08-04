@@ -914,6 +914,9 @@ export const purchaseOrders = pgTable(
     /** Gekoppeld als arbeid/uren (bv. een bouwer-factuur): telt dan als arbeidskost
      * (via een uren-regel) i.p.v. materiaal, om dubbeltelling te voorkomen. */
     countAsLabor: boolean().notNull().default(false),
+    /** Betaald uit kasgeld van de klant — zie {@link projectPayments.clientFunds}.
+     *  Telt dan niet als onze kost op het project. */
+    clientFunds: boolean().notNull().default(false),
     /** AI-suggestie bij binnenkomst: voorgesteld project om aan te koppelen. */
     suggestedProjectId: uuid().references((): AnyPgColumn => projects.id, { onDelete: "set null" }),
     /** AI-suggestie: 'labor' (uren) of 'material'. */
@@ -1169,6 +1172,8 @@ export const projectCosts = pgTable(
     /** Bedrag ex. BTW. */
     amountEur: numeric({ precision: 14, scale: 2 }).notNull().default("0"),
     paymentMethod: paymentMethod().notNull().default("invoice"),
+    /** Zie {@link projectPayments.clientFunds}: betaald uit kasgeld van de klant. */
+    clientFunds: boolean().notNull().default(false),
     paidAt: timestamp({ withTimezone: true }),
     note: text(),
     ...timestamps,
@@ -1220,6 +1225,18 @@ export const projectPayments = pgTable(
      * is nodig voor een voorschot zónder btw — dat is niet af te leiden.
      */
     vatRate: numeric({ precision: 5, scale: 2 }),
+    /**
+     * Kasgeld van de klant: geld dat de klant geeft om ZIJN kosten mee te
+     * betalen (ploeg, materiaal), geen aanbetaling op onze aanneemsom. Telt
+     * daarom niet als onze omzet respectievelijk niet als onze kost, en komt
+     * niet als verrekening op de eindafrekening.
+     *
+     * Voorwaarde: dit klopt alleen als de bijbehorende inkoopfacturen ook echt
+     * van de klant zijn. Staan ze op onze naam in onze administratie, dan is het
+     * onze kost en is het geld onze omzet. Beide kanten moeten dus samen bewegen
+     * — het project toont het saldo (ontvangen − besteed) om dat te bewaken.
+     */
+    clientFunds: boolean().notNull().default(false),
     ...timestamps,
   },
   (t) => [

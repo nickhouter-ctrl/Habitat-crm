@@ -67,13 +67,16 @@ import {
   createWorkerPortalLink,
   deleteProject,
   deleteProjectCost,
+  toggleCostClientFunds,
   deleteProjectPayment,
+  togglePaymentClientFunds,
   deleteTimeEntry,
   deleteWorkerPortalLink,
   updateTimeEntry,
   linkPurchaseOrderToProject,
   sendBudgetToClient,
   setProjectStatus,
+  togglePurchaseOrderClientFunds,
   unlinkPurchaseOrder,
   updateProject,
 } from "../actions";
@@ -387,6 +390,7 @@ export default async function ProjectDetailPage({
           note: projectPayments.note,
           documentId: projectPayments.documentId,
           vatRate: projectPayments.vatRate,
+          clientFunds: projectPayments.clientFunds,
           docNumber: documents.docNumber,
           docSubtotal: documents.subtotalEur,
           docTotal: documents.totalEur,
@@ -434,9 +438,16 @@ export default async function ProjectDetailPage({
   // Als uren gekoppelde inkooporders tellen NIET als materiaal (ze zitten al als
   // arbeidskost in de uren via een uren-regel) — anders dubbel.
   const materialPOs = linkedPOs.filter((p) => !p.countAsLabor);
-  const poCost = materialPOs.reduce((s, p) => s + poExVatAmount(p), 0); // ex. btw, EUR
-  const looseCost = costRows.reduce((s, c) => s + Number(c.amountEur ?? 0), 0);
+  // Kasgeld van de klant telt niet als ONZE kost: dat zijn zijn kosten, betaald
+  // uit geld dat hij ons daarvoor gaf. Zie projectPayments.clientFunds.
+  const poCost = materialPOs.filter((p) => !p.clientFunds).reduce((s, p) => s + poExVatAmount(p), 0); // ex. btw, EUR
+  const looseCost = costRows.filter((c) => !c.clientFunds).reduce((s, c) => s + Number(c.amountEur ?? 0), 0);
   const materialCost = poCost + looseCost;
+
+  // Wat er uit het kasgeld is betaald — apart, alleen om het saldo te tonen.
+  const kasgeldBesteed =
+    materialPOs.filter((p) => p.clientFunds).reduce((s, p) => s + poExVatAmount(p), 0) +
+    costRows.filter((c) => c.clientFunds).reduce((s, c) => s + Number(c.amountEur ?? 0), 0);
 
   // Ontvangen betalingen van de klant (incl. btw) — informatief, los van de
   // factuurgebaseerde omzet/marge hierboven.
@@ -472,7 +483,6 @@ export default async function ProjectDetailPage({
   const opslagPct = (margePct: number) =>
     margePct >= 100 ? null : Math.round((margePct / (100 - margePct)) * 1000) / 10;
 
-  const receivedTotal = paymentRows.reduce((s, p) => s + Number(p.amountEur ?? 0), 0);
   // Betalingen worden incl. btw geboekt; de samenvattingen rekenen ex. btw (÷1,21).
   const VAT_DIVISOR = 1.21;
   /**
@@ -502,7 +512,15 @@ export default async function ProjectDetailPage({
     if (sub > 0 && tot > 0) return Math.round(bedrag * (sub / tot) * 100) / 100;
     return bedrag / VAT_DIVISOR;
   };
-  const receivedTotalEx = paymentRows.reduce((s, p) => s + exBtwVanOntvangst(p), 0);
+  // Kasgeld is geen betaling op de aanneemsom en dus geen omzet van ons; het
+  // staat hieronder in een eigen blok met het saldo.
+  const eigenOntvangsten = paymentRows.filter((p) => !p.clientFunds);
+  const receivedTotal = eigenOntvangsten.reduce((s, p) => s + Number(p.amountEur ?? 0), 0);
+  const receivedTotalEx = eigenOntvangsten.reduce((s, p) => s + exBtwVanOntvangst(p), 0);
+  const kasgeldOntvangen = paymentRows
+    .filter((p) => p.clientFunds)
+    .reduce((s, p) => s + Number(p.amountEur ?? 0), 0);
+  const kasgeldSaldo = Math.round((kasgeldOntvangen - kasgeldBesteed) * 100) / 100;
 
   /**
    * Voorschotten: geld dat binnen is zonder dat er een eigen factuur tegenover
@@ -515,10 +533,10 @@ export default async function ProjectDetailPage({
    * bij Silvestre staan F260012 en F260013 (samen € 25.056,45 ex. btw) al maanden
    * open. Die horen dus niet bij "al ontvangen".
    */
-  const openInvoicedEx = Math.max(0, projRevenue - paymentRows.filter((p) => p.documentId).reduce((s, p) => s + exBtwVanOntvangst(p), 0));
+  const openInvoicedEx = Math.max(0, projRevenue - eigenOntvangsten.filter((p) => p.documentId).reduce((s, p) => s + exBtwVanOntvangst(p), 0));
 
   const voorschottenOnverrekendEx = paymentRows
-    .filter((p) => !p.documentId)
+    .filter((p) => !p.documentId && !p.clientFunds)
     .reduce((s, p) => s + exBtwVanOntvangst(p), 0);
 
   // Eigen-productkost: gerealiseerd = op facturen; verwacht = het meest complete
@@ -1264,6 +1282,57 @@ export default async function ProjectDetailPage({
         params={voorschotParams}
       />
 
+      {(kasgeldOntvangen > 0 || kasgeldBesteed > 0) && (
+        <Card className="mb-5">
+          <CardHeader>
+            <CardTitle>Kasgeld van de klant</CardTitle>
+            <span className="text-xs text-muted">
+              geld dat de klant gaf om zíjn kosten mee te betalen — geen omzet en geen kosten van ons
+            </span>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <div className="grid gap-3 sm:grid-cols-3">
+              <div className="rounded-lg border bg-background p-3">
+                <p className="text-xs text-muted">Ontvangen</p>
+                <p className="text-lg font-semibold tabular-nums">{formatEUR(kasgeldOntvangen)}</p>
+              </div>
+              <div className="rounded-lg border bg-background p-3">
+                <p className="text-xs text-muted">Besteed aan zijn kosten</p>
+                <p className="text-lg font-semibold tabular-nums">{formatEUR(kasgeldBesteed)}</p>
+              </div>
+              <div className={`rounded-lg border p-3 ${Math.abs(kasgeldSaldo) < 0.01 ? "bg-success/5" : "bg-warning/5"}`}>
+                <p className="text-xs text-muted">Saldo in de pot</p>
+                <p
+                  className={`text-lg font-semibold tabular-nums ${
+                    Math.abs(kasgeldSaldo) < 0.01 ? "text-success" : "text-warning"
+                  }`}
+                >
+                  {formatEUR(kasgeldSaldo)}
+                </p>
+              </div>
+            </div>
+            <p className="text-xs text-muted">
+              {kasgeldSaldo > 0.01 ? (
+                <>
+                  Er staat nog {formatEUR(kasgeldSaldo)} in de pot. De eindafrekening verlaagt de aanneemsom met het
+                  volledig ontvangen bedrag, dus dit saldo hoort vóór die tijd op nul: besteden, terugbetalen of alsnog
+                  factureren.
+                </>
+              ) : kasgeldSaldo < -0.01 ? (
+                <>
+                  Er is {formatEUR(Math.abs(kasgeldSaldo))} méér uitgegeven dan er is gekregen — dat deel is dus wél
+                  onze kost. Controleer welke facturen als kasgeld zijn aangevinkt.
+                </>
+              ) : (
+                <>In evenwicht: alles wat binnenkwam is ook besteed.</>
+              )}{" "}
+              Dit klopt alleen als die inkoopfacturen van de klant zijn; staan ze op onze naam, dan is het onze kost en
+              zijn geld onze omzet.
+            </p>
+          </CardContent>
+        </Card>
+      )}
+
       {/* ─────────────── Ontvangen betalingen (van klant) ─────────────── */}
       <Card id="ontvangen" className="mb-5 scroll-mt-24">
         <CardHeader>
@@ -1284,6 +1353,7 @@ export default async function ProjectDetailPage({
                   <Th>Wijze</Th>
                   <Th className="text-right">Bedrag</Th>
                   <Th className="text-right">waarvan ex. btw</Th>
+                  <Th>Soort</Th>
                   <Th />
                 </tr>
               </THead>
@@ -1316,6 +1386,18 @@ export default async function ProjectDetailPage({
                       ) : p.method === "cash" ? (
                         <span className="block text-xs">geen btw</span>
                       ) : null}
+                    </Td>
+                    <Td>
+                      {/* Kasgeld aan/uit: geen omzet van ons, verlaagt straks de aanneemsom. */}
+                      <form action={togglePaymentClientFunds.bind(null, id, p.id, !p.clientFunds)}>
+                        <button type="submit" className="text-left text-xs">
+                          {p.clientFunds ? (
+                            <Badge tone="info">kasgeld klant</Badge>
+                          ) : (
+                            <span className="text-muted underline-offset-2 hover:underline">→ kasgeld</span>
+                          )}
+                        </button>
+                      </form>
                     </Td>
                     <Td className="text-right">
                       {/* Een ontvangst die uit een betaalde factuur komt kun je hier
@@ -1373,6 +1455,16 @@ export default async function ProjectDetailPage({
             <Field label="Bedrag (€)">
               <Input name="amountEur" inputMode="decimal" required placeholder="0,00" />
             </Field>
+            <label className="flex items-start gap-2 text-xs sm:col-span-2 lg:col-span-7">
+              <input type="checkbox" name="clientFunds" className="mt-0.5" />
+              <span>
+                Kasgeld van de klant
+                <span className="block text-muted">
+                  geld om zíjn kosten mee te betalen — telt niet als onze omzet en verlaagt de aanneemsom op de
+                  eindafrekening
+                </span>
+              </span>
+            </label>
             <SubmitButton size="sm" variant="secondary" pendingLabel="…">+ Betaling</SubmitButton>
           </form>
         </CardContent>
@@ -1645,9 +1737,21 @@ export default async function ProjectDetailPage({
                             ) : null}
                           </Td>
                           <Td className="text-right">
-                            <form action={unlinkPurchaseOrder.bind(null, id, p.id)}>
-                              <SubmitButton size="sm" variant="ghost" className="text-muted" pendingLabel="…">ontkoppel</SubmitButton>
-                            </form>
+                            <div className="flex items-center justify-end gap-2">
+                              {/* Betaald uit kasgeld van de klant → telt niet als onze kost. */}
+                              <form action={togglePurchaseOrderClientFunds.bind(null, id, p.id, !p.clientFunds)}>
+                                <button type="submit" className="text-xs">
+                                  {p.clientFunds ? (
+                                    <Badge tone="info">kasgeld klant</Badge>
+                                  ) : (
+                                    <span className="text-muted underline-offset-2 hover:underline">→ kasgeld</span>
+                                  )}
+                                </button>
+                              </form>
+                              <form action={unlinkPurchaseOrder.bind(null, id, p.id)}>
+                                <SubmitButton size="sm" variant="ghost" className="text-muted" pendingLabel="…">ontkoppel</SubmitButton>
+                              </form>
+                            </div>
                           </Td>
                         </Tr>
                         );
@@ -1675,7 +1779,19 @@ export default async function ProjectDetailPage({
                         <Td>{BUDGET_CAT_LABEL[c.category] ?? c.category}</Td>
                         <Td>{c.description}{c.supplier ? <span className="block text-xs text-muted">{c.supplier}</span> : null}</Td>
                         <Td className="text-right tabular-nums font-medium">{formatEUR(c.amountEur)}</Td>
-                        <Td><Badge tone={c.paymentMethod === "cash" ? "warning" : "neutral"}>{PAY_LABEL[c.paymentMethod]}</Badge></Td>
+                        <Td>
+                          <Badge tone={c.paymentMethod === "cash" ? "warning" : "neutral"}>{PAY_LABEL[c.paymentMethod]}</Badge>
+                          {/* Betaald uit kasgeld van de klant → telt niet als onze kost. */}
+                          <form action={toggleCostClientFunds.bind(null, id, c.id, !c.clientFunds)} className="mt-1">
+                            <button type="submit" className="text-xs">
+                              {c.clientFunds ? (
+                                <Badge tone="info">kasgeld klant</Badge>
+                              ) : (
+                                <span className="text-muted underline-offset-2 hover:underline">→ kasgeld</span>
+                              )}
+                            </button>
+                          </form>
+                        </Td>
                         <Td className="text-right">
                           <form action={deleteProjectCost.bind(null, id, c.id)}>
                             <SubmitButton size="sm" variant="ghost" className="text-muted" pendingLabel="…">×</SubmitButton>
@@ -1687,6 +1803,10 @@ export default async function ProjectDetailPage({
                 </Table>
               )}
               <form action={addProjectCost.bind(null, id)} className="grid gap-3 sm:grid-cols-2 lg:grid-cols-[0.9fr_1fr_1.6fr_0.9fr_0.9fr_auto] lg:items-end">
+                <label className="flex items-center gap-2 text-xs sm:col-span-2 lg:col-span-6">
+                  <input type="checkbox" name="clientFunds" />
+                  <span>Betaald uit kasgeld van de klant — telt niet als onze kost</span>
+                </label>
                 <Field label="Datum">
                   <Input name="date" type="date" required />
                 </Field>
