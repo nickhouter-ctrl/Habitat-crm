@@ -952,13 +952,15 @@ export default async function ProjectDetailPage({
               {margins.productRevenue > 0 ? (
                 <>
                   <dl className="space-y-1 text-sm">
-                    <div className="flex justify-between gap-2">
-                      <dt className="text-muted">Gefactureerd</dt>
-                      <dd className="tabular-nums">{formatEUR(margins.productRevenue)}</dd>
-                    </div>
+                    {/* Kostprijs bovenaan, net als bij Uren en Inkoop derden:
+                        overal eerst wat het ons kost, daaronder wat het opbrengt. */}
                     <div className="flex justify-between gap-2">
                       <dt className="text-muted">Kostprijs</dt>
                       <dd className="tabular-nums">{formatEUR(margins.productCost)}</dd>
+                    </div>
+                    <div className="flex justify-between gap-2">
+                      <dt className="text-muted">Gefactureerd</dt>
+                      <dd className="tabular-nums">{formatEUR(margins.productRevenue)}</dd>
                     </div>
                     <div className="flex justify-between gap-2 border-t pt-1 font-semibold">
                       <dt>Marge op producten</dt>
