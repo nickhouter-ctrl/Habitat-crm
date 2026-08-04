@@ -1219,7 +1219,7 @@ export const projectPayments = pgTable(
      * ontvangst bij een factuur volgt die factuur, de rest 21%. Expliciet zetten
      * is nodig voor een voorschot zónder btw — dat is niet af te leiden.
      */
-    vatRate: numeric({ precision: 5, scale: 2 }),
+    vatRate: numeric({ precision: 6, scale: 3 }),
     ...timestamps,
   },
   (t) => [
