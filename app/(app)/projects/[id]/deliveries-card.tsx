@@ -120,6 +120,13 @@ export async function ProjectDeliveriesCard({
           </div>
         )}
 
+        <p className="rounded-md bg-background p-3 text-xs text-muted">
+          <strong className="text-foreground">Let op bij de inkoop.</strong> De kostprijs komt hier via het product uit
+          de catalogus. Koppel de inkooporder van diezelfde goederen dan <em>niet</em> óók aan dit project — dan staan
+          de kosten er twee keer op. Inkooporders koppel je alleen voor spullen of werk die rechtstreeks voor deze werf
+          zijn gekocht en niet via de voorraad lopen.
+        </p>
+
         <form
           action={deliverToProject.bind(null, projectId)}
           className="grid gap-3 lg:grid-cols-[2fr_0.7fr_1fr_0.9fr_auto] lg:items-end"
