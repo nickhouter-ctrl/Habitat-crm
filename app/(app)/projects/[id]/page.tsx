@@ -1063,7 +1063,10 @@ export default async function ProjectDetailPage({
               <p className="mb-2 font-semibold">Wat moet er nu gefactureerd worden?</p>
               <dl className="space-y-1">
                 <div className="flex justify-between gap-2">
-                  <dt className="text-muted">Minimaal door te belasten tot nu toe</dt>
+                  <dt className="text-muted">
+                    Minimaal door te belasten tot nu toe
+                    <span className="block text-xs">alle bedragen hier zijn ex. btw</span>
+                  </dt>
                   <dd className="tabular-nums">{formatEUR(margins.totalRevenue)}</dd>
                 </div>
                 <div className="flex justify-between gap-2">
@@ -1077,7 +1080,15 @@ export default async function ProjectDetailPage({
                 {voorschottenOnverrekendEx > 0 && (
                   <>
                     <div className="flex justify-between gap-2 pt-1">
-                      <dt className="text-muted">Waarvan al ontvangen als voorschot</dt>
+                      <dt className="text-muted">
+                        Waarvan al ontvangen als voorschot
+                        {/* Zonder deze telling is het een getal uit het niets; zo is
+                            het na te lopen bij Ontvangen betalingen. */}
+                        <span className="block text-xs">
+                          {paymentRows.filter((p) => !p.documentId).length} ontvangst
+                          {paymentRows.filter((p) => !p.documentId).length === 1 ? "" : "en"} zonder eigen factuur, ex. btw
+                        </span>
+                      </dt>
                       <dd className="tabular-nums">{formatEUR(voorschottenOnverrekendEx)}</dd>
                     </div>
                     <div className="flex justify-between gap-2">
