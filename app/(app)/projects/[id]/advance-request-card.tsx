@@ -43,6 +43,10 @@ export async function AdvanceRequestCard({
   siteAlias,
   contactId,
   contractDate,
+  kostenTotaal,
+  ontvangenEx,
+  aanneemsom,
+  doorTeBelasten,
   params,
 }: {
   projectId: string;
@@ -50,8 +54,17 @@ export async function AdvanceRequestCard({
   siteAlias: string | null;
   contactId: string | null;
   contractDate: string | null;
+  /** Arbeid + inkoop + kostprijs van geleverde producten (ex. btw). */
+  kostenTotaal: number;
+  /** Alles wat er binnen is (ex. btw). */
+  ontvangenEx: number;
+  /** Aanneemsom/doel en wat er minimaal doorbelast moet worden. */
+  aanneemsom: number;
+  doorTeBelasten: number;
   params: { vbedrag?: string; vtermijn?: string; vdatum?: string; vmail?: string; vstand?: string; vrestant?: string };
 }) {
+  // Tekort afgerond op duizendtallen: een voorschot vraag je niet op de cent.
+  const tekortAfgerond = Math.max(0, Math.ceil((kostenTotaal - ontvangenEx) / 1000) * 1000);
   const amount = parseAmount(params.vbedrag);
   const termLabel = params.vtermijn?.trim() || "";
   const agreementDate = params.vdatum?.trim() || contractDate;
@@ -194,6 +207,43 @@ export async function AdvanceRequestCard({
         </span>
       </CardHeader>
       <CardContent className="space-y-4">
+        {/* De aanleiding om een voorschot te vragen: schieten we voor? Niet de
+            verkoopwaarde maar ONZE KOSTEN tegenover wat er binnen is. */}
+        <div className={`rounded-lg border p-3 ${ontvangenEx >= kostenTotaal ? "bg-success/5" : "bg-danger/5"}`}>
+          <div className="flex flex-wrap items-baseline justify-between gap-x-6 gap-y-1 text-sm">
+            <span className="font-medium">Lopen we voor of achter?</span>
+            <span className="text-muted">
+              onze kosten tot nu toe <strong className="tabular-nums text-foreground">{formatEUR(kostenTotaal)}</strong>
+            </span>
+            <span className="text-muted">
+              ontvangen <strong className="tabular-nums text-foreground">{formatEUR(ontvangenEx)}</strong>
+            </span>
+            <span className={`font-semibold tabular-nums ${ontvangenEx >= kostenTotaal ? "text-success" : "text-danger"}`}>
+              {ontvangenEx >= kostenTotaal
+                ? `+ ${formatEUR(ontvangenEx - kostenTotaal)} vooruit`
+                : `− ${formatEUR(kostenTotaal - ontvangenEx)} voorgeschoten`}
+            </span>
+          </div>
+          <p className="mt-1 text-xs text-muted">
+            {ontvangenEx >= kostenTotaal
+              ? "Er is meer binnen dan er tot nu toe is uitgegeven — precies waarvoor je met voorschotten werkt."
+              : `Er is meer uitgegeven dan er binnen is: dit deel financier je zelf. Hieronder staat ${formatEUR(
+                  tekortAfgerond,
+                )} al ingevuld.`}{" "}
+            Alle bedragen ex. btw.
+          </p>
+          {aanneemsom > 0 && doorTeBelasten > aanneemsom && (
+            <p className="mt-2 text-xs text-warning">
+              Let op: wat er doorbelast moet worden ({formatEUR(doorTeBelasten)}) ligt boven de aanneemsom van{" "}
+              {formatEUR(aanneemsom)}. Dat verschil is geen voorschotkwestie maar{" "}
+              <Link href="#meerwerk" className="underline underline-offset-2">
+                meerwerk
+              </Link>{" "}
+              — leg het vast en laat de klant akkoord geven.
+            </p>
+          )}
+        </div>
+
         {params.vmail === "ok" && (
           <p className="rounded-md bg-success/10 p-3 text-sm">Het voorschotverzoek is verstuurd{to ? ` naar ${to}` : ""}.</p>
         )}
@@ -363,7 +413,13 @@ export async function AdvanceRequestCard({
             <Input name="vtermijn" defaultValue={termLabel} placeholder="1e & 2e termijn" required />
           </Field>
           <Field label="Bedrag (€)">
-            <Input name="vbedrag" inputMode="decimal" defaultValue={params.vbedrag ?? ""} placeholder="50.000,00" required />
+            <Input
+              name="vbedrag"
+              inputMode="decimal"
+              defaultValue={params.vbedrag ?? (tekortAfgerond > 0 ? String(tekortAfgerond) : "")}
+              placeholder="50.000,00"
+              required
+            />
           </Field>
           <Field label="Overeenkomst" hint={contractDate ? "van het project" : "optioneel"}>
             <Input name="vdatum" type="date" defaultValue={agreementDate ?? ""} />

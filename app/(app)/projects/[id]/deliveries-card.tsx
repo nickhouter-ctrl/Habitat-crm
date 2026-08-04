@@ -12,7 +12,6 @@ import Link from "next/link";
 import {
   Badge,
   Card,
-  LinkButton,
   CardContent,
   CardHeader,
   CardTitle,
@@ -33,22 +32,11 @@ import { deliverToProject, reverseDelivery } from "../actions";
 export async function ProjectDeliveriesCard({
   projectId,
   voorschottenEx,
-  ontvangenEx,
-  kostenTotaal,
-  aanneemsom,
-  doorTeBelasten,
   fout,
 }: {
   projectId: string;
   /** Wat er als voorschot binnen is (ex. btw) — om de dekking te tonen. */
   voorschottenEx: number;
-  /** Alles wat er binnen is (ex. btw), dus ook betalingen op facturen. */
-  ontvangenEx: number;
-  /** Arbeid + inkoop + kostprijs van wat er al geleverd is. */
-  kostenTotaal: number;
-  /** De aanneemsom (of het doel) en wat er minimaal doorbelast moet worden. */
-  aanneemsom: number;
-  doorTeBelasten: number;
   fout?: string;
 }) {
   const [voorraad, regels] = await Promise.all([
@@ -132,61 +120,6 @@ export async function ProjectDeliveriesCard({
             </div>
           </div>
         )}
-
-        {/* De vraag achter het voorschotten-model: schieten we voor of niet?
-            Niet de verkoopwaarde maar ONZE KOSTEN afgezet tegen alles wat er
-            binnen is — arbeid, inkoop en de kostprijs van wat er al geleverd is. */}
-        <div className={`rounded-lg border p-3 ${ontvangenEx >= kostenTotaal ? "bg-success/5" : "bg-danger/5"}`}>
-          <div className="flex flex-wrap items-baseline justify-between gap-x-6 gap-y-1 text-sm">
-            <span className="font-medium">Lopen we voor of achter?</span>
-            <span className="text-muted">
-              onze kosten tot nu toe <strong className="tabular-nums text-foreground">{formatEUR(kostenTotaal)}</strong>
-            </span>
-            <span className="text-muted">
-              ontvangen <strong className="tabular-nums text-foreground">{formatEUR(ontvangenEx)}</strong>
-            </span>
-            <span className={`font-semibold tabular-nums ${ontvangenEx >= kostenTotaal ? "text-success" : "text-danger"}`}>
-              {ontvangenEx >= kostenTotaal
-                ? `+ ${formatEUR(ontvangenEx - kostenTotaal)} vooruit`
-                : `− ${formatEUR(kostenTotaal - ontvangenEx)} voorgeschoten`}
-            </span>
-          </div>
-          <p className="mt-1 text-xs text-muted">
-            {ontvangenEx >= kostenTotaal
-              ? "Er is meer binnen dan er tot nu toe is uitgegeven — precies waarvoor je met voorschotten werkt."
-              : "Er is meer uitgegeven dan er binnen is: dit deel financier je zelf."}{" "}
-            Alle bedragen ex. btw.
-          </p>
-
-          {/* Wat je nu zou moeten doen: geld vragen, of vastleggen dat het
-              meerwerk is. Twee verschillende problemen, dus twee knoppen. */}
-          <div className="mt-2 flex flex-wrap items-center gap-2">
-            {ontvangenEx < kostenTotaal && (
-              <LinkButton
-                href={`?vbedrag=${Math.ceil((kostenTotaal - ontvangenEx) / 1000) * 1000}&vtermijn=${encodeURIComponent(
-                  "volgende termijn",
-                )}#voorschot-opvragen`}
-                variant="primary"
-                size="sm"
-                scroll={false}
-              >
-                Voorschot opvragen ({formatEUR(Math.ceil((kostenTotaal - ontvangenEx) / 1000) * 1000)})
-              </LinkButton>
-            )}
-            {aanneemsom > 0 && doorTeBelasten > aanneemsom && (
-              <LinkButton href="#meerwerk" variant="secondary" size="sm" scroll={false}>
-                Meerwerk vastleggen ({formatEUR(doorTeBelasten - aanneemsom)} boven de aanneemsom)
-              </LinkButton>
-            )}
-          </div>
-          {aanneemsom > 0 && doorTeBelasten > aanneemsom && (
-            <p className="mt-1 text-xs text-warning">
-              Wat er doorbelast moet worden ({formatEUR(doorTeBelasten)}) ligt boven de aanneemsom van{" "}
-              {formatEUR(aanneemsom)}. Dat verschil is geen voorschotkwestie maar meerwerk — leg het vast en laat de
-              klant akkoord geven, anders draai je er zelf voor op.
-            </p>
-          )}
-        </div>
 
         <p className="rounded-md bg-background p-3 text-xs text-muted">
           <strong className="text-foreground">Let op bij de inkoop.</strong> De kostprijs komt hier via het product uit

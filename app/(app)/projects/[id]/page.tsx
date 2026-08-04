@@ -1266,6 +1266,10 @@ export default async function ProjectDetailPage({
         siteAlias={project.siteAlias}
         contactId={project.contactId}
         contractDate={project.contractDate}
+        kostenTotaal={realizedCost}
+        ontvangenEx={receivedTotalEx}
+        aanneemsom={targetRevenue}
+        doorTeBelasten={margins.totalRevenue}
         params={voorschotParams}
       />
 
@@ -1391,10 +1395,6 @@ export default async function ProjectDetailPage({
           <ProjectDeliveriesCard
             projectId={id}
             voorschottenEx={voorschottenOnverrekendEx}
-            ontvangenEx={receivedTotalEx}
-            kostenTotaal={realizedCost}
-            aanneemsom={targetRevenue}
-            doorTeBelasten={margins.totalRevenue}
             fout={voorschotParams.lev}
           />
           <ProjectExtrasCard projectId={id} />
