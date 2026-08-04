@@ -1144,7 +1144,17 @@ export default async function ProjectDetailPage({
                   gaat er als verrekening weer af, en de btw over het hele werk wordt dan in één keer afgerekend.
                 </p>
               )}
-              <form action={createFinalSettlement.bind(null, id)} className="mt-3">
+              <form action={createFinalSettlement.bind(null, id)} className="mt-3 space-y-2">
+                <label className="flex items-start gap-2 text-xs">
+                  <input type="checkbox" name="bundel" className="mt-0.5" />
+                  <span>
+                    Voorschotten op één regel samenvatten
+                    <span className="block text-muted">
+                      dan staat er &quot;Reeds ontvangen voorschotten&quot; in plaats van elke betaling apart — de
+                      bedragen blijven volledig op de factuur staan
+                    </span>
+                  </span>
+                </label>
                 <SubmitButton size="sm" variant="secondary" pendingLabel="Opstellen…">
                   Eindafrekening opstellen
                 </SubmitButton>

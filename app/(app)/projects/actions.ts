@@ -707,8 +707,14 @@ export async function sendAdvanceRequest(projectId: string, formData: FormData) 
  *
  * Concept, niet verstuurd: dit is een voorstel dat nagelopen hoort te worden.
  */
-export async function createFinalSettlement(projectId: string) {
+export async function createFinalSettlement(projectId: string, formData?: FormData) {
   await requireUser();
+  // De klant hoeft op de factuur niet te lezen hoe hij betaald heeft. Met deze
+  // optie komen alle voorschotten op één regel "Reeds ontvangen voorschotten".
+  // De BEDRAGEN blijven volledig op de factuur staan — alleen de specificatie
+  // per betaling verdwijnt. Voorschotten zonder btw blijven apart, want die
+  // hebben een ander tarief en dat mag niet vermengd worden.
+  const bundelVoorschotten = formData?.get("bundel") === "on";
   const project = await db.query.projects.findFirst({ where: eq(projects.id, projectId) });
   if (!project) return;
 
@@ -812,7 +818,28 @@ export async function createFinalSettlement(projectId: string) {
       category: "materiaal",
     });
   }
-  for (const p of ontvangsten) {
+  if (bundelVoorschotten) {
+    // Per btw-tarief één regel: tarieven mogen niet op één hoop.
+    const perTarief = new Map<number, number>();
+    for (const p of ontvangsten) {
+      const bedrag = Number(p.amountEur ?? 0);
+      const pct = p.vatRate != null ? Number(p.vatRate) : p.method === "cash" ? 0 : 21;
+      const ex = Math.round((bedrag / (1 + pct / 100)) * 100) / 100;
+      perTarief.set(pct, Math.round(((perTarief.get(pct) ?? 0) + ex) * 100) / 100);
+    }
+    for (const [pct, ex] of [...perTarief.entries()].sort((a, b) => b[0] - a[0])) {
+      if (ex === 0) continue;
+      items.push({
+        name: "Reeds ontvangen voorschotten",
+        description: pct === 0 ? "zonder btw ontvangen, btw wordt hier alsnog afgerekend" : `inclusief ${pct}% btw`,
+        units: 1,
+        price: -ex,
+        taxRate: pct,
+        category: "materiaal",
+      });
+    }
+  }
+  for (const p of bundelVoorschotten ? [] : ontvangsten) {
     const bedrag = Number(p.amountEur ?? 0);
     const pct = p.vatRate != null ? Number(p.vatRate) : p.method === "cash" ? 0 : 21;
     const ex = Math.round((bedrag / (1 + pct / 100)) * 100) / 100;
