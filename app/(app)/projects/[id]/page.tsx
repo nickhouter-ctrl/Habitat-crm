@@ -805,14 +805,18 @@ export default async function ProjectDetailPage({
           <StatTile
             label="Ontvangen"
             value={formatEUR(receivedTotalEx)}
-            hint={`${paymentRows.length} ${paymentRows.length === 1 ? "betaling" : "betalingen"} · ex. btw`}
+            hint={`${paymentRows.length} ${paymentRows.length === 1 ? "betaling" : "betalingen"} · ${formatEUR(receivedTotal)} incl. btw`}
             tone={receivedTotalEx > 0 ? "success" : "neutral"}
           />
           <StatTile label="Kosten" value={formatEUR(realizedCost)} hint="arbeid + inkoop + materiaal" tone="neutral" />
+          {/* "Resultaat" las alsof het verdiend was, terwijl het een vooruitblik
+              is: doel − kosten, dus alleen waar als de volle aanneemprijs ook
+              echt gefactureerd wordt. Bij Silvestre is daarvan pas € 49.736,80
+              gefactureerd, dus dat verschil moet je kunnen zien. */}
           <StatTile
-            label="Resultaat"
+            label="Verwacht resultaat"
             value={`${formatEUR(resultToDate)}${resultMarginPct != null ? ` · ${resultMarginPct}%` : ""}`}
-            hint="doel − kosten"
+            hint="als de volle aanneemprijs gefactureerd wordt"
             tone={resultTone}
           />
         </div>
