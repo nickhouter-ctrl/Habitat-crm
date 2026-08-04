@@ -482,6 +482,13 @@ export default async function ProjectDetailPage({
    * klant twee keer. Ontvangsten die WEL aan een factuur hangen zitten al in
    * "gefactureerd" en tellen hier dus niet mee.
    */
+  /**
+   * Al gefactureerd maar nog niet betaald. Een verstuurde factuur is geen geld:
+   * bij Silvestre staan F260012 en F260013 (samen € 25.056,45 ex. btw) al maanden
+   * open. Die horen dus niet bij "al ontvangen".
+   */
+  const openInvoicedEx = Math.max(0, projRevenue - paymentRows.filter((p) => p.documentId).reduce((s, p) => s + exBtwVanOntvangst(p), 0));
+
   const voorschottenOnverrekendEx = paymentRows
     .filter((p) => !p.documentId)
     .reduce((s, p) => s + exBtwVanOntvangst(p), 0);
@@ -1060,7 +1067,7 @@ export default async function ProjectDetailPage({
               gefactureerd en er is al voorgeschoten — wat moet er dan NU nog uit? */}
           {margins.totalRevenue > 0 && (
             <div className="rounded-lg border border-accent/30 bg-accent/5 p-3 text-sm">
-              <p className="mb-2 font-semibold">Wat moet er nu gefactureerd worden?</p>
+              <p className="mb-2 font-semibold">Wat moet er nu nog binnenkomen?</p>
               <dl className="space-y-1">
                 <div className="flex justify-between gap-2">
                   <dt className="text-muted">
@@ -1070,46 +1077,45 @@ export default async function ProjectDetailPage({
                   <dd className="tabular-nums">{formatEUR(margins.totalRevenue)}</dd>
                 </div>
                 <div className="flex justify-between gap-2">
-                  <dt className="text-muted">Al gefactureerd</dt>
-                  <dd className="tabular-nums">− {formatEUR(projRevenue)}</dd>
+                  <dt className="text-muted">
+                    Al ontvangen
+                    <span className="block text-xs">
+                      {/* Gefactureerd is géén geld: een verstuurde factuur kan onbetaald
+                          zijn. Daarom telt hier wat er ECHT binnen is — betalingen op
+                          facturen én voorschotten. */}
+                      alle betalingen samen, of ze nu op een factuur kwamen of als voorschot
+                    </span>
+                  </dt>
+                  <dd className="tabular-nums">− {formatEUR(receivedTotalEx)}</dd>
                 </div>
                 <div className="flex justify-between gap-2 border-t pt-1 font-semibold">
-                  <dt>Nog te factureren</dt>
-                  <dd className="tabular-nums">{formatEUR(Math.max(0, margins.totalRevenue - projRevenue))}</dd>
+                  <dt>Nog te ontvangen</dt>
+                  <dd className="tabular-nums">{formatEUR(margins.totalRevenue - receivedTotalEx)}</dd>
                 </div>
-                {voorschottenOnverrekendEx > 0 && (
-                  <>
-                    <div className="flex justify-between gap-2 pt-1">
-                      <dt className="text-muted">
-                        Waarvan al ontvangen als voorschot
-                        {/* Zonder deze telling is het een getal uit het niets; zo is
-                            het na te lopen bij Ontvangen betalingen. */}
-                        <span className="block text-xs">
-                          {paymentRows.filter((p) => !p.documentId).length} ontvangst
-                          {paymentRows.filter((p) => !p.documentId).length === 1 ? "" : "en"} zonder eigen factuur, ex. btw
-                        </span>
-                      </dt>
-                      <dd className="tabular-nums">{formatEUR(voorschottenOnverrekendEx)}</dd>
-                    </div>
-                    <div className="flex justify-between gap-2">
-                      <dt className="text-muted">Daarna nog te ontvangen</dt>
-                      <dd
-                        className={`tabular-nums ${
-                          Math.max(0, margins.totalRevenue - projRevenue) - voorschottenOnverrekendEx < 0
-                            ? "text-success"
-                            : ""
-                        }`}
-                      >
-                        {formatEUR(Math.max(0, margins.totalRevenue - projRevenue) - voorschottenOnverrekendEx)}
-                      </dd>
-                    </div>
-                  </>
+                {openInvoicedEx > 0.01 && (
+                  <div className="flex justify-between gap-2 pt-1">
+                    <dt className="text-muted">
+                      waarvan al gefactureerd, nog niet betaald
+                      <span className="block text-xs">openstaande facturen</span>
+                    </dt>
+                    <dd className="tabular-nums text-warning">{formatEUR(openInvoicedEx)}</dd>
+                  </div>
                 )}
+                <div className="flex justify-between gap-2">
+                  <dt className="text-muted">nog te factureren</dt>
+                  <dd className="tabular-nums">
+                    {formatEUR(Math.max(0, margins.totalRevenue - receivedTotalEx - openInvoicedEx))}
+                  </dd>
+                </div>
               </dl>
-              <p className="mt-2 text-xs text-muted">
-                Voorschotten zijn ontvangsten zonder eigen factuur; die worden op de eindafrekening verrekend, anders
-                betaalt de klant twee keer. De btw over het hele werk wordt dán pas afgerekend.
-              </p>
+              {voorschottenOnverrekendEx > 0 && (
+                <p className="mt-2 text-xs text-muted">
+                  Op de eindafrekening moet er méér op papier dan er nog binnenkomt:{" "}
+                  <strong>{formatEUR(Math.max(0, margins.totalRevenue - projRevenue))}</strong>, want de{" "}
+                  {formatEUR(voorschottenOnverrekendEx)} aan voorschotten is wél betaald maar nooit gefactureerd. Die
+                  gaat er als verrekening weer af, en de btw over het hele werk wordt dan in één keer afgerekend.
+                </p>
+              )}
               <form action={createFinalSettlement.bind(null, id)} className="mt-3">
                 <SubmitButton size="sm" variant="secondary" pendingLabel="Opstellen…">
                   Eindafrekening opstellen
