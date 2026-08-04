@@ -112,26 +112,31 @@ export async function ProjectExtrasCard({ projectId }: { projectId: string }) {
           </Table>
         )}
 
+        {/* grid-rows-subgrid: label, invoerveld en hint van élk veld staan op
+            dezelfde regel. Zonder dat schuift een veld mét hint omhoog ten
+            opzichte van een veld zonder, en staat de rij scheef. */}
         <form
           action={addProjectExtra.bind(null, projectId)}
-          className="grid gap-3 lg:grid-cols-[2fr_0.9fr_0.9fr_0.9fr_auto] lg:items-end"
+          className="grid gap-x-3 gap-y-1 lg:grid-cols-[2fr_0.9fr_0.9fr_0.9fr_auto] lg:grid-rows-[auto_auto_auto] lg:items-end"
         >
-          <Field label="Wat is er afgesproken?" htmlFor="mw-desc">
+          <Field className="lg:row-span-3 lg:grid lg:grid-rows-subgrid lg:gap-1.5" label="Wat is er afgesproken?" htmlFor="mw-desc">
             <Input id="mw-desc" name="description" required placeholder="bijv. extra badkamer betegelen" />
           </Field>
-          <Field label="Aan klant (€)" htmlFor="mw-amount" hint="ex. btw">
+          <Field className="lg:row-span-3 lg:grid lg:grid-rows-subgrid lg:gap-1.5" label="Aan klant (€)" htmlFor="mw-amount" hint="ex. btw">
             <Input id="mw-amount" name="amountEur" inputMode="decimal" required className="text-right" placeholder="0,00" />
           </Field>
-          <Field label="Kostprijs (€)" htmlFor="mw-cost" hint="optioneel">
+          <Field className="lg:row-span-3 lg:grid lg:grid-rows-subgrid lg:gap-1.5" label="Kostprijs (€)" htmlFor="mw-cost" hint="optioneel">
             <Input id="mw-cost" name="costEur" inputMode="decimal" className="text-right" placeholder="—" />
           </Field>
-          <Field label="Datum" htmlFor="mw-date">
+          <Field className="lg:row-span-3 lg:grid lg:grid-rows-subgrid lg:gap-1.5" label="Datum" htmlFor="mw-date">
             <Input id="mw-date" name="date" type="date" defaultValue={new Date().toISOString().slice(0, 10)} />
           </Field>
-          <SubmitButton variant="secondary" pendingLabel="…">
-            + Meerwerk
-          </SubmitButton>
-          <label className="flex items-center gap-2 text-sm lg:col-span-5">
+          <div className="lg:row-span-3 lg:self-end">
+            <SubmitButton variant="secondary" pendingLabel="…">
+              + Meerwerk
+            </SubmitButton>
+          </div>
+          <label className="mt-1 flex items-center gap-2 text-sm lg:col-span-5">
             <input type="checkbox" name="approved" />
             <span>De klant is hiermee akkoord</span>
           </label>

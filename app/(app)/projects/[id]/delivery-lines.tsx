@@ -31,8 +31,8 @@ export function DeliveryLinesForm({
     <form action={action} className="space-y-3">
       <div className="space-y-2">
         {regels.map((r, i) => (
-          <div key={r} className="grid gap-2 lg:grid-cols-[2.2fr_0.6fr_0.9fr_auto] lg:items-end">
-            <Field label={i === 0 ? "Product" : "\u00a0"} hint={i === 0 ? "typ een naam of SKU" : undefined}>
+          <div key={r} className="grid gap-x-2 gap-y-1 lg:grid-cols-[2.2fr_0.6fr_0.9fr_auto] lg:grid-rows-[auto_auto_auto] lg:items-end">
+            <Field className="lg:row-span-3 lg:grid lg:grid-rows-subgrid lg:gap-1.5" label={i === 0 ? "Product" : "\u00a0"} hint={i === 0 ? "typ een naam of SKU" : undefined}>
               <Combobox
                 name={`productId_${r}`}
                 options={producten}
@@ -41,16 +41,16 @@ export function DeliveryLinesForm({
                 menuClassName="w-[28rem]"
               />
             </Field>
-            <Field label={i === 0 ? "Aantal" : "\u00a0"}>
+            <Field className="lg:row-span-3 lg:grid lg:grid-rows-subgrid lg:gap-1.5" label={i === 0 ? "Aantal" : "\u00a0"}>
               <Input name={`qty_${r}`} inputMode="decimal" className="text-right" placeholder="1" />
             </Field>
-            <Field label={i === 0 ? "Verkoopprijs p/st" : "\u00a0"} hint={i === 0 ? "leeg = catalogusprijs" : undefined}>
+            <Field className="lg:row-span-3 lg:grid lg:grid-rows-subgrid lg:gap-1.5" label={i === 0 ? "Verkoopprijs p/st" : "\u00a0"} hint={i === 0 ? "leeg = catalogusprijs" : undefined}>
               <Input name={`price_${r}`} inputMode="decimal" className="text-right" placeholder="—" />
             </Field>
             <button
               type="button"
               onClick={() => setRegels((rs) => (rs.length > 1 ? rs.filter((x) => x !== r) : rs))}
-              className="mb-1 rounded p-2 text-muted transition-colors hover:bg-danger/10 hover:text-danger disabled:opacity-30"
+              className="lg:row-span-3 lg:self-end lg:mb-0 mb-1 rounded p-2 text-muted transition-colors hover:bg-danger/10 hover:text-danger disabled:opacity-30"
               disabled={regels.length === 1}
               aria-label="Regel verwijderen"
             >
