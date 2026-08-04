@@ -12,11 +12,10 @@ import Link from "next/link";
 import {
   Badge,
   Card,
+  LinkButton,
   CardContent,
   CardHeader,
   CardTitle,
-  Field,
-  Input,
   TBody,
   Table,
   Td,
@@ -24,9 +23,8 @@ import {
   THead,
   Tr,
 } from "@/components/ui";
-import { Combobox } from "@/components/combobox";
 import { ConfirmSubmit } from "@/components/confirm-submit";
-import { SubmitButton } from "@/components/submit-button";
+import { DeliveryLinesForm } from "./delivery-lines";
 import { db } from "@/lib/db";
 import { products, projectDeliveries, users } from "@/lib/db/schema";
 import { formatEUR } from "@/lib/utils";
@@ -35,11 +33,22 @@ import { deliverToProject, reverseDelivery } from "../actions";
 export async function ProjectDeliveriesCard({
   projectId,
   voorschottenEx,
+  ontvangenEx,
+  kostenTotaal,
+  aanneemsom,
+  doorTeBelasten,
   fout,
 }: {
   projectId: string;
   /** Wat er als voorschot binnen is (ex. btw) — om de dekking te tonen. */
   voorschottenEx: number;
+  /** Alles wat er binnen is (ex. btw), dus ook betalingen op facturen. */
+  ontvangenEx: number;
+  /** Arbeid + inkoop + kostprijs van wat er al geleverd is. */
+  kostenTotaal: number;
+  /** De aanneemsom (of het doel) en wat er minimaal doorbelast moet worden. */
+  aanneemsom: number;
+  doorTeBelasten: number;
   fout?: string;
 }) {
   const [voorraad, regels] = await Promise.all([
@@ -90,14 +99,18 @@ export async function ProjectDeliveriesCard({
         </span>
       </CardHeader>
       <CardContent className="space-y-4">
-        {fout && (
-          <p className="rounded-md bg-danger/10 p-3 text-sm">
-            {fout.startsWith("tekort:")
-              ? `Niet geboekt: er ligt maar ${fout.slice(7)} op voorraad.`
-              : fout === "aantal"
-                ? "Vul een aantal groter dan nul in."
-                : "Kies een product."}
+        {fout?.startsWith("ok:") && (
+          <p className="rounded-md bg-success/10 p-3 text-sm">
+            {fout.slice(3)} {Number(fout.slice(3)) === 1 ? "regel" : "regels"} geboekt en van de voorraad af.
           </p>
+        )}
+        {fout?.startsWith("deels:") && (
+          <p className="rounded-md bg-warning/10 p-3 text-sm">
+            {fout.split(":")[1]} geboekt · niet gelukt: {decodeURIComponent(fout.split(":").slice(2).join(":"))}
+          </p>
+        )}
+        {fout === "leeg" && (
+          <p className="rounded-md bg-warning/10 p-3 text-sm">Niets geboekt — vul minstens één product met aantal in.</p>
         )}
 
         {actief.length > 0 && (
@@ -120,6 +133,61 @@ export async function ProjectDeliveriesCard({
           </div>
         )}
 
+        {/* De vraag achter het voorschotten-model: schieten we voor of niet?
+            Niet de verkoopwaarde maar ONZE KOSTEN afgezet tegen alles wat er
+            binnen is — arbeid, inkoop en de kostprijs van wat er al geleverd is. */}
+        <div className={`rounded-lg border p-3 ${ontvangenEx >= kostenTotaal ? "bg-success/5" : "bg-danger/5"}`}>
+          <div className="flex flex-wrap items-baseline justify-between gap-x-6 gap-y-1 text-sm">
+            <span className="font-medium">Lopen we voor of achter?</span>
+            <span className="text-muted">
+              onze kosten tot nu toe <strong className="tabular-nums text-foreground">{formatEUR(kostenTotaal)}</strong>
+            </span>
+            <span className="text-muted">
+              ontvangen <strong className="tabular-nums text-foreground">{formatEUR(ontvangenEx)}</strong>
+            </span>
+            <span className={`font-semibold tabular-nums ${ontvangenEx >= kostenTotaal ? "text-success" : "text-danger"}`}>
+              {ontvangenEx >= kostenTotaal
+                ? `+ ${formatEUR(ontvangenEx - kostenTotaal)} vooruit`
+                : `− ${formatEUR(kostenTotaal - ontvangenEx)} voorgeschoten`}
+            </span>
+          </div>
+          <p className="mt-1 text-xs text-muted">
+            {ontvangenEx >= kostenTotaal
+              ? "Er is meer binnen dan er tot nu toe is uitgegeven — precies waarvoor je met voorschotten werkt."
+              : "Er is meer uitgegeven dan er binnen is: dit deel financier je zelf."}{" "}
+            Alle bedragen ex. btw.
+          </p>
+
+          {/* Wat je nu zou moeten doen: geld vragen, of vastleggen dat het
+              meerwerk is. Twee verschillende problemen, dus twee knoppen. */}
+          <div className="mt-2 flex flex-wrap items-center gap-2">
+            {ontvangenEx < kostenTotaal && (
+              <LinkButton
+                href={`?vbedrag=${Math.ceil((kostenTotaal - ontvangenEx) / 1000) * 1000}&vtermijn=${encodeURIComponent(
+                  "volgende termijn",
+                )}#voorschot-opvragen`}
+                variant="primary"
+                size="sm"
+                scroll={false}
+              >
+                Voorschot opvragen ({formatEUR(Math.ceil((kostenTotaal - ontvangenEx) / 1000) * 1000)})
+              </LinkButton>
+            )}
+            {aanneemsom > 0 && doorTeBelasten > aanneemsom && (
+              <LinkButton href="#meerwerk" variant="secondary" size="sm" scroll={false}>
+                Meerwerk vastleggen ({formatEUR(doorTeBelasten - aanneemsom)} boven de aanneemsom)
+              </LinkButton>
+            )}
+          </div>
+          {aanneemsom > 0 && doorTeBelasten > aanneemsom && (
+            <p className="mt-1 text-xs text-warning">
+              Wat er doorbelast moet worden ({formatEUR(doorTeBelasten)}) ligt boven de aanneemsom van{" "}
+              {formatEUR(aanneemsom)}. Dat verschil is geen voorschotkwestie maar meerwerk — leg het vast en laat de
+              klant akkoord geven, anders draai je er zelf voor op.
+            </p>
+          )}
+        </div>
+
         <p className="rounded-md bg-background p-3 text-xs text-muted">
           <strong className="text-foreground">Let op bij de inkoop.</strong> De kostprijs komt hier via het product uit
           de catalogus. Koppel de inkooporder van diezelfde goederen dan <em>niet</em> óók aan dit project — dan staan
@@ -127,36 +195,14 @@ export async function ProjectDeliveriesCard({
           zijn gekocht en niet via de voorraad lopen.
         </p>
 
-        <form
+        <DeliveryLinesForm
           action={deliverToProject.bind(null, projectId)}
-          className="grid gap-3 lg:grid-cols-[2fr_0.7fr_1fr_0.9fr_auto] lg:items-end"
-        >
-          <Field label="Product" hint="typ een naam of SKU">
-            <Combobox
-              name="productId"
-              options={voorraad.map((p) => ({
-                value: p.id,
-                label: p.sku ? `${p.name} · ${p.sku}` : p.name,
-                hint: `${Number(p.stockQty)} ${p.unit ?? "st"}${p.priceEur != null ? ` · ${formatEUR(Number(p.priceEur))}` : ""}`,
-              }))}
-              placeholder="zoek product…"
-              clearable
-              menuClassName="w-[28rem]"
-            />
-          </Field>
-          <Field label="Aantal" htmlFor="lev-qty">
-            <Input id="lev-qty" name="qty" inputMode="decimal" required className="text-right" placeholder="1" />
-          </Field>
-          <Field label="Verkoopprijs p/st" htmlFor="lev-price" hint="leeg = catalogusprijs">
-            <Input id="lev-price" name="unitPriceEur" inputMode="decimal" className="text-right" placeholder="—" />
-          </Field>
-          <Field label="Datum" htmlFor="lev-date">
-            <Input id="lev-date" name="date" type="date" defaultValue={new Date().toISOString().slice(0, 10)} />
-          </Field>
-          <SubmitButton variant="secondary" pendingLabel="Boeken…">
-            + Geleverd
-          </SubmitButton>
-        </form>
+          producten={voorraad.map((p) => ({
+            value: p.id,
+            label: p.sku ? `${p.name} · ${p.sku}` : p.name,
+            hint: `${Number(p.stockQty)} ${p.unit ?? "st"}${p.priceEur != null ? ` · ${formatEUR(Number(p.priceEur))}` : ""}`,
+          }))}
+        />
 
         {regels.length > 0 && (
           <Table>

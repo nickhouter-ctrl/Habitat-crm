@@ -899,27 +899,54 @@ export async function createFinalSettlement(projectId: string, formData?: FormDa
 
 /* --------------------------------------------- producten leveren op een project */
 
-/** Boekt een product op het project: voorraad eraf, kost- én verkoopprijs vast. */
+/**
+ * Boekt één of meer producten op het project: voorraad eraf, kost- én
+ * verkoopprijs vastgelegd.
+ *
+ * Het formulier stuurt genummerde velden (`productId_0`, `qty_0`, …) omdat je er
+ * regels bij kunt zetten. Een regel die niet lukt — meestal te weinig voorraad —
+ * houdt de rest niet tegen; wat er misging komt terug in de melding.
+ */
 export async function deliverToProject(projectId: string, formData: FormData) {
   const user = await requireUser();
   const { deliverProductToProject } = await import("@/lib/project-delivery");
-  const res = await deliverProductToProject({
-    projectId,
-    productId: String(formData.get("productId") ?? "").trim(),
-    qty: Number(moneyOrNull(String(formData.get("qty") ?? "")) ?? 0),
-    unitPriceEur: formData.get("unitPriceEur") ? Number(moneyOrNull(String(formData.get("unitPriceEur")))) : null,
-    date: String(formData.get("date") ?? "").trim() || new Date().toISOString().slice(0, 10),
-    note: String(formData.get("note") ?? ""),
-    userId: user.id,
-  });
+  const datum = String(formData.get("date") ?? "").trim() || new Date().toISOString().slice(0, 10);
+  const notitie = String(formData.get("note") ?? "");
+
+  // Alle regelnummers uit het formulier vissen; de nummering loopt niet netjes
+  // door als je er tussenuit hebt gehaald.
+  const nummers = [...new Set(
+    [...formData.keys()].map((k) => k.match(/^productId_(\d+)$/)?.[1]).filter((n): n is string => !!n),
+  )];
+
+  let geboekt = 0;
+  const mislukt: string[] = [];
+  for (const n of nummers) {
+    const productId = String(formData.get(`productId_${n}`) ?? "").trim();
+    const qty = Number(moneyOrNull(String(formData.get(`qty_${n}`) ?? "")) ?? 0);
+    if (!productId || !(qty > 0)) continue; // lege regel, gewoon overslaan
+    const prijs = formData.get(`price_${n}`);
+    const res = await deliverProductToProject({
+      projectId,
+      productId,
+      qty,
+      unitPriceEur: prijs ? Number(moneyOrNull(String(prijs))) : null,
+      date: datum,
+      note: notitie,
+      userId: user.id,
+    });
+    if (res.ok) geboekt++;
+    else mislukt.push(res.reason === "te-weinig-voorraad" ? `voorraad (${res.beschikbaar ?? 0})` : res.reason);
+  }
+
   revalidatePath(`/projects/${projectId}`);
   revalidatePath("/products");
-  if (!res.ok) {
-    const melding =
-      res.reason === "te-weinig-voorraad" ? `tekort:${res.beschikbaar ?? 0}` : res.reason === "geen-aantal" ? "aantal" : "product";
-    redirect(`/projects/${projectId}?lev=${melding}#leveringen`);
-  }
-  redirect(`/projects/${projectId}#leveringen`);
+  const melding = mislukt.length
+    ? `deels:${geboekt}:${encodeURIComponent(mislukt.join(", "))}`
+    : geboekt > 0
+      ? `ok:${geboekt}`
+      : "leeg";
+  redirect(`/projects/${projectId}?lev=${melding}#leveringen`);
 }
 
 /** Draait een levering terug: voorraad weer erbij. */

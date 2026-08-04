@@ -859,7 +859,9 @@ export default async function ProjectDetailPage({
           <StatTile
             label="Ontvangen"
             value={formatEUR(receivedTotalEx)}
-            hint={`${paymentRows.length} ${paymentRows.length === 1 ? "betaling" : "betalingen"} · ${formatEUR(receivedTotal)} incl. btw`}
+            hint={`${paymentRows.length} ${paymentRows.length === 1 ? "betaling" : "betalingen"} · ${formatEUR(receivedTotal)} ontvangen${
+              receivedTotal - receivedTotalEx > 0.01 ? `, waarvan ${formatEUR(receivedTotal - receivedTotalEx)} btw` : " · geen btw"
+            }`}
             tone={receivedTotalEx > 0 ? "success" : "neutral"}
           />
           <StatTile label="Kosten" value={formatEUR(realizedCost)} hint="arbeid + inkoop + materiaal" tone="neutral" />
@@ -894,7 +896,10 @@ export default async function ProjectDetailPage({
             <div className="rounded-lg border bg-background p-3">
               <p className="text-xs text-muted">Ontvangen van klant</p>
               <p className="text-lg font-semibold tabular-nums text-success">+ {formatEUR(receivedTotalEx)}</p>
-              <p className="text-xs text-muted">{paymentRows.length} {paymentRows.length === 1 ? "betaling" : "betalingen"} · ex. btw</p>
+              <p className="text-xs text-muted">
+                {paymentRows.length} {paymentRows.length === 1 ? "betaling" : "betalingen"} · ex. btw van{" "}
+                {formatEUR(receivedTotal)} ontvangen
+              </p>
             </div>
             <div className="rounded-lg border bg-background p-3">
               <p className="text-xs text-muted">Saldo (ontvangen − eruit)</p>
@@ -1386,6 +1391,10 @@ export default async function ProjectDetailPage({
           <ProjectDeliveriesCard
             projectId={id}
             voorschottenEx={voorschottenOnverrekendEx}
+            ontvangenEx={receivedTotalEx}
+            kostenTotaal={realizedCost}
+            aanneemsom={targetRevenue}
+            doorTeBelasten={margins.totalRevenue}
             fout={voorschotParams.lev}
           />
           <ProjectExtrasCard projectId={id} />
