@@ -753,18 +753,30 @@ export async function createFinalSettlement(projectId: string) {
     });
   }
   for (const p of ontvangsten) {
-    // Het voorschot gaat er EX. btw af: de btw over het hele werk wordt op deze
-    // factuur afgerekend. Bij een voorschot waar al btw over is afgedragen zet
-    // je het btw-tarief op de ontvangst; dan klopt dit bedrag ook.
     const bedrag = Number(p.amountEur ?? 0);
     const pct = p.vatRate != null ? Number(p.vatRate) : p.method === "cash" ? 0 : 21;
     const ex = Math.round((bedrag / (1 + pct / 100)) * 100) / 100;
+    /**
+     * De verrekenregel krijgt HET TARIEF VAN HET VOORSCHOT ZELF, niet standaard
+     * 21%. Dat is het hele punt:
+     *
+     *  - Zat er btw op het voorschot (er was een anticipo-factuur), dan is die
+     *    btw al afgedragen. De regel gaat er mét 21% af en verlaagt dus ook de
+     *    btw op deze eindfactuur — anders zou je twee keer btw afdragen.
+     *  - Zat er GEEN btw op (kale aanbetaling, contant), dan is over dat deel
+     *    nog nooit btw afgedragen. De regel gaat er dan met 0% af: het bedrag
+     *    daalt wél, maar de btw-grondslag blijft het volle werk. Zou je dit
+     *    tegen 21% aftrekken, dan verdween er btw die de Hacienda gewoon nog
+     *    tegoed heeft — bij Silvestre € 21.000.
+     */
     items.push({
       name: `Verrekening ${p.description ?? "voorschot"}`,
-      description: p.date ? `ontvangen ${new Date(p.date).toLocaleDateString("nl-NL")}` : "datum onbekend",
+      description: `${p.date ? `ontvangen ${new Date(p.date).toLocaleDateString("nl-NL")}` : "datum onbekend"}${
+        pct === 0 ? " · zonder btw ontvangen, btw wordt hier alsnog afgerekend" : ` · inclusief ${pct}% btw`
+      }`,
       units: 1,
       price: -ex,
-      taxRate: 21,
+      taxRate: pct,
       category: "materiaal",
     });
   }
