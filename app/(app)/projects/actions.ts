@@ -365,6 +365,8 @@ const paymentSchema = z.object({
   advanceRequestId: z.string().trim().optional(),
   /** Leeg = het systeem beslist (contant 0%, bij een factuur die factuur, anders 21%). */
   vatRate: z.string().trim().optional(),
+  /** Btw-bedrag; wint van het tarief. Voor facturen met gemengde tarieven. */
+  vatAmountEur: z.string().trim().optional(),
 });
 
 export async function addProjectPayment(projectId: string, formData: FormData) {
@@ -384,6 +386,7 @@ export async function addProjectPayment(projectId: string, formData: FormData) {
     note: d.note || null,
     advanceRequestId,
     vatRate: d.vatRate ? moneyOrNull(d.vatRate) : null,
+    vatAmountEur: d.vatAmountEur ? moneyOrNull(d.vatAmountEur) : null,
   });
   revalidatePath(`/projects/${projectId}`);
 }
@@ -920,6 +923,7 @@ export async function deliverToProject(projectId: string, formData: FormData) {
   )];
 
   let geboekt = 0;
+  let teBestellen = 0;
   const mislukt: string[] = [];
   for (const n of nummers) {
     const productId = String(formData.get(`productId_${n}`) ?? "").trim();
@@ -935,8 +939,12 @@ export async function deliverToProject(projectId: string, formData: FormData) {
       note: notitie,
       userId: user.id,
     });
-    if (res.ok) geboekt++;
-    else mislukt.push(res.reason === "te-weinig-voorraad" ? `voorraad (${res.beschikbaar ?? 0})` : res.reason);
+    if (res.ok) {
+      geboekt++;
+      if (res.teBestellen > 0) teBestellen += res.teBestellen;
+    } else {
+      mislukt.push(res.reason);
+    }
   }
 
   revalidatePath(`/projects/${projectId}`);
@@ -944,7 +952,9 @@ export async function deliverToProject(projectId: string, formData: FormData) {
   const melding = mislukt.length
     ? `deels:${geboekt}:${encodeURIComponent(mislukt.join(", "))}`
     : geboekt > 0
-      ? `ok:${geboekt}`
+      ? // Wat er niet op voorraad lag komt op de bestellijst; dat is geen fout
+        // maar wel iets wat iemand moet zien.
+        `ok:${geboekt}${teBestellen > 0 ? `:${teBestellen}` : ""}`
       : "leeg";
   redirect(`/projects/${projectId}?lev=${melding}#leveringen`);
 }

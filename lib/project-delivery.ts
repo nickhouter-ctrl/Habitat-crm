@@ -19,13 +19,17 @@ import { db } from "@/lib/db";
 import { activities, products, projectDeliveries } from "@/lib/db/schema";
 
 export type DeliveryResult =
-  | { ok: true; id: string; qty: number; costEur: number; priceEur: number }
-  | { ok: false; reason: "geen-product" | "geen-aantal" | "te-weinig-voorraad"; beschikbaar?: number };
+  | { ok: true; id: string; qty: number; costEur: number; priceEur: number; teBestellen: number }
+  | { ok: false; reason: "geen-product" | "geen-aantal" };
 
 /**
- * Boekt `qty` van een product op een project. Trekt de voorraad in één statement
- * af (geen lees-dan-schrijf race) en weigert als er te weinig ligt — negatieve
- * voorraad is altijd een fout, geen feit.
+ * Boekt `qty` van een product op een project.
+ *
+ * Ligt er te weinig op voorraad, dan gaat eraf wat er wél ligt en blijft de rest
+ * staan als "nog te bestellen". Weigeren zou betekenen dat een aan de klant
+ * beloofd product nergens in de projectkosten opduikt; negatieve voorraad
+ * boeken zou het magazijn laten liegen. Dit is het midden: de werf klopt, het
+ * magazijn klopt, en wat er ontbreekt staat op de bestellijst.
  */
 export async function deliverProductToProject(args: {
   projectId: string;
@@ -46,18 +50,21 @@ export async function deliverProductToProject(args: {
   });
   if (!product) return { ok: false, reason: "geen-product" };
 
-  const beschikbaar = Number(product.stockQty ?? 0);
-  if (beschikbaar < args.qty) return { ok: false, reason: "te-weinig-voorraad", beschikbaar };
+  const beschikbaar = Math.max(0, Number(product.stockQty ?? 0));
+  const vanVoorraad = Math.min(beschikbaar, args.qty);
+  const teBestellen = Math.round((args.qty - vanVoorraad) * 1000) / 1000;
 
   const unitCost = product.costEur != null ? Number(product.costEur) : null;
   const unitPrice = args.unitPriceEur ?? (product.priceEur != null ? Number(product.priceEur) : null);
   const totalCost = unitCost != null ? Math.round(unitCost * args.qty * 100) / 100 : null;
   const totalPrice = unitPrice != null ? Math.round(unitPrice * args.qty * 100) / 100 : null;
 
-  await db
-    .update(products)
-    .set({ stockQty: sql`coalesce(${products.stockQty}, 0) - ${String(args.qty)}`, updatedAt: new Date() })
-    .where(eq(products.id, product.id));
+  if (vanVoorraad > 0) {
+    await db
+      .update(products)
+      .set({ stockQty: sql`coalesce(${products.stockQty}, 0) - ${String(vanVoorraad)}`, updatedAt: new Date() })
+      .where(eq(products.id, product.id));
+  }
 
   const [row] = await db
     .insert(projectDeliveries)
@@ -73,18 +80,19 @@ export async function deliverProductToProject(args: {
       totalPriceEur: totalPrice != null ? totalPrice.toFixed(2) : null,
       date: args.date,
       note: args.note?.trim() || null,
+      toOrderQty: String(teBestellen),
       createdBy: args.userId,
     })
     .returning({ id: projectDeliveries.id });
 
   await db.insert(activities).values({
     type: "note",
-    subject: `Geleverd op project: ${product.name} × ${args.qty}`,
+    subject: `Geleverd op project: ${product.name} × ${args.qty}${teBestellen > 0 ? ` (${teBestellen} nog te bestellen)` : ""}`,
     body: `Kostprijs ${totalCost?.toFixed(2) ?? "?"} · verkoopwaarde ${totalPrice?.toFixed(2) ?? "?"}${args.note ? ` · ${args.note}` : ""}`,
     authorId: args.userId,
   });
 
-  return { ok: true, id: row.id, qty: args.qty, costEur: totalCost ?? 0, priceEur: totalPrice ?? 0 };
+  return { ok: true, id: row.id, qty: args.qty, costEur: totalCost ?? 0, priceEur: totalPrice ?? 0, teBestellen };
 }
 
 /** Draait een levering terug: voorraad erbij, regel blijft staan als spoor. */
@@ -96,10 +104,13 @@ export async function reverseProjectDelivery(args: { id: string; userId: string 
     .returning();
   if (!claim) return false;
 
-  if (claim.productId) {
+  // Alleen teruggeven wat er destijds ván de voorraad af ging; het deel dat nog
+  // besteld moest worden heeft er nooit gelegen.
+  const terug = Math.max(0, Number(claim.qty) - Number(claim.toOrderQty ?? 0));
+  if (claim.productId && terug > 0) {
     await db
       .update(products)
-      .set({ stockQty: sql`coalesce(${products.stockQty}, 0) + ${claim.qty}`, updatedAt: new Date() })
+      .set({ stockQty: sql`coalesce(${products.stockQty}, 0) + ${String(terug)}`, updatedAt: new Date() })
       .where(eq(products.id, claim.productId));
   }
   await db.insert(activities).values({
@@ -112,14 +123,22 @@ export async function reverseProjectDelivery(args: { id: string; userId: string 
 }
 
 /** Wat er op dit project is geleverd, opgeteld — voor de projectcijfers. */
-export async function deliveryTotals(projectId: string): Promise<{ cost: number; price: number; regels: number }> {
+export async function deliveryTotals(
+  projectId: string,
+): Promise<{ cost: number; price: number; regels: number; teBestellen: number }> {
   const [r] = await db
     .select({
       cost: sql<number>`coalesce(sum(${projectDeliveries.totalCostEur}), 0)::float8`,
       price: sql<number>`coalesce(sum(${projectDeliveries.totalPriceEur}), 0)::float8`,
       regels: sql<number>`count(*)::int`,
+      teBestellen: sql<number>`coalesce(sum(${projectDeliveries.toOrderQty}), 0)::float8`,
     })
     .from(projectDeliveries)
     .where(sql`${projectDeliveries.projectId} = ${projectId} and ${projectDeliveries.reversedAt} is null`);
-  return { cost: Number(r?.cost ?? 0), price: Number(r?.price ?? 0), regels: Number(r?.regels ?? 0) };
+  return {
+    cost: Number(r?.cost ?? 0),
+    price: Number(r?.price ?? 0),
+    regels: Number(r?.regels ?? 0),
+    teBestellen: Number(r?.teBestellen ?? 0),
+  };
 }

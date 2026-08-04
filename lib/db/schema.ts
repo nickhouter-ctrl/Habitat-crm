@@ -1106,6 +1106,13 @@ export const projectDeliveries = pgTable(
     createdBy: uuid().references(() => users.id, { onDelete: "set null" }),
     /** Meerwerk: telt bovenop de aanneemsom in plaats van erbinnen. */
     isExtra: boolean().notNull().default(false),
+    /**
+     * Wat er van deze levering nog besteld moet worden. Lag er te weinig op
+     * voorraad, dan gaat eraf wat er wél lag en blijft de rest hier staan — de
+     * levering weigeren zou betekenen dat een aan de klant beloofd product
+     * nergens in de projectkosten opduikt.
+     */
+    toOrderQty: numeric({ precision: 14, scale: 3 }).notNull().default("0"),
     /** Teruggedraaid; de regel blijft staan als spoor. */
     reversedAt: timestamp({ withTimezone: true }),
     reversedBy: uuid().references(() => users.id, { onDelete: "set null" }),
@@ -1220,6 +1227,12 @@ export const projectPayments = pgTable(
      * is nodig voor een voorschot zónder btw — dat is niet af te leiden.
      */
     vatRate: numeric({ precision: 6, scale: 3 }),
+    /**
+     * Btw-BEDRAG op deze ontvangst; wint van het tarief. Nodig bij een factuur
+     * met gemengde tarieven (deels 21%, deels 10%), waar geen enkel percentage
+     * op de cent uitkomt. Het bedrag staat op de factuur, dus dat leggen we vast.
+     */
+    vatAmountEur: numeric({ precision: 14, scale: 2 }),
     ...timestamps,
   },
   (t) => [

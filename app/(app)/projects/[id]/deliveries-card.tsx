@@ -6,7 +6,7 @@
  * Dat is de reden dat je met voorschotten werkt: je levert pas als het geld er
  * is, in plaats van het voor te schieten.
  */
-import { and, desc, eq, gt, isNull } from "drizzle-orm";
+import { desc, eq } from "drizzle-orm";
 import Link from "next/link";
 
 import {
@@ -51,7 +51,9 @@ export async function ProjectDeliveriesCard({
         priceEur: products.priceEur,
       })
       .from(products)
-      .where(and(eq(products.isActive, true), gt(products.stockQty, "0")))
+      // Ook zonder voorraad kiesbaar: wat er niet ligt moet besteld worden, maar
+      // het hoort wél al aan de werf te hangen.
+      .where(eq(products.isActive, true))
       .orderBy(products.name),
     db
       .select({
@@ -62,6 +64,7 @@ export async function ProjectDeliveriesCard({
         qty: projectDeliveries.qty,
         totalCostEur: projectDeliveries.totalCostEur,
         totalPriceEur: projectDeliveries.totalPriceEur,
+        toOrderQty: projectDeliveries.toOrderQty,
         date: projectDeliveries.date,
         note: projectDeliveries.note,
         reversedAt: projectDeliveries.reversedAt,
@@ -77,6 +80,7 @@ export async function ProjectDeliveriesCard({
   const kost = actief.reduce((s, r) => s + Number(r.totalCostEur ?? 0), 0);
   const verkoop = actief.reduce((s, r) => s + Number(r.totalPriceEur ?? 0), 0);
   const gedekt = voorschottenEx >= verkoop;
+  const teBestellen = actief.filter((r) => Number(r.toOrderQty ?? 0) > 0);
 
   return (
     <Card id="leveringen" className="mb-5 scroll-mt-24">
@@ -89,7 +93,10 @@ export async function ProjectDeliveriesCard({
       <CardContent className="space-y-4">
         {fout?.startsWith("ok:") && (
           <p className="rounded-md bg-success/10 p-3 text-sm">
-            {fout.slice(3)} {Number(fout.slice(3)) === 1 ? "regel" : "regels"} geboekt en van de voorraad af.
+            {fout.split(":")[1]} {Number(fout.split(":")[1]) === 1 ? "regel" : "regels"} geboekt.
+            {fout.split(":")[2]
+              ? ` ${fout.split(":")[2]} stuks lagen niet op voorraad — die staan hieronder als nog te bestellen.`
+              : " Alles ging van de voorraad af."}
           </p>
         )}
         {fout?.startsWith("deels:") && (
@@ -121,6 +128,28 @@ export async function ProjectDeliveriesCard({
           </div>
         )}
 
+        {teBestellen.length > 0 && (
+          <div className="rounded-md bg-warning/10 p-3 text-sm">
+            <p className="font-medium">Nog te bestellen voor deze werf</p>
+            <ul className="mt-1 space-y-0.5 text-xs">
+              {teBestellen.map((r) => (
+                <li key={r.id}>
+                  {Number(r.toOrderQty)} × {r.productName}
+                  {r.sku ? ` · ${r.sku}` : ""}
+                </li>
+              ))}
+            </ul>
+            <p className="mt-2 text-xs text-muted">
+              Deze stonden niet (voldoende) op voorraad. Ze tellen wél mee in de kosten en in wat je doorbelast — zet ze
+              op een{" "}
+              <Link href="/bestellen" className="text-accent underline underline-offset-2">
+                bestelbon
+              </Link>{" "}
+              zodat ze ook echt komen.
+            </p>
+          </div>
+        )}
+
         <p className="rounded-md bg-background p-3 text-xs text-muted">
           <strong className="text-foreground">Let op bij de inkoop.</strong> De kostprijs komt hier via het product uit
           de catalogus. Koppel de inkooporder van diezelfde goederen dan <em>niet</em> óók aan dit project — dan staan
@@ -133,7 +162,9 @@ export async function ProjectDeliveriesCard({
           producten={voorraad.map((p) => ({
             value: p.id,
             label: p.sku ? `${p.name} · ${p.sku}` : p.name,
-            hint: `${Number(p.stockQty)} ${p.unit ?? "st"}${p.priceEur != null ? ` · ${formatEUR(Number(p.priceEur))}` : ""}`,
+            hint: `${Number(p.stockQty ?? 0) > 0 ? `${Number(p.stockQty)} ${p.unit ?? "st"}` : "niet op voorraad"}${
+              p.priceEur != null ? ` · ${formatEUR(Number(p.priceEur))}` : ""
+            }`,
           }))}
         />
 
@@ -165,7 +196,12 @@ export async function ProjectDeliveriesCard({
                     )}
                     {r.note ? <span className="block text-xs text-muted">{r.note}</span> : null}
                   </Td>
-                  <Td className="text-right tabular-nums">{Number(r.qty)}</Td>
+                  <Td className="text-right tabular-nums">
+                    {Number(r.qty)}
+                    {Number(r.toOrderQty ?? 0) > 0 && (
+                      <span className="block text-xs text-warning">{Number(r.toOrderQty)} te bestellen</span>
+                    )}
+                  </Td>
                   <Td className="text-right tabular-nums text-muted">{formatEUR(Number(r.totalCostEur ?? 0))}</Td>
                   <Td className="text-right tabular-nums font-medium">{formatEUR(Number(r.totalPriceEur ?? 0))}</Td>
                   <Td className="text-right">

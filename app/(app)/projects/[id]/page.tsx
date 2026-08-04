@@ -387,6 +387,7 @@ export default async function ProjectDetailPage({
           note: projectPayments.note,
           documentId: projectPayments.documentId,
           vatRate: projectPayments.vatRate,
+          vatAmountEur: projectPayments.vatAmountEur,
           docNumber: documents.docNumber,
           docSubtotal: documents.subtotalEur,
           docTotal: documents.totalEur,
@@ -486,10 +487,17 @@ export default async function ProjectDetailPage({
     method: string;
     amountEur: string | number | null;
     vatRate?: string | null;
+    vatAmountEur?: string | null;
     docSubtotal?: string | null;
     docTotal?: string | null;
   }) => {
     const bedrag = Number(p.amountEur ?? 0);
+    // Een vastgelegd btw-BEDRAG wint: bij gemengde tarieven (deels 21%, deels
+    // 10%) komt geen enkel percentage op de cent uit.
+    if (p.vatAmountEur != null && p.vatAmountEur !== "") {
+      const btw = Number(p.vatAmountEur);
+      if (Number.isFinite(btw)) return Math.round((bedrag - btw) * 100) / 100;
+    }
     // Expliciet ingevuld tarief wint altijd: een voorschot kan mét of zonder
     // btw zijn en dat valt niet uit de betaalwijze af te leiden.
     if (p.vatRate != null && p.vatRate !== "") {
@@ -1320,7 +1328,9 @@ export default async function ProjectDetailPage({
                     <Td className="text-right tabular-nums font-medium">{formatEUR(p.amountEur)}</Td>
                     <Td className="text-right tabular-nums text-muted">
                       {formatEUR(exBtwVanOntvangst(p))}
-                      {p.vatRate != null ? (
+                      {p.vatAmountEur != null ? (
+                        <span className="block text-xs">{formatEUR(Number(p.vatAmountEur))} btw</span>
+                      ) : p.vatRate != null ? (
                         <span className="block text-xs">{Number(p.vatRate) === 0 ? "geen btw" : `${Number(p.vatRate)}% btw`}</span>
                       ) : p.method === "cash" ? (
                         <span className="block text-xs">geen btw</span>
@@ -1381,6 +1391,9 @@ export default async function ProjectDetailPage({
             </Field>
             <Field label="Bedrag (€)">
               <Input name="amountEur" inputMode="decimal" required placeholder="0,00" />
+            </Field>
+            <Field label="BTW-bedrag (€)" hint="bij gemengde tarieven">
+              <Input name="vatAmountEur" inputMode="decimal" className="text-right" placeholder="—" />
             </Field>
             <SubmitButton size="sm" variant="secondary" pendingLabel="…">+ Betaling</SubmitButton>
           </form>
