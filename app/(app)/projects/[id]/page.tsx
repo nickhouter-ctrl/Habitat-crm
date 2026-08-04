@@ -49,6 +49,7 @@ import {
   workers,
 } from "@/lib/db/schema";
 import { docProductMargin, lineCostEur, lineMaterialCostEur, normalizeDocItems } from "@/lib/documents";
+import { deliveryTotals } from "@/lib/project-delivery";
 import { poExVat, poExVatAmount, poExVatAssumingSpanishVat } from "@/lib/purchase-orders";
 import { DEFAULT_LABOR_MARGIN_PCT, DEFAULT_PURCHASE_MARGIN_PCT, deriveProjectMargins } from "@/lib/project-financials";
 import type { DocumentLineItem } from "@/lib/db/schema";
@@ -76,6 +77,7 @@ import {
   updateProject,
 } from "../actions";
 import { AdvanceRequestCard } from "./advance-request-card";
+import { ProjectDeliveriesCard } from "./deliveries-card";
 import {
   applyStockOutFromDocument,
   approveEstimateToInvoice,
@@ -101,6 +103,7 @@ export default async function ProjectDetailPage({
     vmail?: string;
     vstand?: string;
     vrestant?: string;
+    lev?: string;
   }>;
 }) {
   const { id } = await params;
@@ -242,6 +245,14 @@ export default async function ProjectDetailPage({
     ownCost += sign * pm.cost;
     ownUncostedRevenue += sign * pm.uncostedRevenue;
   }
+  // Producten die op het project zijn geleverd zonder losse factuur: de kostprijs
+  // hoort bij de kosten en de VERKOOPPRIJS bij wat we doorbelasten. Zonder dit
+  // zou zo'n levering een kale kostenpost zijn en leek de marge te laag.
+  const leveringen = await deliveryTotals(id);
+  ownRevenue += leveringen.price;
+  ownCost += leveringen.cost;
+  projCost += leveringen.cost;
+
   // invoiceDocs = alleen facturen/creditnota's (voor de gefactureerd-lijst onderaan).
   const invoiceDocs = marginDocs.filter((d) => d.kind !== "estimate");
   // Openstaand (ex. btw): onbetaalde facturen, subtotaal × onbetaalde fractie.
@@ -1345,6 +1356,11 @@ export default async function ProjectDetailPage({
         {/* ── Tab: Uren & kosten ── */}
         <TabPanel id="uren" className="order-3">
         <div className="grid gap-5">
+          <ProjectDeliveriesCard
+            projectId={id}
+            voorschottenEx={voorschottenOnverrekendEx}
+            fout={voorschotParams.lev}
+          />
           {/* Uren */}
           <Card id="uren" className="scroll-mt-24">
             <CardHeader>

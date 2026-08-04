@@ -845,3 +845,37 @@ export async function createFinalSettlement(projectId: string) {
   revalidatePath(`/projects/${projectId}`);
   redirect(`/documents/${id}/edit`);
 }
+
+/* --------------------------------------------- producten leveren op een project */
+
+/** Boekt een product op het project: voorraad eraf, kost- én verkoopprijs vast. */
+export async function deliverToProject(projectId: string, formData: FormData) {
+  const user = await requireUser();
+  const { deliverProductToProject } = await import("@/lib/project-delivery");
+  const res = await deliverProductToProject({
+    projectId,
+    productId: String(formData.get("productId") ?? "").trim(),
+    qty: Number(moneyOrNull(String(formData.get("qty") ?? "")) ?? 0),
+    unitPriceEur: formData.get("unitPriceEur") ? Number(moneyOrNull(String(formData.get("unitPriceEur")))) : null,
+    date: String(formData.get("date") ?? "").trim() || new Date().toISOString().slice(0, 10),
+    note: String(formData.get("note") ?? ""),
+    userId: user.id,
+  });
+  revalidatePath(`/projects/${projectId}`);
+  revalidatePath("/products");
+  if (!res.ok) {
+    const melding =
+      res.reason === "te-weinig-voorraad" ? `tekort:${res.beschikbaar ?? 0}` : res.reason === "geen-aantal" ? "aantal" : "product";
+    redirect(`/projects/${projectId}?lev=${melding}#leveringen`);
+  }
+  redirect(`/projects/${projectId}#leveringen`);
+}
+
+/** Draait een levering terug: voorraad weer erbij. */
+export async function reverseDelivery(projectId: string, deliveryId: string) {
+  const user = await requireUser();
+  const { reverseProjectDelivery } = await import("@/lib/project-delivery");
+  await reverseProjectDelivery({ id: deliveryId, userId: user.id });
+  revalidatePath(`/projects/${projectId}`);
+  revalidatePath("/products");
+}

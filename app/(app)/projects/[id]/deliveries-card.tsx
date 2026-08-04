@@ -1,0 +1,207 @@
+/**
+ * Producten geleverd op dit project — binnen de aanneemsom, dus zonder losse
+ * verkoopfactuur.
+ *
+ * Toont ook of de voorschotten die je al binnen hebt de geleverde waarde dekken.
+ * Dat is de reden dat je met voorschotten werkt: je levert pas als het geld er
+ * is, in plaats van het voor te schieten.
+ */
+import { and, desc, eq, gt, isNull } from "drizzle-orm";
+import Link from "next/link";
+
+import {
+  Badge,
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+  Field,
+  Input,
+  TBody,
+  Table,
+  Td,
+  Th,
+  THead,
+  Tr,
+} from "@/components/ui";
+import { Combobox } from "@/components/combobox";
+import { ConfirmSubmit } from "@/components/confirm-submit";
+import { SubmitButton } from "@/components/submit-button";
+import { db } from "@/lib/db";
+import { products, projectDeliveries, users } from "@/lib/db/schema";
+import { formatEUR } from "@/lib/utils";
+import { deliverToProject, reverseDelivery } from "../actions";
+
+export async function ProjectDeliveriesCard({
+  projectId,
+  voorschottenEx,
+  fout,
+}: {
+  projectId: string;
+  /** Wat er als voorschot binnen is (ex. btw) — om de dekking te tonen. */
+  voorschottenEx: number;
+  fout?: string;
+}) {
+  const [voorraad, regels] = await Promise.all([
+    db
+      .select({
+        id: products.id,
+        name: products.name,
+        sku: products.sku,
+        stockQty: products.stockQty,
+        unit: products.unit,
+        costEur: products.costEur,
+        priceEur: products.priceEur,
+      })
+      .from(products)
+      .where(and(eq(products.isActive, true), gt(products.stockQty, "0")))
+      .orderBy(products.name),
+    db
+      .select({
+        id: projectDeliveries.id,
+        productId: projectDeliveries.productId,
+        productName: projectDeliveries.productName,
+        sku: projectDeliveries.sku,
+        qty: projectDeliveries.qty,
+        totalCostEur: projectDeliveries.totalCostEur,
+        totalPriceEur: projectDeliveries.totalPriceEur,
+        date: projectDeliveries.date,
+        note: projectDeliveries.note,
+        reversedAt: projectDeliveries.reversedAt,
+        door: users.name,
+      })
+      .from(projectDeliveries)
+      .leftJoin(users, eq(users.id, projectDeliveries.createdBy))
+      .where(eq(projectDeliveries.projectId, projectId))
+      .orderBy(desc(projectDeliveries.date)),
+  ]);
+
+  const actief = regels.filter((r) => !r.reversedAt);
+  const kost = actief.reduce((s, r) => s + Number(r.totalCostEur ?? 0), 0);
+  const verkoop = actief.reduce((s, r) => s + Number(r.totalPriceEur ?? 0), 0);
+  const gedekt = voorschottenEx >= verkoop;
+
+  return (
+    <Card id="leveringen" className="mb-5 scroll-mt-24">
+      <CardHeader>
+        <CardTitle>Producten geleverd op dit project</CardTitle>
+        <span className="text-xs text-muted">
+          binnen de aanneemsom — geen losse factuur · voorraad gaat eraf, verkoopprijs telt mee in wat je doorbelast
+        </span>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        {fout && (
+          <p className="rounded-md bg-danger/10 p-3 text-sm">
+            {fout.startsWith("tekort:")
+              ? `Niet geboekt: er ligt maar ${fout.slice(7)} op voorraad.`
+              : fout === "aantal"
+                ? "Vul een aantal groter dan nul in."
+                : "Kies een product."}
+          </p>
+        )}
+
+        {actief.length > 0 && (
+          <div className="grid gap-3 sm:grid-cols-3">
+            <div className="rounded-lg border bg-background p-3">
+              <p className="text-xs text-muted">Kostprijs geleverd</p>
+              <p className="text-lg font-semibold tabular-nums">{formatEUR(kost)}</p>
+            </div>
+            <div className="rounded-lg border bg-background p-3">
+              <p className="text-xs text-muted">Door te belasten (verkoop)</p>
+              <p className="text-lg font-semibold tabular-nums">{formatEUR(verkoop)}</p>
+            </div>
+            <div className={`rounded-lg border p-3 ${gedekt ? "bg-success/5" : "bg-warning/5"}`}>
+              <p className="text-xs text-muted">Gedekt door voorschotten</p>
+              <p className={`text-lg font-semibold tabular-nums ${gedekt ? "text-success" : "text-warning"}`}>
+                {gedekt ? "ja" : `nee — ${formatEUR(verkoop - voorschottenEx)} te kort`}
+              </p>
+              <p className="text-xs text-muted">{formatEUR(voorschottenEx)} voorschot ontvangen</p>
+            </div>
+          </div>
+        )}
+
+        <form
+          action={deliverToProject.bind(null, projectId)}
+          className="grid gap-3 lg:grid-cols-[2fr_0.7fr_1fr_0.9fr_auto] lg:items-end"
+        >
+          <Field label="Product" hint="typ een naam of SKU">
+            <Combobox
+              name="productId"
+              options={voorraad.map((p) => ({
+                value: p.id,
+                label: p.sku ? `${p.name} · ${p.sku}` : p.name,
+                hint: `${Number(p.stockQty)} ${p.unit ?? "st"}${p.priceEur != null ? ` · ${formatEUR(Number(p.priceEur))}` : ""}`,
+              }))}
+              placeholder="zoek product…"
+              clearable
+              menuClassName="w-[28rem]"
+            />
+          </Field>
+          <Field label="Aantal" htmlFor="lev-qty">
+            <Input id="lev-qty" name="qty" inputMode="decimal" required className="text-right" placeholder="1" />
+          </Field>
+          <Field label="Verkoopprijs p/st" htmlFor="lev-price" hint="leeg = catalogusprijs">
+            <Input id="lev-price" name="unitPriceEur" inputMode="decimal" className="text-right" placeholder="—" />
+          </Field>
+          <Field label="Datum" htmlFor="lev-date">
+            <Input id="lev-date" name="date" type="date" defaultValue={new Date().toISOString().slice(0, 10)} />
+          </Field>
+          <SubmitButton variant="secondary" pendingLabel="Boeken…">
+            + Geleverd
+          </SubmitButton>
+        </form>
+
+        {regels.length > 0 && (
+          <Table>
+            <THead>
+              <tr>
+                <Th>Datum</Th>
+                <Th>Product</Th>
+                <Th className="text-right">Aantal</Th>
+                <Th className="text-right">Kostprijs</Th>
+                <Th className="text-right">Verkoop</Th>
+                <Th />
+              </tr>
+            </THead>
+            <TBody>
+              {regels.map((r) => (
+                <Tr key={r.id} className={r.reversedAt ? "opacity-50" : undefined}>
+                  <Td className="whitespace-nowrap text-muted">
+                    {new Date(r.date).toLocaleDateString("nl-NL", { day: "numeric", month: "short" })}
+                  </Td>
+                  <Td>
+                    {r.productId ? (
+                      <Link href={`/products/${r.productId}/edit`} className="font-medium hover:underline">
+                        {r.productName}
+                      </Link>
+                    ) : (
+                      <span className="font-medium">{r.productName}</span>
+                    )}
+                    {r.note ? <span className="block text-xs text-muted">{r.note}</span> : null}
+                  </Td>
+                  <Td className="text-right tabular-nums">{Number(r.qty)}</Td>
+                  <Td className="text-right tabular-nums text-muted">{formatEUR(Number(r.totalCostEur ?? 0))}</Td>
+                  <Td className="text-right tabular-nums font-medium">{formatEUR(Number(r.totalPriceEur ?? 0))}</Td>
+                  <Td className="text-right">
+                    {r.reversedAt ? (
+                      <Badge tone="neutral">teruggedraaid</Badge>
+                    ) : (
+                      <form action={reverseDelivery.bind(null, projectId, r.id)}>
+                        <ConfirmSubmit
+                          message={`${r.productName} × ${Number(r.qty)} terugdraaien? De voorraad gaat weer omhoog.`}
+                          className="rounded p-1 text-xs text-muted transition-colors hover:bg-danger/10 hover:text-danger"
+                        >
+                          Terugdraaien
+                        </ConfirmSubmit>
+                      </form>
+                    )}
+                  </Td>
+                </Tr>
+              ))}
+            </TBody>
+          </Table>
+        )}
+      </CardContent>
+    </Card>
+  );
+}

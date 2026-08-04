@@ -1074,6 +1074,49 @@ export const timeEntries = pgTable(
  * Losse projectkosten die niet via een gekoppelde inkooporder lopen — bv.
  * contant gekochte tegels/lijm of een onderaannemer. Bedragen ex. BTW.
  */
+/**
+ * Producten die op een project zijn geleverd zónder aparte verkoopfactuur.
+ *
+ * De producten vallen binnen de aanneemsom, dus je factureert ze niet los. Ze
+ * moeten wél van de voorraad af, hun kostprijs hoort in de projectkosten en hun
+ * VERKOOPPRIJS in wat je doorbelast — anders lijkt zo'n levering een kale
+ * kostenpost en klopt de marge op het project niet.
+ *
+ * Beide prijzen worden vastgelegd bij het leveren; een prijswijziging achteraf
+ * verandert een afgeronde levering niet.
+ */
+export const projectDeliveries = pgTable(
+  "project_deliveries",
+  {
+    id: uuid().primaryKey().default(sql`gen_random_uuid()`),
+    projectId: uuid()
+      .notNull()
+      .references(() => projects.id, { onDelete: "cascade" }),
+    productId: uuid().references(() => products.id, { onDelete: "set null" }),
+    /** Naam en SKU meegeschreven: een verwijderd product mag de historie niet wissen. */
+    productName: text().notNull(),
+    sku: text(),
+    qty: numeric({ precision: 14, scale: 3 }).notNull(),
+    unitCostEur: numeric({ precision: 14, scale: 2 }),
+    totalCostEur: numeric({ precision: 14, scale: 2 }),
+    unitPriceEur: numeric({ precision: 14, scale: 2 }),
+    totalPriceEur: numeric({ precision: 14, scale: 2 }),
+    date: date().notNull(),
+    note: text(),
+    createdBy: uuid().references(() => users.id, { onDelete: "set null" }),
+    /** Teruggedraaid; de regel blijft staan als spoor. */
+    reversedAt: timestamp({ withTimezone: true }),
+    reversedBy: uuid().references(() => users.id, { onDelete: "set null" }),
+    ...timestamps,
+  },
+  (t) => [
+    index("project_deliveries_project_idx").on(t.projectId),
+    index("project_deliveries_product_idx").on(t.productId),
+  ],
+);
+
+export type ProjectDelivery = typeof projectDeliveries.$inferSelect;
+
 export const projectCosts = pgTable(
   "project_costs",
   {
