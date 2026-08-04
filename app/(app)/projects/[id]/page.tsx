@@ -37,6 +37,7 @@ import {
   products,
   projectBudgetLines,
   projectCosts,
+  projectExtras,
   projectPayments,
   sentEmails,
   projectPhases,
@@ -78,6 +79,7 @@ import {
 } from "../actions";
 import { AdvanceRequestCard } from "./advance-request-card";
 import { ProjectDeliveriesCard } from "./deliveries-card";
+import { ProjectExtrasCard } from "./extras-card";
 import {
   applyStockOutFromDocument,
   approveEstimateToInvoice,
@@ -252,6 +254,21 @@ export default async function ProjectDetailPage({
   ownRevenue += leveringen.price;
   ownCost += leveringen.cost;
   projCost += leveringen.cost;
+
+  // Meerwerk staat BUITEN de aanneemsom maar moet wél doorbelast worden; de
+  // kostprijs (als die is ingevuld) hoort bij de kosten.
+  const [meerwerkTotaal] = await db
+    .select({
+      bedrag: sql<number>`coalesce(sum(${projectExtras.amountEur}), 0)::float8`,
+      kost: sql<number>`coalesce(sum(${projectExtras.costEur}), 0)::float8`,
+      n: sql<number>`count(*)::int`,
+    })
+    .from(projectExtras)
+    .where(eq(projectExtras.projectId, id));
+  const meerwerkBedrag = Number(meerwerkTotaal?.bedrag ?? 0);
+  ownRevenue += meerwerkBedrag;
+  ownCost += Number(meerwerkTotaal?.kost ?? 0);
+  projCost += Number(meerwerkTotaal?.kost ?? 0);
 
   // invoiceDocs = alleen facturen/creditnota's (voor de gefactureerd-lijst onderaan).
   const invoiceDocs = marginDocs.filter((d) => d.kind !== "estimate");
@@ -1361,6 +1378,7 @@ export default async function ProjectDetailPage({
             voorschottenEx={voorschottenOnverrekendEx}
             fout={voorschotParams.lev}
           />
+          <ProjectExtrasCard projectId={id} />
           {/* Uren */}
           <Card id="uren" className="scroll-mt-24">
             <CardHeader>

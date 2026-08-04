@@ -13,6 +13,7 @@ import {
   documents,
   projectBudgetLines,
   projectCosts,
+  projectExtras,
   projectPayments,
   projectPhases,
   projects,
@@ -759,6 +760,29 @@ export async function createFinalSettlement(projectId: string) {
     });
   }
 
+  // Meerwerk komt BOVENOP de aanneemsom — aparte regels, zodat de klant ziet
+  // waarvoor. Zonder akkoord blijft het er wel op staan, maar met een notitie:
+  // weglaten zou het stil onder tafel schuiven.
+  const meerwerk = await db
+    .select()
+    .from(projectExtras)
+    .where(eq(projectExtras.projectId, projectId))
+    .orderBy(asc(projectExtras.date));
+  for (const m of meerwerk) {
+    const bedrag = Number(m.amountEur ?? 0);
+    if (bedrag === 0) continue;
+    items.push({
+      name: `Meerwerk: ${m.description}`,
+      description: `${m.date ? new Date(m.date).toLocaleDateString("nl-NL") : ""}${
+        m.approvedAt ? " · akkoord" : " · NOG GEEN AKKOORD"
+      }`.trim(),
+      units: 1,
+      price: bedrag,
+      taxRate: 21,
+      category: "materiaal",
+    });
+  }
+
   // Elke eerdere factuur eraf, mét het btw-tarief dat erop stond.
   const eerder = await db
     .select({
@@ -878,4 +902,51 @@ export async function reverseDelivery(projectId: string, deliveryId: string) {
   await reverseProjectDelivery({ id: deliveryId, userId: user.id });
   revalidatePath(`/projects/${projectId}`);
   revalidatePath("/products");
+}
+
+/* ------------------------------------------------------------------ meerwerk */
+
+const extraSchema = z.object({
+  description: z.string().trim().min(1, "Omschrijving is verplicht"),
+  amountEur: z.string().trim().min(1, "Bedrag is verplicht"),
+  costEur: z.string().trim().optional(),
+  date: z.string().trim().optional(),
+  approved: z.string().trim().optional(),
+  note: z.string().trim().optional(),
+});
+
+/** Meerwerk vastleggen: komt bovenop de aanneemsom, dus op de eindafrekening erbij. */
+export async function addProjectExtra(projectId: string, formData: FormData) {
+  const user = await requireUser();
+  const parsed = extraSchema.safeParse(Object.fromEntries(formData));
+  if (!parsed.success) throw new Error(parsed.error.issues.map((i) => i.message).join(", "));
+  const d = parsed.data;
+  await db.insert(projectExtras).values({
+    projectId,
+    description: d.description,
+    amountEur: numOrZero(d.amountEur),
+    costEur: moneyOrNull(d.costEur),
+    date: dateOrNull(d.date) ?? new Date().toISOString().slice(0, 10),
+    // Akkoord van de klant vastleggen zodra het er is; zonder akkoord is
+    // meerwerk aan het eind van een klus een discussie.
+    approvedAt: d.approved === "on" ? new Date() : null,
+    note: d.note || null,
+    createdBy: user.id,
+  });
+  revalidatePath(`/projects/${projectId}`);
+}
+
+export async function toggleProjectExtraApproved(projectId: string, extraId: string, akkoord: boolean) {
+  await requireUser();
+  await db
+    .update(projectExtras)
+    .set({ approvedAt: akkoord ? new Date() : null, updatedAt: new Date() })
+    .where(eq(projectExtras.id, extraId));
+  revalidatePath(`/projects/${projectId}`);
+}
+
+export async function deleteProjectExtra(projectId: string, extraId: string) {
+  await requireUser();
+  await db.delete(projectExtras).where(eq(projectExtras.id, extraId));
+  revalidatePath(`/projects/${projectId}`);
 }

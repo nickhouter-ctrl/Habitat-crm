@@ -1104,6 +1104,8 @@ export const projectDeliveries = pgTable(
     date: date().notNull(),
     note: text(),
     createdBy: uuid().references(() => users.id, { onDelete: "set null" }),
+    /** Meerwerk: telt bovenop de aanneemsom in plaats van erbinnen. */
+    isExtra: boolean().notNull().default(false),
     /** Teruggedraaid; de regel blijft staan als spoor. */
     reversedAt: timestamp({ withTimezone: true }),
     reversedBy: uuid().references(() => users.id, { onDelete: "set null" }),
@@ -1116,6 +1118,37 @@ export const projectDeliveries = pgTable(
 );
 
 export type ProjectDelivery = typeof projectDeliveries.$inferSelect;
+
+/**
+ * Meerwerk: afspraken BUITEN de aanneemsom.
+ *
+ * Komt op de eindafrekening bovenop de aanneemsom, als aparte regels die de
+ * klant kan nalopen. `approvedAt` is er niet voor de sier: meerwerk zonder
+ * akkoord is de klassieke ruzie aan het eind van een klus.
+ */
+export const projectExtras = pgTable(
+  "project_extras",
+  {
+    id: uuid().primaryKey().default(sql`gen_random_uuid()`),
+    projectId: uuid()
+      .notNull()
+      .references(() => projects.id, { onDelete: "cascade" }),
+    description: text().notNull(),
+    /** Wat we de klant hiervoor rekenen, ex. btw. */
+    amountEur: numeric({ precision: 14, scale: 2 }).notNull().default("0"),
+    /** Wat het ons kost (optioneel) — voor de marge op meerwerk. */
+    costEur: numeric({ precision: 14, scale: 2 }),
+    date: date().notNull(),
+    approvedAt: timestamp({ withTimezone: true }),
+    approvedNote: text(),
+    note: text(),
+    createdBy: uuid().references(() => users.id, { onDelete: "set null" }),
+    ...timestamps,
+  },
+  (t) => [index("project_extras_project_idx").on(t.projectId)],
+);
+
+export type ProjectExtra = typeof projectExtras.$inferSelect;
 
 export const projectCosts = pgTable(
   "project_costs",
