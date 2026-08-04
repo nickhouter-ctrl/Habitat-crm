@@ -327,8 +327,6 @@ const costSchema = z.object({
   amountEur: z.string().trim().optional(),
   paymentMethod: z.enum(["cash", "invoice"]).default("invoice"),
   note: z.string().trim().optional(),
-  /** Betaald uit kasgeld van de klant: geen kost van ons. */
-  clientFunds: z.string().trim().optional(),
 });
 
 export async function addProjectCost(projectId: string, formData: FormData) {
@@ -345,7 +343,6 @@ export async function addProjectCost(projectId: string, formData: FormData) {
     amountEur: numOrZero(d.amountEur),
     paymentMethod: d.paymentMethod,
     note: d.note || null,
-    clientFunds: d.clientFunds === "on",
   });
   revalidatePath(`/projects/${projectId}`);
 }
@@ -368,8 +365,6 @@ const paymentSchema = z.object({
   advanceRequestId: z.string().trim().optional(),
   /** Leeg = het systeem beslist (contant 0%, bij een factuur die factuur, anders 21%). */
   vatRate: z.string().trim().optional(),
-  /** Kasgeld van de klant: geen omzet van ons. */
-  clientFunds: z.string().trim().optional(),
 });
 
 export async function addProjectPayment(projectId: string, formData: FormData) {
@@ -389,7 +384,6 @@ export async function addProjectPayment(projectId: string, formData: FormData) {
     note: d.note || null,
     advanceRequestId,
     vatRate: d.vatRate ? moneyOrNull(d.vatRate) : null,
-    clientFunds: d.clientFunds === "on",
   });
   revalidatePath(`/projects/${projectId}`);
 }
@@ -745,26 +739,8 @@ export async function createFinalSettlement(projectId: string, formData?: FormDa
       documentId: projectPayments.documentId,
     })
     .from(projectPayments)
-    .where(
-      and(
-        eq(projectPayments.projectId, projectId),
-        isNull(projectPayments.documentId),
-        // Kasgeld van de klant is geen betaling op de aanneemsom: het verlaagt
-        // hieronder de aanneemsom zelf en komt dus niet als verrekenregel op de
-        // factuur.
-        eq(projectPayments.clientFunds, false),
-      ),
-    )
+    .where(and(eq(projectPayments.projectId, projectId), isNull(projectPayments.documentId)))
     .orderBy(asc(projectPayments.date));
-
-  // Kasgeld: het VOLLEDIG ONTVANGEN bedrag gaat van de aanneemsom af (keuze van
-  // Nick, 04-08-2026). Zit er nog geld in de pot dat niet is besteed, dan is dat
-  // een openstaande post richting de klant — het projectscherm waarschuwt daarvoor.
-  const [kasgeld] = await db
-    .select({ ontvangen: sql<number>`coalesce(sum(${projectPayments.amountEur}), 0)::float8` })
-    .from(projectPayments)
-    .where(and(eq(projectPayments.projectId, projectId), eq(projectPayments.clientFunds, true)));
-  const kasgeldOntvangen = Number(kasgeld?.ontvangen ?? 0);
 
   const doel = project.contractPriceEur != null ? Number(project.contractPriceEur) : 0;
 
@@ -778,15 +754,13 @@ export async function createFinalSettlement(projectId: string, formData?: FormDa
    * (RD 1619/2012 art. 6). De oude facturen blijven gewoon apart opeisbaar —
    * ze worden hier alleen verrekend, niet vervangen.
    */
-  const aanneemsomNetto = Math.round((doel - kasgeldOntvangen) * 100) / 100;
-
   const items: DocumentLineItem[] = [];
-  if (aanneemsomNetto !== 0) {
+  if (doel !== 0) {
     items.push({
       name: `Aanneemsom ${project.name}`,
       description: "het complete werk volgens overeenkomst",
       units: 1,
-      price: aanneemsomNetto,
+      price: doel,
       taxRate: 21,
       category: "materiaal",
     });
@@ -915,9 +889,7 @@ export async function createFinalSettlement(projectId: string, formData?: FormDa
   await db.insert(activities).values({
     type: "note",
     subject: `Eindafrekening opgesteld: ${project.name}`,
-    body: `Aanneemsom ${formatEUR(doel)}${
-      kasgeldOntvangen > 0 ? ` − ${formatEUR(kasgeldOntvangen)} kasgeld van de klant` : ""
-    } minus ${formatEUR(gefactureerd)} reeds gefactureerd en ${ontvangsten.length} voorschot(ten). Staat als concept klaar.`,
+    body: `Aanneemsom ${formatEUR(doel)} minus ${formatEUR(gefactureerd)} reeds gefactureerd en ${ontvangsten.length} voorschot(ten). Staat als concept klaar.`,
     contactId: project.contactId ?? null,
   });
 
@@ -1004,40 +976,4 @@ export async function deleteProjectExtra(projectId: string, extraId: string) {
   await requireUser();
   await db.delete(projectExtras).where(eq(projectExtras.id, extraId));
   revalidatePath(`/projects/${projectId}`);
-}
-
-/* -------------------------------------------------------- kasgeld van de klant */
-
-/**
- * Merkt een ontvangst, kostenregel of inkooporder als "kasgeld van de klant":
- * geld dat de klant gaf om zíjn kosten mee te betalen, en de kosten die daaruit
- * betaald zijn. Geen omzet, geen kost van ons.
- *
- * Beide kanten horen samen te bewegen. Vink je alleen de ontvangst aan, dan
- * staan er kosten op het project zonder opbrengst en zakt de marge onterecht;
- * het saldo op de projectpagina laat dat zien.
- */
-export async function togglePaymentClientFunds(projectId: string, paymentId: string, waarde: boolean) {
-  await requireUser();
-  await db
-    .update(projectPayments)
-    .set({ clientFunds: waarde, updatedAt: new Date() })
-    .where(eq(projectPayments.id, paymentId));
-  revalidatePath(`/projects/${projectId}`);
-}
-
-export async function toggleCostClientFunds(projectId: string, costId: string, waarde: boolean) {
-  await requireUser();
-  await db.update(projectCosts).set({ clientFunds: waarde, updatedAt: new Date() }).where(eq(projectCosts.id, costId));
-  revalidatePath(`/projects/${projectId}`);
-}
-
-export async function togglePurchaseOrderClientFunds(projectId: string, poId: string, waarde: boolean) {
-  await requireUser();
-  await db
-    .update(purchaseOrders)
-    .set({ clientFunds: waarde, updatedAt: new Date() })
-    .where(eq(purchaseOrders.id, poId));
-  revalidatePath(`/projects/${projectId}`);
-  revalidatePath(`/inkooporders/${poId}`);
 }
