@@ -361,6 +361,8 @@ const paymentSchema = z.object({
   note: z.string().trim().optional(),
   /** Hoort deze ontvangst bij een eerder verstuurd voorschotverzoek? */
   advanceRequestId: z.string().trim().optional(),
+  /** Leeg = het systeem beslist (contant 0%, bij een factuur die factuur, anders 21%). */
+  vatRate: z.string().trim().optional(),
 });
 
 export async function addProjectPayment(projectId: string, formData: FormData) {
@@ -379,6 +381,7 @@ export async function addProjectPayment(projectId: string, formData: FormData) {
     description: d.description || null,
     note: d.note || null,
     advanceRequestId,
+    vatRate: d.vatRate ? moneyOrNull(d.vatRate) : null,
   });
   revalidatePath(`/projects/${projectId}`);
 }

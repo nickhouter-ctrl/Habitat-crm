@@ -357,6 +357,7 @@ export default async function ProjectDetailPage({
           description: projectPayments.description,
           note: projectPayments.note,
           documentId: projectPayments.documentId,
+          vatRate: projectPayments.vatRate,
           docNumber: documents.docNumber,
           docSubtotal: documents.subtotalEur,
           docTotal: documents.totalEur,
@@ -455,10 +456,17 @@ export default async function ProjectDetailPage({
   const exBtwVanOntvangst = (p: {
     method: string;
     amountEur: string | number | null;
+    vatRate?: string | null;
     docSubtotal?: string | null;
     docTotal?: string | null;
   }) => {
     const bedrag = Number(p.amountEur ?? 0);
+    // Expliciet ingevuld tarief wint altijd: een voorschot kan mét of zonder
+    // btw zijn en dat valt niet uit de betaalwijze af te leiden.
+    if (p.vatRate != null && p.vatRate !== "") {
+      const pct = Number(p.vatRate);
+      if (Number.isFinite(pct)) return Math.round((bedrag / (1 + pct / 100)) * 100) / 100;
+    }
     if (p.method === "cash") return bedrag;
     const sub = Number(p.docSubtotal ?? 0);
     const tot = Number(p.docTotal ?? 0);
@@ -1186,7 +1194,11 @@ export default async function ProjectDetailPage({
                     <Td className="text-right tabular-nums font-medium">{formatEUR(p.amountEur)}</Td>
                     <Td className="text-right tabular-nums text-muted">
                       {formatEUR(exBtwVanOntvangst(p))}
-                      {p.method === "cash" && <span className="block text-xs">geen btw</span>}
+                      {p.vatRate != null ? (
+                        <span className="block text-xs">{Number(p.vatRate) === 0 ? "geen btw" : `${Number(p.vatRate)}% btw`}</span>
+                      ) : p.method === "cash" ? (
+                        <span className="block text-xs">geen btw</span>
+                      ) : null}
                     </Td>
                     <Td className="text-right">
                       {/* Een ontvangst die uit een betaalde factuur komt kun je hier
@@ -1205,7 +1217,7 @@ export default async function ProjectDetailPage({
               </TBody>
             </Table>
           )}
-          <form action={addProjectPayment.bind(null, id)} className="grid gap-3 sm:grid-cols-2 lg:grid-cols-[0.9fr_1.4fr_1.2fr_1fr_0.9fr_auto] lg:items-end">
+          <form action={addProjectPayment.bind(null, id)} className="grid gap-3 sm:grid-cols-2 lg:grid-cols-[0.9fr_1.3fr_1.1fr_0.9fr_0.7fr_0.9fr_auto] lg:items-end">
             <Field label="Datum">
               <Input name="date" type="date" />
             </Field>
@@ -1231,6 +1243,14 @@ export default async function ProjectDetailPage({
                 <option value="invoice">Via factuur</option>
                 <option value="advance">Voorschot</option>
                 <option value="other">Overig</option>
+              </Select>
+            </Field>
+            <Field label="BTW" hint="leeg = systeem beslist">
+              <Select name="vatRate" defaultValue="">
+                <option value="">automatisch</option>
+                <option value="0">geen btw</option>
+                <option value="21">21%</option>
+                <option value="10">10%</option>
               </Select>
             </Field>
             <Field label="Bedrag (€)">

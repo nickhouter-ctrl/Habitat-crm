@@ -1138,6 +1138,12 @@ export const projectPayments = pgTable(
      * zien wat er binnen is en wat nog openstaat.
      */
     advanceRequestId: uuid().references((): AnyPgColumn => sentEmails.id, { onDelete: "set null" }),
+    /**
+     * BTW-tarief op deze ontvangst. Leeg = het systeem beslist: contant 0%, een
+     * ontvangst bij een factuur volgt die factuur, de rest 21%. Expliciet zetten
+     * is nodig voor een voorschot zónder btw — dat is niet af te leiden.
+     */
+    vatRate: numeric({ precision: 5, scale: 2 }),
     ...timestamps,
   },
   (t) => [
