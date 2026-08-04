@@ -266,7 +266,27 @@ function buildContent(
   if (isExcel) {
     try {
       const wb = XLSX.read(buffer, { type: "buffer" });
-      const text = wb.SheetNames.map((n) => `# ${n}\n${XLSX.utils.sheet_to_csv(wb.Sheets[n])}`)
+      // NIET sheet_to_csv: die schrijft élke lege kolom als komma. De
+      // Allpack-factuur werd zo 525.000 tekens, waarvan de eerste 60.000 (de
+      // limiet) vrijwel alleen komma's — de AI zag de factuur dus nooit en het
+      // oordeel werd "onleesbaar". Nu alleen de gevulde cellen.
+      const text = wb.SheetNames.map((naam) => {
+        const rijen = XLSX.utils.sheet_to_json<unknown[]>(wb.Sheets[naam], {
+          header: 1,
+          defval: "",
+          raw: false,
+          blankrows: false,
+        });
+        const regels = rijen
+          .map((rij) =>
+            rij
+              .map((cel) => String(cel ?? "").replace(/\s+/g, " ").trim())
+              .filter(Boolean)
+              .join(" | "),
+          )
+          .filter(Boolean);
+        return `# ${naam}\n${regels.join("\n")}`;
+      })
         .join("\n\n")
         .slice(0, 60000);
       return { content: [{ type: "text", text: `${PROMPT}\n\n--- FACTUUR (Excel als tekst) ---\n${text}` }] };

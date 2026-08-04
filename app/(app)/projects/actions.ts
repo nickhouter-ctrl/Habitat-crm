@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { and, asc, eq, isNotNull, isNull } from "drizzle-orm";
+import { and, asc, eq, isNotNull, isNull, sql } from "drizzle-orm";
 import { z } from "zod";
 import { requireWriteUser } from "@/lib/auth/guards";
 
@@ -23,6 +23,7 @@ import {
   type DocumentLineItem,
   type DocumentPhase,
 } from "@/lib/db/schema";
+import { poExVatAssumingSpanishVat } from "@/lib/purchase-orders";
 import { computeTotals } from "@/lib/documents";
 import { insertNumberedDocument } from "@/lib/doc-number";
 import { renderBudgetPdf } from "@/lib/budget-pdf";
@@ -210,12 +211,46 @@ export async function updateTimeEntry(projectId: string, entryId: string, formDa
   const parsed = timeEntryUpdateSchema.safeParse(Object.fromEntries(formData));
   if (!parsed.success) throw new Error(parsed.error.issues.map((i) => i.message).join(", "));
   const d = parsed.data;
+
+  const uren = Number(numOrZero(d.hours));
+  let tarief = numOrZero(d.hourlyCostEur);
+
+  // Hangt deze regel aan een inkoopfactuur, dan is het FACTUURBEDRAG leidend en
+  // volgt het tarief uit de uren — niet andersom. Anders levert elke deling die
+  // niet opgaat een tekort op: 3.800 ÷ 28 = 135,714…, en 135,71 × 28 boekt
+  // € 3.799,88, twaalf cent minder dan de leverancier vraagt.
+  //
+  // Alléén als die factuur precies ÉÉN urenregel heeft. Bij een weekfactuur die
+  // over meerdere dagen of werven is uitgesplitst (Factura nº 2 staat op vier
+  // regels) dekt elke regel maar een deel, en zou dit elke regel op het hele
+  // factuurbedrag zetten — vier keer € 3.016 in plaats van één keer.
+  const bestaand = await db.query.timeEntries.findFirst({
+    where: eq(timeEntries.id, entryId),
+    columns: { purchaseOrderId: true },
+  });
+  if (bestaand?.purchaseOrderId && uren > 0) {
+    const [{ n }] = await db
+      .select({ n: sql<number>`count(*)::int` })
+      .from(timeEntries)
+      .where(eq(timeEntries.purchaseOrderId, bestaand.purchaseOrderId));
+    const po = await db.query.purchaseOrders.findFirst({
+      where: eq(purchaseOrders.id, bestaand.purchaseOrderId),
+      columns: { subtotal: true, total: true, tax: true, items: true, countAsLabor: true },
+    });
+    if (n === 1 && po?.countAsLabor) {
+      // poExVatAssumingSpanishVat, niet het factuurtotaal: bij Ahmed en Zerghini
+      // staat er geen btw-uitsplitsing op en is de arbeidskost het bedrag ÷ 1,21.
+      const { amount } = poExVatAssumingSpanishVat(po);
+      if (amount > 0) tarief = (amount / uren).toFixed(6);
+    }
+  }
+
   await db
     .update(timeEntries)
     .set({
       date: dateOrNull(d.date) ?? undefined,
-      hours: numOrZero(d.hours),
-      hourlyCostEur: numOrZero(d.hourlyCostEur),
+      hours: String(uren),
+      hourlyCostEur: tarief,
       paymentMethod: d.paymentMethod,
       note: d.note?.trim() ? d.note : null,
       updatedAt: new Date(),
