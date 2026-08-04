@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { and, asc, eq, isNotNull, isNull, sql } from "drizzle-orm";
+import { and, asc, eq, inArray, isNotNull, isNull, sql } from "drizzle-orm";
 import { z } from "zod";
 import { requireWriteUser } from "@/lib/auth/guards";
 
@@ -30,6 +30,7 @@ import { renderBudgetPdf } from "@/lib/budget-pdf";
 import { brandedEmail, escapeHtml, sendEmail } from "@/lib/email";
 import { recordSentEmail } from "@/lib/sent-email";
 import { COMPANY } from "@/lib/company";
+import { formatEUR } from "@/lib/utils";
 import { moneyOrNull, moneyOrZero as numOrZero } from "@/lib/parse-money";
 
 async function requireUser() {
@@ -688,4 +689,111 @@ export async function sendAdvanceRequest(projectId: string, formData: FormData) 
 
   revalidatePath(`/projects/${projectId}`);
   redirect(`/projects/${projectId}?vmail=${res.sent ? "ok" : "mislukt"}#voorschot-opvragen`);
+}
+
+/* ------------------------------------------------------- eindafrekening */
+
+/**
+ * Maakt de eindafrekening als CONCEPT-factuur: wat er nog te factureren is,
+ * met de ontvangen voorschotten er als aparte regels vanaf.
+ *
+ * Waarom die voorschotten er als negatieve regels op moeten: de klant heeft dat
+ * geld al betaald, maar er stond geen factuur tegenover. Zet je alleen het
+ * restant op de factuur, dan klopt de btw niet — over een voorschot is nog geen
+ * btw afgedragen zolang er geen factuur voor was. Door het volledige bedrag te
+ * factureren en het voorschot eronder af te trekken, wordt de btw over het hele
+ * werk in één keer afgerekend en betaalt de klant alleen het verschil.
+ *
+ * Concept, niet verstuurd: dit is een voorstel dat nagelopen hoort te worden.
+ */
+export async function createFinalSettlement(projectId: string) {
+  await requireUser();
+  const project = await db.query.projects.findFirst({ where: eq(projects.id, projectId) });
+  if (!project) return;
+
+  // Alles wat al op een eigen factuur staat (concept en geannuleerd tellen niet).
+  const facturen = await db
+    .select({ subtotal: documents.subtotalEur, kind: documents.kind, status: documents.status })
+    .from(documents)
+    .where(and(eq(documents.projectId, projectId), inArray(documents.kind, ["invoice", "creditnote"])));
+  const gefactureerd = facturen
+    .filter((d) => d.status !== "draft" && d.status !== "void")
+    .reduce((s, d) => s + (d.kind === "creditnote" ? -1 : 1) * Number(d.subtotal ?? 0), 0);
+
+  // Ontvangsten zonder eigen factuur = voorschotten die verrekend moeten worden.
+  const ontvangsten = await db
+    .select({
+      id: projectPayments.id,
+      date: projectPayments.date,
+      amountEur: projectPayments.amountEur,
+      method: projectPayments.method,
+      description: projectPayments.description,
+      vatRate: projectPayments.vatRate,
+      documentId: projectPayments.documentId,
+    })
+    .from(projectPayments)
+    .where(and(eq(projectPayments.projectId, projectId), isNull(projectPayments.documentId)))
+    .orderBy(asc(projectPayments.date));
+
+  const doel = project.contractPriceEur != null ? Number(project.contractPriceEur) : 0;
+  const restant = Math.round((doel - gefactureerd) * 100) / 100;
+
+  const items: DocumentLineItem[] = [];
+  if (restant !== 0) {
+    items.push({
+      name: `Eindafrekening ${project.name}`,
+      description:
+        gefactureerd > 0
+          ? `Aanneemsom ${formatEUR(doel)} − reeds gefactureerd ${formatEUR(gefactureerd)}`
+          : `Aanneemsom ${formatEUR(doel)}`,
+      units: 1,
+      price: restant,
+      taxRate: 21,
+      category: "materiaal",
+    });
+  }
+  for (const p of ontvangsten) {
+    // Het voorschot gaat er EX. btw af: de btw over het hele werk wordt op deze
+    // factuur afgerekend. Bij een voorschot waar al btw over is afgedragen zet
+    // je het btw-tarief op de ontvangst; dan klopt dit bedrag ook.
+    const bedrag = Number(p.amountEur ?? 0);
+    const pct = p.vatRate != null ? Number(p.vatRate) : p.method === "cash" ? 0 : 21;
+    const ex = Math.round((bedrag / (1 + pct / 100)) * 100) / 100;
+    items.push({
+      name: `Verrekening ${p.description ?? "voorschot"}`,
+      description: p.date ? `ontvangen ${new Date(p.date).toLocaleDateString("nl-NL")}` : "datum onbekend",
+      units: 1,
+      price: -ex,
+      taxRate: 21,
+      category: "materiaal",
+    });
+  }
+  if (items.length === 0) redirect(`/projects/${projectId}?eind=niets`);
+
+  const totals = computeTotals(items);
+  const round2 = (n: number) => (Math.round(n * 100) / 100).toFixed(2);
+  const { id } = await insertNumberedDocument("invoice", {
+    kind: "invoice",
+    status: "draft",
+    title: `Eindafrekening ${project.name}`,
+    contactId: project.contactId,
+    projectId,
+    propertyId: project.propertyId,
+    issueDate: new Date().toISOString().slice(0, 10),
+    currency: "EUR",
+    subtotalEur: round2(totals.subtotal),
+    taxEur: round2(totals.tax),
+    totalEur: round2(totals.total),
+    items,
+  });
+
+  await db.insert(activities).values({
+    type: "note",
+    subject: `Eindafrekening opgesteld: ${project.name}`,
+    body: `Restant ${formatEUR(restant)} minus ${ontvangsten.length} voorschot(ten). Staat als concept klaar.`,
+    contactId: project.contactId ?? null,
+  });
+
+  revalidatePath(`/projects/${projectId}`);
+  redirect(`/documents/${id}/edit`);
 }

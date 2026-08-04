@@ -61,6 +61,7 @@ import {
   approveAllPendingTimeEntries,
   approveTimeEntry,
   attachDocumentToProject,
+  createFinalSettlement,
   createWorkerPortalLink,
   deleteProject,
   deleteProjectCost,
@@ -474,6 +475,16 @@ export default async function ProjectDetailPage({
     return bedrag / VAT_DIVISOR;
   };
   const receivedTotalEx = paymentRows.reduce((s, p) => s + exBtwVanOntvangst(p), 0);
+
+  /**
+   * Voorschotten: geld dat binnen is zonder dat er een eigen factuur tegenover
+   * staat. Dat moet op de eindafrekening verrekend worden, anders betaalt de
+   * klant twee keer. Ontvangsten die WEL aan een factuur hangen zitten al in
+   * "gefactureerd" en tellen hier dus niet mee.
+   */
+  const voorschottenOnverrekendEx = paymentRows
+    .filter((p) => !p.documentId)
+    .reduce((s, p) => s + exBtwVanOntvangst(p), 0);
 
   // Eigen-productkost: gerealiseerd = op facturen; verwacht = het meest complete
   // beeld (offerte als die hoger is dan wat al gefactureerd is). Voorkomt zowel
@@ -1042,6 +1053,57 @@ export default async function ProjectDetailPage({
                     : ` \u00b7 past binnen de aanneemprijs van ${formatEUR(targetRevenue)} (nog ${formatEUR(targetRevenue - margins.totalRevenue)} ruimte)`
                   : ""}
               </p>
+            </div>
+          )}
+
+          {/* De vraag die "minimaal door te belasten" oproept: er is al
+              gefactureerd en er is al voorgeschoten — wat moet er dan NU nog uit? */}
+          {margins.totalRevenue > 0 && (
+            <div className="rounded-lg border border-accent/30 bg-accent/5 p-3 text-sm">
+              <p className="mb-2 font-semibold">Wat moet er nu gefactureerd worden?</p>
+              <dl className="space-y-1">
+                <div className="flex justify-between gap-2">
+                  <dt className="text-muted">Minimaal door te belasten tot nu toe</dt>
+                  <dd className="tabular-nums">{formatEUR(margins.totalRevenue)}</dd>
+                </div>
+                <div className="flex justify-between gap-2">
+                  <dt className="text-muted">Al gefactureerd</dt>
+                  <dd className="tabular-nums">− {formatEUR(projRevenue)}</dd>
+                </div>
+                <div className="flex justify-between gap-2 border-t pt-1 font-semibold">
+                  <dt>Nog te factureren</dt>
+                  <dd className="tabular-nums">{formatEUR(Math.max(0, margins.totalRevenue - projRevenue))}</dd>
+                </div>
+                {voorschottenOnverrekendEx > 0 && (
+                  <>
+                    <div className="flex justify-between gap-2 pt-1">
+                      <dt className="text-muted">Waarvan al ontvangen als voorschot</dt>
+                      <dd className="tabular-nums">{formatEUR(voorschottenOnverrekendEx)}</dd>
+                    </div>
+                    <div className="flex justify-between gap-2">
+                      <dt className="text-muted">Daarna nog te ontvangen</dt>
+                      <dd
+                        className={`tabular-nums ${
+                          Math.max(0, margins.totalRevenue - projRevenue) - voorschottenOnverrekendEx < 0
+                            ? "text-success"
+                            : ""
+                        }`}
+                      >
+                        {formatEUR(Math.max(0, margins.totalRevenue - projRevenue) - voorschottenOnverrekendEx)}
+                      </dd>
+                    </div>
+                  </>
+                )}
+              </dl>
+              <p className="mt-2 text-xs text-muted">
+                Voorschotten zijn ontvangsten zonder eigen factuur; die worden op de eindafrekening verrekend, anders
+                betaalt de klant twee keer. De btw over het hele werk wordt dán pas afgerekend.
+              </p>
+              <form action={createFinalSettlement.bind(null, id)} className="mt-3">
+                <SubmitButton size="sm" variant="secondary" pendingLabel="Opstellen…">
+                  Eindafrekening opstellen
+                </SubmitButton>
+              </form>
             </div>
           )}
         </CardContent>
