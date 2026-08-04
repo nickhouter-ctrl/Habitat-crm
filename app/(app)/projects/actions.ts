@@ -736,19 +736,55 @@ export async function createFinalSettlement(projectId: string) {
     .orderBy(asc(projectPayments.date));
 
   const doel = project.contractPriceEur != null ? Number(project.contractPriceEur) : 0;
-  const restant = Math.round((doel - gefactureerd) * 100) / 100;
 
+  /**
+   * De eindafrekening toont het HELE werk en trekt daar alles vanaf wat al is
+   * gefactureerd of vooruitbetaald. Zo staat er één compleet stuk waar de klant
+   * zijn hele project op terugziet, en hoeven de oude facturen niet mee.
+   *
+   * Dat is ook de Spaanse regel: op de factura final moeten de eerder
+   * gefactureerde anticipos mét hun btw worden vermeld en afgetrokken
+   * (RD 1619/2012 art. 6). De oude facturen blijven gewoon apart opeisbaar —
+   * ze worden hier alleen verrekend, niet vervangen.
+   */
   const items: DocumentLineItem[] = [];
-  if (restant !== 0) {
+  if (doel !== 0) {
     items.push({
-      name: `Eindafrekening ${project.name}`,
-      description:
-        gefactureerd > 0
-          ? `Aanneemsom ${formatEUR(doel)} − reeds gefactureerd ${formatEUR(gefactureerd)}`
-          : `Aanneemsom ${formatEUR(doel)}`,
+      name: `Aanneemsom ${project.name}`,
+      description: "het complete werk volgens overeenkomst",
       units: 1,
-      price: restant,
+      price: doel,
       taxRate: 21,
+      category: "materiaal",
+    });
+  }
+
+  // Elke eerdere factuur eraf, mét het btw-tarief dat erop stond.
+  const eerder = await db
+    .select({
+      docNumber: documents.docNumber,
+      issueDate: documents.issueDate,
+      subtotal: documents.subtotalEur,
+      tax: documents.taxEur,
+      kind: documents.kind,
+      status: documents.status,
+    })
+    .from(documents)
+    .where(and(eq(documents.projectId, projectId), inArray(documents.kind, ["invoice", "creditnote"])));
+  for (const f of eerder) {
+    if (f.status === "draft" || f.status === "void") continue;
+    const sub = Number(f.subtotal ?? 0) * (f.kind === "creditnote" ? -1 : 1);
+    if (sub === 0) continue;
+    const btw = Number(f.tax ?? 0);
+    const pct = sub !== 0 && btw !== 0 ? Math.round((btw / Math.abs(sub)) * 100) : 0;
+    items.push({
+      name: `Reeds gefactureerd: ${f.docNumber ?? "factuur"}`,
+      description: `${f.issueDate ? new Date(f.issueDate).toLocaleDateString("nl-NL") : ""}${
+        f.status !== "paid" ? " · staat nog open, blijft apart opeisbaar" : ""
+      }`.trim(),
+      units: 1,
+      price: -sub,
+      taxRate: pct,
       category: "materiaal",
     });
   }
@@ -802,7 +838,7 @@ export async function createFinalSettlement(projectId: string) {
   await db.insert(activities).values({
     type: "note",
     subject: `Eindafrekening opgesteld: ${project.name}`,
-    body: `Restant ${formatEUR(restant)} minus ${ontvangsten.length} voorschot(ten). Staat als concept klaar.`,
+    body: `Aanneemsom ${formatEUR(doel)} minus ${formatEUR(gefactureerd)} reeds gefactureerd en ${ontvangsten.length} voorschot(ten). Staat als concept klaar.`,
     contactId: project.contactId ?? null,
   });
 
