@@ -52,6 +52,7 @@ import { docProductMargin, lineCostEur, lineMaterialCostEur, normalizeDocItems }
 import { poExVat, poExVatAmount, poExVatAssumingSpanishVat } from "@/lib/purchase-orders";
 import { DEFAULT_LABOR_MARGIN_PCT, DEFAULT_PURCHASE_MARGIN_PCT, deriveProjectMargins } from "@/lib/project-financials";
 import type { DocumentLineItem } from "@/lib/db/schema";
+import { moneyForInput } from "@/lib/parse-money";
 import { formatEUR } from "@/lib/utils";
 import {
   addProjectCost,
@@ -1267,10 +1268,12 @@ export default async function ProjectDetailPage({
                                   <Input type="date" name="date" defaultValue={String(t.date).slice(0, 10)} />
                                 </Field>
                                 <Field label="Uren">
-                                  <Input name="hours" defaultValue={String(t.hours)} inputMode="decimal" className="w-24 text-right tabular-nums" />
+                                  <Input name="hours" defaultValue={moneyForInput(t.hours)} inputMode="decimal" className="w-24 text-right tabular-nums" />
                                 </Field>
                                 <Field label="Tarief (€/u)">
-                                  <Input name="hourlyCostEur" defaultValue={String(t.hourlyCostEur)} inputMode="decimal" className="w-24 text-right tabular-nums" />
+                                  {/* Zonder opschonen staat hier "3800.000000" — en dat
+                                      werd bij opslaan 3,8 miljard. Zie lib/parse-money.ts. */}
+                                  <Input name="hourlyCostEur" defaultValue={moneyForInput(t.hourlyCostEur)} inputMode="decimal" className="w-24 text-right tabular-nums" />
                                 </Field>
                                 <Field label="Betaling">
                                   <Select name="paymentMethod" defaultValue={t.paymentMethod}>

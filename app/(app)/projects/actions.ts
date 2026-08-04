@@ -29,22 +29,15 @@ import { renderBudgetPdf } from "@/lib/budget-pdf";
 import { brandedEmail, escapeHtml, sendEmail } from "@/lib/email";
 import { recordSentEmail } from "@/lib/sent-email";
 import { COMPANY } from "@/lib/company";
+import { moneyOrNull, moneyOrZero as numOrZero } from "@/lib/parse-money";
 
 async function requireUser() {
   // Centrale guard: ingelogd én geen alleen-lezen (viewer) account.
   return requireWriteUser();
 }
 
-/** Bedrag-string normaliseren (NL-komma → punt); leeg → null. */
-function moneyOrNull(v?: string): string | null {
-  const s = (v ?? "").trim().replace(/\./g, "").replace(",", ".");
-  if (!s) return null;
-  const n = Number(s);
-  return Number.isFinite(n) ? String(n) : null;
-}
-function numOrZero(v?: string): string {
-  return moneyOrNull(v) ?? "0";
-}
+// Bedragen inlezen gebeurt centraal: zie lib/parse-money.ts voor waarom de
+// oude "alle punten zijn duizendtallen"-aanpak fout ging op "3800.000000".
 
 const createSchema = z.object({
   name: z.string().trim().min(1, "Naam is verplicht"),

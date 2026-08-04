@@ -12,6 +12,7 @@ import { contacts, products, sampleMovements, type DocumentLineItem } from "@/li
 import { computeTotals } from "@/lib/documents";
 import { insertNumberedDocument } from "@/lib/doc-number";
 import { SAMPLE_DEPOSIT_EUR } from "@/lib/samples";
+import { parseMoney } from "@/lib/parse-money";
 
 async function requireUser() {
   // Centrale guard: ingelogd én geen alleen-lezen (viewer) account.
@@ -19,7 +20,7 @@ async function requireUser() {
 }
 
 function qtyOrNull(v?: string): number | null {
-  const s = (v ?? "").trim().replace(/\./g, "").replace(",", ".");
+  const s = String(parseMoney(v) ?? "");
   if (!s) return null;
   const n = Number(s);
   return Number.isFinite(n) ? n : null;

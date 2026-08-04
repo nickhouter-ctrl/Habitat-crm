@@ -42,7 +42,9 @@ async function main() {
   const notify = argv.includes("--notify");
   const fromIdx = argv.indexOf("--from");
   const fromEmail = fromIdx >= 0 ? argv[fromIdx + 1] : null;
-  const files = argv.filter((a, i) => !a.startsWith("--") && i !== fromIdx + 1);
+  // Let op: alleen de waarde ná --from overslaan als die vlag er ook echt staat.
+  // Met fromIdx = -1 zou `i !== fromIdx + 1` het EERSTE bestand wegfilteren.
+  const files = argv.filter((a, i) => !a.startsWith("--") && !(fromIdx >= 0 && i === fromIdx + 1));
 
   if (files.length === 0) {
     console.error("Geef één of meer bestanden op.\n  npx tsx scripts/ingest-local-invoice.ts [--from a@b.c] [--notify] <bestand...>");

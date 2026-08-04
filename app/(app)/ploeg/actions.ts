@@ -9,19 +9,14 @@ import { requireWriteUser } from "@/lib/auth/guards";
 import { auth } from "@/auth";
 import { db } from "@/lib/db";
 import { workers } from "@/lib/db/schema";
+import { moneyOrNull } from "@/lib/parse-money";
 
 async function requireUser() {
   // Centrale guard: ingelogd én geen alleen-lezen (viewer) account.
   return requireWriteUser();
 }
 
-/** Bedrag-string normaliseren (NL-komma → punt); leeg → null. */
-function moneyOrNull(v?: string): string | null {
-  const s = (v ?? "").trim().replace(/\./g, "").replace(",", ".");
-  if (!s) return null;
-  const n = Number(s);
-  return Number.isFinite(n) ? String(n) : null;
-}
+// Zie lib/parse-money.ts: "28.000000" is 28, geen 28 miljoen.
 
 const workerSchema = z.object({
   name: z.string().trim().min(1, "Naam is verplicht"),

@@ -16,6 +16,7 @@ import { SubmitButton } from "@/components/submit-button";
 import { db } from "@/lib/db";
 import { workers } from "@/lib/db/schema";
 import { supplierKey } from "@/lib/supplier-key";
+import { moneyForInput } from "@/lib/parse-money";
 import { formatEUR } from "@/lib/utils";
 import { createWorker, toggleWorkerActive, updateWorker } from "./actions";
 
@@ -113,7 +114,7 @@ export default async function PloegPage() {
                   <Input
                     name="hourlyCostEur"
                     inputMode="decimal"
-                    defaultValue={w.hourlyCostEur ? String(w.hourlyCostEur).replace(".", ",") : ""}
+                    defaultValue={moneyForInput(w.hourlyCostEur)}
                   />
                 </Field>
                 <Field label="Standaard betaalwijze">

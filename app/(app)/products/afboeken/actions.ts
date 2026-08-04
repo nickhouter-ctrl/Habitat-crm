@@ -5,11 +5,11 @@ import { redirect } from "next/navigation";
 
 import { requireWriteUser } from "@/lib/auth/guards";
 import { reverseStockWriteoff, writeOffStock, type WriteoffReason } from "@/lib/stock-writeoff";
+import { parseMoney } from "@/lib/parse-money";
 
-/** "1.234,5" → 1234.5 */
+/** "1.234,5" → 1234.5 · "28.000000" → 28 (zie lib/parse-money.ts). */
 function aantal(v: string): number {
-  const n = Number(v.trim().replace(/\./g, "").replace(",", "."));
-  return Number.isFinite(n) ? n : 0;
+  return parseMoney(v) ?? 0;
 }
 
 export async function writeOffStockAction(formData: FormData) {
