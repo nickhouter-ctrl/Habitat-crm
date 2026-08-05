@@ -12,6 +12,8 @@
 import { sql } from "drizzle-orm";
 
 import { db } from "@/lib/db";
+import { lineMaterialCostEur, normalizeDocItems } from "@/lib/documents";
+import type { DocumentLineItem } from "@/lib/db/schema";
 import { alGedekt } from "@/lib/project-receipts";
 
 const eur = (n: number) =>
@@ -24,6 +26,8 @@ export type Signaal = { ernst: "hoog" | "middel" | "laag"; titel: string; regels
 export type Projectcijfers = {
   naam: string; doel: number | null; arbeid: number; inkoop: number; losse: number;
   levKost: number; gefactureerd: number; openFacturen: number; ontvangenIncl: number; ontvangenEx: number;
+  /** Kostprijs van de op facturen gezette eigen producten — zelfde som als de projectpagina. */
+  eigenKost: number;
 };
 
 export type Weekcontrole = { signalen: Signaal[]; projecten: Projectcijfers[]; openTotaal: number };
@@ -176,9 +180,47 @@ export async function verzamelWeekcontrole(): Promise<Weekcontrole> {
     where p.status = 'active' and p.name not in ('test')
     order by p.contract_price_eur desc nulls last, p.name`);
 
+  /* ── Kostprijs van gefactureerde eigen producten — zelfde rekenwijze als de
+        projectpagina (regel-kostprijs, anders catalogus op productId of SKU).
+        Zonder deze post stond Silvestre hier € 24.944 lager dan in het CRM. ── */
+  const projectIds = await db.execute<{ id: string; naam: string }>(sql`
+    select id, name naam from projects where status = 'active'`);
+  const idPerNaam = new Map(projectIds.map((r) => [r.naam, r.id]));
+  const docs = await db.execute<{ project_id: string; kind: string; items: unknown }>(sql`
+    select project_id, kind, items from documents
+    where kind in ('invoice','creditnote') and status not in ('draft','void')
+      and project_id = any(${sql.raw(`ARRAY[${projectIds.map((r) => `'${r.id}'`).join(",") || "null"}]::uuid[]`)})`);
+  const pids = new Set<string>();
+  const skus = new Set<string>();
+  for (const d of docs)
+    for (const it of normalizeDocItems(d.items)) {
+      if (it.productId) pids.add(it.productId);
+      if (it.description?.trim()) skus.add(it.description.trim());
+    }
+  const kostRows =
+    pids.size || skus.size
+      ? await db.execute<{ id: string; sku: string | null; cost: number | null }>(sql`
+          select id, sku, cost_eur::float8 cost from products
+          where id = any(${sql.raw(`ARRAY[${[...pids].map((x) => `'${x}'`).join(",") || "null"}]::uuid[]`)})
+             or sku = any(${sql.raw(`ARRAY[${[...skus].map((x) => `'${x.replace(/'/g, "''")}'`).join(",") || "null"}]::text[]`)})`)
+      : [];
+  const kostPerId = new Map(kostRows.map((r) => [r.id, Number(r.cost ?? 0)]));
+  const kostPerSku = new Map(kostRows.filter((r) => r.sku).map((r) => [r.sku as string, Number(r.cost ?? 0)]));
+  const productCostOf = (it: DocumentLineItem) =>
+    (it.productId ? kostPerId.get(it.productId) : undefined) ??
+    (it.description ? kostPerSku.get(it.description.trim()) : undefined);
+  const eigenKostPerProject = new Map<string, number>();
+  for (const d of docs) {
+    const teken = d.kind === "creditnote" ? -1 : 1;
+    let kost = 0;
+    for (const it of normalizeDocItems(d.items)) kost += lineMaterialCostEur(it, productCostOf);
+    eigenKostPerProject.set(d.project_id, (eigenKostPerProject.get(d.project_id) ?? 0) + teken * kost);
+  }
+  for (const p of projecten) p.eigenKost = eigenKostPerProject.get(idPerNaam.get(p.naam) ?? "") ?? 0;
+
   /* ── H · Kostenplafond (85% van het doel) ── */
   for (const p of projecten) {
-    const kosten = p.arbeid + p.inkoop + p.losse + p.levKost;
+    const kosten = p.arbeid + p.inkoop + p.losse + p.levKost + p.eigenKost;
     if (p.doel && p.doel > 0 && kosten > p.doel * 0.85) {
       signalen.push({
         ernst: kosten > p.doel ? "hoog" : "middel",
@@ -197,7 +239,7 @@ export function bouwArtifactHtml({ signalen, projecten, openTotaal }: Weekcontro
   const nu = new Date().toLocaleString("nl-NL", { dateStyle: "full", timeStyle: "short" });
   const hoog = signalen.filter((s) => s.ernst === "hoog").length;
   const middel = signalen.filter((s) => s.ernst === "middel").length;
-  const kostenTotaal = projecten.reduce((s, p) => s + p.arbeid + p.inkoop + p.losse + p.levKost, 0);
+  const kostenTotaal = projecten.reduce((s, p) => s + p.arbeid + p.inkoop + p.losse + p.levKost + p.eigenKost, 0);
   const ontvangenTotaal = projecten.reduce((s, p) => s + p.ontvangenEx, 0);
 
   const signaalHtml = signalen.length
@@ -214,7 +256,7 @@ export function bouwArtifactHtml({ signalen, projecten, openTotaal }: Weekcontro
 
   const rijen = projecten
     .map((p) => {
-      const kosten = p.arbeid + p.inkoop + p.losse + p.levKost;
+      const kosten = p.arbeid + p.inkoop + p.losse + p.levKost + p.eigenKost;
       const plafond = p.doel && p.doel > 0 ? kosten / (p.doel * 0.85) : null;
       return `<tr>
         <td class="naam">${esc(p.naam)}</td>
@@ -307,7 +349,7 @@ export function bouwArtifactHtml({ signalen, projecten, openTotaal }: Weekcontro
 
   <footer>
     Indicatieve cijfers — de projectpagina in het CRM is leidend. Saldo = ontvangen (ex. btw) − kosten.
-    Kosten = arbeid + inkoop + losse kosten + kostprijs geleverde producten. Deze pagina wordt wekelijks automatisch ververst.
+    Kosten = arbeid + inkoop + losse kosten + kostprijs van geleverde én gefactureerde eigen producten — dezelfde som als de projectpagina. Deze pagina wordt wekelijks automatisch ververst.
   </footer>
 </main>`;
 }
