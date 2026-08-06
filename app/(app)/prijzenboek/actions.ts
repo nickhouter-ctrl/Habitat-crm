@@ -218,6 +218,11 @@ export async function createQuoteFromPriceBook(formData: FormData) {
     totalEur: round2(totals.total),
     items,
     phases,
+    // Gestructureerd schema naast de leesbare tekst: bij akkoord worden
+    // hieruit de termijn-proforma's op het project klaargezet.
+    paymentSchedule: termijnen
+      .filter((t) => t.pct > 0 && t.label)
+      .map((t) => ({ label: t.label, pct: t.pct, amountEur: Math.round((totals.subtotal * t.pct) / 100) })),
     notes: [quoteClauses(taal), betalingsschemaTekst(taal, totals.subtotal, termijnen)].filter(Boolean).join("\n\n"),
   });
 

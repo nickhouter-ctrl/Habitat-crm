@@ -753,6 +753,9 @@ export const documents = pgTable(
     /** Offerte: geordende fase-definities (naam/volgorde/planning). Regels verwijzen
      * via `DocumentLineItem.phase` naar `key`. Leeg = niet in fases opgedeeld. */
     phases: jsonb().$type<DocumentPhase[]>(),
+    /** Gecalculeerde offerte: het betalingsschema (label, % en bedrag ex btw per
+     * termijn) — bij akkoord worden hieruit de termijn-proforma's klaargezet. */
+    paymentSchedule: jsonb().$type<{ label: string; pct: number; amountEur: number }[]>(),
     /** Factuur: welke offerte-fase deze (deel)factuur dekt — zodat de offerte per
      * fase 'gefactureerd' kan tonen. Null = niet fase-gebaseerd (bv. percentage). */
     coveredPhase: text(),
