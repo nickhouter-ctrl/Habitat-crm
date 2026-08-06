@@ -75,7 +75,7 @@ const POSTEN: Post[] = [
   { h: "Elektra", n: "Groepenkast vernieuwen", d: "conform huidige norm", unit: "forfait", driver: "handmatig", kost: 1450 },
 
   // ── Airco & klimaat ──
-  { h: "Airco & klimaat", n: "Airco split-unit (basis)", d: "geplaatst en in bedrijf gesteld", unit: "stuk", driver: "aircounits", kost: 1350, stelpost: MEERPRIJS },
+  { h: "Airco & klimaat", n: "Airco split-unit (basis)", d: "geplaatst en in bedrijf gesteld — ± € 1.000 unit en leidingset + € 500 montage", unit: "stuk", driver: "aircounits", kost: 1500, stelpost: MEERPRIJS },
   { h: "Airco & klimaat", n: "Airco multi-split / premium merk", d: "meerprijs t.o.v. basis split-unit", unit: "stuk", driver: "handmatig", kost: 2400, stelpost: "prijs afhankelijk van merk en aantal binnenunits" },
   { h: "Airco & klimaat", n: "Warmtepomp + installatie", d: "lucht/water incl. buffervat en inregelen — ± € 7.000 levering + € 2.500 installatie", unit: "stuk", driver: "warmtepompen", kost: 9500,
     stelpost: "capaciteit en merk in overleg — definitieve prijs na warmteverliesberekening" },
@@ -95,7 +95,7 @@ const POSTEN: Post[] = [
     stelpost: "gemiddelde uit geleverde kozijnen (± € 390/m² levering); grote schuifpuien, speciale kleuren of hout wijken af — definitief na opmeting" },
 
   // ── Keuken ──
-  { h: "Keuken", n: "Keuken plaatsen", d: "montage en aansluitingen water/elektra/afvoer", unit: "forfait", driver: "keukens", kost: 2400 },
+  { h: "Keuken", n: "Keuken plaatsen", d: "montage en aansluitingen water/elektra/afvoer — een week met 2 man: ± € 300 materiaal + € 2.100 arbeid (± 80 u)", unit: "forfait", driver: "keukens", kost: 2400 },
   { h: "Keuken", n: "Keuken leveren", d: "incl. apparatuur", unit: "forfait", driver: "keukens", kost: 10000, marge: 23, stelpost: MEERPRIJS },
 
   // ── Zwembad ──
