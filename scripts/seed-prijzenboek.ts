@@ -129,7 +129,7 @@ const POSTEN: Post[] = [
     stelpost: "bij rots of hardere grondslag dan verwacht geldt een meerprijs, op regiebasis" },
 
   // ── Eigen producten ──
-  { h: "Eigen producten", n: "Wandpanelen (eigen collectie)", d: "serie naar keuze uit de Habitat-collectie, geplaatst", unit: "m²", driver: "handmatig", kost: null, marge: 45,
+  { h: "Eigen producten", n: "Wandpanelen (eigen collectie)", d: "eigen collectie (± € 75/m² verkoop) + plaatsen zoals wandtegels (± € 50/m²) — serie naar keuze", unit: "m²", driver: "wandpanelen_m2", kost: 65, marge: 48,
     stelpost: "prijs per serie volgens de prijslijst — gekozen serie bepaalt de definitieve prijs" },
   // Automatisch per badkamer-samenstelling; prijzen worden live uit de
   // catalogus ververst (lib/sanitair-prijzen.ts).

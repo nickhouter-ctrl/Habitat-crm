@@ -66,6 +66,7 @@ export const DRIVERS: Driver[] = [
   // schuifpui van 8 m² is geen draaikiepraam van 1,2 m².
   { key: "kozijnen_m2", label: "Kozijnen (oppervlak b×h)", groep: "interieur", eenheid: "m²" },
   { key: "keukens", label: "Keukens", groep: "interieur", eenheid: "stuks" },
+  { key: "wandpanelen_m2", label: "Wandpanelen (eigen collectie)", groep: "interieur", eenheid: "m²" },
 
   // Per m² wateroppervlak, niet per stuk: een zwembad van 10×5 is anderhalf
   // keer een 8×4 en hoort dus ook anderhalf keer zoveel te kosten.
