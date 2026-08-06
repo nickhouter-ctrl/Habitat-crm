@@ -68,7 +68,7 @@ const POSTEN: Post[] = [
   { h: "Badkamers & sanitair", n: "Hangtoilet monteren (incl. inbouwframe)", d: "montage incl. inbouwframe en afwerkplaat (frame is materiaal) — het toilet staat bij Eigen producten", unit: "stuk", driver: "toiletten", kost: 335 },
 
   // ── Loodgieterwerk ──
-  { h: "Loodgieterwerk", n: "Waterleiding vernieuwen", d: "per aftappunt", unit: "punt", driver: "handmatig", kost: 185 },
+  { h: "Loodgieterwerk", n: "Waterleiding vernieuwen", d: "per aftappunt", unit: "punt", driver: "handmatig", kost: 150, marge: 43 },
   { h: "Loodgieterwerk", n: "Afvoer vernieuwen", unit: "m", driver: "handmatig", kost: 65 },
   { h: "Loodgieterwerk", n: "Septictank vervangen", d: "levering en plaatsing nieuwe tank — ± € 3.500 tank + € 5.500 graaf- en aansluitwerk", unit: "forfait", driver: "handmatig", kost: 9000,
     stelpost: "alleen indien de bestaande tank defect blijkt; werkelijke staat is pas zichtbaar na opgraven" },
@@ -80,7 +80,7 @@ const POSTEN: Post[] = [
   // ── Airco & klimaat ──
   { h: "Airco & klimaat", n: "Airco split-unit (basis)", d: "geplaatst en in bedrijf gesteld — ± € 1.000 unit en leidingset + € 500 montage", unit: "stuk", driver: "aircounits", kost: 1500, stelpost: MEERPRIJS },
   { h: "Airco & klimaat", n: "Airco kanaalsysteem (conductos)", d: "per aangesloten ruimte: aandeel unit, kanalen en roosters — ± € 700 levering + € 250 installatie; excl. verlaagd plafond (aparte post)", unit: "stuk", driver: "kanaalairco_ruimtes", kost: 950, stelpost: "capaciteit en merk na warmteverliesberekening; compleet systeem in Spanje € 3.500–8.000 instalado" },
-  { h: "Airco & klimaat", n: "Warmtepomp + installatie", d: "lucht/water incl. buffervat en inregelen — ± € 7.000 levering + € 2.500 installatie", unit: "stuk", driver: "warmtepompen", kost: 9500,
+  { h: "Airco & klimaat", n: "Warmtepomp + installatie", d: "lucht/water incl. buffervat en inregelen — ± € 7.000 levering + € 2.500 installatie", unit: "stuk", driver: "warmtepompen", kost: 8500, marge: 37,
     stelpost: "capaciteit en merk in overleg — definitieve prijs na warmteverliesberekening" },
   { h: "Airco & klimaat", n: "Vloerverwarming", d: "incl. verdeler, excl. afwerkvloer (aparte post)", unit: "m²", driver: "vloerverwarming_m2", kost: 55 },
 
@@ -102,7 +102,7 @@ const POSTEN: Post[] = [
   { h: "Keuken", n: "Keuken leveren", d: "incl. apparatuur", unit: "forfait", driver: "keukens", kost: 10000, marge: 23, stelpost: MEERPRIJS },
 
   // ── Zwembad ──
-  { h: "Zwembad", n: "Nieuw zwembad", d: "beton, incl. techniek en afwerking — € 1.250 verkoop per m² wateroppervlak (8×4 = 32 m² → € 40.000)", unit: "m²", driver: "zwembad_m2", kost: 1000, marge: 20,
+  { h: "Zwembad", n: "Nieuw zwembad", d: "beton, incl. techniek en afwerking — € 1.250 verkoop per m² wateroppervlak (8×4 = 32 m² → € 40.000)", unit: "m²", driver: "zwembad_m2", kost: 900, marge: 28,
     stelpost: "bij rotsachtige ondergrond geldt een meerprijs voor het uitgraven, op regiebasis" },
   { h: "Zwembad", n: "Zwembad renoveren", d: "nieuwe afwerking en techniek — prijs per m² wateroppervlak", unit: "m²", driver: "zwembad_renovatie_m2", kost: 300, stelpost: MEERPRIJS },
 
@@ -114,7 +114,7 @@ const POSTEN: Post[] = [
     stelpost: "maat en uitvoering bepalen de definitieve prijs — middenklasse aluminium inbegrepen" },
   { h: "Buitenruimte", n: "Zonnepanelen (per paneel)", d: "incl. omvormer en installatie naar rato", unit: "stuk", driver: "zonnepanelen", kost: 450,
     stelpost: "definitieve prijs na dakinspectie en legplan" },
-  { h: "Buitenruimte", n: "Carport", d: "hout met dakbedekking, ± 3×5 m — ± € 2.700 levering + € 800 montage", unit: "stuk", driver: "carports", kost: 3500,
+  { h: "Buitenruimte", n: "Carport", d: "hout met dakbedekking, ± 3×5 m — ± € 2.000 hout + € 1.000 fundering en montage", unit: "stuk", driver: "carports", kost: 3000, marge: 40,
     stelpost: "maat, uitvoering en fundering bepalen de definitieve prijs" },
   { h: "Buitenruimte", n: "Buitenkeuken", d: "gemetseld/beton met werkblad, excl. apparatuur", unit: "forfait", driver: "buitenkeukens", kost: 4500,
     stelpost: "uitvoering en apparatuur naar keuze — meerprijs wordt verrekend" },
