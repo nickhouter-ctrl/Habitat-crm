@@ -22,7 +22,7 @@ import {
   PageHeader,
   Select,
 } from "@/components/ui";
-import { BadkamerBlokken, MAX_BADKAMERS } from "@/components/badkamer-blokken";
+import { BadkamerBlokken } from "@/components/badkamer-blokken";
 import { BetalingsschemaBlok, MAX_TERMIJNEN } from "@/components/betalingsschema-blok";
 import { Combobox } from "@/components/combobox";
 import { SubmitButton } from "@/components/submit-button";
@@ -30,7 +30,7 @@ import { db } from "@/lib/db";
 import { contacts, priceBookItems, projects } from "@/lib/db/schema";
 import { moneyForInput, parseMoney } from "@/lib/parse-money";
 import { marginOf } from "@/lib/pricing";
-import { DRIVERS, DRIVER_GROEP_LABEL, DRIVER_HANDMATIG, HOOFDSTUKKEN, type DriverGroep } from "@/lib/price-book";
+import { badkamerSamenstelling, DRIVERS, DRIVER_GROEP_LABEL, DRIVER_HANDMATIG, HOOFDSTUKKEN, type DriverGroep } from "@/lib/price-book";
 import { SCHEMA_FASEN } from "@/lib/quote-clauses";
 import { formatEUR } from "@/lib/utils";
 import { createQuoteFromPriceBook } from "../actions";
@@ -51,32 +51,9 @@ export default async function OfferteCalculatorPage({
     db.select({ id: projects.id, name: projects.name }).from(projects).orderBy(asc(projects.name)),
   ]);
 
-  // Badkamers worden per stuk uitgevraagd (badkamer 1 = 5 m², 1 douche, …);
-  // de sanitair-drivers zijn de sommen over die blokken. Het opgegeven aantal
-  // badkamers bepaalt hoeveel installaties er tellen, ook als een blok
-  // (nog) niet is ingevuld.
-  const aantalBadkamers = Math.min(Math.max(Number.parseInt(params.b_aantal ?? "", 10) || 0, 0), MAX_BADKAMERS);
-  const badkamerVeld = (i: number, veld: string) => parseMoney(params[`b${i}_${veld}`] ?? "") ?? 0;
-  const badkamers = Array.from({ length: aantalBadkamers }, (_, idx) => {
-    const i = idx + 1;
-    return {
-      i,
-      m2: badkamerVeld(i, "m2"),
-      douches: badkamerVeld(i, "douches"),
-      baden: badkamerVeld(i, "baden"),
-      wastafels: badkamerVeld(i, "wastafels"),
-      toiletten: badkamerVeld(i, "toiletten"),
-    };
-  });
-  const gebruikteBadkamers = badkamers.filter((b) => b.m2 || b.douches || b.baden || b.wastafels || b.toiletten);
-  const sanitairTotalen: Record<string, number> = {
-    badkamers: aantalBadkamers,
-    badkamer_m2: badkamers.reduce((s, b) => s + b.m2, 0),
-    douches: badkamers.reduce((s, b) => s + b.douches, 0),
-    baden: badkamers.reduce((s, b) => s + b.baden, 0),
-    wastafels: badkamers.reduce((s, b) => s + b.wastafels, 0),
-    toiletten: badkamers.reduce((s, b) => s + b.toiletten, 0),
-  };
+  // Badkamers per stuk (badkamer 1 = 5 m², 1 douche, …): de gedeelde helper
+  // rekent de driver-totalen — exact dezelfde code als de aanmaak-actie.
+  const { totalen: sanitairTotalen } = badkamerSamenstelling((veld) => params[veld] ?? "");
 
   // Afgeleide maten: containers/stort volgen het totale sloopwerk
   // (gesloopte wanden + vloeren + badkamervloeren).
@@ -128,28 +105,6 @@ export default async function OfferteCalculatorPage({
   const verkoopMetOnvoorzien = verkoop * (1 + onvoorzien / 100);
 
   const groepen = [...new Set(DRIVERS.map((d) => d.groep))] as DriverGroep[];
-
-  // De volledige invoer als querystring: gaat mee de offerte in (logboek) zodat
-  // je later precies ziet op welke maten de prijs was gebaseerd — en er met
-  // één klik opnieuw mee kunt rekenen.
-  const wizardQuery = new URLSearchParams(
-    Object.entries(params).filter(([k, v]) => v != null && v !== "" && k !== "fout") as [string, string][],
-  ).toString();
-
-  // Samenstelling per badkamer — komt als specificatie op de offerte-regel
-  // "Badkamer installatie compleet" (bv. "Badkamer 1: 5 m², 1× douche, …").
-  const badkamerSpec = gebruikteBadkamers
-    .map((b) => {
-      const delen = [
-        b.m2 ? `${moneyForInput(b.m2)} m²` : null,
-        b.douches ? `${b.douches}× douche` : null,
-        b.baden ? `${b.baden}× bad` : null,
-        b.wastafels ? `${b.wastafels}× wastafel` : null,
-        b.toiletten ? `${b.toiletten}× toilet` : null,
-      ].filter(Boolean);
-      return `Badkamer ${b.i}: ${delen.join(", ")}`;
-    })
-    .join(" · ");
 
   return (
     <>
@@ -237,8 +192,15 @@ export default async function OfferteCalculatorPage({
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
-              <input type="hidden" name="badkamerSpec" value={badkamerSpec} />
-              <input type="hidden" name="wizardQuery" value={wizardQuery} />
+              {/* Controle-regel: wat er uit de badkamer-blokken is meegerekend.
+                  Staat hier bewust zichtbaar — als dit 0 toont terwijl boven wél
+                  badkamers zijn ingevuld, is de invoer niet meegekomen. */}
+              <p className="rounded-md bg-background/60 px-3 py-2 text-xs text-muted">
+                Meegerekend uit de badkamers: <strong className="text-foreground">{sanitairTotalen.badkamers}</strong> badkamer{sanitairTotalen.badkamers === 1 ? "" : "s"} ·{" "}
+                <strong className="text-foreground">{moneyForInput(sanitairTotalen.badkamer_m2) || 0} m²</strong> vloer ·{" "}
+                <strong className="text-foreground">{sanitairTotalen.douches}</strong> douches · <strong className="text-foreground">{sanitairTotalen.baden}</strong> baden ·{" "}
+                <strong className="text-foreground">{sanitairTotalen.wastafels}</strong> wastafels · <strong className="text-foreground">{sanitairTotalen.toiletten}</strong> toiletten
+              </p>
 
               {HOOFDSTUKKEN.map((hoofdstuk) => {
                 const rijen = posten.filter((p) => p.chapter === hoofdstuk);

@@ -102,7 +102,7 @@ const POSTEN: Post[] = [
   { h: "Keuken", n: "Keuken leveren", d: "incl. apparatuur", unit: "forfait", driver: "keukens", kost: 10000, marge: 23, stelpost: MEERPRIJS },
 
   // ── Zwembad ──
-  { h: "Zwembad", n: "Nieuw zwembad", d: "beton, incl. techniek en afwerking — per m² wateroppervlak; 8×4 = 32 m² → € 52.000", unit: "m²", driver: "zwembad_m2", kost: 1250, marge: 23,
+  { h: "Zwembad", n: "Nieuw zwembad", d: "beton, incl. techniek en afwerking — € 1.250 verkoop per m² wateroppervlak (8×4 = 32 m² → € 40.000)", unit: "m²", driver: "zwembad_m2", kost: 1000, marge: 20,
     stelpost: "bij rotsachtige ondergrond geldt een meerprijs voor het uitgraven, op regiebasis" },
   { h: "Zwembad", n: "Zwembad renoveren", d: "nieuwe afwerking en techniek — prijs per m² wateroppervlak", unit: "m²", driver: "zwembad_renovatie_m2", kost: 300, stelpost: MEERPRIJS },
 

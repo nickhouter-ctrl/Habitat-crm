@@ -122,3 +122,49 @@ export const EENHEDEN = ["m²", "m", "m³", "stuk", "punt", "forfait"] as const;
 
 /** Standaardmarge (van de verkoopprijs) — keuze van Nick, 06-08-2026: ruim. */
 export const DEFAULT_PRIJZENBOEK_MARGE = 30;
+
+/* ───────────────────────── badkamer-samenstelling ─────────────────────────
+ * De wizard vraagt badkamers per stuk uit (b_aantal, b1_m2, b1_douches, …).
+ * Deze helper leest die velden — uit de URL óf uit FormData — en levert de
+ * driver-totalen plus de specificatie-tekst voor op de offerte. Eén plek,
+ * zodat voorbeeld en aanmaak-actie gegarandeerd hetzelfde rekenen. */
+
+export type BadkamerBlok = { i: number; m2: number; douches: number; baden: number; wastafels: number; toiletten: number };
+
+export const MAX_BADKAMER_BLOKKEN = 12;
+
+export function badkamerSamenstelling(lees: (veldnaam: string) => string) {
+  const num = (s: string) => {
+    const n = Number(s.trim().replace(",", "."));
+    return s.trim() !== "" && Number.isFinite(n) && n >= 0 ? n : 0;
+  };
+  const aantal = Math.min(Math.max(Number.parseInt(lees("b_aantal"), 10) || 0, 0), MAX_BADKAMER_BLOKKEN);
+  const blokken: BadkamerBlok[] = Array.from({ length: aantal }, (_, idx) => {
+    const i = idx + 1;
+    const veld = (v: string) => num(lees(`b${i}_${v}`));
+    return { i, m2: veld("m2"), douches: veld("douches"), baden: veld("baden"), wastafels: veld("wastafels"), toiletten: veld("toiletten") };
+  });
+  const som = (k: keyof Omit<BadkamerBlok, "i">) => blokken.reduce((s, b) => s + b[k], 0);
+  const totalen: Record<string, number> = {
+    badkamers: aantal,
+    badkamer_m2: som("m2"),
+    douches: som("douches"),
+    baden: som("baden"),
+    wastafels: som("wastafels"),
+    toiletten: som("toiletten"),
+  };
+  const spec = blokken
+    .filter((b) => b.m2 || b.douches || b.baden || b.wastafels || b.toiletten)
+    .map((b) => {
+      const delen = [
+        b.m2 ? `${String(b.m2).replace(".", ",")} m²` : null,
+        b.douches ? `${b.douches}× douche` : null,
+        b.baden ? `${b.baden}× bad` : null,
+        b.wastafels ? `${b.wastafels}× wastafel` : null,
+        b.toiletten ? `${b.toiletten}× toilet` : null,
+      ].filter(Boolean);
+      return `Badkamer ${b.i}: ${delen.join(", ")}`;
+    })
+    .join(" · ");
+  return { blokken, totalen, spec };
+}

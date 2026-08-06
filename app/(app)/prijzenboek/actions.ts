@@ -17,7 +17,7 @@ import {
 import { computeTotals } from "@/lib/documents";
 import { insertNumberedDocument } from "@/lib/doc-number";
 import { moneyOrNull, parseMoney } from "@/lib/parse-money";
-import { DEFAULT_PRIJZENBOEK_MARGE, HOOFDSTUKKEN } from "@/lib/price-book";
+import { badkamerSamenstelling, DEFAULT_PRIJZENBOEK_MARGE, HOOFDSTUKKEN } from "@/lib/price-book";
 import { betalingsschemaTekst, quoteClauses, SCHEMA_FASEN, type QuoteLang } from "@/lib/quote-clauses";
 import { syncSanitairPrijzen } from "@/lib/sanitair-prijzen";
 import { suggestedPrice } from "@/lib/pricing";
@@ -117,8 +117,16 @@ export async function createQuoteFromPriceBook(formData: FormData) {
   const projectId = uuidOrNull(formData.get("projectId"));
   const taal = (["nl", "en", "es"].includes(String(formData.get("taal"))) ? String(formData.get("taal")) : "nl") as QuoteLang;
   const onvoorzienPct = parseMoney(String(formData.get("onvoorzien") ?? "")) ?? 10;
-  const badkamerSpec = String(formData.get("badkamerSpec") ?? "").trim();
-  const wizardQuery = String(formData.get("wizardQuery") ?? "").trim();
+  // Badkamer-specificatie en herreken-link uit de formulierdata zelf afleiden
+  // (zelfde helper als het voorbeeld). Vroeger reisden die als hidden velden
+  // mee en stapelden ze zich bij elke herberekening op in de URL.
+  const { spec: badkamerSpec } = badkamerSamenstelling((veld) => String(formData.get(veld) ?? ""));
+  const invoerVelden = /^(bereken|taal|onvoorzien|contactId|projectId|b_aantal|b\d+_|d_|s_aantal|s\d+_|q_)/;
+  const wizardQuery = new URLSearchParams(
+    [...formData.entries()].filter(
+      (e): e is [string, string] => typeof e[1] === "string" && e[1] !== "" && invoerVelden.test(e[0]),
+    ),
+  ).toString();
   // Betalingsschema: vrij aantal termijnen met eigen omschrijving en %.
   const schemaStandaard = SCHEMA_FASEN.map((f) => ({ label: f[taal], pct: f.standaard }));
   const sAantal = Math.min(
