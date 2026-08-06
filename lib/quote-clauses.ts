@@ -140,9 +140,9 @@ const TERMIJN_BOUWSTENEN: { hoofdstukken: string[]; nl: string; en: string; es: 
   { hoofdstukken: ["Loodgieterwerk", "Elektra"], nl: "bij start van de installaties (leidingwerk, elektra)", en: "on start of the installations (plumbing, electrics)", es: "al inicio de las instalaciones (fontanería, electricidad)" },
   { hoofdstukken: ["Airco & klimaat"], nl: "bij start van de klimaatinstallatie (airco, warmtepomp, vloerverwarming)", en: "on start of the climate installation (air conditioning, heat pump, underfloor heating)", es: "al inicio de la climatización (aire acondicionado, bomba de calor, suelo radiante)" },
   { hoofdstukken: ["Stucwerk", "Schilderwerk"], nl: "bij start van het stuc- en schilderwerk", en: "on start of plastering and painting", es: "al inicio del enlucido y pintura" },
-  { hoofdstukken: ["Tegelwerk", "Vloeren & plafonds"], nl: "bij start van het tegel- en vloerwerk", en: "on start of tiling and flooring", es: "al inicio del alicatado y los suelos" },
+  { hoofdstukken: ["Tegelwerk", "Vloeren, wanden & plafonds"], nl: "bij start van het tegel- en vloerwerk", en: "on start of tiling and flooring", es: "al inicio del alicatado y los suelos" },
   { hoofdstukken: ["Kozijnen", "Binnendeuren"], nl: "bij levering van kozijnen en deuren", en: "on delivery of window frames and doors", es: "a la entrega de carpinterías y puertas" },
-  { hoofdstukken: ["Badkamers & sanitair", "Keuken", "Eigen producten"], nl: "bij levering van sanitair, keuken en producten", en: "on delivery of sanitary ware, kitchen and products", es: "a la entrega de sanitarios, cocina y productos" },
+  { hoofdstukken: ["Badkamers & sanitair", "Keuken"], nl: "bij levering van sanitair, keuken en producten", en: "on delivery of sanitary ware, kitchen and products", es: "a la entrega de sanitarios, cocina y productos" },
   { hoofdstukken: ["Zwembad", "Buitenruimte", "Hekwerk & poort"], nl: "bij start van het buitenwerk (zwembad, terras, tuin)", en: "on start of the outdoor works (pool, terrace, garden)", es: "al inicio de los trabajos exteriores (piscina, terraza, jardín)" },
 ];
 

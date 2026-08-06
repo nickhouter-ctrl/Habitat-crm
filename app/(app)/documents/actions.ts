@@ -850,7 +850,7 @@ async function richtProjectInNaAkkoord(estimateId: string, userId: string | null
       const kost = regels.reduce((s, it) => s + (Number(it.costEur) || 0) * (Number(it.units) || 0), 0);
       await db.insert(projectBudgetLines).values({
         projectId,
-        category: hoofdstuk === "Eigen producten" ? "material" : "other",
+        category: "other",
         phase: hoofdstuk,
         description: hoofdstuk,
         amountEur: round2(verkoop),

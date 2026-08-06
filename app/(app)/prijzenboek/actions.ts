@@ -189,7 +189,7 @@ export async function createQuoteFromPriceBook(formData: FormData) {
         costEur: p.costEur != null ? Number(p.costEur) : undefined,
         marginPct: Number(p.marginPct),
         taxRate: 21,
-        category: hoofdstuk === "Eigen producten" ? "materiaal" : "renovatie",
+        category: "renovatie",
         phase: hoofdstuk,
         productId: p.productId ?? undefined,
       });

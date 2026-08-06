@@ -59,13 +59,13 @@ const POSTEN: Post[] = [
     stelpost: `tegels t/m € 30/m² inbegrepen — ${MEERPRIJS}` },
 
   // ── Vloeren & plafonds ──
-  { h: "Vloeren & plafonds", n: "Verlaagd plafond (gyproc)", d: "incl. profielen en afwerking, excl. spots — ± € 18 materiaal + € 30 arbeid per m²", unit: "m²", driver: "plafond_m2", kost: 48 },
-  { h: "Vloeren & plafonds", n: "Parket / laminaat leggen", d: "incl. ondervloer en plinten — ± € 25 laminaat + € 35 leggen per m² (verkoop)", unit: "m²", driver: "parket_m2", kost: 40, marge: 33,
+  { h: "Vloeren, wanden & plafonds", n: "Verlaagd plafond (gyproc)", d: "incl. profielen en afwerking, excl. spots — ± € 18 materiaal + € 30 arbeid per m²", unit: "m²", driver: "plafond_m2", kost: 48 },
+  { h: "Vloeren, wanden & plafonds", n: "Parket / laminaat leggen", d: "incl. ondervloer en plinten — ± € 25 laminaat + € 35 leggen per m² (verkoop)", unit: "m²", driver: "parket_m2", kost: 40, marge: 33,
     stelpost: "laminaat t/m € 25/m² inbegrepen — duurdere keuze (parket) wordt als meerprijs verrekend" },
-  { h: "Vloeren & plafonds", n: "Afwerkvloer / dekvloer", d: "zandcement dekvloer over de vloerverwarming, klaar voor tegelwerk — ± € 8 materiaal + € 14 arbeid per m²", unit: "m²", driver: "vloerverwarming_m2", kost: 22 },
-  { h: "Vloeren & plafonds", n: "SPC / PVC vloer", d: "eigen collectie (€ 37,50/m² verkoop) + € 35 leggen incl. ondervloer en plinten", unit: "m²", driver: "spc_m2", kost: 31, marge: 58,
+  { h: "Vloeren, wanden & plafonds", n: "Afwerkvloer / dekvloer", d: "zandcement dekvloer over de vloerverwarming, klaar voor tegelwerk — ± € 8 materiaal + € 14 arbeid per m²", unit: "m²", driver: "vloerverwarming_m2", kost: 22 },
+  { h: "Vloeren, wanden & plafonds", n: "SPC / PVC vloer", d: "eigen collectie (€ 37,50/m² verkoop) + € 35 leggen incl. ondervloer en plinten", unit: "m²", driver: "spc_m2", kost: 31, marge: 58,
     stelpost: "dessin naar keuze uit de collectie — prijs per serie volgens de prijslijst" },
-  { h: "Vloeren & plafonds", n: "Microcement vloer of wand", d: "meerlaags aangebracht incl. toplaag", unit: "m²", driver: "microcement_m2", kost: 85,
+  { h: "Vloeren, wanden & plafonds", n: "Microcement vloer of wand", d: "meerlaags aangebracht incl. toplaag", unit: "m²", driver: "microcement_m2", kost: 85,
     stelpost: "kleur en textuur naar keuze — definitieve prijs na proefstaal" },
 
   // ── Badkamers & sanitair ──
@@ -159,21 +159,21 @@ const POSTEN: Post[] = [
     stelpost: "bij rots of hardere grondslag dan verwacht geldt een meerprijs, op regiebasis" },
 
   // ── Eigen producten ──
-  { h: "Eigen producten", n: "Wandpanelen", d: "eigen collectie (± € 75/m² verkoop) + plaatsen zoals wandtegels (± € 50/m²) — serie naar keuze", unit: "m²", driver: "wandpanelen_m2", kost: 65, marge: 48,
+  { h: "Vloeren, wanden & plafonds", n: "Wandpanelen", d: "eigen collectie (± € 75/m² verkoop) + plaatsen zoals wandtegels (± € 50/m²) — serie naar keuze", unit: "m²", driver: "wandpanelen_m2", kost: 65, marge: 48,
     stelpost: "prijs per serie volgens de prijslijst — gekozen serie bepaalt de definitieve prijs" },
   // Automatisch per badkamer-samenstelling; prijzen worden live uit de
   // catalogus ververst (lib/sanitair-prijzen.ts).
-  { h: "Eigen producten", n: "Inloopdouche compleet", d: "alles inbegrepen: douchevloer met tegelgoot óf douchebak (gemiddeld ± € 360), doucheset (± € 800) en glazen wand (± € 826)", unit: "stuk", driver: "douches", kost: 1100, marge: 44,
+  { h: "Badkamers & sanitair", n: "Inloopdouche compleet", d: "alles inbegrepen: douchevloer met tegelgoot óf douchebak (gemiddeld ± € 360), doucheset (± € 800) en glazen wand (± € 826)", unit: "stuk", driver: "douches", kost: 1100, marge: 44,
     stelpost: "gemiddelde serie — gekozen model bepaalt de definitieve prijs" },
-  { h: "Eigen producten", n: "Bad + badkraan", d: "vrijstaand bad uit eigen collectie (± € 1.928) + vrijstaande badkraan, los ingekocht (± € 1.000 verkoop)", unit: "stuk", driver: "baden", kost: 1538, marge: 47,
+  { h: "Badkamers & sanitair", n: "Bad + badkraan", d: "vrijstaand bad uit eigen collectie (± € 1.928) + vrijstaande badkraan, los ingekocht (± € 1.000 verkoop)", unit: "stuk", driver: "baden", kost: 1538, marge: 47,
     stelpost: "gemiddelde serie — gekozen model bepaalt de definitieve prijs" },
-  { h: "Eigen producten", n: "Wastafelmeubel, kraan en spiegel", d: "meubel (± € 950), kraan (± € 316), afvoerset en spiegel (± € 248) — gemiddelde serie", unit: "stuk", driver: "wastafels", kost: 944, marge: 42,
+  { h: "Badkamers & sanitair", n: "Wastafelmeubel, kraan en spiegel", d: "meubel (± € 950), kraan (± € 316), afvoerset en spiegel (± € 248) — gemiddelde serie", unit: "stuk", driver: "wastafels", kost: 944, marge: 42,
     stelpost: "gemiddelde serie — gekozen model bepaalt de definitieve prijs" },
-  { h: "Eigen producten", n: "Hangtoilet incl. accessoires", d: "hangtoilet (± € 413) + wc-borstel, toiletrolhouder en accessoires (± € 210); drukplaat zit bij het inbouwframe", unit: "stuk", driver: "toiletten", kost: 235, marge: 62,
+  { h: "Badkamers & sanitair", n: "Hangtoilet incl. accessoires", d: "hangtoilet (± € 413) + wc-borstel, toiletrolhouder en accessoires (± € 210); drukplaat zit bij het inbouwframe", unit: "stuk", driver: "toiletten", kost: 235, marge: 62,
     stelpost: "gemiddelde serie — gekozen model bepaalt de definitieve prijs" },
-  { h: "Eigen producten", n: "Waterdamphaard", d: "sfeerhaard op waterdamp, geplaatst en aangesloten — verkoopprijs eigen catalogus (gem. model)", unit: "stuk", driver: "handmatig", kost: 550, marge: 55,
+  { h: "Vloeren, wanden & plafonds", n: "Waterdamphaard", d: "sfeerhaard op waterdamp, geplaatst en aangesloten — verkoopprijs eigen catalogus (gem. model)", unit: "stuk", driver: "handmatig", kost: 550, marge: 55,
     stelpost: "gekozen model bepaalt de definitieve prijs" },
-  { h: "Eigen producten", n: "Badkamerproducten uit eigen catalogus", d: "kranen, spiegels en accessoires — kies de producten in de offerte-editor via de productkiezer", unit: "forfait", driver: "handmatig", kost: null, marge: 45, stelpost: MEERPRIJS },
+  { h: "Badkamers & sanitair", n: "Badkamerproducten uit eigen catalogus", d: "kranen, spiegels en accessoires — kies de producten in de offerte-editor via de productkiezer", unit: "forfait", driver: "handmatig", kost: null, marge: 45, stelpost: MEERPRIJS },
 ];
 
 async function main() {

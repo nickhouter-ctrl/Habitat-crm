@@ -127,6 +127,7 @@ export default async function DocumentDetailPage({
             id: true,
             kind: true,
             docNumber: true,
+            title: true,
             status: true,
             totalEur: true,
             paidEur: true,
@@ -656,7 +657,40 @@ export default async function DocumentDetailPage({
                 </div>
               )}
 
-              {doc.kind === "estimate" && phaseList.length > 0 && (
+              {/* Gecalculeerde offerte mét betalingsschema: factureren volgt de
+                  termijnen — exact dezelfde lijst als in de calculator. De
+                  termijn-proforma's worden bij akkoord klaargezet. */}
+              {doc.kind === "estimate" && Array.isArray(doc.paymentSchedule) && doc.paymentSchedule.length > 0 && (
+                <div className="space-y-2 rounded-md bg-background px-3 py-2.5">
+                  <p className="text-xs font-medium text-muted">Factureren per termijn (betalingsschema)</p>
+                  {doc.paymentSchedule.map((t, i) => {
+                    const proforma = linkedVoorschotten.find((v) => v.title?.startsWith(`Termijn ${i + 1} —`));
+                    return (
+                      <div key={i} className="flex items-center justify-between gap-2 border-b border-border/60 pb-1.5 last:border-0">
+                        <div className="min-w-0">
+                          <p className="truncate text-sm font-medium">
+                            {t.pct}% {t.label}
+                          </p>
+                          <p className="text-xs text-muted">Termijn {i + 1} · {formatEUR(t.amountEur)} ex. BTW</p>
+                        </div>
+                        {proforma ? (
+                          <Link href={`/documents/${proforma.id}`} className="text-sm text-accent hover:underline">
+                            {proforma.docNumber}
+                          </Link>
+                        ) : (
+                          <Badge tone="neutral">bij akkoord</Badge>
+                        )}
+                      </div>
+                    );
+                  })}
+                  <p className="text-[11px] text-muted">
+                    Bij akkoord op de offerte worden de termijn-proforma&apos;s automatisch op het project klaargezet —
+                    versturen en factureren doe je per termijn vanaf de proforma.
+                  </p>
+                </div>
+              )}
+
+              {doc.kind === "estimate" && !(Array.isArray(doc.paymentSchedule) && doc.paymentSchedule.length > 0) && phaseList.length > 0 && (
                 <div className="space-y-2 rounded-md bg-background px-3 py-2.5">
                   <p className="text-xs font-medium text-muted">Factureren per fase</p>
                   {phaseList.map((ph) => (

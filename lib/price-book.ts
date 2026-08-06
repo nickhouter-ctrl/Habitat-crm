@@ -113,7 +113,7 @@ export const HOOFDSTUKKEN = [
   "Stucwerk",
   "Schilderwerk",
   "Tegelwerk",
-  "Vloeren & plafonds",
+  "Vloeren, wanden & plafonds",
   "Badkamers & sanitair",
   "Loodgieterwerk",
   "Elektra",
@@ -126,7 +126,6 @@ export const HOOFDSTUKKEN = [
   "Buitenruimte",
   "Hekwerk & poort",
   "Aanbouw & kelder",
-  "Eigen producten",
 ] as const;
 
 export const EENHEDEN = ["m²", "m", "m³", "stuk", "punt", "forfait"] as const;

@@ -91,7 +91,7 @@ export async function syncSanitairPrijzen(): Promise<number> {
     await db.execute(sql`
       update price_book_items set cost_eur=${kost}, price_eur=${verkoop},
         margin_pct=${Math.round(((verkoop - kost) / verkoop) * 100)}, needs_review=false, updated_at=now()
-      where chapter='Eigen producten' and name=${p.naam}`);
+      where chapter='Badkamers & sanitair' and name=${p.naam}`);
     bijgewerkt++;
   }
   return bijgewerkt;
