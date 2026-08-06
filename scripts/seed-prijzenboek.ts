@@ -95,7 +95,7 @@ const POSTEN: Post[] = [
 
   // ── Kozijnen ──
   { h: "Kozijnen", n: "Kozijn (aluminium, geleverd en geplaatst)", d: "aluminium met thermische onderbreking, incl. beglazing en montage — ± € 490 levering + € 110 plaatsing per m² kozijnoppervlak (b × h)", unit: "m²", driver: "kozijnen_m2", kost: 600,
-    stelpost: "kunststof (PVC) is voordeliger (± € 390/m² levering, uit eigen leveringen); definitief na opmeting per kozijn" },
+    stelpost: "stelpost o.b.v. gemiddelde uit eigen leveringen; de definitieve kozijnofferte volgt na opmeting — valt die hoger uit, dan wordt het verschil als meerprijs verrekend (kunststof is voordeliger, ± € 390/m² levering)" },
 
   // ── Keuken ──
   { h: "Keuken", n: "Keuken plaatsen", d: "montage en aansluitingen water/elektra/afvoer — een week met 2 man: ± € 300 materiaal + € 2.100 arbeid (± 80 u)", unit: "forfait", driver: "keukens", kost: 2400 },
