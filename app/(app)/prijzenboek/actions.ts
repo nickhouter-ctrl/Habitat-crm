@@ -19,6 +19,7 @@ import { insertNumberedDocument } from "@/lib/doc-number";
 import { moneyOrNull, parseMoney } from "@/lib/parse-money";
 import { DEFAULT_PRIJZENBOEK_MARGE, HOOFDSTUKKEN } from "@/lib/price-book";
 import { betalingsschemaTekst, quoteClauses, SCHEMA_FASEN, type QuoteLang } from "@/lib/quote-clauses";
+import { syncSanitairPrijzen } from "@/lib/sanitair-prijzen";
 import { suggestedPrice } from "@/lib/pricing";
 
 /* ───────────────────────────── beheer ───────────────────────────── */
@@ -78,6 +79,13 @@ export async function addPriceBookItem(chapter: string, formData: FormData) {
     needsReview: false,
     sortOrder: 999,
   });
+  revalidatePath("/prijzenboek");
+}
+
+/** Ververs de "eigen collectie"-badkamerposten uit de actuele catalogusprijzen. */
+export async function verversSanitairUitCatalogus() {
+  await requireWriteUser();
+  await syncSanitairPrijzen();
   revalidatePath("/prijzenboek");
 }
 

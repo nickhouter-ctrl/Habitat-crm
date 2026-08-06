@@ -28,6 +28,9 @@ export const DRIVERS: Driver[] = [
   { key: "oprit_m2", label: "Oprit", groep: "oppervlaktes", eenheid: "m²" },
   { key: "aanbouw_m2", label: "Aanbouw", groep: "oppervlaktes", eenheid: "m²" },
   { key: "kelder_m3", label: "Kelder uitgraven", groep: "oppervlaktes", eenheid: "m³" },
+  { key: "parket_m2", label: "Parket / laminaat", groep: "oppervlaktes", eenheid: "m²" },
+  { key: "spc_m2", label: "SPC / PVC vloer", groep: "oppervlaktes", eenheid: "m²" },
+  { key: "microcement_m2", label: "Microcement", groep: "oppervlaktes", eenheid: "m²" },
 
   // De wizard vraagt dit per badkamer uit (badkamer 1 = 5 m², 1 douche, …)
   // en telt hier de totalen op — de posten rekenen met de sommen.
@@ -42,11 +45,13 @@ export const DRIVERS: Driver[] = [
   { key: "opbouw_wanden_m2", label: "Wanden opbouwen", groep: "wanden", eenheid: "m²" },
   { key: "stuc_binnen_m2", label: "Stucwerk binnen", groep: "wanden", eenheid: "m²" },
   { key: "stuc_buiten_m2", label: "Stucwerk buiten / gevel", groep: "wanden", eenheid: "m²" },
+  { key: "plafond_m2", label: "Verlaagd plafond (gyproc)", groep: "wanden", eenheid: "m²" },
 
   { key: "elektrapunten", label: "Elektrapunten", groep: "techniek", eenheid: "punten" },
   { key: "verlichtingspunten", label: "Verlichtingspunten", groep: "techniek", eenheid: "punten" },
   { key: "aircounits", label: "Airco-units", groep: "techniek", eenheid: "stuks" },
   { key: "warmtepompen", label: "Warmtepompen", groep: "techniek", eenheid: "stuks" },
+  { key: "zonnepanelen", label: "Zonnepanelen", groep: "techniek", eenheid: "stuks" },
 
   { key: "binnendeuren", label: "Binnendeuren", groep: "interieur", eenheid: "stuks" },
   // Per m² kozijnoppervlak (b × h): uit 57 geleverde leveranciersoffertes in
@@ -61,6 +66,9 @@ export const DRIVERS: Driver[] = [
   { key: "zwembad_renovatie_m2", label: "Zwembad renoveren (wateroppervlak)", groep: "buiten", eenheid: "m²" },
   { key: "hekwerk_m", label: "Hekwerk", groep: "buiten", eenheid: "m" },
   { key: "poorten", label: "Poorten", groep: "buiten", eenheid: "stuks" },
+  { key: "pergolas", label: "Pergola / zonwering", groep: "buiten", eenheid: "stuks" },
+  { key: "buitenkeukens", label: "Buitenkeuken", groep: "buiten", eenheid: "stuks" },
+  { key: "carports", label: "Carport", groep: "buiten", eenheid: "stuks" },
 ];
 
 export const DRIVER_GROEP_LABEL: Record<DriverGroep, string> = {

@@ -49,25 +49,25 @@ const POSTEN: Post[] = [
     stelpost: `tegels t/m € 30/m² inbegrepen — ${MEERPRIJS}` },
 
   // ── Vloeren & plafonds ──
-  { h: "Vloeren & plafonds", n: "Verlaagd plafond (gyproc)", d: "incl. profielen en afwerking, excl. spots — ± € 18 materiaal + € 30 arbeid per m²", unit: "m²", driver: "handmatig", kost: 48 },
-  { h: "Vloeren & plafonds", n: "Parket / laminaat leggen", d: "incl. ondervloer en plinten — ± € 30 levering + € 15 leggen per m²", unit: "m²", driver: "handmatig", kost: 45,
+  { h: "Vloeren & plafonds", n: "Verlaagd plafond (gyproc)", d: "incl. profielen en afwerking, excl. spots — ± € 18 materiaal + € 30 arbeid per m²", unit: "m²", driver: "plafond_m2", kost: 48 },
+  { h: "Vloeren & plafonds", n: "Parket / laminaat leggen", d: "incl. ondervloer en plinten — ± € 25 laminaat + € 35 leggen per m² (verkoop)", unit: "m²", driver: "parket_m2", kost: 40, marge: 33,
     stelpost: "laminaat t/m € 25/m² inbegrepen — duurdere keuze (parket) wordt als meerprijs verrekend" },
-  { h: "Vloeren & plafonds", n: "SPC / PVC vloer (eigen collectie)", d: "eigen collectie (± € 37/m² verkoop) incl. leggen, ondervloer en plinten — ± € 37 levering + € 17 leggen per m²", unit: "m²", driver: "handmatig", kost: 23, marge: 57,
+  { h: "Vloeren & plafonds", n: "SPC / PVC vloer (eigen collectie)", d: "eigen collectie (€ 37,50/m² verkoop) + € 35 leggen incl. ondervloer en plinten", unit: "m²", driver: "spc_m2", kost: 31, marge: 58,
     stelpost: "dessin naar keuze uit de collectie — prijs per serie volgens de prijslijst" },
-  { h: "Vloeren & plafonds", n: "Microcement vloer of wand", d: "meerlaags aangebracht incl. toplaag", unit: "m²", driver: "handmatig", kost: 85,
+  { h: "Vloeren & plafonds", n: "Microcement vloer of wand", d: "meerlaags aangebracht incl. toplaag", unit: "m²", driver: "microcement_m2", kost: 85,
     stelpost: "kleur en textuur naar keuze — definitieve prijs na proefstaal" },
 
   // ── Badkamers & sanitair ──
   { h: "Badkamers & sanitair", n: "Badkamer installatie compleet", d: "al het leiding- en afvoerwerk per badkamer: aanvoer/afvoer naar elk tappunt, incl. afmontage — sanitair zelf staat per stuk hieronder", unit: "stuk", driver: "badkamers", kost: 2400 },
-  { h: "Badkamers & sanitair", n: "Inloopdouche", d: "eigen collectie: douchebak, doucheset en glaswand (verkoopprijzen catalogus ± € 1.962) + € 286 montage", unit: "stuk", driver: "douches", kost: 1300, marge: 42, stelpost: MEERPRIJS },
-  { h: "Badkamers & sanitair", n: "Bad plaatsen", d: "eigen collectie: vrijstaand bad (± € 1.928) + kraanwerk + € 214 montage en aansluiten", unit: "stuk", driver: "baden", kost: 1510, marge: 37, stelpost: MEERPRIJS },
-  { h: "Badkamers & sanitair", n: "Wastafelmeubel + kraan", d: "eigen collectie: meubel (± € 950), kraan (± € 316) en afvoerset + € 114 montage", unit: "stuk", driver: "wastafels", kost: 865, marge: 42, stelpost: MEERPRIJS },
-  { h: "Badkamers & sanitair", n: "Hangtoilet incl. inbouwreservoir", d: "eigen collectie: hangtoilet (± € 413) + inbouwframe en afwerkplaat + € 193 montage", unit: "stuk", driver: "toiletten", kost: 500, marge: 47, stelpost: MEERPRIJS },
+  { h: "Badkamers & sanitair", n: "Inloopdouche monteren", d: "montage douchebak, goot, doucheset en glaswand — alleen arbeid; de producten staan bij Eigen producten", unit: "stuk", driver: "douches", kost: 200 },
+  { h: "Badkamers & sanitair", n: "Bad plaatsen", d: "alleen plaatsen en aansluiten, incl. kraanwerk-montage — het bad zelf staat bij Eigen producten", unit: "stuk", driver: "baden", kost: 150 },
+  { h: "Badkamers & sanitair", n: "Wastafelmeubel + kraan monteren", d: "ophangen, kraan plaatsen en aansluiten — meubel en kraan staan bij Eigen producten", unit: "stuk", driver: "wastafels", kost: 80 },
+  { h: "Badkamers & sanitair", n: "Hangtoilet monteren (incl. inbouwframe)", d: "montage incl. inbouwframe en afwerkplaat (frame is materiaal) — het toilet staat bij Eigen producten", unit: "stuk", driver: "toiletten", kost: 335 },
 
   // ── Loodgieterwerk ──
   { h: "Loodgieterwerk", n: "Waterleiding vernieuwen", d: "per aftappunt", unit: "punt", driver: "handmatig", kost: 185 },
   { h: "Loodgieterwerk", n: "Afvoer vernieuwen", unit: "m", driver: "handmatig", kost: 65 },
-  { h: "Loodgieterwerk", n: "Septictank vervangen", d: "levering en plaatsing nieuwe tank", unit: "forfait", driver: "handmatig", kost: 4800,
+  { h: "Loodgieterwerk", n: "Septictank vervangen", d: "levering en plaatsing nieuwe tank — ± € 3.500 tank + € 5.500 graaf- en aansluitwerk", unit: "forfait", driver: "handmatig", kost: 9000,
     stelpost: "alleen indien de bestaande tank defect blijkt; werkelijke staat is pas zichtbaar na opgraven" },
 
   // ── Elektra ──
@@ -76,7 +76,7 @@ const POSTEN: Post[] = [
 
   // ── Airco & klimaat ──
   { h: "Airco & klimaat", n: "Airco split-unit (basis)", d: "geplaatst en in bedrijf gesteld — ± € 1.000 unit en leidingset + € 500 montage", unit: "stuk", driver: "aircounits", kost: 1500, stelpost: MEERPRIJS },
-  { h: "Airco & klimaat", n: "Airco multi-split / premium merk", d: "meerprijs t.o.v. basis split-unit", unit: "stuk", driver: "handmatig", kost: 2400, stelpost: "prijs afhankelijk van merk en aantal binnenunits" },
+  { h: "Airco & klimaat", n: "Airco kanaalsysteem (conductos)", d: "per verdieping ± 100 m²: unit, kanalen en roosters — ± € 3.500 levering + € 1.300 installatie; excl. verlaagd plafond (aparte post)", unit: "stuk", driver: "handmatig", kost: 4800, stelpost: "capaciteit en merk na warmteverliesberekening; marktprijs instalado in Spanje € 3.500–8.000" },
   { h: "Airco & klimaat", n: "Warmtepomp + installatie", d: "lucht/water incl. buffervat en inregelen — ± € 7.000 levering + € 2.500 installatie", unit: "stuk", driver: "warmtepompen", kost: 9500,
     stelpost: "capaciteit en merk in overleg — definitieve prijs na warmteverliesberekening" },
   { h: "Airco & klimaat", n: "Vloerverwarming", d: "incl. verdeler, excl. afwerkvloer", unit: "m²", driver: "handmatig", kost: 55 },
@@ -91,8 +91,8 @@ const POSTEN: Post[] = [
   { h: "Binnendeuren", n: "Buitendeur", d: "incl. beslag en cilinder", unit: "stuk", driver: "handmatig", kost: 850, stelpost: MEERPRIJS },
 
   // ── Kozijnen ──
-  { h: "Kozijnen", n: "Kozijn (PVC, geleverd en geplaatst)", d: "incl. beglazing en montage — prijs per m² kozijnoppervlak (breedte × hoogte)", unit: "m²", driver: "kozijnen_m2", kost: 500,
-    stelpost: "gemiddelde uit geleverde kozijnen (± € 390/m² levering); grote schuifpuien, speciale kleuren of hout wijken af — definitief na opmeting" },
+  { h: "Kozijnen", n: "Kozijn (aluminium, geleverd en geplaatst)", d: "aluminium met thermische onderbreking, incl. beglazing en montage — ± € 490 levering + € 110 plaatsing per m² kozijnoppervlak (b × h)", unit: "m²", driver: "kozijnen_m2", kost: 600,
+    stelpost: "kunststof (PVC) is voordeliger (± € 390/m² levering, uit eigen leveringen); definitief na opmeting per kozijn" },
 
   // ── Keuken ──
   { h: "Keuken", n: "Keuken plaatsen", d: "montage en aansluitingen water/elektra/afvoer — een week met 2 man: ± € 300 materiaal + € 2.100 arbeid (± 80 u)", unit: "forfait", driver: "keukens", kost: 2400 },
@@ -107,11 +107,13 @@ const POSTEN: Post[] = [
   { h: "Buitenruimte", n: "Terras aanleggen", d: "incl. fundering en tegels", unit: "m²", driver: "terras_m2", kost: 85, stelpost: `tegels t/m € 35/m² inbegrepen — ${MEERPRIJS}` },
   { h: "Buitenruimte", n: "Tuinaanleg", d: "grondwerk en basisbeplanting", unit: "m²", driver: "tuin_m2", kost: 35, stelpost: MEERPRIJS },
   { h: "Buitenruimte", n: "Oprit", d: "incl. fundering", unit: "m²", driver: "oprit_m2", kost: 75 },
-  { h: "Buitenruimte", n: "Pergola / zonwering", d: "geleverd en gemonteerd", unit: "forfait", driver: "handmatig", kost: 3500,
+  { h: "Buitenruimte", n: "Pergola / zonwering", d: "geleverd en gemonteerd", unit: "forfait", driver: "pergolas", kost: 3500,
     stelpost: "maat en uitvoering bepalen de definitieve prijs — middenklasse aluminium inbegrepen" },
-  { h: "Buitenruimte", n: "Zonnepanelen (per paneel)", d: "incl. omvormer en installatie naar rato", unit: "stuk", driver: "handmatig", kost: 450,
+  { h: "Buitenruimte", n: "Zonnepanelen (per paneel)", d: "incl. omvormer en installatie naar rato", unit: "stuk", driver: "zonnepanelen", kost: 450,
     stelpost: "definitieve prijs na dakinspectie en legplan" },
-  { h: "Buitenruimte", n: "Buitenkeuken", d: "gemetseld/beton met werkblad, excl. apparatuur", unit: "forfait", driver: "handmatig", kost: 4500,
+  { h: "Buitenruimte", n: "Carport", d: "aluminium met polycarbonaat dak, ± 3×5 m — ± € 2.400 levering + € 600 montage", unit: "stuk", driver: "carports", kost: 3000,
+    stelpost: "maat, uitvoering en fundering bepalen de definitieve prijs" },
+  { h: "Buitenruimte", n: "Buitenkeuken", d: "gemetseld/beton met werkblad, excl. apparatuur", unit: "forfait", driver: "buitenkeukens", kost: 4500,
     stelpost: "uitvoering en apparatuur naar keuze — meerprijs wordt verrekend" },
 
   // ── Hekwerk & poort ──
@@ -126,6 +128,16 @@ const POSTEN: Post[] = [
   // ── Eigen producten ──
   { h: "Eigen producten", n: "Wandpanelen (eigen collectie)", d: "serie naar keuze uit de Habitat-collectie, geplaatst", unit: "m²", driver: "handmatig", kost: null, marge: 45,
     stelpost: "prijs per serie volgens de prijslijst — gekozen serie bepaalt de definitieve prijs" },
+  // Automatisch per badkamer-samenstelling; prijzen worden live uit de
+  // catalogus ververst (lib/sanitair-prijzen.ts).
+  { h: "Eigen producten", n: "Doucheset compleet (eigen collectie)", d: "douchebak, doucheset en glaswand — verkoopprijzen uit de eigen catalogus (gem. serie)", unit: "stuk", driver: "douches", kost: 1100, marge: 44,
+    stelpost: "gemiddelde serie uit de collectie — gekozen model bepaalt de definitieve prijs" },
+  { h: "Eigen producten", n: "Bad (eigen collectie)", d: "vrijstaand bad — verkoopprijs uit de eigen catalogus (gem. serie)", unit: "stuk", driver: "baden", kost: 1238, marge: 36,
+    stelpost: "gemiddelde serie uit de collectie — gekozen model bepaalt de definitieve prijs" },
+  { h: "Eigen producten", n: "Wastafelmeubel + kraan (eigen collectie)", d: "meubel, kraan en afvoerset — verkoopprijzen uit de eigen catalogus (gem. serie)", unit: "stuk", driver: "wastafels", kost: 785, marge: 44,
+    stelpost: "gemiddelde serie uit de collectie — gekozen model bepaalt de definitieve prijs" },
+  { h: "Eigen producten", n: "Hangtoilet (eigen collectie)", d: "hangtoilet — verkoopprijs uit de eigen catalogus (gem. serie)", unit: "stuk", driver: "toiletten", kost: 145, marge: 65,
+    stelpost: "gemiddelde serie uit de collectie — gekozen model bepaalt de definitieve prijs" },
   { h: "Eigen producten", n: "Badkamerproducten uit eigen catalogus", d: "kranen, spiegels en accessoires — kies de producten in de offerte-editor via de productkiezer", unit: "forfait", driver: "handmatig", kost: null, marge: 45, stelpost: MEERPRIJS },
 ];
 

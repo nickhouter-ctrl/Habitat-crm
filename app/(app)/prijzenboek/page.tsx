@@ -30,7 +30,7 @@ import { nacalculatieRijen } from "@/lib/nacalculatie";
 import { moneyForInput } from "@/lib/parse-money";
 import { DRIVERS, DRIVER_HANDMATIG, DRIVER_LABEL, EENHEDEN, HOOFDSTUKKEN } from "@/lib/price-book";
 import { formatEUR } from "@/lib/utils";
-import { addPriceBookItem, deletePriceBookItem, savePriceBookItem, togglePriceBookActive } from "./actions";
+import { addPriceBookItem, deletePriceBookItem, savePriceBookItem, togglePriceBookActive, verversSanitairUitCatalogus } from "./actions";
 
 export const metadata = { title: "Prijzenboek" };
 
@@ -48,9 +48,16 @@ export default async function PrijzenboekPage() {
         title="Prijzenboek"
         subtitle="eenheidsprijzen voor de offerte-calculator · alle bedragen excl. btw · marge zit in de prijs, dus nooit meer te laag offreren"
         actions={
-          <LinkButton href="/prijzenboek/offerte" variant="primary">
-            Offerte calculeren
-          </LinkButton>
+          <div className="flex items-center gap-2">
+            <form action={verversSanitairUitCatalogus}>
+              <SubmitButton variant="ghost" pendingLabel="Verversen…" title="Zet de eigen-collectie badkamerposten op de actuele catalogusgemiddelden">
+                Sanitair ← catalogus
+              </SubmitButton>
+            </form>
+            <LinkButton href="/prijzenboek/offerte" variant="primary">
+              Offerte calculeren
+            </LinkButton>
+          </div>
         }
       />
 

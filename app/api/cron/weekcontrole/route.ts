@@ -13,6 +13,7 @@
 import { NextResponse } from "next/server";
 
 import { brandedEmail, escapeHtml, sendEmail } from "@/lib/email";
+import { syncSanitairPrijzen } from "@/lib/sanitair-prijzen";
 import { verzamelWeekcontrole } from "@/lib/weekcontrole";
 
 export const dynamic = "force-dynamic";
@@ -25,6 +26,10 @@ export async function GET(req: Request) {
   if (process.env.NODE_ENV === "production" && auth !== `Bearer ${process.env.CRON_SECRET}`) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
+
+  // Eerst de eigen-collectie badkamerposten verversen uit de catalogus, zodat
+  // de calculator de week ingaat met actuele productprijzen.
+  await syncSanitairPrijzen().catch((e) => console.error("[weekcontrole] sanitair-sync mislukt:", e));
 
   const data = await verzamelWeekcontrole();
   const hoog = data.signalen.filter((s) => s.ernst === "hoog").length;
