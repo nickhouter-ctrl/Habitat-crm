@@ -27,6 +27,7 @@ import { SubmitButton } from "@/components/submit-button";
 import { lineCostEur, lineNet, lineTax, normalizeDocItems } from "@/lib/documents";
 import { missingBillingFields } from "@/lib/invoice-validation";
 import { labelForCategory } from "@/lib/products";
+import { HOOFDSTUKKEN } from "@/lib/price-book";
 import { formatDate, formatEUR } from "@/lib/utils";
 import {
   applyStockOutFromDocument,
@@ -190,9 +191,17 @@ export default async function DocumentDetailPage({
   const phaseLabelMap = new Map(
     (Array.isArray(doc.phases) ? doc.phases : []).map((p) => [p.key, p.label]),
   );
+  // In bouwvolgorde (de hoofdstuk-volgorde van het prijzenboek), niet
+  // alfabetisch: sloopwerk bovenaan, eigen producten onderaan. Onbekende
+  // fases sluiten alfabetisch achteraan aan.
+  const bouwvolgorde = new Map(HOOFDSTUKKEN.map((h, i) => [h as string, i]));
   const phaseList = [...phaseMap.entries()]
     .map(([key, v]) => ({ key, label: phaseLabelMap.get(key) ?? key, ...v, covered: coveredPhases.has(key) }))
-    .sort((a, b) => a.label.localeCompare(b.label, "nl", { numeric: true }));
+    .sort((a, b) => {
+      const ia = bouwvolgorde.get(a.label) ?? bouwvolgorde.get(a.key) ?? 999;
+      const ib = bouwvolgorde.get(b.label) ?? bouwvolgorde.get(b.key) ?? 999;
+      return ia !== ib ? ia - ib : a.label.localeCompare(b.label, "nl", { numeric: true });
+    });
 
   // Marge (intern): kostprijs per regel via gekoppeld product (id of SKU). Komt
   // NIET op de klant-PDF — alleen zichtbaar voor jullie op deze pagina.
