@@ -35,6 +35,8 @@ export const DRIVERS: Driver[] = [
   { key: "spc_m2", label: "SPC / PVC vloer", groep: "oppervlaktes", eenheid: "m²" },
   { key: "microcement_m2", label: "Microcement", groep: "oppervlaktes", eenheid: "m²" },
   { key: "vloerverwarming_m2", label: "Vloerverwarming", groep: "oppervlaktes", eenheid: "m²" },
+  { key: "dak_pannen_m2", label: "Dak renoveren (pannen)", groep: "oppervlaktes", eenheid: "m²" },
+  { key: "dak_plat_m2", label: "Plat dak waterdicht", groep: "oppervlaktes", eenheid: "m²" },
 
   // De wizard vraagt dit per badkamer uit (badkamer 1 = 5 m², 1 douche, …)
   // en telt hier de totalen op — de posten rekenen met de sommen.
@@ -100,6 +102,7 @@ export const DRIVER_LABEL = new Map([
 export const HOOFDSTUKKEN = [
   "Sloopwerk",
   "Ruwbouw & wanden",
+  "Dakwerk",
   "Stucwerk",
   "Schilderwerk",
   "Tegelwerk",

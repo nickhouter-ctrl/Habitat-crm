@@ -34,9 +34,17 @@ const POSTEN: Post[] = [
   // ── Ruwbouw & wanden ──
   { h: "Ruwbouw & wanden", n: "Binnenwand opbouwen", d: "gasbeton/steen incl. materiaal", unit: "m²", driver: "opbouw_wanden_m2", kost: 55 },
 
+  // ── Dakwerk ──
+  { h: "Dakwerk", n: "Dak renoveren (pannen)", d: "pannen vervangen incl. panlatten en onderfolie — ± € 40 materiaal + € 35 arbeid per m²", unit: "m²", driver: "dak_pannen_m2", kost: 75,
+    stelpost: "bij houtrot in de dakconstructie geldt een meerprijs op regiebasis" },
+  { h: "Dakwerk", n: "Plat dak waterdicht maken", d: "tela asfáltica / EPDM incl. voorbereiding — ± € 25 materiaal + € 20 arbeid per m²", unit: "m²", driver: "dak_plat_m2", kost: 45 },
+  { h: "Dakwerk", n: "Dakisolatie", d: "isolatieplaten aan binnen- of buitenzijde — ± € 20 materiaal + € 15 arbeid per m²", unit: "m²", driver: "handmatig", kost: 35 },
+
   // ── Stucwerk ──
   { h: "Stucwerk", n: "Stucwerk binnen", d: "glad, 2 lagen, schilderklaar", unit: "m²", driver: "stuc_binnen_m2", kost: 22 },
   { h: "Stucwerk", n: "Stucwerk buiten / gevel", d: "incl. voorbehandeling", unit: "m²", driver: "stuc_buiten_m2", kost: 38 },
+
+  { h: "Stucwerk", n: "Gevelisolatie (SATE) incl. afwerking", d: "isolatieplaten + wapening + sierpleister — ± € 40 materiaal + € 30 arbeid per m²", unit: "m²", driver: "handmatig", kost: 70 },
 
   // ── Schilderwerk ──
   { h: "Schilderwerk", n: "Schilderwerk binnen", d: "muren en plafonds sausen, 2 lagen — ± € 3 materiaal + € 9 arbeid per m²", unit: "m²", driver: "stuc_binnen_m2", kost: 12 },
@@ -73,9 +81,13 @@ const POSTEN: Post[] = [
   { h: "Loodgieterwerk", n: "Septictank vervangen", d: "levering en plaatsing nieuwe tank — ± € 3.500 tank + € 5.500 graaf- en aansluitwerk", unit: "forfait", driver: "handmatig", kost: 9000, marge: 10,
     stelpost: "alleen indien de bestaande tank defect blijkt; werkelijke staat is pas zichtbaar na opgraven" },
 
+  { h: "Loodgieterwerk", n: "Boiler / termo vervangen", d: "elektrische boiler geleverd en aangesloten — ± € 300 boiler + € 150 arbeid", unit: "stuk", driver: "handmatig", kost: 450, stelpost: "capaciteit naar behoefte — middenklasse inbegrepen" },
+
   // ── Elektra ──
   { h: "Elektra", n: "Elektrapunt vernieuwen", d: "schakelaar of wandcontactdoos incl. bekabeling", unit: "punt", driver: "elektrapunten", kost: 78 },
   { h: "Elektra", n: "Groepenkast vernieuwen", d: "conform huidige norm", unit: "forfait", driver: "handmatig", kost: 1450 },
+
+  { h: "Elektra", n: "Alarmsysteem", d: "centrale, sensoren en app-koppeling, gemonteerd", unit: "forfait", driver: "handmatig", kost: 1200, stelpost: "aantal sensoren/camera's bepaalt de definitieve prijs" },
 
   // ── Airco & klimaat ──
   { h: "Airco & klimaat", n: "Airco split-unit (basis)", d: "geplaatst en in bedrijf gesteld — ± € 1.000 unit en leidingset + € 500 montage", unit: "stuk", driver: "aircounits", kost: 1500, stelpost: MEERPRIJS },
@@ -92,6 +104,10 @@ const POSTEN: Post[] = [
   { h: "Binnendeuren", n: "Binnendeur leveren en afhangen", d: "incl. beslag", unit: "stuk", driver: "binnendeuren", kost: 380,
     stelpost: `standaard vlakke deur inbegrepen — ${MEERPRIJS} (bv. Yo Home of maatwerk)` },
   { h: "Binnendeuren", n: "Buitendeur", d: "incl. beslag en cilinder", unit: "stuk", driver: "handmatig", kost: 850, stelpost: MEERPRIJS },
+
+  { h: "Badkamers & sanitair", n: "Mechanische ventilatie badkamer", d: "afzuiging incl. kanaal naar buiten, per badkamer", unit: "stuk", driver: "badkamers", kost: 180 },
+  { h: "Binnendeuren", n: "Trap vervangen", d: "nieuwe binnentrap incl. plaatsing", unit: "forfait", driver: "handmatig", kost: 4500, stelpost: "uitvoering (hout/staal/zwevend) bepaalt de definitieve prijs" },
+  { h: "Binnendeuren", n: "Balustrade / leuning", d: "geplaatst, per strekkende meter", unit: "m", driver: "handmatig", kost: 160, stelpost: "glas of smeedwerk = meerprijs" },
 
   // ── Kozijnen ──
   { h: "Kozijnen", n: "Kozijn (aluminium, geleverd en geplaatst)", d: "aluminium met thermische onderbreking, incl. beglazing en montage — ± € 490 levering + € 110 plaatsing per m² kozijnoppervlak (b × h)", unit: "m²", driver: "kozijnen_m2", kost: 600,
@@ -114,6 +130,7 @@ const POSTEN: Post[] = [
     stelpost: "maat en uitvoering bepalen de definitieve prijs — middenklasse aluminium inbegrepen" },
   { h: "Buitenruimte", n: "Zonnepanelen (per paneel)", d: "incl. omvormer en installatie naar rato", unit: "stuk", driver: "zonnepanelen", kost: 450,
     stelpost: "definitieve prijs na dakinspectie en legplan" },
+  { h: "Buitenruimte", n: "Rejas / raambeveiliging", d: "per raam, gemonteerd", unit: "stuk", driver: "handmatig", kost: 350, stelpost: "maat en model bepalen de definitieve prijs" },
   { h: "Buitenruimte", n: "Carport", d: "hout met dakbedekking, ± 3×5 m — ± € 2.000 hout + € 1.000 fundering en montage", unit: "stuk", driver: "carports", kost: 3000, marge: 40,
     stelpost: "maat, uitvoering en fundering bepalen de definitieve prijs" },
   { h: "Buitenruimte", n: "Buitenkeuken", d: "gemetseld/beton met werkblad, excl. apparatuur", unit: "forfait", driver: "buitenkeukens", kost: 4500,
@@ -141,6 +158,8 @@ const POSTEN: Post[] = [
     stelpost: "gemiddelde serie uit de collectie — gekozen model bepaalt de definitieve prijs" },
   { h: "Eigen producten", n: "Hangtoilet (eigen collectie)", d: "hangtoilet — verkoopprijs uit de eigen catalogus (gem. serie)", unit: "stuk", driver: "toiletten", kost: 145, marge: 65,
     stelpost: "gemiddelde serie uit de collectie — gekozen model bepaalt de definitieve prijs" },
+  { h: "Eigen producten", n: "Waterdamphaard (eigen collectie)", d: "sfeerhaard op waterdamp, geplaatst en aangesloten — verkoopprijs eigen catalogus (gem. model)", unit: "stuk", driver: "handmatig", kost: 550, marge: 55,
+    stelpost: "gekozen model bepaalt de definitieve prijs" },
   { h: "Eigen producten", n: "Badkamerproducten uit eigen catalogus", d: "kranen, spiegels en accessoires — kies de producten in de offerte-editor via de productkiezer", unit: "forfait", driver: "handmatig", kost: null, marge: 45, stelpost: MEERPRIJS },
 ];
 

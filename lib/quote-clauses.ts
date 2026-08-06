@@ -16,7 +16,7 @@ export type QuoteLang = "nl" | "en" | "es";
 
 const CLAUSES: Record<QuoteLang, string[]> = {
   nl: [
-    "Voorbehouden en uitgangspunten",
+    "Voorbehouden en uitgangspunten — LET OP: bij een verbouwing kunnen zich altijd onvoorziene kosten en meerwerk voordoen (verborgen gebreken, hardere ondergrond, gewijzigde keuzes). Meerwerk wordt uitsluitend uitgevoerd na schriftelijk akkoord van de opdrachtgever en wordt apart verrekend.",
     "Stelposten: waar een stelpost is opgenomen, is materiaal van gemiddelde kwaliteit inbegrepen (het genoemde bedrag of de genoemde klasse). Kiest de opdrachtgever een duurder materiaal of merk — tegels, sanitair, deuren, keuken, verlichting, airco, warmtepomp of enig ander onderdeel — dan wordt het verschil als meerprijs verrekend.",
     "Verborgen gebreken: gebreken die pas tijdens de uitvoering zichtbaar worden — zoals verouderde of ondeugdelijke elektrische bekabeling, leidingwerk, riolering of een defecte septictank — vallen buiten deze offerte en worden na overleg op regiebasis verrekend.",
     "Grondwerk: bij graafwerk (kelder, zwembad, fundering) is uitgegaan van normale grondslag. Blijkt de ondergrond rotsachtig of harder dan verwacht, dan geldt voor het extra werk een meerprijs op regiebasis.",
@@ -27,7 +27,7 @@ const CLAUSES: Record<QuoteLang, string[]> = {
     "Deze offerte is 30 dagen geldig. Prijzen zijn exclusief btw, onder voorbehoud van beschikbaarheid van materialen en prijswijzigingen van leveranciers.",
   ],
   en: [
-    "Reservations and assumptions",
+    "Reservations and assumptions — PLEASE NOTE: renovations can always give rise to unforeseen costs and additional work (hidden defects, harder ground, changed choices). Additional work is only carried out after the client's written approval and is charged separately.",
     "Provisional sums: where a provisional sum is included, mid-range materials are covered (the stated amount or class). Should the client choose more expensive materials or brands — tiles, sanitary ware, doors, kitchen, lighting, air conditioning, heat pump or any other item — the difference will be charged as an extra.",
     "Hidden defects: defects that only become visible during the works — such as outdated or faulty electrical wiring, plumbing, drainage or a defective septic tank — fall outside this quotation and will be charged on a time-and-materials basis after consultation.",
     "Groundwork: excavation (basement, pool, foundations) assumes normal ground conditions. If the ground proves rocky or harder than expected, the additional work will be charged on a time-and-materials basis.",
@@ -38,7 +38,7 @@ const CLAUSES: Record<QuoteLang, string[]> = {
     "This quotation is valid for 30 days. Prices exclude VAT and are subject to material availability and supplier price changes.",
   ],
   es: [
-    "Reservas y condiciones",
+    "Reservas y condiciones — ATENCIÓN: en una reforma siempre pueden surgir costes imprevistos y trabajos adicionales (vicios ocultos, terreno más duro, cambios de elección). Los trabajos adicionales solo se ejecutan previa conformidad por escrito del cliente y se facturan por separado.",
     "Partidas alzadas: donde se incluye una partida alzada, se contempla material de calidad media (el importe o la clase indicados). Si el cliente elige materiales o marcas de mayor precio — azulejos, sanitarios, puertas, cocina, iluminación, aire acondicionado, bomba de calor o cualquier otro elemento — la diferencia se facturará como incremento.",
     "Vicios ocultos: los defectos que solo se hagan visibles durante la ejecución — como instalación eléctrica, fontanería o saneamiento en mal estado, o una fosa séptica defectuosa — quedan fuera de este presupuesto y se facturarán por administración previa consulta.",
     "Movimiento de tierras: en las excavaciones (sótano, piscina, cimentación) se presupone un terreno normal. Si el terreno resulta rocoso o más duro de lo previsto, el trabajo adicional se facturará por administración.",
