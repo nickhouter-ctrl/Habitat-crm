@@ -54,3 +54,36 @@ const CLAUSES: Record<QuoteLang, string[]> = {
 export function quoteClauses(lang: QuoteLang): string {
   return CLAUSES[lang].join("\n\n");
 }
+
+const SCHEMA_TEKST: Record<QuoteLang, { kop: string; termijnen: [string, string, string]; slot: string }> = {
+  nl: {
+    kop: "Betalingsschema",
+    termijnen: ["bij opdracht", "halverwege de werkzaamheden", "bij oplevering"],
+    slot: "Bedragen excl. btw; elke termijn te voldoen vóór aanvang van de volgende fase.",
+  },
+  en: {
+    kop: "Payment schedule",
+    termijnen: ["on commissioning", "halfway through the works", "on completion"],
+    slot: "Amounts exclude VAT; each instalment is due before the next phase starts.",
+  },
+  es: {
+    kop: "Calendario de pagos",
+    termijnen: ["a la firma del encargo", "a mitad de obra", "a la entrega"],
+    slot: "Importes sin IVA; cada plazo se abona antes de iniciar la siguiente fase.",
+  },
+};
+
+/**
+ * Betalingsschema als alinea voor onder de offerte: percentages over het
+ * offertetotaal (ex btw), met de bedragen erbij. Termijnen op 0% vervallen.
+ */
+export function betalingsschemaTekst(lang: QuoteLang, totaalEx: number, pcts: [number, number, number]): string | null {
+  const t = SCHEMA_TEKST[lang];
+  const eur = (n: number) =>
+    new Intl.NumberFormat("nl-NL", { style: "currency", currency: "EUR", maximumFractionDigits: 0 }).format(n);
+  const delen = pcts
+    .map((pct, i) => (pct > 0 ? `${pct}% ${t.termijnen[i]} (${eur(Math.round((totaalEx * pct) / 100))})` : null))
+    .filter(Boolean);
+  if (delen.length === 0) return null;
+  return `${t.kop}: ${delen.join(" · ")}. ${t.slot}`;
+}

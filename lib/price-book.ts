@@ -46,6 +46,7 @@ export const DRIVERS: Driver[] = [
   { key: "elektrapunten", label: "Elektrapunten", groep: "techniek", eenheid: "punten" },
   { key: "verlichtingspunten", label: "Verlichtingspunten", groep: "techniek", eenheid: "punten" },
   { key: "aircounits", label: "Airco-units", groep: "techniek", eenheid: "stuks" },
+  { key: "warmtepompen", label: "Warmtepompen", groep: "techniek", eenheid: "stuks" },
 
   { key: "binnendeuren", label: "Binnendeuren", groep: "interieur", eenheid: "stuks" },
   // Per m² kozijnoppervlak (b × h): uit 57 geleverde leveranciersoffertes in
@@ -84,7 +85,9 @@ export const HOOFDSTUKKEN = [
   "Sloopwerk",
   "Ruwbouw & wanden",
   "Stucwerk",
+  "Schilderwerk",
   "Tegelwerk",
+  "Vloeren & plafonds",
   "Badkamers & sanitair",
   "Loodgieterwerk",
   "Elektra",

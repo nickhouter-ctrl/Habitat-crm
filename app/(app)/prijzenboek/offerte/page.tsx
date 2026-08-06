@@ -97,6 +97,13 @@ export default async function OfferteCalculatorPage({
 
   const groepen = [...new Set(DRIVERS.map((d) => d.groep))] as DriverGroep[];
 
+  // De volledige invoer als querystring: gaat mee de offerte in (logboek) zodat
+  // je later precies ziet op welke maten de prijs was gebaseerd — en er met
+  // één klik opnieuw mee kunt rekenen.
+  const wizardQuery = new URLSearchParams(
+    Object.entries(params).filter(([k, v]) => v != null && v !== "" && k !== "fout") as [string, string][],
+  ).toString();
+
   // Samenstelling per badkamer — komt als specificatie op de offerte-regel
   // "Badkamer installatie compleet" (bv. "Badkamer 1: 5 m², 1× douche, …").
   const badkamerSpec = gebruikteBadkamers
@@ -156,6 +163,23 @@ export default async function OfferteCalculatorPage({
               </Field>
             </div>
 
+            <div>
+              <p className="mb-1.5 text-xs font-medium uppercase tracking-wide text-muted">
+                Betalingsschema <span className="normal-case tracking-normal">— komt met de bedragen op de offerte</span>
+              </p>
+              <div className="grid gap-3 sm:grid-cols-3 lg:grid-cols-6">
+                <Field label="Bij opdracht (%)">
+                  <Input name="t1" inputMode="decimal" defaultValue={params.t1 ?? "40"} className="text-right" />
+                </Field>
+                <Field label="Halverwege (%)">
+                  <Input name="t2" inputMode="decimal" defaultValue={params.t2 ?? "30"} className="text-right" />
+                </Field>
+                <Field label="Bij oplevering (%)">
+                  <Input name="t3" inputMode="decimal" defaultValue={params.t3 ?? "30"} className="text-right" />
+                </Field>
+              </div>
+            </div>
+
             {groepen.map((groep) =>
               groep === "sanitair" ? (
                 <BadkamerBlokken key={groep} defaults={params} />
@@ -196,6 +220,10 @@ export default async function OfferteCalculatorPage({
               <input type="hidden" name="taal" value={params.taal ?? "nl"} />
               <input type="hidden" name="onvoorzien" value={String(onvoorzien)} />
               <input type="hidden" name="badkamerSpec" value={badkamerSpec} />
+              <input type="hidden" name="t1" value={params.t1 ?? "40"} />
+              <input type="hidden" name="t2" value={params.t2 ?? "30"} />
+              <input type="hidden" name="t3" value={params.t3 ?? "30"} />
+              <input type="hidden" name="wizardQuery" value={wizardQuery} />
 
               {HOOFDSTUKKEN.map((hoofdstuk) => {
                 const rijen = posten.filter((p) => p.chapter === hoofdstuk);

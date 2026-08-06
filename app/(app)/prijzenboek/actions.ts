@@ -18,7 +18,7 @@ import { computeTotals } from "@/lib/documents";
 import { insertNumberedDocument } from "@/lib/doc-number";
 import { moneyOrNull, parseMoney } from "@/lib/parse-money";
 import { DEFAULT_PRIJZENBOEK_MARGE, HOOFDSTUKKEN } from "@/lib/price-book";
-import { quoteClauses, type QuoteLang } from "@/lib/quote-clauses";
+import { betalingsschemaTekst, quoteClauses, type QuoteLang } from "@/lib/quote-clauses";
 import { suggestedPrice } from "@/lib/pricing";
 
 /* ───────────────────────────── beheer ───────────────────────────── */
@@ -110,6 +110,12 @@ export async function createQuoteFromPriceBook(formData: FormData) {
   const taal = (["nl", "en", "es"].includes(String(formData.get("taal"))) ? String(formData.get("taal")) : "nl") as QuoteLang;
   const onvoorzienPct = parseMoney(String(formData.get("onvoorzien") ?? "")) ?? 10;
   const badkamerSpec = String(formData.get("badkamerSpec") ?? "").trim();
+  const wizardQuery = String(formData.get("wizardQuery") ?? "").trim();
+  const termijnen = [40, 30, 30].map((standaard, i) => parseMoney(String(formData.get(`t${i + 1}`) ?? "")) ?? standaard) as [
+    number,
+    number,
+    number,
+  ];
 
   const posten = await db
     .select()
@@ -191,7 +197,7 @@ export async function createQuoteFromPriceBook(formData: FormData) {
     totalEur: round2(totals.total),
     items,
     phases,
-    notes: quoteClauses(taal),
+    notes: [quoteClauses(taal), betalingsschemaTekst(taal, totals.subtotal, termijnen)].filter(Boolean).join("\n\n"),
   });
 
   const kost = items.reduce((s, it) => s + (Number(it.costEur) || 0) * (Number(it.units) || 0), 0);
@@ -200,7 +206,7 @@ export async function createQuoteFromPriceBook(formData: FormData) {
     subject: `Offerte ${docNumber} gecalculeerd uit het prijzenboek`,
     body: `${items.length} regels · verkoop ${round2(totals.subtotal)} · kostprijs ${round2(kost)}${
       overgeslagen.length ? ` · overgeslagen (geen prijs): ${overgeslagen.join(", ")}` : ""
-    }`,
+    }${wizardQuery ? `\nGebruikte maten (opnieuw calculeren): /prijzenboek/offerte?${wizardQuery}` : ""}`,
     contactId: contactId ?? project?.contactId ?? null,
     documentId: id,
     authorId: user.id,

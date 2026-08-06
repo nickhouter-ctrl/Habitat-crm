@@ -26,6 +26,7 @@ import { PriceBookRowFields } from "@/components/price-book-row-fields";
 import { SubmitButton } from "@/components/submit-button";
 import { db } from "@/lib/db";
 import { priceBookItems } from "@/lib/db/schema";
+import { nacalculatieRijen } from "@/lib/nacalculatie";
 import { moneyForInput } from "@/lib/parse-money";
 import { DRIVERS, DRIVER_HANDMATIG, DRIVER_LABEL, EENHEDEN, HOOFDSTUKKEN } from "@/lib/price-book";
 import { formatEUR } from "@/lib/utils";
@@ -34,7 +35,10 @@ import { addPriceBookItem, deletePriceBookItem, savePriceBookItem, togglePriceBo
 export const metadata = { title: "Prijzenboek" };
 
 export default async function PrijzenboekPage() {
-  const posten = await db.select().from(priceBookItems).orderBy(asc(priceBookItems.sortOrder), asc(priceBookItems.name));
+  const [posten, nacalc] = await Promise.all([
+    db.select().from(priceBookItems).orderBy(asc(priceBookItems.sortOrder), asc(priceBookItems.name)),
+    nacalculatieRijen(),
+  ]);
   const teControleren = posten.filter((p) => p.needsReview).length;
   const zonderPrijs = posten.filter((p) => p.active && p.priceEur == null).length;
 
@@ -151,6 +155,45 @@ export default async function PrijzenboekPage() {
           </Card>
         );
       })}
+
+      {nacalc.length > 0 && (
+        <Card className="mb-4">
+          <CardHeader>
+            <CardTitle>Nacalculatie — gecalculeerd vs. werkelijk</CardTitle>
+            <span className="text-xs text-muted">projecten met budgetregels uit een gecalculeerde offerte</span>
+          </CardHeader>
+          <CardContent>
+            <div className="hidden grid-cols-[1.6fr_1fr_1fr_1fr] gap-2 px-2.5 text-[11px] font-medium uppercase tracking-wide text-muted sm:grid">
+              <span>Project</span>
+              <span className="text-right">Gecalculeerde kost</span>
+              <span className="text-right">Werkelijke kost</span>
+              <span className="text-right">Afwijking</span>
+            </div>
+            {nacalc.map((r) => {
+              const afw = r.werkelijkeKost - r.begrootKost;
+              const pct = r.begrootKost > 0 ? (afw / r.begrootKost) * 100 : null;
+              return (
+                <div key={r.projectId} className="grid gap-2 rounded-md border p-2.5 text-sm sm:grid-cols-[1.6fr_1fr_1fr_1fr] sm:items-center">
+                  <Link href={`/projects/${r.projectId}`} className="font-medium hover:underline">
+                    {r.naam}
+                  </Link>
+                  <span className="text-right tabular-nums">{formatEUR(r.begrootKost)}</span>
+                  <span className="text-right tabular-nums">{formatEUR(r.werkelijkeKost)}</span>
+                  <span className={`text-right tabular-nums font-medium ${afw > 0 ? "text-danger" : "text-success"}`}>
+                    {afw > 0 ? "+" : ""}
+                    {formatEUR(afw)}
+                    {pct != null ? ` (${pct > 0 ? "+" : ""}${pct.toFixed(0)}%)` : ""}
+                  </span>
+                </div>
+              );
+            })}
+            <p className="mt-2 text-xs text-muted">
+              Loopt de werkelijke kost structureel vóór op de calculatie, verhoog dan de kostprijzen hierboven — de
+              verkoop rekent vanzelf mee. Werkelijke kost = arbeid + inkoop + losse kosten + geleverde producten.
+            </p>
+          </CardContent>
+        </Card>
+      )}
 
       <p className="text-xs text-muted">
         Verkoopprijs = kost ÷ (1 − marge), excl. btw. Voorbeeld: kost € 70 met 30% marge → {formatEUR(100)}. Pas je
