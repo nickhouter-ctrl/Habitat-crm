@@ -167,14 +167,16 @@ export default async function OfferteCalculatorPage({
         <p className="mb-4 rounded-md bg-warning/10 p-3 text-sm">Geen regels met een aantal — vul minstens één maat of aantal in.</p>
       )}
 
-      {/* Stap 1 · de maten */}
+      {/* Eén formulier over beide stappen: elke knop (berekenen, bijwerken,
+          aanmaken) verstuurt zo altijd de complete invoer. */}
+      <form method="get">
       <Card className="mb-5">
         <CardHeader>
           <CardTitle>1 · Maten van de woning</CardTitle>
           <span className="text-xs text-muted">alleen invullen wat van toepassing is — leeg = doet niet mee</span>
         </CardHeader>
         <CardContent>
-          <form method="get" className="space-y-4">
+          <div className="space-y-4">
             <input type="hidden" name="bereken" value="1" />
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
               <Field label="Klant">
@@ -217,31 +219,24 @@ export default async function OfferteCalculatorPage({
             <SubmitButton variant="primary" pendingLabel="Rekenen…">
               Bereken voorbeeld
             </SubmitButton>
-          </form>
+          </div>
         </CardContent>
       </Card>
 
-      {/* Stap 2 · het voorbeeld */}
+      {/* Stap 2 · het voorbeeld — zelfde formulier als stap 1, dus élke knop
+          verstuurt altijd álle invoer (maten, badkamers, schema én aantallen).
+          Vroeger waren dit twee losse formulieren: wie onderin klikte verloor
+          de badkamer-invoer van boven en alles viel op 0. */}
       {bereken && (
         <Card>
           <CardHeader>
             <CardTitle>2 · Voorbeeld — controleer en pas aan</CardTitle>
             <span className="text-xs text-muted">
-              aantallen voorgerekend uit stap 1 (badkamers vullen ook de eigen producten) · iets gewijzigd boven? klik
-              eerst opnieuw &ldquo;Bereken voorbeeld&rdquo; · 0 = regel vervalt
+              aantallen voorgerekend uit stap 1 (badkamers vullen ook de montage én de eigen producten) · 0 = regel vervalt
             </span>
           </CardHeader>
           <CardContent>
-            {/* GET-formulier: "Voorbeeld bijwerken" herrekent met de aangepaste
-                aantallen zonder iets aan te maken; pas de aanmaak-knop (met
-                formAction) maakt het concept. Alle stap-1-invoer reist mee als
-                hidden velden, zodat niets verloren gaat. */}
-            <form method="get" className="space-y-4">
-              {Object.entries(params)
-                .filter(([k, v]) => v != null && v !== "" && k !== "fout" && !k.startsWith("q_"))
-                .map(([k, v]) => (
-                  <input key={k} type="hidden" name={k} value={v} />
-                ))}
+            <div className="space-y-4">
               <input type="hidden" name="badkamerSpec" value={badkamerSpec} />
               <input type="hidden" name="wizardQuery" value={wizardQuery} />
 
@@ -318,10 +313,11 @@ export default async function OfferteCalculatorPage({
                 </SubmitButton>
                 <span className="text-xs text-muted">bijwerken herrekent alleen — er wordt pas iets aangemaakt met de rechterknop</span>
               </div>
-            </form>
+            </div>
           </CardContent>
         </Card>
       )}
+      </form>
 
       {!bereken && (
         <p className="text-sm text-muted">
