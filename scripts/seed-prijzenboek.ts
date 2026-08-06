@@ -150,7 +150,7 @@ const POSTEN: Post[] = [
     stelpost: "prijs per serie volgens de prijslijst — gekozen serie bepaalt de definitieve prijs" },
   // Automatisch per badkamer-samenstelling; prijzen worden live uit de
   // catalogus ververst (lib/sanitair-prijzen.ts).
-  { h: "Eigen producten", n: "Doucheset compleet", d: "douchebak, doucheset en glaswand (gemiddelde serie)", unit: "stuk", driver: "douches", kost: 1100, marge: 44,
+  { h: "Eigen producten", n: "Inloopdouche compleet", d: "douchebak (± € 516), doucheset (± € 800) en glazen wand (± € 826) — gemiddelde serie", unit: "stuk", driver: "douches", kost: 1100, marge: 44,
     stelpost: "gemiddelde serie — gekozen model bepaalt de definitieve prijs" },
   { h: "Eigen producten", n: "Bad + badkraan", d: "vrijstaand bad uit eigen collectie (± € 1.928) + vrijstaande badkraan, los ingekocht (± € 1.000 verkoop)", unit: "stuk", driver: "baden", kost: 1538, marge: 47,
     stelpost: "gemiddelde serie — gekozen model bepaalt de definitieve prijs" },

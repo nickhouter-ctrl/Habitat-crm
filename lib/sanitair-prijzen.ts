@@ -46,7 +46,7 @@ export async function syncSanitairPrijzen(): Promise<number> {
   const wand = per.get("Douchewanden");
   if (bak && set && wand)
     posten.push({
-      naam: "Doucheset compleet",
+      naam: "Inloopdouche compleet",
       g: { kost: bak.kost + set.kost + wand.kost, verkoop: bak.verkoop + set.verkoop + wand.verkoop },
     });
   const bad = per.get("Baden");
