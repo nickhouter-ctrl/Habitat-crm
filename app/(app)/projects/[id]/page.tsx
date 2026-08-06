@@ -313,7 +313,10 @@ export default async function ProjectDetailPage({
   const prodAgg = new Map<string, Agg>();
   for (const d of projDocItems) {
     for (const it of normalizeDocItems(d.items)) {
-      const key = it.productId || it.description?.trim() || it.name?.trim();
+      // Alleen échte catalogusproducten (met productkoppeling) tellen als
+      // gereserveerd/verkocht — werk-regels uit het prijzenboek (stucwerk,
+      // containers, …) zijn geen voorraad.
+      const key = it.productId;
       if (!key || !it.units) continue;
       const entry =
         prodAgg.get(key) ??
