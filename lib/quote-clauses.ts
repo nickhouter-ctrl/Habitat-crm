@@ -60,18 +60,28 @@ export function quoteClauses(lang: QuoteLang): string {
  * de wizard laat per termijn het percentage instellen (0 = vervalt).
  * `key` is de veldnaam in de wizard (f1…f5), `nl` ook het label daar.
  */
+/** Standaard 7 termijnen (keuze Nick 06-08-2026): klein slot bij oplevering
+ * zoals gebruikelijk in de bouw, en vooraan genoeg om steeds vóór de kosten
+ * uit te lopen — na de installatiefase is cumulatief 50% binnen, na levering
+ * van kozijnen en producten 95%, terwijl de kosten daar dan nog onder liggen. */
 export const SCHEMA_FASEN = [
   {
-    standaard: 25,
+    standaard: 20,
     nl: "bij opdracht, vóór aanvang van het sloopwerk",
     en: "on commissioning, before demolition starts",
     es: "a la firma del encargo, antes del inicio de la demolición",
   },
   {
-    standaard: 20,
-    nl: "bij start van het ruwbouw- en installatiewerk (leidingen, elektra)",
-    en: "on start of structural work and installations (plumbing, electrics)",
-    es: "al inicio de la obra gruesa e instalaciones (fontanería, electricidad)",
+    standaard: 15,
+    nl: "bij start van het ruwbouwwerk",
+    en: "on start of the structural work",
+    es: "al inicio de la obra gruesa",
+  },
+  {
+    standaard: 15,
+    nl: "bij start van de installaties (leidingwerk, elektra, airco)",
+    en: "on start of the installations (plumbing, electrics, air conditioning)",
+    es: "al inicio de las instalaciones (fontanería, electricidad, climatización)",
   },
   {
     standaard: 15,
@@ -91,7 +101,7 @@ export const SCHEMA_FASEN = [
     en: "on delivery of sanitary ware, kitchen and products",
     es: "a la entrega de sanitarios, cocina y productos",
   },
-  { standaard: 10, nl: "bij oplevering", en: "on completion", es: "a la entrega final" },
+  { standaard: 5, nl: "bij oplevering", en: "on completion", es: "a la entrega final" },
 ] as const;
 
 const SCHEMA_TEKST: Record<QuoteLang, { kop: string; slot: string }> = {
