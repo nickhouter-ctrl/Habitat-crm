@@ -23,6 +23,7 @@ import {
   Select,
 } from "@/components/ui";
 import { BadkamerBlokken } from "@/components/badkamer-blokken";
+import { OngerekendeWijzigingen } from "@/components/ongerekende-wijzigingen";
 import { BetalingsschemaBlok, MAX_TERMIJNEN } from "@/components/betalingsschema-blok";
 import { Combobox } from "@/components/combobox";
 import { SubmitButton } from "@/components/submit-button";
@@ -124,7 +125,7 @@ export default async function OfferteCalculatorPage({
 
       {/* Eén formulier over beide stappen: elke knop (berekenen, bijwerken,
           aanmaken) verstuurt zo altijd de complete invoer. */}
-      <form method="get">
+      <form method="get" id="offerte-wizard">
       <Card className="mb-5">
         <CardHeader>
           <CardTitle>1 · Maten van de woning</CardTitle>
@@ -192,6 +193,7 @@ export default async function OfferteCalculatorPage({
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
+              <OngerekendeWijzigingen formId="offerte-wizard" />
               {/* Controle-regel: wat er uit de badkamer-blokken is meegerekend.
                   Staat hier bewust zichtbaar — als dit 0 toont terwijl boven wél
                   badkamers zijn ingevuld, is de invoer niet meegekomen. */}
