@@ -19,6 +19,8 @@ export type Driver = {
   groep: DriverGroep;
   /** Eenheid van de maat zelf (m², stuks, …) — puur voor het invoerveld. */
   eenheid: string;
+  /** Afgeleide maat: geen invoerveld — de wizard rekent hem uit andere maten. */
+  afgeleid?: boolean;
 };
 
 export const DRIVERS: Driver[] = [
@@ -44,6 +46,8 @@ export const DRIVERS: Driver[] = [
   { key: "sloop_wanden_m2", label: "Wanden slopen", groep: "wanden", eenheid: "m²" },
   { key: "opbouw_wanden_m2", label: "Wanden opbouwen", groep: "wanden", eenheid: "m²" },
   { key: "stuc_binnen_m2", label: "Stucwerk binnen", groep: "wanden", eenheid: "m²" },
+  // Auto: wanden + vloeren + badkamervloeren — voor containers/stortkosten.
+  { key: "sloop_totaal_m2", label: "Sloopwerk totaal (automatisch)", groep: "wanden", eenheid: "m²", afgeleid: true },
   { key: "stuc_buiten_m2", label: "Stucwerk buiten / gevel", groep: "wanden", eenheid: "m²" },
   { key: "plafond_m2", label: "Verlaagd plafond (gyproc)", groep: "wanden", eenheid: "m²" },
 

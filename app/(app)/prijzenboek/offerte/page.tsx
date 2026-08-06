@@ -77,8 +77,18 @@ export default async function OfferteCalculatorPage({
     toiletten: badkamers.reduce((s, b) => s + b.toiletten, 0),
   };
 
+  // Afgeleide maten: containers/stort volgen het totale sloopwerk
+  // (gesloopte wanden + vloeren + badkamervloeren).
+  const afgeleiden: Record<string, number> = {
+    ...sanitairTotalen,
+    sloop_totaal_m2:
+      (parseMoney(params.d_sloop_wanden_m2 ?? "") ?? 0) +
+      (parseMoney(params.d_woonoppervlak_m2 ?? "") ?? 0) +
+      sanitairTotalen.badkamer_m2,
+  };
+
   // Maat → waarde uit de URL; aantal per post = maat × factor.
-  const maat = (key: string) => sanitairTotalen[key] ?? parseMoney(params[`d_${key}`] ?? "") ?? 0;
+  const maat = (key: string) => afgeleiden[key] ?? parseMoney(params[`d_${key}`] ?? "") ?? 0;
   const aantalVoor = (p: (typeof posten)[number]) =>
     p.driver === DRIVER_HANDMATIG ? 0 : Math.round(maat(p.driver) * Number(p.factor) * 100) / 100;
 
@@ -189,7 +199,7 @@ export default async function OfferteCalculatorPage({
                 <div key={groep}>
                   <p className="mb-1.5 text-xs font-medium uppercase tracking-wide text-muted">{DRIVER_GROEP_LABEL[groep]}</p>
                   <div className="grid gap-3 sm:grid-cols-3 lg:grid-cols-6">
-                    {DRIVERS.filter((d) => d.groep === groep).map((d) => (
+                    {DRIVERS.filter((d) => d.groep === groep && !d.afgeleid).map((d) => (
                       <Field key={d.key} label={d.label} hint={d.eenheid}>
                         <Input name={`d_${d.key}`} inputMode="decimal" defaultValue={params[`d_${d.key}`] ?? ""} className="text-right" placeholder="—" />
                       </Field>

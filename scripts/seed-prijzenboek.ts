@@ -29,7 +29,7 @@ const POSTEN: Post[] = [
   { h: "Sloopwerk", n: "Wanden slopen", d: "incl. afvoer puin", unit: "m²", driver: "sloop_wanden_m2", kost: 28 },
   { h: "Sloopwerk", n: "Badkamer strippen", d: "sanitair en tegels verwijderen, incl. afvoer — per m² badkamervloer", unit: "m²", driver: "badkamer_m2", kost: 130 },
   { h: "Sloopwerk", n: "Vloer verwijderen", d: "bestaande vloer/tegels eruit, incl. afvoer", unit: "m²", driver: "woonoppervlak_m2", kost: 14 },
-  { h: "Sloopwerk", n: "Container & stortkosten", unit: "forfait", driver: "handmatig", kost: 450 },
+  { h: "Sloopwerk", n: "Container & stortkosten", d: "afvoer en stort — ± 1 container per ± 50 m² sloopwerk; rekent automatisch over wanden + vloeren + badkamers", unit: "m²", driver: "sloop_totaal_m2", kost: 6 },
 
   // ── Ruwbouw & wanden ──
   { h: "Ruwbouw & wanden", n: "Binnenwand opbouwen", d: "gasbeton/steen incl. materiaal", unit: "m²", driver: "opbouw_wanden_m2", kost: 55 },
