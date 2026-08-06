@@ -4,10 +4,10 @@ import { revalidatePath } from "next/cache";
 import { eq } from "drizzle-orm";
 import { requireWriteUser } from "@/lib/auth/guards";
 
-import { auth } from "@/auth";
 import { db } from "@/lib/db";
 import { activities, mailAttachments } from "@/lib/db/schema";
 import { applyLandedCostToProducts } from "@/lib/landed-cost";
+import { moneyOrNull } from "@/lib/parse-money";
 
 async function requireUser() {
   // Centrale guard: ingelogd én geen alleen-lezen (viewer) account.
@@ -21,24 +21,23 @@ export async function saveAttachmentAmount(
   poId: string,
 ) {
   await requireUser();
-  const num = amount.trim() === "" ? null : Number(amount.replace(",", "."));
   await db
     .update(mailAttachments)
     .set({
-      amountEur: num != null && Number.isFinite(num) ? String(num) : null,
+      amountEur: moneyOrNull(amount),
       updatedAt: new Date(),
     })
     .where(eq(mailAttachments.id, attachmentId));
   revalidatePath(`/inkooporders/${poId}/kostenanalyse`);
 }
 
-/** Apply landed-cost ratio op alle PO-producten. */
-export async function applyLandedCost(purchaseOrderId: string, ratio: number) {
+/** Apply landed-cost op alle PO-producten. Ratio wordt server-side herberekend. */
+export async function applyLandedCost(purchaseOrderId: string) {
   const user = await requireUser();
-  const result = await applyLandedCostToProducts({ purchaseOrderId, ratio });
+  const result = await applyLandedCostToProducts({ purchaseOrderId });
   await db.insert(activities).values({
     type: "note",
-    subject: `Landed-cost toegepast (ratio ${(ratio * 100).toFixed(2)}%)`,
+    subject: `Landed-cost toegepast (ratio ${(result.ratio * 100).toFixed(2)}%)`,
     body: `${result.updated} producten bijgewerkt, ${result.skipped} overgeslagen.`,
     authorId: user.id,
   });

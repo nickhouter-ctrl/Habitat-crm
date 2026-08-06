@@ -9,6 +9,7 @@ import { db } from "./lib/db";
 import { accounts, sessions, users, verificationTokens } from "./lib/db/schema";
 import { verifyPassword } from "./lib/auth/password";
 import { markLoginTokenUsed, resolveLoginToken } from "./lib/login-links";
+import { clientIp, rateLimit } from "./lib/rate-limit";
 
 const credentialsSchema = z.object({
   email: z.string().email(),
@@ -33,11 +34,21 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         email: { label: "Email", type: "email" },
         password: { label: "Password", type: "password" },
       },
-      async authorize(raw) {
+      async authorize(raw, request) {
         const parsed = credentialsSchema.safeParse(raw);
         if (!parsed.success) return null;
 
         const { email, password } = parsed.data;
+
+        // Brute-force-rem, zelfde opzet als de portal-login: per IP én per
+        // e-mailadres, vóór de wachtwoordcheck.
+        const ip = clientIp(request);
+        const [ipOk, emailOk] = await Promise.all([
+          rateLimit(`crm-login:ip:${ip}`, 10, 5 * 60),
+          rateLimit(`crm-login:email:${email.toLowerCase()}`, 5, 15 * 60),
+        ]);
+        if (!ipOk || !emailOk) return null;
+
         const user = await db.query.users.findFirst({
           where: eq(users.email, email.toLowerCase()),
         });
@@ -64,8 +75,9 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       id: "maillink",
       name: "Inloglink",
       credentials: { token: { label: "Token", type: "text" } },
-      async authorize(raw) {
+      async authorize(raw, request) {
         const token = typeof raw?.token === "string" ? raw.token : "";
+        if (!(await rateLimit(`maillink:ip:${clientIp(request)}`, 10, 5 * 60))) return null;
         const user = await resolveLoginToken(token);
         if (!user) return null;
         await markLoginTokenUsed(token);

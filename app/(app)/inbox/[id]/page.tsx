@@ -7,6 +7,7 @@ import { Badge, Card, LinkButton, PageHeader, buttonClass } from "@/components/u
 import { db } from "@/lib/db";
 import { emailInbox, mailAttachments, purchaseOrders, quoteRequests } from "@/lib/db/schema";
 import { CATEGORIES } from "@/lib/email-categories";
+import { sanitizeMailHtml } from "@/lib/sanitize-mail-html";
 import { cn, formatEUR } from "@/lib/utils";
 
 import {
@@ -134,8 +135,8 @@ export default async function MailDetailPage({ params }: { params: Promise<{ id:
           {mail.bodyHtml ? (
             <div
               className="prose prose-sm max-w-none text-sm"
-              // Trusted gmail content — note this is rendered as-is
-              dangerouslySetInnerHTML={{ __html: mail.bodyHtml }}
+              // Inkomende mail is attacker-controlled — altijd sanitizen.
+              dangerouslySetInnerHTML={{ __html: sanitizeMailHtml(mail.bodyHtml) }}
             />
           ) : mail.bodyText ? (
             <pre className="whitespace-pre-wrap break-words font-sans text-sm leading-relaxed">

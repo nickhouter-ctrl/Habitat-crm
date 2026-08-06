@@ -12,6 +12,8 @@
  */
 import { NextResponse } from "next/server";
 
+import { requireCron } from "@/lib/auth/require-cron";
+
 import { brandedEmail, escapeHtml, sendEmail } from "@/lib/email";
 import { syncSanitairPrijzen } from "@/lib/sanitair-prijzen";
 import { verzamelWeekcontrole } from "@/lib/weekcontrole";
@@ -22,10 +24,8 @@ export const maxDuration = 60;
 const ONTVANGERS = ["nick@habitat-one.com", "hans@habitat-one.com"];
 
 export async function GET(req: Request) {
-  const auth = req.headers.get("authorization");
-  if (process.env.NODE_ENV === "production" && auth !== `Bearer ${process.env.CRON_SECRET}`) {
-    return NextResponse.json({ error: "unauthorized" }, { status: 401 });
-  }
+  const denied = requireCron(req);
+  if (denied) return denied;
 
   // Eerst de eigen-collectie badkamerposten verversen uit de catalogus, zodat
   // de calculator de week ingaat met actuele productprijzen.

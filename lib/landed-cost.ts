@@ -6,7 +6,7 @@
  * dit module de TRUE landed cost per product op basis van wat er werkelijk is
  * betaald.
  */
-import { eq, sql } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 
 import { db } from "@/lib/db";
 import {
@@ -79,11 +79,12 @@ export function computeLandedCost(args: {
   po: PurchaseOrder;
   attachments: AttachmentRow[];
 }): LandedCostResult {
-  // Factory total = som van line items
-  const items = (args.po.items ?? []) as Array<{ quantity?: number; unitPrice?: number | string }>;
+  // Factory total = som van line items. `unitPrice` staat in de ordervaluta;
+  // bij een niet-EUR PO is de ratio dus een benadering (overhead is wél EUR).
+  const items = args.po.items ?? [];
   let factoryTotal = 0;
   for (const it of items) {
-    const qty = Number(it.quantity ?? 0);
+    const qty = Number(it.units ?? 0);
     const price = Number(it.unitPrice ?? 0);
     factoryTotal += qty * price;
   }
@@ -134,25 +135,29 @@ export function computeLandedCost(args: {
 }
 
 /**
- * Pas de landed-cost ratio toe op alle producten in de PO.
- * Voor elke line-item met productId: update purchaseCostEur naar
- * (line.unitPrice in EUR) × (1 + ratio).
+ * Pas de landed-cost toe op alle producten in de PO.
+ * De ratio wordt hier server-side (her)berekend uit de PO + gekoppelde
+ * bijlagen — nooit uit een client-waarde, want die schrijft direct in
+ * `products.purchaseCostEur`. Voor elke line-item met productId:
+ * purchaseCostEur = unitPrice × (1 + ratio).
  */
 export async function applyLandedCostToProducts(args: {
   purchaseOrderId: string;
-  ratio: number;
-}): Promise<{ updated: number; skipped: number }> {
+}): Promise<{ updated: number; skipped: number; ratio: number }> {
   const po = await db.query.purchaseOrders.findFirst({
     where: eq(purchaseOrders.id, args.purchaseOrderId),
   });
   if (!po) throw new Error("PO niet gevonden");
 
-  const items = (po.items ?? []) as Array<{
-    productId?: string;
-    unitPrice?: number | string;
-    quantity?: number;
-  }>;
+  const attachments = await getAttachmentsForPO(args.purchaseOrderId);
+  const result = computeLandedCost({ po, attachments });
+  if (result.factoryTotalEur <= 0 || result.overheadTotalEur <= 0) {
+    throw new Error(
+      "Landed cost niet toepasbaar: factory-totaal of overhead is 0 — vul eerst bedragen in.",
+    );
+  }
 
+  const items = po.items ?? [];
   let updated = 0;
   let skipped = 0;
   for (const it of items) {
@@ -166,7 +171,7 @@ export async function applyLandedCostToProducts(args: {
       continue;
     }
     // Nieuwe inkoop = factory × (1 + ratio)
-    const newPurchase = Math.round(factoryUnit * (1 + args.ratio) * 100) / 100;
+    const newPurchase = Math.round(factoryUnit * (1 + result.ratio) * 100) / 100;
     await db
       .update(products)
       .set({
@@ -181,15 +186,22 @@ export async function applyLandedCostToProducts(args: {
   await db
     .update(purchaseOrders)
     .set({
-      landedCostSummary: sql`${JSON.stringify({
+      landedCostSummary: {
+        factoryTotalEur: result.factoryTotalEur,
+        overheadTotalEur: result.overheadTotalEur,
+        ratio: result.ratio,
         appliedAt: new Date().toISOString(),
-        ratio: args.ratio,
-      })}::jsonb` as any,
+        breakdown: result.breakdown.map((b) => ({
+          category: b.category,
+          amount: b.amount,
+          attachmentCount: b.attachmentCount,
+        })),
+      },
       updatedAt: new Date(),
     })
     .where(eq(purchaseOrders.id, args.purchaseOrderId));
 
-  return { updated, skipped };
+  return { updated, skipped, ratio: result.ratio };
 }
 
 /** Patterns voor auto-linking van attachments aan PO via shipmentRef/containerRef. */

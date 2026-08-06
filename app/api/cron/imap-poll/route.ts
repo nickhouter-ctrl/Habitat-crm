@@ -9,6 +9,8 @@
  */
 import { NextResponse } from "next/server";
 
+import { requireCron } from "@/lib/auth/require-cron";
+
 import { runImapPoll } from "@/lib/imap-poll";
 
 export const dynamic = "force-dynamic";
@@ -20,10 +22,8 @@ export const maxDuration = 300;
 
 export async function GET(req: Request) {
   // Beveiliging: in productie alleen Vercel Cron (header authorization)
-  const auth = req.headers.get("authorization");
-  if (process.env.NODE_ENV === "production" && auth !== `Bearer ${process.env.CRON_SECRET}`) {
-    return NextResponse.json({ error: "unauthorized" }, { status: 401 });
-  }
+  const denied = requireCron(req);
+  if (denied) return denied;
 
   const result = await runImapPoll();
   return NextResponse.json(result, { status: result.ok ? 200 : 500 });

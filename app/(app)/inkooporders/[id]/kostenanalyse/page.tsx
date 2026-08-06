@@ -23,13 +23,7 @@ export default async function KostenanalysePage({ params }: { params: Promise<{ 
   const attachments = await getAttachmentsForPO(id);
   const result = computeLandedCost({ po, attachments });
 
-  const items = (po.items ?? []) as Array<{
-    productId?: string;
-    productName?: string;
-    sku?: string;
-    quantity?: number;
-    unitPrice?: number | string;
-  }>;
+  const items = po.items ?? [];
 
   return (
     <>
@@ -181,7 +175,7 @@ export default async function KostenanalysePage({ params }: { params: Promise<{ 
               <form
                 action={async () => {
                   "use server";
-                  await applyLandedCost(id, result.ratio);
+                  await applyLandedCost(id);
                 }}
               >
                 <button className={cn(buttonClass({}), "w-full")}>
@@ -223,7 +217,7 @@ export default async function KostenanalysePage({ params }: { params: Promise<{ 
                     return (
                       <Tr key={i}>
                         <Td className="text-xs">
-                          {it.sku ?? "—"} · {it.productName?.slice(0, 25)}
+                          {it.sku ?? "—"} · {it.name?.slice(0, 25)}
                         </Td>
                         <Td className="text-right text-xs tabular-nums">{formatEUR(factory)}</Td>
                         <Td className="text-right text-xs font-medium tabular-nums text-accent">

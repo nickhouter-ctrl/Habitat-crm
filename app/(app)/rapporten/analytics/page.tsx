@@ -108,7 +108,8 @@ export default async function AnalyticsPage({
 
   return (
     <>
-      <AutoRefresh seconds={30} />
+      {/* 60s is genoeg: de GA4-data komt uit een 5-min-cache, alleen realtime is vers. */}
+      <AutoRefresh seconds={60} />
       <PageHeader
         title="Analytics"
         subtitle={data ? `Google Analytics (GA4) · ${periodeLabel}` : "Google Analytics (GA4)"}

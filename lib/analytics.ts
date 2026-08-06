@@ -2,6 +2,8 @@
 // Auth: dezelfde OAuth-credentials als Search Console (refresh-token) met de
 // scope analytics.readonly. Lichtgewicht: alleen fetch.
 
+import { kvGet, kvSet } from "@/lib/kv-cache";
+
 const PROPERTY = process.env.GA_PROPERTY_ID; // numeriek GA4 property-id
 const CLIENT_ID = process.env.SC_CLIENT_ID;
 const CLIENT_SECRET = process.env.SC_CLIENT_SECRET;
@@ -150,8 +152,24 @@ function dayLabel(spec: string): string {
 
 export type GaQuery = { days?: number; date?: string };
 
+/**
+ * Gecachte variant (5 min, gedeeld over instances via kv_cache). Eén load van
+ * het Analytics-dashboard doet ~21 GA4-calls; met de 30s-autorefresh op die
+ * pagina liep dat zonder cache op tot ~46 externe calls per minuut per tab.
+ */
+const GA_TTL_MS = 5 * 60 * 1000;
+
 export async function getAnalyticsData(opts: GaQuery | number = {}): Promise<GaData> {
   const q: GaQuery = typeof opts === "number" ? { days: opts } : opts;
+  const key = `ga-data:${q.date ?? `days-${q.days ?? 28}`}`;
+  const cached = await kvGet<{ fetchedAt: number; data: GaData }>(key);
+  if (cached && Date.now() - cached.fetchedAt < GA_TTL_MS) return cached.data;
+  const data = await fetchAnalyticsData(q);
+  await kvSet(key, { fetchedAt: Date.now(), data });
+  return data;
+}
+
+async function fetchAnalyticsData(q: GaQuery): Promise<GaData> {
   const single = Boolean(q.date);
   const days = q.days ?? 28;
   const token = await accessToken();

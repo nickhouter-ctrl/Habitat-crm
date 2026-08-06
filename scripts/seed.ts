@@ -5,7 +5,8 @@
  *
  *   npm run db:seed
  *
- * Env (optional): SEED_ADMIN_EMAIL, SEED_ADMIN_PASSWORD
+ * Env: SEED_ADMIN_PASSWORD (verplicht — geen standaardwachtwoord),
+ *      SEED_ADMIN_EMAIL (optioneel).
  */
 import "./load-env"; // must be first — loads .env.local before lib/db is evaluated
 
@@ -17,7 +18,13 @@ import { contacts, deals, products, properties, users } from "../lib/db/schema";
 
 async function main() {
   const email = (process.env.SEED_ADMIN_EMAIL ?? "admin@habitat.local").toLowerCase();
-  const password = process.env.SEED_ADMIN_PASSWORD ?? "habitat1234";
+  // Bewust geen fallback: dit script reset bij elke run het admin-wachtwoord,
+  // dus een publiek in de repo staand standaardwachtwoord is direct overname.
+  const password = process.env.SEED_ADMIN_PASSWORD;
+  if (!password) {
+    console.error("SEED_ADMIN_PASSWORD is niet gezet — zet hem in .env.local en draai opnieuw.");
+    process.exit(1);
+  }
   const passwordHash = await hashPassword(password);
 
   const [admin] = await db
@@ -28,7 +35,7 @@ async function main() {
       set: { passwordHash, role: "admin" },
     })
     .returning({ id: users.id });
-  console.log(`✓ admin user ready — ${email} / ${password}`);
+  console.log(`✓ admin user ready — ${email}`);
 
   // Sample catalogue products (idempotent — only if the catalogue is empty).
   const [{ p: productCount }] = await db.select({ p: count() }).from(products);
