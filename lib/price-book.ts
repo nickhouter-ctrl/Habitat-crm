@@ -48,8 +48,10 @@ export const DRIVERS: Driver[] = [
   { key: "kozijnen", label: "Kozijnen", groep: "interieur", eenheid: "stuks" },
   { key: "keukens", label: "Keukens", groep: "interieur", eenheid: "stuks" },
 
-  { key: "zwembad_nieuw", label: "Nieuw zwembad", groep: "buiten", eenheid: "stuks" },
-  { key: "zwembad_renovatie", label: "Zwembad renoveren", groep: "buiten", eenheid: "stuks" },
+  // Per m² wateroppervlak, niet per stuk: een zwembad van 10×5 is anderhalf
+  // keer een 8×4 en hoort dus ook anderhalf keer zoveel te kosten.
+  { key: "zwembad_m2", label: "Nieuw zwembad (wateroppervlak)", groep: "buiten", eenheid: "m²" },
+  { key: "zwembad_renovatie_m2", label: "Zwembad renoveren (wateroppervlak)", groep: "buiten", eenheid: "m²" },
   { key: "hekwerk_m", label: "Hekwerk", groep: "buiten", eenheid: "m" },
   { key: "poorten", label: "Poorten", groep: "buiten", eenheid: "stuks" },
 ];
