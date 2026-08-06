@@ -109,11 +109,17 @@ export default async function OfferteCalculatorPage({
   );
   // Lege omschrijvingen (bv. uit een oudere URL) vallen terug op de standaard
   // of "Termijn n" — een termijn met een percentage telt dus altijd mee.
-  const termijnen = Array.from({ length: schemaAantal }, (_, idx) => ({
+  let termijnen = Array.from({ length: schemaAantal }, (_, idx) => ({
     label: (params[`s${idx + 1}_label`] ?? "").trim() || schemaStandaard[idx]?.label || `Termijn ${idx + 1}`,
     pct: parseMoney(params[`s${idx + 1}_pct`] ?? "") ?? schemaStandaard[idx]?.pct ?? 0,
   }));
-  const schemaSom = termijnen.reduce((s, t) => s + t.pct, 0);
+  let schemaSom = termijnen.reduce((s, t) => s + t.pct, 0);
+  // Alle percentages op 0 (bv. hangengebleven oude URL) is nooit de bedoeling:
+  // dan geldt gewoon het standaardschema.
+  if (schemaSom === 0) {
+    termijnen = schemaStandaard.map((t) => ({ ...t }));
+    schemaSom = termijnen.reduce((s, t) => s + t.pct, 0);
+  }
   const verkoopMetOnvoorzien = verkoop * (1 + onvoorzien / 100);
 
   const groepen = [...new Set(DRIVERS.map((d) => d.groep))] as DriverGroep[];
@@ -261,7 +267,7 @@ export default async function OfferteCalculatorPage({
                 {margePct != null && margePct < 15 && (
                   <p className="mt-1 text-xs text-danger">Onder de 15%-norm — controleer de prijzen in het prijzenboek voordat je dit verstuurt.</p>
                 )}
-                {verkoop > 0 && schemaSom > 0 && (
+                {verkoop > 0 && (
                   <div className="mt-2 border-t pt-2 text-xs">
                     <p className="mb-1 font-medium uppercase tracking-wide text-muted">Betalingsschema (over {formatEUR(verkoopMetOnvoorzien)} ex btw)</p>
                     {termijnen.map((t, i) =>

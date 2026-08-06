@@ -133,10 +133,12 @@ export async function createQuoteFromPriceBook(formData: FormData) {
     Math.max(Number.parseInt(String(formData.get("s_aantal") ?? ""), 10) || schemaStandaard.length, 0),
     10,
   );
-  const termijnen = Array.from({ length: sAantal }, (_, idx) => ({
+  let termijnen = Array.from({ length: sAantal }, (_, idx) => ({
     label: String(formData.get(`s${idx + 1}_label`) ?? "").trim() || schemaStandaard[idx]?.label || `Termijn ${idx + 1}`,
     pct: parseMoney(String(formData.get(`s${idx + 1}_pct`) ?? "")) ?? schemaStandaard[idx]?.pct ?? 0,
   }));
+  // Alle percentages 0 → standaardschema (zelfde vangnet als het voorbeeld).
+  if (termijnen.reduce((s, t) => s + t.pct, 0) === 0) termijnen = schemaStandaard.map((t) => ({ ...t }));
 
   const posten = await db
     .select()
