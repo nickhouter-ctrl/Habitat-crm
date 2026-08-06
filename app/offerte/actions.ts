@@ -4,11 +4,11 @@ import { eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { NOTIFY_RECIPIENTS, NOTIFY_TO } from "@/lib/mail-bcc";
 
-import { COMPANY } from "@/lib/company";
 import { db } from "@/lib/db";
 import { syncDealFromDocument } from "@/lib/deals";
 import { activities, documents } from "@/lib/db/schema";
 import { offerteAcceptedEmail, sendEmail } from "@/lib/email";
+import { richtProjectInNaAkkoord } from "@/lib/project-inrichting";
 
 // No auth — these are invoked by the client from the public /offerte/[token] page.
 
@@ -53,6 +53,15 @@ export async function acceptOfferte(token: string) {
       status: "accepted",
       totalEur: doc.totalEur,
     });
+    // Gecalculeerde verbouwings-offerte → project inrichten (aanneemsom,
+    // budgetregels, termijn-proforma's) — precies zoals bij intern op
+    // "geaccepteerd" zetten. Best-effort: een fout hier mag het akkoord van
+    // de klant zelf nooit blokkeren.
+    try {
+      await richtProjectInNaAkkoord(doc.id, null);
+    } catch (e) {
+      console.error("[acceptOfferte] project inrichten na akkoord mislukt:", e);
+    }
     await notifyTeam(
       `✅ Offerte ${doc.docNumber ?? ""} geaccepteerd`.trim(),
       `<p>${doc.contact?.name ?? "Een klant"} heeft offerte ${doc.docNumber ?? ""} geaccepteerd — tijd om te factureren.</p>`,
