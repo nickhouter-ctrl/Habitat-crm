@@ -168,8 +168,11 @@ export default async function OfferteCalculatorPage({
               <Field label="Klant">
                 <Combobox name="contactId" defaultValue={params.contactId ?? ""} clearable placeholder="zoek klant…" options={contactRows.map((c) => ({ value: c.id, label: c.name }))} />
               </Field>
-              <Field label="Project" hint="leeg = bij akkoord wordt automatisch een project aangemaakt">
-                <Combobox name="projectId" defaultValue={params.projectId ?? ""} clearable placeholder="zoek project…" options={projectRows.map((p) => ({ value: p.id, label: p.name }))} />
+              <Field label="Project" hint="bestaand kiezen óf een nieuwe naam typen — leeg = bij akkoord automatisch aangemaakt">
+                <div className="space-y-1.5">
+                  <Combobox name="projectId" defaultValue={params.projectId ?? ""} clearable placeholder="zoek bestaand project…" options={projectRows.map((p) => ({ value: p.id, label: p.name }))} />
+                  <Input name="nieuwProject" defaultValue={params.nieuwProject ?? ""} placeholder="…of nieuw project: typ de naam" />
+                </div>
               </Field>
               <Field label="Taal offerte-voorwaarden">
                 <Select name="taal" defaultValue={params.taal ?? "nl"}>

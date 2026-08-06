@@ -114,14 +114,22 @@ export async function deletePriceBookItem(id: string) {
 export async function createQuoteFromPriceBook(formData: FormData) {
   const user = await requireWriteUser();
   const contactId = uuidOrNull(formData.get("contactId"));
-  const projectId = uuidOrNull(formData.get("projectId"));
+  let projectId = uuidOrNull(formData.get("projectId"));
+
+  // Nieuw project direct vanuit de wizard: naam getypt + geen bestaand project
+  // gekozen → meteen aanmaken en de offerte eraan koppelen.
+  const nieuwProject = String(formData.get("nieuwProject") ?? "").trim();
+  if (!projectId && nieuwProject) {
+    const [aangemaakt] = await db.insert(projects).values({ name: nieuwProject, contactId }).returning({ id: projects.id });
+    projectId = aangemaakt.id;
+  }
   const taal = (["nl", "en", "es"].includes(String(formData.get("taal"))) ? String(formData.get("taal")) : "nl") as QuoteLang;
   const onvoorzienPct = parseMoney(String(formData.get("onvoorzien") ?? "")) ?? 10;
   // Badkamer-specificatie en herreken-link uit de formulierdata zelf afleiden
   // (zelfde helper als het voorbeeld). Vroeger reisden die als hidden velden
   // mee en stapelden ze zich bij elke herberekening op in de URL.
   const { spec: badkamerSpec } = badkamerSamenstelling((veld) => String(formData.get(veld) ?? ""));
-  const invoerVelden = /^(bereken|taal|onvoorzien|contactId|projectId|b_aantal|b\d+_|d_|s_aantal|s\d+_|q_|qb_)/;
+  const invoerVelden = /^(bereken|taal|onvoorzien|contactId|projectId|b_aantal|b\d+_|d_|s_aantal|s\d+_|q_|qb_|nieuwProject)/;
   const wizardQuery = new URLSearchParams(
     [...formData.entries()].filter(
       (e): e is [string, string] => typeof e[1] === "string" && e[1] !== "" && invoerVelden.test(e[0]),
