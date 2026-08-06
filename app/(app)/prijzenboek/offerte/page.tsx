@@ -109,7 +109,8 @@ export default async function OfferteCalculatorPage({
   // 5% oplevering vast) — zolang er niets is doorgerekend de vaste standaard.
   const auto = autoTermijnen(taal, verkoopPerHoofdstuk);
   const schemaStandaard = auto.length > 0 ? auto : SCHEMA_FASEN.map((f) => ({ label: f[taal], pct: f.standaard }));
-  const aantalGetypt = params.s_aantal != null && params.s_aantal !== "" && params.s_aantal !== params.s_aantal_basis;
+  const aantalGetypt =
+    params.s_aantal_basis != null && params.s_aantal != null && params.s_aantal !== "" && params.s_aantal !== params.s_aantal_basis;
   const schemaAantal = Math.min(
     Math.max(aantalGetypt ? Number.parseInt(params.s_aantal ?? "", 10) || schemaStandaard.length : schemaStandaard.length, 0),
     MAX_TERMIJNEN,
@@ -118,12 +119,16 @@ export default async function OfferteCalculatorPage({
   // of "Termijn n" — een termijn met een percentage telt dus altijd mee.
   let termijnen = Array.from({ length: schemaAantal }, (_, idx) => {
     const i = idx + 1;
-    const getypt = params[`s${i}_pct`];
-    const basis = params[`s${i}_basis`];
-    const handmatig = getypt != null && getypt !== "" && getypt !== basis ? parseMoney(getypt) : null;
+    const pctGetypt = params[`s${i}_pct`];
+    const pctBasis = params[`s${i}_basis`];
+    const handmatigPct = pctBasis != null && pctGetypt != null && pctGetypt !== "" && pctGetypt !== pctBasis ? parseMoney(pctGetypt) : null;
+    const labelGetypt = params[`s${i}_label`];
+    const labelBasis = params[`s${i}_label_basis`];
+    const handmatigLabel =
+      labelBasis != null && labelGetypt != null && labelGetypt.trim() !== "" && labelGetypt !== labelBasis ? labelGetypt.trim() : null;
     return {
-      label: (params[`s${i}_label`] ?? "").trim() || schemaStandaard[idx]?.label || `Termijn ${i}`,
-      pct: handmatig ?? schemaStandaard[idx]?.pct ?? 0,
+      label: handmatigLabel ?? schemaStandaard[idx]?.label ?? `Termijn ${i}`,
+      pct: handmatigPct ?? schemaStandaard[idx]?.pct ?? 0,
     };
   });
   let schemaSom = termijnen.reduce((s, t) => s + t.pct, 0);

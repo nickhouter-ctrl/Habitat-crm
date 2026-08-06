@@ -25,7 +25,8 @@ export function BetalingsschemaBlok({
     // (automatisch gegenereerde) fase-lijst.
     const uitParam = defaults.s_aantal;
     const basis = defaults.s_aantal_basis;
-    if (uitParam != null && uitParam !== "" && uitParam !== basis) {
+    // Zonder basis (oude URL) geldt de invoer niet als "zelf gekozen".
+    if (basis != null && uitParam != null && uitParam !== "" && uitParam !== basis) {
       const n = Number.parseInt(uitParam, 10);
       if (Number.isFinite(n)) return Math.min(Math.max(n, 0), MAX_TERMIJNEN);
     }
@@ -57,19 +58,25 @@ export function BetalingsschemaBlok({
           {Array.from({ length: aantal }, (_, idx) => idx + 1).map((i) => (
             <div key={i} className="flex items-center gap-2">
               <span className="w-16 shrink-0 text-xs text-muted">Termijn {i}</span>
-              <Input
-                name={`s${i}_label`}
-                defaultValue={(defaults[`s${i}_label`] ?? "").trim() || standaard[i - 1]?.label || ""}
-                placeholder="omschrijving, bv. bij start dakwerk…"
-                className="flex-1"
-              />
+              {(() => {
+                const vers = standaard[i - 1]?.label ?? "";
+                const getypt = defaults[`s${i}_label`];
+                const basis = defaults[`s${i}_label_basis`];
+                const waarde = basis != null && getypt != null && getypt.trim() !== "" && getypt !== basis ? getypt : vers;
+                return (
+                  <>
+                    <Input name={`s${i}_label`} defaultValue={waarde} placeholder="omschrijving, bv. bij start dakwerk…" className="flex-1" />
+                    <input type="hidden" name={`s${i}_label_basis`} value={vers} />
+                  </>
+                );
+              })()}
               {(() => {
                 // Alleen een écht overgetypt percentage blijft staan; anders
                 // volgt het veld de (automatisch berekende) standaard.
                 const vers = standaard[i - 1] ? String(standaard[i - 1].pct) : "";
                 const getypt = defaults[`s${i}_pct`];
                 const basis = defaults[`s${i}_basis`];
-                const waarde = getypt != null && getypt !== "" && getypt !== basis ? getypt : vers;
+                const waarde = basis != null && getypt != null && getypt !== "" && getypt !== basis ? getypt : vers;
                 return (
                   <>
                     <Input name={`s${i}_pct`} inputMode="decimal" defaultValue={waarde} placeholder="%" className="w-20 text-right" />
