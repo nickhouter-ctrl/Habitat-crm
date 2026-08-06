@@ -17,6 +17,10 @@ type Gem = { kost: number; verkoop: number };
 /** Afvoerset zit niet als eigen categorie in de catalogus — vast bedrag. */
 const AFVOERSET: Gem = { kost: 90, verkoop: 124 };
 
+/** Vrijstaande badkraan: hoort automatisch bij elk bad (verkoop ± € 1.000,
+ *  keuze Nick 06-08-2026); geen eigen categorie in de catalogus. */
+const BADKRAAN: Gem = { kost: 300, verkoop: 1000 };
+
 export async function syncSanitairPrijzen(): Promise<number> {
   const per = new Map<string, Gem>();
   const cats = await db.execute<{ cat: string; kost: number | null; verkoop: number | null }>(sql`
@@ -45,7 +49,11 @@ export async function syncSanitairPrijzen(): Promise<number> {
       g: { kost: bak.kost + set.kost + wand.kost, verkoop: bak.verkoop + set.verkoop + wand.verkoop },
     });
   const bad = per.get("Baden");
-  if (bad?.verkoop) posten.push({ naam: "Bad (eigen collectie)", g: bad });
+  if (bad?.verkoop)
+    posten.push({
+      naam: "Bad + badkraan (eigen collectie)",
+      g: { kost: bad.kost + BADKRAAN.kost, verkoop: bad.verkoop + BADKRAAN.verkoop },
+    });
   const kraan = per.get("Kranen");
   if (meubel?.verkoop && kraan)
     posten.push({

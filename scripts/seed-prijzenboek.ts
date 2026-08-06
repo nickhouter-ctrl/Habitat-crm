@@ -135,7 +135,7 @@ const POSTEN: Post[] = [
   // catalogus ververst (lib/sanitair-prijzen.ts).
   { h: "Eigen producten", n: "Doucheset compleet (eigen collectie)", d: "douchebak, doucheset en glaswand — verkoopprijzen uit de eigen catalogus (gem. serie)", unit: "stuk", driver: "douches", kost: 1100, marge: 44,
     stelpost: "gemiddelde serie uit de collectie — gekozen model bepaalt de definitieve prijs" },
-  { h: "Eigen producten", n: "Bad (eigen collectie)", d: "vrijstaand bad — verkoopprijs uit de eigen catalogus (gem. serie)", unit: "stuk", driver: "baden", kost: 1238, marge: 36,
+  { h: "Eigen producten", n: "Bad + badkraan (eigen collectie)", d: "vrijstaand bad (± € 1.928) + vrijstaande badkraan (± € 1.000) — verkoopprijzen eigen catalogus", unit: "stuk", driver: "baden", kost: 1538, marge: 47,
     stelpost: "gemiddelde serie uit de collectie — gekozen model bepaalt de definitieve prijs" },
   { h: "Eigen producten", n: "Wastafelmeubel + kraan (eigen collectie)", d: "meubel, kraan en afvoerset — verkoopprijzen uit de eigen catalogus (gem. serie)", unit: "stuk", driver: "wastafels", kost: 785, marge: 44,
     stelpost: "gemiddelde serie uit de collectie — gekozen model bepaalt de definitieve prijs" },
