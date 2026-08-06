@@ -143,7 +143,8 @@ const TERMIJN_BOUWSTENEN: { hoofdstukken: string[]; nl: string; en: string; es: 
   { hoofdstukken: ["Tegelwerk", "Vloeren, wanden & plafonds"], nl: "bij start van het tegel- en vloerwerk", en: "on start of tiling and flooring", es: "al inicio del alicatado y los suelos" },
   { hoofdstukken: ["Kozijnen", "Binnendeuren"], nl: "bij levering van kozijnen en deuren", en: "on delivery of window frames and doors", es: "a la entrega de carpinterías y puertas" },
   { hoofdstukken: ["Badkamers & sanitair", "Keuken"], nl: "bij levering van sanitair, keuken en producten", en: "on delivery of sanitary ware, kitchen and products", es: "a la entrega de sanitarios, cocina y productos" },
-  { hoofdstukken: ["Zwembad", "Buitenruimte", "Hekwerk & poort"], nl: "bij start van het buitenwerk (zwembad, terras, tuin)", en: "on start of the outdoor works (pool, terrace, garden)", es: "al inicio de los trabajos exteriores (piscina, terraza, jardín)" },
+  { hoofdstukken: ["Zwembad"], nl: "bij start van de zwembadbouw", en: "on start of the pool construction", es: "al inicio de la construcción de la piscina" },
+  { hoofdstukken: ["Buitenruimte", "Hekwerk & poort"], nl: "bij start van het terras- en tuinwerk", en: "on start of the terrace and garden works", es: "al inicio de la terraza y el jardín" },
 ];
 
 const TERMIJN_VAST: Record<QuoteLang, { opdracht: string; oplevering: string }> = {
