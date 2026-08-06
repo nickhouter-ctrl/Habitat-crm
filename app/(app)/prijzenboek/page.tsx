@@ -74,6 +74,17 @@ export default async function PrijzenboekPage() {
               </span>
             </CardHeader>
             <CardContent className="space-y-3">
+              {/* Kolomkoppen — dezelfde grid als de rijen eronder. */}
+              <div className="hidden gap-2 px-2.5 text-[11px] font-medium uppercase tracking-wide text-muted lg:grid lg:grid-cols-[1.6fr_0.6fr_1fr_0.5fr_0.6fr_0.5fr_0.7fr_auto]">
+                <span>Post &amp; omschrijving</span>
+                <span>Eenheid</span>
+                <span>Aantal volgt uit</span>
+                <span className="text-right">Factor</span>
+                <span className="text-right">Kost p/e</span>
+                <span className="text-right">Marge %</span>
+                <span className="text-right">Verkoop p/e</span>
+                <span />
+              </div>
               {rijen.map((p) => (
                 <form
                   key={p.id}
