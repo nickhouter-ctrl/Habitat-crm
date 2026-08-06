@@ -228,7 +228,8 @@ export default async function OfferteCalculatorPage({
                               <span className="font-medium">{p.name}</span>
                               {p.isStelpost && <Badge tone="info" className="ml-1.5">stelpost</Badge>}
                               {p.priceEur == null && <Badge tone="warning" className="ml-1.5">geen prijs</Badge>}
-                              {p.stelpostNote ? <span className="block text-xs text-muted">{p.stelpostNote}</span> : null}
+                              {p.description ? <span className="block text-xs text-muted">{p.description}</span> : null}
+                              {p.stelpostNote ? <span className="block text-xs text-muted/80 italic">Stelpost: {p.stelpostNote}</span> : null}
                             </div>
                             <div className="flex items-center gap-1.5">
                               <Input name={`q_${p.id}`} inputMode="decimal" defaultValue={q > 0 ? moneyForInput(q) : ""} placeholder="0" className="w-24 text-right" disabled={p.priceEur == null} />
