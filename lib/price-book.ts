@@ -30,6 +30,7 @@ export const DRIVERS: Driver[] = [
   { key: "oprit_m2", label: "Oprit", groep: "oppervlaktes", eenheid: "m²" },
   { key: "aanbouw_m2", label: "Aanbouw", groep: "oppervlaktes", eenheid: "m²" },
   { key: "kelder_m3", label: "Kelder uitgraven", groep: "oppervlaktes", eenheid: "m³" },
+  { key: "tegelvloer_m2", label: "Tegelvloer", groep: "oppervlaktes", eenheid: "m²" },
   { key: "parket_m2", label: "Parket / laminaat", groep: "oppervlaktes", eenheid: "m²" },
   { key: "spc_m2", label: "SPC / PVC vloer", groep: "oppervlaktes", eenheid: "m²" },
   { key: "microcement_m2", label: "Microcement", groep: "oppervlaktes", eenheid: "m²" },
