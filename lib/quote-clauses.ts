@@ -55,35 +55,55 @@ export function quoteClauses(lang: QuoteLang): string {
   return CLAUSES[lang].join("\n\n");
 }
 
-const SCHEMA_TEKST: Record<QuoteLang, { kop: string; termijnen: [string, string, string]; slot: string }> = {
-  nl: {
-    kop: "Betalingsschema",
-    termijnen: ["bij opdracht", "halverwege de werkzaamheden", "bij oplevering"],
-    slot: "Bedragen excl. btw; elke termijn te voldoen vóór aanvang van de volgende fase.",
+/**
+ * De vaste fase-termijnen van het betalingsschema. Volgorde = bouwvolgorde;
+ * de wizard laat per termijn het percentage instellen (0 = vervalt).
+ * `key` is de veldnaam in de wizard (f1…f5), `nl` ook het label daar.
+ */
+export const SCHEMA_FASEN = [
+  { key: "f1", standaard: 30, nl: "bij opdracht", en: "on commissioning", es: "a la firma del encargo" },
+  {
+    key: "f2",
+    standaard: 20,
+    nl: "bij start van het sloop- en ruwbouwwerk",
+    en: "on start of demolition and structural work",
+    es: "al inicio de la demolición y obra gruesa",
   },
-  en: {
-    kop: "Payment schedule",
-    termijnen: ["on commissioning", "halfway through the works", "on completion"],
-    slot: "Amounts exclude VAT; each instalment is due before the next phase starts.",
+  {
+    key: "f3",
+    standaard: 20,
+    nl: "bij start van de afbouw (tegelwerk, stucwerk, installaties)",
+    en: "on start of the finishing works (tiling, plastering, installations)",
+    es: "al inicio de los acabados (alicatado, enlucido, instalaciones)",
   },
-  es: {
-    kop: "Calendario de pagos",
-    termijnen: ["a la firma del encargo", "a mitad de obra", "a la entrega"],
-    slot: "Importes sin IVA; cada plazo se abona antes de iniciar la siguiente fase.",
+  {
+    key: "f4",
+    standaard: 15,
+    nl: "bij levering van sanitair, kozijnen en producten",
+    en: "on delivery of sanitary ware, window frames and products",
+    es: "a la entrega de sanitarios, carpinterías y productos",
   },
+  { key: "f5", standaard: 15, nl: "bij oplevering", en: "on completion", es: "a la entrega final" },
+] as const;
+
+const SCHEMA_TEKST: Record<QuoteLang, { kop: string; slot: string }> = {
+  nl: { kop: "Betalingsschema", slot: "Bedragen excl. btw; elke termijn te voldoen vóór aanvang van de betreffende fase." },
+  en: { kop: "Payment schedule", slot: "Amounts exclude VAT; each instalment is due before the corresponding phase starts." },
+  es: { kop: "Calendario de pagos", slot: "Importes sin IVA; cada plazo se abona antes de iniciar la fase correspondiente." },
 };
 
 /**
- * Betalingsschema als alinea voor onder de offerte: percentages over het
- * offertetotaal (ex btw), met de bedragen erbij. Termijnen op 0% vervallen.
+ * Betalingsschema als alinea voor onder de offerte: één regel per fase-termijn
+ * met percentage en bedrag over het offertetotaal (ex btw). 0% vervalt.
  */
-export function betalingsschemaTekst(lang: QuoteLang, totaalEx: number, pcts: [number, number, number]): string | null {
+export function betalingsschemaTekst(lang: QuoteLang, totaalEx: number, pcts: number[]): string | null {
   const t = SCHEMA_TEKST[lang];
   const eur = (n: number) =>
     new Intl.NumberFormat("nl-NL", { style: "currency", currency: "EUR", maximumFractionDigits: 0 }).format(n);
-  const delen = pcts
-    .map((pct, i) => (pct > 0 ? `${pct}% ${t.termijnen[i]} (${eur(Math.round((totaalEx * pct) / 100))})` : null))
-    .filter(Boolean);
-  if (delen.length === 0) return null;
-  return `${t.kop}: ${delen.join(" · ")}. ${t.slot}`;
+  const regels = SCHEMA_FASEN.map((fase, i) => {
+    const pct = pcts[i] ?? 0;
+    return pct > 0 ? `• ${pct}% ${fase[lang]} — ${eur(Math.round((totaalEx * pct) / 100))}` : null;
+  }).filter(Boolean);
+  if (regels.length === 0) return null;
+  return `${t.kop}\n${regels.join("\n")}\n${t.slot}`;
 }

@@ -18,7 +18,7 @@ import { computeTotals } from "@/lib/documents";
 import { insertNumberedDocument } from "@/lib/doc-number";
 import { moneyOrNull, parseMoney } from "@/lib/parse-money";
 import { DEFAULT_PRIJZENBOEK_MARGE, HOOFDSTUKKEN } from "@/lib/price-book";
-import { betalingsschemaTekst, quoteClauses, type QuoteLang } from "@/lib/quote-clauses";
+import { betalingsschemaTekst, quoteClauses, SCHEMA_FASEN, type QuoteLang } from "@/lib/quote-clauses";
 import { suggestedPrice } from "@/lib/pricing";
 
 /* ───────────────────────────── beheer ───────────────────────────── */
@@ -111,11 +111,7 @@ export async function createQuoteFromPriceBook(formData: FormData) {
   const onvoorzienPct = parseMoney(String(formData.get("onvoorzien") ?? "")) ?? 10;
   const badkamerSpec = String(formData.get("badkamerSpec") ?? "").trim();
   const wizardQuery = String(formData.get("wizardQuery") ?? "").trim();
-  const termijnen = [40, 30, 30].map((standaard, i) => parseMoney(String(formData.get(`t${i + 1}`) ?? "")) ?? standaard) as [
-    number,
-    number,
-    number,
-  ];
+  const termijnen = SCHEMA_FASEN.map((fase) => parseMoney(String(formData.get(fase.key) ?? "")) ?? fase.standaard);
 
   const posten = await db
     .select()

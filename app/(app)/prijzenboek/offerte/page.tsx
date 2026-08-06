@@ -30,6 +30,7 @@ import { contacts, priceBookItems, projects } from "@/lib/db/schema";
 import { moneyForInput, parseMoney } from "@/lib/parse-money";
 import { marginOf } from "@/lib/pricing";
 import { DRIVERS, DRIVER_GROEP_LABEL, DRIVER_HANDMATIG, HOOFDSTUKKEN, type DriverGroep } from "@/lib/price-book";
+import { SCHEMA_FASEN } from "@/lib/quote-clauses";
 import { formatEUR } from "@/lib/utils";
 import { createQuoteFromPriceBook } from "../actions";
 
@@ -94,6 +95,11 @@ export default async function OfferteCalculatorPage({
   }
   const margePct = verkoop > 0 ? (marginOf(verkoop, kost)?.pct ?? null) : null;
   const onvoorzien = parseMoney(params.onvoorzien ?? "") ?? 10;
+
+  // Betalingsschema per fase: percentages uit de URL (of de standaard).
+  const schemaPcts = SCHEMA_FASEN.map((f) => parseMoney(params[f.key] ?? "") ?? f.standaard);
+  const schemaSom = schemaPcts.reduce((s, p) => s + p, 0);
+  const verkoopMetOnvoorzien = verkoop * (1 + onvoorzien / 100);
 
   const groepen = [...new Set(DRIVERS.map((d) => d.groep))] as DriverGroep[];
 
@@ -165,18 +171,14 @@ export default async function OfferteCalculatorPage({
 
             <div>
               <p className="mb-1.5 text-xs font-medium uppercase tracking-wide text-muted">
-                Betalingsschema <span className="normal-case tracking-normal">— komt met de bedragen op de offerte</span>
+                Betalingsschema per fase <span className="normal-case tracking-normal">— percentages, 0 of leeg = termijn vervalt; komt met de bedragen op de offerte</span>
               </p>
-              <div className="grid gap-3 sm:grid-cols-3 lg:grid-cols-6">
-                <Field label="Bij opdracht (%)">
-                  <Input name="t1" inputMode="decimal" defaultValue={params.t1 ?? "40"} className="text-right" />
-                </Field>
-                <Field label="Halverwege (%)">
-                  <Input name="t2" inputMode="decimal" defaultValue={params.t2 ?? "30"} className="text-right" />
-                </Field>
-                <Field label="Bij oplevering (%)">
-                  <Input name="t3" inputMode="decimal" defaultValue={params.t3 ?? "30"} className="text-right" />
-                </Field>
+              <div className="grid gap-3 sm:grid-cols-3 lg:grid-cols-5">
+                {SCHEMA_FASEN.map((fase) => (
+                  <Field key={fase.key} label={`${fase.nl.charAt(0).toUpperCase()}${fase.nl.slice(1)} (%)`}>
+                    <Input name={fase.key} inputMode="decimal" defaultValue={params[fase.key] ?? String(fase.standaard)} className="text-right" />
+                  </Field>
+                ))}
               </div>
             </div>
 
@@ -220,9 +222,9 @@ export default async function OfferteCalculatorPage({
               <input type="hidden" name="taal" value={params.taal ?? "nl"} />
               <input type="hidden" name="onvoorzien" value={String(onvoorzien)} />
               <input type="hidden" name="badkamerSpec" value={badkamerSpec} />
-              <input type="hidden" name="t1" value={params.t1 ?? "40"} />
-              <input type="hidden" name="t2" value={params.t2 ?? "30"} />
-              <input type="hidden" name="t3" value={params.t3 ?? "30"} />
+              {SCHEMA_FASEN.map((fase) => (
+                <input key={fase.key} type="hidden" name={fase.key} value={params[fase.key] ?? String(fase.standaard)} />
+              ))}
               <input type="hidden" name="wizardQuery" value={wizardQuery} />
 
               {HOOFDSTUKKEN.map((hoofdstuk) => {
@@ -267,6 +269,21 @@ export default async function OfferteCalculatorPage({
                 </div>
                 {margePct != null && margePct < 15 && (
                   <p className="mt-1 text-xs text-danger">Onder de 15%-norm — controleer de prijzen in het prijzenboek voordat je dit verstuurt.</p>
+                )}
+                {verkoop > 0 && schemaSom > 0 && (
+                  <div className="mt-2 border-t pt-2 text-xs">
+                    <p className="mb-1 font-medium uppercase tracking-wide text-muted">Betalingsschema (over {formatEUR(verkoopMetOnvoorzien)} ex btw)</p>
+                    {SCHEMA_FASEN.map((fase, i) =>
+                      schemaPcts[i] > 0 ? (
+                        <p key={fase.key} className="text-muted">
+                          {schemaPcts[i]}% {fase.nl} — <span className="tabular-nums text-foreground">{formatEUR(Math.round((verkoopMetOnvoorzien * schemaPcts[i]) / 100))}</span>
+                        </p>
+                      ) : null,
+                    )}
+                    {Math.round(schemaSom) !== 100 && (
+                      <p className="mt-1 text-danger">De termijnen tellen op tot {schemaSom}% — pas de percentages in stap 1 aan naar 100%.</p>
+                    )}
+                  </div>
                 )}
                 <p className="mt-1 text-xs text-muted">
                   Aantallen die je hierboven aanpast worden bij het aanmaken opnieuw doorgerekend. De offerte wordt een
