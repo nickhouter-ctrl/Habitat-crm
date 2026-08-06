@@ -31,7 +31,7 @@ import { db } from "@/lib/db";
 import { contacts, priceBookItems, projects } from "@/lib/db/schema";
 import { moneyForInput, parseMoney } from "@/lib/parse-money";
 import { marginOf } from "@/lib/pricing";
-import { badkamerSamenstelling, DRIVERS, DRIVER_GROEP_LABEL, DRIVER_HANDMATIG, HOOFDSTUKKEN, type DriverGroep } from "@/lib/price-book";
+import { autoTermijnPcts, badkamerSamenstelling, DRIVERS, DRIVER_GROEP_LABEL, DRIVER_HANDMATIG, HOOFDSTUKKEN, type DriverGroep } from "@/lib/price-book";
 import { SCHEMA_FASEN } from "@/lib/quote-clauses";
 import { formatEUR } from "@/lib/utils";
 import { createQuoteFromPriceBook } from "../actions";
@@ -86,14 +86,17 @@ export default async function OfferteCalculatorPage({
   };
   const qVan = (p: (typeof posten)[number]) => qOverride(p) ?? aantalVoor(p);
 
-  // Totalen van het voorbeeld, inclusief handmatige aanpassingen.
+  // Totalen van het voorbeeld, inclusief handmatige aanpassingen — en per
+  // hoofdstuk, voor het fase-gebaseerde betalingsschema.
   let verkoop = 0;
   let kost = 0;
+  const verkoopPerHoofdstuk: Record<string, number> = {};
   for (const p of posten) {
     const q = qVan(p);
     if (q > 0 && p.priceEur != null) {
       verkoop += q * Number(p.priceEur);
       kost += q * Number(p.costEur ?? 0);
+      verkoopPerHoofdstuk[p.chapter] = (verkoopPerHoofdstuk[p.chapter] ?? 0) + q * Number(p.priceEur);
     }
   }
   const margePct = verkoop > 0 ? (marginOf(verkoop, kost)?.pct ?? null) : null;
@@ -102,17 +105,27 @@ export default async function OfferteCalculatorPage({
   // Betalingsschema: aantal termijnen + omschrijving en % per termijn uit de
   // URL; standaard de bouwfase-termijnen in de gekozen offertetaal.
   const taal = (["nl", "en", "es"].includes(params.taal ?? "") ? params.taal : "nl") as "nl" | "en" | "es";
-  const schemaStandaard = SCHEMA_FASEN.map((f) => ({ label: f[taal], pct: f.standaard }));
+  // Percentages naar rato van de werkelijke fase-waarde in deze offerte
+  // (15% opdracht en 5% oplevering vast); zolang er niets is doorgerekend
+  // gelden de vaste standaarden.
+  const autoPcts = autoTermijnPcts(verkoopPerHoofdstuk);
+  const schemaStandaard = SCHEMA_FASEN.map((f, idx) => ({ label: f[taal], pct: autoPcts[idx] ?? f.standaard }));
   const schemaAantal = Math.min(
     Math.max(Number.parseInt(params.s_aantal ?? "", 10) || schemaStandaard.length, 0),
     MAX_TERMIJNEN,
   );
   // Lege omschrijvingen (bv. uit een oudere URL) vallen terug op de standaard
   // of "Termijn n" — een termijn met een percentage telt dus altijd mee.
-  let termijnen = Array.from({ length: schemaAantal }, (_, idx) => ({
-    label: (params[`s${idx + 1}_label`] ?? "").trim() || schemaStandaard[idx]?.label || `Termijn ${idx + 1}`,
-    pct: parseMoney(params[`s${idx + 1}_pct`] ?? "") ?? schemaStandaard[idx]?.pct ?? 0,
-  }));
+  let termijnen = Array.from({ length: schemaAantal }, (_, idx) => {
+    const i = idx + 1;
+    const getypt = params[`s${i}_pct`];
+    const basis = params[`s${i}_basis`];
+    const handmatig = getypt != null && getypt !== "" && getypt !== basis ? parseMoney(getypt) : null;
+    return {
+      label: (params[`s${i}_label`] ?? "").trim() || schemaStandaard[idx]?.label || `Termijn ${i}`,
+      pct: handmatig ?? schemaStandaard[idx]?.pct ?? 0,
+    };
+  });
   let schemaSom = termijnen.reduce((s, t) => s + t.pct, 0);
   // Alle percentages op 0 (bv. hangengebleven oude URL) is nooit de bedoeling:
   // dan geldt gewoon het standaardschema.

@@ -56,13 +56,20 @@ export function BetalingsschemaBlok({
                 placeholder="omschrijving, bv. bij start dakwerk…"
                 className="flex-1"
               />
-              <Input
-                name={`s${i}_pct`}
-                inputMode="decimal"
-                defaultValue={defaults[`s${i}_pct`] ?? (standaard[i - 1] ? String(standaard[i - 1].pct) : "")}
-                placeholder="%"
-                className="w-20 text-right"
-              />
+              {(() => {
+                // Alleen een écht overgetypt percentage blijft staan; anders
+                // volgt het veld de (automatisch berekende) standaard.
+                const vers = standaard[i - 1] ? String(standaard[i - 1].pct) : "";
+                const getypt = defaults[`s${i}_pct`];
+                const basis = defaults[`s${i}_basis`];
+                const waarde = getypt != null && getypt !== "" && getypt !== basis ? getypt : vers;
+                return (
+                  <>
+                    <Input name={`s${i}_pct`} inputMode="decimal" defaultValue={waarde} placeholder="%" className="w-20 text-right" />
+                    <input type="hidden" name={`s${i}_basis`} value={vers} />
+                  </>
+                );
+              })()}
               <span className="text-xs text-muted">%</span>
             </div>
           ))}

@@ -17,7 +17,7 @@ import {
 import { computeTotals } from "@/lib/documents";
 import { insertNumberedDocument } from "@/lib/doc-number";
 import { moneyOrNull, parseMoney } from "@/lib/parse-money";
-import { badkamerSamenstelling, DEFAULT_PRIJZENBOEK_MARGE, HOOFDSTUKKEN } from "@/lib/price-book";
+import { autoTermijnPcts, badkamerSamenstelling, DEFAULT_PRIJZENBOEK_MARGE, HOOFDSTUKKEN } from "@/lib/price-book";
 import { betalingsschemaTekst, quoteClauses, SCHEMA_FASEN, type QuoteLang } from "@/lib/quote-clauses";
 import { syncSanitairPrijzen } from "@/lib/sanitair-prijzen";
 import { suggestedPrice } from "@/lib/pricing";
@@ -133,12 +133,17 @@ export async function createQuoteFromPriceBook(formData: FormData) {
     Math.max(Number.parseInt(String(formData.get("s_aantal") ?? ""), 10) || schemaStandaard.length, 0),
     10,
   );
-  let termijnen = Array.from({ length: sAantal }, (_, idx) => ({
-    label: String(formData.get(`s${idx + 1}_label`) ?? "").trim() || schemaStandaard[idx]?.label || `Termijn ${idx + 1}`,
-    pct: parseMoney(String(formData.get(`s${idx + 1}_pct`) ?? "")) ?? schemaStandaard[idx]?.pct ?? 0,
-  }));
-  // Alle percentages 0 → standaardschema (zelfde vangnet als het voorbeeld).
-  if (termijnen.reduce((s, t) => s + t.pct, 0) === 0) termijnen = schemaStandaard.map((t) => ({ ...t }));
+  // Ruwe invoer; de percentages worden ná het opbouwen van de regels
+  // definitief gemaakt (fase-gebaseerd, tenzij handmatig overgetypt).
+  const termijnInvoer = Array.from({ length: sAantal }, (_, idx) => {
+    const i = idx + 1;
+    const getypt = String(formData.get(`s${i}_pct`) ?? "");
+    const basis = String(formData.get(`s${i}_basis`) ?? "");
+    return {
+      label: String(formData.get(`s${i}_label`) ?? "").trim() || schemaStandaard[idx]?.label || `Termijn ${i}`,
+      handmatig: getypt !== "" && getypt !== basis ? parseMoney(getypt) : null,
+    };
+  });
 
   const posten = await db
     .select()
@@ -184,6 +189,17 @@ export async function createQuoteFromPriceBook(formData: FormData) {
     }
   }
   if (items.length === 0) redirect("/prijzenboek/offerte?fout=leeg");
+
+  // Percentages fase-gebaseerd invullen waar niet handmatig overgetypt.
+  const verkoopPerHoofdstuk: Record<string, number> = {};
+  for (const it of items)
+    if (it.phase) verkoopPerHoofdstuk[it.phase] = (verkoopPerHoofdstuk[it.phase] ?? 0) + (Number(it.price) || 0) * (Number(it.units) || 0);
+  const autoPcts = autoTermijnPcts(verkoopPerHoofdstuk);
+  let termijnen = termijnInvoer.map((t, idx) => ({
+    label: t.label,
+    pct: t.handmatig ?? autoPcts[idx] ?? schemaStandaard[idx]?.pct ?? 0,
+  }));
+  if (termijnen.reduce((s, t) => s + t.pct, 0) === 0) termijnen = schemaStandaard.map((t) => ({ ...t }));
 
   // Onvoorzien als zichtbare slotregel (keuze Nick): transparant richting de
   // klant, en het dekt precies de dingen die je vooraf niet kunt zien.
