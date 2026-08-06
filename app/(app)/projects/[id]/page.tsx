@@ -125,6 +125,7 @@ export default async function ProjectDetailPage({
         docNumber: documents.docNumber,
         title: documents.title,
         totalEur: documents.totalEur,
+        subtotalEur: documents.subtotalEur,
         issueDate: documents.issueDate,
         stockAppliedAt: documents.stockAppliedAt,
         reservedAt: documents.reservedAt,
@@ -1886,7 +1887,8 @@ export default async function ProjectDetailPage({
                             {d.title && <span className="ml-1 text-xs text-muted">— {d.title}</span>}
                           </Link>
                           <span className={`shrink-0 text-xs tabular-nums ${voided ? "text-muted line-through" : "text-muted"}`}>
-                            € {Number(d.totalEur ?? 0).toLocaleString("nl-NL", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                            € {Number(d.subtotalEur ?? d.totalEur ?? 0).toLocaleString("nl-NL", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}{" "}
+                            ex. btw
                           </span>
                         </div>
                         {(d.kind === "invoice" || d.kind === "creditnote") && marginByDoc.has(d.id) && (
