@@ -71,10 +71,19 @@ export default async function OfferteCalculatorPage({
   const aantalVoor = (p: (typeof posten)[number]) =>
     p.driver === DRIVER_HANDMATIG ? 0 : Math.round(maat(p.driver) * Number(p.factor) * 100) / 100;
 
-  // Handmatige aanpassingen uit stap 2 ("Voorbeeld bijwerken") winnen van de
-  // voorgerekende aantallen — zo kun je schaven en herrekenen zonder dat de
-  // offerte al wordt aangemaakt.
-  const qOverride = (p: (typeof posten)[number]) => parseMoney(params[`q_${p.id}`] ?? "");
+  // Handmatige aanpassingen uit stap 2 winnen van de voorgerekende aantallen —
+  // maar ALLEEN als het vakje echt is overgetypt. Elk aantal-vakje stuurt zijn
+  // getoonde waarde ook als qb_ (basis) mee: is q gelijk aan die basis, dan is
+  // het vakje niet aangeraakt en rekenen we vers. Zonder die check hielden de
+  // meegestuurde oude vakjes elke herberekening op de vorige stand vast
+  // ("ik heb opnieuw geklikt, er gebeurt niks").
+  const qOverride = (p: (typeof posten)[number]) => {
+    const q = params[`q_${p.id}`];
+    if (q == null || q === "") return null;
+    const basis = params[`qb_${p.id}`];
+    if (basis != null && q === basis) return null;
+    return parseMoney(q);
+  };
   const qVan = (p: (typeof posten)[number]) => qOverride(p) ?? aantalVoor(p);
 
   // Totalen van het voorbeeld, inclusief handmatige aanpassingen.
@@ -223,6 +232,8 @@ export default async function OfferteCalculatorPage({
                             </div>
                             <div className="flex items-center gap-1.5">
                               <Input name={`q_${p.id}`} inputMode="decimal" defaultValue={q > 0 ? moneyForInput(q) : ""} placeholder="0" className="w-24 text-right" disabled={p.priceEur == null} />
+                              {/* Basiswaarde: zo weet de server of het vakje echt is overgetypt. */}
+                              <input type="hidden" name={`qb_${p.id}`} value={q > 0 ? moneyForInput(q) : ""} />
                               <span className="text-xs text-muted">{p.unit}</span>
                             </div>
                             <span className="text-right tabular-nums text-muted">{p.priceEur != null ? `${formatEUR(Number(p.priceEur))} /${p.unit}` : "—"}</span>

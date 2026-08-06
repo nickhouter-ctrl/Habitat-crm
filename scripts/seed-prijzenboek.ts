@@ -70,7 +70,7 @@ const POSTEN: Post[] = [
   // ── Loodgieterwerk ──
   { h: "Loodgieterwerk", n: "Waterleiding vernieuwen", d: "per aftappunt", unit: "punt", driver: "handmatig", kost: 150, marge: 43 },
   { h: "Loodgieterwerk", n: "Afvoer vernieuwen", unit: "m", driver: "handmatig", kost: 65 },
-  { h: "Loodgieterwerk", n: "Septictank vervangen", d: "levering en plaatsing nieuwe tank — ± € 2.500 tank + € 4.000 graaf- en aansluitwerk", unit: "forfait", driver: "handmatig", kost: 6500, marge: 35,
+  { h: "Loodgieterwerk", n: "Septictank vervangen", d: "levering en plaatsing nieuwe tank — ± € 3.500 tank + € 5.500 graaf- en aansluitwerk", unit: "forfait", driver: "handmatig", kost: 9000, marge: 10,
     stelpost: "alleen indien de bestaande tank defect blijkt; werkelijke staat is pas zichtbaar na opgraven" },
 
   // ── Elektra ──

@@ -121,7 +121,7 @@ export async function createQuoteFromPriceBook(formData: FormData) {
   // (zelfde helper als het voorbeeld). Vroeger reisden die als hidden velden
   // mee en stapelden ze zich bij elke herberekening op in de URL.
   const { spec: badkamerSpec } = badkamerSamenstelling((veld) => String(formData.get(veld) ?? ""));
-  const invoerVelden = /^(bereken|taal|onvoorzien|contactId|projectId|b_aantal|b\d+_|d_|s_aantal|s\d+_|q_)/;
+  const invoerVelden = /^(bereken|taal|onvoorzien|contactId|projectId|b_aantal|b\d+_|d_|s_aantal|s\d+_|q_|qb_)/;
   const wizardQuery = new URLSearchParams(
     [...formData.entries()].filter(
       (e): e is [string, string] => typeof e[1] === "string" && e[1] !== "" && invoerVelden.test(e[0]),
