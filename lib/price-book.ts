@@ -57,6 +57,7 @@ export const DRIVERS: Driver[] = [
   { key: "aircounits", label: "Airco-units", groep: "techniek", eenheid: "stuks" },
   { key: "warmtepompen", label: "Warmtepompen", groep: "techniek", eenheid: "stuks" },
   { key: "zonnepanelen", label: "Zonnepanelen", groep: "techniek", eenheid: "stuks" },
+  { key: "kanaalairco_ruimtes", label: "Kanaalairco (ruimtes)", groep: "techniek", eenheid: "stuks" },
 
   { key: "binnendeuren", label: "Binnendeuren", groep: "interieur", eenheid: "stuks" },
   // Per m² kozijnoppervlak (b × h): uit 57 geleverde leveranciersoffertes in

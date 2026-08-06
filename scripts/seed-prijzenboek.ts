@@ -76,7 +76,7 @@ const POSTEN: Post[] = [
 
   // ── Airco & klimaat ──
   { h: "Airco & klimaat", n: "Airco split-unit (basis)", d: "geplaatst en in bedrijf gesteld — ± € 1.000 unit en leidingset + € 500 montage", unit: "stuk", driver: "aircounits", kost: 1500, stelpost: MEERPRIJS },
-  { h: "Airco & klimaat", n: "Airco kanaalsysteem (conductos)", d: "per verdieping ± 100 m²: unit, kanalen en roosters — ± € 3.500 levering + € 1.300 installatie; excl. verlaagd plafond (aparte post)", unit: "stuk", driver: "handmatig", kost: 4800, stelpost: "capaciteit en merk na warmteverliesberekening; marktprijs instalado in Spanje € 3.500–8.000" },
+  { h: "Airco & klimaat", n: "Airco kanaalsysteem (conductos)", d: "per aangesloten ruimte: aandeel unit, kanalen en roosters — ± € 700 levering + € 250 installatie; excl. verlaagd plafond (aparte post)", unit: "stuk", driver: "kanaalairco_ruimtes", kost: 950, stelpost: "capaciteit en merk na warmteverliesberekening; compleet systeem in Spanje € 3.500–8.000 instalado" },
   { h: "Airco & klimaat", n: "Warmtepomp + installatie", d: "lucht/water incl. buffervat en inregelen — ± € 7.000 levering + € 2.500 installatie", unit: "stuk", driver: "warmtepompen", kost: 9500,
     stelpost: "capaciteit en merk in overleg — definitieve prijs na warmteverliesberekening" },
   { h: "Airco & klimaat", n: "Vloerverwarming", d: "incl. verdeler, excl. afwerkvloer", unit: "m²", driver: "handmatig", kost: 55 },
@@ -111,7 +111,7 @@ const POSTEN: Post[] = [
     stelpost: "maat en uitvoering bepalen de definitieve prijs — middenklasse aluminium inbegrepen" },
   { h: "Buitenruimte", n: "Zonnepanelen (per paneel)", d: "incl. omvormer en installatie naar rato", unit: "stuk", driver: "zonnepanelen", kost: 450,
     stelpost: "definitieve prijs na dakinspectie en legplan" },
-  { h: "Buitenruimte", n: "Carport", d: "aluminium met polycarbonaat dak, ± 3×5 m — ± € 2.400 levering + € 600 montage", unit: "stuk", driver: "carports", kost: 3000,
+  { h: "Buitenruimte", n: "Carport", d: "hout met dakbedekking, ± 3×5 m — ± € 2.700 levering + € 800 montage", unit: "stuk", driver: "carports", kost: 3500,
     stelpost: "maat, uitvoering en fundering bepalen de definitieve prijs" },
   { h: "Buitenruimte", n: "Buitenkeuken", d: "gemetseld/beton met werkblad, excl. apparatuur", unit: "forfait", driver: "buitenkeukens", kost: 4500,
     stelpost: "uitvoering en apparatuur naar keuze — meerprijs wordt verrekend" },
