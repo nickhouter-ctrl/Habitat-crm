@@ -45,11 +45,11 @@ const POSTEN: Post[] = [
     stelpost: `tegels t/m € 30/m² inbegrepen — ${MEERPRIJS}` },
 
   // ── Badkamers & sanitair ──
-  { h: "Badkamers & sanitair", n: "Badkamer installatie compleet", d: "leidingwerk, afvoer en afmontage per badkamer", unit: "stuk", driver: "badkamers", kost: 1850 },
-  { h: "Badkamers & sanitair", n: "Inloopdouche", d: "douchegoot, kraanwerk en glaswand", unit: "stuk", driver: "douches", kost: 1250, stelpost: MEERPRIJS },
-  { h: "Badkamers & sanitair", n: "Bad plaatsen", d: "incl. kraanwerk", unit: "stuk", driver: "baden", kost: 950, stelpost: MEERPRIJS },
-  { h: "Badkamers & sanitair", n: "Wastafelmeubel + kraan", unit: "stuk", driver: "wastafels", kost: 680, stelpost: MEERPRIJS },
-  { h: "Badkamers & sanitair", n: "Hangtoilet incl. inbouwreservoir", unit: "stuk", driver: "toiletten", kost: 720, stelpost: MEERPRIJS },
+  { h: "Badkamers & sanitair", n: "Badkamer installatie compleet", d: "al het leiding- en afvoerwerk per badkamer: aanvoer/afvoer naar elk tappunt, incl. afmontage — sanitair zelf staat per stuk hieronder", unit: "stuk", driver: "badkamers", kost: 1850 },
+  { h: "Badkamers & sanitair", n: "Inloopdouche", d: "geleverd en gemonteerd: douchegoot, kraanwerk en glaswand", unit: "stuk", driver: "douches", kost: 1250, stelpost: MEERPRIJS },
+  { h: "Badkamers & sanitair", n: "Bad plaatsen", d: "geleverd en geplaatst, incl. kraanwerk en aansluiten", unit: "stuk", driver: "baden", kost: 950, stelpost: MEERPRIJS },
+  { h: "Badkamers & sanitair", n: "Wastafelmeubel + kraan", d: "geleverd en gemonteerd: ophangen, kraan plaatsen en aansluiten op water en afvoer", unit: "stuk", driver: "wastafels", kost: 680, stelpost: MEERPRIJS },
+  { h: "Badkamers & sanitair", n: "Hangtoilet incl. inbouwreservoir", d: "geleverd en gemonteerd, incl. inbouwframe en afwerkplaat", unit: "stuk", driver: "toiletten", kost: 720, stelpost: MEERPRIJS },
 
   // ── Loodgieterwerk ──
   { h: "Loodgieterwerk", n: "Waterleiding vernieuwen", d: "per aftappunt", unit: "punt", driver: "handmatig", kost: 185 },

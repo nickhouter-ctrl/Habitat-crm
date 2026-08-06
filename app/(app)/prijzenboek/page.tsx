@@ -22,6 +22,7 @@ import {
   StatTile,
 } from "@/components/ui";
 import { ConfirmSubmit } from "@/components/confirm-submit";
+import { PriceBookRowFields } from "@/components/price-book-row-fields";
 import { SubmitButton } from "@/components/submit-button";
 import { db } from "@/lib/db";
 import { priceBookItems } from "@/lib/db/schema";
@@ -41,7 +42,7 @@ export default async function PrijzenboekPage() {
     <>
       <PageHeader
         title="Prijzenboek"
-        subtitle="eenheidsprijzen voor de offerte-calculator · marge zit in de prijs, dus nooit meer te laag offreren"
+        subtitle="eenheidsprijzen voor de offerte-calculator · alle bedragen excl. btw · marge zit in de prijs, dus nooit meer te laag offreren"
         actions={
           <LinkButton href="/prijzenboek/offerte" variant="primary">
             Offerte calculeren
@@ -109,15 +110,11 @@ export default async function PrijzenboekPage() {
                       <option key={d.key} value={d.key}>{d.label}</option>
                     ))}
                   </Select>
-                  <Input name="factor" defaultValue={moneyForInput(p.factor)} className="text-right" title="Factor: aantal = maat × factor" />
-                  <Input name="costEur" defaultValue={moneyForInput(p.costEur)} placeholder="kost" className="text-right" title="Onze kost per eenheid" />
-                  <Input name="marginPct" defaultValue={moneyForInput(p.marginPct)} className="text-right" title="Marge, % van de verkoopprijs" />
-                  <Input
-                    name="priceEur"
-                    defaultValue={moneyForInput(p.priceEur)}
-                    placeholder="auto"
-                    className="text-right font-semibold"
-                    title="Verkoop per eenheid — leeg laten = kost ÷ (1 − marge)"
+                  <PriceBookRowFields
+                    factor={moneyForInput(p.factor)}
+                    costEur={moneyForInput(p.costEur)}
+                    marginPct={moneyForInput(p.marginPct)}
+                    priceEur={moneyForInput(p.priceEur)}
                   />
                   <div className="flex items-center justify-end gap-1.5">
                     <SubmitButton size="sm" variant="secondary" pendingLabel="…">Opslaan</SubmitButton>
@@ -156,7 +153,8 @@ export default async function PrijzenboekPage() {
       })}
 
       <p className="text-xs text-muted">
-        Verkoopprijs = kost ÷ (1 − marge). Voorbeeld: kost € 70 met 30% marge → {formatEUR(100)}. Eigen producten kies
+        Verkoopprijs = kost ÷ (1 − marge), excl. btw. Voorbeeld: kost € 70 met 30% marge → {formatEUR(100)}. Pas je
+        kost of marge aan, dan rekent het verkoopveld direct mee; zelf een verkoopprijs typen mag altijd. Eigen producten kies
         je in de offerte-editor via de productkiezer — die rekenen met hun eigen catalogusmarge.{" "}
         <Link href="/prijzenboek/offerte" className="text-accent hover:underline">
           Naar de calculator

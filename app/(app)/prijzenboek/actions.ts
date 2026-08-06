@@ -28,8 +28,19 @@ export async function savePriceBookItem(id: string, formData: FormData) {
   const kost = parseMoney(String(formData.get("costEur") ?? ""));
   const marge = parseMoney(String(formData.get("marginPct") ?? "")) ?? DEFAULT_PRIJZENBOEK_MARGE;
   const prijsInvoer = parseMoney(String(formData.get("priceEur") ?? ""));
-  // Verkoop leeg gelaten → voorrekenen uit kost en marge; ingevuld → dat wint.
-  const prijs = prijsInvoer ?? (kost != null ? Math.round(suggestedPrice(kost, marge)) : null);
+
+  // Verkoop volgt kost en marge, tenzij hij bewust is overgetypt: staat er nog
+  // de OUDE verkoopprijs terwijl kost of marge wél veranderde, dan rekenen we
+  // opnieuw (vangnet voor als de live-herberekening in de browser niet liep).
+  const oud = await db.query.priceBookItems.findFirst({ where: eq(priceBookItems.id, id) });
+  const ongewijzigdePrijs = prijsInvoer != null && oud?.priceEur != null && prijsInvoer === Number(oud.priceEur);
+  const kostOfMargeGewijzigd = kost !== (oud?.costEur != null ? Number(oud.costEur) : null) || marge !== Number(oud?.marginPct ?? DEFAULT_PRIJZENBOEK_MARGE);
+  const prijs =
+    prijsInvoer == null || (ongewijzigdePrijs && kostOfMargeGewijzigd)
+      ? kost != null
+        ? Math.round(suggestedPrice(kost, marge))
+        : null
+      : prijsInvoer;
 
   await db
     .update(priceBookItems)
