@@ -2373,3 +2373,23 @@ export const campaignRecipientsRelations = relations(campaignRecipients, ({ one 
 export type Prospect = typeof prospects.$inferSelect;
 export type EmailCampaign = typeof emailCampaigns.$inferSelect;
 export type CampaignRecipient = typeof campaignRecipients.$inferSelect;
+
+/* --------------------------------------------------- infra: cache & limits */
+
+/**
+ * Mini key-value-cache, gedeeld over serverless-instances. Benaderd via raw
+ * SQL in `lib/kv-cache.ts`; staat hier zodat drizzle-kit hem kent en `db:push`
+ * hem nooit meer wil droppen.
+ */
+export const kvCache = pgTable("kv_cache", {
+  key: text().primaryKey(),
+  value: jsonb().notNull(),
+  updatedAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
+});
+
+/** Vaste-venster-tellers voor `lib/rate-limit.ts` (raw SQL, zie hierboven). */
+export const rateLimits = pgTable("rate_limits", {
+  key: text().primaryKey(),
+  windowStart: timestamp({ withTimezone: true }).notNull().defaultNow(),
+  count: integer().notNull().default(1),
+});

@@ -33,8 +33,8 @@ npm run dev            # http://localhost:3000
 npm run build          # production build (+ type-check)
 npm run lint
 npm run db:generate    # generate SQL migration from schema changes
-npm run db:migrate     # apply migrations
-npm run db:push        # push schema directly (dev only)
+npm run db:migrate     # apply migrations (the ONLY path to prod — see drizzle/README.md)
+npm run db:push        # NEVER against prod: drops tables it doesn't know (backup tables!)
 npm run db:studio      # Drizzle Studio
 npm run db:seed        # seed an admin user + sample data
 ```

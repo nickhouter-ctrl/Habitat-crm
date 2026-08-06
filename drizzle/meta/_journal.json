@@ -288,6 +288,13 @@
       "when": 1782902946280,
       "tag": "0040_soft_husk",
       "breakpoints": true
+    },
+    {
+      "idx": 41,
+      "version": "7",
+      "when": 1786026572723,
+      "tag": "0041_low_edwin_jarvis",
+      "breakpoints": true
     }
   ]
 }
