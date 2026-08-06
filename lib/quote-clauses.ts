@@ -62,22 +62,34 @@ export function quoteClauses(lang: QuoteLang): string {
  */
 export const SCHEMA_FASEN = [
   {
-    standaard: 40,
-    nl: "bij opdracht, vóór aanvang van het sloop- en ruwbouwwerk",
-    en: "on commissioning, before demolition and structural work start",
-    es: "a la firma del encargo, antes del inicio de la demolición y obra gruesa",
+    standaard: 25,
+    nl: "bij opdracht, vóór aanvang van het sloopwerk",
+    en: "on commissioning, before demolition starts",
+    es: "a la firma del encargo, antes del inicio de la demolición",
   },
   {
-    standaard: 25,
-    nl: "bij start van de afbouw (tegelwerk, stucwerk, installaties)",
-    en: "on start of the finishing works (tiling, plastering, installations)",
-    es: "al inicio de los acabados (alicatado, enlucido, instalaciones)",
+    standaard: 20,
+    nl: "bij start van het ruwbouw- en installatiewerk (leidingen, elektra)",
+    en: "on start of structural work and installations (plumbing, electrics)",
+    es: "al inicio de la obra gruesa e instalaciones (fontanería, electricidad)",
   },
   {
-    standaard: 25,
-    nl: "bij levering van sanitair, kozijnen en producten",
-    en: "on delivery of sanitary ware, window frames and products",
-    es: "a la entrega de sanitarios, carpinterías y productos",
+    standaard: 15,
+    nl: "bij start van het stuc- en tegelwerk",
+    en: "on start of plastering and tiling",
+    es: "al inicio del enlucido y alicatado",
+  },
+  {
+    standaard: 15,
+    nl: "bij levering van kozijnen en buitendeuren",
+    en: "on delivery of window frames and exterior doors",
+    es: "a la entrega de carpinterías y puertas exteriores",
+  },
+  {
+    standaard: 15,
+    nl: "bij levering van sanitair, keuken en producten",
+    en: "on delivery of sanitary ware, kitchen and products",
+    es: "a la entrega de sanitarios, cocina y productos",
   },
   { standaard: 10, nl: "bij oplevering", en: "on completion", es: "a la entrega final" },
 ] as const;
