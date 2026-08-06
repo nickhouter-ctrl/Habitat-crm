@@ -132,7 +132,9 @@ export default async function ProjectDetailPage({
       })
       .from(documents)
       .where(eq(documents.projectId, id))
-      .orderBy(desc(documents.issueDate), desc(documents.createdAt)),
+      // Oplopend: de offerte bovenaan en de termijnen in volgorde (1 → 10),
+      // in plaats van nieuwste-eerst waardoor termijn 10 bovenaan stond.
+      .orderBy(asc(documents.issueDate), asc(documents.createdAt)),
     // Documenten die nog niet aan een project hangen — om hier te koppelen.
     db
       .select({
