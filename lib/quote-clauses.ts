@@ -152,26 +152,29 @@ const TERMIJN_VAST: Record<QuoteLang, { opdracht: string; oplevering: string }> 
   es: { opdracht: "a la firma del encargo, antes del inicio de la demolición", oplevering: "a la entrega final" },
 };
 
-/** Termijnen uit de verkoop per hoofdstuk: 15% opdracht + per gevulde bouwfase
- *  naar rato van de waarde (samen 80%) + 5% oplevering. [] zonder berekening. */
+/** Termijnen die de fase-waarden van de offerte zelf volgen: elke termijn is
+ *  (op het 5%-opleveringsslot na) precies wat die fase waard is. De opdracht-
+ *  termijn dekt het sloopwerk; fases zonder werk vallen weg. */
 export function autoTermijnen(lang: QuoteLang, verkoopPerHoofdstuk: Record<string, number>): SchemaTermijn[] {
-  // Sloopwerk stapelt niet als eigen termijn kort na de opdracht: het
-  // sloopaandeel telt bij de opdracht-termijn op (keuze Nick 06-08-2026).
+  const vast = TERMIJN_VAST[lang];
   const sloop = verkoopPerHoofdstuk["Sloopwerk"] ?? 0;
-  const waarden = TERMIJN_BOUWSTENEN.map((b) => ({
+  const fasen = TERMIJN_BOUWSTENEN.map((b) => ({
     label: b[lang],
     waarde: b.hoofdstukken.reduce((s, h) => s + (verkoopPerHoofdstuk[h] ?? 0), 0),
   })).filter((b) => b.waarde > 0);
-  const totaal = sloop + waarden.reduce((s, b) => s + b.waarde, 0);
+  const totaal = sloop + fasen.reduce((s, b) => s + b.waarde, 0);
   if (totaal <= 0) return [];
-  const sloopPct = Math.round((80 * sloop) / totaal);
-  let midden = waarden.map((b) => ({ label: b.label, pct: Math.round((80 * b.waarde) / totaal), waarde: b.waarde }));
-  midden = midden.filter((t) => t.pct >= 1);
-  const som = sloopPct + midden.reduce((s, t) => s + t.pct, 0);
-  if (som !== 80 && midden.length > 0) {
-    const grootste = midden.reduce((a, b) => (b.waarde > a.waarde ? b : a));
-    grootste.pct += 80 - som;
+
+  // 95% naar rato van de fase-waarde; 5% blijft als opleveringsslot.
+  const rijen = [
+    ...(sloop > 0 ? [{ label: vast.opdracht, waarde: sloop }] : []),
+    ...fasen,
+  ].map((r) => ({ label: r.label, waarde: r.waarde, pct: Math.round((95 * r.waarde) / totaal) }));
+  const zichtbaar = rijen.filter((r) => r.pct >= 1);
+  const som = zichtbaar.reduce((s, r) => s + r.pct, 0);
+  if (som !== 95 && zichtbaar.length > 0) {
+    const grootste = zichtbaar.reduce((a, b) => (b.waarde > a.waarde ? b : a));
+    grootste.pct += 95 - som;
   }
-  const vast = TERMIJN_VAST[lang];
-  return [{ label: vast.opdracht, pct: 15 + sloopPct }, ...midden.map(({ label, pct }) => ({ label, pct })), { label: vast.oplevering, pct: 5 }];
+  return [...zichtbaar.map(({ label, pct }) => ({ label, pct })), { label: vast.oplevering, pct: 5 }];
 }
