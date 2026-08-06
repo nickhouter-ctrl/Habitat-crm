@@ -61,6 +61,9 @@ export const DRIVERS: Driver[] = [
   { key: "warmtepompen", label: "Warmtepompen", groep: "techniek", eenheid: "stuks" },
   { key: "zonnepanelen", label: "Zonnepanelen", groep: "techniek", eenheid: "stuks" },
   { key: "kanaalairco_ruimtes", label: "Kanaalairco (ruimtes)", groep: "techniek", eenheid: "stuks" },
+  { key: "internetpunten", label: "Internetaansluitingen", groep: "techniek", eenheid: "punten" },
+  { key: "tvpunten", label: "TV-aansluitingen", groep: "techniek", eenheid: "punten" },
+  { key: "cameras", label: "Camera's", groep: "techniek", eenheid: "stuks" },
 
   { key: "binnendeuren", label: "Binnendeuren", groep: "interieur", eenheid: "stuks" },
   // Per m² kozijnoppervlak (b × h): uit 57 geleverde leveranciersoffertes in
@@ -79,6 +82,8 @@ export const DRIVERS: Driver[] = [
   { key: "pergolas", label: "Pergola / zonwering", groep: "buiten", eenheid: "stuks" },
   { key: "buitenkeukens", label: "Buitenkeuken", groep: "buiten", eenheid: "stuks" },
   { key: "carports", label: "Carport", groep: "buiten", eenheid: "stuks" },
+  { key: "buitenwandlicht_punten", label: "Buitenverlichting (wand)", groep: "buiten", eenheid: "punten" },
+  { key: "tuinlicht_punten", label: "Tuin-/terrasverlichting", groep: "buiten", eenheid: "punten" },
 ];
 
 export const DRIVER_GROEP_LABEL: Record<DriverGroep, string> = {

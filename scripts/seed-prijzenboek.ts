@@ -87,6 +87,11 @@ const POSTEN: Post[] = [
   { h: "Elektra", n: "Elektrapunt vernieuwen", d: "schakelaar of wandcontactdoos incl. bekabeling", unit: "punt", driver: "elektrapunten", kost: 78 },
   { h: "Elektra", n: "Groepenkast vernieuwen", d: "conform huidige norm", unit: "forfait", driver: "handmatig", kost: 1450 },
 
+  { h: "Elektra", n: "Hoofdbekabeling vernieuwen", d: "nieuwe voedingen van de groepenkast naar alle ruimtes, per m² woonoppervlak — de punten zelf staan apart", unit: "m²", driver: "woonoppervlak_m2", kost: 12 },
+  { h: "Elektra", n: "Internetaansluiting (UTP)", d: "bekabeld datapunt incl. contactdoos", unit: "punt", driver: "internetpunten", kost: 60 },
+  { h: "Elektra", n: "TV-aansluiting (coax)", d: "incl. bekabeling en contactdoos", unit: "punt", driver: "tvpunten", kost: 55 },
+  { h: "Elektra", n: "Camera (bewaking)", d: "geleverd, bekabeld en aangesloten op de recorder/app", unit: "stuk", driver: "cameras", kost: 250,
+    stelpost: "merk en resolutie bepalen de definitieve prijs" },
   { h: "Elektra", n: "Alarmsysteem", d: "centrale, sensoren en app-koppeling, gemonteerd", unit: "forfait", driver: "handmatig", kost: 1200, stelpost: "aantal sensoren/camera's bepaalt de definitieve prijs" },
 
   // ── Airco & klimaat ──
@@ -99,6 +104,10 @@ const POSTEN: Post[] = [
   // ── Verlichting ──
   { h: "Verlichting", n: "Verlichtingspunt aanleggen", d: "incl. bekabeling en afmontage", unit: "punt", driver: "verlichtingspunten", kost: 65,
     stelpost: "armaturen uit eigen collectie — model naar keuze, meerprijs bij duurdere serie" },
+
+  { h: "Verlichting", n: "Buitenverlichting (wand)", d: "wandarmatuur incl. bekabeling en montage", unit: "punt", driver: "buitenwandlicht_punten", kost: 95,
+    stelpost: "armaturen uit eigen collectie — model naar keuze, meerprijs bij duurdere serie" },
+  { h: "Verlichting", n: "Tuin-/terrasverlichting", d: "grond- of prikspots incl. grondkabel", unit: "punt", driver: "tuinlicht_punten", kost: 85, stelpost: MEERPRIJS },
 
   // ── Binnendeuren ──
   { h: "Binnendeuren", n: "Binnendeur leveren en afhangen", d: "incl. beslag", unit: "stuk", driver: "binnendeuren", kost: 380,
@@ -126,6 +135,8 @@ const POSTEN: Post[] = [
   { h: "Buitenruimte", n: "Terras aanleggen", d: "incl. fundering en tegels", unit: "m²", driver: "terras_m2", kost: 85, stelpost: `tegels t/m € 35/m² inbegrepen — ${MEERPRIJS}` },
   { h: "Buitenruimte", n: "Tuinaanleg", d: "grondwerk en basisbeplanting", unit: "m²", driver: "tuin_m2", kost: 35, stelpost: MEERPRIJS },
   { h: "Buitenruimte", n: "Oprit", d: "incl. fundering", unit: "m²", driver: "oprit_m2", kost: 75 },
+  { h: "Buitenruimte", n: "Irrigatiesysteem tuin", d: "automatische bewatering (druppelslang/sproeiers + programmeur), per m² tuin", unit: "m²", driver: "tuin_m2", kost: 8,
+    stelpost: "aantal zones en watertoevoer bepalen de definitieve prijs" },
   { h: "Buitenruimte", n: "Pergola / zonwering", d: "geleverd en gemonteerd", unit: "forfait", driver: "pergolas", kost: 3500,
     stelpost: "maat en uitvoering bepalen de definitieve prijs — middenklasse aluminium inbegrepen" },
   { h: "Buitenruimte", n: "Zonnepanelen (per paneel)", d: "incl. omvormer en installatie naar rato", unit: "stuk", driver: "zonnepanelen", kost: 450,
