@@ -135,7 +135,6 @@ export function betalingsschemaTekst(lang: QuoteLang, totaalEx: number, termijne
  * werkelijke waarde van die fase. Opdracht (15%) en oplevering (5%) vast. */
 
 const TERMIJN_BOUWSTENEN: { hoofdstukken: string[]; nl: string; en: string; es: string }[] = [
-  { hoofdstukken: ["Sloopwerk"], nl: "bij start van het sloopwerk", en: "on start of demolition", es: "al inicio de la demolición" },
   { hoofdstukken: ["Ruwbouw & wanden", "Aanbouw & kelder"], nl: "bij start van het ruwbouwwerk", en: "on start of the structural work", es: "al inicio de la obra gruesa" },
   { hoofdstukken: ["Dakwerk"], nl: "bij start van het dakwerk", en: "on start of the roofing works", es: "al inicio de la cubierta" },
   { hoofdstukken: ["Loodgieterwerk", "Elektra"], nl: "bij start van de installaties (leidingwerk, elektra)", en: "on start of the installations (plumbing, electrics)", es: "al inicio de las instalaciones (fontanería, electricidad)" },
@@ -148,27 +147,31 @@ const TERMIJN_BOUWSTENEN: { hoofdstukken: string[]; nl: string; en: string; es: 
 ];
 
 const TERMIJN_VAST: Record<QuoteLang, { opdracht: string; oplevering: string }> = {
-  nl: { opdracht: "bij opdracht", oplevering: "bij oplevering" },
-  en: { opdracht: "on commissioning", oplevering: "on completion" },
-  es: { opdracht: "a la firma del encargo", oplevering: "a la entrega final" },
+  nl: { opdracht: "bij opdracht, vóór aanvang van het sloopwerk", oplevering: "bij oplevering" },
+  en: { opdracht: "on commissioning, before demolition starts", oplevering: "on completion" },
+  es: { opdracht: "a la firma del encargo, antes del inicio de la demolición", oplevering: "a la entrega final" },
 };
 
 /** Termijnen uit de verkoop per hoofdstuk: 15% opdracht + per gevulde bouwfase
  *  naar rato van de waarde (samen 80%) + 5% oplevering. [] zonder berekening. */
 export function autoTermijnen(lang: QuoteLang, verkoopPerHoofdstuk: Record<string, number>): SchemaTermijn[] {
+  // Sloopwerk stapelt niet als eigen termijn kort na de opdracht: het
+  // sloopaandeel telt bij de opdracht-termijn op (keuze Nick 06-08-2026).
+  const sloop = verkoopPerHoofdstuk["Sloopwerk"] ?? 0;
   const waarden = TERMIJN_BOUWSTENEN.map((b) => ({
     label: b[lang],
     waarde: b.hoofdstukken.reduce((s, h) => s + (verkoopPerHoofdstuk[h] ?? 0), 0),
   })).filter((b) => b.waarde > 0);
-  const totaal = waarden.reduce((s, b) => s + b.waarde, 0);
+  const totaal = sloop + waarden.reduce((s, b) => s + b.waarde, 0);
   if (totaal <= 0) return [];
+  const sloopPct = Math.round((80 * sloop) / totaal);
   let midden = waarden.map((b) => ({ label: b.label, pct: Math.round((80 * b.waarde) / totaal), waarde: b.waarde }));
   midden = midden.filter((t) => t.pct >= 1);
-  const som = midden.reduce((s, t) => s + t.pct, 0);
+  const som = sloopPct + midden.reduce((s, t) => s + t.pct, 0);
   if (som !== 80 && midden.length > 0) {
     const grootste = midden.reduce((a, b) => (b.waarde > a.waarde ? b : a));
     grootste.pct += 80 - som;
   }
   const vast = TERMIJN_VAST[lang];
-  return [{ label: vast.opdracht, pct: 15 }, ...midden.map(({ label, pct }) => ({ label, pct })), { label: vast.oplevering, pct: 5 }];
+  return [{ label: vast.opdracht, pct: 15 + sloopPct }, ...midden.map(({ label, pct }) => ({ label, pct })), { label: vast.oplevering, pct: 5 }];
 }
