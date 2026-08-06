@@ -27,7 +27,7 @@ const MEERPRIJS = "middenklasse inbegrepen — duurdere keuze wordt als meerprij
 const POSTEN: Post[] = [
   // ── Sloopwerk ──
   { h: "Sloopwerk", n: "Wanden slopen", d: "incl. afvoer puin", unit: "m²", driver: "sloop_wanden_m2", kost: 28 },
-  { h: "Sloopwerk", n: "Badkamer strippen", d: "sanitair en tegels verwijderen, incl. afvoer", unit: "stuk", driver: "badkamers", kost: 650 },
+  { h: "Sloopwerk", n: "Badkamer strippen", d: "sanitair en tegels verwijderen, incl. afvoer — per m² badkamervloer", unit: "m²", driver: "badkamer_m2", kost: 130 },
   { h: "Sloopwerk", n: "Vloer verwijderen", d: "bestaande vloer/tegels eruit, incl. afvoer", unit: "m²", driver: "woonoppervlak_m2", kost: 14 },
   { h: "Sloopwerk", n: "Container & stortkosten", unit: "forfait", driver: "handmatig", kost: 450 },
 
@@ -41,15 +41,15 @@ const POSTEN: Post[] = [
   // ── Tegelwerk ──
   { h: "Tegelwerk", n: "Vloertegels leggen", d: "incl. lijm en voegen", unit: "m²", driver: "woonoppervlak_m2", kost: 38,
     stelpost: `keramische tegels t/m € 30/m² inbegrepen — ${MEERPRIJS}` },
-  { h: "Tegelwerk", n: "Wandtegels badkamer", d: "wanden betegelen", unit: "m²", driver: "badkamers", factor: 25, kost: 42,
+  { h: "Tegelwerk", n: "Wandtegels badkamer", d: "wanden betegelen — ± 5 m² wand per m² badkamervloer", unit: "m²", driver: "badkamer_m2", factor: 5, kost: 42,
     stelpost: `tegels t/m € 30/m² inbegrepen — ${MEERPRIJS}` },
 
   // ── Badkamers & sanitair ──
-  { h: "Badkamers & sanitair", n: "Badkamer installatie compleet", d: "al het leiding- en afvoerwerk per badkamer: aanvoer/afvoer naar elk tappunt, incl. afmontage — sanitair zelf staat per stuk hieronder", unit: "stuk", driver: "badkamers", kost: 1850 },
-  { h: "Badkamers & sanitair", n: "Inloopdouche", d: "geleverd en gemonteerd: douchegoot, kraanwerk en glaswand", unit: "stuk", driver: "douches", kost: 1250, stelpost: MEERPRIJS },
-  { h: "Badkamers & sanitair", n: "Bad plaatsen", d: "geleverd en geplaatst, incl. kraanwerk en aansluiten", unit: "stuk", driver: "baden", kost: 950, stelpost: MEERPRIJS },
-  { h: "Badkamers & sanitair", n: "Wastafelmeubel + kraan", d: "geleverd en gemonteerd: ophangen, kraan plaatsen en aansluiten op water en afvoer", unit: "stuk", driver: "wastafels", kost: 680, stelpost: MEERPRIJS },
-  { h: "Badkamers & sanitair", n: "Hangtoilet incl. inbouwreservoir", d: "geleverd en gemonteerd, incl. inbouwframe en afwerkplaat", unit: "stuk", driver: "toiletten", kost: 720, stelpost: MEERPRIJS },
+  { h: "Badkamers & sanitair", n: "Badkamer installatie compleet", d: "al het leiding- en afvoerwerk per badkamer: aanvoer/afvoer naar elk tappunt, incl. afmontage — sanitair zelf staat per stuk hieronder", unit: "stuk", driver: "badkamers", kost: 2400 },
+  { h: "Badkamers & sanitair", n: "Inloopdouche", d: "geleverd en gemonteerd: douchegoot, kraanwerk en glaswand", unit: "stuk", driver: "douches", kost: 1600, stelpost: MEERPRIJS },
+  { h: "Badkamers & sanitair", n: "Bad plaatsen", d: "geleverd en geplaatst, incl. kraanwerk en aansluiten", unit: "stuk", driver: "baden", kost: 1400, stelpost: MEERPRIJS },
+  { h: "Badkamers & sanitair", n: "Wastafelmeubel + kraan", d: "geleverd en gemonteerd: ophangen, kraan plaatsen en aansluiten op water en afvoer", unit: "stuk", driver: "wastafels", kost: 1000, stelpost: MEERPRIJS },
+  { h: "Badkamers & sanitair", n: "Hangtoilet incl. inbouwreservoir", d: "geleverd en gemonteerd, incl. inbouwframe en afwerkplaat", unit: "stuk", driver: "toiletten", kost: 950, stelpost: MEERPRIJS },
 
   // ── Loodgieterwerk ──
   { h: "Loodgieterwerk", n: "Waterleiding vernieuwen", d: "per aftappunt", unit: "punt", driver: "handmatig", kost: 185 },
@@ -78,8 +78,8 @@ const POSTEN: Post[] = [
   { h: "Binnendeuren", n: "Buitendeur", d: "incl. beslag en cilinder", unit: "stuk", driver: "handmatig", kost: 850, stelpost: MEERPRIJS },
 
   // ── Kozijnen ──
-  { h: "Kozijnen", n: "Kozijn (PVC, geplaatst)", d: "gemiddeld raamkozijn incl. plaatsing en beglazing", unit: "stuk", driver: "kozijnen", kost: 780,
-    stelpost: "gemiddelde maat — definitieve prijs volgt uit opmeting per kozijn" },
+  { h: "Kozijnen", n: "Kozijn (PVC, geleverd en geplaatst)", d: "incl. beglazing en montage — prijs per m² kozijnoppervlak (breedte × hoogte)", unit: "m²", driver: "kozijnen_m2", kost: 500,
+    stelpost: "gemiddelde uit geleverde kozijnen (± € 390/m² levering); grote schuifpuien, speciale kleuren of hout wijken af — definitief na opmeting" },
 
   // ── Keuken ──
   { h: "Keuken", n: "Keuken plaatsen", d: "montage en aansluitingen water/elektra/afvoer", unit: "forfait", driver: "keukens", kost: 2400 },

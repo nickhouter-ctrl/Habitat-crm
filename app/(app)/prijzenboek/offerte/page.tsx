@@ -34,6 +34,18 @@ import { createQuoteFromPriceBook } from "../actions";
 
 export const metadata = { title: "Offerte calculeren" };
 
+/** Maximaal aantal badkamer-blokken in de wizard. */
+const MAX_BADKAMERS = 6;
+
+/** Wat je per badkamer invult; de posten rekenen met de sommen hiervan. */
+const BADKAMER_VELDEN = [
+  { veld: "m2", label: "m² vloer" },
+  { veld: "douches", label: "douches" },
+  { veld: "baden", label: "baden" },
+  { veld: "wastafels", label: "wastafels" },
+  { veld: "toiletten", label: "toiletten" },
+] as const;
+
 export default async function OfferteCalculatorPage({
   searchParams,
 }: {
@@ -48,8 +60,32 @@ export default async function OfferteCalculatorPage({
     db.select({ id: projects.id, name: projects.name }).from(projects).orderBy(asc(projects.name)),
   ]);
 
+  // Badkamers worden per stuk uitgevraagd (badkamer 1 = 5 m², 1 douche, …);
+  // de sanitair-drivers zijn de sommen over die blokken.
+  const badkamerVeld = (i: number, veld: string) => parseMoney(params[`b${i}_${veld}`] ?? "") ?? 0;
+  const badkamers = Array.from({ length: MAX_BADKAMERS }, (_, idx) => {
+    const i = idx + 1;
+    return {
+      i,
+      m2: badkamerVeld(i, "m2"),
+      douches: badkamerVeld(i, "douches"),
+      baden: badkamerVeld(i, "baden"),
+      wastafels: badkamerVeld(i, "wastafels"),
+      toiletten: badkamerVeld(i, "toiletten"),
+    };
+  });
+  const gebruikteBadkamers = badkamers.filter((b) => b.m2 || b.douches || b.baden || b.wastafels || b.toiletten);
+  const sanitairTotalen: Record<string, number> = {
+    badkamers: gebruikteBadkamers.length,
+    badkamer_m2: gebruikteBadkamers.reduce((s, b) => s + b.m2, 0),
+    douches: gebruikteBadkamers.reduce((s, b) => s + b.douches, 0),
+    baden: gebruikteBadkamers.reduce((s, b) => s + b.baden, 0),
+    wastafels: gebruikteBadkamers.reduce((s, b) => s + b.wastafels, 0),
+    toiletten: gebruikteBadkamers.reduce((s, b) => s + b.toiletten, 0),
+  };
+
   // Maat → waarde uit de URL; aantal per post = maat × factor.
-  const maat = (key: string) => parseMoney(params[`d_${key}`] ?? "") ?? 0;
+  const maat = (key: string) => sanitairTotalen[key] ?? parseMoney(params[`d_${key}`] ?? "") ?? 0;
   const aantalVoor = (p: (typeof posten)[number]) =>
     p.driver === DRIVER_HANDMATIG ? 0 : Math.round(maat(p.driver) * Number(p.factor) * 100) / 100;
 
@@ -68,6 +104,21 @@ export default async function OfferteCalculatorPage({
   const onvoorzien = parseMoney(params.onvoorzien ?? "") ?? 10;
 
   const groepen = [...new Set(DRIVERS.map((d) => d.groep))] as DriverGroep[];
+
+  // Samenstelling per badkamer — komt als specificatie op de offerte-regel
+  // "Badkamer installatie compleet" (bv. "Badkamer 1: 5 m², 1× douche, …").
+  const badkamerSpec = gebruikteBadkamers
+    .map((b, idx) => {
+      const delen = [
+        b.m2 ? `${moneyForInput(b.m2)} m²` : null,
+        b.douches ? `${b.douches}× douche` : null,
+        b.baden ? `${b.baden}× bad` : null,
+        b.wastafels ? `${b.wastafels}× wastafel` : null,
+        b.toiletten ? `${b.toiletten}× toilet` : null,
+      ].filter(Boolean);
+      return `Badkamer ${idx + 1}: ${delen.join(", ")}`;
+    })
+    .join(" · ");
 
   return (
     <>
@@ -113,18 +164,47 @@ export default async function OfferteCalculatorPage({
               </Field>
             </div>
 
-            {groepen.map((groep) => (
-              <div key={groep}>
-                <p className="mb-1.5 text-xs font-medium uppercase tracking-wide text-muted">{DRIVER_GROEP_LABEL[groep]}</p>
-                <div className="grid gap-3 sm:grid-cols-3 lg:grid-cols-6">
-                  {DRIVERS.filter((d) => d.groep === groep).map((d) => (
-                    <Field key={d.key} label={d.label} hint={d.eenheid}>
-                      <Input name={`d_${d.key}`} inputMode="decimal" defaultValue={params[`d_${d.key}`] ?? ""} className="text-right" placeholder="—" />
-                    </Field>
-                  ))}
+            {groepen.map((groep) =>
+              groep === "sanitair" ? (
+                <div key={groep}>
+                  <p className="mb-1.5 text-xs font-medium uppercase tracking-wide text-muted">
+                    {DRIVER_GROEP_LABEL[groep]} <span className="normal-case tracking-normal">— per badkamer: m² en wat erin komt</span>
+                  </p>
+                  <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                    {badkamers.map((b) => (
+                      <div key={b.i} className="rounded-md border p-2.5">
+                        <p className="mb-1.5 text-xs font-semibold">Badkamer {b.i}</p>
+                        <div className="grid grid-cols-5 gap-1.5">
+                          {BADKAMER_VELDEN.map(({ veld, label }) => (
+                            <label key={veld} className="text-center text-[10px] text-muted">
+                              <Input
+                                name={`b${b.i}_${veld}`}
+                                inputMode="decimal"
+                                defaultValue={params[`b${b.i}_${veld}`] ?? ""}
+                                placeholder="—"
+                                className="px-1 text-center"
+                              />
+                              <span className="mt-0.5 block">{label}</span>
+                            </label>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
                 </div>
-              </div>
-            ))}
+              ) : (
+                <div key={groep}>
+                  <p className="mb-1.5 text-xs font-medium uppercase tracking-wide text-muted">{DRIVER_GROEP_LABEL[groep]}</p>
+                  <div className="grid gap-3 sm:grid-cols-3 lg:grid-cols-6">
+                    {DRIVERS.filter((d) => d.groep === groep).map((d) => (
+                      <Field key={d.key} label={d.label} hint={d.eenheid}>
+                        <Input name={`d_${d.key}`} inputMode="decimal" defaultValue={params[`d_${d.key}`] ?? ""} className="text-right" placeholder="—" />
+                      </Field>
+                    ))}
+                  </div>
+                </div>
+              )
+            )}
 
             <SubmitButton variant="primary" pendingLabel="Rekenen…">
               Bereken voorbeeld
@@ -148,6 +228,7 @@ export default async function OfferteCalculatorPage({
               <input type="hidden" name="projectId" value={params.projectId ?? ""} />
               <input type="hidden" name="taal" value={params.taal ?? "nl"} />
               <input type="hidden" name="onvoorzien" value={String(onvoorzien)} />
+              <input type="hidden" name="badkamerSpec" value={badkamerSpec} />
 
               {HOOFDSTUKKEN.map((hoofdstuk) => {
                 const rijen = posten.filter((p) => p.chapter === hoofdstuk);

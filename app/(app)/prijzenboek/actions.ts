@@ -109,6 +109,7 @@ export async function createQuoteFromPriceBook(formData: FormData) {
   const projectId = uuidOrNull(formData.get("projectId"));
   const taal = (["nl", "en", "es"].includes(String(formData.get("taal"))) ? String(formData.get("taal")) : "nl") as QuoteLang;
   const onvoorzienPct = parseMoney(String(formData.get("onvoorzien") ?? "")) ?? 10;
+  const badkamerSpec = String(formData.get("badkamerSpec") ?? "").trim();
 
   const posten = await db
     .select()
@@ -130,7 +131,12 @@ export async function createQuoteFromPriceBook(formData: FormData) {
         continue;
       }
       if (!gebruikteHoofdstukken.includes(hoofdstuk)) gebruikteHoofdstukken.push(hoofdstuk);
-      const omschrijving = [p.description, p.isStelpost && p.stelpostNote ? `Stelpost: ${p.stelpostNote}` : null]
+      const omschrijving = [
+        p.description,
+        // Per-badkamer specificatie uit de wizard op de installatieregel.
+        p.driver === "badkamers" && badkamerSpec ? badkamerSpec : null,
+        p.isStelpost && p.stelpostNote ? `Stelpost: ${p.stelpostNote}` : null,
+      ]
         .filter(Boolean)
         .join(". ");
       items.push({

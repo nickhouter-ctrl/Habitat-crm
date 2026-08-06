@@ -29,7 +29,10 @@ export const DRIVERS: Driver[] = [
   { key: "aanbouw_m2", label: "Aanbouw", groep: "oppervlaktes", eenheid: "m²" },
   { key: "kelder_m3", label: "Kelder uitgraven", groep: "oppervlaktes", eenheid: "m³" },
 
+  // De wizard vraagt dit per badkamer uit (badkamer 1 = 5 m², 1 douche, …)
+  // en telt hier de totalen op — de posten rekenen met de sommen.
   { key: "badkamers", label: "Badkamers", groep: "sanitair", eenheid: "stuks" },
+  { key: "badkamer_m2", label: "Badkameroppervlak (totaal)", groep: "sanitair", eenheid: "m²" },
   { key: "douches", label: "Douches", groep: "sanitair", eenheid: "stuks" },
   { key: "baden", label: "Baden", groep: "sanitair", eenheid: "stuks" },
   { key: "wastafels", label: "Wastafels", groep: "sanitair", eenheid: "stuks" },
@@ -45,7 +48,10 @@ export const DRIVERS: Driver[] = [
   { key: "aircounits", label: "Airco-units", groep: "techniek", eenheid: "stuks" },
 
   { key: "binnendeuren", label: "Binnendeuren", groep: "interieur", eenheid: "stuks" },
-  { key: "kozijnen", label: "Kozijnen", groep: "interieur", eenheid: "stuks" },
+  // Per m² kozijnoppervlak (b × h): uit 57 geleverde leveranciersoffertes in
+  // het Rebu-CRM komt gemiddeld € 391/m² inkoop — per stuk zegt niets, een
+  // schuifpui van 8 m² is geen draaikiepraam van 1,2 m².
+  { key: "kozijnen_m2", label: "Kozijnen (oppervlak b×h)", groep: "interieur", eenheid: "m²" },
   { key: "keukens", label: "Keukens", groep: "interieur", eenheid: "stuks" },
 
   // Per m² wateroppervlak, niet per stuk: een zwembad van 10×5 is anderhalf
