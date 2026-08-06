@@ -177,35 +177,3 @@ export function badkamerSamenstelling(lees: (veldnaam: string) => string) {
     .join(" · ");
   return { blokken, totalen, spec };
 }
-
-/* ───────────────────── betalingsschema uit de offerte ─────────────────────
- * Termijn 2–6 volgen de werkelijke waarde van hun bouwfase in de offerte:
- * een klein sloopwerk geeft een kleine sloop-termijn. Termijn 1 (opdracht,
- * 15%) en 7 (oplevering, 5%) staan vast; de overige 80% wordt naar rato van
- * de hoofdstuk-totalen verdeeld. Alles blijft per offerte overschrijfbaar. */
-
-export const TERMIJN_GROEPEN: string[][] = [
-  [], // 1 · bij opdracht (vast 15%)
-  ["Sloopwerk", "Ruwbouw & wanden", "Dakwerk", "Aanbouw & kelder"],
-  ["Loodgieterwerk", "Elektra", "Airco & klimaat", "Verlichting"],
-  ["Stucwerk", "Schilderwerk", "Tegelwerk", "Vloeren & plafonds"],
-  ["Kozijnen", "Binnendeuren"],
-  ["Badkamers & sanitair", "Keuken", "Eigen producten", "Zwembad", "Buitenruimte", "Hekwerk & poort"],
-  [], // 7 · bij oplevering (vast 5%)
-];
-
-/** Percentages (7 stuks, som 100) uit de verkoop per hoofdstuk; [] zolang er
- *  nog niets is doorgerekend — dan gelden de vaste standaarden. */
-export function autoTermijnPcts(verkoopPerHoofdstuk: Record<string, number>): number[] {
-  const groepSom = TERMIJN_GROEPEN.map((g) => g.reduce((s, h) => s + (verkoopPerHoofdstuk[h] ?? 0), 0));
-  const midden = groepSom.slice(1, 6);
-  const middenTotaal = midden.reduce((s, v) => s + v, 0);
-  if (middenTotaal <= 0) return [];
-  const pcts = [15, ...midden.map((v) => Math.round((80 * v) / middenTotaal)), 5];
-  const som = pcts.reduce((s, v) => s + v, 0);
-  if (som !== 100) {
-    const grootste = 1 + midden.indexOf(Math.max(...midden));
-    pcts[grootste] += 100 - som;
-  }
-  return pcts;
-}

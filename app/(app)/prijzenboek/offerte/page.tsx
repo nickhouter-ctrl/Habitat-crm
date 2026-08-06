@@ -31,8 +31,8 @@ import { db } from "@/lib/db";
 import { contacts, priceBookItems, projects } from "@/lib/db/schema";
 import { moneyForInput, parseMoney } from "@/lib/parse-money";
 import { marginOf } from "@/lib/pricing";
-import { autoTermijnPcts, badkamerSamenstelling, DRIVERS, DRIVER_GROEP_LABEL, DRIVER_HANDMATIG, HOOFDSTUKKEN, type DriverGroep } from "@/lib/price-book";
-import { SCHEMA_FASEN } from "@/lib/quote-clauses";
+import { badkamerSamenstelling, DRIVERS, DRIVER_GROEP_LABEL, DRIVER_HANDMATIG, HOOFDSTUKKEN, type DriverGroep } from "@/lib/price-book";
+import { autoTermijnen, SCHEMA_FASEN } from "@/lib/quote-clauses";
 import { formatEUR } from "@/lib/utils";
 import { createQuoteFromPriceBook } from "../actions";
 
@@ -105,13 +105,13 @@ export default async function OfferteCalculatorPage({
   // Betalingsschema: aantal termijnen + omschrijving en % per termijn uit de
   // URL; standaard de bouwfase-termijnen in de gekozen offertetaal.
   const taal = (["nl", "en", "es"].includes(params.taal ?? "") ? params.taal : "nl") as "nl" | "en" | "es";
-  // Percentages naar rato van de werkelijke fase-waarde in deze offerte
-  // (15% opdracht en 5% oplevering vast); zolang er niets is doorgerekend
-  // gelden de vaste standaarden.
-  const autoPcts = autoTermijnPcts(verkoopPerHoofdstuk);
-  const schemaStandaard = SCHEMA_FASEN.map((f, idx) => ({ label: f[taal], pct: autoPcts[idx] ?? f.standaard }));
+  // Termijnen per gevulde bouwfase, naar rato van de waarde (15% opdracht en
+  // 5% oplevering vast) — zolang er niets is doorgerekend de vaste standaard.
+  const auto = autoTermijnen(taal, verkoopPerHoofdstuk);
+  const schemaStandaard = auto.length > 0 ? auto : SCHEMA_FASEN.map((f) => ({ label: f[taal], pct: f.standaard }));
+  const aantalGetypt = params.s_aantal != null && params.s_aantal !== "" && params.s_aantal !== params.s_aantal_basis;
   const schemaAantal = Math.min(
-    Math.max(Number.parseInt(params.s_aantal ?? "", 10) || schemaStandaard.length, 0),
+    Math.max(aantalGetypt ? Number.parseInt(params.s_aantal ?? "", 10) || schemaStandaard.length : schemaStandaard.length, 0),
     MAX_TERMIJNEN,
   );
   // Lege omschrijvingen (bv. uit een oudere URL) vallen terug op de standaard

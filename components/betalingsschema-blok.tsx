@@ -10,7 +10,7 @@ import { useState } from "react";
 
 import { Input } from "@/components/ui";
 
-export const MAX_TERMIJNEN = 10;
+export const MAX_TERMIJNEN = 12;
 
 export function BetalingsschemaBlok({
   defaults,
@@ -21,8 +21,14 @@ export function BetalingsschemaBlok({
   standaard: { label: string; pct: number }[];
 }) {
   const [aantal, setAantal] = useState(() => {
-    const uitParam = Number.parseInt(defaults.s_aantal ?? "", 10);
-    if (Number.isFinite(uitParam)) return Math.min(Math.max(uitParam, 0), MAX_TERMIJNEN);
+    // Alleen een zelf gekozen aantal blijft staan; anders volgt het aantal de
+    // (automatisch gegenereerde) fase-lijst.
+    const uitParam = defaults.s_aantal;
+    const basis = defaults.s_aantal_basis;
+    if (uitParam != null && uitParam !== "" && uitParam !== basis) {
+      const n = Number.parseInt(uitParam, 10);
+      if (Number.isFinite(n)) return Math.min(Math.max(n, 0), MAX_TERMIJNEN);
+    }
     return standaard.length;
   });
 
@@ -44,6 +50,7 @@ export function BetalingsschemaBlok({
           placeholder="—"
           className="w-20 text-right"
         />
+        <input type="hidden" name="s_aantal_basis" value={String(standaard.length)} />
       </label>
       {aantal > 0 && (
         <div className="space-y-1.5">

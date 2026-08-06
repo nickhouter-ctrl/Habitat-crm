@@ -128,3 +128,47 @@ export function betalingsschemaTekst(lang: QuoteLang, totaalEx: number, termijne
   if (regels.length === 0) return null;
   return `${t.kop}\n${regels.join("\n")}\n${t.slot}`;
 }
+
+/* ─────────────────── fase-termijnen uit de offerte zelf ───────────────────
+ * Elke bouwsteen wordt een eigen termijn zodra er werk in zit — een grote
+ * klus krijgt zo vanzelf meer termijnen, en elke termijn past bij de
+ * werkelijke waarde van die fase. Opdracht (15%) en oplevering (5%) vast. */
+
+const TERMIJN_BOUWSTENEN: { hoofdstukken: string[]; nl: string; en: string; es: string }[] = [
+  { hoofdstukken: ["Sloopwerk"], nl: "bij start van het sloopwerk", en: "on start of demolition", es: "al inicio de la demolición" },
+  { hoofdstukken: ["Ruwbouw & wanden", "Aanbouw & kelder"], nl: "bij start van het ruwbouwwerk", en: "on start of the structural work", es: "al inicio de la obra gruesa" },
+  { hoofdstukken: ["Dakwerk"], nl: "bij start van het dakwerk", en: "on start of the roofing works", es: "al inicio de la cubierta" },
+  { hoofdstukken: ["Loodgieterwerk", "Elektra"], nl: "bij start van de installaties (leidingwerk, elektra)", en: "on start of the installations (plumbing, electrics)", es: "al inicio de las instalaciones (fontanería, electricidad)" },
+  { hoofdstukken: ["Airco & klimaat"], nl: "bij start van de klimaatinstallatie (airco, warmtepomp, vloerverwarming)", en: "on start of the climate installation (air conditioning, heat pump, underfloor heating)", es: "al inicio de la climatización (aire acondicionado, bomba de calor, suelo radiante)" },
+  { hoofdstukken: ["Stucwerk", "Schilderwerk"], nl: "bij start van het stuc- en schilderwerk", en: "on start of plastering and painting", es: "al inicio del enlucido y pintura" },
+  { hoofdstukken: ["Tegelwerk", "Vloeren & plafonds"], nl: "bij start van het tegel- en vloerwerk", en: "on start of tiling and flooring", es: "al inicio del alicatado y los suelos" },
+  { hoofdstukken: ["Kozijnen", "Binnendeuren"], nl: "bij levering van kozijnen en deuren", en: "on delivery of window frames and doors", es: "a la entrega de carpinterías y puertas" },
+  { hoofdstukken: ["Badkamers & sanitair", "Keuken", "Eigen producten"], nl: "bij levering van sanitair, keuken en producten", en: "on delivery of sanitary ware, kitchen and products", es: "a la entrega de sanitarios, cocina y productos" },
+  { hoofdstukken: ["Zwembad", "Buitenruimte", "Hekwerk & poort"], nl: "bij start van het buitenwerk (zwembad, terras, tuin)", en: "on start of the outdoor works (pool, terrace, garden)", es: "al inicio de los trabajos exteriores (piscina, terraza, jardín)" },
+];
+
+const TERMIJN_VAST: Record<QuoteLang, { opdracht: string; oplevering: string }> = {
+  nl: { opdracht: "bij opdracht", oplevering: "bij oplevering" },
+  en: { opdracht: "on commissioning", oplevering: "on completion" },
+  es: { opdracht: "a la firma del encargo", oplevering: "a la entrega final" },
+};
+
+/** Termijnen uit de verkoop per hoofdstuk: 15% opdracht + per gevulde bouwfase
+ *  naar rato van de waarde (samen 80%) + 5% oplevering. [] zonder berekening. */
+export function autoTermijnen(lang: QuoteLang, verkoopPerHoofdstuk: Record<string, number>): SchemaTermijn[] {
+  const waarden = TERMIJN_BOUWSTENEN.map((b) => ({
+    label: b[lang],
+    waarde: b.hoofdstukken.reduce((s, h) => s + (verkoopPerHoofdstuk[h] ?? 0), 0),
+  })).filter((b) => b.waarde > 0);
+  const totaal = waarden.reduce((s, b) => s + b.waarde, 0);
+  if (totaal <= 0) return [];
+  let midden = waarden.map((b) => ({ label: b.label, pct: Math.round((80 * b.waarde) / totaal), waarde: b.waarde }));
+  midden = midden.filter((t) => t.pct >= 1);
+  const som = midden.reduce((s, t) => s + t.pct, 0);
+  if (som !== 80 && midden.length > 0) {
+    const grootste = midden.reduce((a, b) => (b.waarde > a.waarde ? b : a));
+    grootste.pct += 80 - som;
+  }
+  const vast = TERMIJN_VAST[lang];
+  return [{ label: vast.opdracht, pct: 15 }, ...midden.map(({ label, pct }) => ({ label, pct })), { label: vast.oplevering, pct: 5 }];
+}
