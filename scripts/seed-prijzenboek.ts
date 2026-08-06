@@ -43,8 +43,10 @@ const POSTEN: Post[] = [
   { h: "Schilderwerk", n: "Schilderwerk buiten / gevel", d: "incl. voorbehandeling — ± € 5 materiaal + € 13 arbeid per m²", unit: "m²", driver: "stuc_buiten_m2", kost: 18 },
 
   // ── Tegelwerk ──
-  { h: "Tegelwerk", n: "Vloertegels leggen", d: "incl. lijm en voegen", unit: "m²", driver: "woonoppervlak_m2", kost: 38,
+  { h: "Tegelwerk", n: "Vloertegels leggen", d: "woonkamer en overige ruimtes — de badkamers rekenen automatisch mee via de badkamer-posten", unit: "m²", driver: "tegelvloer_m2", kost: 68,
     stelpost: `keramische tegels t/m € 30/m² inbegrepen — ${MEERPRIJS}` },
+  { h: "Tegelwerk", n: "Vloertegels badkamer", d: "badkamervloeren betegelen — rekent automatisch met de badkamer-m²", unit: "m²", driver: "badkamer_m2", kost: 68,
+    stelpost: `tegels t/m € 30/m² inbegrepen — ${MEERPRIJS}` },
   { h: "Tegelwerk", n: "Wandtegels badkamer", d: "wanden betegelen ≈ omtrek × hoogte (2,80 m): bij ± 5 m² vloer is dat ± 5× de vloer — aantal in stap 2 aanpasbaar", unit: "m²", driver: "badkamer_m2", factor: 5, kost: 73,
     stelpost: `tegels t/m € 30/m² inbegrepen — ${MEERPRIJS}` },
 
