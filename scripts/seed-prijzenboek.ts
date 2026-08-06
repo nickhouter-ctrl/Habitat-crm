@@ -52,6 +52,7 @@ const POSTEN: Post[] = [
   { h: "Vloeren & plafonds", n: "Verlaagd plafond (gyproc)", d: "incl. profielen en afwerking, excl. spots — ± € 18 materiaal + € 30 arbeid per m²", unit: "m²", driver: "plafond_m2", kost: 48 },
   { h: "Vloeren & plafonds", n: "Parket / laminaat leggen", d: "incl. ondervloer en plinten — ± € 25 laminaat + € 35 leggen per m² (verkoop)", unit: "m²", driver: "parket_m2", kost: 40, marge: 33,
     stelpost: "laminaat t/m € 25/m² inbegrepen — duurdere keuze (parket) wordt als meerprijs verrekend" },
+  { h: "Vloeren & plafonds", n: "Afwerkvloer / dekvloer", d: "zandcement dekvloer over de vloerverwarming, klaar voor tegelwerk — ± € 8 materiaal + € 14 arbeid per m²", unit: "m²", driver: "vloerverwarming_m2", kost: 22 },
   { h: "Vloeren & plafonds", n: "SPC / PVC vloer (eigen collectie)", d: "eigen collectie (€ 37,50/m² verkoop) + € 35 leggen incl. ondervloer en plinten", unit: "m²", driver: "spc_m2", kost: 31, marge: 58,
     stelpost: "dessin naar keuze uit de collectie — prijs per serie volgens de prijslijst" },
   { h: "Vloeren & plafonds", n: "Microcement vloer of wand", d: "meerlaags aangebracht incl. toplaag", unit: "m²", driver: "microcement_m2", kost: 85,
@@ -79,7 +80,7 @@ const POSTEN: Post[] = [
   { h: "Airco & klimaat", n: "Airco kanaalsysteem (conductos)", d: "per aangesloten ruimte: aandeel unit, kanalen en roosters — ± € 700 levering + € 250 installatie; excl. verlaagd plafond (aparte post)", unit: "stuk", driver: "kanaalairco_ruimtes", kost: 950, stelpost: "capaciteit en merk na warmteverliesberekening; compleet systeem in Spanje € 3.500–8.000 instalado" },
   { h: "Airco & klimaat", n: "Warmtepomp + installatie", d: "lucht/water incl. buffervat en inregelen — ± € 7.000 levering + € 2.500 installatie", unit: "stuk", driver: "warmtepompen", kost: 9500,
     stelpost: "capaciteit en merk in overleg — definitieve prijs na warmteverliesberekening" },
-  { h: "Airco & klimaat", n: "Vloerverwarming", d: "incl. verdeler, excl. afwerkvloer", unit: "m²", driver: "handmatig", kost: 55 },
+  { h: "Airco & klimaat", n: "Vloerverwarming", d: "incl. verdeler, excl. afwerkvloer (aparte post)", unit: "m²", driver: "vloerverwarming_m2", kost: 55 },
 
   // ── Verlichting ──
   { h: "Verlichting", n: "Verlichtingspunt aanleggen", d: "incl. bekabeling en afmontage", unit: "punt", driver: "verlichtingspunten", kost: 65,

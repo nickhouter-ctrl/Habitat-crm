@@ -34,6 +34,7 @@ export const DRIVERS: Driver[] = [
   { key: "parket_m2", label: "Parket / laminaat", groep: "oppervlaktes", eenheid: "m²" },
   { key: "spc_m2", label: "SPC / PVC vloer", groep: "oppervlaktes", eenheid: "m²" },
   { key: "microcement_m2", label: "Microcement", groep: "oppervlaktes", eenheid: "m²" },
+  { key: "vloerverwarming_m2", label: "Vloerverwarming", groep: "oppervlaktes", eenheid: "m²" },
 
   // De wizard vraagt dit per badkamer uit (badkamer 1 = 5 m², 1 douche, …)
   // en telt hier de totalen op — de posten rekenen met de sommen.
