@@ -17,6 +17,11 @@ type Gem = { kost: number; verkoop: number };
 /** Afvoerset zit niet als eigen categorie in de catalogus — vast bedrag. */
 const AFVOERSET: Gem = { kost: 90, verkoop: 124 };
 
+/** Douchegoot (betegelde douchevloer): het alternatief voor een douchebak —
+ *  Nick werkt liefst met een tegelgoot; de post rekent het GEMIDDELDE van
+ *  goot en douchebak, beide kan. Geen eigen catalogus-categorie. */
+const DOUCHEGOOT: Gem = { kost: 80, verkoop: 200 };
+
 /** Vrijstaande badkraan: hoort automatisch bij elk bad (verkoop ± € 1.000,
  *  keuze Nick 06-08-2026). Zit NIET in de eigen collectie — wordt los
  *  ingekocht (bv. in Spanje); vast bedrag tot er een catalogus-categorie is. */
@@ -44,11 +49,14 @@ export async function syncSanitairPrijzen(): Promise<number> {
   const bak = per.get("Douchebakken");
   const set = per.get("Douchesets");
   const wand = per.get("Douchewanden");
-  if (bak && set && wand)
+  if (bak && set && wand) {
+    // Vloer: gemiddelde van tegelgoot en douchebak (beide komen voor).
+    const vloer: Gem = { kost: (bak.kost + DOUCHEGOOT.kost) / 2, verkoop: (bak.verkoop + DOUCHEGOOT.verkoop) / 2 };
     posten.push({
       naam: "Inloopdouche compleet",
-      g: { kost: bak.kost + set.kost + wand.kost, verkoop: bak.verkoop + set.verkoop + wand.verkoop },
+      g: { kost: vloer.kost + set.kost + wand.kost, verkoop: vloer.verkoop + set.verkoop + wand.verkoop },
     });
+  }
   const bad = per.get("Baden");
   if (bad?.verkoop)
     posten.push({
