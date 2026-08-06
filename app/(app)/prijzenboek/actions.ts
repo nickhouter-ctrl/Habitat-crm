@@ -119,7 +119,16 @@ export async function createQuoteFromPriceBook(formData: FormData) {
   const onvoorzienPct = parseMoney(String(formData.get("onvoorzien") ?? "")) ?? 10;
   const badkamerSpec = String(formData.get("badkamerSpec") ?? "").trim();
   const wizardQuery = String(formData.get("wizardQuery") ?? "").trim();
-  const termijnen = SCHEMA_FASEN.map((fase) => parseMoney(String(formData.get(fase.key) ?? "")) ?? fase.standaard);
+  // Betalingsschema: vrij aantal termijnen met eigen omschrijving en %.
+  const schemaStandaard = SCHEMA_FASEN.map((f) => ({ label: f[taal], pct: f.standaard }));
+  const sAantal = Math.min(
+    Math.max(Number.parseInt(String(formData.get("s_aantal") ?? ""), 10) || schemaStandaard.length, 0),
+    10,
+  );
+  const termijnen = Array.from({ length: sAantal }, (_, idx) => ({
+    label: String(formData.get(`s${idx + 1}_label`) ?? schemaStandaard[idx]?.label ?? "").trim(),
+    pct: parseMoney(String(formData.get(`s${idx + 1}_pct`) ?? "")) ?? schemaStandaard[idx]?.pct ?? 0,
+  }));
 
   const posten = await db
     .select()

@@ -23,6 +23,7 @@ import {
   Select,
 } from "@/components/ui";
 import { BadkamerBlokken, MAX_BADKAMERS } from "@/components/badkamer-blokken";
+import { BetalingsschemaBlok, MAX_TERMIJNEN } from "@/components/betalingsschema-blok";
 import { Combobox } from "@/components/combobox";
 import { SubmitButton } from "@/components/submit-button";
 import { db } from "@/lib/db";
@@ -92,12 +93,17 @@ export default async function OfferteCalculatorPage({
   const aantalVoor = (p: (typeof posten)[number]) =>
     p.driver === DRIVER_HANDMATIG ? 0 : Math.round(maat(p.driver) * Number(p.factor) * 100) / 100;
 
-  // Totalen van het voorbeeld (alleen de voorgerekende aantallen — wat de
-  // gebruiker daarna nog aanpast telt de server bij het aanmaken opnieuw).
+  // Handmatige aanpassingen uit stap 2 ("Voorbeeld bijwerken") winnen van de
+  // voorgerekende aantallen — zo kun je schaven en herrekenen zonder dat de
+  // offerte al wordt aangemaakt.
+  const qOverride = (p: (typeof posten)[number]) => parseMoney(params[`q_${p.id}`] ?? "");
+  const qVan = (p: (typeof posten)[number]) => qOverride(p) ?? aantalVoor(p);
+
+  // Totalen van het voorbeeld, inclusief handmatige aanpassingen.
   let verkoop = 0;
   let kost = 0;
   for (const p of posten) {
-    const q = aantalVoor(p);
+    const q = qVan(p);
     if (q > 0 && p.priceEur != null) {
       verkoop += q * Number(p.priceEur);
       kost += q * Number(p.costEur ?? 0);
@@ -106,9 +112,19 @@ export default async function OfferteCalculatorPage({
   const margePct = verkoop > 0 ? (marginOf(verkoop, kost)?.pct ?? null) : null;
   const onvoorzien = parseMoney(params.onvoorzien ?? "") ?? 10;
 
-  // Betalingsschema per fase: percentages uit de URL (of de standaard).
-  const schemaPcts = SCHEMA_FASEN.map((f) => parseMoney(params[f.key] ?? "") ?? f.standaard);
-  const schemaSom = schemaPcts.reduce((s, p) => s + p, 0);
+  // Betalingsschema: aantal termijnen + omschrijving en % per termijn uit de
+  // URL; standaard de bouwfase-termijnen in de gekozen offertetaal.
+  const taal = (["nl", "en", "es"].includes(params.taal ?? "") ? params.taal : "nl") as "nl" | "en" | "es";
+  const schemaStandaard = SCHEMA_FASEN.map((f) => ({ label: f[taal], pct: f.standaard }));
+  const schemaAantal = Math.min(
+    Math.max(Number.parseInt(params.s_aantal ?? "", 10) || schemaStandaard.length, 0),
+    MAX_TERMIJNEN,
+  );
+  const termijnen = Array.from({ length: schemaAantal }, (_, idx) => ({
+    label: (params[`s${idx + 1}_label`] ?? schemaStandaard[idx]?.label ?? "").trim(),
+    pct: parseMoney(params[`s${idx + 1}_pct`] ?? "") ?? schemaStandaard[idx]?.pct ?? 0,
+  }));
+  const schemaSom = termijnen.reduce((s, t) => s + (t.label ? t.pct : 0), 0);
   const verkoopMetOnvoorzien = verkoop * (1 + onvoorzien / 100);
 
   const groepen = [...new Set(DRIVERS.map((d) => d.groep))] as DriverGroep[];
@@ -179,18 +195,7 @@ export default async function OfferteCalculatorPage({
               </Field>
             </div>
 
-            <div>
-              <p className="mb-1.5 text-xs font-medium uppercase tracking-wide text-muted">
-                Betalingsschema per fase <span className="normal-case tracking-normal">— percentages, 0 of leeg = termijn vervalt; komt met de bedragen op de offerte</span>
-              </p>
-              <div className="grid gap-3 sm:grid-cols-3 lg:grid-cols-5">
-                {SCHEMA_FASEN.map((fase) => (
-                  <Field key={fase.key} label={`${fase.nl.charAt(0).toUpperCase()}${fase.nl.slice(1)} (%)`}>
-                    <Input name={fase.key} inputMode="decimal" defaultValue={params[fase.key] ?? String(fase.standaard)} className="text-right" />
-                  </Field>
-                ))}
-              </div>
-            </div>
+            <BetalingsschemaBlok defaults={params} standaard={schemaStandaard} />
 
             {groepen.map((groep) =>
               groep === "sanitair" ? (
@@ -222,19 +227,22 @@ export default async function OfferteCalculatorPage({
           <CardHeader>
             <CardTitle>2 · Voorbeeld — controleer en pas aan</CardTitle>
             <span className="text-xs text-muted">
-              elk aantal is aanpasbaar · 0 = regel vervalt · handmatige posten (septictank, groepenkast, …) vul je hier in
+              aantallen voorgerekend uit stap 1 (badkamers vullen ook de eigen producten) · iets gewijzigd boven? klik
+              eerst opnieuw &ldquo;Bereken voorbeeld&rdquo; · 0 = regel vervalt
             </span>
           </CardHeader>
           <CardContent>
-            <form action={createQuoteFromPriceBook} className="space-y-4">
-              <input type="hidden" name="contactId" value={params.contactId ?? ""} />
-              <input type="hidden" name="projectId" value={params.projectId ?? ""} />
-              <input type="hidden" name="taal" value={params.taal ?? "nl"} />
-              <input type="hidden" name="onvoorzien" value={String(onvoorzien)} />
+            {/* GET-formulier: "Voorbeeld bijwerken" herrekent met de aangepaste
+                aantallen zonder iets aan te maken; pas de aanmaak-knop (met
+                formAction) maakt het concept. Alle stap-1-invoer reist mee als
+                hidden velden, zodat niets verloren gaat. */}
+            <form method="get" className="space-y-4">
+              {Object.entries(params)
+                .filter(([k, v]) => v != null && v !== "" && k !== "fout" && !k.startsWith("q_"))
+                .map(([k, v]) => (
+                  <input key={k} type="hidden" name={k} value={v} />
+                ))}
               <input type="hidden" name="badkamerSpec" value={badkamerSpec} />
-              {SCHEMA_FASEN.map((fase) => (
-                <input key={fase.key} type="hidden" name={fase.key} value={params[fase.key] ?? String(fase.standaard)} />
-              ))}
               <input type="hidden" name="wizardQuery" value={wizardQuery} />
 
               {HOOFDSTUKKEN.map((hoofdstuk) => {
@@ -245,7 +253,7 @@ export default async function OfferteCalculatorPage({
                     <p className="border-b bg-background/60 px-3 py-1.5 text-xs font-semibold uppercase tracking-wide">{hoofdstuk}</p>
                     <div className="divide-y">
                       {rijen.map((p) => {
-                        const q = aantalVoor(p);
+                        const q = qVan(p);
                         return (
                           <div key={p.id} className="grid items-center gap-2 px-3 py-1.5 text-sm lg:grid-cols-[2fr_0.8fr_0.9fr_0.9fr]">
                             <div>
@@ -283,10 +291,10 @@ export default async function OfferteCalculatorPage({
                 {verkoop > 0 && schemaSom > 0 && (
                   <div className="mt-2 border-t pt-2 text-xs">
                     <p className="mb-1 font-medium uppercase tracking-wide text-muted">Betalingsschema (over {formatEUR(verkoopMetOnvoorzien)} ex btw)</p>
-                    {SCHEMA_FASEN.map((fase, i) =>
-                      schemaPcts[i] > 0 ? (
-                        <p key={fase.key} className="text-muted">
-                          {schemaPcts[i]}% {fase.nl} — <span className="tabular-nums text-foreground">{formatEUR(Math.round((verkoopMetOnvoorzien * schemaPcts[i]) / 100))}</span>
+                    {termijnen.map((t, i) =>
+                      t.pct > 0 && t.label ? (
+                        <p key={i} className="text-muted">
+                          {t.pct}% {t.label} — <span className="tabular-nums text-foreground">{formatEUR(Math.round((verkoopMetOnvoorzien * t.pct) / 100))}</span>
                         </p>
                       ) : null,
                     )}
@@ -301,9 +309,15 @@ export default async function OfferteCalculatorPage({
                 </p>
               </div>
 
-              <SubmitButton variant="primary" pendingLabel="Aanmaken…">
-                Offerte aanmaken (concept)
-              </SubmitButton>
+              <div className="flex flex-wrap items-center gap-2">
+                <SubmitButton variant="secondary" pendingLabel="Herrekenen…">
+                  Voorbeeld bijwerken
+                </SubmitButton>
+                <SubmitButton formAction={createQuoteFromPriceBook} variant="primary" pendingLabel="Aanmaken…">
+                  Offerte aanmaken (concept)
+                </SubmitButton>
+                <span className="text-xs text-muted">bijwerken herrekent alleen — er wordt pas iets aangemaakt met de rechterknop</span>
+              </div>
             </form>
           </CardContent>
         </Card>

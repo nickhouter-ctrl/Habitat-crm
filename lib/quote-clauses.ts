@@ -61,29 +61,25 @@ export function quoteClauses(lang: QuoteLang): string {
  * `key` is de veldnaam in de wizard (f1…f5), `nl` ook het label daar.
  */
 export const SCHEMA_FASEN = [
-  { key: "f1", standaard: 30, nl: "bij opdracht", en: "on commissioning", es: "a la firma del encargo" },
   {
-    key: "f2",
-    standaard: 20,
-    nl: "bij start van het sloop- en ruwbouwwerk",
-    en: "on start of demolition and structural work",
-    es: "al inicio de la demolición y obra gruesa",
+    standaard: 40,
+    nl: "bij opdracht, vóór aanvang van het sloop- en ruwbouwwerk",
+    en: "on commissioning, before demolition and structural work start",
+    es: "a la firma del encargo, antes del inicio de la demolición y obra gruesa",
   },
   {
-    key: "f3",
-    standaard: 20,
+    standaard: 25,
     nl: "bij start van de afbouw (tegelwerk, stucwerk, installaties)",
     en: "on start of the finishing works (tiling, plastering, installations)",
     es: "al inicio de los acabados (alicatado, enlucido, instalaciones)",
   },
   {
-    key: "f4",
-    standaard: 15,
+    standaard: 25,
     nl: "bij levering van sanitair, kozijnen en producten",
     en: "on delivery of sanitary ware, window frames and products",
     es: "a la entrega de sanitarios, carpinterías y productos",
   },
-  { key: "f5", standaard: 15, nl: "bij oplevering", en: "on completion", es: "a la entrega final" },
+  { standaard: 10, nl: "bij oplevering", en: "on completion", es: "a la entrega final" },
 ] as const;
 
 const SCHEMA_TEKST: Record<QuoteLang, { kop: string; slot: string }> = {
@@ -92,18 +88,21 @@ const SCHEMA_TEKST: Record<QuoteLang, { kop: string; slot: string }> = {
   es: { kop: "Calendario de pagos", slot: "Importes sin IVA; cada plazo se abona antes de iniciar la fase correspondiente." },
 };
 
+export type SchemaTermijn = { label: string; pct: number };
+
 /**
- * Betalingsschema als alinea voor onder de offerte: één regel per fase-termijn
- * met percentage en bedrag over het offertetotaal (ex btw). 0% vervalt.
+ * Betalingsschema als alinea voor onder de offerte: één regel per termijn met
+ * percentage en bedrag over het offertetotaal (ex btw). Termijnen op 0% of
+ * zonder omschrijving vervallen. De labels komen uit de wizard (aanpasbaar,
+ * aantal vrij); de standaardtermijnen staan in SCHEMA_FASEN.
  */
-export function betalingsschemaTekst(lang: QuoteLang, totaalEx: number, pcts: number[]): string | null {
+export function betalingsschemaTekst(lang: QuoteLang, totaalEx: number, termijnen: SchemaTermijn[]): string | null {
   const t = SCHEMA_TEKST[lang];
   const eur = (n: number) =>
     new Intl.NumberFormat("nl-NL", { style: "currency", currency: "EUR", maximumFractionDigits: 0 }).format(n);
-  const regels = SCHEMA_FASEN.map((fase, i) => {
-    const pct = pcts[i] ?? 0;
-    return pct > 0 ? `• ${pct}% ${fase[lang]} — ${eur(Math.round((totaalEx * pct) / 100))}` : null;
-  }).filter(Boolean);
+  const regels = termijnen
+    .filter((r) => r.pct > 0 && r.label.trim())
+    .map((r) => `• ${r.pct}% ${r.label.trim()} — ${eur(Math.round((totaalEx * r.pct) / 100))}`);
   if (regels.length === 0) return null;
   return `${t.kop}\n${regels.join("\n")}\n${t.slot}`;
 }
