@@ -18,7 +18,8 @@ type Gem = { kost: number; verkoop: number };
 const AFVOERSET: Gem = { kost: 90, verkoop: 124 };
 
 /** Vrijstaande badkraan: hoort automatisch bij elk bad (verkoop ± € 1.000,
- *  keuze Nick 06-08-2026); geen eigen categorie in de catalogus. */
+ *  keuze Nick 06-08-2026). Zit NIET in de eigen collectie — wordt los
+ *  ingekocht (bv. in Spanje); vast bedrag tot er een catalogus-categorie is. */
 const BADKRAAN: Gem = { kost: 300, verkoop: 1000 };
 
 export async function syncSanitairPrijzen(): Promise<number> {
@@ -51,7 +52,7 @@ export async function syncSanitairPrijzen(): Promise<number> {
   const bad = per.get("Baden");
   if (bad?.verkoop)
     posten.push({
-      naam: "Bad + badkraan (eigen collectie)",
+      naam: "Bad + badkraan",
       g: { kost: bad.kost + BADKRAAN.kost, verkoop: bad.verkoop + BADKRAAN.verkoop },
     });
   const kraan = per.get("Kranen");
