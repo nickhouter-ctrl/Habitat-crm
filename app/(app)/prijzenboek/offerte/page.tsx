@@ -24,7 +24,7 @@ import {
 } from "@/components/ui";
 import { BadkamerBlokken } from "@/components/badkamer-blokken";
 import { OngerekendeWijzigingen } from "@/components/ongerekende-wijzigingen";
-import { BetalingsschemaBlok, MAX_TERMIJNEN } from "@/components/betalingsschema-blok";
+import { BetalingsschemaBlok } from "@/components/betalingsschema-blok";
 import { Combobox } from "@/components/combobox";
 import { SubmitButton } from "@/components/submit-button";
 import { db } from "@/lib/db";
@@ -32,7 +32,7 @@ import { contacts, priceBookItems, projects } from "@/lib/db/schema";
 import { moneyForInput, parseMoney } from "@/lib/parse-money";
 import { marginOf } from "@/lib/pricing";
 import { badkamerSamenstelling, DRIVERS, DRIVER_GROEP_LABEL, DRIVER_HANDMATIG, HOOFDSTUKKEN, type DriverGroep } from "@/lib/price-book";
-import { autoTermijnen, SCHEMA_FASEN } from "@/lib/quote-clauses";
+import { autoTermijnen, MAX_TERMIJNEN, SCHEMA_FASEN } from "@/lib/quote-clauses";
 import { formatEUR } from "@/lib/utils";
 import { createQuoteFromPriceBook } from "../actions";
 

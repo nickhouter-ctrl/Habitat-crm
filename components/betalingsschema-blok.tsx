@@ -9,8 +9,7 @@
 import { useState } from "react";
 
 import { Input } from "@/components/ui";
-
-export const MAX_TERMIJNEN = 12;
+import { MAX_TERMIJNEN } from "@/lib/quote-clauses";
 
 export function BetalingsschemaBlok({
   defaults,

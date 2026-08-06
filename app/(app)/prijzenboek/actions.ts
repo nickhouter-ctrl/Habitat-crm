@@ -8,7 +8,6 @@ import { requireWriteUser } from "@/lib/auth/guards";
 import { db } from "@/lib/db";
 import {
   activities,
-  documents,
   priceBookItems,
   projects,
   type DocumentLineItem,
@@ -16,9 +15,9 @@ import {
 } from "@/lib/db/schema";
 import { computeTotals } from "@/lib/documents";
 import { insertNumberedDocument } from "@/lib/doc-number";
-import { moneyOrNull, parseMoney } from "@/lib/parse-money";
+import { parseMoney } from "@/lib/parse-money";
 import { badkamerSamenstelling, DEFAULT_PRIJZENBOEK_MARGE, HOOFDSTUKKEN } from "@/lib/price-book";
-import { betalingsschemaTekst, quoteClauses, SCHEMA_FASEN, type QuoteLang } from "@/lib/quote-clauses";
+import { autoTermijnen, betalingsschemaTekst, MAX_TERMIJNEN, quoteClauses, SCHEMA_FASEN, type QuoteLang } from "@/lib/quote-clauses";
 import { syncSanitairPrijzen } from "@/lib/sanitair-prijzen";
 import { suggestedPrice } from "@/lib/pricing";
 
@@ -135,23 +134,6 @@ export async function createQuoteFromPriceBook(formData: FormData) {
       (e): e is [string, string] => typeof e[1] === "string" && e[1] !== "" && invoerVelden.test(e[0]),
     ),
   ).toString();
-  // Betalingsschema: vrij aantal termijnen met eigen omschrijving en %.
-  const schemaStandaard = SCHEMA_FASEN.map((f) => ({ label: f[taal], pct: f.standaard }));
-  const sAantal = Math.min(
-    Math.max(Number.parseInt(String(formData.get("s_aantal") ?? ""), 10) || schemaStandaard.length, 0),
-    10,
-  );
-  // De wizard toont de (fase-gebaseerde) waarden in de velden zelf, dus wat
-  // hier binnenkomt is precies wat op het scherm stond.
-  let termijnen = Array.from({ length: sAantal }, (_, idx) => {
-    const i = idx + 1;
-    return {
-      label: String(formData.get(`s${i}_label`) ?? "").trim() || schemaStandaard[idx]?.label || `Termijn ${i}`,
-      pct: parseMoney(String(formData.get(`s${i}_pct`) ?? "")) ?? schemaStandaard[idx]?.pct ?? 0,
-    };
-  });
-  if (termijnen.reduce((s, t) => s + t.pct, 0) === 0) termijnen = schemaStandaard.map((t) => ({ ...t }));
-
   const posten = await db
     .select()
     .from(priceBookItems)
@@ -161,6 +143,7 @@ export async function createQuoteFromPriceBook(formData: FormData) {
   const items: DocumentLineItem[] = [];
   const overgeslagen: string[] = [];
   const gebruikteHoofdstukken: string[] = [];
+  const verkoopPerHoofdstuk: Record<string, number> = {};
 
   // In hoofdstuk-volgorde, zodat de offerte leest als een bestek.
   for (const hoofdstuk of HOOFDSTUKKEN) {
@@ -172,6 +155,7 @@ export async function createQuoteFromPriceBook(formData: FormData) {
         continue;
       }
       if (!gebruikteHoofdstukken.includes(hoofdstuk)) gebruikteHoofdstukken.push(hoofdstuk);
+      verkoopPerHoofdstuk[hoofdstuk] = (verkoopPerHoofdstuk[hoofdstuk] ?? 0) + qty * Number(p.priceEur);
       const omschrijving = [
         p.description,
         // Per-badkamer specificatie alleen op de installatieregel — niet op
@@ -198,7 +182,25 @@ export async function createQuoteFromPriceBook(formData: FormData) {
   }
   if (items.length === 0) redirect("/prijzenboek/offerte?fout=leeg");
 
-
+  // Betalingsschema: vrij aantal termijnen met eigen omschrijving en %. De
+  // terugval is dezelfde fase-lijst als het voorbeeld toonde — pas daarna het
+  // vaste standaardschema.
+  const auto = autoTermijnen(taal, verkoopPerHoofdstuk);
+  const schemaStandaard = auto.length > 0 ? auto : SCHEMA_FASEN.map((f) => ({ label: f[taal], pct: f.standaard }));
+  const sAantal = Math.min(
+    Math.max(Number.parseInt(String(formData.get("s_aantal") ?? ""), 10) || schemaStandaard.length, 0),
+    MAX_TERMIJNEN,
+  );
+  // De wizard toont de (fase-gebaseerde) waarden in de velden zelf, dus wat
+  // hier binnenkomt is precies wat op het scherm stond.
+  let termijnen = Array.from({ length: sAantal }, (_, idx) => {
+    const i = idx + 1;
+    return {
+      label: String(formData.get(`s${i}_label`) ?? "").trim() || schemaStandaard[idx]?.label || `Termijn ${i}`,
+      pct: parseMoney(String(formData.get(`s${i}_pct`) ?? "")) ?? schemaStandaard[idx]?.pct ?? 0,
+    };
+  });
+  if (termijnen.reduce((s, t) => s + t.pct, 0) === 0) termijnen = schemaStandaard.map((t) => ({ ...t }));
 
   // Onvoorzien als zichtbare slotregel (keuze Nick): transparant richting de
   // klant, en het dekt precies de dingen die je vooraf niet kunt zien.

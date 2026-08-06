@@ -112,6 +112,9 @@ const SCHEMA_TEKST: Record<QuoteLang, { kop: string; slot: string }> = {
 
 export type SchemaTermijn = { label: string; pct: number };
 
+/** Maximum aantal termijnen: opdracht + 10 bouwstenen + oplevering. */
+export const MAX_TERMIJNEN = 12;
+
 /**
  * Betalingsschema als alinea voor onder de offerte: één regel per termijn met
  * percentage en bedrag over het offertetotaal (ex btw). Termijnen op 0% of
