@@ -63,7 +63,7 @@ const POSTEN: Post[] = [
   { h: "Vloeren & plafonds", n: "Parket / laminaat leggen", d: "incl. ondervloer en plinten — ± € 25 laminaat + € 35 leggen per m² (verkoop)", unit: "m²", driver: "parket_m2", kost: 40, marge: 33,
     stelpost: "laminaat t/m € 25/m² inbegrepen — duurdere keuze (parket) wordt als meerprijs verrekend" },
   { h: "Vloeren & plafonds", n: "Afwerkvloer / dekvloer", d: "zandcement dekvloer over de vloerverwarming, klaar voor tegelwerk — ± € 8 materiaal + € 14 arbeid per m²", unit: "m²", driver: "vloerverwarming_m2", kost: 22 },
-  { h: "Vloeren & plafonds", n: "SPC / PVC vloer (eigen collectie)", d: "eigen collectie (€ 37,50/m² verkoop) + € 35 leggen incl. ondervloer en plinten", unit: "m²", driver: "spc_m2", kost: 31, marge: 58,
+  { h: "Vloeren & plafonds", n: "SPC / PVC vloer", d: "eigen collectie (€ 37,50/m² verkoop) + € 35 leggen incl. ondervloer en plinten", unit: "m²", driver: "spc_m2", kost: 31, marge: 58,
     stelpost: "dessin naar keuze uit de collectie — prijs per serie volgens de prijslijst" },
   { h: "Vloeren & plafonds", n: "Microcement vloer of wand", d: "meerlaags aangebracht incl. toplaag", unit: "m²", driver: "microcement_m2", kost: 85,
     stelpost: "kleur en textuur naar keuze — definitieve prijs na proefstaal" },
@@ -146,19 +146,19 @@ const POSTEN: Post[] = [
     stelpost: "bij rots of hardere grondslag dan verwacht geldt een meerprijs, op regiebasis" },
 
   // ── Eigen producten ──
-  { h: "Eigen producten", n: "Wandpanelen (eigen collectie)", d: "eigen collectie (± € 75/m² verkoop) + plaatsen zoals wandtegels (± € 50/m²) — serie naar keuze", unit: "m²", driver: "wandpanelen_m2", kost: 65, marge: 48,
+  { h: "Eigen producten", n: "Wandpanelen", d: "eigen collectie (± € 75/m² verkoop) + plaatsen zoals wandtegels (± € 50/m²) — serie naar keuze", unit: "m²", driver: "wandpanelen_m2", kost: 65, marge: 48,
     stelpost: "prijs per serie volgens de prijslijst — gekozen serie bepaalt de definitieve prijs" },
   // Automatisch per badkamer-samenstelling; prijzen worden live uit de
   // catalogus ververst (lib/sanitair-prijzen.ts).
-  { h: "Eigen producten", n: "Doucheset compleet (eigen collectie)", d: "douchebak, doucheset en glaswand — verkoopprijzen uit de eigen catalogus (gem. serie)", unit: "stuk", driver: "douches", kost: 1100, marge: 44,
-    stelpost: "gemiddelde serie uit de collectie — gekozen model bepaalt de definitieve prijs" },
+  { h: "Eigen producten", n: "Doucheset compleet", d: "douchebak, doucheset en glaswand (gemiddelde serie)", unit: "stuk", driver: "douches", kost: 1100, marge: 44,
+    stelpost: "gemiddelde serie — gekozen model bepaalt de definitieve prijs" },
   { h: "Eigen producten", n: "Bad + badkraan", d: "vrijstaand bad uit eigen collectie (± € 1.928) + vrijstaande badkraan, los ingekocht (± € 1.000 verkoop)", unit: "stuk", driver: "baden", kost: 1538, marge: 47,
-    stelpost: "gemiddelde serie uit de collectie — gekozen model bepaalt de definitieve prijs" },
-  { h: "Eigen producten", n: "Wastafelmeubel + kraan (eigen collectie)", d: "meubel, kraan en afvoerset — verkoopprijzen uit de eigen catalogus (gem. serie)", unit: "stuk", driver: "wastafels", kost: 785, marge: 44,
-    stelpost: "gemiddelde serie uit de collectie — gekozen model bepaalt de definitieve prijs" },
-  { h: "Eigen producten", n: "Hangtoilet (eigen collectie)", d: "hangtoilet — verkoopprijs uit de eigen catalogus (gem. serie)", unit: "stuk", driver: "toiletten", kost: 145, marge: 65,
-    stelpost: "gemiddelde serie uit de collectie — gekozen model bepaalt de definitieve prijs" },
-  { h: "Eigen producten", n: "Waterdamphaard (eigen collectie)", d: "sfeerhaard op waterdamp, geplaatst en aangesloten — verkoopprijs eigen catalogus (gem. model)", unit: "stuk", driver: "handmatig", kost: 550, marge: 55,
+    stelpost: "gemiddelde serie — gekozen model bepaalt de definitieve prijs" },
+  { h: "Eigen producten", n: "Wastafelmeubel + kraan", d: "meubel, kraan en afvoerset (gemiddelde serie)", unit: "stuk", driver: "wastafels", kost: 785, marge: 44,
+    stelpost: "gemiddelde serie — gekozen model bepaalt de definitieve prijs" },
+  { h: "Eigen producten", n: "Hangtoilet", d: "hangtoilet (gemiddelde serie)", unit: "stuk", driver: "toiletten", kost: 145, marge: 65,
+    stelpost: "gemiddelde serie — gekozen model bepaalt de definitieve prijs" },
+  { h: "Eigen producten", n: "Waterdamphaard", d: "sfeerhaard op waterdamp, geplaatst en aangesloten — verkoopprijs eigen catalogus (gem. model)", unit: "stuk", driver: "handmatig", kost: 550, marge: 55,
     stelpost: "gekozen model bepaalt de definitieve prijs" },
   { h: "Eigen producten", n: "Badkamerproducten uit eigen catalogus", d: "kranen, spiegels en accessoires — kies de producten in de offerte-editor via de productkiezer", unit: "forfait", driver: "handmatig", kost: null, marge: 45, stelpost: MEERPRIJS },
 ];

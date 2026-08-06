@@ -46,7 +46,7 @@ export async function syncSanitairPrijzen(): Promise<number> {
   const wand = per.get("Douchewanden");
   if (bak && set && wand)
     posten.push({
-      naam: "Doucheset compleet (eigen collectie)",
+      naam: "Doucheset compleet",
       g: { kost: bak.kost + set.kost + wand.kost, verkoop: bak.verkoop + set.verkoop + wand.verkoop },
     });
   const bad = per.get("Baden");
@@ -58,14 +58,14 @@ export async function syncSanitairPrijzen(): Promise<number> {
   const kraan = per.get("Kranen");
   if (meubel?.verkoop && kraan)
     posten.push({
-      naam: "Wastafelmeubel + kraan (eigen collectie)",
+      naam: "Wastafelmeubel + kraan",
       g: {
         kost: (meubel.kost ?? 0) + kraan.kost + AFVOERSET.kost,
         verkoop: meubel.verkoop + kraan.verkoop + AFVOERSET.verkoop,
       },
     });
   if (toilet?.verkoop)
-    posten.push({ naam: "Hangtoilet (eigen collectie)", g: { kost: toilet.kost ?? 0, verkoop: toilet.verkoop } });
+    posten.push({ naam: "Hangtoilet", g: { kost: toilet.kost ?? 0, verkoop: toilet.verkoop } });
 
   let bijgewerkt = 0;
   for (const p of posten) {
