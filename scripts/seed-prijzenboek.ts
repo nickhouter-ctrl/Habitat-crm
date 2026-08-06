@@ -45,7 +45,7 @@ const POSTEN: Post[] = [
   // ── Tegelwerk ──
   { h: "Tegelwerk", n: "Vloertegels leggen", d: "incl. lijm en voegen", unit: "m²", driver: "woonoppervlak_m2", kost: 38,
     stelpost: `keramische tegels t/m € 30/m² inbegrepen — ${MEERPRIJS}` },
-  { h: "Tegelwerk", n: "Wandtegels badkamer", d: "wanden betegelen — ± 5 m² wand per m² badkamervloer", unit: "m²", driver: "badkamer_m2", factor: 5, kost: 42,
+  { h: "Tegelwerk", n: "Wandtegels badkamer", d: "wanden betegelen ≈ omtrek × hoogte (2,80 m): bij ± 5 m² vloer is dat ± 5× de vloer — aantal in stap 2 aanpasbaar", unit: "m²", driver: "badkamer_m2", factor: 5, kost: 73,
     stelpost: `tegels t/m € 30/m² inbegrepen — ${MEERPRIJS}` },
 
   // ── Vloeren & plafonds ──
