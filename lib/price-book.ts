@@ -72,6 +72,7 @@ export const DRIVERS: Driver[] = [
   { key: "kozijnen_m2", label: "Kozijnen (oppervlak b×h)", groep: "interieur", eenheid: "m²" },
   { key: "keukens", label: "Keukens", groep: "interieur", eenheid: "stuks" },
   { key: "wandpanelen_m2", label: "Wandpanelen (eigen collectie)", groep: "interieur", eenheid: "m²" },
+  { key: "ledstrip_binnen_m", label: "LED-strips binnen", groep: "interieur", eenheid: "m" },
 
   // Per m² wateroppervlak, niet per stuk: een zwembad van 10×5 is anderhalf
   // keer een 8×4 en hoort dus ook anderhalf keer zoveel te kosten.
@@ -84,6 +85,7 @@ export const DRIVERS: Driver[] = [
   { key: "carports", label: "Carport", groep: "buiten", eenheid: "stuks" },
   { key: "buitenwandlicht_punten", label: "Buitenverlichting (wand)", groep: "buiten", eenheid: "punten" },
   { key: "tuinlicht_punten", label: "Tuin-/terrasverlichting", groep: "buiten", eenheid: "punten" },
+  { key: "ledstrip_buiten_m", label: "LED-strips buiten", groep: "buiten", eenheid: "m" },
 ];
 
 export const DRIVER_GROEP_LABEL: Record<DriverGroep, string> = {

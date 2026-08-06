@@ -105,6 +105,8 @@ const POSTEN: Post[] = [
   { h: "Verlichting", n: "Verlichtingspunt aanleggen", d: "incl. bekabeling en afmontage", unit: "punt", driver: "verlichtingspunten", kost: 65,
     stelpost: "armaturen uit eigen collectie — model naar keuze, meerprijs bij duurdere serie" },
 
+  { h: "Verlichting", n: "LED-strips binnen", d: "koof- of plafondverlichting: strip, profiel, voeding en dimmer naar rato, per strekkende meter", unit: "m", driver: "ledstrip_binnen_m", kost: 22 },
+  { h: "Verlichting", n: "LED-strips buiten (waterdicht)", d: "gevel-, terras- of trapverlichting IP67 incl. profiel en voeding, per strekkende meter", unit: "m", driver: "ledstrip_buiten_m", kost: 30 },
   { h: "Verlichting", n: "Buitenverlichting (wand)", d: "wandarmatuur incl. bekabeling en montage", unit: "punt", driver: "buitenwandlicht_punten", kost: 95,
     stelpost: "armaturen uit eigen collectie — model naar keuze, meerprijs bij duurdere serie" },
   { h: "Verlichting", n: "Tuin-/terrasverlichting", d: "grond- of prikspots incl. grondkabel", unit: "punt", driver: "tuinlicht_punten", kost: 85, stelpost: MEERPRIJS },
