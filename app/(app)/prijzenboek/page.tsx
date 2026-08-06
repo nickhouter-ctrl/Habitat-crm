@@ -75,7 +75,7 @@ export default async function PrijzenboekPage() {
             </CardHeader>
             <CardContent className="space-y-3">
               {/* Kolomkoppen — dezelfde grid als de rijen eronder. */}
-              <div className="hidden gap-2 px-2.5 text-[11px] font-medium uppercase tracking-wide text-muted lg:grid lg:grid-cols-[1.6fr_0.6fr_1fr_0.5fr_0.6fr_0.5fr_0.7fr_auto]">
+              <div className="hidden gap-2 px-2.5 text-[11px] font-medium uppercase tracking-wide text-muted lg:grid lg:grid-cols-[1.6fr_0.6fr_1fr_0.5fr_0.6fr_0.5fr_0.7fr_9.5rem]">
                 <span>Post &amp; omschrijving</span>
                 <span>Eenheid</span>
                 <span>Aantal volgt uit</span>
@@ -89,10 +89,13 @@ export default async function PrijzenboekPage() {
                 <form
                   key={p.id}
                   action={savePriceBookItem.bind(null, p.id)}
-                  className={`grid gap-2 rounded-md border p-2.5 lg:grid-cols-[1.6fr_0.6fr_1fr_0.5fr_0.6fr_0.5fr_0.7fr_auto] lg:items-center ${p.active ? "" : "opacity-50"}`}
+                  className={`grid gap-2 rounded-md border p-2.5 lg:grid-cols-[1.6fr_0.6fr_1fr_0.5fr_0.6fr_0.5fr_0.7fr_9.5rem] lg:items-center ${p.active ? "" : "opacity-50"}`}
                 >
                   <div>
-                    <Input name="name" defaultValue={p.name} className="font-medium" />
+                    <div className="flex items-center gap-2">
+                      <Input name="name" defaultValue={p.name} className="font-medium" />
+                      {p.needsReview && <Badge tone="warning">controleer</Badge>}
+                    </div>
                     <Input name="description" defaultValue={p.description ?? ""} placeholder="wat is inbegrepen…" className="mt-1 text-xs" />
                   </div>
                   <Select name="unit" defaultValue={p.unit} title="Eenheid">
@@ -116,8 +119,7 @@ export default async function PrijzenboekPage() {
                     className="text-right font-semibold"
                     title="Verkoop per eenheid — leeg laten = kost ÷ (1 − marge)"
                   />
-                  <div className="flex items-center gap-1.5">
-                    {p.needsReview && <Badge tone="warning">controleer</Badge>}
+                  <div className="flex items-center justify-end gap-1.5">
                     <SubmitButton size="sm" variant="secondary" pendingLabel="…">Opslaan</SubmitButton>
                     <button type="submit" formAction={togglePriceBookActive.bind(null, p.id, !p.active)} className="text-xs text-muted hover:underline">
                       {p.active ? "uit" : "aan"}
