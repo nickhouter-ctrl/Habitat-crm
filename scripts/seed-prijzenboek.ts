@@ -22,7 +22,7 @@ type Post = {
   kost: number | null; stelpost?: string; marge?: number;
 };
 
-const MEERPRIJS = "middenklasse inbegrepen — duurdere keuze wordt als meerprijs verrekend";
+const MEERPRIJS = "middenklasse inbegrepen — duurdere of voordeliger keuze wordt verrekend (meer- of minderprijs)";
 
 const POSTEN: Post[] = [
   // ── Sloopwerk ──
