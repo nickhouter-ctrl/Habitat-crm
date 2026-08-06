@@ -406,7 +406,18 @@ export function ReviewCard({
           )}
 
           <div className="flex flex-wrap gap-2">
-            <SubmitButton variant="primary" pendingLabel="Bezig…">
+            {/* Eén klik stuurde direct een mail naar de leverancier — de reden was
+                voorgevuld en het vinkje stond aan (Allpack, 06-08-2026, per
+                ongeluk). Vandaar nu een expliciete bevestiging mét het adres. */}
+            <SubmitButton
+              variant="primary"
+              pendingLabel="Bezig…"
+              onClick={(e) => {
+                if (sendMail && !window.confirm(`Dit verstuurt direct een mail naar ${mailTo || "de leverancier"}. Doorgaan?`)) {
+                  e.preventDefault();
+                }
+              }}
+            >
               {sendMail ? "Afkeuren en versturen" : "Alleen afkeuren"}
             </SubmitButton>
             <button type="button" onClick={() => setRejecting(false)} className={buttonClass({ variant: "ghost" })}>

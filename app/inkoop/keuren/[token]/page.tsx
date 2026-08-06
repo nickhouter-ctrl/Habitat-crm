@@ -10,7 +10,8 @@
 import { eq, sql } from "drizzle-orm";
 import Link from "next/link";
 
-import { Badge, Card, CardContent, CardHeader, CardTitle, Field, Input, Select, Textarea } from "@/components/ui";
+import { Badge, buttonClass, Card, CardContent, CardHeader, CardTitle, Field, Input, Select, Textarea } from "@/components/ui";
+import { ConfirmSubmit } from "@/components/confirm-submit";
 import { Combobox } from "@/components/combobox";
 import { SubmitButton } from "@/components/submit-button";
 import { db } from "@/lib/db";
@@ -251,9 +252,12 @@ export default async function KeurenViaMailPage({
                   defaultValue={teMelden.length ? `Incompleet: ${teMelden.map((c) => c.label.toLowerCase()).join(", ")}.` : ""}
                 />
               </Field>
+              {/* Standaard UIT: op deze pagina beland je rechtstreeks vanuit een
+                  mailknop, en een vooraf aangevinkt "verstuur" plus voorgevulde
+                  reden maakte van één klik een mail aan de leverancier. */}
               <label className="flex items-center gap-2 text-sm">
-                <input type="checkbox" name="sendMail" defaultChecked={!!concept} />
-                <span>Terugsturen naar de leverancier</span>
+                <input type="checkbox" name="sendMail" />
+                <span>Terugsturen naar de leverancier (mail hieronder gaat dan direct uit)</span>
               </label>
               <Field label="Aan" htmlFor="mailTo">
                 <Select id="mailTo" name="mailTo" defaultValue={kandidaten[0]?.email ?? ""}>
@@ -271,9 +275,12 @@ export default async function KeurenViaMailPage({
               <Field label="Bericht" htmlFor="mailBody" hint="dit gaat er letterlijk uit">
                 <Textarea id="mailBody" name="mailBody" rows={12} defaultValue={concept?.text ?? ""} />
               </Field>
-              <SubmitButton variant="secondary" pendingLabel="Bezig…">
-                Afkeuren en versturen
-              </SubmitButton>
+              <ConfirmSubmit
+                message="Als het vinkje 'Terugsturen naar de leverancier' aanstaat, gaat de mail hieronder direct naar de leverancier. Doorgaan?"
+                className={buttonClass({ variant: "secondary" })}
+              >
+                Afkeuren
+              </ConfirmSubmit>
             </form>
           </details>
 
