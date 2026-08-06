@@ -224,6 +224,7 @@ export function normaliseLineItem(raw: unknown): DocumentLineItem | null {
     // Negatieve aantallen zijn geldig (retour-/correctieregels); alleen een
     // niet-numerieke invoer valt terug op 1.
     units: Number.isFinite(units) ? units : 1,
+    unit: typeof r.unit === "string" && r.unit.trim() ? r.unit.trim().slice(0, 12) : undefined,
     price: Number.isFinite(price) ? round2(price) : 0,
     discount: discount > 0 ? round2(discount) : undefined,
     taxRate: Number.isFinite(taxRate) && taxRate >= 0 ? taxRate : 21,

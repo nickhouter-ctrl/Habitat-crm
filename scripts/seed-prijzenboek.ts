@@ -1,0 +1,132 @@
+/**
+ * Vult het prijzenboek met de posten en INDICATIEVE startprijzen.
+ *
+ * Alle bedragen zijn Costa Blanca-indicaties en staan gemarkeerd als
+ * "controleer" (needs_review) tot iemand ze op /prijzenboek bevestigt of
+ * aanpast — dit zijn startwaarden, geen waarheid. Marge 30% van de
+ * verkoopprijs (keuze Nick 06-08-2026); verkoop = kost ÷ 0,70, afgerond.
+ *
+ * Idempotent: bestaande posten (zelfde hoofdstuk + naam) blijven ongemoeid,
+ * dus aangepaste prijzen overleven een nieuwe run.
+ *
+ *   NODE_OPTIONS="--conditions=react-server" npx tsx scripts/seed-prijzenboek.ts
+ */
+import "./load-env";
+
+import { sql } from "drizzle-orm";
+
+import { db } from "../lib/db";
+
+type Post = {
+  h: string; n: string; d?: string; unit: string; driver: string; factor?: number;
+  kost: number | null; stelpost?: string; marge?: number;
+};
+
+const MEERPRIJS = "middenklasse inbegrepen — duurdere keuze wordt als meerprijs verrekend";
+
+const POSTEN: Post[] = [
+  // ── Sloopwerk ──
+  { h: "Sloopwerk", n: "Wanden slopen", d: "incl. afvoer puin", unit: "m²", driver: "sloop_wanden_m2", kost: 28 },
+  { h: "Sloopwerk", n: "Badkamer strippen", d: "sanitair en tegels verwijderen, incl. afvoer", unit: "stuk", driver: "badkamers", kost: 650 },
+  { h: "Sloopwerk", n: "Vloer verwijderen", d: "bestaande vloer/tegels eruit, incl. afvoer", unit: "m²", driver: "woonoppervlak_m2", kost: 14 },
+  { h: "Sloopwerk", n: "Container & stortkosten", unit: "forfait", driver: "handmatig", kost: 450 },
+
+  // ── Ruwbouw & wanden ──
+  { h: "Ruwbouw & wanden", n: "Binnenwand opbouwen", d: "gasbeton/steen incl. materiaal", unit: "m²", driver: "opbouw_wanden_m2", kost: 55 },
+
+  // ── Stucwerk ──
+  { h: "Stucwerk", n: "Stucwerk binnen", d: "glad, 2 lagen, schilderklaar", unit: "m²", driver: "stuc_binnen_m2", kost: 22 },
+  { h: "Stucwerk", n: "Stucwerk buiten / gevel", d: "incl. voorbehandeling", unit: "m²", driver: "stuc_buiten_m2", kost: 38 },
+
+  // ── Tegelwerk ──
+  { h: "Tegelwerk", n: "Vloertegels leggen", d: "incl. lijm en voegen", unit: "m²", driver: "woonoppervlak_m2", kost: 38,
+    stelpost: `keramische tegels t/m € 30/m² inbegrepen — ${MEERPRIJS}` },
+  { h: "Tegelwerk", n: "Wandtegels badkamer", d: "wanden betegelen", unit: "m²", driver: "badkamers", factor: 25, kost: 42,
+    stelpost: `tegels t/m € 30/m² inbegrepen — ${MEERPRIJS}` },
+
+  // ── Badkamers & sanitair ──
+  { h: "Badkamers & sanitair", n: "Badkamer installatie compleet", d: "leidingwerk, afvoer en afmontage per badkamer", unit: "stuk", driver: "badkamers", kost: 1850 },
+  { h: "Badkamers & sanitair", n: "Inloopdouche", d: "douchegoot, kraanwerk en glaswand", unit: "stuk", driver: "douches", kost: 1250, stelpost: MEERPRIJS },
+  { h: "Badkamers & sanitair", n: "Bad plaatsen", d: "incl. kraanwerk", unit: "stuk", driver: "baden", kost: 950, stelpost: MEERPRIJS },
+  { h: "Badkamers & sanitair", n: "Wastafelmeubel + kraan", unit: "stuk", driver: "wastafels", kost: 680, stelpost: MEERPRIJS },
+  { h: "Badkamers & sanitair", n: "Hangtoilet incl. inbouwreservoir", unit: "stuk", driver: "toiletten", kost: 720, stelpost: MEERPRIJS },
+
+  // ── Loodgieterwerk ──
+  { h: "Loodgieterwerk", n: "Waterleiding vernieuwen", d: "per aftappunt", unit: "punt", driver: "handmatig", kost: 185 },
+  { h: "Loodgieterwerk", n: "Afvoer vernieuwen", unit: "m", driver: "handmatig", kost: 65 },
+  { h: "Loodgieterwerk", n: "Septictank vervangen", d: "levering en plaatsing nieuwe tank", unit: "forfait", driver: "handmatig", kost: 4800,
+    stelpost: "alleen indien de bestaande tank defect blijkt; werkelijke staat is pas zichtbaar na opgraven" },
+
+  // ── Elektra ──
+  { h: "Elektra", n: "Elektrapunt vernieuwen", d: "schakelaar of wandcontactdoos incl. bekabeling", unit: "punt", driver: "elektrapunten", kost: 78 },
+  { h: "Elektra", n: "Groepenkast vernieuwen", d: "conform huidige norm", unit: "forfait", driver: "handmatig", kost: 1450 },
+
+  // ── Airco & klimaat ──
+  { h: "Airco & klimaat", n: "Airco split-unit (basis)", d: "geplaatst en in bedrijf gesteld", unit: "stuk", driver: "aircounits", kost: 1350, stelpost: MEERPRIJS },
+  { h: "Airco & klimaat", n: "Airco multi-split / premium merk", d: "meerprijs t.o.v. basis split-unit", unit: "stuk", driver: "handmatig", kost: 2400, stelpost: "prijs afhankelijk van merk en aantal binnenunits" },
+  { h: "Airco & klimaat", n: "Warmtepomp + installatie", d: "lucht/water incl. buffervat en inregelen", unit: "forfait", driver: "handmatig", kost: 9500,
+    stelpost: "capaciteit en merk in overleg — definitieve prijs na warmteverliesberekening" },
+  { h: "Airco & klimaat", n: "Vloerverwarming", d: "incl. verdeler, excl. afwerkvloer", unit: "m²", driver: "handmatig", kost: 55 },
+
+  // ── Verlichting ──
+  { h: "Verlichting", n: "Verlichtingspunt aanleggen", d: "incl. bekabeling en afmontage", unit: "punt", driver: "verlichtingspunten", kost: 65,
+    stelpost: "armaturen uit eigen collectie — model naar keuze, meerprijs bij duurdere serie" },
+
+  // ── Binnendeuren ──
+  { h: "Binnendeuren", n: "Binnendeur leveren en afhangen", d: "incl. beslag", unit: "stuk", driver: "binnendeuren", kost: 380,
+    stelpost: `standaard vlakke deur inbegrepen — ${MEERPRIJS} (bv. Yo Home of maatwerk)` },
+  { h: "Binnendeuren", n: "Buitendeur", d: "incl. beslag en cilinder", unit: "stuk", driver: "handmatig", kost: 850, stelpost: MEERPRIJS },
+
+  // ── Kozijnen ──
+  { h: "Kozijnen", n: "Kozijn (PVC, geplaatst)", d: "gemiddeld raamkozijn incl. plaatsing en beglazing", unit: "stuk", driver: "kozijnen", kost: 780,
+    stelpost: "gemiddelde maat — definitieve prijs volgt uit opmeting per kozijn" },
+
+  // ── Keuken ──
+  { h: "Keuken", n: "Keuken plaatsen", d: "montage en aansluitingen water/elektra/afvoer", unit: "forfait", driver: "keukens", kost: 2400 },
+  { h: "Keuken", n: "Keuken leveren", d: "incl. apparatuur", unit: "forfait", driver: "keukens", kost: 6500, stelpost: MEERPRIJS },
+
+  // ── Zwembad ──
+  { h: "Zwembad", n: "Nieuw zwembad 8×4", d: "beton, incl. techniek en afwerking", unit: "forfait", driver: "zwembad_nieuw", kost: 32000,
+    stelpost: "bij rotsachtige ondergrond geldt een meerprijs voor het uitgraven, op regiebasis" },
+  { h: "Zwembad", n: "Zwembad renoveren", d: "nieuwe afwerking en techniek", unit: "forfait", driver: "zwembad_renovatie", kost: 9500, stelpost: MEERPRIJS },
+
+  // ── Buitenruimte ──
+  { h: "Buitenruimte", n: "Terras aanleggen", d: "incl. fundering en tegels", unit: "m²", driver: "terras_m2", kost: 85, stelpost: `tegels t/m € 35/m² inbegrepen — ${MEERPRIJS}` },
+  { h: "Buitenruimte", n: "Tuinaanleg", d: "grondwerk en basisbeplanting", unit: "m²", driver: "tuin_m2", kost: 35, stelpost: MEERPRIJS },
+  { h: "Buitenruimte", n: "Oprit", d: "incl. fundering", unit: "m²", driver: "oprit_m2", kost: 75 },
+
+  // ── Hekwerk & poort ──
+  { h: "Hekwerk & poort", n: "Hekwerk", d: "geplaatst", unit: "m", driver: "hekwerk_m", kost: 95 },
+  { h: "Hekwerk & poort", n: "Poort (elektrisch)", d: "incl. motor en bediening", unit: "stuk", driver: "poorten", kost: 2800, stelpost: MEERPRIJS },
+
+  // ── Aanbouw & kelder ──
+  { h: "Aanbouw & kelder", n: "Aanbouw casco", d: "fundering, wanden en dak, wind- en waterdicht", unit: "m²", driver: "aanbouw_m2", kost: 950 },
+  { h: "Aanbouw & kelder", n: "Kelder uitgraven", d: "graven en afvoer grond", unit: "m³", driver: "kelder_m3", kost: 95,
+    stelpost: "bij rots of hardere grondslag dan verwacht geldt een meerprijs, op regiebasis" },
+
+  // ── Eigen producten ──
+  { h: "Eigen producten", n: "Wandpanelen (eigen collectie)", d: "serie naar keuze uit de Habitat-collectie, geplaatst", unit: "m²", driver: "handmatig", kost: null, marge: 45,
+    stelpost: "prijs per serie volgens de prijslijst — gekozen serie bepaalt de definitieve prijs" },
+  { h: "Eigen producten", n: "Badkamerproducten uit eigen catalogus", d: "kranen, spiegels en accessoires — kies de producten in de offerte-editor via de productkiezer", unit: "forfait", driver: "handmatig", kost: null, marge: 45, stelpost: MEERPRIJS },
+];
+
+async function main() {
+  const rond = (n: number) => Math.round(n);
+  let nieuw = 0;
+  for (let i = 0; i < POSTEN.length; i++) {
+    const p = POSTEN[i];
+    const marge = p.marge ?? 30;
+    const prijs = p.kost != null ? rond(p.kost / (1 - marge / 100)) : null;
+    const r = await db.execute(sql`
+      insert into price_book_items (chapter, name, description, unit, driver, factor, cost_eur, margin_pct, price_eur, is_stelpost, stelpost_note, sort_order)
+      values (${p.h}, ${p.n}, ${p.d ?? null}, ${p.unit}, ${p.driver}, ${p.factor ?? 1}, ${p.kost}, ${marge}, ${prijs}, ${!!p.stelpost}, ${p.stelpost ?? null}, ${i})
+      on conflict (chapter, name) do nothing
+      returning id`);
+    if (r.length) nieuw++;
+  }
+  const [t] = await db.execute<{ n: number }>(sql`select count(*)::int n from price_book_items`);
+  console.log(`${nieuw} posten toegevoegd · totaal ${t.n} in het prijzenboek (alle nieuwe staan op "controleer")`);
+  process.exit(0);
+}
+
+main().catch((e) => { console.error(e); process.exit(1); });

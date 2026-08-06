@@ -691,6 +691,8 @@ export type DocumentLineItem = {
   name: string;
   description?: string;
   units: number;
+  /** Eenheid van `units` (m², m, stuk, punt, forfait) — puur voor de weergave. */
+  unit?: string;
   price: number; // unit price, EUR, ex. VAT (before discount)
   /** Line discount, percent (0–100). */
   discount?: number;
@@ -1247,6 +1249,49 @@ export const projectPayments = pgTable(
  * kosten (uren + inkoop + materiaal) en de aanneemprijs/offerte op het dashboard.
  * Bedragen ex. BTW.
  */
+/**
+ * Prijzenboek: eenheidsprijzen (m², stuk, punt, forfait) voor de
+ * offerte-calculator. Elke post hangt aan een "driver" — een maat van de woning
+ * (zie lib/price-book.ts) — zodat een offerte zichzelf uitrekent uit de intake.
+ *
+ * `priceEur` is de verkoopprijs per eenheid. De suggestie is kost ÷ (1 − marge),
+ * maar hij is bewust apart opgeslagen: prijzen worden afgerond en soms
+ * strategisch gezet, en een latere kostwijziging mag een gegeven offerteprijs
+ * niet stil veranderen.
+ */
+export const priceBookItems = pgTable(
+  "price_book_items",
+  {
+    id: uuid().primaryKey().default(sql`gen_random_uuid()`),
+    chapter: text().notNull(),
+    name: text().notNull(),
+    /** Wat is inbegrepen — komt als omschrijving op de offerteregel. */
+    description: text(),
+    unit: text().notNull().default("stuk"),
+    /** Maat waar het aantal uit volgt; 'handmatig' = invullen in de wizard. */
+    driver: text().notNull().default("handmatig"),
+    factor: numeric({ precision: 10, scale: 3 }).notNull().default("1"),
+    /** Onze kost per eenheid (arbeid + materiaal). */
+    costEur: numeric({ precision: 14, scale: 2 }),
+    /** Marge als % van de verkoopprijs (30 = ruim, keuze Nick 06-08-2026). */
+    marginPct: numeric({ precision: 5, scale: 2 }).notNull().default("30"),
+    priceEur: numeric({ precision: 14, scale: 2 }),
+    /** Eigen product: kost/verkoop volgen de catalogus. */
+    productId: uuid().references(() => products.id, { onDelete: "set null" }),
+    /** Stelpost: gemiddelde kwaliteit inbegrepen, duurdere keuze = meerprijs. */
+    isStelpost: boolean().notNull().default(false),
+    stelpostNote: text(),
+    /** Seed-prijzen zijn indicatief tot iemand ze bevestigt. */
+    needsReview: boolean().notNull().default(true),
+    sortOrder: integer().notNull().default(0),
+    active: boolean().notNull().default(true),
+    ...timestamps,
+  },
+  (t) => [uniqueIndex("price_book_chapter_name_idx").on(t.chapter, t.name)],
+);
+
+export type PriceBookItem = typeof priceBookItems.$inferSelect;
+
 export const projectBudgetLines = pgTable(
   "project_budget_lines",
   {

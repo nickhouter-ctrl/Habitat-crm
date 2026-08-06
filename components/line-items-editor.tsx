@@ -51,6 +51,8 @@ type Row = {
   category: string;
   productId: string;
   phase: string;
+  /** Eenheid (m², stuk, …) — alleen weergave, moet het opslaan overleven. */
+  unit?: string;
   /** Kozijn-calculator: kostprijs/leveranciersprijs/marge blijven op de regel. */
   costEur?: string;
   supplierPriceEur?: string;
@@ -91,6 +93,7 @@ function rowToItem(r: Row): DocumentLineItem {
     category: r.category || undefined,
     productId: r.productId || undefined,
     phase: r.phase.trim() || undefined,
+    unit: r.unit || undefined,
     costEur: r.costEur != null && r.costEur !== "" ? Number(r.costEur) : undefined,
     supplierPriceEur:
       r.supplierPriceEur != null && r.supplierPriceEur !== "" ? Number(r.supplierPriceEur) : undefined,
@@ -137,6 +140,7 @@ export function LineItemsEditor({
           category: it.category ?? "materiaal",
           productId: it.productId ?? "",
           phase: it.phase ?? "",
+          unit: it.unit ?? undefined,
           costEur: it.costEur != null ? String(it.costEur) : undefined,
           supplierPriceEur: it.supplierPriceEur != null ? String(it.supplierPriceEur) : undefined,
           marginPct: it.marginPct != null ? String(it.marginPct) : undefined,

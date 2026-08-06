@@ -427,10 +427,18 @@ const s = StyleSheet.create({
     paddingTop: 10,
     borderTopWidth: 0.5,
     borderColor: "#e5e3de",
-    fontSize: 8.5,
-    color: C.charcoal,
-    lineHeight: 1.6,
   },
+  notesPara: { fontSize: 8.5, color: C.charcoal, lineHeight: 1.6, marginBottom: 5 },
+  notesFirst: { fontSize: 9, color: C.charcoal, lineHeight: 1.6, marginBottom: 6, fontFamily: "Sora", fontWeight: 700 },
+
+  /** Hoofdstuk-kop (offertes uit het prijzenboek: regels gegroepeerd per fase). */
+  phaseHead: {
+    marginTop: 10,
+    paddingVertical: 4,
+    paddingHorizontal: 6,
+    backgroundColor: "#f4efe6",
+  },
+  phaseHeadText: { fontFamily: "Sora", fontWeight: 700, fontSize: 8.5, color: C.charcoal, letterSpacing: 0.4 },
 
   footer: {
     position: "absolute",
@@ -561,6 +569,17 @@ function DocumentPdf({ doc }: { doc: PdfDoc }) {
   const kindLabels = KIND_LABEL[locale];
 
   const items = doc.items ?? [];
+  // Hoofdstukken: hebben regels een fase (offerte uit het prijzenboek), dan
+  // groeperen we ze onder een kopregel, in volgorde van voorkomen. Documenten
+  // zonder fasen renderen exact als vanouds — één platte lijst.
+  const faseVolgorde: (string | null)[] = [];
+  for (const it of items) {
+    const k = it.phase?.trim() || null;
+    if (!faseVolgorde.includes(k)) faseVolgorde.push(k);
+  }
+  const itemGroepen = faseVolgorde.some((k) => k)
+    ? faseVolgorde.map((k) => ({ fase: k, regels: items.filter((it) => (it.phase?.trim() || null) === k) }))
+    : [{ fase: null as string | null, regels: items }];
   const isDelivery = doc.kind === "deliverynote";
   const isInvoice = doc.kind === "invoice";
   // Provisión de fondos: factuur-layout maar géén factuur — nergens BTW tonen
@@ -696,7 +715,14 @@ function DocumentPdf({ doc }: { doc: PdfDoc }) {
           {items.length === 0 ? (
             <Text style={[s.tr, s.muted]}>{t.noLines}</Text>
           ) : (
-            items.map((it, i) => {
+            itemGroepen.map((groep, gi) => (
+              <View key={gi}>
+                {groep.fase ? (
+                  <View style={s.phaseHead} wrap={false}>
+                    <Text style={s.phaseHeadText}>{groep.fase.toUpperCase()}</Text>
+                  </View>
+                ) : null}
+                {groep.regels.map((it, i) => {
               const img = it.productId ? doc.lineImages?.[it.productId] : undefined;
               return (
                 <View key={i} style={[s.tr, i % 2 === 1 ? s.trAlt : {}]} wrap={false}>
@@ -722,7 +748,7 @@ function DocumentPdf({ doc }: { doc: PdfDoc }) {
                     ) : null}
                   </View>
                   <Text style={s.cCat}>{catLabel(it.category, locale)}</Text>
-                  <Text style={isDelivery ? s.cAmt : s.cQty}>{it.units}</Text>
+                  <Text style={isDelivery ? s.cAmt : s.cQty}>{it.unit ? `${it.units} ${it.unit}` : it.units}</Text>
                   {!isDelivery && (
                     <>
                       <Text style={s.cNum}>{eur(it.price)}</Text>
@@ -732,7 +758,9 @@ function DocumentPdf({ doc }: { doc: PdfDoc }) {
                   )}
                 </View>
               );
-            })
+                })}
+              </View>
+            ))
           )}
 
           {/* ---- payment block + totals ---- */}
@@ -794,7 +822,15 @@ function DocumentPdf({ doc }: { doc: PdfDoc }) {
               verlegd.
             </Text>
           ) : null}
-          {doc.notes ? <Text style={s.notes}>{doc.notes}</Text> : null}
+          {doc.notes ? (
+            <View style={s.notes}>
+              {doc.notes.split(/\n{2,}/).map((alinea, i) => (
+                <Text key={i} style={i === 0 && doc.notes!.includes("\n\n") ? s.notesFirst : s.notesPara}>
+                  {alinea}
+                </Text>
+              ))}
+            </View>
+          ) : null}
         </View>
 
         {/* ---- footer ---- */}
