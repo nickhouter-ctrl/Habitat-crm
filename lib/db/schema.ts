@@ -326,6 +326,7 @@ export const contacts = pgTable(
     index("contacts_email_idx").on(t.email),
     index("contacts_owner_idx").on(t.ownerId),
     index("contacts_company_idx").on(t.companyId),
+    index("contacts_source_idx").on(t.source),
   ],
 );
 
@@ -478,6 +479,14 @@ export const products = pgTable(
     index("products_category_idx").on(t.category),
     index("products_name_idx").on(t.name),
     uniqueIndex("products_holded_id_idx").on(t.holdedProductId),
+    // Partieel uniek: lege sku/barcode komt voor (o.a. 940 producten zonder
+    // barcode), dus alleen ingevulde waarden moeten uniek zijn.
+    uniqueIndex("products_sku_uidx")
+      .on(t.sku)
+      .where(sql`sku is not null and sku <> ''`),
+    uniqueIndex("products_barcode_uidx")
+      .on(t.barcode)
+      .where(sql`barcode is not null and barcode <> ''`),
   ],
 );
 
@@ -815,6 +824,15 @@ export const documents = pgTable(
     index("documents_contact_idx").on(t.contactId),
     uniqueIndex("documents_holded_id_idx").on(t.holdedId),
     uniqueIndex("documents_accept_token_idx").on(t.acceptToken),
+    index("documents_deal_idx").on(t.dealId),
+    index("documents_kind_issue_idx").on(t.kind, t.issueDate),
+    index("documents_project_idx").on(t.projectId),
+    index("documents_company_idx").on(t.companyId),
+    index("documents_source_doc_idx").on(t.sourceDocumentId),
+    // Nog niet uniek: er staat één historisch dubbel factuurnummer in
+    // (F260008, twee verschillende facturen). Uniek maken zodra dat is
+    // rechtgezet — zie drizzle/README.md.
+    index("documents_kind_docnumber_idx").on(t.kind, t.docNumber),
   ],
 );
 
@@ -977,6 +995,13 @@ export const purchaseOrders = pgTable(
     index("purchase_orders_container_ref_idx").on(t.containerRef),
     index("purchase_orders_shipment_ref_idx").on(t.shipmentRef),
     index("purchase_orders_project_idx").on(t.projectId),
+    // "Nog te betalen" is de veelgevraagde helft — partieel op paid_at is null.
+    index("purchase_orders_paid_idx")
+      .on(t.paidAt)
+      .where(sql`paid_at is null`),
+    index("purchase_orders_suggested_project_idx").on(t.suggestedProjectId),
+    index("purchase_orders_order_date_idx").on(t.orderDate),
+    index("purchase_orders_due_date_idx").on(t.dueDate),
   ],
 );
 
@@ -1613,7 +1638,10 @@ export const webhookEvents = pgTable(
     processedAt: timestamp({ withTimezone: true }),
     error: text(),
   },
-  (t) => [index("webhook_events_received_idx").on(t.receivedAt)],
+  (t) => [
+    index("webhook_events_received_idx").on(t.receivedAt),
+    index("webhook_events_processed_idx").on(t.processedAt),
+  ],
 );
 
 /**
@@ -1650,6 +1678,8 @@ export const deliveries = pgTable(
     index("deliveries_document_idx").on(t.documentId),
     index("deliveries_status_idx").on(t.status),
     index("deliveries_planned_idx").on(t.plannedDate),
+    index("deliveries_project_idx").on(t.projectId),
+    index("deliveries_contact_idx").on(t.contactId),
   ],
 );
 
@@ -1819,6 +1849,8 @@ export const emailInbox = pgTable(
     uniqueIndex("email_inbox_message_id_idx").on(t.messageId),
     index("email_inbox_status_idx").on(t.status),
     index("email_inbox_received_at_idx").on(t.receivedAt),
+    // FK zonder index — de kostenanalyse joint hierop (lib/landed-cost.ts).
+    index("email_inbox_linked_po_idx").on(t.linkedPurchaseOrderId),
   ],
 );
 

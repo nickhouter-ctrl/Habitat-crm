@@ -34,6 +34,16 @@ en gaat langs RLS heen — autorisatie binnen de app zit volledig in
 `npx tsx scripts/enable-rls.ts` (of neem `ENABLE ROW LEVEL SECURITY` op in de
 migratie) en controleer met `scripts/check-rls.ts`.
 
+## Openstaand: uniek factuurnummer
+
+`documents (kind, doc_number)` heeft sinds 0042 een gewone index maar nog
+**geen** unique constraint: er staan twee verschillende facturen met nummer
+**F260008** in productie (07-06-2026 · € 34.166,58 · overdue én 16-01-2026 ·
+€ 20.578,96 · paid). Dat is een boekhoudkwestie — waarschijnlijk moet één van
+beide (ook in Holded) een ander nummer krijgen. Zodra dat is rechtgezet:
+maak in `lib/db/schema.ts` van `documents_kind_docnumber_idx` een
+`uniqueIndex` en draai `db:generate` + `db:migrate`.
+
 ## Losse feiten
 
 - `0029_catalog_collection_category.sql` was een handgeschreven duplicaat dat

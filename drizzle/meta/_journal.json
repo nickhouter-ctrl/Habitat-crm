@@ -295,6 +295,13 @@
       "when": 1786026572723,
       "tag": "0041_low_edwin_jarvis",
       "breakpoints": true
+    },
+    {
+      "idx": 42,
+      "version": "7",
+      "when": 1786027220134,
+      "tag": "0042_chief_warstar",
+      "breakpoints": true
     }
   ]
 }
