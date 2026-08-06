@@ -107,11 +107,13 @@ export default async function OfferteCalculatorPage({
     Math.max(Number.parseInt(params.s_aantal ?? "", 10) || schemaStandaard.length, 0),
     MAX_TERMIJNEN,
   );
+  // Lege omschrijvingen (bv. uit een oudere URL) vallen terug op de standaard
+  // of "Termijn n" — een termijn met een percentage telt dus altijd mee.
   const termijnen = Array.from({ length: schemaAantal }, (_, idx) => ({
-    label: (params[`s${idx + 1}_label`] ?? schemaStandaard[idx]?.label ?? "").trim(),
+    label: (params[`s${idx + 1}_label`] ?? "").trim() || schemaStandaard[idx]?.label || `Termijn ${idx + 1}`,
     pct: parseMoney(params[`s${idx + 1}_pct`] ?? "") ?? schemaStandaard[idx]?.pct ?? 0,
   }));
-  const schemaSom = termijnen.reduce((s, t) => s + (t.label ? t.pct : 0), 0);
+  const schemaSom = termijnen.reduce((s, t) => s + t.pct, 0);
   const verkoopMetOnvoorzien = verkoop * (1 + onvoorzien / 100);
 
   const groepen = [...new Set(DRIVERS.map((d) => d.groep))] as DriverGroep[];

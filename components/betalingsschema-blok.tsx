@@ -52,7 +52,7 @@ export function BetalingsschemaBlok({
               <span className="w-16 shrink-0 text-xs text-muted">Termijn {i}</span>
               <Input
                 name={`s${i}_label`}
-                defaultValue={defaults[`s${i}_label`] ?? standaard[i - 1]?.label ?? ""}
+                defaultValue={(defaults[`s${i}_label`] ?? "").trim() || standaard[i - 1]?.label || ""}
                 placeholder="omschrijving, bv. bij start dakwerk…"
                 className="flex-1"
               />

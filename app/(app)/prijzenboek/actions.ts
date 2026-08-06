@@ -134,7 +134,7 @@ export async function createQuoteFromPriceBook(formData: FormData) {
     10,
   );
   const termijnen = Array.from({ length: sAantal }, (_, idx) => ({
-    label: String(formData.get(`s${idx + 1}_label`) ?? schemaStandaard[idx]?.label ?? "").trim(),
+    label: String(formData.get(`s${idx + 1}_label`) ?? "").trim() || schemaStandaard[idx]?.label || `Termijn ${idx + 1}`,
     pct: parseMoney(String(formData.get(`s${idx + 1}_pct`) ?? "")) ?? schemaStandaard[idx]?.pct ?? 0,
   }));
 
