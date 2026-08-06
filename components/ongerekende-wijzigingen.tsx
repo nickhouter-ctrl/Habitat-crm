@@ -4,7 +4,8 @@
  * Waarschuwing in stap 2 van de offerte-wizard: verschijnt zodra er ná de
  * laatste berekening iets in het formulier is gewijzigd (extra badkamer,
  * andere maat, aangepast aantal). De bedragen eronder zijn dan nog van de
- * vorige berekening — één klik op "Voorbeeld bijwerken" rekent alles opnieuw.
+ * vorige berekening. Blijft bovenin plakken tijdens het scrollen en heeft
+ * zijn eigen herreken-knop, zodat het niet te missen is.
  */
 import { useEffect, useState } from "react";
 
@@ -21,9 +22,11 @@ export function OngerekendeWijzigingen({ formId }: { formId: string }) {
 
   if (!gewijzigd) return null;
   return (
-    <p className="rounded-md bg-warning/10 px-3 py-2 text-sm font-medium">
-      ⚠ Je hebt iets gewijzigd dat nog niet is doorgerekend — de bedragen hieronder zijn van de vorige berekening. Klik
-      op <strong>&ldquo;Voorbeeld bijwerken&rdquo;</strong> om alles opnieuw te rekenen.
-    </p>
+    <div className="sticky top-2 z-20 flex flex-wrap items-center justify-between gap-3 rounded-md border border-warning/50 bg-warning/15 px-3 py-2 text-sm font-medium shadow-md backdrop-blur">
+      <span>⚠ Gewijzigde invoer is nog niet doorgerekend — de bedragen hieronder zijn van de vorige berekening.</span>
+      <button type="submit" className="rounded-md bg-foreground px-3 py-1.5 text-sm font-semibold text-background hover:opacity-90">
+        Nu herrekenen
+      </button>
+    </div>
   );
 }
