@@ -972,7 +972,7 @@ export default async function DocumentDetailPage({
                           )}
                         </Td>
                         <Td className="text-muted">{labelForCategory(it.category)}</Td>
-                        <Td className="text-right tabular-nums">{it.units}</Td>
+                        <Td className="text-right tabular-nums">{it.units}{it.unit ? ` ${it.unit}` : ""}</Td>
                         <Td className="text-right tabular-nums">{formatEUR(it.price)}</Td>
                         <Td className="text-right tabular-nums text-muted">
                           {it.discount ? `${it.discount}%` : "—"}

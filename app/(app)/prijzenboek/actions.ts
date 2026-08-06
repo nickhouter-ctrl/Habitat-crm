@@ -174,8 +174,9 @@ export async function createQuoteFromPriceBook(formData: FormData) {
       if (!gebruikteHoofdstukken.includes(hoofdstuk)) gebruikteHoofdstukken.push(hoofdstuk);
       const omschrijving = [
         p.description,
-        // Per-badkamer specificatie uit de wizard op de installatieregel.
-        p.driver === "badkamers" && badkamerSpec ? badkamerSpec : null,
+        // Per-badkamer specificatie alleen op de installatieregel — niet op
+        // elke post die toevallig per badkamer meetelt (ventilatie e.d.).
+        p.name.startsWith("Badkamer installatie") && badkamerSpec ? badkamerSpec : null,
         p.isStelpost && p.stelpostNote ? `Stelpost: ${p.stelpostNote}` : null,
       ]
         .filter(Boolean)

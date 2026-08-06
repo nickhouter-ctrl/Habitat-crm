@@ -561,14 +561,17 @@ export function LineItemsEditor({
                     </Select>
                   </td>
                   <td className="px-1 py-2">
-                    <Input
-                      type="number"
-                      step="0.01"
-                      min="0"
-                      value={r.units}
-                      onChange={(e) => patchRow(i, { units: e.target.value })}
-                      className="text-right"
-                    />
+                    <div className="flex items-center gap-1">
+                      <Input
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        value={r.units}
+                        onChange={(e) => patchRow(i, { units: e.target.value })}
+                        className="text-right"
+                      />
+                      {r.unit ? <span className="shrink-0 text-xs text-muted">{r.unit}</span> : null}
+                    </div>
                   </td>
                   <td className="px-1 py-2">
                     <Input

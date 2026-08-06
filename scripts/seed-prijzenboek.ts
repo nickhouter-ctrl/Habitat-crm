@@ -116,7 +116,7 @@ const POSTEN: Post[] = [
     stelpost: `standaard vlakke deur inbegrepen — ${MEERPRIJS} (bv. Yo Home of maatwerk)` },
   { h: "Binnendeuren", n: "Buitendeur", d: "incl. beslag en cilinder", unit: "stuk", driver: "handmatig", kost: 850, stelpost: MEERPRIJS },
 
-  { h: "Badkamers & sanitair", n: "Mechanische ventilatie badkamer", d: "afzuiging incl. kanaal naar buiten, per badkamer", unit: "stuk", driver: "badkamers", kost: 180 },
+  { h: "Badkamers & sanitair", n: "Mechanische ventilatie badkamer", d: "afzuiging incl. kanaal naar buiten (kernboring), per badkamer — ± € 140 materiaal + € 160 arbeid", unit: "stuk", driver: "badkamers", kost: 300 },
   { h: "Binnendeuren", n: "Trap vervangen", d: "nieuwe binnentrap incl. plaatsing", unit: "forfait", driver: "handmatig", kost: 4500, stelpost: "uitvoering (hout/staal/zwevend) bepaalt de definitieve prijs" },
   { h: "Binnendeuren", n: "Balustrade / leuning", d: "geplaatst, per strekkende meter", unit: "m", driver: "handmatig", kost: 160, stelpost: "glas of smeedwerk = meerprijs" },
 
