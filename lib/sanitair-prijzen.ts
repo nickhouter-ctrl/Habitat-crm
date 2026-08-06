@@ -22,6 +22,10 @@ const AFVOERSET: Gem = { kost: 90, verkoop: 124 };
  *  goot en douchebak, beide kan. Geen eigen catalogus-categorie. */
 const DOUCHEGOOT: Gem = { kost: 80, verkoop: 200 };
 
+/** Accessoire-set per toilet: wc-borstel, toiletrolhouder en haakjes (de
+ *  drukplaat zit bij het inbouwframe in de montagepost). Vast bedrag. */
+const TOILET_ACCESSOIRES: Gem = { kost: 90, verkoop: 210 };
+
 /** Vrijstaande badkraan: hoort automatisch bij elk bad (verkoop ± € 1.000,
  *  keuze Nick 06-08-2026). Zit NIET in de eigen collectie — wordt los
  *  ingekocht (bv. in Spanje); vast bedrag tot er een catalogus-categorie is. */
@@ -32,7 +36,7 @@ export async function syncSanitairPrijzen(): Promise<number> {
   const cats = await db.execute<{ cat: string; kost: number | null; verkoop: number | null }>(sql`
     select category cat, avg(cost_eur)::float8 kost, avg(price_eur)::float8 verkoop
     from products
-    where price_eur is not null and category in ('Douchebakken','Douchesets','Douchewanden','Baden','Kranen')
+    where price_eur is not null and category in ('Douchebakken','Douchesets','Douchewanden','Baden','Kranen','Spiegels')
     group by category`);
   for (const c of cats) per.set(c.cat, { kost: c.kost ?? 0, verkoop: c.verkoop ?? 0 });
 
@@ -64,16 +68,20 @@ export async function syncSanitairPrijzen(): Promise<number> {
       g: { kost: bad.kost + BADKRAAN.kost, verkoop: bad.verkoop + BADKRAAN.verkoop },
     });
   const kraan = per.get("Kranen");
+  const spiegel = per.get("Spiegels") ?? { kost: 159, verkoop: 248 };
   if (meubel?.verkoop && kraan)
     posten.push({
-      naam: "Wastafelmeubel + kraan",
+      naam: "Wastafelmeubel, kraan en spiegel",
       g: {
-        kost: (meubel.kost ?? 0) + kraan.kost + AFVOERSET.kost,
-        verkoop: meubel.verkoop + kraan.verkoop + AFVOERSET.verkoop,
+        kost: (meubel.kost ?? 0) + kraan.kost + AFVOERSET.kost + spiegel.kost,
+        verkoop: meubel.verkoop + kraan.verkoop + AFVOERSET.verkoop + spiegel.verkoop,
       },
     });
   if (toilet?.verkoop)
-    posten.push({ naam: "Hangtoilet", g: { kost: toilet.kost ?? 0, verkoop: toilet.verkoop } });
+    posten.push({
+      naam: "Hangtoilet incl. accessoires",
+      g: { kost: (toilet.kost ?? 0) + TOILET_ACCESSOIRES.kost, verkoop: toilet.verkoop + TOILET_ACCESSOIRES.verkoop },
+    });
 
   let bijgewerkt = 0;
   for (const p of posten) {
