@@ -70,10 +70,10 @@ const POSTEN: Post[] = [
 
   // ── Badkamers & sanitair ──
   { h: "Badkamers & sanitair", n: "Badkamer installatie compleet", d: "al het leiding- en afvoerwerk per badkamer: aanvoer/afvoer naar elk tappunt, incl. afmontage — sanitair zelf staat per stuk hieronder", unit: "stuk", driver: "badkamers", kost: 2400 },
-  { h: "Badkamers & sanitair", n: "Inloopdouche monteren", d: "montage douchebak, goot, doucheset en glaswand — alleen arbeid; de producten staan bij Eigen producten", unit: "stuk", driver: "douches", kost: 200 },
-  { h: "Badkamers & sanitair", n: "Bad plaatsen", d: "alleen plaatsen en aansluiten, incl. kraanwerk-montage — het bad zelf staat bij Eigen producten", unit: "stuk", driver: "baden", kost: 150 },
-  { h: "Badkamers & sanitair", n: "Wastafelmeubel + kraan monteren", d: "ophangen, kraan plaatsen en aansluiten — meubel en kraan staan bij Eigen producten", unit: "stuk", driver: "wastafels", kost: 80 },
-  { h: "Badkamers & sanitair", n: "Hangtoilet monteren (incl. inbouwframe)", d: "montage incl. inbouwframe en afwerkplaat (frame is materiaal) — het toilet staat bij Eigen producten", unit: "stuk", driver: "toiletten", kost: 335 },
+  { h: "Badkamers & sanitair", n: "Inloopdouche monteren", d: "montage van douchebak, goot, doucheset en glaswand — de inloopdouche zelf staat als aparte regel", unit: "stuk", driver: "douches", kost: 200 },
+  { h: "Badkamers & sanitair", n: "Bad plaatsen", d: "alleen plaatsen en aansluiten, incl. kraanwerk-montage — het bad zelf staat als aparte regel", unit: "stuk", driver: "baden", kost: 150 },
+  { h: "Badkamers & sanitair", n: "Wastafelmeubel + kraan monteren", d: "ophangen, kraan plaatsen en aansluiten — meubel en kraan staan als aparte regel", unit: "stuk", driver: "wastafels", kost: 80 },
+  { h: "Badkamers & sanitair", n: "Hangtoilet monteren (incl. inbouwframe)", d: "montage incl. inbouwframe en afwerkplaat — het toilet zelf staat als aparte regel", unit: "stuk", driver: "toiletten", kost: 335 },
 
   // ── Loodgieterwerk ──
   { h: "Loodgieterwerk", n: "Waterleiding vernieuwen", d: "per aftappunt", unit: "punt", driver: "handmatig", kost: 150, marge: 43 },

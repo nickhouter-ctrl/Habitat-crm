@@ -41,8 +41,12 @@ const OMSCHRIJVINGEN: Record<string, string> = {
   "Gevelisolatie (SATE) incl. afwerking": "isolatieplaten, wapening en sierpleister",
   "Groepenkast vernieuwen": "vernieuwd conform de huidige norm, incl. keuring",
   "Hekwerk": "geplaatst per strekkende meter, incl. palen en fundering",
-  "Inloopdouche monteren":
-    "montage van douchebak, goot, doucheset en glaswand; de producten zelf staan bij Eigen producten",
+  // "Eigen producten" bestaat niet meer als apart kopje — de productposten
+  // staan gewoon als eigen regels in dezelfde lijst/fase.
+  "Inloopdouche monteren": "montage van douchebak, goot, doucheset en glaswand — de inloopdouche zelf staat als aparte regel",
+  "Bad plaatsen": "alleen plaatsen en aansluiten, incl. kraanwerk-montage — het bad zelf staat als aparte regel",
+  "Wastafelmeubel + kraan monteren": "ophangen, kraan plaatsen en aansluiten — meubel en kraan staan als aparte regel",
+  "Hangtoilet monteren (incl. inbouwframe)": "montage incl. inbouwframe en afwerkplaat — het toilet zelf staat als aparte regel",
   "Keuken plaatsen": "montage en aansluitingen voor water, elektra en afvoer",
   "Kozijn (aluminium, geleverd en geplaatst)":
     "aluminium met thermische onderbreking, incl. beglazing en montage — per m² kozijnoppervlak (b × h)",
