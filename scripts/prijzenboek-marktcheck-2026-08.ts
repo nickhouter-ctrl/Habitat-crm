@@ -181,9 +181,10 @@ const POSTEN: Post[] = [
   /* ── Airco & klimaat ───────────────────────────────────────────────── */
   { hoofdstuk: "Airco & klimaat", naam: "Airco split-unit (basis)", uren: 8, materiaal: 1276, marge: 30,
     waarom: "unit, leidingwerk, doorvoer en vacuümtrekken" },
-  // Keuze Nick 07-08-2026: een compleet kanaalsysteem hoort op elke grootte
-  // duurder uit te komen dan losse splits — € 2.250/ruimte > € 2.143/split.
-  { hoofdstuk: "Airco & klimaat", naam: "Airco kanaalsysteem (conductos)", uren: 10, materiaal: 1295, marge: 30, eenheid: "ruimte",
+  // Keuze Nick 07-08-2026: prijsniveau uit de NL-marktcijfers die zijn klanten
+  // kennen — 5 ruimtes € 12.000–22.000 incl. btw → midden ± € 14.000 ex btw =
+  // € 2.800/ruimte. Ook ruim boven splits (€ 2.143/stuk), zoals het hoort.
+  { hoofdstuk: "Airco & klimaat", naam: "Airco kanaalsysteem (conductos)", uren: 10, materiaal: 1680, marge: 30, eenheid: "ruimte",
     waarom: "per aangesloten ruimte: aandeel machine en plenum, kanalen, roosters, zonering en inregelen" },
   { hoofdstuk: "Airco & klimaat", naam: "Warmtepomp + installatie", uren: 24, materiaal: 7828, marge: 37,
     waarom: "aerotermia inclusief buffervat en inregelen" },
