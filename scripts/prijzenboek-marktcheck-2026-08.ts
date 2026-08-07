@@ -59,6 +59,8 @@ type Post = {
   marge: number;
   /** Snijverlies % — alleen voor wat op maat gezaagd wordt. */
   snij?: number;
+  /** Eenheid, alleen als die afwijkt van wat er al staat (bv. "ruimte"). */
+  eenheid?: string;
   /** Waarom deze uren/dit materiaal. Komt in de log, niet in de database. */
   waarom: string;
 };
@@ -179,8 +181,10 @@ const POSTEN: Post[] = [
   /* ── Airco & klimaat ───────────────────────────────────────────────── */
   { hoofdstuk: "Airco & klimaat", naam: "Airco split-unit (basis)", uren: 8, materiaal: 1276, marge: 30,
     waarom: "unit, leidingwerk, doorvoer en vacuümtrekken" },
-  { hoofdstuk: "Airco & klimaat", naam: "Airco kanaalsysteem (conductos)", uren: 10, materiaal: 670, marge: 30,
-    waarom: "per aangesloten ruimte: kanaal, rooster en inregelen" },
+  // Keuze Nick 07-08-2026: een compleet kanaalsysteem hoort op elke grootte
+  // duurder uit te komen dan losse splits — € 2.250/ruimte > € 2.143/split.
+  { hoofdstuk: "Airco & klimaat", naam: "Airco kanaalsysteem (conductos)", uren: 10, materiaal: 1295, marge: 30, eenheid: "ruimte",
+    waarom: "per aangesloten ruimte: aandeel machine en plenum, kanalen, roosters, zonering en inregelen" },
   { hoofdstuk: "Airco & klimaat", naam: "Warmtepomp + installatie", uren: 24, materiaal: 7828, marge: 37,
     waarom: "aerotermia inclusief buffervat en inregelen" },
   { hoofdstuk: "Airco & klimaat", naam: "Vloerverwarming", uren: 0.5, materiaal: 41, marge: 30,
@@ -284,7 +288,8 @@ async function main() {
       Number(huidig.marginPct) === post.marge &&
       Number(huidig.wastePct) === snij &&
       huidig.laborHours != null &&
-      Number(huidig.laborHours) === post.uren;
+      Number(huidig.laborHours) === post.uren &&
+      (post.eenheid == null || huidig.unit === post.eenheid);
     if (zelfde) {
       ongewijzigd++;
       continue;
@@ -312,6 +317,7 @@ async function main() {
           marginPct: String(post.marge),
           priceEur: prijs.toFixed(2),
           wastePct: String(snij),
+          ...(post.eenheid != null ? { unit: post.eenheid } : {}),
           needsReview: false,
           updatedAt: new Date(),
         })

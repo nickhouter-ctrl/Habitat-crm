@@ -128,7 +128,7 @@ export const HOOFDSTUKKEN = [
   "Aanbouw & kelder",
 ] as const;
 
-export const EENHEDEN = ["m²", "m", "m³", "stuk", "punt", "forfait"] as const;
+export const EENHEDEN = ["m²", "m", "m³", "stuk", "punt", "ruimte", "forfait"] as const;
 
 /** Standaardmarge (van de verkoopprijs) — keuze van Nick, 06-08-2026: ruim. */
 export const DEFAULT_PRIJZENBOEK_MARGE = 30;
