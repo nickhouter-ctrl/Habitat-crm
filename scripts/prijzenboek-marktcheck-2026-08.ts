@@ -109,8 +109,8 @@ const POSTEN: Post[] = [
     waarom: "kleine ruimte met veel paswerk rond afvoer en douchehoek" },
 
   /* ── Vloeren, wanden & plafonds ────────────────────────────────────── */
-  { hoofdstuk: "Vloeren, wanden & plafonds", naam: "Wandpanelen", uren: 0.6, materiaal: 27, marge: 65, snij: 10,
-    waarom: "eigen data (294 panelen): landed € 20,00/m² plus XPS-montageplaat ± € 7/m². De oude kost van € 65 was ruim 2× te hoog — verkoopprijs blijft € 125, we maakten er dus al 65% marge op in plaats van de geboekte 48%" },
+  { hoofdstuk: "Vloeren, wanden & plafonds", naam: "Wandpanelen", uren: 0.8, materiaal: 27, marge: 60, snij: 10,
+    waarom: "eigen data (294 panelen): landed € 20,00/m² plus XPS-montageplaat ± € 7/m². verkoopprijs blijft € 125 inclusief plaatsen (0,8 u/m²); de oude kost van € 65 was ruim 2× te hoog, we maakten er dus al 60% marge op in plaats van de geboekte 48%" },
   { hoofdstuk: "Vloeren, wanden & plafonds", naam: "Verlaagd plafond (gyproc)", uren: 0.9, materiaal: 22, marge: 30,
     waarom: "metalstud regelwerk, gyproc, voegen en schuurklaar" },
   { hoofdstuk: "Vloeren, wanden & plafonds", naam: "Parket / laminaat leggen", uren: 0.4, materiaal: 30, marge: 33, snij: 10,
