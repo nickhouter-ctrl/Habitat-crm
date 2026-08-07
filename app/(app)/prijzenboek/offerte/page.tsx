@@ -31,7 +31,15 @@ import { db } from "@/lib/db";
 import { contacts, priceBookItems, projects } from "@/lib/db/schema";
 import { moneyForInput, parseMoney } from "@/lib/parse-money";
 import { marginOf } from "@/lib/pricing";
-import { badkamerSamenstelling, DRIVERS, DRIVER_GROEP_LABEL, DRIVER_HANDMATIG, HOOFDSTUKKEN, type DriverGroep } from "@/lib/price-book";
+import {
+  aantalMetSnijverlies,
+  badkamerSamenstelling,
+  DRIVERS,
+  DRIVER_GROEP_LABEL,
+  DRIVER_HANDMATIG,
+  HOOFDSTUKKEN,
+  type DriverGroep,
+} from "@/lib/price-book";
 import { autoTermijnen, MAX_TERMIJNEN, SCHEMA_FASEN } from "@/lib/quote-clauses";
 import { formatEUR } from "@/lib/utils";
 import { createQuoteFromPriceBook } from "../actions";
@@ -66,10 +74,13 @@ export default async function OfferteCalculatorPage({
       sanitairTotalen.badkamer_m2,
   };
 
-  // Maat → waarde uit de URL; aantal per post = maat × factor.
+  // Maat → waarde uit de URL; aantal per post = maat × factor, plus het
+  // snijverlies van de post (tegels/panelen/plankvloeren worden op maat
+  // gezaagd, dus je bestelt meer dan de netto oppervlakte).
   const maat = (key: string) => afgeleiden[key] ?? parseMoney(params[`d_${key}`] ?? "") ?? 0;
-  const aantalVoor = (p: (typeof posten)[number]) =>
+  const nettoVoor = (p: (typeof posten)[number]) =>
     p.driver === DRIVER_HANDMATIG ? 0 : Math.round(maat(p.driver) * Number(p.factor) * 100) / 100;
+  const aantalVoor = (p: (typeof posten)[number]) => aantalMetSnijverlies(nettoVoor(p), p.wastePct);
 
   // Handmatige aanpassingen uit stap 2 winnen van de voorgerekende aantallen —
   // maar ALLEEN als het vakje echt is overgetypt. Elk aantal-vakje stuurt zijn
@@ -257,6 +268,11 @@ export default async function OfferteCalculatorPage({
                               <span className="font-medium">{p.name}</span>
                               {p.isStelpost && <Badge tone="info" className="ml-1.5">stelpost</Badge>}
                               {p.priceEur == null && <Badge tone="warning" className="ml-1.5">geen prijs</Badge>}
+                              {Number(p.wastePct) > 0 && (
+                                <Badge tone="neutral" className="ml-1.5">
+                                  +{moneyForInput(p.wastePct)}% snijverlies
+                                </Badge>
+                              )}
                               {p.description ? <span className="block text-xs text-muted">{p.description}</span> : null}
                               {p.stelpostNote ? <span className="block text-xs text-muted/80 italic">Stelpost: {p.stelpostNote}</span> : null}
                             </div>
@@ -265,6 +281,11 @@ export default async function OfferteCalculatorPage({
                               {/* Basiswaarde: zo weet de server of het vakje echt is overgetypt. */}
                               <input type="hidden" name={`qb_${p.id}`} value={q > 0 ? moneyForInput(q) : ""} />
                               <span className="text-xs text-muted">{p.unit}</span>
+                              {Number(p.wastePct) > 0 && q > 0 && qOverride(p) == null && (
+                                <span className="text-xs text-muted/80" title="netto oppervlakte vóór snijverlies">
+                                  ({moneyForInput(nettoVoor(p))} netto)
+                                </span>
+                              )}
                             </div>
                             <span className="text-right tabular-nums text-muted">{p.priceEur != null ? `${formatEUR(Number(p.priceEur))} /${p.unit}` : "—"}</span>
                             <span className="text-right tabular-nums font-medium">{q > 0 && p.priceEur != null ? formatEUR(q * Number(p.priceEur)) : ""}</span>

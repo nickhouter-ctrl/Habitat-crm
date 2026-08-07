@@ -133,6 +133,66 @@ export const EENHEDEN = ["m²", "m", "m³", "stuk", "punt", "forfait"] as const;
 /** Standaardmarge (van de verkoopprijs) — keuze van Nick, 06-08-2026: ruim. */
 export const DEFAULT_PRIJZENBOEK_MARGE = 30;
 
+/* ─────────────────────────── kostopbouw & snijverlies ─────────────────────
+ * Twee dingen die de calculator zelf moet doen, zodat een offerte klopt
+ * zonder dat iemand er met de hand aan rekent. */
+
+/**
+ * Wat de ploeg ons kost per uur — het maximum dat we betalen (Nick, 07-08-2026;
+ * komt overeen met de hoogste `workers.hourlyCostEur` in het systeem). Onze
+ * marge komt hier bovenop, die zit NIET in dit tarief.
+ *
+ * Staat hier als constante en niet als los kostbedrag per post, zodat een
+ * tariefwijziging in één keer door het hele prijzenboek loopt.
+ */
+export const UURTARIEF_ONDERAANNEMER = 28;
+
+/** Standaard snijverlies voor materiaal dat op maat wordt gezaagd. */
+export const SNIJVERLIES_PCT = 10;
+
+/**
+ * Kost per eenheid uit de opbouw (uren × tarief + materiaal). Is de opbouw
+ * niet ingevuld, dan blijft het losse kostbedrag leidend — zo blijven posten
+ * werken waarvoor uren/materiaal niet zinvol te splitsen zijn (stelposten als
+ * "keuken leveren").
+ */
+export function kostUitOpbouw(post: {
+  laborHours?: string | number | null;
+  materialCostEur?: string | number | null;
+  costEur?: string | number | null;
+}): number | null {
+  const uren = post.laborHours == null ? null : Number(post.laborHours);
+  const materiaal = post.materialCostEur == null ? null : Number(post.materialCostEur);
+  if (uren == null && materiaal == null) {
+    return post.costEur == null ? null : Number(post.costEur);
+  }
+  const som = (uren ?? 0) * UURTARIEF_ONDERAANNEMER + (materiaal ?? 0);
+  return Math.round(som * 100) / 100;
+}
+
+/**
+ * Aantal inclusief snijverlies. Naar boven op 2 decimalen — je bestelt liever
+ * een halve doos te veel dan te weinig.
+ */
+export function aantalMetSnijverlies(aantal: number, wastePct: string | number | null | undefined): number {
+  const pct = wastePct == null ? 0 : Number(wastePct);
+  if (!Number.isFinite(pct) || pct <= 0) return aantal;
+  return Math.round(aantal * (1 + pct / 100) * 100) / 100;
+}
+
+/** "45,1 m² incl. 10% snijverlies (41 m² netto)" — voor op de offerteregel. */
+export function snijverliesToelichting(
+  netto: number,
+  bruto: number,
+  wastePct: string | number | null | undefined,
+  eenheid: string,
+): string | null {
+  const pct = wastePct == null ? 0 : Number(wastePct);
+  if (!Number.isFinite(pct) || pct <= 0 || bruto <= netto) return null;
+  const getal = (n: number) => String(Math.round(n * 100) / 100).replace(".", ",");
+  return `Inclusief ${getal(pct)}% snijverlies: ${getal(bruto)} ${eenheid} besteld voor ${getal(netto)} ${eenheid} netto.`;
+}
+
 /* ───────────────────────── badkamer-samenstelling ─────────────────────────
  * De wizard vraagt badkamers per stuk uit (b_aantal, b1_m2, b1_douches, …).
  * Deze helper leest die velden — uit de URL óf uit FormData — en levert de

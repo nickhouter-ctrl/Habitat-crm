@@ -28,7 +28,7 @@ import { db } from "@/lib/db";
 import { priceBookItems } from "@/lib/db/schema";
 import { nacalculatieRijen } from "@/lib/nacalculatie";
 import { moneyForInput } from "@/lib/parse-money";
-import { DRIVERS, DRIVER_HANDMATIG, DRIVER_LABEL, EENHEDEN, HOOFDSTUKKEN } from "@/lib/price-book";
+import { DRIVERS, DRIVER_HANDMATIG, DRIVER_LABEL, EENHEDEN, HOOFDSTUKKEN, UURTARIEF_ONDERAANNEMER } from "@/lib/price-book";
 import { formatEUR } from "@/lib/utils";
 import { addPriceBookItem, deletePriceBookItem, savePriceBookItem, togglePriceBookActive, verversSanitairUitCatalogus } from "./actions";
 
@@ -87,11 +87,14 @@ export default async function PrijzenboekPage() {
             </CardHeader>
             <CardContent className="space-y-3">
               {/* Kolomkoppen — dezelfde grid als de rijen eronder. */}
-              <div className="hidden gap-2 px-2.5 text-[11px] font-medium uppercase tracking-wide text-muted lg:grid lg:grid-cols-[1.6fr_0.6fr_1fr_0.5fr_0.6fr_0.5fr_0.7fr_9.5rem]">
+              <div className="hidden gap-2 px-2.5 text-[11px] font-medium uppercase tracking-wide text-muted lg:grid lg:grid-cols-[1.5fr_0.55fr_0.9fr_0.42fr_0.42fr_0.42fr_0.55fr_0.55fr_0.42fr_0.62fr_8.5rem]">
                 <span>Post &amp; omschrijving</span>
                 <span>Eenheid</span>
                 <span>Aantal volgt uit</span>
                 <span className="text-right">Factor</span>
+                <span className="text-right" title="Snijverlies %: automatisch bij het aantal opgeteld">Snij %</span>
+                <span className="text-right" title={`Uren ploeg per eenheid × € ${UURTARIEF_ONDERAANNEMER}/uur`}>Uren</span>
+                <span className="text-right">Mat. p/e</span>
                 <span className="text-right">Kost p/e</span>
                 <span className="text-right">Marge %</span>
                 <span className="text-right">Verkoop p/e</span>
@@ -101,7 +104,7 @@ export default async function PrijzenboekPage() {
                 <form
                   key={p.id}
                   action={savePriceBookItem.bind(null, p.id)}
-                  className={`grid gap-2 rounded-md border p-2.5 lg:grid-cols-[1.6fr_0.6fr_1fr_0.5fr_0.6fr_0.5fr_0.7fr_9.5rem] lg:items-center ${p.active ? "" : "opacity-50"}`}
+                  className={`grid gap-2 rounded-md border p-2.5 lg:grid-cols-[1.5fr_0.55fr_0.9fr_0.42fr_0.42fr_0.42fr_0.55fr_0.55fr_0.42fr_0.62fr_8.5rem] lg:items-center ${p.active ? "" : "opacity-50"}`}
                 >
                   <div>
                     <div className="flex items-center gap-2">
@@ -123,6 +126,9 @@ export default async function PrijzenboekPage() {
                   </Select>
                   <PriceBookRowFields
                     factor={moneyForInput(p.factor)}
+                    wastePct={moneyForInput(p.wastePct)}
+                    laborHours={moneyForInput(p.laborHours)}
+                    materialCostEur={moneyForInput(p.materialCostEur)}
                     costEur={moneyForInput(p.costEur)}
                     marginPct={moneyForInput(p.marginPct)}
                     priceEur={moneyForInput(p.priceEur)}

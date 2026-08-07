@@ -16,7 +16,13 @@ import {
 import { computeTotals } from "@/lib/documents";
 import { insertNumberedDocument } from "@/lib/doc-number";
 import { parseMoney } from "@/lib/parse-money";
-import { badkamerSamenstelling, DEFAULT_PRIJZENBOEK_MARGE, HOOFDSTUKKEN } from "@/lib/price-book";
+import {
+  badkamerSamenstelling,
+  DEFAULT_PRIJZENBOEK_MARGE,
+  HOOFDSTUKKEN,
+  kostUitOpbouw,
+  snijverliesToelichting,
+} from "@/lib/price-book";
 import { autoTermijnen, betalingsschemaTekst, MAX_TERMIJNEN, quoteClauses, SCHEMA_FASEN, type QuoteLang } from "@/lib/quote-clauses";
 import { syncSanitairPrijzen } from "@/lib/sanitair-prijzen";
 import { suggestedPrice } from "@/lib/pricing";
@@ -25,7 +31,16 @@ import { suggestedPrice } from "@/lib/pricing";
 
 export async function savePriceBookItem(id: string, formData: FormData) {
   await requireWriteUser();
-  const kost = parseMoney(String(formData.get("costEur") ?? ""));
+  // Kostopbouw wint van het kostveld: staan er uren of materiaal, dan is de
+  // kost daaruit afgeleid (het veld staat in de UI ook op slot). Zo kan een
+  // wijziging van het ploegtarief niet stilletjes naast een oud kostbedrag
+  // blijven staan.
+  const uren = parseMoney(String(formData.get("laborHours") ?? ""));
+  const materiaal = parseMoney(String(formData.get("materialCostEur") ?? ""));
+  const kost =
+    uren != null || materiaal != null
+      ? kostUitOpbouw({ laborHours: uren, materialCostEur: materiaal })
+      : parseMoney(String(formData.get("costEur") ?? ""));
   const marge = parseMoney(String(formData.get("marginPct") ?? "")) ?? DEFAULT_PRIJZENBOEK_MARGE;
   const prijsInvoer = parseMoney(String(formData.get("priceEur") ?? ""));
 
@@ -50,6 +65,9 @@ export async function savePriceBookItem(id: string, formData: FormData) {
       unit: String(formData.get("unit") ?? "stuk"),
       driver: String(formData.get("driver") ?? "handmatig"),
       factor: String(parseMoney(String(formData.get("factor") ?? "")) ?? 1),
+      wastePct: String(parseMoney(String(formData.get("wastePct") ?? "")) ?? 0),
+      laborHours: uren != null ? String(uren) : null,
+      materialCostEur: materiaal != null ? materiaal.toFixed(2) : null,
       costEur: kost != null ? kost.toFixed(2) : null,
       marginPct: String(marge),
       priceEur: prijs != null ? prijs.toFixed(2) : null,
@@ -156,11 +174,21 @@ export async function createQuoteFromPriceBook(formData: FormData) {
       }
       if (!gebruikteHoofdstukken.includes(hoofdstuk)) gebruikteHoofdstukken.push(hoofdstuk);
       verkoopPerHoofdstuk[hoofdstuk] = (verkoopPerHoofdstuk[hoofdstuk] ?? 0) + qty * Number(p.priceEur);
+      // Snijverlies vermelden we alleen als het aantal écht uit de calculator
+      // komt: heeft iemand het vakje overgetypt, dan is dát zijn aantal en zou
+      // "inclusief 10% snijverlies" een bewering zijn die niet klopt.
+      const basis = parseMoney(String(formData.get(`qb_${p.id}`) ?? ""));
+      const uitCalculator = basis != null && Math.abs(basis - qty) < 0.005;
+      const snijverlies =
+        uitCalculator && Number(p.wastePct) > 0
+          ? snijverliesToelichting(qty / (1 + Number(p.wastePct) / 100), qty, p.wastePct, p.unit)
+          : null;
       const omschrijving = [
         p.description,
         // Per-badkamer specificatie alleen op de installatieregel — niet op
         // elke post die toevallig per badkamer meetelt (ventilatie e.d.).
         p.name.startsWith("Badkamer installatie") && badkamerSpec ? badkamerSpec : null,
+        snijverlies,
         p.isStelpost && p.stelpostNote ? `Stelpost: ${p.stelpostNote}` : null,
       ]
         .filter(Boolean)

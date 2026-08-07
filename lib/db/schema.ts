@@ -1299,6 +1299,20 @@ export const priceBookItems = pgTable(
     /** Maat waar het aantal uit volgt; 'handmatig' = invullen in de wizard. */
     driver: text().notNull().default("handmatig"),
     factor: numeric({ precision: 10, scale: 3 }).notNull().default("1"),
+    /**
+     * Snijverlies in % op het aantal (10 = 10% erbij). Tegels, panelen en
+     * plankvloeren worden op maat gezaagd; wie exact de netto m² bestelt komt
+     * tekort. De wizard rekent dit automatisch bij het aantal op.
+     */
+    wastePct: numeric({ precision: 5, scale: 2 }).notNull().default("0"),
+    /**
+     * Kostopbouw per eenheid. Zijn beide gevuld, dan is `costEur` afgeleid:
+     * uren × UURTARIEF_ONDERAANNEMER + materiaal. Zo verandert een wijziging
+     * van het ploegtarief alle prijzen in één keer, in plaats van 76 losse
+     * kostbedragen die stilletjes uit elkaar gaan lopen.
+     */
+    laborHours: numeric({ precision: 10, scale: 3 }),
+    materialCostEur: numeric({ precision: 14, scale: 2 }),
     /** Onze kost per eenheid (arbeid + materiaal). */
     costEur: numeric({ precision: 14, scale: 2 }),
     /** Marge als % van de verkoopprijs (30 = ruim, keuze Nick 06-08-2026). */
