@@ -23,6 +23,7 @@ import {
 import type { ProductOption } from "@/app/(app)/_options";
 import type { DocumentLineItem } from "@/lib/db/schema";
 import type { DocKind } from "@/lib/documents";
+import { quoteClauses } from "@/lib/quote-clauses";
 import { cn } from "@/lib/utils";
 
 type Option = { id: string; name: string };
@@ -305,7 +306,9 @@ export function DocumentWizard({
         <Card>
           <CardContent className="space-y-3">
             <Field label="Notities / voorwaarden" htmlFor="notes">
-              <Textarea id="notes" name="notes" />
+              {/* Offertes starten met de vaste voorbehouden (onvoorzien, meerwerk,
+                  stelposten) — aanpasbaar, maar nooit per ongeluk afwezig. */}
+              <Textarea id="notes" name="notes" defaultValue={kind === "estimate" ? quoteClauses("nl") : undefined} />
             </Field>
             {(kind === "invoice" || kind === "estimate") && (
               <label className="flex cursor-pointer items-center gap-2 text-sm text-foreground">

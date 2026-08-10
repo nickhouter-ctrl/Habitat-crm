@@ -27,6 +27,7 @@ import {
 import { poExVatAssumingSpanishVat } from "@/lib/purchase-orders";
 import { computeTotals } from "@/lib/documents";
 import { insertNumberedDocument } from "@/lib/doc-number";
+import { quoteClauses } from "@/lib/quote-clauses";
 import { renderBudgetPdf } from "@/lib/budget-pdf";
 import { brandedEmail, escapeHtml, sendEmail } from "@/lib/email";
 import { recordSentEmail } from "@/lib/sent-email";
@@ -633,6 +634,9 @@ export async function createEstimateFromBudget(projectId: string) {
     totalEur: round2(totals.total),
     items,
     phases: phases.length > 0 ? phases : null,
+    // Zelfde voorbehouden als onder de gecalculeerde offerte — onvoorzien en
+    // meerwerk moeten op élke offerte staan.
+    notes: quoteClauses("nl"),
   });
   revalidatePath(`/projects/${projectId}`);
   redirect(`/documents/${id}/edit`);

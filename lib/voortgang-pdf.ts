@@ -7,6 +7,7 @@ import { asc, eq } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { contacts, projectBudgetLines, projectPhases, projects } from "@/lib/db/schema";
 import { renderReportPdf } from "@/lib/report-pdf";
+import { formatEUR } from "@/lib/utils";
 
 export type VoortgangPdf = { buffer: Buffer; filename: string; projectName: string; contactEmail: string | null };
 
@@ -47,6 +48,11 @@ export async function renderVoortgangPdf(projectId: string): Promise<VoortgangPd
 
   const status = (pct: number) => (pct >= 100 ? "Gereed" : pct > 0 ? "In uitvoering" : "Nog niet gestart");
 
+  // Met een begroting tonen we het bedrag per fase (targetprijzen, ex btw —
+  // dezelfde bedragen als op de begroting-PDF) en de gereedgekomen waarde.
+  const metBedragen = totaalGewicht > 0;
+  const waardeGereed = fases.reduce((s, f, i) => s + (gewichten[i] * f.progressPct) / 100, 0);
+
   const buffer = await renderReportPdf({
     title: "Voortgang van uw project",
     subtitle: [project.name, contact?.name ? `voor ${contact.name}` : null].filter(Boolean).join(" — "),
@@ -54,18 +60,33 @@ export async function renderVoortgangPdf(projectId: string): Promise<VoortgangPd
     kpis: [
       { label: "Totale voortgang", value: `${totaalPct}%` },
       { label: "Fases gereed", value: `${gereed} van ${fases.length}` },
-      { label: "In uitvoering", value: String(bezig) },
+      metBedragen
+        ? { label: "Waarde gereed", value: formatEUR(waardeGereed), hint: `van ${formatEUR(totaalGewicht)} excl. btw` }
+        : { label: "In uitvoering", value: String(bezig) },
     ],
     tables: [
       {
         title: "Voortgang per bouwfase",
-        subtitle: "In volgorde van uitvoering. De balk toont hoe ver elke fase is.",
-        columns: [
-          { header: "Fase", flex: 2 },
-          { header: "Status", flex: 1 },
-          { header: "Voortgang", flex: 1.6, kind: "progress" },
-        ],
-        rows: fases.map((f) => [f.name, status(f.progressPct), String(f.progressPct)]),
+        subtitle: metBedragen
+          ? "In volgorde van uitvoering. Bedragen volgens de begroting, excl. btw."
+          : "In volgorde van uitvoering. De balk toont hoe ver elke fase is.",
+        columns: metBedragen
+          ? [
+              { header: "Fase", flex: 2 },
+              { header: "Begroot", align: "right", flex: 0.9 },
+              { header: "Status", flex: 1 },
+              { header: "Voortgang", flex: 1.6, kind: "progress" },
+            ]
+          : [
+              { header: "Fase", flex: 2 },
+              { header: "Status", flex: 1 },
+              { header: "Voortgang", flex: 1.6, kind: "progress" },
+            ],
+        rows: fases.map((f, i) =>
+          metBedragen
+            ? [f.name, gewichten[i] > 0 ? formatEUR(gewichten[i]) : "", status(f.progressPct), String(f.progressPct)]
+            : [f.name, status(f.progressPct), String(f.progressPct)],
+        ),
       },
     ],
   });

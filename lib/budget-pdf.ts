@@ -97,6 +97,20 @@ export async function renderBudgetPdf(projectId: string): Promise<BudgetPdf | nu
     });
   }
 
+  // Vaste slotpassage — zelfde strekking als de voorbehouden onder de offerte
+  // (lib/quote-clauses.ts): onvoorzien en meerwerk vallen buiten de begroting.
+  tables.push({
+    title: "Onvoorziene werkzaamheden & meerwerk",
+    subtitle: [
+      "Bij een verbouwing kunnen zich altijd onvoorziene kosten en meerwerk voordoen (verborgen gebreken, hardere ondergrond, gewijzigde keuzes). Werkzaamheden die niet in deze begroting zijn opgenomen vallen erbuiten en worden na overleg apart verrekend.",
+      "Meerwerk wordt uitsluitend uitgevoerd na schriftelijk akkoord van de opdrachtgever en wordt apart verrekend. Een opgenomen onvoorzien-post wordt uitsluitend verrekend voor zover daadwerkelijk gebruikt.",
+      "Stelposten zijn richtbedragen: kiest de opdrachtgever een duurdere uitvoering, dan wordt het verschil als meerprijs verrekend; een voordeliger keuze wordt als minderprijs in mindering gebracht.",
+      "Alle bedragen zijn exclusief btw.",
+    ].join("\n"),
+    columns: [],
+    rows: [],
+  });
+
   const subtitleBits = ["Begroting per fase", "alle bedragen excl. BTW"];
   let contactEmail: string | null = null;
   if (project.contactId) {
