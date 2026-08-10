@@ -19,6 +19,10 @@ export const HOLDED_DOC_TYPES = [
 ] as const;
 export type HoldedDocType = (typeof HOLDED_DOC_TYPES)[number];
 
+/**
+ * Een Holded-contact (klant, leverancier of lead). Gespiegeld in de eigen
+ * `contacts`-tabel via `holded_sync_map` — dit is de ruwe API-vorm.
+ */
 export interface HoldedContact {
   id: string;
   customId?: string;
@@ -31,7 +35,7 @@ export interface HoldedContact {
   phone?: string;
   type?: "client" | "supplier" | "debtor" | "creditor" | "lead" | string;
   isperson?: boolean | number;
-  /** ISO country code or Holded internal id. */
+  /** Bank details. */
   iban?: string;
   swift?: string;
   /** Billing/shipping addresses. */
@@ -53,6 +57,7 @@ export interface HoldedContact {
   updateHash?: string;
 }
 
+/** Een product uit Holded's catalogus. Prijzen zijn numbers, ex. btw tenzij anders vermeld. */
 export interface HoldedProduct {
   id: string;
   kind?: string; // "simple" | "variants" | ...
@@ -76,6 +81,7 @@ export interface HoldedProduct {
   updateHash?: string;
 }
 
+/** Adresblok zoals Holded het levert op contacten (facturatie- én verzendadres). */
 export interface HoldedAddress {
   address?: string;
   city?: string;
@@ -85,6 +91,7 @@ export interface HoldedAddress {
   countryCode?: string;
 }
 
+/** Eén regel op een Holded-document (het `products`-array van {@link HoldedDocument}). */
 export interface HoldedDocumentItem {
   name?: string;
   desc?: string;
@@ -97,6 +104,11 @@ export interface HoldedDocumentItem {
   productId?: string;
 }
 
+/**
+ * Een Holded-document (offerte, factuur, inkoopfactuur, …; zie
+ * {@link HoldedDocType}). Bedragen zijn numbers in documentvaluta; datums
+ * unix-seconden.
+ */
 export interface HoldedDocument {
   id: string;
   contact?: string; // Holded contact id

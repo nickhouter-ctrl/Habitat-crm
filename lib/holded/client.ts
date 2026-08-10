@@ -18,9 +18,16 @@ const BASE = (process.env.HOLDED_API_BASE ?? "https://api.holded.com/api").repla
   "",
 );
 
+/**
+ * Error thrown for any non-2xx Holded response. Carries the HTTP `status` and
+ * the parsed response `body` so callers can branch on specifics (e.g. 404 =
+ * document verwijderd in Holded) or log the raw payload.
+ */
 export class HoldedError extends Error {
   constructor(
+    /** HTTP status code of the failed response. */
     public status: number,
+    /** Parsed JSON body when possible, otherwise the raw response text. */
     public body: unknown,
     message: string,
   ) {
@@ -37,8 +44,14 @@ function apiKey(): string {
   return key;
 }
 
+/** Querystring-parameters; `undefined`/`null` entries worden weggelaten. */
 type Query = Record<string, string | number | boolean | undefined | null>;
 
+/**
+ * Voer één Holded-API-call uit en parse het antwoord als JSON (valt terug op
+ * de ruwe tekst als het geen JSON is). Gooit {@link HoldedError} bij elke
+ * non-2xx status. Nooit gecachet (`no-store`) en met een harde abort-timeout.
+ */
 async function request<T>(
   path: string,
   init: {
@@ -99,20 +112,29 @@ export interface HoldedWriteResult {
   [key: string]: unknown;
 }
 
+/**
+ * De Holded-client: dunne, getypte wrappers per resource (contacts, documents,
+ * products). Elke methode gooit {@link HoldedError} bij een API-fout; er is
+ * geen ingebouwde retry — dat beslist de aanroeper.
+ */
 export const holded = {
   /** Low-level escape hatch for endpoints not wrapped below. */
   request,
 
   contacts: {
+    /** List contacts; supports Holded query params like `page`. */
     list: (query?: Query) =>
       request<HoldedContact[]>("/invoicing/v1/contacts", { query }),
+    /** Fetch one contact by Holded id. */
     get: (id: string) =>
       request<HoldedContact>(`/invoicing/v1/contacts/${id}`),
+    /** Create a contact; the new Holded id comes back in the result. */
     create: (body: Partial<HoldedContact>) =>
       request<HoldedWriteResult>("/invoicing/v1/contacts", {
         method: "POST",
         body,
       }),
+    /** Update an existing contact (partial body — only sent fields change). */
     update: (id: string, body: Partial<HoldedContact>) =>
       request<HoldedWriteResult>(`/invoicing/v1/contacts/${id}`, {
         method: "PUT",
@@ -121,10 +143,13 @@ export const holded = {
   },
 
   documents: {
+    /** List documents of one type; supports query params like `page`. */
     list: (docType: HoldedDocType, query?: Query) =>
       request<HoldedDocument[]>(`/invoicing/v1/documents/${docType}`, { query }),
+    /** Fetch one document by type + Holded id. */
     get: (docType: HoldedDocType, id: string) =>
       request<HoldedDocument>(`/invoicing/v1/documents/${docType}/${id}`),
+    /** Create a document; the new Holded id comes back in the result. */
     create: (docType: HoldedDocType, body: Record<string, unknown>) =>
       request<HoldedWriteResult>(`/invoicing/v1/documents/${docType}`, {
         method: "POST",
@@ -146,8 +171,10 @@ export const holded = {
   },
 
   products: {
+    /** List products; supports query params like `page`. */
     list: (query?: Query) =>
       request<HoldedProduct[]>("/invoicing/v1/products", { query }),
+    /** Fetch one product by Holded id. */
     get: (id: string) =>
       request<HoldedProduct>(`/invoicing/v1/products/${id}`),
     /** Create a new product. We only ever *create* — never update Holded products. */
@@ -156,7 +183,16 @@ export const holded = {
   },
 };
 
-/** Fetch all pages of a paginated list endpoint (Holded uses `?page=N`). */
+/**
+ * Fetch all pages of a paginated list endpoint (Holded uses `?page=N`).
+ *
+ * Stopt bij een lege pagina, bij minder dan 100 resultaten (Holded's
+ * paginagrootte — heuristiek voor "laatste pagina"), of na `maxPages` als
+ * noodrem tegen eindeloos doorbladeren.
+ *
+ * @param fetchPage - Haalt één pagina op, bijv. `(p) => holded.contacts.list({ page: p })`.
+ * @param maxPages - Harde bovengrens op het aantal opgehaalde pagina's.
+ */
 export async function holdedListAll<T>(
   fetchPage: (page: number) => Promise<T[]>,
   maxPages = 50,
@@ -171,4 +207,8 @@ export async function holdedListAll<T>(
   return all;
 }
 
+/**
+ * Het type van {@link holded}, voor wie de client wil injecteren of mocken.
+ * (Momenteel nergens geïmporteerd; bewust behouden als publiek API-oppervlak.)
+ */
 export type HoldedClient = typeof holded;
