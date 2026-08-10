@@ -73,6 +73,7 @@ import {
   updateTimeEntry,
   linkPurchaseOrderToProject,
   sendBudgetToClient,
+  setPhaseProgress,
   setProjectStatus,
   unlinkPurchaseOrder,
   updateProject,
@@ -1182,6 +1183,92 @@ export default async function ProjectDetailPage({
           )}
         </CardContent>
       </Card>
+
+      {/* ─────────────── Voortgang per bouwfase ─────────────── */}
+      {(() => {
+        // Fases uit projectPhases; oudere projecten met alleen budgetregels
+        // krijgen de fases daaruit (voortgang 0 — eerste klik maakt de fase aan).
+        const bekend = new Set(phaseRows.map((f) => f.name));
+        const uitBudget = [...new Set(budgetRows.map((b) => (b.phase ?? "").trim()).filter(Boolean))]
+          .filter((naam) => !bekend.has(naam))
+          .map((naam) => ({ id: null as string | null, name: naam, progressPct: 0 }));
+        const fases = [
+          ...phaseRows.map((f) => ({ id: f.id as string | null, name: f.name, progressPct: f.progressPct })),
+          ...uitBudget,
+        ];
+        if (fases.length === 0) return null;
+        const gewichtVan = (naam: string) =>
+          budgetRows.filter((b) => (b.phase ?? "").trim() === naam).reduce((s, b) => s + Number(b.amountEur ?? 0), 0);
+        const gewichten = fases.map((f) => gewichtVan(f.name));
+        const totGewicht = gewichten.reduce((s, g) => s + g, 0);
+        const totaalPct = Math.round(
+          totGewicht > 0
+            ? fases.reduce((s, f, i) => s + f.progressPct * gewichten[i], 0) / totGewicht
+            : fases.reduce((s, f) => s + f.progressPct, 0) / fases.length,
+        );
+        const gereed = fases.filter((f) => f.progressPct >= 100).length;
+        return (
+          <Card className="mb-5">
+            <CardHeader>
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <CardTitle>Voortgang</CardTitle>
+                  <span className="text-xs text-muted">
+                    {totaalPct}% van het werk gereed{totGewicht > 0 ? " (gewogen naar begrote waarde)" : ""} · {gereed} van{" "}
+                    {fases.length} fases afgerond
+                  </span>
+                </div>
+                <LinkButton href={`/projects/${id}/voortgang/pdf`} target="_blank" variant="secondary">
+                  <Printer className="size-4" /> Voortgang-PDF voor de klant
+                </LinkButton>
+              </div>
+              {/* Totaalbalk */}
+              <div className="mt-2 h-2 w-full overflow-hidden rounded-full bg-background">
+                <div className="h-2 rounded-full bg-success transition-all" style={{ width: `${totaalPct}%` }} />
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-2.5">
+              {fases.map((f) => (
+                <form
+                  key={f.name}
+                  action={setPhaseProgress.bind(null, id, f.name, f.progressPct)}
+                  className="grid items-center gap-2 sm:grid-cols-[1.4fr_2fr_auto]"
+                >
+                  <span className={`text-sm ${f.progressPct >= 100 ? "text-muted line-through decoration-success/60" : "font-medium"}`}>
+                    {f.progressPct >= 100 && <Check className="mr-1 inline size-3.5 text-success" />}
+                    {f.name}
+                  </span>
+                  <div className="flex items-center gap-2">
+                    <div className="h-2 flex-1 overflow-hidden rounded-full bg-background">
+                      <div className="h-2 rounded-full bg-success transition-all" style={{ width: `${f.progressPct}%` }} />
+                    </div>
+                    <span className="w-10 text-right text-xs tabular-nums text-muted">{f.progressPct}%</span>
+                  </div>
+                  <div className="flex items-center gap-1">
+                    {[0, 25, 50, 75].map((p) => (
+                      <button
+                        key={p}
+                        formAction={setPhaseProgress.bind(null, id, f.name, p)}
+                        className={`rounded border px-1.5 py-0.5 text-[11px] tabular-nums hover:bg-background ${f.progressPct === p ? "border-success font-semibold" : "text-muted"}`}
+                        title={`Zet op ${p}%`}
+                      >
+                        {p}
+                      </button>
+                    ))}
+                    <button
+                      formAction={setPhaseProgress.bind(null, id, f.name, 100)}
+                      className={`rounded border px-1.5 py-0.5 text-[11px] hover:bg-background ${f.progressPct >= 100 ? "border-success font-semibold text-success" : "text-muted"}`}
+                      title="Fase afvinken (100%)"
+                    >
+                      ✓ klaar
+                    </button>
+                  </div>
+                </form>
+              ))}
+            </CardContent>
+          </Card>
+        );
+      })()}
 
       {/* ─────────────── Begroting (eigen scherm) ─────────────── */}
       <Card className="mb-5">

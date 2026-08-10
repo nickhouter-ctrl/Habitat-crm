@@ -1383,6 +1383,8 @@ export const projectPhases = pgTable(
     description: text(),
     /** Indicatieve duur/planning, vrij veld (bv. "Week 1–3 · 2 weken"). */
     plannedWeeks: text(),
+    /** Voortgang 0–100% — de groene balk op het project en in de klant-PDF. */
+    progressPct: integer().notNull().default(0),
     sortOrder: integer().notNull().default(0),
     ...timestamps,
   },

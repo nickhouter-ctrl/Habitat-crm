@@ -544,6 +544,27 @@ export async function deleteProjectPhase(projectId: string, phaseId: string) {
   revalidatePath(`/projects/${projectId}`);
 }
 
+/**
+ * Voortgang van een bouwfase (0–100%) — de groene balk op het project en in de
+ * klant-voortgangs-PDF. Bestaat de fase nog niet als projectfase (ouder project
+ * met alleen budgetregels), dan wordt hij hier alsnog aangemaakt.
+ */
+export async function setPhaseProgress(projectId: string, naam: string, pct: number) {
+  await requireUser();
+  const p = Math.max(0, Math.min(100, Math.round(Number(pct) || 0)));
+  const bestaand = await db.query.projectPhases.findFirst({
+    where: and(eq(projectPhases.projectId, projectId), eq(projectPhases.name, naam)),
+    columns: { id: true },
+  });
+  if (bestaand) {
+    await db.update(projectPhases).set({ progressPct: p, updatedAt: new Date() }).where(eq(projectPhases.id, bestaand.id));
+  } else {
+    const count = await db.$count(projectPhases, eq(projectPhases.projectId, projectId));
+    await db.insert(projectPhases).values({ projectId, name: naam, progressPct: p, sortOrder: count });
+  }
+  revalidatePath(`/projects/${projectId}`);
+}
+
 /* ------------------------------------------ offerte genereren uit de begroting */
 
 /**

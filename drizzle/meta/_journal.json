@@ -309,6 +309,13 @@
       "when": 1786089250136,
       "tag": "0043_parched_thaddeus_ross",
       "breakpoints": true
+    },
+    {
+      "idx": 44,
+      "version": "7",
+      "when": 1786347703057,
+      "tag": "0044_clammy_squadron_supreme",
+      "breakpoints": true
     }
   ]
 }

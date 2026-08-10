@@ -1,0 +1,1 @@
+ALTER TABLE "project_phases" ADD COLUMN "progress_pct" integer DEFAULT 0 NOT NULL;

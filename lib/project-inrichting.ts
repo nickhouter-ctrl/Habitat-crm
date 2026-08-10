@@ -7,6 +7,7 @@ import {
   contacts,
   documents,
   projectBudgetLines,
+  projectPhases,
   projects,
   type DocumentLineItem,
   type DocumentPhase,
@@ -93,6 +94,21 @@ export async function richtProjectInNaAkkoord(estimateId: string, userId: string
         sortOrder: i,
       });
       budgetregels++;
+    }
+  }
+
+  // Fases voor de voortgang: dezelfde hoofdstukken als de budgetregels, elk
+  // met een groene balk op het project (en in de klant-voortgangs-PDF).
+  // Alleen als het project nog geen fases heeft — nooit dubbel.
+  const heeftFases = await db.query.projectPhases.findFirst({
+    where: eq(projectPhases.projectId, projectId),
+    columns: { id: true },
+  });
+  if (!heeftFases) {
+    const hoofdstukken = phases.map((f) => f.label ?? f.key);
+    for (const [i, hoofdstuk] of hoofdstukken.entries()) {
+      if (!items.some((it) => it.phase === hoofdstuk || it.phase === phases[i]?.key)) continue;
+      await db.insert(projectPhases).values({ projectId, name: hoofdstuk, sortOrder: i });
     }
   }
 

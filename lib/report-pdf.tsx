@@ -41,7 +41,13 @@ Font.register({
 const LOGO_CREAM = path.join(process.cwd(), "public", "brand", "habitat-one-logo-cream.png");
 
 export type ReportKpi = { label: string; value: string; hint?: string };
-export type ReportColumn = { header: string; align?: "left" | "right"; flex?: number };
+export type ReportColumn = {
+  header: string;
+  align?: "left" | "right";
+  flex?: number;
+  /** "progress": celwaarde is "0".."100" en rendert als groene voortgangsbalk. */
+  kind?: "progress";
+};
 export type ReportTable = {
   title: string;
   subtitle?: string;
@@ -135,6 +141,12 @@ const s = StyleSheet.create({
   tCellEmph: { fontSize: 8.5, color: COMPANY.terracotta, fontWeight: 600 },
   empty: { fontSize: 8.5, color: COMPANY.muted, paddingVertical: 8, paddingHorizontal: 4 },
 
+  /* Voortgangsbalk (kolom kind: "progress") */
+  barWrap: { flexDirection: "row", alignItems: "center" },
+  barTrack: { flex: 1, height: 5, borderRadius: 2.5, backgroundColor: "#ece5da", overflow: "hidden" },
+  barFill: { height: 5, borderRadius: 2.5, backgroundColor: "#4f7a53" },
+  barPct: { fontSize: 8, color: COMPANY.brown, fontWeight: 600, width: 30, textAlign: "right" },
+
   /* Footer */
   footer: {
     position: "absolute",
@@ -176,6 +188,17 @@ function Table({ table }: { table: ReportTable }) {
           return (
             <View key={ri} style={[s.tRow, ri % 2 === 1 ? s.tRowAlt : {}]}>
               {table.columns.map((c, ci) => {
+                if (c.kind === "progress") {
+                  const pct = Math.max(0, Math.min(100, Number(row[ci]) || 0));
+                  return (
+                    <View key={ci} style={[s.barWrap, { flex: c.flex ?? 1 }]}>
+                      <View style={s.barTrack}>
+                        <View style={[s.barFill, { width: `${pct}%` }]} />
+                      </View>
+                      <Text style={s.barPct}>{pct}%</Text>
+                    </View>
+                  );
+                }
                 const right = (c.align ?? "left") === "right";
                 const base = emph ? s.tCellEmph : right ? s.tCellNum : s.tCell;
                 return (
