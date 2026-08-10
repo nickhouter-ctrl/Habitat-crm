@@ -278,6 +278,32 @@ export default async function DocumentDetailPage({
   const docMarginPct = costedRevenue > 0 ? Math.round((docMargin / costedRevenue) * 100) : null;
   const marginComplete = items.length > 0 && costedLines === items.length;
 
+  // Begroting (intern): de calculatie achter een gecalculeerde offerte —
+  // verkoop, kost en marge per bouwfase, met de regels eronder uitklapbaar.
+  // Bij akkoord worden precies deze fases de budgetregels van het project.
+  const begrotingPerFase = phaseList.map((f) => {
+    const regels = items
+      .filter((it) => (it.phase ?? "").trim() === f.key)
+      .map((it) => ({
+        name: it.name,
+        units: Number(it.units) || 0,
+        unit: it.unit,
+        verkoop: lineNet(it),
+        kost: lineCostEur(it, productCostOf),
+      }));
+    const verkoop = regels.reduce((s, r) => s + r.verkoop, 0);
+    const kost = regels.reduce((s, r) => s + (r.kost ?? 0), 0);
+    const kostCompleet = regels.every((r) => r.kost != null);
+    return { ...f, regels, verkoop, kost, kostCompleet };
+  });
+  const begroting = begrotingPerFase.length
+    ? {
+        verkoop: begrotingPerFase.reduce((s, f) => s + f.verkoop, 0),
+        kost: begrotingPerFase.reduce((s, f) => s + f.kost, 0),
+        kostCompleet: begrotingPerFase.every((f) => f.kostCompleet),
+      }
+    : null;
+
   const partyName = doc.contact?.name ?? doc.company?.name ?? null;
   const kindLabel = documentKindMeta[doc.kind];
   // Facturatie-check: welke verplichte klantgegevens ontbreken (blokkeert versturen).
@@ -1019,6 +1045,84 @@ export default async function DocumentDetailPage({
               </>
             )}
           </Card>
+
+          {begroting && (
+            <Card className="mt-4">
+              <CardHeader>
+                <CardTitle>Begroting (intern)</CardTitle>
+                <span className="text-xs text-muted">
+                  verkoop · kost · marge per bouwfase — staat niet op de klant-PDF
+                </span>
+              </CardHeader>
+              <CardContent>
+                <div className="hidden grid-cols-[1.8fr_1fr_1fr_1.2fr] gap-2 px-2 text-[11px] font-medium uppercase tracking-wide text-muted sm:grid">
+                  <span>Fase</span>
+                  <span className="text-right">Verkoop</span>
+                  <span className="text-right">Kost</span>
+                  <span className="text-right">Marge</span>
+                </div>
+                {begrotingPerFase.map((f) => {
+                  const marge = f.verkoop - f.kost;
+                  const pct = f.verkoop > 0 ? (marge / f.verkoop) * 100 : null;
+                  return (
+                    <details key={f.key} className="group border-b last:border-b-0">
+                      <summary className="grid cursor-pointer list-none items-center gap-2 rounded px-2 py-2 text-sm hover:bg-background/60 sm:grid-cols-[1.8fr_1fr_1fr_1.2fr]">
+                        <span className="font-medium">
+                          <span className="mr-1.5 inline-block text-xs text-muted transition-transform group-open:rotate-90">▸</span>
+                          {f.label}
+                          <span className="ml-1.5 text-xs font-normal text-muted">
+                            {f.lines} {f.lines === 1 ? "regel" : "regels"}
+                          </span>
+                        </span>
+                        <span className="text-right tabular-nums">{formatEUR(f.verkoop)}</span>
+                        <span className="text-right tabular-nums text-muted">{formatEUR(f.kost)}</span>
+                        <span className={`text-right tabular-nums font-medium ${marge < 0 ? "text-danger" : ""}`}>
+                          {formatEUR(marge)}
+                          {pct != null ? ` · ${pct.toFixed(0)}%` : ""}
+                          {!f.kostCompleet && (
+                            <span className="ml-1 font-normal text-muted" title="Niet elke regel heeft een kostprijs — de echte marge ligt lager">
+                              *
+                            </span>
+                          )}
+                        </span>
+                      </summary>
+                      <div className="space-y-1 px-2 pb-2.5 pl-7">
+                        {f.regels.map((r, i) => (
+                          <div key={i} className="grid items-baseline gap-2 text-xs text-muted sm:grid-cols-[1.8fr_1fr_1fr_1.2fr]">
+                            <span>
+                              {r.name}
+                              <span className="text-muted/70"> — {r.units}{r.unit ? ` ${r.unit}` : "×"}</span>
+                            </span>
+                            <span className="text-right tabular-nums">{formatEUR(r.verkoop)}</span>
+                            <span className="text-right tabular-nums">{r.kost != null ? formatEUR(r.kost) : "—"}</span>
+                            <span className="text-right tabular-nums">
+                              {r.kost != null ? formatEUR(r.verkoop - r.kost) : "kost onbekend"}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    </details>
+                  );
+                })}
+                <div className="grid items-center gap-2 px-2 pt-2.5 text-sm font-semibold sm:grid-cols-[1.8fr_1fr_1fr_1.2fr]">
+                  <span>Totaal (ex btw)</span>
+                  <span className="text-right tabular-nums">{formatEUR(begroting.verkoop)}</span>
+                  <span className="text-right tabular-nums">{formatEUR(begroting.kost)}</span>
+                  <span className={`text-right tabular-nums ${begroting.verkoop - begroting.kost < 0 ? "text-danger" : ""}`}>
+                    {formatEUR(begroting.verkoop - begroting.kost)}
+                    {begroting.verkoop > 0
+                      ? ` · ${(((begroting.verkoop - begroting.kost) / begroting.verkoop) * 100).toFixed(1).replace(".", ",")}%`
+                      : ""}
+                  </span>
+                </div>
+                <p className="mt-2 text-xs text-muted">
+                  {begroting.kostCompleet ? "" : "* Regels zonder kostprijs tellen als € 0 kost — de echte marge ligt daar lager. "}
+                  Bij akkoord worden deze fases automatisch de budgetregels van het project; de nacalculatie op het
+                  project vergelijkt ze daarna met de werkelijke kosten.
+                </p>
+              </CardContent>
+            </Card>
+          )}
 
           {doc.notes && (
             <Card className="mt-4">
