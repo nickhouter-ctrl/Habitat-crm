@@ -6,14 +6,11 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
-/** Format a number as EUR currency (Habitat One operates in euros). */
-export function formatEUR(amount: number | string | null | undefined) {
-  const n = typeof amount === "string" ? Number(amount) : amount ?? 0;
-  return new Intl.NumberFormat("nl-NL", {
-    style: "currency",
-    currency: "EUR",
-  }).format(Number.isFinite(n) ? (n as number) : 0);
-}
+/**
+ * Geldlogica (parsen én formatteren) woont in `lib/parse-money.ts`; dit
+ * re-export houdt alle bestaande `@/lib/utils`-imports werkend.
+ */
+export { formatEUR } from "./parse-money";
 
 /** Format a date (Date | ISO string | unix seconds) as a short readable string. */
 export function formatDate(value: Date | string | number | null | undefined) {

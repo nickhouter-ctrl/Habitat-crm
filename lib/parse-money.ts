@@ -57,12 +57,38 @@ export function moneyOrZero(raw: string | null | undefined): string {
 }
 
 /**
+ * Interne coercie voor machinewaarden: een numeric-kolomwaarde uit Postgres
+ * (string als "1234.56") of een al-geparste number naar een getal. Bewust
+ * gewone `Number()` en géén {@link parseMoney} — dit is geen gebruikersinvoer,
+ * dus komma's/duizendtallen horen hier niet voor te komen en mogen niet
+ * stilletjes geherinterpreteerd worden.
+ */
+function naarGetal(value: string | number): number {
+  return typeof value === "number" ? value : Number(value);
+}
+
+/**
  * Bedrag voor een invoerveld: geen sleep van nullen ("28.000000" → "28"), maar
  * wel de decimalen die er echt toe doen ("28.000747" → "28,000747").
  */
 export function moneyForInput(raw: string | number | null | undefined): string {
   if (raw == null || raw === "") return "";
-  const n = typeof raw === "number" ? raw : Number(raw);
+  const n = naarGetal(raw);
   if (!Number.isFinite(n)) return String(raw);
   return String(Math.round(n * 1e6) / 1e6).replace(".", ",");
+}
+
+/**
+ * Format een bedrag (number, of numeric-kolomstring uit Postgres) als euro's
+ * in nl-NL-notatie, bijv. `€ 1.234,56`. Onbruikbare invoer (null, lege string,
+ * niet-numeriek) rendert als € 0,00 — weergave mag nooit crashen op een lege
+ * kolom. Woont hier zodat álle geldlogica (parsen én formatteren) één module
+ * heeft; `lib/utils.ts` re-exporteert deze functie voor bestaande imports.
+ */
+export function formatEUR(amount: number | string | null | undefined): string {
+  const n = amount == null ? 0 : naarGetal(amount);
+  return new Intl.NumberFormat("nl-NL", {
+    style: "currency",
+    currency: "EUR",
+  }).format(Number.isFinite(n) ? n : 0);
 }
