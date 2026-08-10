@@ -26,7 +26,9 @@ export function InvoiceFromMailButtons({
       setResult(null);
       try {
         const r = await createPurchaseInvoiceFromMail({ emailId, attachmentId, asProforma });
-        if (r.holdedError) {
+        if ("error" in r) {
+          setResult({ ok: false, text: r.error });
+        } else if (r.holdedError) {
           setResult({ ok: false, text: `Aangemaakt — Holded-push mislukte: ${r.holdedError}` });
         } else {
           setResult({ ok: true, text: `${asProforma ? "Proforma" : "Inkoopfactuur"} aangemaakt ✓` });

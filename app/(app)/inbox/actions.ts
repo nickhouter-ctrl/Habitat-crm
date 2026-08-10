@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { eq, sql } from "drizzle-orm";
+import { eq, ilike, sql } from "drizzle-orm";
 import { requireWriteUser } from "@/lib/auth/guards";
 
 import { auth } from "@/auth";
@@ -126,6 +126,17 @@ function supplierNameFromEmail(email: string | null | undefined): string | null 
   return main.charAt(0).toUpperCase() + main.slice(1);
 }
 
+export type InkoopfactuurUitMail =
+  | { purchaseOrderId: string; holdedId: string | null; total: number; holdedError?: string }
+  | { error: string };
+
+/**
+ * Publieke ingang. Vangt élke fout af en geeft hem als tekst terug in plaats
+ * van te gooien: Next.js vervangt een gegooide fout in productie door
+ * "An error occurred in the Server Components render…", en daar kan niemand
+ * iets mee — niet de gebruiker en niet wij. Nu staat de echte oorzaak op het
+ * scherm én, met bijlage-context, in de serverlog.
+ */
 export async function createPurchaseInvoiceFromMail(args: {
   emailId: string;
   attachmentId: string;
@@ -133,9 +144,31 @@ export async function createPurchaseInvoiceFromMail(args: {
   asProforma?: boolean;
   /** Override: supplier / reference / amount als de extractie iets verkeerd haalt */
   override?: { supplier?: string; reference?: string; total?: number };
-}): Promise<{ purchaseOrderId: string; holdedId: string | null; total: number; holdedError?: string }> {
+}): Promise<InkoopfactuurUitMail> {
   const user = await requireUser();
+  try {
+    return await maakInkoopfactuurUitMail(args, user.id);
+  } catch (e) {
+    const msg = e instanceof Error ? `${e.name}: ${e.message}` : String(e);
+    console.error("[createPurchaseInvoiceFromMail] mislukt", {
+      emailId: args.emailId,
+      attachmentId: args.attachmentId,
+      asProforma: !!args.asProforma,
+      error: e,
+    });
+    return { error: msg };
+  }
+}
 
+async function maakInkoopfactuurUitMail(
+  args: {
+    emailId: string;
+    attachmentId: string;
+    asProforma?: boolean;
+    override?: { supplier?: string; reference?: string; total?: number };
+  },
+  userId: string,
+): Promise<InkoopfactuurUitMail> {
   const mail = await db.query.emailInbox.findFirst({ where: eq(emailInbox.id, args.emailId) });
   if (!mail) throw new Error("Mail niet gevonden");
 
@@ -194,12 +227,28 @@ export async function createPurchaseInvoiceFromMail(args: {
       ? `${supplier} ${aiInvoiceNumber}`.replace(/\s+/g, " ").trim()
       : (refMatch?.[1] ?? att.filename.replace(/\.[a-z]+$/i, "")));
 
-  // Dedup: bestaat er al een inkooporder met dit factuurnummer? Dezelfde factuur
+  // Dedup: bestaat er al een inkooporder voor deze factuur? Dezelfde factuur
   // komt soms via beide mailboxen (hi@ + purchase@) binnen — dan koppelen we de
   // mail aan de bestaande inkooporder i.p.v. een dubbele aan te maken.
-  const existingPo = await db.query.purchaseOrders.findFirst({
-    where: eq(purchaseOrders.reference, reference),
-  });
+  //
+  // De referentie alleen is daarvoor niet genoeg: die begint met de
+  // leveranciersnaam, en die komt bij een doorgestuurde factuur uit de AI —
+  // die noemde dezelfde Montó-factuur de ene keer "DEMARSAN PINTURAS SLU" en
+  // de andere keer "Montó Tiendas". Zo ontstonden er twee inkooporders voor
+  // één factuur. Daarom zoeken we óók op het factuurnummer zelf, dat wél
+  // stabiel is.
+  const factuurnummer = (aiInvoiceNumber ?? refMatch?.[1] ?? "").trim();
+  const existingPo =
+    (await db.query.purchaseOrders.findFirst({
+      where: eq(purchaseOrders.reference, reference),
+    })) ??
+    // Alleen bij een nummer dat onderscheidend genoeg is — een "1" of "A2" zou
+    // willekeurige andere facturen aan elkaar knopen.
+    (factuurnummer.length >= 5
+      ? await db.query.purchaseOrders.findFirst({
+          where: ilike(purchaseOrders.reference, `%${factuurnummer.replace(/[%_]/g, "\\$&")}%`),
+        })
+      : undefined);
   if (existingPo) {
     await db
       .update(emailInbox)
@@ -209,7 +258,7 @@ export async function createPurchaseInvoiceFromMail(args: {
       type: "note",
       subject: `Mail gekoppeld aan bestaande inkoopfactuur: ${existingPo.supplier} ${reference}`,
       body: "Dubbele inkoopfactuur voorkomen — deze mail wijst naar de al bestaande inkooporder.",
-      authorId: user.id,
+      authorId: userId,
     });
     revalidatePath("/");
     revalidatePath("/inbox");
@@ -274,7 +323,7 @@ export async function createPurchaseInvoiceFromMail(args: {
     type: "note",
     subject: `${isProforma ? "Proforma" : "Inkoopfactuur"} toegevoegd: ${supplier} ${reference}`,
     body: `Bedrag: €${total.toFixed(2)}\nBron: ${att.filename}\nMail: ${mail.subject ?? ""}`,
-    authorId: user.id,
+    authorId: userId,
   });
 
   // 5. Best-effort push naar Holded — alleen echte facturen, geen proforma's.
