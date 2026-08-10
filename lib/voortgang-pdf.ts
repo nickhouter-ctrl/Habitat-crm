@@ -5,11 +5,13 @@ import "server-only";
 import { asc, eq } from "drizzle-orm";
 
 import { db } from "@/lib/db";
-import { contacts, projectBudgetLines, projectPhases, projects } from "@/lib/db/schema";
+import { projectBudgetLines, projectPhases, projects } from "@/lib/db/schema";
+import { getPdfContact, pdfDateStamp, phaseKey, sumAmountEur, type ClientPdf } from "@/lib/pdf-shared";
 import { renderReportPdf } from "@/lib/report-pdf";
 import { formatEUR } from "@/lib/utils";
 
-export type VoortgangPdf = { buffer: Buffer; filename: string; projectName: string; contactEmail: string | null };
+/** Resultaat van {@link renderVoortgangPdf} — zie {@link ClientPdf}. */
+export type VoortgangPdf = ClientPdf;
 
 export async function renderVoortgangPdf(projectId: string): Promise<VoortgangPdf | null> {
   const project = await db.query.projects.findFirst({ where: eq(projects.id, projectId) });
@@ -18,12 +20,12 @@ export async function renderVoortgangPdf(projectId: string): Promise<VoortgangPd
   const [faseRows, budgetRows, contact] = await Promise.all([
     db.select().from(projectPhases).where(eq(projectPhases.projectId, projectId)).orderBy(asc(projectPhases.sortOrder)),
     db.select().from(projectBudgetLines).where(eq(projectBudgetLines.projectId, projectId)),
-    project.contactId ? db.query.contacts.findFirst({ where: eq(contacts.id, project.contactId) }) : null,
+    getPdfContact(project.contactId),
   ]);
   // Oudere projecten hebben soms alleen budgetregels: die fases tellen mee op
   // 0% — zelfde terugval als de voortgangskaart op het projectscherm.
   const bekend = new Set(faseRows.map((f) => f.name));
-  const uitBudget = [...new Set(budgetRows.map((b) => (b.phase ?? "").trim()).filter(Boolean))]
+  const uitBudget = [...new Set(budgetRows.map((b) => phaseKey(b.phase)).filter(Boolean))]
     .filter((naam) => !bekend.has(naam))
     .map((naam) => ({ name: naam, progressPct: 0 }));
   const fases = [...faseRows.map((f) => ({ name: f.name, progressPct: f.progressPct })), ...uitBudget];
@@ -32,10 +34,7 @@ export async function renderVoortgangPdf(projectId: string): Promise<VoortgangPd
   // Totale voortgang gewogen naar de begrote waarde per fase (een fase van
   // € 40.000 telt zwaarder dan een van € 2.000); zonder begroting telt elke
   // fase even zwaar.
-  const gewichtVan = (naam: string) =>
-    budgetRows
-      .filter((b) => (b.phase ?? "").trim() === naam)
-      .reduce((s, b) => s + Number(b.amountEur ?? 0), 0);
+  const gewichtVan = (naam: string) => sumAmountEur(budgetRows.filter((b) => phaseKey(b.phase) === naam));
   const gewichten = fases.map((f) => gewichtVan(f.name));
   const totaalGewicht = gewichten.reduce((s, g) => s + g, 0);
   const totaal =
@@ -91,10 +90,9 @@ export async function renderVoortgangPdf(projectId: string): Promise<VoortgangPd
     ],
   });
 
-  const datum = new Date().toISOString().slice(0, 10);
   return {
     buffer,
-    filename: `voortgang-${(project.name ?? "project").toLowerCase().replace(/[^a-z0-9]+/g, "-")}-${datum}.pdf`,
+    filename: `voortgang-${(project.name ?? "project").toLowerCase().replace(/[^a-z0-9]+/g, "-")}-${pdfDateStamp()}.pdf`,
     projectName: project.name,
     contactEmail: contact?.email ?? null,
   };
