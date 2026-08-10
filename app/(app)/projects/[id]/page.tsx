@@ -1228,7 +1228,7 @@ export default async function ProjectDetailPage({
               </div>
             </CardHeader>
             <CardContent className="space-y-2.5">
-              {fases.map((f) => (
+              {fases.map((f, i) => (
                 <form
                   key={f.name}
                   action={setPhaseProgress.bind(null, id, f.name, f.progressPct)}
@@ -1237,6 +1237,11 @@ export default async function ProjectDetailPage({
                   <span className={`text-sm ${f.progressPct >= 100 ? "text-muted line-through decoration-success/60" : "font-medium"}`}>
                     {f.progressPct >= 100 && <Check className="mr-1 inline size-3.5 text-success" />}
                     {f.name}
+                    {gewichten[i] > 0 && (
+                      <span className="ml-2 text-xs font-normal tabular-nums text-muted">
+                        {formatEUR(gewichten[i])}
+                      </span>
+                    )}
                   </span>
                   <div className="flex items-center gap-2">
                     <div className="h-2 flex-1 overflow-hidden rounded-full bg-background">
