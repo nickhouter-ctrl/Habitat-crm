@@ -347,6 +347,17 @@ export async function pullDocumentsFromHolded(
           updated++;
           continue;
         }
+        // Ander factuurnummer op de gekoppelde id = verkeerde koppeling (bv.
+        // na dupliceren/hernummeren in Holded) — niet overschrijven met de
+        // inhoud en betaalstand van andermans factuur.
+        const lokaalNummer = existing.docNumber?.trim();
+        const holdedNummer = rd.docNumber?.trim();
+        if (lokaalNummer && holdedNummer && lokaalNummer !== holdedNummer) {
+          console.warn(
+            `Holded-pull overgeslagen: lokaal document ${lokaalNummer} is gekoppeld aan Holded-document ${holdedNummer} (${rd.id}) — koppeling controleren.`,
+          );
+          continue;
+        }
         const nextStatus =
           data.status === "paid" || data.status === "partially_paid"
             ? data.status
@@ -1043,7 +1054,7 @@ export async function refreshInvoicePaymentFromHolded(
 ): Promise<LocalDocStatus | null> {
   const local = await db.query.documents.findFirst({
     where: and(eq(documents.holdedId, holdedId), eq(documents.kind, "invoice")),
-    columns: { id: true, status: true },
+    columns: { id: true, status: true, docNumber: true },
   });
   if (!local) return null;
   if (local.status === "void" || local.status === "draft") return null;
@@ -1055,6 +1066,19 @@ export async function refreshInvoicePaymentFromHolded(
     return null;
   }
   if (!d) return null;
+
+  // Vangnet tegen verkeerde koppelingen: wijst holdedId naar een document met
+  // een ÁNDER factuurnummer (bv. na hernummeren of dupliceren in Holded), dan
+  // is diens betaalstand niet de onze — overnemen zette hier een onbetaalde
+  // factuur elke nacht opnieuw op betaald.
+  const lokaalNummer = local.docNumber?.trim();
+  const holdedNummer = d.docNumber?.trim();
+  if (lokaalNummer && holdedNummer && lokaalNummer !== holdedNummer) {
+    console.warn(
+      `Holded-betaalsync overgeslagen: lokale factuur ${lokaalNummer} is gekoppeld aan Holded-document ${holdedNummer} (${holdedId}) — koppeling controleren.`,
+    );
+    return null;
+  }
 
   const paidEur = String(d.paymentsTotal ?? 0);
   const payStatus = holdedDocStatus(d); // "paid" | "partially_paid" | "sent"
