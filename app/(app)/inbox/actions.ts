@@ -193,6 +193,12 @@ async function maakInkoopfactuurUitMail(
   let aiSupplier: string | null = null;
   let aiInvoiceNumber: string | null = null;
   let aiCurrency: string | null = null;
+  // Subtotaal en btw uit de factuur: zonder deze twee weet `poExVat()` niet wat
+  // de kost ex. btw is en toont het overzicht "btw?" — met het volle bedrag
+  // incl. btw als kostprijs. De AI leest ze wél uit; ze werden alleen niet
+  // opgeslagen.
+  let aiSubtotal: number | null = null;
+  let aiVatAmount: number | null = null;
   if (!args.override?.supplier && (total <= 0 || !ruleSupplier)) {
     const ai = await extractInvoiceFieldsWithAI({
       storagePath: att.storagePath,
@@ -204,7 +210,19 @@ async function maakInkoopfactuurUitMail(
       aiSupplier = ai.supplier;
       aiInvoiceNumber = ai.invoiceNumber;
       aiCurrency = ai.currency;
+      aiSubtotal = ai.subtotal;
+      aiVatAmount = ai.vatAmount;
+      // Ontbreekt één van de twee, dan leiden we hem af uit het totaal — maar
+      // alleen als de uitkomst klopt met de factuur.
+      if (aiSubtotal == null && aiVatAmount != null && total > 0) aiSubtotal = Math.round((total - aiVatAmount) * 100) / 100;
+      if (aiVatAmount == null && aiSubtotal != null && total > 0) aiVatAmount = Math.round((total - aiSubtotal) * 100) / 100;
     }
+  }
+  // Nooit een subtotaal wegschrijven dat niet bij het totaal past (bv. als de
+  // AI het totaal miste en we het bedrag uit de bestandsnaam haalden).
+  if (aiSubtotal != null && (aiSubtotal < 0 || aiSubtotal > total + 0.02)) {
+    aiSubtotal = null;
+    aiVatAmount = null;
   }
 
   // Let op: `||` i.p.v. `??` — een lege string ("") moet óók doorvallen,
@@ -295,6 +313,8 @@ async function maakInkoopfactuurUitMail(
       orderDate,
       dueDate,
       receivedAt: isProforma ? null : baseDate,
+      subtotal: aiSubtotal != null ? aiSubtotal.toFixed(2) : null,
+      tax: aiVatAmount != null ? aiVatAmount.toFixed(2) : null,
       total: String(total.toFixed(2)),
       items: [
         {
