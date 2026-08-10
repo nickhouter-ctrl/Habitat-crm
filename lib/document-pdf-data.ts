@@ -6,6 +6,7 @@ import { products, type DocumentLineItem } from "@/lib/db/schema";
 import { normalizeDocItems } from "@/lib/documents";
 import { formatDimensions } from "@/lib/products";
 
+/** Documentregel verrijkt voor de PDF: SKU en maatvoering van het gekoppelde product (of `null`). */
 export type PdfLineItem = DocumentLineItem & { sku: string | null; dim: string | null };
 
 /**

@@ -15,6 +15,7 @@ import {
 import { COMPANY } from "@/lib/company";
 import type { DocumentLineItem } from "@/lib/db/schema";
 import { lineNet } from "@/lib/documents";
+import { amountEur, phaseKey } from "@/lib/pdf-shared";
 import type { Locale } from "@/lib/translate";
 
 // Habitat One huisstijl-lettertype (Sora) — zelfde als website + prijslijst-PDF.
@@ -71,9 +72,10 @@ const INTL_LOCALE: Record<Locale, string> = {
   es: "es-ES",
 };
 
+/** Geldformatter in de documenttaal (formatEUR is vast nl-NL; documenten volgen het contact). */
 const eurFor = (locale: Locale) => (v: string | number | null | undefined) =>
   new Intl.NumberFormat(INTL_LOCALE[locale], { style: "currency", currency: "EUR" }).format(
-    Number(v) || 0,
+    amountEur(v) || 0,
   );
 
 const fdateFor = (locale: Locale) => (v: string | Date | null | undefined) => {
@@ -463,6 +465,11 @@ const s = StyleSheet.create({
   },
 });
 
+/**
+ * Alles wat de document-PDF (offerte / factuur / pakbon / …) nodig heeft om te
+ * renderen. Bedragen als string (Drizzle `numeric`); regels zijn optioneel al
+ * verrijkt met SKU/maatvoering via `enrichDocItemsForPdf` (document-pdf-data).
+ */
 export type PdfDoc = {
   kind: string;
   docNumber: string | null;
@@ -574,11 +581,11 @@ function DocumentPdf({ doc }: { doc: PdfDoc }) {
   // zonder fasen renderen exact als vanouds — één platte lijst.
   const faseVolgorde: (string | null)[] = [];
   for (const it of items) {
-    const k = it.phase?.trim() || null;
+    const k = phaseKey(it.phase) || null;
     if (!faseVolgorde.includes(k)) faseVolgorde.push(k);
   }
   const itemGroepen = faseVolgorde.some((k) => k)
-    ? faseVolgorde.map((k) => ({ fase: k, regels: items.filter((it) => (it.phase?.trim() || null) === k) }))
+    ? faseVolgorde.map((k) => ({ fase: k, regels: items.filter((it) => (phaseKey(it.phase) || null) === k) }))
     : [{ fase: null as string | null, regels: items }];
   const isDelivery = doc.kind === "deliverynote";
   const isInvoice = doc.kind === "invoice";
@@ -893,6 +900,11 @@ async function fetchSfeerImages(): Promise<ExampleImage[]> {
   return out;
 }
 
+/**
+ * Rendert een CRM-document naar een PDF-buffer. Zonder meegegeven
+ * `exampleImages` worden de curated sfeerfoto's opgehaald (voor- en eindblad);
+ * pakbonnen blijven clean en slaan die pagina's over.
+ */
 export async function renderDocumentPdf(doc: PdfDoc): Promise<Buffer> {
   const exampleImages = doc.exampleImages ?? (await fetchSfeerImages());
   return renderToBuffer(<DocumentPdf doc={{ ...doc, exampleImages }} />);
