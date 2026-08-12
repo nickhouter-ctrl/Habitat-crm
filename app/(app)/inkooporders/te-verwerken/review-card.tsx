@@ -270,7 +270,13 @@ export function ReviewCard({
             </label>
             {split && (
               <div className="mt-2 space-y-2">
-                {(data.lines.length > 1 ? data.lines : [emptyLine(), emptyLine()]).map((l, i) => (
+                {[
+                  ...(data.lines.length > 1 ? data.lines : [emptyLine(), emptyLine()]),
+                  // De AI ziet alleen wat er op de factuur staat — de specificatie
+                  // noemt vaak méér werven. Extra regels bijmaken kan altijd; een
+                  // regel zonder project telt bij goedkeuren gewoon niet mee.
+                  ...Array.from({ length: extraRegels }, () => emptyLine()),
+                ].map((l, i) => (
                   <div key={i} className="grid gap-2 sm:grid-cols-[1fr_6rem_8rem]">
                     <Select name={`split_${i}_projectId`} defaultValue={l.projectId ?? ""}>
                       <option value="">— kies project —</option>
