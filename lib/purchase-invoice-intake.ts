@@ -614,6 +614,16 @@ export async function approveInvoiceReview(args: {
     }
   }
 
+  // Specificaties (urenverantwoording, pakbon) die als "bijlage bij deze
+  // factuur" zijn gemarkeerd: hun PDF komt mee op dezelfde inkooporder.
+  const bijlagen = await bijlageReviewsVoor(review);
+  for (const b of bijlagen) {
+    const ba = await db.query.mailAttachments.findFirst({ where: eq(mailAttachments.id, b.mailAttachmentId) });
+    if (!ba) continue;
+    const copied = await copyMailAttachmentToPoBucket({ mailStoragePath: ba.storagePath, filename: ba.filename });
+    if (copied) poAttachments.push({ ...copied, uploadedAt: new Date().toISOString() });
+  }
+
   // "Algemene kosten" aangevinkt: onthouden voor de volgende keer. Bewust vóór
   // de inkooporder, zodat het ook klopt als de rest hierna misgaat.
   if (o.overhead) {
@@ -697,6 +707,14 @@ export async function approveInvoiceReview(args: {
     .update(purchaseInvoiceReviews)
     .set({ purchaseOrderId: po.id, updatedAt: new Date() })
     .where(eq(purchaseInvoiceReviews.id, review.id));
+  // De bijlage-kaarten horen bij dezelfde inkooporder — dan is het spoor
+  // compleet ("waar is die urenverantwoording gebleven?").
+  for (const b of bijlagen) {
+    await db
+      .update(purchaseInvoiceReviews)
+      .set({ purchaseOrderId: po.id, updatedAt: new Date() })
+      .where(eq(purchaseInvoiceReviews.id, b.id));
+  }
   await db
     .update(emailInbox)
     .set({ linkedPurchaseOrderId: po.id, status: "linked", updatedAt: new Date() })
@@ -827,6 +845,93 @@ export async function rejectInvoiceReview(args: {
 function ensureAngles(id: string): string {
   const v = id.trim();
   return v.startsWith("<") ? v : `<${v}>`;
+}
+
+/* ─────────────────────── bijlage bij een andere factuur ───────────────────────
+ * Eén mail bevat soms een factuur ÉN een specificatie (urenverantwoording,
+ * pakbon). Die specificatie is geen eigen te-betalen post: hij hoort als
+ * bijlage op dezelfde inkooporder als de factuur. De markering leeft in
+ * decision_note ("bijlage-bij:<reviewId>"); goedkeuren van de factuur neemt
+ * de bijlage dan mee. */
+
+const BIJLAGE_PREFIX = "bijlage-bij:";
+
+export async function attachReviewToSibling(args: {
+  reviewId: string;
+  targetReviewId: string;
+  userId: string | null;
+}): Promise<{ ok: boolean; reason?: string }> {
+  if (args.reviewId === args.targetReviewId) return { ok: false, reason: "zelfde-kaart" };
+  const target = await db.query.purchaseInvoiceReviews.findFirst({
+    where: eq(purchaseInvoiceReviews.id, args.targetReviewId),
+  });
+  if (!target) return { ok: false, reason: "doel-onbekend" };
+
+  // Alleen een wachtende kaart uit DEZELFDE mail kan bijlage worden — claim
+  // atomair, zodat dubbelklikken of een parallelle beslissing niets dubbel doet.
+  const claimed = await db
+    .update(purchaseInvoiceReviews)
+    .set({
+      status: "superseded",
+      decisionNote: `${BIJLAGE_PREFIX}${args.targetReviewId}`,
+      purchaseOrderId: target.purchaseOrderId ?? null,
+      decidedBy: args.userId,
+      decidedAt: new Date(),
+      decidedVia: "app",
+      updatedAt: new Date(),
+    })
+    .where(
+      and(
+        eq(purchaseInvoiceReviews.id, args.reviewId),
+        eq(purchaseInvoiceReviews.status, "pending"),
+        eq(purchaseInvoiceReviews.emailId, target.emailId),
+      ),
+    )
+    .returning();
+  const review = claimed[0];
+  if (!review) return { ok: false, reason: "al-afgehandeld-of-andere-mail" };
+
+  const att = await db.query.mailAttachments.findFirst({ where: eq(mailAttachments.id, review.mailAttachmentId) });
+
+  // Is de factuur al goedgekeurd (inkooporder bestaat), zet de bijlage er dan
+  // nu meteen bij; anders neemt approveInvoiceReview hem straks mee.
+  if (target.purchaseOrderId && att) {
+    const po = await db.query.purchaseOrders.findFirst({ where: eq(purchaseOrders.id, target.purchaseOrderId) });
+    if (po) {
+      const copied = await copyMailAttachmentToPoBucket({ mailStoragePath: att.storagePath, filename: att.filename });
+      if (copied) {
+        const bestaande = (po.attachments as { name: string; path: string; size?: number; uploadedAt?: string }[] | null) ?? [];
+        await db
+          .update(purchaseOrders)
+          .set({ attachments: [...bestaande, { ...copied, uploadedAt: new Date().toISOString() }], updatedAt: new Date() })
+          .where(eq(purchaseOrders.id, po.id));
+      }
+    }
+  }
+
+  await db.insert(activities).values({
+    type: "note",
+    subject: `Specificatie gekoppeld aan factuur${target.proposedReference ? ` ${target.proposedReference}` : ""}`,
+    body: `"${att?.filename ?? "bijlage"}" is gemarkeerd als specificatie bij ${
+      target.proposedReference ?? "de andere factuur uit dezelfde mail"
+    } — geen eigen inkooporder.`,
+    authorId: args.userId,
+  });
+  return { ok: true };
+}
+
+/** Bijlage-kaarten die bij deze factuur horen (gemarkeerd via attachReviewToSibling). */
+async function bijlageReviewsVoor(review: { id: string; emailId: string }) {
+  return db
+    .select()
+    .from(purchaseInvoiceReviews)
+    .where(
+      and(
+        eq(purchaseInvoiceReviews.emailId, review.emailId),
+        eq(purchaseInvoiceReviews.status, "superseded"),
+        eq(purchaseInvoiceReviews.decisionNote, `${BIJLAGE_PREFIX}${review.id}`),
+      ),
+    );
 }
 
 export async function ignoreInvoiceReview(args: { reviewId: string; userId: string | null }): Promise<void> {

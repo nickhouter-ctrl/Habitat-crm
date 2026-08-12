@@ -10,6 +10,7 @@ import { revalidatePath } from "next/cache";
 import { requireWriteUser } from "@/lib/auth/guards";
 import {
   approveInvoiceReview,
+  attachReviewToSibling,
   ignoreInvoiceReview,
   rejectInvoiceReview,
   type ApprovalOverrides,
@@ -108,5 +109,13 @@ function escapeForHtml(s: string): string {
 export async function ignoreReviewAction(reviewId: string) {
   const user = await requireWriteUser();
   await ignoreInvoiceReview({ reviewId, userId: user.id });
+  refresh();
+}
+
+/** Dit is geen eigen factuur maar een specificatie (urenverantwoording, pakbon)
+ *  bij een andere factuur uit dezelfde mail: koppel de PDF daaraan. */
+export async function attachToSiblingAction(reviewId: string, targetReviewId: string) {
+  const user = await requireWriteUser();
+  await attachReviewToSibling({ reviewId, targetReviewId, userId: user.id });
   refresh();
 }

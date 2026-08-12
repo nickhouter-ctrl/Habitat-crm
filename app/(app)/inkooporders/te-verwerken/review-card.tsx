@@ -13,7 +13,7 @@ import { Badge, Field, Input, Select, Textarea, buttonClass } from "@/components
 import { Combobox } from "@/components/combobox";
 import { SubmitButton } from "@/components/submit-button";
 import { formatEUR } from "@/lib/utils";
-import { approveReviewAction, ignoreReviewAction, rejectReviewAction } from "./actions";
+import { approveReviewAction, attachToSiblingAction, ignoreReviewAction, rejectReviewAction } from "./actions";
 
 export type ReviewCheck = {
   key: string;
@@ -61,6 +61,9 @@ export type ReviewCardData = {
   /** Voorgeschreven concept: onderwerp en tekst. */
   draft: { subject: string; text: string } | null;
   wachtDagen: number;
+  /** Andere facturen uit dezelfde mail — deze kaart kan daar een bijlage
+   *  (urenverantwoording, pakbon) bij zijn. */
+  siblings: { id: string; label: string }[];
 };
 
 const VERDICT: Record<ReviewCardData["verdict"], { label: string; tone: "success" | "warning" | "danger" | "neutral" }> = {
@@ -323,6 +326,19 @@ export function ReviewCard({
               Afkeuren
             </button>
             <span className="flex-1" />
+            {data.siblings.map((s) => (
+              <SubmitButton
+                key={s.id}
+                variant="ghost"
+                size="sm"
+                className="text-muted"
+                pendingLabel="Koppelen…"
+                formAction={attachToSiblingAction.bind(null, data.id, s.id)}
+                title="Dit is geen eigen factuur maar een specificatie (bv. urenverantwoording) — de PDF komt als bijlage op de inkooporder van die factuur"
+              >
+                Bijlage bij {s.label}
+              </SubmitButton>
+            ))}
             <IgnoreButton reviewId={data.id} />
           </div>
         </form>

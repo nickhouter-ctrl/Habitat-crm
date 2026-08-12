@@ -137,8 +137,19 @@ export default async function FacturenKeurenPage() {
       emailCandidates: extras.get(v.id)?.candidates ?? [],
       draft: extras.get(v.id)?.draft ?? null,
       wachtDagen: dagenSinds(r.receivedAt),
+      siblings: [],
     });
     perMail.set(r.mailId, groep);
+  }
+  // Bij meerdere facturen in één mail kan een kaart een specificatie
+  // (urenverantwoording, pakbon) bij een andere zijn — geef elke kaart zijn
+  // mail-genoten mee zodat de "bijlage bij …"-knop kan verschijnen.
+  for (const groep of perMail.values()) {
+    for (const item of groep.items) {
+      item.siblings = groep.items
+        .filter((x) => x.id !== item.id)
+        .map((x) => ({ id: x.id, label: x.reference ?? x.attachmentName }));
+    }
   }
 
   const totaal = rows.reduce((s, r) => s + (r.review.proposedTotal != null ? Number(r.review.proposedTotal) : 0), 0);
