@@ -177,14 +177,14 @@ export function ContactCreateForm({
 
       {type !== "zakelijk" && (
         <Field
-          label="NIF / CIF (fiscaal nummer)"
+          label="NIE / BSN (fiscaal nummer)"
           htmlFor="taxId"
-          hint="Verplicht op facturen — DNI/NIF voor particulieren, of buitenlands btw-nummer met landcode."
+          hint="Verplicht op facturen — NIE of DNI voor particulieren in Spanje, anders het BSN of buitenlandse fiscaal nummer."
         >
           <Input
             id="taxId"
             name="taxId"
-            placeholder="bv. 12345678Z of NL123456789B01"
+            placeholder="bv. X1234567L of 123456782"
             defaultValue={initial?.taxId ?? ""}
             onBlur={(e) => checkVies(e.currentTarget.value)}
           />

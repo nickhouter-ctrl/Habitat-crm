@@ -131,28 +131,44 @@ function ontbrekend(findings: unknown): string {
     .join(", ");
 }
 
-function tabel(regels: Regel[], toonLeeftijd = false, wie: string | null = null): string {
+/** Geëxporteerd zodat de mailopmaak te renderen is zonder mail te versturen. */
+export function tabel(regels: Regel[], toonLeeftijd = false, wie: string | null = null): string {
   const wieParam = wie ? `?w=${wie}` : "";
   const rijen = regels
     .slice(0, 25)
     .map((r) => {
       const mist = ontbrekend(r.findings);
+      // Twee regels per factuur in plaats van vier kolommen naast elkaar. In een
+      // mail van 600px passen een reden-kolom én twee knoppen niet naast elkaar:
+      // "Afkeuren" viel rechts buiten beeld en de reden werd tot een strook van
+      // een paar tekens geknepen. Nu staan gegevens en bedrag boven, en reden en
+      // knoppen op de volle breedte daaronder.
       return `<tr>
-        <td style="padding:6px 10px;border-bottom:1px solid #eee">${escapeHtml(r.supplier ?? "onbekend")}<br>
-          <span style="color:#888;font-size:12px">${escapeHtml(r.reference ?? "")}${toonLeeftijd && r.dagen > 0 ? ` · wacht ${r.dagen} dag${r.dagen === 1 ? "" : "en"}` : ""}</span></td>
-        <td style="padding:6px 10px;border-bottom:1px solid #eee;text-align:right;white-space:nowrap">${r.total ? formatEUR(Number(r.total)) : "—"}</td>
-        <td style="padding:6px 10px;border-bottom:1px solid #eee">${VERDICT_LABEL[r.verdict] ?? r.verdict}${mist ? `<br><span style="color:#888;font-size:12px">${escapeHtml(mist)}</span>` : ""}</td>
-        <td style="padding:6px 10px;border-bottom:1px solid #eee;white-space:nowrap">${
-          r.token
-            ? `<a href="${APP_URL}/inkoop/keuren/${r.token}${wieParam}" style="display:inline-block;padding:6px 12px;background:#3a2a20;color:#fff;border-radius:6px;text-decoration:none;font-size:13px">Goedkeuren</a>
-               <a href="${APP_URL}/inkoop/keuren/${r.token}${wieParam}#afkeuren" style="display:inline-block;padding:6px 12px;border:1px solid #ccc;border-radius:6px;text-decoration:none;color:#333;font-size:13px;margin-left:4px">Afkeuren</a>`
-            : `<a href="${APP_URL}/inkooporders/te-verwerken">beoordelen</a>`
-        }</td>
+        <td style="padding:10px 10px 2px">
+          <strong>${escapeHtml(r.supplier ?? "onbekend")}</strong><br>
+          <span style="color:#888;font-size:12px">${escapeHtml(r.reference ?? "")}${toonLeeftijd && r.dagen > 0 ? ` · wacht ${r.dagen} dag${r.dagen === 1 ? "" : "en"}` : ""}</span>
+        </td>
+        <td style="padding:10px 10px 2px;text-align:right;white-space:nowrap;vertical-align:top">
+          <strong>${r.total ? formatEUR(Number(r.total)) : "—"}</strong>
+        </td>
+      </tr>
+      <tr>
+        <td colspan="2" style="padding:0 10px 10px;border-bottom:1px solid #eee">
+          <span style="font-size:13px">${VERDICT_LABEL[r.verdict] ?? r.verdict}</span>${mist ? `<br><span style="color:#888;font-size:12px">${escapeHtml(mist)}</span>` : ""}
+          <div style="margin-top:8px">${
+            r.token
+              ? `<a href="${APP_URL}/inkoop/keuren/${r.token}${wieParam}" style="display:inline-block;padding:8px 16px;background:#3a2a20;color:#fff;border-radius:6px;text-decoration:none;font-size:13px">Goedkeuren</a>
+                 <a href="${APP_URL}/inkoop/keuren/${r.token}${wieParam}#afkeuren" style="display:inline-block;padding:8px 16px;border:1px solid #ccc;border-radius:6px;text-decoration:none;color:#333;font-size:13px;margin-left:6px">Afkeuren</a>`
+              : `<a href="${APP_URL}/inkooporders/te-verwerken" style="font-size:13px">Beoordelen in het CRM</a>`
+          }</div>
+        </td>
       </tr>`;
     })
     .join("");
   const rest = regels.length > 25 ? `<p style="color:#888">en nog ${regels.length - 25} andere.</p>` : "";
-  return `<table style="width:100%;border-collapse:collapse;font-size:14px">${rijen}</table>${rest}`;
+  // table-layout:fixed houdt de tabel binnen de mailbreedte, ook als een
+  // leveranciersnaam of referentie lang is.
+  return `<table role="presentation" style="width:100%;max-width:100%;table-layout:fixed;border-collapse:collapse;font-size:14px">${rijen}</table>${rest}`;
 }
 
 /**

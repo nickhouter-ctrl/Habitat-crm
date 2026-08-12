@@ -331,8 +331,8 @@ export default async function DataCheckPage() {
               Klanten met onvolledige factuurgegevens ({incompleteClients.length})
             </h3>
             <p className="text-xs text-amber-800/80">
-              Deze klanten krijgen facturen/offertes maar missen verplichte gegevens (NIF/CIF of adres) — een factuur kan
-              pas verstuurd worden als dit is aangevuld.
+              Deze klanten krijgen facturen/offertes maar missen verplichte gegevens (fiscaal nummer of adres) — een
+              factuur kan pas verstuurd worden als dit is aangevuld.
             </p>
           </div>
           <ul className="divide-y text-sm">

@@ -1,8 +1,10 @@
 /**
  * Controleert of de klantgegevens compleet genoeg zijn om een factuur te mogen
- * versturen (Spanje). Verplicht: naam, NIF/CIF of buitenlands btw-nummer, en een
- * volledig adres. Deze velden mogen op het contact of op het gekoppelde bedrijf
- * staan (bedrijfsklant heeft het btw-nummer op de company).
+ * versturen (Spanje). Verplicht: naam, een fiscaal nummer, en een volledig adres.
+ * Deze velden mogen op het contact of op het gekoppelde bedrijf staan
+ * (bedrijfsklant heeft het btw-nummer op de company). Welk fiscaal nummer we
+ * vragen hangt af van het klanttype: bedrijf → NIF/CIF of btw-nummer,
+ * particulier (geen gekoppeld bedrijf) → NIE of BSN.
  */
 export type BillingContact = {
   name?: string | null;
@@ -34,8 +36,12 @@ export function missingBillingFields(contact: BillingContact, company: BillingCo
   const country = v(contact?.country) || v(company?.country);
 
   const missing: string[] = [];
+  // Particulier = geen gekoppeld bedrijf: die heeft geen NIF/CIF of btw-nummer,
+  // maar identificeert zich met een NIE (of Nederlands BSN).
+  const isParticulier = !company;
+
   if (!name) missing.push("naam");
-  if (!taxId) missing.push("NIF/CIF of btw-nummer");
+  if (!taxId) missing.push(isParticulier ? "NIE of BSN" : "NIF/CIF of btw-nummer");
   if (!addressLine) missing.push("adres (straat + huisnummer)");
   if (!postalCode) missing.push("postcode");
   if (!city) missing.push("plaats");
