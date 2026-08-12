@@ -6,10 +6,10 @@
  * en in `purchase_invoice_reviews` gezet. Pas na goedkeuring ontstaat er een
  * inkooporder die meetelt in de kosten en naar Holded kan.
  */
-import { eq } from "drizzle-orm";
+import { and, asc, eq, lt, sql } from "drizzle-orm";
 
 import { db } from "@/lib/db";
-import { emailInbox, mailAttachments } from "@/lib/db/schema";
+import { emailInbox, mailAttachments, purchaseInvoiceReviews } from "@/lib/db/schema";
 import {
   buildInvoiceProposal,
   buildPurchaseReference,
@@ -27,6 +27,54 @@ export interface AutoInvoiceResult {
   /** Nieuwe wachtrij-rijen, zodat de poller er één melding over kan sturen. */
   reviewIds: string[];
   errors: string[];
+}
+
+/**
+ * Herkanst wachtende facturen waarvan de AI-uitlezing TECHNISCH faalde
+ * (netwerkfout, 5xx, timeout, rate limit). Zo'n kaart bleef vroeger voorgoed
+ * op "niet gelezen" staan — de poller kijkt alleen naar nieuwe mails.
+ *
+ * Maximaal drie herkansingen per factuur (ai_attempts) en pas als de vorige
+ * poging ≥ 10 minuten oud is: een storing bij de AI-leverancier lost zichzelf
+ * niet binnen dezelfde minuut op. Draait mee met elke poll-ronde.
+ */
+export async function retryFailedAiReads(limiet = 5): Promise<{ geprobeerd: number; hersteld: number }> {
+  const rows = await db
+    .select({
+      id: purchaseInvoiceReviews.id,
+      emailId: purchaseInvoiceReviews.emailId,
+      attachmentId: purchaseInvoiceReviews.mailAttachmentId,
+    })
+    .from(purchaseInvoiceReviews)
+    .where(
+      and(
+        eq(purchaseInvoiceReviews.status, "pending"),
+        eq(purchaseInvoiceReviews.aiReadOk, false),
+        lt(purchaseInvoiceReviews.aiAttempts, 3),
+        lt(purchaseInvoiceReviews.aiCheckedAt, new Date(Date.now() - 10 * 60_000)),
+      ),
+    )
+    .orderBy(asc(purchaseInvoiceReviews.aiCheckedAt))
+    .limit(limiet);
+
+  let hersteld = 0;
+  for (const r of rows) {
+    // Teller vóór de poging: ook een poging die wéér faalt telt mee, anders
+    // blijft een structureel kapotte bijlage eeuwig herkansen.
+    await db
+      .update(purchaseInvoiceReviews)
+      .set({ aiAttempts: sql`${purchaseInvoiceReviews.aiAttempts} + 1` })
+      .where(eq(purchaseInvoiceReviews.id, r.id));
+    try {
+      const proposal = await buildInvoiceProposal({ emailId: r.emailId, attachmentId: r.attachmentId });
+      if (!proposal) continue;
+      await upsertInvoiceReview(proposal, "auto");
+      if (proposal.verdict.readOk) hersteld++;
+    } catch (e) {
+      console.error("Herkansing AI-uitlezing faalde:", e instanceof Error ? e.message : e);
+    }
+  }
+  return { geprobeerd: rows.length, hersteld };
 }
 
 export async function tryAutoCreatePurchaseInvoice(emailId: string): Promise<AutoInvoiceResult> {

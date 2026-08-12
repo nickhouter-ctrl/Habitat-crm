@@ -62,6 +62,8 @@ export type InvoiceVerdict = {
   mailable: Check[];
   readOk: boolean;
   readError: AiReadError | null;
+  /** Technische toelichting bij een mislukte uitlezing (statuscode, fetch-oorzaak). */
+  readDetail?: string | null;
 };
 
 /**
@@ -189,14 +191,16 @@ export function evaluateInvoice(read: AiInvoiceRead, ctx: CheckContext): Invoice
       status: "unreadable",
       readOk: false,
       readError: read.error,
+      readDetail: read.detail ?? null,
       mailable: [],
       checks: [
         check({
           key: "read_failed",
-          label: `De factuur kon niet uitgelezen worden (${read.error}) — handmatig beoordelen`,
+          label: `De factuur kon niet uitgelezen worden (${read.error}) — wordt automatisch opnieuw geprobeerd`,
           severity: "warning",
           ok: false,
           internal: true,
+          found: read.detail ?? null,
           es: "",
         }),
       ],

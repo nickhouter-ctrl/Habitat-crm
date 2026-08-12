@@ -257,6 +257,17 @@ export async function runImapPoll(): Promise<ImapPollResult> {
     }
   }
 
+  // Herkans facturen waarvan de AI-uitlezing technisch faalde (netwerkfout,
+  // 5xx, timeout) — die bleven anders voorgoed op "niet gelezen" staan.
+  // Best-effort en na het mailwerk, zodat het poll-budget voorgaat.
+  try {
+    const { retryFailedAiReads } = await import("@/lib/auto-purchase-invoice");
+    const r = await retryFailedAiReads();
+    if (r.geprobeerd > 0) console.log(`AI-herkansing: ${r.hersteld}/${r.geprobeerd} alsnog gelezen`);
+  } catch (e) {
+    console.error("AI-herkansing mislukt:", e instanceof Error ? e.message : e);
+  }
+
   // Eén melding per ronde over de nieuwe facturen — niet één per factuur, anders
   // levert een inhaalslag van twintig facturen twintig mails op.
   if (totals.reviewIds.length > 0) {

@@ -476,7 +476,11 @@ export async function upsertInvoiceReview(p: InvoiceProposal, source: "auto" | "
     suggestedHours: p.hours != null ? String(p.hours) : null,
     aiFields: p.fields as unknown,
     aiReadOk: p.verdict.readOk,
-    aiError: p.verdict.readError,
+    // Foutcode mét technische toelichting — anders valt achteraf niet meer te
+    // achterhalen wáárom een uitlezing faalde (statuscode, fetch-oorzaak).
+    aiError: p.verdict.readError
+      ? [p.verdict.readError as string, p.verdict.readDetail].filter(Boolean).join(": ").slice(0, 500)
+      : null,
     aiModel: p.aiModel,
     aiPromptVersion: p.aiPromptVersion,
     aiCheckedAt: new Date(),

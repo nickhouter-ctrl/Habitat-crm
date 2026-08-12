@@ -123,6 +123,7 @@ export type AiReadError =
   | "http-5xx"
   | "http-4xx"
   | "timeout"
+  | "network-error"
   | "empty-response"
   | "parse-error";
 
@@ -317,8 +318,13 @@ export async function readInvoiceFromBuffer(args: {
   const built = buildContent(args.buffer, args.filename, args.contentType);
   if ("error" in built) return { ok: false, error: built.error };
 
-  // Eén retry bij rate limit / serverfout: zonder deze retry wordt een 429 stil
-  // een "onleesbare factuur" en gaat 'ie handmatig de wachtrij in.
+  // Eén retry bij rate limit / serverfout / netwerkfout: zonder deze retry
+  // wordt een hikje stil een "onleesbare factuur" en gaat 'ie handmatig de
+  // wachtrij in. Wat er als laatste misging bepaalt het foutlabel — vroeger
+  // heette elke gegooide fetch-fout "http-5xx" en elke uitgeputte 5xx
+  // "http-429", waardoor de melding op de kaart niets zei over de oorzaak.
+  let lastError: AiReadError = "http-429";
+  let lastDetail: string | undefined;
   for (let attempt = 0; attempt < 2; attempt++) {
     if (attempt > 0) await new Promise((r) => setTimeout(r, 1500));
     try {
@@ -343,8 +349,16 @@ export async function readInvoiceFromBuffer(args: {
         signal: AbortSignal.timeout(45_000),
       });
 
-      if (res.status === 429) continue;
-      if (res.status >= 500) continue;
+      if (res.status === 429) {
+        lastError = "http-429";
+        lastDetail = undefined;
+        continue;
+      }
+      if (res.status >= 500) {
+        lastError = "http-5xx";
+        lastDetail = `API gaf ${res.status}`;
+        continue;
+      }
       if (!res.ok) {
         const detail = await res.text().catch(() => "");
         console.warn("AI-invoice extract faalde:", res.status, detail);
@@ -372,12 +386,15 @@ export async function readInvoiceFromBuffer(args: {
       }
     } catch (err) {
       const timedOut = err instanceof Error && (err.name === "TimeoutError" || err.name === "AbortError");
-      if (timedOut && attempt === 0) continue;
       console.warn("AI-invoice extract error:", err);
-      return { ok: false, error: timedOut ? "timeout" : "http-5xx", detail: String(err).slice(0, 300) };
+      lastError = timedOut ? "timeout" : "network-error";
+      // fetch verstopt de echte oorzaak (DNS, TLS, reset) vaak in `cause`.
+      const cause = err instanceof Error && err.cause ? ` — ${String(err.cause)}` : "";
+      lastDetail = `${String(err)}${cause}`.slice(0, 300);
+      continue;
     }
   }
-  return { ok: false, error: "http-429" };
+  return { ok: false, error: lastError, detail: lastDetail };
 }
 
 /** Zelfde uitlezing op een bestand in de mail-bucket. */
