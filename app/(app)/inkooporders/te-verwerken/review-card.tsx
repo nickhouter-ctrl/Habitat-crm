@@ -83,6 +83,7 @@ export function ReviewCard({
 }) {
   const [kind, setKind] = useState<"labor" | "material" | "">(data.kind ?? "");
   const [split, setSplit] = useState(data.lines.length > 1);
+  const [extraRegels, setExtraRegels] = useState(0);
   const [rejecting, setRejecting] = useState(false);
   const [sendMail, setSendMail] = useState(true);
   const [mailTo, setMailTo] = useState(data.emailCandidates[0]?.email ?? "");
@@ -296,6 +297,13 @@ export function ReviewCard({
                     {l.projectHint && <p className="text-xs text-muted sm:col-span-3">op de factuur: {l.projectHint}</p>}
                   </div>
                 ))}
+                <button
+                  type="button"
+                  onClick={() => setExtraRegels((n) => n + 1)}
+                  className="text-xs text-accent hover:underline"
+                >
+                  + werf toevoegen
+                </button>
                 <p className="text-xs text-muted">
                   De bedragen samen horen op {data.subtotal != null ? formatEUR(data.subtotal) : "het bedrag ex. btw"} uit te
                   komen. De inkooporder zelf blijft bij een verdeling ongekoppeld — anders telt het bedrag dubbel.
