@@ -22,7 +22,7 @@ import {
   Tr,
 } from "@/components/ui";
 import { db } from "@/lib/db";
-import { documents, holdedSyncMap, products } from "@/lib/db/schema";
+import { deliveries, documents, holdedSyncMap, products } from "@/lib/db/schema";
 import { SubmitButton } from "@/components/submit-button";
 import { lineCostEur, lineNet, lineTax, normalizeDocItems } from "@/lib/documents";
 import { missingBillingFields } from "@/lib/invoice-validation";
@@ -47,6 +47,7 @@ import {
   signDocumentUploadAction,
   toggleReserveEstimate,
 } from "../actions";
+import { markPickedUp, undoPickedUp } from "../../leveringen/actions";
 import { documentFileUrl } from "@/lib/storage";
 import { documentKindMeta, documentStatusMeta } from "../../_meta";
 import { ConfirmSubmit } from "@/components/confirm-submit";
@@ -161,6 +162,17 @@ export default async function DocumentDetailPage({
           orderBy: [asc(documents.issueDate)],
         })
       : [];
+
+  // De levering die bij deze factuur hoort (gepland, afgehaald of "geen levering
+  // nodig"). Zolang die ontbreekt staat de factuur op het dashboard bij
+  // "te plannen leveringen".
+  const linkedDelivery =
+    doc.kind === "invoice"
+      ? await db.query.deliveries.findFirst({
+          where: eq(deliveries.documentId, id),
+          columns: { id: true, method: true, status: true, deliveredAt: true },
+        })
+      : null;
 
   // Hoeveel van de offerte is al gefactureerd? (voor deelfacturen)
   const invoicedTotal = linkedInvoices.reduce((s, inv) => s + Number(inv.totalEur ?? 0), 0);
@@ -309,6 +321,11 @@ export default async function DocumentDetailPage({
   // Facturatie-check: welke verplichte klantgegevens ontbreken (blokkeert versturen).
   const invoiceMissing =
     doc.kind === "invoice" || doc.kind === "creditnote" ? missingBillingFields(doc.contact, doc.company) : [];
+
+  // Alleen facturen met productregels kunnen daadwerkelijk geleverd of opgehaald
+  // worden — een factuur voor uren heeft niets om mee te geven.
+  const hasProductLines = items.some((it) => it.productId && it.units);
+  const isPickedUp = linkedDelivery?.method === "ophalen" && linkedDelivery.status === "geleverd";
 
   const changeStatus = setDocumentStatus.bind(null, id);
   const removeDoc = deleteDocument.bind(null, id);
@@ -783,6 +800,38 @@ export default async function DocumentDetailPage({
                     → Maak pakbon
                   </SubmitButton>
                 </form>
+              )}
+              {doc.kind === "invoice" && hasProductLines && (
+                <div className="space-y-1">
+                  {isPickedUp ? (
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-sm font-medium text-success">
+                        🤝 Afgehaald{linkedDelivery?.deliveredAt ? ` op ${formatDate(linkedDelivery.deliveredAt)}` : ""}
+                      </span>
+                      <form action={undoPickedUp.bind(null, id)}>
+                        <SubmitButton size="sm" variant="ghost" className="text-muted" pendingLabel="…">
+                          Ongedaan maken
+                        </SubmitButton>
+                      </form>
+                    </div>
+                  ) : linkedDelivery ? (
+                    <p className="text-xs text-muted">
+                      Levering staat ingepland —{" "}
+                      <Link href="/leveringen" className="text-accent hover:underline">
+                        bekijk op leveringen
+                      </Link>
+                    </p>
+                  ) : (
+                    <form action={markPickedUp.bind(null, id)}>
+                      <SubmitButton size="sm" variant="secondary" pendingLabel="Bezig…">
+                        🤝 Markeer als afgehaald
+                      </SubmitButton>
+                      <p className="mt-1 text-xs text-muted">
+                        Klant heeft het meegenomen — haalt deze factuur van &ldquo;te plannen leveringen&rdquo; af.
+                      </p>
+                    </form>
+                  )}
+                </div>
               )}
               {doc.kind === "invoice" && (
                 <form action={makeCreditNote}>

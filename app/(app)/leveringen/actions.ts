@@ -106,6 +106,98 @@ export async function planDelivery(formData: FormData) {
 }
 
 /**
+ * "Afgehaald" — de klant heeft de spullen in de showroom meegenomen, er is dus
+ * niets meer te plannen. Legt dat vast als een echte levering (ophalen/geleverd)
+ * zodat het op /leveringen terugkomt, en zet de bijbehorende pakbon in één moeite
+ * door op afgeleverd. Idempotent: een bestaande levering wordt bijgewerkt.
+ */
+export async function markPickedUp(documentId: string) {
+  await requireUser();
+  if (!documentId) return;
+
+  const doc = await db.query.documents.findFirst({
+    where: eq(documents.id, documentId),
+    columns: { id: true, contactId: true, projectId: true },
+  });
+  if (!doc) return;
+
+  const existing = await db.query.deliveries.findFirst({
+    where: eq(deliveries.documentId, documentId),
+    columns: { id: true, deliveryNoteId: true },
+  });
+
+  // Pakbon is het leverdocument dat met de goederen meegaat — ook bij afhalen
+  // willen we 'm hebben (en meteen als afgeleverd markeren).
+  const deliveryNoteId = existing?.deliveryNoteId ?? (await createDeliveryNoteInternal(documentId));
+
+  const now = new Date();
+  const today = now.toISOString().slice(0, 10);
+
+  if (existing) {
+    await db
+      .update(deliveries)
+      .set({
+        plannedDate: today,
+        method: "ophalen",
+        status: "geleverd",
+        deliveredAt: now,
+        deliveryNoteId,
+        updatedAt: now,
+      })
+      .where(eq(deliveries.id, existing.id));
+  } else {
+    await db.insert(deliveries).values({
+      documentId,
+      deliveryNoteId,
+      contactId: doc.contactId,
+      projectId: doc.projectId,
+      plannedDate: today,
+      method: "ophalen",
+      status: "geleverd",
+      deliveredAt: now,
+    });
+  }
+
+  if (deliveryNoteId) {
+    await db
+      .update(documents)
+      .set({ deliveredAt: now, updatedAt: now })
+      .where(eq(documents.id, deliveryNoteId));
+  }
+
+  revalidatePath("/");
+  revalidatePath("/leveringen");
+  revalidatePath("/pakbonnen");
+  revalidatePath(`/documents/${documentId}`);
+  if (doc.projectId) revalidatePath(`/projects/${doc.projectId}`);
+}
+
+/** Draait `markPickedUp` terug: levering weg, pakbon weer niet-afgeleverd. */
+export async function undoPickedUp(documentId: string) {
+  await requireUser();
+  if (!documentId) return;
+
+  const existing = await db.query.deliveries.findFirst({
+    where: eq(deliveries.documentId, documentId),
+    columns: { id: true, deliveryNoteId: true },
+  });
+  if (!existing) return;
+
+  await db.delete(deliveries).where(eq(deliveries.id, existing.id));
+  if (existing.deliveryNoteId) {
+    await db
+      .update(documents)
+      .set({ deliveredAt: null, updatedAt: new Date() })
+      .where(eq(documents.id, existing.deliveryNoteId));
+  }
+
+  revalidatePath("/");
+  revalidatePath("/leveringen");
+  revalidatePath("/pakbonnen");
+  revalidatePath(`/documents/${documentId}`);
+}
+
+/**
  * "Geen levering nodig" — bv. een factuur voor werkzaamheden. Markeert het
  * document zodat het niet meer in "te plannen leveringen" verschijnt, zonder een
  * echte levering in te plannen.

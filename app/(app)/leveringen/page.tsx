@@ -23,7 +23,7 @@ import { db } from "@/lib/db";
 import { contacts, deliveries, documents, projects } from "@/lib/db/schema";
 import { normalizeDocItems } from "@/lib/documents";
 import { cn, formatDate } from "@/lib/utils";
-import { deleteDelivery, dismissDelivery, planDelivery, setDeliveryStatus } from "./actions";
+import { deleteDelivery, dismissDelivery, markPickedUp, planDelivery, setDeliveryStatus } from "./actions";
 
 export const metadata = { title: "Leveringen" };
 
@@ -179,6 +179,15 @@ export default async function LeveringenPage({
                   <SubmitButton size="sm" variant="secondary" pendingLabel="…">
                     Plannen
                   </SubmitButton>
+                  <button
+                    type="submit"
+                    formAction={markPickedUp.bind(null, d.id)}
+                    formNoValidate
+                    className="rounded-md px-2 py-1.5 text-xs text-muted transition-colors hover:bg-muted/50 hover:text-foreground"
+                    title="Klant heeft het al opgehaald — legt dit vast als afgeronde ophaling"
+                  >
+                    Al afgehaald
+                  </button>
                   <button
                     type="submit"
                     formAction={dismissDelivery.bind(null, d.id)}

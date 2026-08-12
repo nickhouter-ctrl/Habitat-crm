@@ -35,7 +35,7 @@ import { documentKindMeta } from "./_meta";
 import { SubmitButton } from "@/components/submit-button";
 import { reorderShortagesToDrafts } from "./bestellen/actions";
 import { approveProforma, markPurchaseOrderPaid } from "./inkooporders/actions";
-import { setDeliveryStatus } from "./leveringen/actions";
+import { markPickedUp, setDeliveryStatus } from "./leveringen/actions";
 
 export const metadata = { title: "Dashboard" };
 // Cold start mag tot 60s, ruim voor de eerste Holded-fetch; warm is dit 1–2s.
@@ -874,12 +874,21 @@ export default async function DashboardPage() {
                       </span>
                     )}
                   </span>
-                  <Link
-                    href="/leveringen"
-                    className="shrink-0 text-xs font-medium text-accent hover:underline"
-                  >
-                    Plannen →
-                  </Link>
+                  <span className="flex shrink-0 items-center gap-2">
+                    <form action={markPickedUp.bind(null, d.id)}>
+                      <SubmitButton
+                        size="sm"
+                        variant="ghost"
+                        className="text-xs text-muted"
+                        pendingLabel="…"
+                      >
+                        Afgehaald
+                      </SubmitButton>
+                    </form>
+                    <Link href="/leveringen" className="text-xs font-medium text-accent hover:underline">
+                      Plannen →
+                    </Link>
+                  </span>
                 </li>
               ))}
             </ul>
