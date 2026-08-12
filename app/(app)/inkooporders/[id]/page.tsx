@@ -21,7 +21,7 @@ import {
   Tr,
 } from "@/components/ui";
 import { db } from "@/lib/db";
-import { products, projects, purchaseInvoiceReviews, purchaseOrders, timeEntries, users } from "@/lib/db/schema";
+import { projectCosts, products, projects, purchaseInvoiceReviews, purchaseOrders, timeEntries, users } from "@/lib/db/schema";
 import { nextSequentialSku } from "@/lib/products";
 import {
   formatMoney,
@@ -89,6 +89,39 @@ export default async function PurchaseOrderPage({ params }: { params: Promise<{ 
     .from(timeEntries)
     .where(eq(timeEntries.purchaseOrderId, id));
   const geboekteUren = urenRij?.uren ? Number(urenRij.uren) : null;
+
+  // Verdeling over projecten: de uren- en kostenregels die bij het goedkeuren
+  // per werf zijn geboekt. Bestaan die, dan is de vraag "bij welk project hoort
+  // deze factuur?" al beantwoord en tonen we het antwoord in plaats van het
+  // koppel-formulier.
+  const [urenPerProject, kostenPerProject] = await Promise.all([
+    db
+      .select({
+        projectId: timeEntries.projectId,
+        naam: projects.name,
+        uren: sql<number>`sum(${timeEntries.hours})::float8`,
+        bedrag: sql<number>`sum(${timeEntries.hours} * ${timeEntries.hourlyCostEur})::float8`,
+        datum: sql<string>`max(${timeEntries.date})`,
+      })
+      .from(timeEntries)
+      .leftJoin(projects, eq(projects.id, timeEntries.projectId))
+      .where(eq(timeEntries.purchaseOrderId, id))
+      .groupBy(timeEntries.projectId, projects.name),
+    db
+      .select({
+        projectId: projectCosts.projectId,
+        naam: projects.name,
+        bedrag: sql<number>`sum(${projectCosts.amountEur})::float8`,
+      })
+      .from(projectCosts)
+      .leftJoin(projects, eq(projects.id, projectCosts.projectId))
+      .where(eq(projectCosts.purchaseOrderId, id))
+      .groupBy(projectCosts.projectId, projects.name),
+  ]);
+  const verdeling = [
+    ...urenPerProject.map((r) => ({ ...r, soort: "uren" as const })),
+    ...kostenPerProject.map((r) => ({ ...r, uren: null as number | null, datum: null as string | null, soort: "materiaal" as const })),
+  ].sort((a, b) => (b.bedrag ?? 0) - (a.bedrag ?? 0));
 
   // Projecten om deze inkoop aan te koppelen (telt dan mee als materiaalkost).
   const projectRows = await db
@@ -313,6 +346,43 @@ export default async function PurchaseOrderPage({ params }: { params: Promise<{ 
         </Card>
         )}
 
+        {po.projectId == null && verdeling.length > 0 ? (
+          <Card>
+            <CardHeader>
+              <CardTitle>Verdeeld over projecten</CardTitle>
+              <span className="text-xs text-muted">
+                bij het goedkeuren per werf geboekt — de order zelf blijft bewust ongekoppeld, anders telt het bedrag dubbel
+              </span>
+            </CardHeader>
+            <CardContent className="space-y-1.5 text-sm">
+              {verdeling.map((r) => (
+                <div key={`${r.soort}-${r.projectId}`} className="flex flex-wrap items-baseline justify-between gap-2 rounded-md border px-3 py-1.5">
+                  <span>
+                    {r.projectId ? (
+                      <Link href={`/projects/${r.projectId}`} className="font-medium hover:underline">
+                        {r.naam ?? "project"}
+                      </Link>
+                    ) : (
+                      <span className="text-muted">zonder project</span>
+                    )}
+                    <span className="ml-1.5 text-xs text-muted">
+                      {r.soort === "uren" ? `${r.uren} uur arbeid${r.datum ? ` · ${r.datum}` : ""}` : "materiaal"}
+                    </span>
+                  </span>
+                  <span className="tabular-nums font-medium">{formatMoney(r.bedrag, "EUR")}</span>
+                </div>
+              ))}
+              <div className="flex items-baseline justify-between px-3 pt-1 text-sm font-semibold">
+                <span>Samen</span>
+                <span className="tabular-nums">{formatMoney(verdeling.reduce((s, r) => s + (r.bedrag ?? 0), 0), "EUR")}</span>
+              </div>
+              <p className="pt-1 text-xs text-muted">
+                Klopt een bedrag of datum niet? Pas de regel aan op het project zelf (kaart Uren / arbeid of Kosten) —
+                daar staan ze als losse regels met deze inkooporder als bron.
+              </p>
+            </CardContent>
+          </Card>
+        ) : (
         <Card>
           <CardHeader>
             <CardTitle>Bij welk project hoort deze factuur?</CardTitle>
@@ -344,6 +414,7 @@ export default async function PurchaseOrderPage({ params }: { params: Promise<{ 
             />
           </CardContent>
         </Card>
+        )}
 
         <div className="space-y-5">
           <Card>
