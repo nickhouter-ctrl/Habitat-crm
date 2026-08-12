@@ -59,6 +59,13 @@ export async function createProject(formData: FormData) {
   const parsed = createSchema.safeParse(Object.fromEntries(formData));
   if (!parsed.success) throw new Error(parsed.error.issues.map((i) => i.message).join(", "));
   const d = parsed.data;
+  // Dubbele namen ("oliva hotel" naast "Oliva Hotel") betekenen uren en kosten
+  // die op het verkeerde scherm terechtkomen — blokkeren met een duidelijke fout.
+  const dubbel = await db.query.projects.findFirst({
+    where: sql`lower(trim(${projects.name})) = ${d.name.toLowerCase()}`,
+    columns: { id: true, name: true },
+  });
+  if (dubbel) throw new Error(`Er bestaat al een project met deze naam: "${dubbel.name}". Open dat project, of kies een andere naam.`);
   const [row] = await db
     .insert(projects)
     .values({

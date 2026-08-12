@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { asc, eq } from "drizzle-orm";
+import { asc, eq, sql } from "drizzle-orm";
 
 import { requireWriteUser } from "@/lib/auth/guards";
 import { db } from "@/lib/db";
@@ -134,11 +134,22 @@ export async function createQuoteFromPriceBook(formData: FormData) {
   let projectId = uuidOrNull(formData.get("projectId"));
 
   // Nieuw project direct vanuit de wizard: naam getypt + geen bestaand project
-  // gekozen → meteen aanmaken en de offerte eraan koppelen.
+  // gekozen → meteen aanmaken en de offerte eraan koppelen. Bestaat er al een
+  // project met (op hoofdletters na) dezelfde naam, dan gebruiken we dát —
+  // "oliva hotel" naast "Oliva Hotel" betekent uren en kosten die je op het
+  // verkeerde scherm zoekt.
   const nieuwProject = String(formData.get("nieuwProject") ?? "").trim();
   if (!projectId && nieuwProject) {
-    const [aangemaakt] = await db.insert(projects).values({ name: nieuwProject, contactId }).returning({ id: projects.id });
-    projectId = aangemaakt.id;
+    const bestaand = await db.query.projects.findFirst({
+      where: sql`lower(trim(${projects.name})) = ${nieuwProject.toLowerCase()}`,
+      columns: { id: true },
+    });
+    if (bestaand) {
+      projectId = bestaand.id;
+    } else {
+      const [aangemaakt] = await db.insert(projects).values({ name: nieuwProject, contactId }).returning({ id: projects.id });
+      projectId = aangemaakt.id;
+    }
   }
   const taal = (["nl", "en", "es"].includes(String(formData.get("taal"))) ? String(formData.get("taal")) : "nl") as QuoteLang;
   const onvoorzienPct = parseMoney(String(formData.get("onvoorzien") ?? "")) ?? 10;
