@@ -40,3 +40,9 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# losse werkbestanden: screenshots die je in de projectmap plakt en
+# wegwerp-diagnosescripts. Horen niet in de repo, wel handig om te bewaren.
+Scherm*afbeelding*.png
+WhatsApp Image*.jpeg
+tmp-*.ts
