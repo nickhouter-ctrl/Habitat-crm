@@ -5,7 +5,7 @@
  * bewaart de organische insights in `ig_metrics`: een post die organisch goed
  * liep is een sterke kandidaat voor advertentiebeeld.
  *
- * GET  — Vercel-cron (Bearer CRON_SECRET).
+ * GET  — Vercel-cron (Bearer CRON_SECRET; zie vercel.json, dagelijks 04:10).
  * POST — handmatige trigger (ingelogd, geen viewer).
  *
  * Media worden sequentieel verwerkt (TOCTOU-note van de ingest-review).

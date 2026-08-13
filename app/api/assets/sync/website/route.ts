@@ -8,7 +8,7 @@
  * beelden van alle producten die op de website staan (websiteProductId
  * gevuld, of pushToWebsite aan) — geen HTML-parsing, geen extra endpoint.
  *
- * GET  — Vercel-cron (Bearer CRON_SECRET).
+ * GET  — Vercel-cron (Bearer CRON_SECRET; zie vercel.json, dagelijks 04:00).
  * POST — handmatige trigger (ingelogd, geen viewer — dit schrijft assets).
  *
  * Beelden worden sequentieel verwerkt: de ingest-duplicaatdetectie heeft een

@@ -33,6 +33,14 @@
       "schedule": "23 5 * * 1"
     },
     {
+      "path": "/api/assets/sync/website",
+      "schedule": "0 4 * * *"
+    },
+    {
+      "path": "/api/assets/sync/instagram",
+      "schedule": "10 4 * * *"
+    },
+    {
       "path": "/api/meta/sync",
       "schedule": "*/30 * * * *"
     },
