@@ -12,6 +12,11 @@ import { Check, Sparkles, X } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import { Badge, Input, buttonClass } from "@/components/ui";
+import {
+  allSubcategories,
+  groupForSubcategory,
+  OVERIG,
+} from "@/lib/marketing/taxonomy";
 import { cn } from "@/lib/utils";
 
 export interface PickerAsset {
@@ -84,10 +89,27 @@ export function AssetPickerModal({
       map.set(key, [...(map.get(key) ?? []), asset]);
     };
     for (const asset of filtered) {
-      if (groupBy === "categorie") add(asset.category ?? "Zonder categorie", asset);
-      else if (groupBy === "bron") add(SOURCE_LABELS[asset.source] ?? asset.source, asset);
-      else if (asset.tags.length === 0) add("Zonder tag", asset);
-      else for (const tag of asset.tags) add(`#${tag}`, asset);
+      if (groupBy === "categorie") {
+        // Taxonomie-subcategorie, getoond mét de websitemenu-groep ervoor;
+        // beelden zonder (gemapte) categorie landen expliciet in "Overig".
+        const sub = asset.category ?? OVERIG;
+        add(sub === OVERIG ? OVERIG : `${groupForSubcategory(sub)} · ${sub}`, asset);
+      } else if (groupBy === "bron") {
+        add(SOURCE_LABELS[asset.source] ?? asset.source, asset);
+      } else if (asset.tags.length === 0) {
+        add("Zonder tag", asset);
+      } else {
+        for (const tag of asset.tags) add(`#${tag}`, asset);
+      }
+    }
+    if (groupBy === "categorie") {
+      // Menuvolgorde aanhouden; "Overig" achteraan.
+      const order = allSubcategories().map((s) => `${groupForSubcategory(s)} · ${s}`);
+      return [...map.entries()].sort(([a], [b]) => {
+        if (a === OVERIG) return 1;
+        if (b === OVERIG) return -1;
+        return order.indexOf(a) - order.indexOf(b);
+      });
     }
     return [...map.entries()].sort(([a], [b]) => a.localeCompare(b, "nl"));
   }, [filtered, groupBy]);
