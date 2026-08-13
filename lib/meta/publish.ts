@@ -8,10 +8,10 @@
 import { eq } from "drizzle-orm";
 
 import { db } from "@/lib/db";
-import { ads, adSets, creativeSpecs } from "@/lib/db/schema";
+import { adCampaigns, ads, adSets, creativeSpecs } from "@/lib/db/schema";
 
-import { meta, metaErrorMessage, withMetaRetry, MetaError } from "./client";
-import type { ObjectStorySpec } from "./types";
+import { eurToCents, meta, metaErrorMessage, withMetaRetry, MetaError } from "./client";
+import type { MetaStatusFields, ObjectStorySpec } from "./types";
 
 /* ------------------------------------------------- adset-planningsvalidatie */
 
@@ -88,6 +88,199 @@ export function buildObjectStorySpec(input: ObjectStorySpecInput): ObjectStorySp
   };
   if (input.igUserId) spec.instagram_user_id = input.igUserId;
   return spec;
+}
+
+/* ------------------------------------------- campagne- & adset-push (U5) */
+
+/** Invoer voor {@link buildCampaignPayload}. */
+export interface CampaignPushInput {
+  name: string;
+  objective: string | null;
+}
+
+/**
+ * Meta-payload voor een nieuwe campagne — altijd PAUSED (§3.4).
+ * `special_ad_categories` is verplicht sinds v18; wij adverteren materialen
+ * en verbouwingen, geen woningaanbod, dus "NONE". Zou hier ooit
+ * vastgoed-aanbod door moeten, dan is HOUSING wettelijk verplicht.
+ */
+export function buildCampaignPayload(input: CampaignPushInput): Record<string, unknown> {
+  return {
+    name: input.name,
+    objective: input.objective ?? "OUTCOME_TRAFFIC",
+    status: "PAUSED",
+    special_ad_categories: ["NONE"],
+  };
+}
+
+/** Invoer voor {@link buildAdSetPayload} — spiegelt de `ad_sets`-rij. */
+export interface AdSetPushInput {
+  name: string;
+  campaignMetaId: string;
+  /** Doelstelling van de bovenliggende campagne (bepaalt optimization_goal). */
+  objective: string | null;
+  startTime: Date | null;
+  endTime: Date | null;
+  dailyBudgetEur: string | null;
+  lifetimeBudgetEur: string | null;
+  dayparting: unknown[] | null;
+  targeting: unknown | null;
+}
+
+/**
+ * Meta-payload voor een nieuwe advertentieset — altijd PAUSED. Budgetten in
+ * centen via {@link eurToCents} (nooit floats, §9); dagdelen als
+ * `adset_schedule` + `pacing_type: ["day_parting"]` (vereist lifetime-budget —
+ * de aanroeper draait {@link validateAdSetScheduling} vóóraf). Standaard-
+ * targeting is Spanje; een eigen `targeting`-object gaat één-op-één door en
+ * wordt door de aanroeper op de rij bewaard (reproduceerbaarheid).
+ * Lead-formulieren zijn een latere fase, dus leads optimaliseren we
+ * voorlopig ook op LINK_CLICKS.
+ */
+export function buildAdSetPayload(input: AdSetPushInput): Record<string, unknown> {
+  const payload: Record<string, unknown> = {
+    name: input.name,
+    campaign_id: input.campaignMetaId,
+    status: "PAUSED",
+    billing_event: "IMPRESSIONS",
+    optimization_goal: input.objective === "OUTCOME_AWARENESS" ? "REACH" : "LINK_CLICKS",
+    targeting: input.targeting ?? { geo_locations: { countries: ["ES"] } },
+  };
+  if (input.dailyBudgetEur) payload.daily_budget = eurToCents(input.dailyBudgetEur);
+  if (input.lifetimeBudgetEur) payload.lifetime_budget = eurToCents(input.lifetimeBudgetEur);
+  if (input.startTime) payload.start_time = input.startTime.toISOString();
+  if (input.endTime) payload.end_time = input.endTime.toISOString();
+  if (Array.isArray(input.dayparting) && input.dayparting.length > 0) {
+    payload.adset_schedule = input.dayparting;
+    payload.pacing_type = ["day_parting"];
+  }
+  return payload;
+}
+
+/** Uitkomst van een push of koppeling — fouten al vertaald voor de UI. */
+export type PushResult = { ok: true; metaId: string } | { ok: false; error: string };
+
+/** Zet een CRM-campagne als gepauzeerde campagne in Meta; schrijft meta_id terug. */
+export async function pushCampaignToMeta(campaignId: string): Promise<PushResult> {
+  const [campaign] = await db
+    .select()
+    .from(adCampaigns)
+    .where(eq(adCampaigns.id, campaignId))
+    .limit(1);
+  if (!campaign) return { ok: false, error: "Campagne niet gevonden in het CRM." };
+  if (campaign.metaId) return { ok: true, metaId: campaign.metaId };
+
+  try {
+    const created = await withMetaRetry(() =>
+      meta.campaigns.create(buildCampaignPayload(campaign)),
+    );
+    if (!created.id) throw new MetaError(200, created, "Meta gaf geen campagne-id terug");
+    await db
+      .update(adCampaigns)
+      .set({ metaId: created.id, effectiveStatus: "PAUSED", lastSyncedAt: new Date() })
+      .where(eq(adCampaigns.id, campaignId));
+    return { ok: true, metaId: created.id };
+  } catch (err) {
+    return { ok: false, error: metaErrorMessage(err) };
+  }
+}
+
+/**
+ * Zet een CRM-advertentieset als gepauzeerde adset in Meta; schrijft meta_id
+ * en de daadwerkelijk verstuurde targeting terug. De campagne moet al in
+ * Meta staan (of eerst gepusht/gekoppeld worden).
+ */
+export async function pushAdSetToMeta(adSetId: string): Promise<PushResult> {
+  const [adSet] = await db.select().from(adSets).where(eq(adSets.id, adSetId)).limit(1);
+  if (!adSet) return { ok: false, error: "Advertentieset niet gevonden in het CRM." };
+  if (adSet.metaId) return { ok: true, metaId: adSet.metaId };
+
+  const [campaign] = await db
+    .select()
+    .from(adCampaigns)
+    .where(eq(adCampaigns.id, adSet.campaignId))
+    .limit(1);
+  if (!campaign?.metaId) {
+    return {
+      ok: false,
+      error: "De campagne staat nog niet in Meta. Zet eerst de campagne in Meta (of koppel een bestaand id).",
+    };
+  }
+
+  const schedulingErrors = validateAdSetScheduling({
+    startTime: adSet.startTime,
+    endTime: adSet.endTime,
+    dayparting: adSet.dayparting as unknown[] | null,
+    lifetimeBudgetEur: adSet.lifetimeBudgetEur,
+    dailyBudgetEur: adSet.dailyBudgetEur,
+  });
+  if (schedulingErrors.length > 0) {
+    return { ok: false, error: schedulingErrors.join(" ") };
+  }
+
+  const payload = buildAdSetPayload({
+    name: adSet.name,
+    campaignMetaId: campaign.metaId,
+    objective: campaign.objective,
+    startTime: adSet.startTime,
+    endTime: adSet.endTime,
+    dailyBudgetEur: adSet.dailyBudgetEur,
+    lifetimeBudgetEur: adSet.lifetimeBudgetEur,
+    dayparting: adSet.dayparting as unknown[] | null,
+    targeting: adSet.targeting,
+  });
+
+  try {
+    const created = await withMetaRetry(() => meta.adSets.create(payload));
+    if (!created.id) throw new MetaError(200, created, "Meta gaf geen adset-id terug");
+    await db
+      .update(adSets)
+      .set({
+        metaId: created.id,
+        effectiveStatus: "PAUSED",
+        targeting: payload.targeting,
+        lastSyncedAt: new Date(),
+      })
+      .where(eq(adSets.id, adSetId));
+    return { ok: true, metaId: created.id };
+  } catch (err) {
+    return { ok: false, error: metaErrorMessage(err) };
+  }
+}
+
+/**
+ * Koppel een bestáánd Meta-object aan een CRM-rij (voor campagnes/adsets die
+ * al in Business Manager zijn aangemaakt). Valideert het id bij Meta en
+ * neemt meteen de actuele effective_status over.
+ */
+export async function linkExistingMetaId(
+  kind: "campaign" | "adSet",
+  localId: string,
+  metaId: string,
+): Promise<PushResult> {
+  try {
+    const status = await withMetaRetry(() =>
+      meta.request<MetaStatusFields>(`/${metaId}`, { query: { fields: "effective_status" } }),
+    );
+    const table = kind === "campaign" ? adCampaigns : adSets;
+    await db
+      .update(table)
+      .set({
+        metaId,
+        effectiveStatus: status.effective_status ?? null,
+        lastSyncedAt: new Date(),
+      })
+      .where(eq(table.id, localId));
+    return { ok: true, metaId };
+  } catch (err) {
+    if (err instanceof MetaError && (err.status === 404 || err.code === 100)) {
+      return {
+        ok: false,
+        error: "Meta kent dit id niet (of het token mag het niet zien). Controleer het id in Ads Manager.",
+      };
+    }
+    return { ok: false, error: metaErrorMessage(err) };
+  }
 }
 
 /* ---------------------------------------------------------- publicatieketen */

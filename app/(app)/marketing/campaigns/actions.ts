@@ -19,7 +19,12 @@ import { ensureRenderForSpec } from "@/lib/creatives/export";
 import { db } from "@/lib/db";
 import { adCampaigns, adSets } from "@/lib/db/schema";
 import { metaErrorMessage } from "@/lib/meta/client";
-import { validateAdSetScheduling } from "@/lib/meta/publish";
+import {
+  linkExistingMetaId,
+  pushAdSetToMeta,
+  pushCampaignToMeta,
+  validateAdSetScheduling,
+} from "@/lib/meta/publish";
 import { syncMetaStatuses } from "@/lib/meta/sync";
 import {
   buildDayparting,
@@ -158,6 +163,69 @@ export async function saveAdSet(
   }
   revalidatePath(`/marketing/campaigns/${v.campaignId}`);
   redirect(`/marketing/campaigns/${v.campaignId}`);
+}
+
+/* ------------------------------------------------------- Meta-push (U5) */
+
+/**
+ * Zet de campagne als gepauzeerde campagne in Meta en schrijf het meta_id
+ * terug. Idempotent: een campagne die al in Meta staat geeft direct succes.
+ */
+export async function pushCampaignAction(campaignId: string): Promise<{ error?: string }> {
+  await requireWriteUser();
+  const id = z.uuid().safeParse(campaignId);
+  if (!id.success) return { error: "Ongeldige campagne." };
+  const result = await pushCampaignToMeta(id.data);
+  if (!result.ok) return { error: result.error };
+  revalidatePath(`/marketing/campaigns/${id.data}`);
+  return {};
+}
+
+/** Zet de advertentieset als gepauzeerde adset in Meta (campagne moet er al staan). */
+export async function pushAdSetAction(
+  adSetId: string,
+  campaignId: string,
+): Promise<{ error?: string }> {
+  await requireWriteUser();
+  const ids = z.object({ adSetId: z.uuid(), campaignId: z.uuid() }).safeParse({ adSetId, campaignId });
+  if (!ids.success) return { error: "Ongeldige advertentieset." };
+  const result = await pushAdSetToMeta(ids.data.adSetId);
+  if (!result.ok) return { error: result.error };
+  revalidatePath(`/marketing/campaigns/${ids.data.campaignId}`);
+  return {};
+}
+
+const linkSchema = z.object({
+  kind: z.enum(["campaign", "adSet"]),
+  localId: z.uuid(),
+  campaignId: z.uuid(),
+  // Meta-object-id's zijn numeriek (soms lang) — voorkom dat er een naam of
+  // URL wordt geplakt.
+  metaId: z
+    .string()
+    .trim()
+    .regex(/^\d{5,25}$/, "Een Meta-id is een getal — kopieer het uit Ads Manager (kolom 'ID')."),
+});
+
+/** Koppel een bestaand Meta-id aan een CRM-campagne of -advertentieset. */
+export async function linkMetaIdAction(
+  _prev: CampaignActionState,
+  formData: FormData,
+): Promise<CampaignActionState> {
+  await requireWriteUser();
+  const parsed = linkSchema.safeParse({
+    kind: formData.get("kind"),
+    localId: formData.get("localId"),
+    campaignId: formData.get("campaignId"),
+    metaId: formData.get("metaId"),
+  });
+  if (!parsed.success) {
+    return { error: z.flattenError(parsed.error).fieldErrors.metaId?.[0] ?? "Ongeldige invoer." };
+  }
+  const result = await linkExistingMetaId(parsed.data.kind, parsed.data.localId, parsed.data.metaId);
+  if (!result.ok) return { error: result.error };
+  revalidatePath(`/marketing/campaigns/${parsed.data.campaignId}`);
+  return {};
 }
 
 /* ------------------------------------------------------------------- render */

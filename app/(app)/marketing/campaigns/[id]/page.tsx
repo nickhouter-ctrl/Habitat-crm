@@ -11,6 +11,7 @@ import {
   describeReviewFeedback,
   PROBLEM_STATUSES,
 } from "@/components/marketing/campaigns/feedback";
+import { MetaPushControls } from "@/components/marketing/campaigns/meta-push-controls";
 import { PublishAdForm } from "@/components/marketing/campaigns/publish-ad-form";
 import { describeDayparting, formatMadrid } from "@/components/marketing/campaigns/schedule";
 import {
@@ -91,6 +92,22 @@ export default async function CampaignDetailPage({
           </LinkButton>
         }
       />
+
+      {!campaign.metaId && (
+        <Card className="mb-5 p-4">
+          <h2 className="mb-1 text-sm font-medium">Deze campagne staat nog niet in Meta</h2>
+          <p className="mb-3 text-sm text-muted">
+            Zet hem gepauzeerd in Meta, of koppel het id van een campagne die al in Business
+            Manager bestaat. Daarna kun je advertentiesets en advertenties publiceren.
+          </p>
+          <MetaPushControls
+            kind="campaign"
+            localId={id}
+            campaignId={id}
+            pushLabel="Zet campagne in Meta"
+          />
+        </Card>
+      )}
 
       {sets.length === 0 && (
         <EmptyState
@@ -188,11 +205,23 @@ export default async function CampaignDetailPage({
                 <div className="mt-3">
                   {set.metaId ? (
                     <PublishAdForm adSetId={set.id} approvedSpecs={approvedOptions} />
+                  ) : campaign.metaId ? (
+                    <div className="space-y-2">
+                      <p className="text-sm text-muted">
+                        Zet deze advertentieset eerst in Meta (gepauzeerd), of koppel een
+                        bestaande adset uit Ads Manager — daarna kun je hier publiceren.
+                      </p>
+                      <MetaPushControls
+                        kind="adSet"
+                        localId={set.id}
+                        campaignId={id}
+                        pushLabel="Zet advertentieset in Meta"
+                      />
+                    </div>
                   ) : (
                     <p className="text-sm text-muted">
-                      Deze advertentieset staat nog niet in Meta. Publiceren kan zodra de set een
-                      Meta-id heeft (volgt bij de eerste campagnepush vanuit Business Manager of
-                      een latere iteratie van de publicatieketen).
+                      Zet eerst de campagne in Meta (bovenaan deze pagina); daarna kan deze
+                      advertentieset erin en kun je hier publiceren.
                     </p>
                   )}
                 </div>

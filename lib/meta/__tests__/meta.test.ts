@@ -15,7 +15,12 @@ import {
   throttleDelayMs,
   withMetaRetry,
 } from "../client";
-import { buildObjectStorySpec, validateAdSetScheduling } from "../publish";
+import {
+  buildAdSetPayload,
+  buildCampaignPayload,
+  buildObjectStorySpec,
+  validateAdSetScheduling,
+} from "../publish";
 
 /* ------------------------------------------------------------- eurToCents */
 
@@ -241,6 +246,91 @@ describe("validateAdSetScheduling", () => {
       dailyBudgetEur: null,
     });
     expect(none.length).toBeGreaterThan(0);
+  });
+});
+
+/* ------------------------------------------------- buildCampaignPayload */
+
+describe("buildCampaignPayload", () => {
+  it("maakt campagnes ALTIJD gepauzeerd aan (§3.4)", () => {
+    const payload = buildCampaignPayload({ name: "Zomer ES", objective: "OUTCOME_TRAFFIC" });
+    expect(payload.status).toBe("PAUSED");
+    expect(payload.name).toBe("Zomer ES");
+    expect(payload.objective).toBe("OUTCOME_TRAFFIC");
+    expect(payload.special_ad_categories).toEqual(["NONE"]);
+  });
+
+  it("valt terug op OUTCOME_TRAFFIC zonder doelstelling", () => {
+    expect(buildCampaignPayload({ name: "x", objective: null }).objective).toBe(
+      "OUTCOME_TRAFFIC",
+    );
+  });
+});
+
+/* ---------------------------------------------------- buildAdSetPayload */
+
+describe("buildAdSetPayload", () => {
+  const base = {
+    name: "Set ES",
+    campaignMetaId: "meta-camp-1",
+    objective: "OUTCOME_TRAFFIC" as string | null,
+    startTime: new Date("2026-09-01T06:00:00Z"),
+    endTime: null as Date | null,
+    dailyBudgetEur: "25.00" as string | null,
+    lifetimeBudgetEur: null as string | null,
+    dayparting: null as unknown[] | null,
+    targeting: null,
+  };
+
+  it("bouwt een gepauzeerde adset met dagbudget in centen (geen floats)", () => {
+    const payload = buildAdSetPayload(base);
+    expect(payload.status).toBe("PAUSED");
+    expect(payload.campaign_id).toBe("meta-camp-1");
+    expect(payload.daily_budget).toBe(2500);
+    expect(payload).not.toHaveProperty("lifetime_budget");
+    expect(payload.start_time).toBe("2026-09-01T06:00:00.000Z");
+    expect(payload).not.toHaveProperty("end_time");
+  });
+
+  it("stuurt lifetime-budget mét einddatum", () => {
+    const payload = buildAdSetPayload({
+      ...base,
+      dailyBudgetEur: null,
+      lifetimeBudgetEur: "350.00",
+      endTime: new Date("2026-09-15T18:00:00Z"),
+    });
+    expect(payload.lifetime_budget).toBe(35000);
+    expect(payload.end_time).toBe("2026-09-15T18:00:00.000Z");
+    expect(payload).not.toHaveProperty("daily_budget");
+  });
+
+  it("zet dagdelen om naar adset_schedule + pacing_type day_parting", () => {
+    const schedule = [{ days: [1, 2], start_minute: 540, end_minute: 1260 }];
+    const payload = buildAdSetPayload({
+      ...base,
+      dailyBudgetEur: null,
+      lifetimeBudgetEur: "350.00",
+      endTime: new Date("2026-09-15T18:00:00Z"),
+      dayparting: schedule,
+    });
+    expect(payload.adset_schedule).toEqual(schedule);
+    expect(payload.pacing_type).toEqual(["day_parting"]);
+  });
+
+  it("target standaard Spanje; eigen targeting gaat één-op-één door", () => {
+    expect(buildAdSetPayload(base).targeting).toEqual({
+      geo_locations: { countries: ["ES"] },
+    });
+    const custom = { geo_locations: { cities: [{ key: "123" }] } };
+    expect(buildAdSetPayload({ ...base, targeting: custom }).targeting).toEqual(custom);
+  });
+
+  it("kiest optimalisatiedoel passend bij de campagnedoelstelling", () => {
+    expect(buildAdSetPayload(base).optimization_goal).toBe("LINK_CLICKS");
+    expect(
+      buildAdSetPayload({ ...base, objective: "OUTCOME_AWARENESS" }).optimization_goal,
+    ).toBe("REACH");
+    expect(buildAdSetPayload(base).billing_event).toBe("IMPRESSIONS");
   });
 });
 
