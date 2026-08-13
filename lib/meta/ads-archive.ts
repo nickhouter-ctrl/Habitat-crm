@@ -29,6 +29,7 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 /** Eén advertentie uit het `ads_archive`-endpoint (alleen gebruikte velden). */
 export interface ArchiveAd {
   id: string;
+  page_id?: string;
   page_name?: string;
   ad_creative_bodies?: string[];
   ad_creative_link_titles?: string[];
@@ -247,6 +248,51 @@ export async function fetchArchiveAds(metaPageId: string): Promise<ArchiveAd[]> 
   return all;
 }
 
+/* ------------------------------------------------------- zoeken op naam (U8) */
+
+/** Eén paginatreffer uit een naam-zoekopdracht in het archief. */
+export interface PageHit {
+  pageId: string;
+  pageName: string;
+  /** Aantal archief-advertenties dat de zoekopdracht voor deze pagina vond. */
+  adCount: number;
+}
+
+/** Groepeer archief-advertenties per pagina, meeste advertenties eerst (puur). */
+export function aggregatePageHits(ads: ArchiveAd[]): PageHit[] {
+  const byPage = new Map<string, PageHit>();
+  for (const ad of ads) {
+    if (!ad.page_id) continue;
+    const hit = byPage.get(ad.page_id);
+    if (hit) {
+      hit.adCount++;
+    } else {
+      byPage.set(ad.page_id, {
+        pageId: ad.page_id,
+        pageName: ad.page_name ?? ad.page_id,
+        adCount: 1,
+      });
+    }
+  }
+  return [...byPage.values()].sort((a, b) => b.adCount - a.adCount);
+}
+
+/**
+ * Zoek adverterende pagina's op naam via `search_terms` (U8) — zodat het team
+ * een concurrent kan volgen zonder zelf `view_all_page_id` uit de Ad
+ * Library-URL te vissen. Zoekt in het ES-archief en groepeert per pagina.
+ */
+export async function searchArchivePages(term: string): Promise<PageHit[]> {
+  const res = await archiveGet<{ data?: ArchiveAd[] }>("/ads_archive", {
+    ad_reached_countries: JSON.stringify(["ES"]),
+    search_terms: term,
+    ad_active_status: "ALL",
+    fields: "id,page_id,page_name",
+    limit: "100",
+  });
+  return aggregatePageHits(res.data ?? []);
+}
+
 /** Verloopdatum van het archief-token via /debug_token (null = onbekend). */
 export async function fetchArchiveTokenExpiry(): Promise<Date | null> {
   try {
@@ -291,6 +337,8 @@ export async function runCompetitorSync(now = new Date()): Promise<CompetitorSyn
 
   const allCompetitors: Competitor[] = await db.select().from(competitors);
   for (const competitor of allCompetitors) {
+    // Prospects zonder page-id (U8) kunnen nog niet gesynct worden.
+    if (!competitor.metaPageId) continue;
     try {
       const archiveAds = await fetchArchiveAds(competitor.metaPageId);
       const existing = await db

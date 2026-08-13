@@ -24,6 +24,7 @@ import {
   AddCompetitorForm,
   CompetitorSyncButton,
 } from "@/components/marketing/competitors/competitor-controls";
+import { CompetitorSearch } from "@/components/marketing/competitors/competitor-search";
 import { db } from "@/lib/db";
 import { competitorAds, competitors } from "@/lib/db/schema";
 import {
@@ -101,9 +102,18 @@ export default async function CompetitorsPage() {
         </div>
       )}
 
-      <div className="mb-5">
-        <AddCompetitorForm />
-      </div>
+      <Card className="mb-5 space-y-3 p-4">
+        <h2 className="text-sm font-medium">Concurrent zoeken op naam</h2>
+        <CompetitorSearch hasToken={!!process.env.META_ADS_ARCHIVE_TOKEN} />
+        <details>
+          <summary className="cursor-pointer text-xs text-muted">
+            Of handmatig toevoegen met een Meta Page-ID
+          </summary>
+          <div className="mt-3">
+            <AddCompetitorForm />
+          </div>
+        </details>
+      </Card>
 
       {perCompetitor.length === 0 ? (
         <EmptyState
@@ -134,6 +144,11 @@ export default async function CompetitorsPage() {
                       >
                         {competitor.website.replace(/^https?:\/\//, "")}
                       </a>
+                    )}
+                    {!competitor.metaPageId && (
+                      <Badge tone="warning" className="text-[10px]">
+                        prospect — nog geen page-ID
+                      </Badge>
                     )}
                   </div>
                   <form action={removeCompetitor}>
@@ -246,12 +261,24 @@ export default async function CompetitorsPage() {
                       ))}
                     </TBody>
                   </Table>
-                ) : (
+                ) : competitor.metaPageId ? (
                   <p className="border-t border-border/60 px-4 py-3 text-xs text-muted">
                     {ads.length === 0
                       ? "Nog geen advertenties opgehaald — draai de sync."
                       : "Nog geen langlopers (≥ 30 dagen) — nog te weinig historie om iets uit af te leiden."}
                   </p>
+                ) : (
+                  <div className="border-t border-border/60 px-4 py-3">
+                    <p className="mb-2 text-xs text-muted">
+                      Koppel eerst een Meta Page-ID — daarna haalt de wekelijkse sync het
+                      advertentiearchief op.
+                    </p>
+                    <CompetitorSearch
+                      hasToken={!!process.env.META_ADS_ARCHIVE_TOKEN}
+                      competitorId={competitor.id}
+                      prefill={competitor.name}
+                    />
+                  </div>
                 )}
               </Card>
             );

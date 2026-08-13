@@ -6,6 +6,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  aggregatePageHits,
   daysRunning,
   mapArchiveAd,
   summarizeCompetitorAds,
@@ -95,6 +96,28 @@ describe("tokenExpiryWarning", () => {
 
   it("geeft null zonder verloopdatum (die kennen we dan niet)", () => {
     expect(tokenExpiryWarning(null, NOW)).toBeNull();
+  });
+});
+
+/* --------------------------------------------------------- aggregatePageHits */
+
+describe("aggregatePageHits", () => {
+  it("groepeert zoekresultaten per pagina en telt advertenties, meeste eerst (U8)", () => {
+    const hits = aggregatePageHits([
+      { id: "1", page_id: "100", page_name: "Azulejos Jávea" },
+      { id: "2", page_id: "100", page_name: "Azulejos Jávea" },
+      { id: "3", page_id: "200", page_name: "Eurogres" },
+      { id: "4", page_id: "100", page_name: "Azulejos Jávea" },
+    ]);
+    expect(hits).toEqual([
+      { pageId: "100", pageName: "Azulejos Jávea", adCount: 3 },
+      { pageId: "200", pageName: "Eurogres", adCount: 1 },
+    ]);
+  });
+
+  it("slaat resultaten zonder page_id over en is leeg-veilig", () => {
+    expect(aggregatePageHits([{ id: "1" }])).toEqual([]);
+    expect(aggregatePageHits([])).toEqual([]);
   });
 });
 

@@ -54,6 +54,72 @@ export async function addCompetitor(formData: FormData): Promise<string | null> 
   return null;
 }
 
+/**
+ * Volg een pagina uit de archief-zoekresultaten (U8): bestaat er al een
+ * prospect met dezelfde naam, dan krijgt die het page-id; anders komt er een
+ * nieuwe concurrent bij. Eén klik, geen view_all_page_id-gedoe.
+ */
+export async function followPageAction(formData: FormData): Promise<string | null> {
+  await requireWriteUser();
+  const parsed = z
+    .object({
+      name: z.string().trim().min(1).max(120),
+      pageId: z.string().trim().regex(/^\d{3,20}$/),
+    })
+    .safeParse({ name: formData.get("name"), pageId: formData.get("pageId") });
+  if (!parsed.success) return "Ongeldig zoekresultaat.";
+
+  const [byPage] = await db
+    .select({ id: competitors.id, name: competitors.name })
+    .from(competitors)
+    .where(eq(competitors.metaPageId, parsed.data.pageId))
+    .limit(1);
+  if (byPage) return `Deze pagina wordt al gevolgd als "${byPage.name}".`;
+
+  const [prospect] = await db
+    .select({ id: competitors.id })
+    .from(competitors)
+    .where(eq(competitors.name, parsed.data.name))
+    .limit(1);
+  if (prospect) {
+    await db
+      .update(competitors)
+      .set({ metaPageId: parsed.data.pageId })
+      .where(eq(competitors.id, prospect.id));
+  } else {
+    await db.insert(competitors).values({ name: parsed.data.name, metaPageId: parsed.data.pageId });
+  }
+  revalidatePath("/marketing/competitors");
+  return null;
+}
+
+/** Koppel een gevonden page-id aan een bestaande prospect ("Zoek page-ID"). */
+export async function setPageIdAction(formData: FormData): Promise<string | null> {
+  await requireWriteUser();
+  const parsed = z
+    .object({
+      id: z.uuid(),
+      pageId: z.string().trim().regex(/^\d{3,20}$/),
+    })
+    .safeParse({ id: formData.get("id"), pageId: formData.get("pageId") });
+  if (!parsed.success) return "Ongeldige koppeling.";
+
+  const [byPage] = await db
+    .select({ id: competitors.id, name: competitors.name })
+    .from(competitors)
+    .where(eq(competitors.metaPageId, parsed.data.pageId))
+    .limit(1);
+  if (byPage && byPage.id !== parsed.data.id) {
+    return `Deze pagina is al gekoppeld aan "${byPage.name}".`;
+  }
+  await db
+    .update(competitors)
+    .set({ metaPageId: parsed.data.pageId })
+    .where(eq(competitors.id, parsed.data.id));
+  revalidatePath("/marketing/competitors");
+  return null;
+}
+
 /** Stop met volgen; de opgehaalde advertentiehistorie wordt mee verwijderd. */
 export async function removeCompetitor(formData: FormData): Promise<void> {
   await requireWriteUser();
