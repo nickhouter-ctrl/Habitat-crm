@@ -36,9 +36,33 @@ export function websiteBaseUrl(): string {
 const IMG_SKIP = /\.svg($|\?)|\.ico($|\?)|^data:|logo|favicon|icon[-_.]/i;
 const VIDEO_EXT = /\.(mp4|webm|mov)($|\?)/i;
 
+/**
+ * Decodeer HTML-entities in attribuutwaarden — servergerenderde HTML bevat
+ * `&amp;` in querystrings; onbewerkt doorfetchen gaf 400's van de site.
+ */
+function decodeEntities(value: string): string {
+  return value
+    .replace(/&amp;/gi, "&")
+    .replace(/&quot;/gi, '"')
+    .replace(/&#0?39;|&apos;/gi, "'")
+    .replace(/&lt;/gi, "<")
+    .replace(/&gt;/gi, ">")
+    .replace(/&#x2f;/gi, "/")
+    .replace(/&#(\d+);/g, (_, n: string) => String.fromCharCode(Number(n)));
+}
+
 function absolutize(src: string, baseUrl: string): string | null {
   try {
-    return new URL(src, `${baseUrl}/`).toString();
+    const url = new URL(decodeEntities(src), `${baseUrl}/`);
+    // Next.js-image-optimizer: niet de optimizer-URL spiegelen maar het
+    // originele bestand uit de url=-parameter — de optimizer geeft 400 op
+    // onbekende breedtes en levert her-gecomprimeerde varianten.
+    if (url.pathname === "/_next/image") {
+      const original = url.searchParams.get("url");
+      if (original) return absolutize(original, baseUrl);
+      return null;
+    }
+    return url.toString();
   } catch {
     return null;
   }
@@ -87,9 +111,11 @@ export function extractMediaFromHtml(html: string, baseUrl: string): PageMedia {
     const srcset = /srcset\s*=\s*["']([^"']+)["']/i.exec(tag)?.[1];
     const src = /\bsrc\s*=\s*["']([^"']+)["']/i.exec(tag)?.[1];
     const candidate = (srcset && largestFromSrcset(srcset)) || src;
-    if (!candidate || IMG_SKIP.test(candidate)) continue;
+    if (!candidate || candidate.startsWith("data:")) continue;
     const abs = absolutize(candidate, baseUrl);
-    if (abs) images.add(abs);
+    // Filter op de UITGEPAKTE URL — een logo achter /_next/image?url=… zou
+    // anders door de mazen glippen.
+    if (abs && !IMG_SKIP.test(abs)) images.add(abs);
   }
 
   for (const m of html.matchAll(/<(?:video|source)\b[^>]*\bsrc\s*=\s*["']([^"']+)["'][^>]*>/gi)) {

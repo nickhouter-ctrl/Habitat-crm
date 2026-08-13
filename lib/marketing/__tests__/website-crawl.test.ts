@@ -56,6 +56,31 @@ describe("extractMediaFromHtml", () => {
     ]);
   });
 
+  it("decodeert HTML-entities in URL's (&amp; uit servergerenderde HTML)", () => {
+    const html = `<img src="/_next/image?url=%2Fprojects%2Fwip%2F93.jpg&amp;w=3840&amp;q=75">`;
+    expect(extractMediaFromHtml(html, BASE).images).toEqual([
+      `${BASE}/projects/wip/93.jpg`,
+    ]);
+  });
+
+  it("pakt bij _next/image-URL's het originele pad uit de url=-parameter", () => {
+    const html = `
+      <img src="/_next/image?url=%2Fimg%2Fhero.webp&w=1920&q=80">
+      <img src="https://habitat-one.com/_next/image?url=https%3A%2F%2Fcdn.habitat-one.com%2Fx.jpg&w=640">`;
+    expect(extractMediaFromHtml(html, BASE).images).toEqual([
+      `${BASE}/img/hero.webp`,
+      "https://cdn.habitat-one.com/x.jpg",
+    ]);
+  });
+
+  it("ontdubbelt ook wanneer optimizer- en origineel-URL naar hetzelfde beeld wijzen", () => {
+    const html = `
+      <img src="/_next/image?url=%2Fa.jpg&w=640">
+      <img src="/_next/image?url=%2Fa.jpg&amp;w=3840">
+      <img src="/a.jpg">`;
+    expect(extractMediaFromHtml(html, BASE).images).toEqual([`${BASE}/a.jpg`]);
+  });
+
   it("ontdubbelt binnen één pagina", () => {
     const html = `<img src="/a.jpg"><img src="/a.jpg"><video src="/v.mp4"></video><video src="/v.mp4"></video>`;
     const media = extractMediaFromHtml(html, BASE);
