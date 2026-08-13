@@ -35,6 +35,11 @@ import {
   X,
   HandCoins,
   FileCheck,
+  Images,
+  Palette,
+  Send,
+  TrendingUp,
+  Radar,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import Image from "next/image";
@@ -104,6 +109,16 @@ const NAV_GROUPS: { label: string | null; items: NavItem[] }[] = [
       { href: "/shipments", label: "Shipments", icon: Boxes },
       { href: "/pakbonnen", label: "Pakbonnen", icon: Truck },
       { href: "/leveringen", label: "Leveringen", icon: PackageCheck },
+    ],
+  },
+  {
+    label: "Marketing",
+    items: [
+      { href: "/marketing/assets", label: "Beeldbibliotheek", icon: Images },
+      { href: "/marketing/creatives", label: "Creatives", icon: Palette },
+      { href: "/marketing/campaigns", label: "Campagnes", icon: Send },
+      { href: "/marketing/insights", label: "Wat werkt", icon: TrendingUp },
+      { href: "/marketing/competitors", label: "Concurrenten", icon: Radar },
     ],
   },
   {
