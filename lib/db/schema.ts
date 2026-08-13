@@ -2521,6 +2521,9 @@ export const competitorSegment = pgEnum("competitor_segment", [
   "estate_agent",
 ]);
 
+/** Mediatype van een asset (U7): stilstaand beeld of video. */
+export const assetMediaType = pgEnum("asset_media_type", ["image", "video"]);
+
 /**
  * Elk bruikbaar beeld, ongeacht herkomst. Beelden worden bij ingest altijd
  * gekopieerd naar eigen Storage (`storagePath`) — bron-URL's (zeker die van
@@ -2533,6 +2536,8 @@ export const assets = pgTable(
       .primaryKey()
       .default(sql`gen_random_uuid()`),
     source: assetSource().notNull(),
+    /** Beeld of video (U7). Video's hebben geen phash — dedupe op inhoudshash. */
+    mediaType: assetMediaType().notNull().default("image"),
     /** Slug, IG-media-id of bestandsnaam — waarmee de bron het beeld aanduidt. */
     sourceRef: text(),
     /** Oorspronkelijke locatie; alleen herkomst, nooit als servebron gebruiken. */
@@ -2550,6 +2555,10 @@ export const assets = pgTable(
     tags: text().array(),
     /** Organische IG-cijfers — alleen bij herkomst instagram. Hint, geen bewijs. */
     igMetrics: jsonb().$type<{ reach?: number; likes?: number; saved?: number }>(),
+    /** Videoduur in seconden (browser-metadata bij upload); null bij beeld. */
+    durationSeconds: numeric({ precision: 8, scale: 2 }),
+    /** Eigen Storage-kopie van het posterframe; null bij beeld. */
+    thumbnailPath: text(),
     ...timestamps,
   },
   (t) => [
@@ -2715,7 +2724,14 @@ export const ads = pgTable(
       .primaryKey()
       .default(sql`gen_random_uuid()`),
     adSetId: uuid().notNull(),
-    specId: uuid().notNull(),
+    /** CreativeSpec (beeld-ads via de editor). Null bij video-ads (U7). */
+    specId: uuid(),
+    /**
+     * Video-asset (U7). Precies één van specId/assetId is gevuld: de editor
+     * is image-only, dus een video-ad verwijst direct naar het asset en
+     * krijgt zijn copy uit copy_blocks in de publish-flow.
+     */
+    assetId: uuid(),
     name: text().notNull(),
     metaId: text(),
     /** Meta-id van de adcreative uit de publicatieketen (PNG → adimages → adcreatives). */
@@ -2731,7 +2747,10 @@ export const ads = pgTable(
   (t) => [
     index("ads_ad_set_idx").on(t.adSetId),
     index("ads_spec_idx").on(t.specId),
+    index("ads_asset_idx").on(t.assetId),
     uniqueIndex("ads_meta_idx").on(t.metaId),
+    // Beeld-ad (spec) óf video-ad (asset) — nooit allebei, nooit geen van beide.
+    check("ads_spec_xor_asset", sql`(spec_id is null) <> (asset_id is null)`),
   ],
 ).enableRLS();
 
@@ -2889,6 +2908,7 @@ export const adSetsRelations = relations(adSets, ({ one, many }) => ({
 export const adsRelations = relations(ads, ({ one, many }) => ({
   adSet: one(adSets, { fields: [ads.adSetId], references: [adSets.id] }),
   spec: one(creativeSpecs, { fields: [ads.specId], references: [creativeSpecs.id] }),
+  asset: one(assets, { fields: [ads.assetId], references: [assets.id] }),
   metricsDaily: many(adMetricsDaily),
 }));
 
