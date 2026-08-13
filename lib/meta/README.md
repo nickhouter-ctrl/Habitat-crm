@@ -36,5 +36,19 @@ Let op: Meta plant in de tijdzone van het advertentieaccount — controleer die
 in Business Manager (hoort Europe/Madrid te zijn) vóór start-/eindtijden en
 dagdelen worden gebruikt (brief §9).
 
+## Concurrentiemonitor (fase 5) — `ads-archive.ts`
+
+Leest het publieke DSA-advertentiearchief (`/ads_archive`,
+`ad_reached_countries=['ES']`, `search_page_ids`) — geen scraping. Wekelijkse
+pull via `GET /api/competitors/sync` (cron, ma 04:45); upsert in
+`competitor_ads`: nieuw = first_seen, bestaand = last_seen + verversen, en een
+gestopte advertentie krijgt `delivery_stop` maar verdwijnt nooit. Alleen
+tekstvelden en de `ad_snapshot_url` als verwijzing — nooit media van
+concurrenten naar onze Storage. Het kernsignaal is looptijd
+(`days_running`); dashboard op `/marketing/competitors`. Token:
+`META_ADS_ARCHIVE_TOKEN` (verloopt ±60 dagen; `/debug_token`-check toont een
+verloopwaarschuwing in het dashboard in plaats van stil te falen).
+
 Tests: `npx vitest run lib/meta` — pure logica (centen, BUC-parsing, backoff,
-foutvertaling, planningsvalidatie, object_story_spec).
+foutvertaling, planningsvalidatie, object_story_spec, looptijd/mapping/
+aggregatie van de concurrentiemonitor).
