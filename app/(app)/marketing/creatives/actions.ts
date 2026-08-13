@@ -25,18 +25,23 @@ import { validateSpecCopy } from "@/lib/creatives/validate";
 import { FORMAT_NAMES } from "@/lib/creatives/tokens";
 import { db } from "@/lib/db";
 import { assets, copyBlocks, creativeSpecs, products } from "@/lib/db/schema";
+import { generateCreativeCopy } from "@/lib/marketing/ai-copy";
 import {
-  resolveCopyPrefill,
-  type CreativeLocale,
-  type ProductTokens,
-} from "@/components/marketing/creatives/prefill";
+  formatPriceFrom,
+  getCopySuggestion,
+  type CopyBlockLike,
+} from "@/lib/marketing/copy-suggest";
+import { TEMPLATES } from "@/lib/creatives/templates";
 
 const LOCALES = ["nl", "en", "es", "de"] as const;
 
-/** Payload uit de editor: een CreativeSpec mét verplichte asset + herkomst. */
+/** Payload uit de editor: een CreativeSpec mét verplichte asset + herkomst.
+ *  `category` wordt niet opgeslagen — hij stuurt alleen de prefill van de
+ *  overige talen bij "Maak set" (categorie volstaat, product is optioneel). */
 const payloadSchema = creativeSpecSchema.extend({
   assetId: z.uuid("Kies eerst een beeld uit de bibliotheek."),
   parentId: z.uuid().nullish(),
+  category: z.string().max(200).nullish(),
 });
 
 export interface EditorActionState {
@@ -71,6 +76,22 @@ function parsePayload(formData: FormData):
 async function assertAssetExists(assetId: string): Promise<boolean> {
   const [row] = await db.select({ id: assets.id }).from(assets).where(eq(assets.id, assetId)).limit(1);
   return !!row;
+}
+
+/** Producttokens voor prefill en AI-copy (naam, categorie, vanafprijs, specs). */
+async function loadProductTokens(productId: string | null) {
+  if (!productId) return null;
+  const [p] = await db
+    .select({
+      name: products.name,
+      category: products.category,
+      priceFromEur: products.priceFromEur,
+      specs: products.specs,
+    })
+    .from(products)
+    .where(eq(products.id, productId))
+    .limit(1);
+  return p ?? null;
 }
 
 /** Sla één spec op als concept en ga naar de detailpagina. */
@@ -146,28 +167,17 @@ export async function createCreativeSet(
           ),
         )
     : [];
-  let product: ProductTokens | null = null;
-  if (spec.productId) {
-    const [p] = await db
-      .select({
-        name: products.name,
-        nameI18n: products.nameI18n,
-        priceFromEur: products.priceFromEur,
-        specs: products.specs,
-      })
-      .from(products)
-      .where(eq(products.id, spec.productId))
-      .limit(1);
-    product = p ?? null;
-  }
+  const product = await loadProductTokens(spec.productId ?? null);
 
-  const copyFor = (locale: CreativeLocale) => {
+  const copyFor = (locale: "nl" | "en" | "es" | "de") => {
     if (locale === spec.locale || !spec.copyAngle) return spec.copy;
-    const prefill = resolveCopyPrefill(blocks, {
-      locale,
+    const prefill = getCopySuggestion(blocks as CopyBlockLike[], {
       angle: spec.copyAngle,
+      locale,
       productId: spec.productId ?? null,
-      product,
+      priceFrom: product?.priceFromEur ?? null,
+      finish: (product?.specs?.finish as string | undefined) ?? null,
+      category: spec.category ?? product?.category ?? null,
     });
     // Terugval per rol op de editor-copy: liever dezelfde tekst dan een leeg veld.
     return {
@@ -256,6 +266,53 @@ export async function approveCreative(formData: FormData): Promise<void> {
   revalidatePath("/marketing/creatives");
   revalidatePath(`/marketing/creatives/${id}`);
   redirect(`/marketing/creatives/${id}`);
+}
+
+/* ---------------------------------------------------------------- AI-copy */
+
+const aiRequestSchema = z.object({
+  locale: z.enum(["nl", "en", "es", "de"]),
+  angle: z.enum(["material", "price", "showroom", "project", "seasonal"]).nullish(),
+  productId: z.uuid().nullish(),
+  category: z.string().max(200).nullish(),
+  template: z.enum(["frame", "split", "swatch", "price"]),
+  format: z.enum(["1080x1080", "1080x1350", "1080x1920"]),
+});
+
+/**
+ * "Genereer met AI" (taak U3): schrijf alle copyvelden in de doeltaal, binnen
+ * de tekenlimieten van het gekozen sjabloon × formaat. Zonder
+ * ANTHROPIC_API_KEY of bij een fout krijgt de gebruiker een duidelijke
+ * melding en blijft "Vul automatisch" (copyblokken) het pad.
+ */
+export async function generateAiCopyAction(input: unknown): Promise<{
+  copy?: { eyebrow?: string; headline?: string; subline?: string; cta?: string; badge?: string };
+  error?: string;
+}> {
+  await requireWriteUser();
+  const parsed = aiRequestSchema.safeParse(input);
+  if (!parsed.success) return { error: "Ongeldige aanvraag voor AI-copy." };
+  const req = parsed.data;
+
+  const product = await loadProductTokens(req.productId ?? null);
+  const limits = TEMPLATES[req.template].limits[req.format];
+  const copy = await generateCreativeCopy({
+    locale: req.locale,
+    angle: req.angle ?? null,
+    productName: product?.name ?? null,
+    category: req.category ?? product?.category ?? null,
+    priceFormatted: product?.priceFromEur
+      ? formatPriceFrom(product.priceFromEur, req.locale)
+      : null,
+    limits,
+  });
+  if (!copy) {
+    return {
+      error:
+        "AI-copy is niet beschikbaar (geen ANTHROPIC_API_KEY of de aanvraag mislukte). Gebruik 'Vul automatisch' voor de vastgelegde tekstblokken.",
+    };
+  }
+  return { copy };
 }
 
 /** Archiveer een spec (concept of goedgekeurd, niet live). */

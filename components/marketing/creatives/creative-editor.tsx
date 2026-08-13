@@ -9,12 +9,14 @@
  * "Maak set" genereert 3 formaten × 4 talen als aparte specs — twaalf
  * bestanden uit één handeling, de belangrijkste tijdwinst van de module.
  */
+import { Sparkles } from "lucide-react";
 import Link from "next/link";
 import { useActionState, useEffect, useMemo, useRef, useState } from "react";
 
 import {
   createCreativeSet,
   createCreativeSpec,
+  generateAiCopyAction,
   type EditorActionState,
 } from "@/app/(app)/marketing/creatives/actions";
 import { Badge, Card, Field, Input, Label, buttonClass } from "@/components/ui";
@@ -29,15 +31,15 @@ import {
   type PaletteName,
 } from "@/lib/creatives/tokens";
 import { headlineScaleFor, validateSpecCopy } from "@/lib/creatives/validate";
-import { cn } from "@/lib/utils";
 import {
-  resolveCopyPrefill,
-  type CopyBlockRow,
-  type CreativeLocale,
-  type ProductTokens,
-} from "./prefill";
+  getCopySuggestion,
+  type CopyBlockLike,
+} from "@/lib/marketing/copy-suggest";
+import { cn } from "@/lib/utils";
 
 /* -------------------------------------------------------------------- types */
+
+export type CreativeLocale = "nl" | "en" | "es" | "de";
 
 export interface EditorAsset {
   id: string;
@@ -46,15 +48,28 @@ export interface EditorAsset {
   productId: string | null;
 }
 
-export interface EditorProduct extends ProductTokens {
+export interface EditorProduct {
   id: string;
   name: string;
   category: string | null;
+  /** Vanafprijs als db-`numeric`-string; tokens in copyblokken gebruiken hem. */
+  priceFromEur: string | null;
+  specs: Record<string, string | number> | null;
+}
+
+/** Best presterende combinatie uit de leerlaag (brief §8) — vooringevuld,
+ *  altijd overschrijfbaar. */
+export interface EditorSuggestionProp {
+  template?: string;
+  palette?: string;
+  copyAngle?: string;
+  reason: string;
 }
 
 export interface EditorInitial {
   assetId?: string;
   productId?: string | null;
+  category?: string | null;
   template?: TemplateName;
   palette?: PaletteName;
   format?: FormatName;
@@ -102,21 +117,40 @@ function b64url(json: string): string {
 export function CreativeEditor({
   assets,
   products,
+  categories,
   copyBlocks,
   initial,
+  suggestion,
+  aiEnabled,
 }: {
   assets: EditorAsset[];
   products: EditorProduct[];
-  copyBlocks: CopyBlockRow[];
+  /** Bekende productcategorieën — categorie volstaat, product is optioneel. */
+  categories: string[];
+  copyBlocks: CopyBlockLike[];
   initial: EditorInitial;
+  /** Best presterende combinatie uit de leerlaag; null zonder data. */
+  suggestion?: EditorSuggestionProp | null;
+  /** Is er een ANTHROPIC_API_KEY? Zo niet, geen AI-knop. */
+  aiEnabled?: boolean;
 }) {
   const [assetId, setAssetId] = useState(initial.assetId ?? "");
   const [productId, setProductId] = useState(initial.productId ?? "");
-  const [template, setTemplate] = useState<TemplateName>(initial.template ?? "frame");
+  const [category, setCategory] = useState(initial.category ?? "");
+  // Leerlaag-suggestie als default — alleen als er geen expliciete beginstand
+  // is (dupliceren wint), en alleen met waarden die de registry kent.
+  const [template, setTemplate] = useState<TemplateName>(
+    initial.template ??
+      (TEMPLATE_NAMES.find((t) => t === suggestion?.template) ?? "frame"),
+  );
   const [format, setFormat] = useState<FormatName>(initial.format ?? "1080x1080");
-  const [palette, setPalette] = useState<PaletteName>(initial.palette ?? "diep");
+  const [palette, setPalette] = useState<PaletteName>(
+    initial.palette ??
+      (PALETTE_NAMES.find((p) => p === suggestion?.palette) ?? "diep"),
+  );
   const [locale, setLocale] = useState<CreativeLocale>(initial.locale ?? "es");
-  const [angle, setAngle] = useState(initial.copyAngle ?? "");
+  const [angle, setAngle] = useState(initial.copyAngle ?? suggestion?.copyAngle ?? "");
+  const [variant, setVariant] = useState(0);
   const [copy, setCopy] = useState<Record<CopyField, string>>({
     eyebrow: initial.copy?.eyebrow ?? "",
     headline: initial.copy?.headline ?? "",
@@ -124,6 +158,8 @@ export function CreativeEditor({
     cta: initial.copy?.cta ?? "",
     badge: initial.copy?.badge ?? "",
   });
+  const [aiBusy, setAiBusy] = useState(false);
+  const [aiError, setAiError] = useState<string | null>(null);
   // Velden die de gebruiker zelf aanraakte, overschrijft prefill nooit.
   const dirtyRef = useRef(new Set<CopyField>(
     (Object.keys(initial.copy ?? {}) as CopyField[]).filter((k) => initial.copy?.[k]),
@@ -133,24 +169,38 @@ export function CreativeEditor({
   const product = products.find((p) => p.id === productId) ?? null;
   const limits = TEMPLATES[template].limits[format];
 
-  /* Prefill bij wisselen van taal, hoek of product — alleen niet-aangeraakte velden. */
-  useEffect(() => {
+  /** Vul velden vanuit de copyblokken; force = ook aangeraakte velden. */
+  const applySuggestion = (force: boolean, nextVariant = variant) => {
     if (!angle) return;
-    const prefill = resolveCopyPrefill(copyBlocks, {
-      locale,
-      angle,
-      productId: productId || null,
-      product,
-    });
+    const prefill = angle
+      ? getCopySuggestion(copyBlocks, {
+          angle: angle as CopyBlockLike["angle"],
+          locale,
+          productId: productId || null,
+          priceFrom: product?.priceFromEur ?? null,
+          finish: (product?.specs?.finish as string | undefined) ?? null,
+          category: category || product?.category || null,
+          variant: nextVariant,
+        })
+      : {};
     setCopy((prev) => {
       const next = { ...prev };
       for (const key of ["eyebrow", "headline", "subline", "cta"] as const) {
-        if (!dirtyRef.current.has(key) && prefill[key]) next[key] = prefill[key]!;
+        if (prefill[key] && (force || !dirtyRef.current.has(key))) {
+          next[key] = prefill[key]!;
+          if (force) dirtyRef.current.delete(key);
+        }
       }
       return next;
     });
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- prefill alleen bij deze drie triggers
-  }, [locale, angle, productId]);
+  };
+
+  /* Prefill bij wisselen van taal, hoek, product of categorie — alleen
+     niet-aangeraakte velden (U2: automatisch invullen bij wissel). */
+  useEffect(() => {
+    applySuggestion(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- prefill alleen bij deze triggers
+  }, [locale, angle, productId, category]);
 
   /* Payload voor acties + preview. */
   const spec = useMemo(
@@ -168,11 +218,46 @@ export function CreativeEditor({
       },
       copyAngle: angle || null,
       productId: productId || null,
+      category: category || product?.category || null,
       assetId: assetId || null,
       parentId: initial.parentId ?? null,
     }),
-    [template, palette, format, locale, copy, angle, productId, assetId, initial.parentId],
+    [template, palette, format, locale, copy, angle, productId, category, product?.category, assetId, initial.parentId],
   );
+
+  /** "Genereer met AI" (U3) — schrijft alle velden; fout blijft inline zichtbaar. */
+  const generateWithAi = async () => {
+    setAiBusy(true);
+    setAiError(null);
+    try {
+      const result = await generateAiCopyAction({
+        locale,
+        angle: angle || null,
+        productId: productId || null,
+        category: category || product?.category || null,
+        template,
+        format,
+      });
+      if (result.error) {
+        setAiError(result.error);
+      } else if (result.copy) {
+        setCopy((prev) => {
+          const next = { ...prev };
+          for (const key of ["eyebrow", "headline", "subline", "cta", "badge"] as const) {
+            if (result.copy![key]) {
+              next[key] = result.copy![key]!;
+              dirtyRef.current.add(key); // bewust gegenereerd = eigen inhoud
+            }
+          }
+          return next;
+        });
+      }
+    } catch {
+      setAiError("De AI-aanvraag mislukte. Probeer het opnieuw.");
+    } finally {
+      setAiBusy(false);
+    }
+  };
 
   /* Live validatie (dezelfde functie als de approve-poortwachter). */
   const issues = useMemo(
@@ -263,19 +348,42 @@ export function CreativeEditor({
           )}
         </Card>
 
-        {/* ------------------------------------------- product / hoek / taal */}
-        <Card className="grid gap-4 p-4 sm:grid-cols-3">
+        {/* ------------------------- product / categorie / hoek / taal (U2) */}
+        <Card className="grid gap-4 p-4 sm:grid-cols-2 lg:grid-cols-4">
           <Field label="Product (optioneel)" htmlFor="ce-product">
             <select
               id="ce-product"
               value={productId}
-              onChange={(e) => setProductId(e.target.value)}
+              onChange={(e) => {
+                setProductId(e.target.value);
+                const p = products.find((x) => x.id === e.target.value);
+                if (p?.category) setCategory(p.category);
+              }}
               className="h-9 w-full rounded-md border border-border bg-background px-2 text-sm"
             >
               <option value="">Geen product</option>
               {products.map((p) => (
                 <option key={p.id} value={p.id}>
                   {p.name}
+                </option>
+              ))}
+            </select>
+          </Field>
+          <Field
+            label="Categorie"
+            htmlFor="ce-category"
+            hint="Categorie volstaat voor prefill — een product is niet verplicht."
+          >
+            <select
+              id="ce-category"
+              value={category}
+              onChange={(e) => setCategory(e.target.value)}
+              className="h-9 w-full rounded-md border border-border bg-background px-2 text-sm"
+            >
+              <option value="">Geen categorie</option>
+              {categories.map((c) => (
+                <option key={c} value={c}>
+                  {c}
                 </option>
               ))}
             </select>
@@ -313,6 +421,12 @@ export function CreativeEditor({
 
         {/* -------------------------------------- sjabloon / formaat / palet */}
         <Card className="space-y-4 p-4">
+          {suggestion && (
+            <p className="rounded-md bg-accent/5 px-3 py-2 text-xs text-muted">
+              <Sparkles className="mr-1 inline size-3.5 text-accent" aria-hidden />
+              {suggestion.reason}
+            </p>
+          )}
           <fieldset>
             <legend className="text-sm font-medium">Sjabloon</legend>
             <div className="mt-2 flex flex-wrap gap-2">
@@ -393,6 +507,50 @@ export function CreativeEditor({
 
         {/* --------------------------------------------------------- teksten */}
         <Card className="space-y-4 p-4">
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={() => applySuggestion(true)}
+              disabled={!angle}
+              title={angle ? undefined : "Kies eerst een invalshoek"}
+              className={buttonClass({ variant: "secondary", size: "sm" })}
+            >
+              Vul automatisch
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                const next = variant + 1;
+                setVariant(next);
+                applySuggestion(true, next);
+              }}
+              disabled={!angle}
+              className={buttonClass({ variant: "ghost", size: "sm" })}
+              title="Volgend tekstblok uit dezelfde invalshoek"
+            >
+              Andere variant
+            </button>
+            {aiEnabled && (
+              <button
+                type="button"
+                onClick={generateWithAi}
+                disabled={aiBusy}
+                className={buttonClass({ variant: "secondary", size: "sm" })}
+              >
+                <Sparkles className="size-3.5" aria-hidden />
+                {aiBusy ? "Genereren…" : "Genereer met AI"}
+              </button>
+            )}
+            <span className="text-xs text-muted">
+              Vult vanuit de vastgelegde tekstblokken{aiEnabled ? " of laat AI schrijven" : ""} —
+              alles blijft aanpasbaar.
+            </span>
+          </div>
+          {aiError && (
+            <Card className="border-amber-300 bg-amber-50 p-3 text-sm" role="alert">
+              {aiError}
+            </Card>
+          )}
           {COPY_FIELDS.map(({ key, label, multiline }) => (
             <CopyInput
               key={key}
