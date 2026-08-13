@@ -105,27 +105,61 @@ export function ingestVideoFromBytes(input: VideoIngestInput): Promise<VideoInge
   return ingestVideoAsset(input, { storage: marketingStorage(), repo: drizzleVideoRepo });
 }
 
+/**
+ * Leg een niet-downloadbare video-embed (YouTube/Vimeo) vast als VERWIJZING
+ * (U9): een asset-rij met virtueel pad `embed/<provider>/<id>` — er staan
+ * geen bytes in Storage; de bibliotheek toont een "bekijk op…"-link.
+ * Idempotent op dat pad.
+ */
+export async function recordEmbedAsset(input: {
+  provider: "youtube" | "vimeo";
+  id: string;
+  /** Publieke kijk-URL van de embed. */
+  url: string;
+  /** Pagina waarop de embed stond (paginaherkomst). */
+  pageUrl: string;
+  tags: string[];
+}): Promise<{ status: "stored" | "duplicate"; assetId: string }> {
+  const virtualPath = `embed/${input.provider}/${input.id}`;
+  const existing = await drizzleVideoRepo.findByStoragePath(virtualPath);
+  if (existing) return { status: "duplicate", assetId: existing.id };
+  const [row] = await db
+    .insert(assets)
+    .values({
+      mediaType: "video",
+      source: "website",
+      sourceRef: input.url,
+      sourceUrl: input.pageUrl,
+      storagePath: virtualPath,
+      tags: input.tags,
+    })
+    .returning({ id: assets.id });
+  return { status: "stored", assetId: row.id };
+}
+
 const FETCH_MAX_BYTES = 25 * 1024 * 1024;
 
 /**
- * Haal beeldbytes op van een externe bron (website-CDN, Instagram-CDN).
- * Alleen http(s), met harde timeout en groottelimiet. Gooit een NL-fout met
- * de bron-URL erin zodat de sync-samenvatting bruikbaar is.
+ * Haal mediabytes op van een externe bron (website-CDN, Instagram-CDN).
+ * Alleen http(s), met harde timeout en groottelimiet (default 25 MB; de
+ * website-video's van U9 mogen tot 100 MB). Gooit een NL-fout met de
+ * bron-URL erin zodat de sync-samenvatting bruikbaar is.
  */
 export async function fetchImageBytes(
   url: string,
+  maxBytes = FETCH_MAX_BYTES,
 ): Promise<{ bytes: Uint8Array; contentType: string }> {
   if (!/^https?:\/\//i.test(url)) {
-    throw new Error(`Beeld-URL is geen http(s): ${url}`);
+    throw new Error(`Media-URL is geen http(s): ${url}`);
   }
-  const res = await fetch(url, { cache: "no-store", signal: AbortSignal.timeout(30_000) });
+  const res = await fetch(url, { cache: "no-store", signal: AbortSignal.timeout(120_000) });
   if (!res.ok) {
-    throw new Error(`Beeld ophalen mislukt (${res.status}): ${url}`);
+    throw new Error(`Media ophalen mislukt (${res.status}): ${url}`);
   }
   const buf = await res.arrayBuffer();
-  if (buf.byteLength === 0) throw new Error(`Leeg beeldbestand: ${url}`);
-  if (buf.byteLength > FETCH_MAX_BYTES) {
-    throw new Error(`Beeld groter dan 25 MB: ${url}`);
+  if (buf.byteLength === 0) throw new Error(`Leeg mediabestand: ${url}`);
+  if (buf.byteLength > maxBytes) {
+    throw new Error(`Bestand groter dan ${Math.round(maxBytes / 1024 / 1024)} MB: ${url}`);
   }
   return {
     bytes: new Uint8Array(buf),

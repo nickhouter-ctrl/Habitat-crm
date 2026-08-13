@@ -241,7 +241,8 @@ export default async function AssetsPage({
           aria-label="Beelden"
         >
           {rows.map(({ asset, productName }) => {
-            const url = safeUrl(asset.storagePath);
+            const isEmbed = asset.storagePath.startsWith("embed/");
+            const url = isEmbed ? null : safeUrl(asset.storagePath);
             const isVideo = asset.mediaType === "video";
             const posterUrl = asset.thumbnailPath ? safeUrl(asset.thumbnailPath) : null;
             const reach = asset.igMetrics?.reach;
@@ -250,7 +251,21 @@ export default async function AssetsPage({
             return (
               <li key={asset.id}>
                 <Card className="group relative overflow-hidden p-0">
-                  {isVideo ? (
+                  {isEmbed ? (
+                    // Embed (U9): verwijzing, geen eigen kopie — bekijk bij de
+                    // provider. Nooit media van derden in onze Storage.
+                    <a
+                      href={asset.sourceRef ?? asset.sourceUrl ?? "#"}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex aspect-square w-full flex-col items-center justify-center gap-2 bg-black/85 text-center text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent"
+                    >
+                      <span aria-hidden className="text-3xl">▶</span>
+                      <span className="px-3 text-xs">
+                        Bekijk op {asset.storagePath.startsWith("embed/vimeo") ? "Vimeo" : "YouTube"}
+                      </span>
+                    </a>
+                  ) : isVideo ? (
                     // Video: afspeelbare preview in de kaart. Geen editor-link —
                     // de creative-editor is image-only; een video wordt als
                     // video-ad gepubliceerd met copy uit copy_blocks (U7).

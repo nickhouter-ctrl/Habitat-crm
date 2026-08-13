@@ -53,8 +53,12 @@ export function formatDuration(seconds: number | string | null | undefined): str
 export interface VideoIngestInput {
   bytes: Uint8Array;
   contentType: string;
+  /** Herkomst; default "upload" — de website-sync (U9) levert "website". */
+  source?: "website" | "upload";
   /** Bestandsnaam of andere herkomstreferentie. */
   sourceRef: string;
+  /** Oorspronkelijke locatie (paginaherkomst bij website-sync). */
+  sourceUrl?: string | null;
   productId?: string | null;
   tags?: string[];
   /** Browser-metadata; null als de browser ze niet kon lezen. */
@@ -68,8 +72,9 @@ export interface VideoIngestInput {
 /** Rij-vorm voor de `assets`-tabel (mediaType video, geen phash). */
 export interface NewVideoAssetRecord {
   mediaType: "video";
-  source: "upload";
+  source: "website" | "upload";
   sourceRef: string;
+  sourceUrl: string | null;
   storagePath: string;
   thumbnailPath: string | null;
   width: number | null;
@@ -132,8 +137,9 @@ export async function ingestVideoAsset(
 
   const { id } = await deps.repo.insertVideoAsset({
     mediaType: "video",
-    source: "upload",
+    source: input.source ?? "upload",
     sourceRef: input.sourceRef,
+    sourceUrl: input.sourceUrl ?? null,
     storagePath,
     thumbnailPath,
     width: input.width ?? null,
