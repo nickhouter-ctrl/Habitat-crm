@@ -7,6 +7,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
+    "test": "vitest run",
+    "test:watch": "vitest",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
     "db:push": "drizzle-kit push",
@@ -36,6 +38,7 @@
     "react-dom": "19.2.4",
     "recharts": "^3.8.1",
     "sanitize-html": "^2.17.6",
+    "sharp": "^0.35.3",
     "tailwind-merge": "^3.6.0",
     "topojson-client": "^3.1.0",
     "xlsx": "^0.18.5",
@@ -58,6 +61,7 @@
     "server-only": "^0.0.1",
     "tailwindcss": "^4",
     "tsx": "^4.20.6",
-    "typescript": "^5"
+    "typescript": "^5",
+    "vitest": "^4.1.10"
   }
 }

@@ -472,6 +472,17 @@ export const products = pgTable(
     /** Habitat-one product-id, ingevuld door de sync zodra een match (of nieuwe entry) is gemaakt. */
     websiteProductId: integer(),
     holdedProductId: text(),
+    // Marketing-module (brief §4, "uitbreiden, niet vervangen"):
+    /** URL-slug voor de marketingmodule; gespiegeld vanaf de website-sync. */
+    slug: text(),
+    /** Hero-beeld uit de asset-bibliotheek (soft link naar `assets.id`). */
+    heroAssetId: uuid(),
+    /** Vanafprijs voor advertentiecopy ({price_from}-token), ex. BTW. */
+    priceFromEur: numeric({ precision: 14, scale: 2 }),
+    /** Vertaalde productnamen per locale; `name` blijft de primaire tekst. */
+    nameI18n: jsonb().$type<{ nl?: string; de?: string; en?: string; es?: string }>(),
+    /** Vrije specs (afwerking, materiaal, …) voor invulpatronen in copy_blocks. */
+    specs: jsonb().$type<Record<string, string | number>>(),
     ...timestamps,
   },
   (t) => [
@@ -487,6 +498,9 @@ export const products = pgTable(
     uniqueIndex("products_barcode_uidx")
       .on(t.barcode)
       .where(sql`barcode is not null and barcode <> ''`),
+    uniqueIndex("products_slug_uidx")
+      .on(t.slug)
+      .where(sql`slug is not null and slug <> ''`),
   ],
 );
 
@@ -2441,3 +2455,465 @@ export const rateLimits = pgTable("rate_limits", {
   windowStart: timestamp({ withTimezone: true }).notNull().defaultNow(),
   count: integer().notNull().default(1),
 });
+
+/* ============================================================ marketing-module
+ *
+ * Advertentiebeelden maken, naar Meta publiceren en terugmeten wat werkt.
+ * Zie habitat-one-marketing-module-brief.pdf §4 (datamodel) en §8b (fase 5).
+ * De CreativeSpec (JSON) is de waarheid; PNG's in Supabase Storage zijn een
+ * afgeleide en altijd opnieuw te renderen. Soft links (geen harde FK's),
+ * conform het `deliveries`-patroon elders in dit bestand.
+ */
+
+/** Herkomst van een beeld in de asset-bibliotheek. */
+export const assetSource = pgEnum("asset_source", [
+  "website",
+  "instagram",
+  "upload",
+  "generated",
+]);
+
+/** Invalshoek van een tekstblok of creative. */
+export const copyAngle = pgEnum("copy_angle", [
+  "material",
+  "price",
+  "showroom",
+  "project",
+  "seasonal",
+]);
+
+/** Rol van een herbruikbaar tekstblok binnen een creative. */
+export const copyRole = pgEnum("copy_role", ["eyebrow", "headline", "subline", "cta"]);
+
+/** Pixelformaten voor Meta-plaatsingen: feed vierkant, feed portret, story. */
+export const creativeFormat = pgEnum("creative_format", [
+  "1080x1080",
+  "1080x1350",
+  "1080x1920",
+]);
+
+/** Levensloop van een CreativeSpec. `approved` kan alleen na validatie (fase 2). */
+export const creativeStatus = pgEnum("creative_status", [
+  "draft",
+  "approved",
+  "scheduled",
+  "live",
+  "archived",
+]);
+
+/**
+ * Doelgroep-as voor targeting én de leerlaag (§8c): een sjabloon dat bij
+ * Nederlandse kopers werkt hoeft bij Spaanse kopers niets te doen.
+ */
+export const audienceSegment = pgEnum("audience_segment", [
+  "local_es",
+  "expat_nl",
+  "expat_en",
+  "expat_de",
+]);
+
+/** Marktsegment van een gevolgde concurrent (fase 5). */
+export const competitorSegment = pgEnum("competitor_segment", [
+  "materials",
+  "contractor",
+  "architect",
+  "estate_agent",
+]);
+
+/**
+ * Elk bruikbaar beeld, ongeacht herkomst. Beelden worden bij ingest altijd
+ * gekopieerd naar eigen Storage (`storagePath`) — bron-URL's (zeker die van
+ * Instagram) verlopen; `sourceUrl` is alleen herkomst-administratie.
+ */
+export const assets = pgTable(
+  "assets",
+  {
+    id: uuid()
+      .primaryKey()
+      .default(sql`gen_random_uuid()`),
+    source: assetSource().notNull(),
+    /** Slug, IG-media-id of bestandsnaam — waarmee de bron het beeld aanduidt. */
+    sourceRef: text(),
+    /** Oorspronkelijke locatie; alleen herkomst, nooit als servebron gebruiken. */
+    sourceUrl: text(),
+    /** Onze eigen kopie in Storage — dé bron voor renderen en tonen. */
+    storagePath: text().notNull(),
+    width: integer(),
+    height: integer(),
+    /** Perceptuele hash voor duplicaatdetectie: duplicaat = bronnen samenvoegen. */
+    phash: text(),
+    /** Drie hexwaarden, voor paletvoorstellen in de editor. */
+    dominantColors: jsonb().$type<string[]>(),
+    /** Koppeling als het beeld bij een product hoort. */
+    productId: uuid(),
+    tags: text().array(),
+    /** Organische IG-cijfers — alleen bij herkomst instagram. Hint, geen bewijs. */
+    igMetrics: jsonb().$type<{ reach?: number; likes?: number; saved?: number }>(),
+    ...timestamps,
+  },
+  (t) => [
+    index("assets_source_idx").on(t.source),
+    index("assets_product_idx").on(t.productId),
+    index("assets_phash_idx").on(t.phash),
+  ],
+);
+
+/**
+ * Herbruikbare advertentietekst, per taal gelijkwaardig geschreven (§8c) —
+ * dus géén vertaaltabel die aan het Engels hangt.
+ */
+export const copyBlocks = pgTable(
+  "copy_blocks",
+  {
+    id: uuid()
+      .primaryKey()
+      .default(sql`gen_random_uuid()`),
+    angle: copyAngle().notNull(),
+    locale: language().notNull(),
+    role: copyRole().notNull(),
+    text: text().notNull(),
+    /** Null = generiek bruikbaar; anders productspecifiek. */
+    productId: uuid(),
+    /** Invulpatroon met tokens als {finish} of {price_from}; null = letterlijke tekst. */
+    pattern: text(),
+    ...timestamps,
+  },
+  (t) => [
+    index("copy_blocks_locale_role_idx").on(t.locale, t.role),
+    index("copy_blocks_product_idx").on(t.productId),
+  ],
+);
+
+/**
+ * De CreativeSpec is de waarheid; de PNG is een afgeleide (brief §3.2).
+ * Wijzigen betekent dupliceren (§3.5): `parentId` wijst naar het origineel.
+ */
+export const creativeSpecs = pgTable(
+  "creative_specs",
+  {
+    id: uuid()
+      .primaryKey()
+      .default(sql`gen_random_uuid()`),
+    productId: uuid(),
+    assetId: uuid().notNull(),
+    /** Sjabloonnaam uit de registry in lib/creatives/templates. */
+    template: text().notNull(),
+    /** Paletnaam uit lib/creatives/tokens.ts. */
+    palette: text().notNull(),
+    format: creativeFormat().notNull(),
+    locale: language().notNull(),
+    copy: jsonb().$type<{
+      eyebrow?: string;
+      headline: string;
+      subline?: string;
+      cta?: string;
+      badge?: string;
+    }>(),
+    copyAngle: copyAngle(),
+    status: creativeStatus().notNull().default("draft"),
+    /** Gezet bij "Dupliceer en pas aan" — verwijst naar de bron-spec. */
+    parentId: uuid().references((): AnyPgColumn => creativeSpecs.id),
+    createdBy: text(),
+    ...timestamps,
+  },
+  (t) => [
+    index("creative_specs_status_idx").on(t.status),
+    index("creative_specs_product_idx").on(t.productId),
+    index("creative_specs_asset_idx").on(t.assetId),
+  ],
+);
+
+/**
+ * Gerenderde PNG's per spec. Bij ongewijzigde `specHash` wordt de bestaande
+ * render hergebruikt in plaats van opnieuw gerenderd.
+ */
+export const renders = pgTable(
+  "renders",
+  {
+    id: uuid()
+      .primaryKey()
+      .default(sql`gen_random_uuid()`),
+    specId: uuid().notNull(),
+    storagePath: text().notNull(),
+    /** Hash over de genormaliseerde spec-JSON — cache-sleutel voor hergebruik. */
+    specHash: text().notNull(),
+    renderedAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [uniqueIndex("renders_spec_hash_idx").on(t.specId, t.specHash)],
+);
+
+/**
+ * Eigen campagne-records mét het Meta-object-id ernaast. `effectiveStatus` en
+ * `reviewFeedback` worden bij elke statussync overschreven (brief §4).
+ * Losse tabel naast `email_campaigns` (e-mailmarketing) — dit zijn Meta-ads.
+ */
+export const adCampaigns = pgTable(
+  "campaigns",
+  {
+    id: uuid()
+      .primaryKey()
+      .default(sql`gen_random_uuid()`),
+    name: text().notNull(),
+    /** Meta-objective, bv. "OUTCOME_TRAFFIC" of "OUTCOME_LEADS". */
+    objective: text(),
+    metaId: text(),
+    effectiveStatus: text(),
+    reviewFeedback: jsonb(),
+    lastSyncedAt: timestamp({ withTimezone: true }),
+    ...timestamps,
+  },
+  (t) => [uniqueIndex("campaigns_meta_idx").on(t.metaId)],
+);
+
+/**
+ * Advertentiesets. Plannen gebeurt hier via `startTime`/`endTime`; dagdelen
+ * (`dayparting`) vereisen een lifetime-budget — de UI valideert dat (§7).
+ * Bedragen in euro's met cent-precisie (numeric, nooit floats).
+ */
+export const adSets = pgTable(
+  "ad_sets",
+  {
+    id: uuid()
+      .primaryKey()
+      .default(sql`gen_random_uuid()`),
+    campaignId: uuid().notNull(),
+    name: text().notNull(),
+    metaId: text(),
+    effectiveStatus: text(),
+    reviewFeedback: jsonb(),
+    startTime: timestamp({ withTimezone: true }),
+    endTime: timestamp({ withTimezone: true }),
+    dailyBudgetEur: numeric({ precision: 14, scale: 2 }),
+    lifetimeBudgetEur: numeric({ precision: 14, scale: 2 }),
+    /** Meta adset_schedule-blokken; alleen toegestaan mét lifetime-budget. */
+    dayparting: jsonb(),
+    /** Ruwe Meta-targeting zoals meegestuurd, voor reproduceerbaarheid. */
+    targeting: jsonb(),
+    /** Taal van de doelgroep — naast het segment de as waarlangs we leren. */
+    locale: language(),
+    /** Lokaal of expat (§8c) — verplicht vast te leggen bij aanmaken. */
+    audienceSegment: audienceSegment(),
+    lastSyncedAt: timestamp({ withTimezone: true }),
+    ...timestamps,
+  },
+  (t) => [
+    index("ad_sets_campaign_idx").on(t.campaignId),
+    uniqueIndex("ad_sets_meta_idx").on(t.metaId),
+  ],
+);
+
+/**
+ * Advertenties. `specId` is de brug tussen creatie en prestatie: via de spec
+ * weet de leerlaag welke facetten (sjabloon, palet, taal, …) een ad had.
+ * Meta-ads worden altijd gepauzeerd aangemaakt (§3.4).
+ */
+export const ads = pgTable(
+  "ads",
+  {
+    id: uuid()
+      .primaryKey()
+      .default(sql`gen_random_uuid()`),
+    adSetId: uuid().notNull(),
+    specId: uuid().notNull(),
+    name: text().notNull(),
+    metaId: text(),
+    /** Meta-id van de adcreative uit de publicatieketen (PNG → adimages → adcreatives). */
+    metaCreativeId: text(),
+    /** image_hash die Meta teruggeeft na upload — nodig voor de object_story_spec. */
+    imageHash: text(),
+    effectiveStatus: text(),
+    /** ad_review_feedback van Meta — afkeuringen prominent tonen in de lijst. */
+    reviewFeedback: jsonb(),
+    lastSyncedAt: timestamp({ withTimezone: true }),
+    ...timestamps,
+  },
+  (t) => [
+    index("ads_ad_set_idx").on(t.adSetId),
+    index("ads_spec_idx").on(t.specId),
+    uniqueIndex("ads_meta_idx").on(t.metaId),
+  ],
+);
+
+/** Dagcijfers per advertentie; upsert op (adId, date) bij elke sync. */
+export const adMetricsDaily = pgTable(
+  "ad_metrics_daily",
+  {
+    id: uuid()
+      .primaryKey()
+      .default(sql`gen_random_uuid()`),
+    adId: uuid().notNull(),
+    date: date().notNull(),
+    impressions: integer().notNull().default(0),
+    clicks: integer().notNull().default(0),
+    /** Besteding in euro's, cent-precisie. */
+    spend: numeric({ precision: 14, scale: 2 }).notNull().default("0"),
+    leads: integer().notNull().default(0),
+    reach: integer().notNull().default(0),
+    frequency: numeric({ precision: 8, scale: 4 }),
+  },
+  (t) => [uniqueIndex("ad_metrics_daily_ad_date_idx").on(t.adId, t.date)],
+);
+
+/**
+ * Uitvoer van de leerlaag (fase 4), nachtelijk volledig herbouwd. Per
+ * facetwaarde geaggregeerde prestaties over de laatste 90 dagen, met de
+ * statistiek uit de brief §8: Wilson lower bound voor CTR en empirical-Bayes-
+ * gecorrigeerde kosten per lead. Onder de drempel (1.000 impressies én 7
+ * dagen) toont de UI "nog te weinig data" — nooit een rauwe ranglijst.
+ */
+export const facetPerformance = pgTable(
+  "facet_performance",
+  {
+    id: uuid()
+      .primaryKey()
+      .default(sql`gen_random_uuid()`),
+    /** Facetnaam: template | palette | format | locale | copy_angle |
+     *  product_category | asset_source | has_price_badge |
+     *  headline_length_bucket | audience_segment. */
+    facet: text().notNull(),
+    value: text().notNull(),
+    impressions: integer().notNull().default(0),
+    clicks: integer().notNull().default(0),
+    spend: numeric({ precision: 14, scale: 2 }).notNull().default("0"),
+    leads: integer().notNull().default(0),
+    /** Aantal onderscheiden advertenties waarop de uitspraak rust. */
+    adCount: integer().notNull().default(0),
+    /** Aantal advertentie-dagen — altijd tonen bij een oordeel. */
+    adDays: integer().notNull().default(0),
+    /** Wilson lower bound (95%) van de CTR — nooit het rauwe percentage tonen. */
+    ctrWilsonLower: numeric({ precision: 8, scale: 6 }),
+    /** Kosten per lead, met empirical Bayes naar het accountgemiddelde getrokken. */
+    cplEbEur: numeric({ precision: 14, scale: 2 }),
+    /** True zodra ≥ 1.000 impressies én ≥ 7 dagen looptijd. */
+    meetsThreshold: boolean().notNull().default(false),
+    computedAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [uniqueIndex("facet_performance_facet_value_idx").on(t.facet, t.value)],
+);
+
+/** Gevolgde concurrent voor de advertentiemonitor (fase 5, ads_archive). */
+export const competitors = pgTable(
+  "competitors",
+  {
+    id: uuid()
+      .primaryKey()
+      .default(sql`gen_random_uuid()`),
+    name: text().notNull(),
+    /** Meta Page-ID — uit view_all_page_id in de Ad Library-URL. */
+    metaPageId: text().notNull(),
+    website: text(),
+    segment: competitorSegment(),
+    notes: text(),
+    ...timestamps,
+  },
+  (t) => [uniqueIndex("competitors_page_idx").on(t.metaPageId)],
+);
+
+/**
+ * Advertenties van concurrenten uit het publieke DSA-archief (ads_archive).
+ * Alleen tekstvelden en verwijzingen — nooit beelden of video's van
+ * concurrenten naar onze Storage (brief §8b, "Verboden en toegestaan").
+ * Een gestopte advertentie krijgt `deliveryStop` en verdwijnt niet.
+ */
+export const competitorAds = pgTable(
+  "competitor_ads",
+  {
+    id: uuid()
+      .primaryKey()
+      .default(sql`gen_random_uuid()`),
+    competitorId: uuid().notNull(),
+    metaAdArchiveId: text().notNull(),
+    firstSeen: timestamp({ withTimezone: true }).notNull().defaultNow(),
+    lastSeen: timestamp({ withTimezone: true }).notNull().defaultNow(),
+    deliveryStart: timestamp({ withTimezone: true }),
+    deliveryStop: timestamp({ withTimezone: true }),
+    /** ad_creative_bodies — feitelijke onderzoeksdata, nooit hergebruiken in eigen creatives. */
+    bodies: jsonb().$type<string[]>(),
+    /** ad_creative_link_titles. */
+    titles: jsonb().$type<string[]>(),
+    languages: text().array(),
+    platforms: text().array(),
+    euTotalReach: integer(),
+    /** age_country_gender_reach_breakdown, ruw bewaard. */
+    reachBreakdown: jsonb(),
+    /** Verwijzing naar Meta's snapshot — bewust geen eigen kopie. */
+    snapshotUrl: text(),
+    /** Afgeleid: looptijd in dagen — dé proxy voor winstgevendheid van buitenaf. */
+    daysRunning: integer(),
+    ...timestamps,
+  },
+  (t) => [
+    uniqueIndex("competitor_ads_archive_idx").on(t.competitorId, t.metaAdArchiveId),
+    index("competitor_ads_last_seen_idx").on(t.lastSeen),
+  ],
+);
+
+/* ------------------------------------------------ marketing-module relations */
+
+export const assetsRelations = relations(assets, ({ one, many }) => ({
+  product: one(products, { fields: [assets.productId], references: [products.id] }),
+  creativeSpecs: many(creativeSpecs),
+}));
+
+export const copyBlocksRelations = relations(copyBlocks, ({ one }) => ({
+  product: one(products, { fields: [copyBlocks.productId], references: [products.id] }),
+}));
+
+export const creativeSpecsRelations = relations(creativeSpecs, ({ one, many }) => ({
+  product: one(products, { fields: [creativeSpecs.productId], references: [products.id] }),
+  asset: one(assets, { fields: [creativeSpecs.assetId], references: [assets.id] }),
+  parent: one(creativeSpecs, {
+    fields: [creativeSpecs.parentId],
+    references: [creativeSpecs.id],
+    relationName: "specParent",
+  }),
+  variants: many(creativeSpecs, { relationName: "specParent" }),
+  renders: many(renders),
+  ads: many(ads),
+}));
+
+export const rendersRelations = relations(renders, ({ one }) => ({
+  spec: one(creativeSpecs, { fields: [renders.specId], references: [creativeSpecs.id] }),
+}));
+
+export const adCampaignsRelations = relations(adCampaigns, ({ many }) => ({
+  adSets: many(adSets),
+}));
+
+export const adSetsRelations = relations(adSets, ({ one, many }) => ({
+  campaign: one(adCampaigns, { fields: [adSets.campaignId], references: [adCampaigns.id] }),
+  ads: many(ads),
+}));
+
+export const adsRelations = relations(ads, ({ one, many }) => ({
+  adSet: one(adSets, { fields: [ads.adSetId], references: [adSets.id] }),
+  spec: one(creativeSpecs, { fields: [ads.specId], references: [creativeSpecs.id] }),
+  metricsDaily: many(adMetricsDaily),
+}));
+
+export const adMetricsDailyRelations = relations(adMetricsDaily, ({ one }) => ({
+  ad: one(ads, { fields: [adMetricsDaily.adId], references: [ads.id] }),
+}));
+
+export const competitorsRelations = relations(competitors, ({ many }) => ({
+  ads: many(competitorAds),
+}));
+
+export const competitorAdsRelations = relations(competitorAds, ({ one }) => ({
+  competitor: one(competitors, {
+    fields: [competitorAds.competitorId],
+    references: [competitors.id],
+  }),
+}));
+
+export type Asset = typeof assets.$inferSelect;
+export type CopyBlock = typeof copyBlocks.$inferSelect;
+export type CreativeSpec = typeof creativeSpecs.$inferSelect;
+export type Render = typeof renders.$inferSelect;
+export type AdCampaign = typeof adCampaigns.$inferSelect;
+export type AdSet = typeof adSets.$inferSelect;
+export type Ad = typeof ads.$inferSelect;
+export type AdMetricsDaily = typeof adMetricsDaily.$inferSelect;
+export type FacetPerformance = typeof facetPerformance.$inferSelect;
+export type Competitor = typeof competitors.$inferSelect;
+export type CompetitorAd = typeof competitorAds.$inferSelect;
