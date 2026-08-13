@@ -303,11 +303,23 @@ export async function storeMailAttachments(args: {
       skipped++;
       continue;
     }
-    // Skip afbeeldingen onder 500kB — vrijwel altijd e-mail-signatures, logos, inline graphics.
-    // Echte gescande facturen zijn meestal >500kB en hebben image/jpeg of image/pdf.
-    if (att.contentType.startsWith("image/") && att.size < 500 * 1024) {
-      skipped++;
-      continue;
+    // Afbeeldingen: alleen overslaan wat in de body is INGESLOTEN — logo's en
+    // handtekeningen dus. Wat iemand bewust bijvoegt bewaren we, hoe klein ook.
+    //
+    // Dit ging eerder op bestandsgrootte (< 500 kB eruit). Dat kostte echte
+    // foto's: een kiekje van een bon dat Hans naar purchase@ stuurde was 71 kB
+    // en verdween daarmee uit het archief — je zag alleen nog de metadata en
+    // moest terug naar Gmail. Grootte zegt niets over bedoeling; de
+    // content-disposition van de mail zelf wél.
+    if (att.contentType.startsWith("image/")) {
+      const ingesloten = att.related === true || att.contentDisposition === "inline";
+      // Valt de disposition weg (oudere parser of rare client), dan is een
+      // afbeelding van enkele kB's alsnog vrijwel zeker een logo.
+      const nietigKlein = att.size < 10 * 1024;
+      if (ingesloten || (att.contentDisposition == null && nietigKlein)) {
+        skipped++;
+        continue;
+      }
     }
     // .ics calendar invites zijn nooit relevant voor archief
     if (att.contentType === "application/ics" || att.filename.endsWith(".ics")) {

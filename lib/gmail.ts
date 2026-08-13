@@ -92,6 +92,15 @@ export interface ParsedAttachment {
   size: number;
   contentType: string;
   content: Buffer;
+  /**
+   * Of het bestand ECHT is bijgevoegd ("attachment") of alleen in de body is
+   * ingesloten ("inline") — een logo in een handtekening bijvoorbeeld. Zonder
+   * dit onderscheid rest alleen bestandsgrootte als schifting, en die kapte
+   * ook echte foto's weg (een telefoonkiekje van 71 kB is geen logo).
+   */
+  contentDisposition?: string;
+  /** Door mailparser gezet als de afbeelding via cid in de HTML wordt getoond. */
+  related?: boolean;
 }
 
 export interface ParsedEmail {
@@ -199,6 +208,8 @@ export async function fetchNewMails(
           size: a.size ?? 0,
           contentType: a.contentType ?? "application/octet-stream",
           content: a.content as Buffer,
+          contentDisposition: a.contentDisposition,
+          related: (a as { related?: boolean }).related === true,
         }));
       mails.push({
         messageId: clean(parsed.messageId ?? msg.envelope?.messageId) ?? `imap-uid-${msg.uid}`,
