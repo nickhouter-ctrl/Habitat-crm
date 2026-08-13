@@ -1,0 +1,1 @@
+ALTER TABLE "competitors" ALTER COLUMN "meta_page_id" DROP NOT NULL;

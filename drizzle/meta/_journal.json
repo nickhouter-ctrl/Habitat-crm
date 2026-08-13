@@ -330,6 +330,13 @@
       "when": 1786608430019,
       "tag": "0046_abnormal_legion",
       "breakpoints": true
+    },
+    {
+      "idx": 47,
+      "version": "7",
+      "when": 1786608791048,
+      "tag": "0047_bright_imperial_guard",
+      "breakpoints": true
     }
   ]
 }

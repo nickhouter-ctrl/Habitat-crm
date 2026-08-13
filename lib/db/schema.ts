@@ -2819,8 +2819,12 @@ export const competitors = pgTable(
       .primaryKey()
       .default(sql`gen_random_uuid()`),
     name: text().notNull(),
-    /** Meta Page-ID — uit view_all_page_id in de Ad Library-URL. */
-    metaPageId: text().notNull(),
+    /**
+     * Meta Page-ID. Null = prospect (U8): wel volgen op naam/website, page-id
+     * nog opzoeken via de Ad Library-zoekactie; de wekelijkse sync slaat
+     * prospects zonder id over. Uniek alleen op gevulde waarden.
+     */
+    metaPageId: text(),
     website: text(),
     segment: competitorSegment(),
     notes: text(),
