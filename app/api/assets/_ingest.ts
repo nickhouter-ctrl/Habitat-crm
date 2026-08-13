@@ -18,6 +18,12 @@ import {
   type IngestResult,
 } from "@/lib/marketing/ingest";
 import { marketingStorage } from "@/lib/marketing/storage";
+import {
+  ingestVideoAsset,
+  type VideoIngestInput,
+  type VideoIngestRepo,
+  type VideoIngestResult,
+} from "@/lib/marketing/video";
 
 /** Drizzle-implementatie van de repo-poort van de ingest-pijplijn. */
 export const drizzleAssetRepo: AssetIngestRepo = {
@@ -78,6 +84,27 @@ export function ingestFromBytes(input: IngestInput): Promise<IngestResult> {
   });
 }
 
+/** Drizzle-implementatie van de video-repo (U7): dedupe op inhoudshash-pad. */
+export const drizzleVideoRepo: VideoIngestRepo = {
+  async findByStoragePath(path) {
+    const [row] = await db
+      .select({ id: assets.id })
+      .from(assets)
+      .where(eq(assets.storagePath, path))
+      .limit(1);
+    return row ?? null;
+  },
+  async insertVideoAsset(record) {
+    const [row] = await db.insert(assets).values(record).returning({ id: assets.id });
+    return row;
+  },
+};
+
+/** Eén video door de pijplijn (geen phash; browser-metadata, zie video.ts). */
+export function ingestVideoFromBytes(input: VideoIngestInput): Promise<VideoIngestResult> {
+  return ingestVideoAsset(input, { storage: marketingStorage(), repo: drizzleVideoRepo });
+}
+
 const FETCH_MAX_BYTES = 25 * 1024 * 1024;
 
 /**
@@ -119,8 +146,11 @@ export function emptySummary(): SyncSummary {
   return { stored: 0, duplicates: 0, skipped: 0, errors: [] };
 }
 
-/** Tel één ingest-uitkomst mee in de samenvatting. */
-export function tally(summary: SyncSummary, result: IngestResult): void {
+/** Tel één ingest-uitkomst (beeld of video) mee in de samenvatting. */
+export function tally(
+  summary: SyncSummary,
+  result: Pick<IngestResult | VideoIngestResult, "status">,
+): void {
   if (result.status === "duplicate") summary.duplicates++;
   else summary.stored++;
 }

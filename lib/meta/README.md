@@ -36,6 +36,20 @@ Let op: Meta plant in de tijdzone van het advertentieaccount — controleer die
 in Business Manager (hoort Europe/Madrid te zijn) vóór start-/eindtijden en
 dagdelen worden gebruikt (brief §9).
 
+## Video-ads (U7)
+
+De creative-editor is en blijft **image-only** — video's krijgen geen
+CreativeSpec. Een video-ad verwijst rechtstreeks naar het asset
+(`ads.assetId`, XOR met `specId`) en krijgt zijn copy uit `copy_blocks` in de
+publish-flow (bv. via `getCopySuggestion` uit lib/marketing/copy-suggest.ts,
+altijd door een mens bevestigd). Keten (`publishVideoAdToMeta`): publieke
+Storage-URL → `POST /act/advideos` met `file_url` (Meta haalt de video zelf
+op — geen multipart), wachten tot de verwerking klaar is, adcreative met
+`video_data` (video-id + posterframe `image_url`), advertentie **PAUSED**.
+Zelfde stapsgewijze vastlegging, retries en NL-foutafhandeling als de
+beeldketen; het Meta-video-id wordt op de ad-rij bewaard zodat een halve
+keten hervatbaar is.
+
 ## Concurrentiemonitor (fase 5) — `ads-archive.ts`
 
 Leest het publieke DSA-advertentiearchief (`/ads_archive`,

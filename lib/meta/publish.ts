@@ -10,7 +10,14 @@ import { eq } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { adCampaigns, ads, adSets, creativeSpecs } from "@/lib/db/schema";
 
-import { eurToCents, meta, metaErrorMessage, withMetaRetry, MetaError } from "./client";
+import {
+  adAccountPath,
+  eurToCents,
+  meta,
+  metaErrorMessage,
+  withMetaRetry,
+  MetaError,
+} from "./client";
 import type { MetaStatusFields, ObjectStorySpec } from "./types";
 
 /* ------------------------------------------------- adset-planningsvalidatie */
@@ -283,6 +290,183 @@ export async function linkExistingMetaId(
   }
 }
 
+/* -------------------------------------------------------- video-ads (U7) */
+
+/** Invoer voor {@link buildVideoStorySpec}. */
+export interface VideoStorySpecInput {
+  pageId: string;
+  igUserId?: string | null;
+  /** Meta-video-id uit de /advideos-upload. */
+  videoId: string;
+  /** Publieke URL van het posterframe — verplicht bij video_data. */
+  imageUrl: string;
+  message: string;
+  link: string;
+  callToAction: string;
+}
+
+/** De `object_story_spec` voor een video-ad (video_data i.p.v. link_data). */
+export function buildVideoStorySpec(input: VideoStorySpecInput): Record<string, unknown> {
+  const spec: Record<string, unknown> = {
+    page_id: input.pageId,
+    video_data: {
+      video_id: input.videoId,
+      image_url: input.imageUrl,
+      message: input.message,
+      call_to_action: { type: input.callToAction, value: { link: input.link } },
+    },
+  };
+  if (input.igUserId) spec.instagram_user_id = input.igUserId;
+  return spec;
+}
+
+/** Invoer voor {@link publishVideoAdToMeta}. */
+export interface PublishVideoAdInput {
+  /** Onze `ads`-rij met `assetId` (video) — de editor is image-only, dus de
+   *  copy komt hier rechtstreeks uit copy_blocks (via getCopySuggestion of
+   *  handmatig), niet uit een CreativeSpec. */
+  adId: string;
+  /** Publieke URL van de video in onze eigen Storage. */
+  videoUrl: string;
+  /** Publieke URL van het posterframe (assets.thumbnailPath). */
+  thumbnailUrl: string;
+  message: string;
+  link: string;
+  callToAction?: string;
+}
+
+/**
+ * Wacht tot Meta de geüploade video verwerkt heeft (advideos is asynchroon);
+ * een adcreative op een onverwerkte video faalt. Injecteerbare sleep voor
+ * tests.
+ */
+async function waitForVideoReady(
+  videoId: string,
+  opts: { attempts?: number; sleep?: (ms: number) => Promise<void> } = {},
+): Promise<boolean> {
+  const attempts = opts.attempts ?? 10;
+  const sleep = opts.sleep ?? ((ms: number) => new Promise<void>((r) => setTimeout(r, ms)));
+  for (let i = 0; i < attempts; i++) {
+    const res = await withMetaRetry(() =>
+      meta.request<{ status?: { video_status?: string } }>(`/${videoId}`, {
+        query: { fields: "status" },
+      }),
+    );
+    if (res.status?.video_status === "ready") return true;
+    if (res.status?.video_status === "error") return false;
+    await sleep(3000);
+  }
+  return false;
+}
+
+/**
+ * Publiceer een video-asset als GEPAUZEERDE video-ad (U7):
+ * video-URL → POST /act/advideos (file_url — Meta haalt de video zelf uit
+ * onze publieke Storage, geen multipart nodig) → wachten op verwerking →
+ * adcreative met video_data → ad PAUSED. Zelfde stapsgewijze vastlegging en
+ * foutafhandeling als de beeldketen; fouten landen vertaald op de ad-rij.
+ */
+export async function publishVideoAdToMeta(input: PublishVideoAdInput): Promise<PushResult> {
+  const pageId = process.env.META_PAGE_ID;
+  if (!pageId) {
+    return { ok: false, error: "META_PAGE_ID is niet ingesteld (zie .env.example)." };
+  }
+  const igUserId = process.env.IG_USER_ID ?? null;
+
+  const [ad] = await db.select().from(ads).where(eq(ads.id, input.adId)).limit(1);
+  if (!ad) return { ok: false, error: "Advertentie niet gevonden in het CRM." };
+  if (!ad.assetId) {
+    return { ok: false, error: "Deze advertentie heeft geen video-asset — beeld-ads gaan via de creative-keten." };
+  }
+  const [adSet] = await db.select().from(adSets).where(eq(adSets.id, ad.adSetId)).limit(1);
+  if (!adSet?.metaId) {
+    return {
+      ok: false,
+      error: "De advertentieset staat nog niet in Meta. Zet eerst de advertentieset in Meta.",
+    };
+  }
+
+  try {
+    // Stap 1 — video registreren; imageHash-kolom hergebruiken we als
+    // opslagplek voor het Meta-video-id zodat de keten hervatbaar blijft.
+    let videoId = ad.imageHash;
+    if (!videoId) {
+      const uploaded = await withMetaRetry(() =>
+        meta.request<{ id?: string }>(`/${adAccountPath()}/advideos`, {
+          method: "POST",
+          body: { file_url: input.videoUrl },
+          timeoutMs: 60_000,
+        }),
+      );
+      if (!uploaded.id) throw new MetaError(200, uploaded, "Meta gaf geen video-id terug");
+      videoId = uploaded.id;
+      await db.update(ads).set({ imageHash: videoId }).where(eq(ads.id, ad.id));
+    }
+
+    if (!(await waitForVideoReady(videoId))) {
+      return {
+        ok: false,
+        error: "Meta is de video nog aan het verwerken. Probeer het over een paar minuten opnieuw — de upload blijft bewaard.",
+      };
+    }
+
+    // Stap 2 — adcreative met video_data.
+    let metaCreativeId = ad.metaCreativeId;
+    if (!metaCreativeId) {
+      const creative = await withMetaRetry(() =>
+        meta.adCreatives.create({
+          name: ad.name,
+          object_story_spec: buildVideoStorySpec({
+            pageId,
+            igUserId,
+            videoId,
+            imageUrl: input.thumbnailUrl,
+            message: input.message,
+            link: input.link,
+            callToAction: input.callToAction ?? "LEARN_MORE",
+          }),
+        }),
+      );
+      if (!creative.id) throw new MetaError(200, creative, "Meta gaf geen creative-id terug");
+      metaCreativeId = creative.id;
+      await db.update(ads).set({ metaCreativeId }).where(eq(ads.id, ad.id));
+    }
+
+    // Stap 3 — de advertentie zelf, altijd PAUSED (afgedwongen in de client).
+    let metaAdId = ad.metaId;
+    if (!metaAdId) {
+      const created = await withMetaRetry(() =>
+        meta.ads.create({
+          name: ad.name,
+          adset_id: adSet.metaId,
+          creative: { creative_id: metaCreativeId },
+        }),
+      );
+      if (!created.id) throw new MetaError(200, created, "Meta gaf geen ad-id terug");
+      metaAdId = created.id;
+    }
+    await db
+      .update(ads)
+      .set({ metaId: metaAdId, effectiveStatus: "PAUSED", lastSyncedAt: new Date() })
+      .where(eq(ads.id, ad.id));
+    return { ok: true, metaId: metaAdId };
+  } catch (err) {
+    const message = metaErrorMessage(err);
+    await db
+      .update(ads)
+      .set({
+        effectiveStatus: "PUBLISH_FAILED",
+        reviewFeedback: {
+          publishError: message,
+          code: err instanceof MetaError ? err.code : undefined,
+          at: new Date().toISOString(),
+        },
+      })
+      .where(eq(ads.id, ad.id));
+    return { ok: false, error: message };
+  }
+}
+
 /* ---------------------------------------------------------- publicatieketen */
 
 /** Invoer voor {@link publishAdToMeta}. */
@@ -320,6 +504,9 @@ export async function publishAdToMeta(input: PublishAdInput): Promise<PublishRes
 
   const [ad] = await db.select().from(ads).where(eq(ads.id, input.adId)).limit(1);
   if (!ad) return { ok: false, error: "Advertentie niet gevonden in het CRM." };
+  if (!ad.specId) {
+    return { ok: false, error: "Deze advertentie is een video-ad — publiceer hem via de videoketen." };
+  }
 
   const [adSet] = await db.select().from(adSets).where(eq(adSets.id, ad.adSetId)).limit(1);
   if (!adSet?.metaId) {

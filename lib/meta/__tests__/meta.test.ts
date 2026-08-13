@@ -19,6 +19,7 @@ import {
   buildAdSetPayload,
   buildCampaignPayload,
   buildObjectStorySpec,
+  buildVideoStorySpec,
   validateAdSetScheduling,
 } from "../publish";
 
@@ -366,6 +367,48 @@ describe("buildObjectStorySpec", () => {
       pageId: "111",
       igUserId: null,
       imageHash: "abc123",
+      message: "m",
+      link: "https://x.example",
+      callToAction: "CONTACT_US",
+    });
+    expect("instagram_user_id" in spec).toBe(false);
+  });
+});
+
+/* -------------------------------------------------- buildVideoStorySpec */
+
+describe("buildVideoStorySpec", () => {
+  it("bouwt video_data met video-id, posterframe, tekst en CTA (U7)", () => {
+    const spec = buildVideoStorySpec({
+      pageId: "111",
+      igUserId: "222",
+      videoId: "vid-9",
+      imageUrl: "https://storage.example/poster.jpg",
+      message: "Bekijk de showroom",
+      link: "https://habitat-one.com/showroom",
+      callToAction: "LEARN_MORE",
+    });
+    expect(spec).toEqual({
+      page_id: "111",
+      instagram_user_id: "222",
+      video_data: {
+        video_id: "vid-9",
+        image_url: "https://storage.example/poster.jpg",
+        message: "Bekijk de showroom",
+        call_to_action: {
+          type: "LEARN_MORE",
+          value: { link: "https://habitat-one.com/showroom" },
+        },
+      },
+    });
+  });
+
+  it("laat instagram_user_id weg als die er niet is", () => {
+    const spec = buildVideoStorySpec({
+      pageId: "111",
+      igUserId: null,
+      videoId: "vid-9",
+      imageUrl: "https://x.example/p.jpg",
       message: "m",
       link: "https://x.example",
       callToAction: "CONTACT_US",

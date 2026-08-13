@@ -63,10 +63,64 @@ export function AssetToolbar() {
     }
   }
 
+  /**
+   * Browser-metadata voor een video (U7): duur + afmetingen via een
+   * HTMLVideoElement en een posterframe via canvas. De server draait geen
+   * ffmpeg, dus dit is de enige plek waar we die gegevens kunnen lezen.
+   * Faalt stil naar nulls — de upload gaat dan gewoon door zonder metadata.
+   */
+  async function videoMetadata(
+    file: File,
+  ): Promise<{ duration: number; width: number; height: number; poster: Blob | null } | null> {
+    try {
+      const url = URL.createObjectURL(file);
+      try {
+        const video = document.createElement("video");
+        video.preload = "metadata";
+        video.muted = true;
+        video.src = url;
+        await new Promise<void>((resolve, reject) => {
+          video.onloadeddata = () => resolve();
+          video.onerror = () => reject(new Error("video onleesbaar"));
+        });
+        const canvas = document.createElement("canvas");
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
+        canvas.getContext("2d")?.drawImage(video, 0, 0);
+        const poster = await new Promise<Blob | null>((resolve) =>
+          canvas.toBlob(resolve, "image/jpeg", 0.85),
+        );
+        return {
+          duration: video.duration,
+          width: video.videoWidth,
+          height: video.videoHeight,
+          poster,
+        };
+      } finally {
+        URL.revokeObjectURL(url);
+      }
+    } catch {
+      return null;
+    }
+  }
+
   async function onUpload(files: FileList | null) {
     if (!files || files.length === 0) return;
     const form = new FormData();
-    for (const file of Array.from(files)) form.append("file", file);
+    const list = Array.from(files);
+    for (const file of list) form.append("file", file);
+    // Metadata alleen bij precies één video — de route koppelt de velden
+    // anders niet betrouwbaar aan het juiste bestand.
+    const videos = list.filter((f) => f.type.startsWith("video/"));
+    if (videos.length === 1) {
+      const meta = await videoMetadata(videos[0]);
+      if (meta) {
+        form.set("duration", String(meta.duration));
+        form.set("videoWidth", String(meta.width));
+        form.set("videoHeight", String(meta.height));
+        if (meta.poster) form.set("thumbnail", meta.poster, "poster.jpg");
+      }
+    }
     await run("upload", () => fetch("/api/assets/upload", { method: "POST", body: form }), "Upload");
     if (fileInput.current) fileInput.current.value = "";
   }
@@ -76,10 +130,10 @@ export function AssetToolbar() {
       <input
         ref={fileInput}
         type="file"
-        accept="image/jpeg,image/png,image/webp,image/avif"
+        accept="image/jpeg,image/png,image/webp,image/avif,video/mp4,video/quicktime,video/webm"
         multiple
         className="sr-only"
-        aria-label="Beelden uploaden"
+        aria-label="Beelden of video's uploaden"
         onChange={(e) => onUpload(e.target.files)}
       />
       <Button
@@ -89,7 +143,7 @@ export function AssetToolbar() {
         onClick={() => fileInput.current?.click()}
       >
         <Upload className="mr-1.5 size-4" aria-hidden />
-        {busy === "upload" ? "Bezig met uploaden…" : "Beelden uploaden"}
+        {busy === "upload" ? "Bezig met uploaden…" : "Media uploaden"}
       </Button>
       <Button
         type="button"

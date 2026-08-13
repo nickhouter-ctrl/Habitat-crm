@@ -13,6 +13,7 @@ import { AssetToolbar } from "@/components/marketing/assets/asset-toolbar";
 import { db } from "@/lib/db";
 import { assets, products } from "@/lib/db/schema";
 import { marketingStorage } from "@/lib/marketing/storage";
+import { formatDuration } from "@/lib/marketing/video";
 import { cn } from "@/lib/utils";
 
 export const metadata = { title: "Beeldbibliotheek" };
@@ -241,40 +242,68 @@ export default async function AssetsPage({
         >
           {rows.map(({ asset, productName }) => {
             const url = safeUrl(asset.storagePath);
+            const isVideo = asset.mediaType === "video";
+            const posterUrl = asset.thumbnailPath ? safeUrl(asset.thumbnailPath) : null;
             const reach = asset.igMetrics?.reach;
             const organicStrong = avgReach != null && reach != null && reach > avgReach;
             const alt = productName ?? asset.sourceRef ?? "Beeld zonder naam";
             return (
               <li key={asset.id}>
                 <Card className="group relative overflow-hidden p-0">
-                  <Link
-                    href={`/marketing/creatives/new?assetId=${asset.id}`}
-                    className="block focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent"
-                    aria-label={`Maak creative met ${alt}`}
-                  >
-                    {url ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img
+                  {isVideo ? (
+                    // Video: afspeelbare preview in de kaart. Geen editor-link —
+                    // de creative-editor is image-only; een video wordt als
+                    // video-ad gepubliceerd met copy uit copy_blocks (U7).
+                    url ? (
+                      <video
                         src={url}
-                        alt={alt}
-                        loading="lazy"
-                        width={asset.width ?? undefined}
-                        height={asset.height ?? undefined}
-                        className="aspect-square w-full object-cover"
+                        poster={posterUrl ?? undefined}
+                        controls
+                        preload="none"
+                        playsInline
+                        className="aspect-square w-full bg-black object-contain"
+                        aria-label={`Video: ${alt}`}
                       />
                     ) : (
                       <span className="flex aspect-square w-full items-center justify-center text-xs text-muted">
                         Opslag niet geconfigureerd
                       </span>
-                    )}
-                    <span className="pointer-events-none absolute inset-x-0 bottom-0 hidden bg-gradient-to-t from-black/70 to-transparent px-3 pb-2 pt-8 text-xs font-medium text-white group-hover:block group-focus-within:block">
-                      Maak creative →
-                    </span>
-                  </Link>
-                  <div className="absolute left-2 top-2 flex flex-wrap gap-1">
+                    )
+                  ) : (
+                    <Link
+                      href={`/marketing/creatives/new?assetId=${asset.id}`}
+                      className="block focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent"
+                      aria-label={`Maak creative met ${alt}`}
+                    >
+                      {url ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img
+                          src={url}
+                          alt={alt}
+                          loading="lazy"
+                          width={asset.width ?? undefined}
+                          height={asset.height ?? undefined}
+                          className="aspect-square w-full object-cover"
+                        />
+                      ) : (
+                        <span className="flex aspect-square w-full items-center justify-center text-xs text-muted">
+                          Opslag niet geconfigureerd
+                        </span>
+                      )}
+                      <span className="pointer-events-none absolute inset-x-0 bottom-0 hidden bg-gradient-to-t from-black/70 to-transparent px-3 pb-2 pt-8 text-xs font-medium text-white group-hover:block group-focus-within:block">
+                        Maak creative →
+                      </span>
+                    </Link>
+                  )}
+                  <div className="pointer-events-none absolute left-2 top-2 flex flex-wrap gap-1">
                     <Badge tone="neutral" className="bg-background/85 text-[10px]">
                       {SOURCE_LABELS[asset.source] ?? asset.source}
                     </Badge>
+                    {isVideo && (
+                      <Badge tone="info" className="bg-background/85 text-[10px]">
+                        ▶ {formatDuration(asset.durationSeconds)}
+                      </Badge>
+                    )}
                     {organicStrong && (
                       <span
                         title={`Organisch sterk op Instagram: bereik ${reach!.toLocaleString("nl-NL")} (boven het gemiddelde van ${Math.round(avgReach!).toLocaleString("nl-NL")}). Een hint, geen bewijs.`}
