@@ -3,9 +3,11 @@
  * Met ?assetId= komt het beeld uit de bibliotheek voorgeselecteerd; met
  * ?from= wordt een bestaande spec gedupliceerd ("Dupliceer en pas aan", §3.5).
  * De leerlaag (§8) levert de voorselectie van sjabloon/palet/invalshoek —
- * altijd overschrijfbaar, met de reden in gewone taal erbij.
+ * altijd overschrijfbaar, met de reden in gewone taal erbij. Categorieën
+ * volgen de menutaxonomie (lib/marketing/taxonomy.ts), niet de families uit
+ * `products.category`.
  */
-import { desc, eq, isNotNull } from "drizzle-orm";
+import { desc, eq, sql } from "drizzle-orm";
 
 import { PageHeader } from "@/components/ui";
 import {
@@ -21,6 +23,7 @@ import { aiCreativeCopyConfigured } from "@/lib/marketing/ai-copy";
 import type { CopyBlockLike } from "@/lib/marketing/copy-suggest";
 import { getEditorSuggestion } from "@/lib/marketing/facets";
 import { marketingStorage } from "@/lib/marketing/storage";
+import { subcategoryForFamily } from "@/lib/marketing/taxonomy";
 
 export const metadata = { title: "Nieuwe creative" };
 
@@ -41,17 +44,23 @@ export default async function NewCreativePage({
   const assetIdParam = typeof params.assetId === "string" ? params.assetId : "";
   const fromId = typeof params.from === "string" ? params.from : "";
 
-  const [assetRows, productRows, blockRows, categoryRows, suggestion] = await Promise.all([
+  const [assetRows, productRows, blockRows, igAgg, suggestion] = await Promise.all([
     db
       .select({
         id: assets.id,
         storagePath: assets.storagePath,
         sourceRef: assets.sourceRef,
         productId: assets.productId,
+        source: assets.source,
+        tags: assets.tags,
+        igReach: sql<string | null>`${assets.igMetrics} ->> 'reach'`,
+        productName: products.name,
+        productFamily: products.category,
       })
       .from(assets)
+      .leftJoin(products, eq(products.id, assets.productId))
       .orderBy(desc(assets.createdAt))
-      .limit(80),
+      .limit(500),
     db
       .select({
         id: products.id,
@@ -73,22 +82,28 @@ export default async function NewCreativePage({
       })
       .from(copyBlocks),
     db
-      .selectDistinct({ category: products.category })
-      .from(products)
-      .where(isNotNull(products.category)),
+      .select({
+        avgReach: sql<string | null>`avg((${assets.igMetrics} ->> 'reach')::numeric)`,
+      })
+      .from(assets)
+      .where(sql`${assets.igMetrics} ->> 'reach' is not null`),
     getEditorSuggestion().catch(() => null),
   ]);
+
+  // Drempel voor het IG-signaal: bovengemiddeld organisch bereik (§8 — hint, geen bewijs).
+  const avgReach = igAgg[0]?.avgReach ? Number(igAgg[0].avgReach) : null;
 
   const editorAssets: EditorAsset[] = assetRows.map((a) => ({
     id: a.id,
     url: safeUrl(a.storagePath),
-    label: a.sourceRef ?? "Beeld zonder naam",
+    label: a.productName ?? a.sourceRef ?? "Beeld zonder naam",
     productId: a.productId,
+    category: a.productFamily ? subcategoryForFamily(a.productFamily) : null,
+    source: a.source,
+    tags: a.tags ?? [],
+    organicStrong:
+      avgReach != null && a.igReach != null && Number(a.igReach) > avgReach,
   }));
-  const categories = categoryRows
-    .map((r) => r.category)
-    .filter((c): c is string => !!c)
-    .sort();
 
   // Dupliceren: bestaande spec als beginstand, mét verwijzing naar het origineel.
   let initial: EditorInitial = { assetId: assetIdParam || undefined };
@@ -116,7 +131,7 @@ export default async function NewCreativePage({
     const linked = editorAssets.find((a) => a.id === assetIdParam);
     if (linked?.productId) {
       initial.productId = linked.productId;
-      initial.category = productRows.find((p) => p.id === linked.productId)?.category ?? null;
+      initial.category = linked.category;
     }
   }
 
@@ -127,13 +142,12 @@ export default async function NewCreativePage({
         subtitle={
           fromId
             ? "Een lopende advertentie wijzig je niet — je maakt een kopie en past die aan (anders gaat de leerfase verloren)."
-            : "Kies beeld, sjabloon en teksten; de preview toont exact wat er naar Meta gaat."
+            : "Kies beeld(en), sjabloon en teksten; de preview toont exact wat er naar Meta gaat."
         }
       />
       <CreativeEditor
         assets={editorAssets}
         products={productRows}
-        categories={categories}
         copyBlocks={blockRows as CopyBlockLike[]}
         initial={initial}
         suggestion={fromId ? null : suggestion}

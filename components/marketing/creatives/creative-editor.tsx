@@ -35,18 +35,16 @@ import {
   getCopySuggestion,
   type CopyBlockLike,
 } from "@/lib/marketing/copy-suggest";
+import { subcategoryForFamily, TAXONOMY } from "@/lib/marketing/taxonomy";
 import { cn } from "@/lib/utils";
+import { AssetPickerModal, type PickerAsset } from "./asset-picker-modal";
 
 /* -------------------------------------------------------------------- types */
 
 export type CreativeLocale = "nl" | "en" | "es" | "de";
 
-export interface EditorAsset {
-  id: string;
-  url: string | null;
-  label: string;
-  productId: string | null;
-}
+/** Asset zoals de editor én de popup-kiezer (U6) hem nodig hebben. */
+export type EditorAsset = PickerAsset;
 
 export interface EditorProduct {
   id: string;
@@ -117,7 +115,6 @@ function b64url(json: string): string {
 export function CreativeEditor({
   assets,
   products,
-  categories,
   copyBlocks,
   initial,
   suggestion,
@@ -125,8 +122,6 @@ export function CreativeEditor({
 }: {
   assets: EditorAsset[];
   products: EditorProduct[];
-  /** Bekende productcategorieën — categorie volstaat, product is optioneel. */
-  categories: string[];
   copyBlocks: CopyBlockLike[];
   initial: EditorInitial;
   /** Best presterende combinatie uit de leerlaag; null zonder data. */
@@ -134,7 +129,12 @@ export function CreativeEditor({
   /** Is er een ANTHROPIC_API_KEY? Zo niet, geen AI-knop. */
   aiEnabled?: boolean;
 }) {
-  const [assetId, setAssetId] = useState(initial.assetId ?? "");
+  // Multi-select (U6): het eerste beeld stuurt de preview en het losse concept;
+  // "Maak set" genereert per gekozen beeld × formaat × taal.
+  const [assetIds, setAssetIds] = useState<string[]>(
+    initial.assetId ? [initial.assetId] : [],
+  );
+  const [pickerOpen, setPickerOpen] = useState(false);
   const [productId, setProductId] = useState(initial.productId ?? "");
   const [category, setCategory] = useState(initial.category ?? "");
   // Leerlaag-suggestie als default — alleen als er geen expliciete beginstand
@@ -165,7 +165,11 @@ export function CreativeEditor({
     (Object.keys(initial.copy ?? {}) as CopyField[]).filter((k) => initial.copy?.[k]),
   ));
 
-  const asset = assets.find((a) => a.id === assetId) ?? null;
+  const asset = assets.find((a) => a.id === assetIds[0]) ?? null;
+  const selectedAssets = assetIds
+    .map((id) => assets.find((a) => a.id === id))
+    .filter((a): a is EditorAsset => !!a);
+  const setSize = assetIds.length * FORMAT_NAMES.length * 4; // beelden × formaten × talen
   const product = products.find((p) => p.id === productId) ?? null;
   const limits = TEMPLATES[template].limits[format];
 
@@ -219,10 +223,11 @@ export function CreativeEditor({
       copyAngle: angle || null,
       productId: productId || null,
       category: category || product?.category || null,
-      assetId: assetId || null,
+      assetId: assetIds[0] ?? null,
+      assetIds,
       parentId: initial.parentId ?? null,
     }),
-    [template, palette, format, locale, copy, angle, productId, category, product?.category, assetId, initial.parentId],
+    [template, palette, format, locale, copy, angle, productId, category, product?.category, assetIds, initial.parentId],
   );
 
   /** "Genereer met AI" (U3) — schrijft alle velden; fout blijft inline zichtbaar. */
@@ -305,9 +310,21 @@ export function CreativeEditor({
       <input type="hidden" name="payload" value={JSON.stringify(spec)} />
 
       <div className="space-y-5">
-        {/* ---------------------------------------------------------- asset */}
+        {/* ------------------------------------------------- beeld(en) (U6) */}
         <Card className="p-4">
-          <Label>Beeld</Label>
+          <div className="flex items-center justify-between gap-3">
+            <Label>
+              Beeld{assetIds.length > 1 ? `en (${assetIds.length})` : ""}
+            </Label>
+            <button
+              type="button"
+              onClick={() => setPickerOpen(true)}
+              disabled={assets.length === 0}
+              className={buttonClass({ variant: "secondary", size: "sm" })}
+            >
+              Kies beeld(en)
+            </button>
+          </div>
           {assets.length === 0 ? (
             <p className="mt-2 text-sm text-muted">
               De bibliotheek is leeg — vul hem eerst via{" "}
@@ -316,22 +333,21 @@ export function CreativeEditor({
               </Link>
               .
             </p>
+          ) : selectedAssets.length === 0 ? (
+            <p className="mt-2 text-sm text-muted">
+              Nog geen beeld gekozen. Het eerste gekozen beeld stuurt de preview; met meerdere
+              beelden maakt &ldquo;Maak set&rdquo; een set per beeld.
+            </p>
           ) : (
-            <ul
-              className="mt-2 flex list-none gap-2 overflow-x-auto pb-1"
-              aria-label="Kies een beeld"
-            >
-              {assets.map((a) => (
-                <li key={a.id} className="shrink-0">
-                  <button
-                    type="button"
-                    onClick={() => setAssetId(a.id)}
-                    aria-pressed={assetId === a.id}
-                    aria-label={`Gebruik ${a.label}`}
+            <ul className="mt-2 flex list-none gap-2 overflow-x-auto pb-1" aria-label="Gekozen beelden">
+              {selectedAssets.map((a, i) => (
+                <li key={a.id} className="relative shrink-0">
+                  <span
                     className={cn(
-                      "block overflow-hidden rounded-md border-2 transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent",
-                      assetId === a.id ? "border-accent" : "border-transparent hover:border-border",
+                      "block overflow-hidden rounded-md border-2",
+                      i === 0 ? "border-accent" : "border-border",
                     )}
+                    title={i === 0 ? `${a.label} (preview-beeld)` : a.label}
                   >
                     {a.url ? (
                       // eslint-disable-next-line @next/next/no-img-element
@@ -341,12 +357,30 @@ export function CreativeEditor({
                         geen opslag
                       </span>
                     )}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setAssetIds((prev) => prev.filter((id) => id !== a.id))}
+                    aria-label={`Verwijder ${a.label} uit de selectie`}
+                    className="absolute -right-1.5 -top-1.5 flex size-5 items-center justify-center rounded-full border bg-surface text-muted shadow-sm hover:text-foreground"
+                  >
+                    ×
                   </button>
                 </li>
               ))}
             </ul>
           )}
         </Card>
+        <AssetPickerModal
+          open={pickerOpen}
+          assets={assets}
+          selected={assetIds}
+          onClose={() => setPickerOpen(false)}
+          onConfirm={(ids) => {
+            setAssetIds(ids);
+            setPickerOpen(false);
+          }}
+        />
 
         {/* ------------------------- product / categorie / hoek / taal (U2) */}
         <Card className="grid gap-4 p-4 sm:grid-cols-2 lg:grid-cols-4">
@@ -357,7 +391,9 @@ export function CreativeEditor({
               onChange={(e) => {
                 setProductId(e.target.value);
                 const p = products.find((x) => x.id === e.target.value);
-                if (p?.category) setCategory(p.category);
+                // products.category is een familie ("Age Stone"); de picker
+                // werkt in de menutaxonomie — vertaal bij het meebewegen.
+                if (p?.category) setCategory(subcategoryForFamily(p.category));
               }}
               className="h-9 w-full rounded-md border border-border bg-background px-2 text-sm"
             >
@@ -381,10 +417,14 @@ export function CreativeEditor({
               className="h-9 w-full rounded-md border border-border bg-background px-2 text-sm"
             >
               <option value="">Geen categorie</option>
-              {categories.map((c) => (
-                <option key={c} value={c}>
-                  {c}
-                </option>
+              {TAXONOMY.map((group) => (
+                <optgroup key={group.group} label={group.group}>
+                  {group.subcategories.map((sub) => (
+                    <option key={sub} value={sub}>
+                      {sub}
+                    </option>
+                  ))}
+                </optgroup>
               ))}
             </select>
           </Field>
@@ -604,22 +644,23 @@ export function CreativeEditor({
           <button
             type="submit"
             formAction={saveAction}
-            disabled={pending || !assetId || !copy.headline}
+            disabled={pending || assetIds.length === 0 || !copy.headline}
             className={buttonClass({ variant: "secondary" })}
+            title={assetIds.length > 1 ? "Slaat één concept op met het eerste (preview-)beeld" : undefined}
           >
             {savePending ? "Opslaan…" : "Opslaan als concept"}
           </button>
           <button
             type="submit"
             formAction={setActionFn}
-            disabled={pending || !assetId || !copy.headline}
+            disabled={pending || assetIds.length === 0 || !copy.headline}
             className={buttonClass()}
-            title="Genereert 3 formaten × 4 talen als aparte concepten"
+            title={`${assetIds.length || 1} beeld(en) × ${FORMAT_NAMES.length} formaten × 4 talen als aparte concepten`}
           >
-            {setPending ? "Set maken…" : "Maak set (12 concepten)"}
+            {setPending ? "Set maken…" : `Maak set (${setSize || 12} concepten)`}
           </button>
-          {(!assetId || !copy.headline) && (
-            <p className="text-xs text-muted">Kies een beeld en vul minimaal een kop in.</p>
+          {(assetIds.length === 0 || !copy.headline) && (
+            <p className="text-xs text-muted">Kies minstens één beeld en vul een kop in.</p>
           )}
         </div>
       </div>

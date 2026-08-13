@@ -14,7 +14,7 @@
  * Wijzigen betekent dupliceren (§3.5): er is bewust geen update-actie voor
  * copy — de editor maakt een nieuwe spec met `parentId`.
  */
-import { and, eq, isNull, or } from "drizzle-orm";
+import { and, eq, inArray, isNull, or } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
@@ -40,6 +40,9 @@ const LOCALES = ["nl", "en", "es", "de"] as const;
  *  overige talen bij "Maak set" (categorie volstaat, product is optioneel). */
 const payloadSchema = creativeSpecSchema.extend({
   assetId: z.uuid("Kies eerst een beeld uit de bibliotheek."),
+  /** Multi-select (U6): "Maak set" genereert per beeld × formaat × taal.
+   *  Het eerste beeld is gelijk aan `assetId` (stuurt preview + los concept). */
+  assetIds: z.array(z.uuid()).max(24, "Maximaal 24 beelden per set.").optional(),
   parentId: z.uuid().nullish(),
   category: z.string().max(200).nullish(),
 });
@@ -189,12 +192,23 @@ export async function createCreativeSet(
     };
   };
 
-  // Basis-spec eerst; de overige elf verwijzen ernaar via parentId.
+  // Multi-select (U6): per gekozen beeld × formaat × taal één concept.
+  const assetIds = [...new Set(spec.assetIds?.length ? spec.assetIds : [spec.assetId])];
+  const existing = await db
+    .select({ id: assets.id })
+    .from(assets)
+    .where(inArray(assets.id, assetIds));
+  if (existing.length !== assetIds.length) {
+    return { error: "Een van de gekozen beelden bestaat niet (meer). Open de beeldkiezer opnieuw." };
+  }
+
+  // Basis-spec eerst (eerste beeld, huidige formaat + taal); de rest van de
+  // set verwijst ernaar via parentId.
   const [base] = await db
     .insert(creativeSpecs)
     .values({
       productId: spec.productId ?? null,
-      assetId: spec.assetId,
+      assetId: assetIds[0],
       template: spec.template,
       palette: spec.palette,
       format: spec.format,
@@ -207,15 +221,20 @@ export async function createCreativeSet(
     })
     .returning({ id: creativeSpecs.id });
 
-  const rest = FORMAT_NAMES.flatMap((format) =>
-    LOCALES.map((locale) => ({ format, locale })),
-  ).filter(({ format, locale }) => !(format === spec.format && locale === spec.locale));
+  const rest = assetIds.flatMap((assetId) =>
+    FORMAT_NAMES.flatMap((format) =>
+      LOCALES.map((locale) => ({ assetId, format, locale })),
+    ),
+  ).filter(
+    ({ assetId, format, locale }) =>
+      !(assetId === assetIds[0] && format === spec.format && locale === spec.locale),
+  );
 
   if (rest.length > 0) {
     await db.insert(creativeSpecs).values(
-      rest.map(({ format, locale }) => ({
+      rest.map(({ assetId, format, locale }) => ({
         productId: spec.productId ?? null,
-        assetId: spec.assetId,
+        assetId,
         template: spec.template,
         palette: spec.palette,
         format,
