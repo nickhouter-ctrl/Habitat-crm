@@ -17,6 +17,7 @@ CREATE TABLE "campaigns" (
 	"updated_at" timestamp with time zone DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
+ALTER TABLE "campaigns" ENABLE ROW LEVEL SECURITY;--> statement-breakpoint
 CREATE TABLE "ad_metrics_daily" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"ad_id" uuid NOT NULL,
@@ -29,6 +30,7 @@ CREATE TABLE "ad_metrics_daily" (
 	"frequency" numeric(8, 4)
 );
 --> statement-breakpoint
+ALTER TABLE "ad_metrics_daily" ENABLE ROW LEVEL SECURITY;--> statement-breakpoint
 CREATE TABLE "ad_sets" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"campaign_id" uuid NOT NULL,
@@ -49,6 +51,7 @@ CREATE TABLE "ad_sets" (
 	"updated_at" timestamp with time zone DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
+ALTER TABLE "ad_sets" ENABLE ROW LEVEL SECURITY;--> statement-breakpoint
 CREATE TABLE "ads" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"ad_set_id" uuid NOT NULL,
@@ -64,6 +67,7 @@ CREATE TABLE "ads" (
 	"updated_at" timestamp with time zone DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
+ALTER TABLE "ads" ENABLE ROW LEVEL SECURITY;--> statement-breakpoint
 CREATE TABLE "assets" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"source" "asset_source" NOT NULL,
@@ -81,6 +85,7 @@ CREATE TABLE "assets" (
 	"updated_at" timestamp with time zone DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
+ALTER TABLE "assets" ENABLE ROW LEVEL SECURITY;--> statement-breakpoint
 CREATE TABLE "competitor_ads" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"competitor_id" uuid NOT NULL,
@@ -101,6 +106,7 @@ CREATE TABLE "competitor_ads" (
 	"updated_at" timestamp with time zone DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
+ALTER TABLE "competitor_ads" ENABLE ROW LEVEL SECURITY;--> statement-breakpoint
 CREATE TABLE "competitors" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"name" text NOT NULL,
@@ -112,6 +118,7 @@ CREATE TABLE "competitors" (
 	"updated_at" timestamp with time zone DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
+ALTER TABLE "competitors" ENABLE ROW LEVEL SECURITY;--> statement-breakpoint
 CREATE TABLE "copy_blocks" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"angle" "copy_angle" NOT NULL,
@@ -124,6 +131,7 @@ CREATE TABLE "copy_blocks" (
 	"updated_at" timestamp with time zone DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
+ALTER TABLE "copy_blocks" ENABLE ROW LEVEL SECURITY;--> statement-breakpoint
 CREATE TABLE "creative_specs" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"product_id" uuid,
@@ -141,6 +149,7 @@ CREATE TABLE "creative_specs" (
 	"updated_at" timestamp with time zone DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
+ALTER TABLE "creative_specs" ENABLE ROW LEVEL SECURITY;--> statement-breakpoint
 CREATE TABLE "facet_performance" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"facet" text NOT NULL,
@@ -157,6 +166,7 @@ CREATE TABLE "facet_performance" (
 	"computed_at" timestamp with time zone DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
+ALTER TABLE "facet_performance" ENABLE ROW LEVEL SECURITY;--> statement-breakpoint
 CREATE TABLE "renders" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"spec_id" uuid NOT NULL,
@@ -165,10 +175,11 @@ CREATE TABLE "renders" (
 	"rendered_at" timestamp with time zone DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
+ALTER TABLE "renders" ENABLE ROW LEVEL SECURITY;--> statement-breakpoint
 ALTER TABLE "products" ADD COLUMN "slug" text;--> statement-breakpoint
 ALTER TABLE "products" ADD COLUMN "hero_asset_id" uuid;--> statement-breakpoint
 ALTER TABLE "products" ADD COLUMN "price_from_eur" numeric(14, 2);--> statement-breakpoint
-ALTER TABLE "products" ADD COLUMN "name_i_18n" jsonb;--> statement-breakpoint
+ALTER TABLE "products" ADD COLUMN "name_i18n" jsonb;--> statement-breakpoint
 ALTER TABLE "products" ADD COLUMN "specs" jsonb;--> statement-breakpoint
 ALTER TABLE "creative_specs" ADD CONSTRAINT "creative_specs_parent_id_creative_specs_id_fk" FOREIGN KEY ("parent_id") REFERENCES "public"."creative_specs"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 CREATE UNIQUE INDEX "campaigns_meta_idx" ON "campaigns" USING btree ("meta_id");--> statement-breakpoint

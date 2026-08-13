@@ -479,8 +479,9 @@ export const products = pgTable(
     heroAssetId: uuid(),
     /** Vanafprijs voor advertentiecopy ({price_from}-token), ex. BTW. */
     priceFromEur: numeric({ precision: 14, scale: 2 }),
-    /** Vertaalde productnamen per locale; `name` blijft de primaire tekst. */
-    nameI18n: jsonb().$type<{ nl?: string; de?: string; en?: string; es?: string }>(),
+    /** Vertaalde productnamen per locale; `name` blijft de primaire tekst.
+     * Kolomnaam expliciet: de casing-conversie zou er "name_i_18n" van maken. */
+    nameI18n: jsonb("name_i18n").$type<{ nl?: string; de?: string; en?: string; es?: string }>(),
     /** Vrije specs (afwerking, materiaal, …) voor invulpatronen in copy_blocks. */
     specs: jsonb().$type<Record<string, string | number>>(),
     ...timestamps,
@@ -2556,7 +2557,7 @@ export const assets = pgTable(
     index("assets_product_idx").on(t.productId),
     index("assets_phash_idx").on(t.phash),
   ],
-);
+).enableRLS();
 
 /**
  * Herbruikbare advertentietekst, per taal gelijkwaardig geschreven (§8c) —
@@ -2582,7 +2583,7 @@ export const copyBlocks = pgTable(
     index("copy_blocks_locale_role_idx").on(t.locale, t.role),
     index("copy_blocks_product_idx").on(t.productId),
   ],
-);
+).enableRLS();
 
 /**
  * De CreativeSpec is de waarheid; de PNG is een afgeleide (brief §3.2).
@@ -2621,7 +2622,7 @@ export const creativeSpecs = pgTable(
     index("creative_specs_product_idx").on(t.productId),
     index("creative_specs_asset_idx").on(t.assetId),
   ],
-);
+).enableRLS();
 
 /**
  * Gerenderde PNG's per spec. Bij ongewijzigde `specHash` wordt de bestaande
@@ -2640,7 +2641,7 @@ export const renders = pgTable(
     renderedAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [uniqueIndex("renders_spec_hash_idx").on(t.specId, t.specHash)],
-);
+).enableRLS();
 
 /**
  * Eigen campagne-records mét het Meta-object-id ernaast. `effectiveStatus` en
@@ -2663,7 +2664,7 @@ export const adCampaigns = pgTable(
     ...timestamps,
   },
   (t) => [uniqueIndex("campaigns_meta_idx").on(t.metaId)],
-);
+).enableRLS();
 
 /**
  * Advertentiesets. Plannen gebeurt hier via `startTime`/`endTime`; dagdelen
@@ -2700,7 +2701,7 @@ export const adSets = pgTable(
     index("ad_sets_campaign_idx").on(t.campaignId),
     uniqueIndex("ad_sets_meta_idx").on(t.metaId),
   ],
-);
+).enableRLS();
 
 /**
  * Advertenties. `specId` is de brug tussen creatie en prestatie: via de spec
@@ -2732,7 +2733,7 @@ export const ads = pgTable(
     index("ads_spec_idx").on(t.specId),
     uniqueIndex("ads_meta_idx").on(t.metaId),
   ],
-);
+).enableRLS();
 
 /** Dagcijfers per advertentie; upsert op (adId, date) bij elke sync. */
 export const adMetricsDaily = pgTable(
@@ -2752,7 +2753,7 @@ export const adMetricsDaily = pgTable(
     frequency: numeric({ precision: 8, scale: 4 }),
   },
   (t) => [uniqueIndex("ad_metrics_daily_ad_date_idx").on(t.adId, t.date)],
-);
+).enableRLS();
 
 /**
  * Uitvoer van de leerlaag (fase 4), nachtelijk volledig herbouwd. Per
@@ -2789,7 +2790,7 @@ export const facetPerformance = pgTable(
     computedAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [uniqueIndex("facet_performance_facet_value_idx").on(t.facet, t.value)],
-);
+).enableRLS();
 
 /** Gevolgde concurrent voor de advertentiemonitor (fase 5, ads_archive). */
 export const competitors = pgTable(
@@ -2807,7 +2808,7 @@ export const competitors = pgTable(
     ...timestamps,
   },
   (t) => [uniqueIndex("competitors_page_idx").on(t.metaPageId)],
-);
+).enableRLS();
 
 /**
  * Advertenties van concurrenten uit het publieke DSA-archief (ads_archive).
@@ -2846,7 +2847,7 @@ export const competitorAds = pgTable(
     uniqueIndex("competitor_ads_archive_idx").on(t.competitorId, t.metaAdArchiveId),
     index("competitor_ads_last_seen_idx").on(t.lastSeen),
   ],
-);
+).enableRLS();
 
 /* ------------------------------------------------ marketing-module relations */
 

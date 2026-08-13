@@ -1,5 +1,5 @@
 {
-  "id": "3df77bb8-8c94-49d1-a6bd-d24e256f8ed8",
+  "id": "af9e9fb3-0d7d-4b2d-a76b-30230ac0f2cb",
   "prevId": "b5f9a692-31fe-46c7-bdd1-344b5b2841e6",
   "version": "7",
   "dialect": "postgresql",
@@ -566,7 +566,7 @@
       "uniqueConstraints": {},
       "policies": {},
       "checkConstraints": {},
-      "isRLSEnabled": false
+      "isRLSEnabled": true
     },
     "public.ad_metrics_daily": {
       "name": "ad_metrics_daily",
@@ -661,7 +661,7 @@
       "uniqueConstraints": {},
       "policies": {},
       "checkConstraints": {},
-      "isRLSEnabled": false
+      "isRLSEnabled": true
     },
     "public.ad_sets": {
       "name": "ad_sets",
@@ -812,7 +812,7 @@
       "uniqueConstraints": {},
       "policies": {},
       "checkConstraints": {},
-      "isRLSEnabled": false
+      "isRLSEnabled": true
     },
     "public.ads": {
       "name": "ads",
@@ -946,7 +946,7 @@
       "uniqueConstraints": {},
       "policies": {},
       "checkConstraints": {},
-      "isRLSEnabled": false
+      "isRLSEnabled": true
     },
     "public.appointments": {
       "name": "appointments",
@@ -1253,7 +1253,7 @@
       "uniqueConstraints": {},
       "policies": {},
       "checkConstraints": {},
-      "isRLSEnabled": false
+      "isRLSEnabled": true
     },
     "public.campaign_recipients": {
       "name": "campaign_recipients",
@@ -2333,7 +2333,7 @@
       "uniqueConstraints": {},
       "policies": {},
       "checkConstraints": {},
-      "isRLSEnabled": false
+      "isRLSEnabled": true
     },
     "public.competitors": {
       "name": "competitors",
@@ -2414,7 +2414,7 @@
       "uniqueConstraints": {},
       "policies": {},
       "checkConstraints": {},
-      "isRLSEnabled": false
+      "isRLSEnabled": true
     },
     "public.consignments": {
       "name": "consignments",
@@ -2975,7 +2975,7 @@
       "uniqueConstraints": {},
       "policies": {},
       "checkConstraints": {},
-      "isRLSEnabled": false
+      "isRLSEnabled": true
     },
     "public.creative_specs": {
       "name": "creative_specs",
@@ -3140,7 +3140,7 @@
       "uniqueConstraints": {},
       "policies": {},
       "checkConstraints": {},
-      "isRLSEnabled": false
+      "isRLSEnabled": true
     },
     "public.customer_accounts": {
       "name": "customer_accounts",
@@ -4823,7 +4823,7 @@
       "uniqueConstraints": {},
       "policies": {},
       "checkConstraints": {},
-      "isRLSEnabled": false
+      "isRLSEnabled": true
     },
     "public.holded_sync_map": {
       "name": "holded_sync_map",
@@ -5780,8 +5780,8 @@
           "primaryKey": false,
           "notNull": false
         },
-        "name_i_18n": {
-          "name": "name_i_18n",
+        "name_i18n": {
+          "name": "name_i18n",
           "type": "jsonb",
           "primaryKey": false,
           "notNull": false
@@ -8790,7 +8790,7 @@
       "uniqueConstraints": {},
       "policies": {},
       "checkConstraints": {},
-      "isRLSEnabled": false
+      "isRLSEnabled": true
     },
     "public.sample_movements": {
       "name": "sample_movements",
