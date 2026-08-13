@@ -12,7 +12,7 @@ import { loadCreativeFonts, loadLogoDataUri } from "./fonts";
 import { renderableSpecSchema, type RenderableSpec } from "./schema";
 import { TEMPLATES } from "./templates";
 import { FORMATS, PALETTES, TYPE_SCALE } from "./tokens";
-import { headlineScaleFor, HEADLINE_SHRINK_STEPS } from "./validate";
+import { shrinkScaleFor, HEADLINE_SHRINK_STEPS } from "./validate";
 
 /**
  * Render een spec naar PNG. Valideert de invoer (zod) en kiest de
@@ -30,8 +30,11 @@ export async function renderCreative(input: unknown): Promise<ImageResponse> {
   const entry = TEMPLATES[spec.template];
   const palette = PALETTES[spec.palette];
   const minScale = HEADLINE_SHRINK_STEPS[HEADLINE_SHRINK_STEPS.length - 1];
-  const headlineScale =
-    headlineScaleFor(spec.copy.headline.length, entry.limits[spec.format].headline) ?? minScale;
+  const limits = entry.limits[spec.format];
+  const headlineScale = shrinkScaleFor(spec.copy.headline.length, limits.headline) ?? minScale;
+  const sublineScale = spec.copy.subline
+    ? (shrinkScaleFor(spec.copy.subline.length, limits.subline) ?? minScale)
+    : 1;
 
   const [fonts, logoUri] = await Promise.all([
     loadCreativeFonts(),
@@ -47,6 +50,7 @@ export async function renderCreative(input: unknown): Promise<ImageResponse> {
         size={size}
         typeScale={TYPE_SCALE[spec.format]}
         headlineScale={headlineScale}
+        sublineScale={sublineScale}
         logoUri={logoUri}
       />
     ),

@@ -80,12 +80,15 @@ export function Subline({
   typeScale,
   color,
   maxLines,
+  scale = 1,
   align = "flex-start",
 }: {
   text: string;
   typeScale: TypeScale;
   color: string;
   maxLines: number;
+  /** Automatische verkleining (100/88/78%, U10) — zelfde principe als de kop. */
+  scale?: number;
   align?: "flex-start" | "center";
 }): ReactElement {
   return (
@@ -93,7 +96,7 @@ export function Subline({
       style={{
         display: "block",
         lineClamp: maxLines,
-        fontSize: typeScale.subline,
+        fontSize: Math.round(typeScale.subline * scale),
         fontWeight: 400,
         lineHeight: 1.35,
         color,

@@ -21,6 +21,7 @@ export function PriceTemplate({
   size,
   typeScale,
   headlineScale,
+  sublineScale,
   logoUri,
 }: TemplateProps): ReactElement {
   const pad = 64;
@@ -98,7 +99,13 @@ export function PriceTemplate({
           maxLines={spec.format === "1080x1920" ? 4 : 3}
         />
         {spec.copy.subline ? (
-          <Subline text={spec.copy.subline} typeScale={typeScale} color={palette.ink} maxLines={2} />
+          <Subline
+            text={spec.copy.subline}
+            typeScale={typeScale}
+            color={palette.ink}
+            maxLines={spec.format === "1080x1920" ? 3 : 2}
+            scale={sublineScale}
+          />
         ) : null}
         {spec.copy.cta ? (
           <div style={{ display: "flex", marginTop: 10 }}>

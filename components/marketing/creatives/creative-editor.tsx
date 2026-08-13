@@ -30,7 +30,7 @@ import {
   type FormatName,
   type PaletteName,
 } from "@/lib/creatives/tokens";
-import { headlineScaleFor, validateSpecCopy } from "@/lib/creatives/validate";
+import { shrinkScaleFor, validateSpecCopy } from "@/lib/creatives/validate";
 import {
   getCopySuggestion,
   type CopyBlockLike,
@@ -272,7 +272,8 @@ export function CreativeEditor({
         : [],
     [spec, copy.headline],
   );
-  const headlineScale = headlineScaleFor(copy.headline.length, limits.headline);
+  const headlineScale = shrinkScaleFor(copy.headline.length, limits.headline);
+  const sublineScale = copy.subline ? shrinkScaleFor(copy.subline.length, limits.subline) : 1;
 
   /* Debounced preview via het render-endpoint als <img src> (§6). De doel-URL
      is afgeleide staat; alleen de vertraagde overname ervan is echte state. */
@@ -600,7 +601,9 @@ export function CreativeEditor({
               limit={limits[key]}
               required={key === "headline"}
               multiline={multiline}
-              headlineScale={key === "headline" ? headlineScale : undefined}
+              shrinkScale={
+                key === "headline" ? headlineScale : key === "subline" ? sublineScale : undefined
+              }
               onChange={(value) => {
                 dirtyRef.current.add(key);
                 setCopy((prev) => ({ ...prev, [key]: value }));
@@ -706,9 +709,9 @@ export function CreativeEditor({
 /* -------------------------------------------------------------- copy-input */
 
 /**
- * Tekstveld met teller die kleurt bij overschrijding (§6b). Voor de kop toont
- * hij bovendien de automatische verkleiningsstap (88%/78%) vóórdat het echt
- * niet meer past.
+ * Tekstveld met teller die kleurt bij overschrijding (§6b). Voor kop en
+ * subregel (U10) toont hij bovendien de automatische verkleiningsstap
+ * (88%/78%) vóórdat het echt niet meer past.
  */
 function CopyInput({
   id,
@@ -717,7 +720,7 @@ function CopyInput({
   limit,
   required,
   multiline,
-  headlineScale,
+  shrinkScale,
   onChange,
 }: {
   id: string;
@@ -726,14 +729,15 @@ function CopyInput({
   limit: number;
   required?: boolean;
   multiline?: boolean;
-  headlineScale?: 1 | 0.88 | 0.78 | null;
+  /** Alleen gezet voor verkleinbare rollen (kop, subregel). */
+  shrinkScale?: 1 | 0.88 | 0.78 | null;
   onChange: (value: string) => void;
 }) {
   const len = value.length;
-  const isHeadline = headlineScale !== undefined;
-  const hardLimit = isHeadline ? Math.floor(limit / 0.78) : limit;
+  const shrinkable = shrinkScale !== undefined;
+  const hardLimit = shrinkable ? Math.floor(limit / 0.78) : limit;
   const over = len > hardLimit;
-  const shrinks = isHeadline && !over && len > limit;
+  const shrinks = shrinkable && !over && len > limit;
 
   const counterClass = over
     ? "text-danger font-medium"
@@ -756,8 +760,8 @@ function CopyInput({
       <div className="flex items-baseline justify-between gap-2">
         <Label htmlFor={id}>{label}</Label>
         <span id={`${id}-teller`} className={cn("text-xs tabular-nums", counterClass)} aria-live="polite">
-          {len}/{isHeadline ? limit : hardLimit}
-          {shrinks && ` — wordt verkleind naar ${Math.round((headlineScale ?? 0.78) * 100)}%`}
+          {len}/{shrinkable ? limit : hardLimit}
+          {shrinks && ` — wordt verkleind naar ${Math.round((shrinkScale ?? 0.78) * 100)}%`}
           {over && " — past niet, ook niet verkleind"}
         </span>
       </div>

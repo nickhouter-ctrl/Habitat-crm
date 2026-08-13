@@ -13,6 +13,7 @@ export function SplitTemplate({
   size,
   typeScale,
   headlineScale,
+  sublineScale,
   logoUri,
 }: TemplateProps): ReactElement {
   const pad = 64;
@@ -73,6 +74,7 @@ export function SplitTemplate({
               typeScale={typeScale}
               color={palette.muted}
               maxLines={spec.format === "1080x1080" ? 2 : 3}
+              scale={sublineScale}
             />
           ) : null}
         </div>

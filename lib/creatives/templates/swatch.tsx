@@ -14,6 +14,7 @@ export function SwatchTemplate({
   size,
   typeScale,
   headlineScale,
+  sublineScale,
   logoUri,
 }: TemplateProps): ReactElement {
   const pad = 72;
@@ -103,7 +104,7 @@ export function SwatchTemplate({
           typeScale={{ ...typeScale, headline: Math.round(typeScale.headline * 0.82) }}
           headlineScale={headlineScale}
           color={palette.ink}
-          maxLines={2}
+          maxLines={spec.format === "1080x1920" ? 3 : 2}
           align="center"
         />
         {spec.copy.subline ? (
@@ -111,8 +112,9 @@ export function SwatchTemplate({
             text={spec.copy.subline}
             typeScale={typeScale}
             color={palette.muted}
-            maxLines={2}
+            maxLines={spec.format === "1080x1920" ? 3 : 2}
             align="center"
+            scale={sublineScale}
           />
         ) : null}
         <div style={{ display: "flex", alignItems: "center", gap: 36, marginTop: 6 }}>

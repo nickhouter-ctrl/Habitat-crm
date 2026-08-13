@@ -40,3 +40,14 @@ bouwen.
 met de randgevallen uit §6b (kop 70 tekens, één woord van 25, lege
 badge/subregel, subregel 200 tekens, vier talen met ñ/à/í/¿) en alle vier de
 paletten. Draait in CI via `npm test`.
+
+## Pasgarantie (U10)
+
+De tekenlimieten in de registry zijn **empirisch gekalibreerd**: met een
+truncatie-orakel (twee renders die alleen in het laatste teken verschillen;
+byte-identieke PNG's = afgekapt) is per rol × sjabloon × formaat gemeten
+hoeveel breed-realistische tekst er werkelijk past, op 100% én op 78%
+typeschaal, met ±10% marge. De automatische verkleining (100→88→78%) geldt
+voor kop én subregel. `__tests__/fit-guarantee.test.tsx` dwingt in CI af dat
+tekst op de limiet altijd volledig rendert — nooit ellipsis. Wie een sjabloon
+of limiet wijzigt en die suite rood ziet, heeft te ruim gezet: herkalibreren.

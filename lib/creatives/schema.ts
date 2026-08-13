@@ -73,6 +73,8 @@ export interface TemplateProps {
   typeScale: TypeScale;
   /** 1, 0.88 of 0.78 — automatische kopverkleining (§6b). */
   headlineScale: number;
+  /** 1, 0.88 of 0.78 — automatische verkleining van de subregel (U10). */
+  sublineScale: number;
   /** Logo als data-URI, variant passend bij het palet. */
   logoUri: string;
 }
