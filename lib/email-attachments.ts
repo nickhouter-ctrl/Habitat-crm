@@ -144,6 +144,32 @@ const CATEGORY_RULES: Array<{ cat: AttachmentCategory; test: (ctx: CategorizeCtx
       /^INVOICE\s+A1[2-6][0-9].*WAREHOUSE/i.test(c.filename) ||
       /works[_\s]*costs[_\s]*summary/i.test(c.filename) },
 
+  // Onderaannemers die per week of per klus factureren: Ahmed Bouzekri,
+  // Ferhaoui Mohamed, Zerghini Abdelmjid, Wilhelmus Strijks. Zij factureren de
+  // uren die op een project geboekt moeten worden, maar vielen tot 12-08-2026
+  // in 'other' — en omdat de goedkeuringspoort alleen de financiële categorieën
+  // verwerkt, kwamen hun facturen nooit in de wachtrij. Ze staan allemaal in
+  // `workers` met een uurtarief; op naam matchen is genoeg, er is geen andere
+  // afzender die zo heet.
+  // Hoogendijk bewust NIET hier: die wordt hierboven al als boekhouder
+  // afgevangen (hij stuurt inkoopfacturen van derden door), en de eerste match
+  // wint — een regel voor hem zou hier dood zijn.
+  { cat: "contractor", test: (c) => {
+      // Een factuur is een document. De naam van de bouwer staat ook in het
+      // ONDERWERP, dus zonder deze eis werden de meegestuurde schermafbeeldingen
+      // ("Scherm­afbeelding … .png") als aannemersfactuur aangemerkt en zouden
+      // ze op de goedkeuringslijst belanden.
+      if (!/\.(pdf|xlsx?|docx?)$/i.test(c.filename)) return false;
+      const alles = `${c.fromName} ${c.fromEmail} ${c.subject} ${c.filename}`;
+      return (
+        /bouzekri|ferhaoui|ferhaqui|zerghini|abdelmjid|strijks|wilhelmus/i.test(alles) ||
+        // Ahmed factureert als "A0007 Ahmed Silvestre.pdf" / "Ahmed A0018.pdf".
+        (/\bahmed\b/i.test(alles) && /\bA0\d{3}\b/i.test(c.filename + " " + c.subject)) ||
+        // Wilhelmus levert factuur + urenverantwoording als losse Excel-bestanden.
+        /justificacion\s*horas|factura\s*n[°º]?\s*\d+\s*wilhelmus/i.test(c.filename)
+      );
+    } },
+
   // Csaba's externe klanten — apart afvangen → other (niet voor Habitat).
   // Villajoyosa NIET meer hier (is nu Habitat-inkoop, zie de regel hierboven).
   { cat: "other", test: (c) =>
@@ -237,7 +263,8 @@ function detectSupplierTag(ctx: CategorizeCtx): string | null {
   return null;
 }
 
-function detectCategory(ctx: CategorizeCtx): AttachmentCategory {
+/** Geëxporteerd zodat bestaande bijlagen opnieuw ingedeeld kunnen worden. */
+export function detectCategory(ctx: CategorizeCtx): AttachmentCategory {
   for (const { cat, test } of CATEGORY_RULES) {
     if (test(ctx)) return cat;
   }
