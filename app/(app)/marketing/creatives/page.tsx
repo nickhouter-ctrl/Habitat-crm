@@ -38,6 +38,19 @@ export default async function CreativesPage({
     .orderBy(desc(creativeSpecs.createdAt))
     .limit(200);
 
+  // Sets met openstaande concepten: groepeer drafts op hun basis-spec, zodat
+  // het goedkeurblok altijd zichtbaar is — niet alleen direct na "Maak set".
+  const draftRows = await db
+    .select({ id: creativeSpecs.id, parentId: creativeSpecs.parentId })
+    .from(creativeSpecs)
+    .where(eq(creativeSpecs.status, "draft"));
+  const setCounts = new Map<string, number>();
+  for (const row of draftRows) {
+    const base = row.parentId ?? row.id;
+    setCounts.set(base, (setCounts.get(base) ?? 0) + 1);
+  }
+  const draftSetIds = [...setCounts.entries()].filter(([, n]) => n >= 2).map(([id]) => id);
+
   const buildHref = (s?: string) => (s ? `/marketing/creatives?status=${s}` : "/marketing/creatives");
 
   return (
@@ -48,7 +61,14 @@ export default async function CreativesPage({
         actions={<LinkButton href="/marketing/creatives/new">Nieuwe creative</LinkButton>}
       />
 
-      {setId && <SetApproval setId={setId} fout={typeof params.fout === "string" ? params.fout : ""} aantal={typeof params.aantal === "string" ? params.aantal : ""} />}
+      {(draftSetIds.length > 0 ? draftSetIds : setId ? [setId] : []).map((id) => (
+        <SetApproval
+          key={id}
+          setId={id}
+          fout={id === setId && typeof params.fout === "string" ? params.fout : ""}
+          aantal={typeof params.aantal === "string" ? params.aantal : ""}
+        />
+      ))}
 
       <nav aria-label="Filter op status" className="mb-4 flex flex-wrap gap-1">
         {[["", "Alle"], ...Object.entries(STATUS_META).map(([k, v]) => [k, v.label])].map(
@@ -160,8 +180,8 @@ async function SetApproval({ setId, fout, aantal }: { setId: string; fout: strin
   return (
     <Card className="mb-4 border-accent/40 bg-accent/5 p-4 text-sm" role="status">
       <p className="font-medium">
-        Set aangemaakt: {drafts.length} concept{drafts.length === 1 ? "" : "en"} (formaten × talen).
-        Loop ze hieronder na en keur ze daarna hier in één keer goed.
+        Set met {drafts.length} openstaand{drafts.length === 1 ? " concept" : "e concepten"} (beelden
+        × formaten × talen). Loop ze hieronder na en keur ze daarna hier in één keer goed.
       </p>
       {fout && FOUT[fout] && (
         <p className="mt-2 rounded-md border border-red-300 bg-red-50 px-3 py-2 text-red-900" role="alert">
