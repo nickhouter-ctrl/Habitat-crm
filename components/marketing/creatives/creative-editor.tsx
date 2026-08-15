@@ -665,6 +665,13 @@ export function CreativeEditor({
           {(assetIds.length === 0 || !copy.headline) && (
             <p className="text-xs text-muted">Kies minstens één beeld en vul een kop in.</p>
           )}
+          {!angle && assetIds.length > 0 && !!copy.headline && (
+            <p className="text-xs font-medium text-amber-700" role="status">
+              ⚠ Geen invalshoek gekozen — &ldquo;Maak set&rdquo; geeft alle vier de talen dan
+              deze zelfde tekst. Kies een invalshoek om per taal de juiste tekstblokken te
+              gebruiken.
+            </p>
+          )}
         </div>
       </div>
 
