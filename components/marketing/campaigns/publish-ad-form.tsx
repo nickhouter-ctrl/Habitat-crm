@@ -151,31 +151,52 @@ export function PublishAdForm({
               </option>
             ))}
           </select>
+          {specId && (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={`/api/creatives/render?id=${specId}`}
+              alt="Voorbeeld van de gekozen creative"
+              className="mt-2 max-h-48 rounded-md border border-border bg-background object-contain"
+            />
+          )}
         </Field>
       ) : (
         <fieldset>
           <legend className="mb-1 text-sm font-medium">
-            Kaartjes ({carouselIds.length} gekozen — aanvinkvolgorde = kaartvolgorde)
+            Kaartjes ({carouselIds.length} gekozen — klikvolgorde = kaartvolgorde)
           </legend>
-          <ul className="max-h-56 space-y-1 overflow-y-auto rounded-md border border-border p-2 text-sm">
+          <ul className="grid max-h-96 list-none grid-cols-3 gap-2 overflow-y-auto rounded-md border border-border p-2 sm:grid-cols-4">
             {approvedSpecs.map((s) => {
               const idx = carouselIds.indexOf(s.id);
+              const picked = idx >= 0;
               return (
                 <li key={s.id}>
-                  <label className="flex items-center gap-2">
-                    <input
-                      type="checkbox"
-                      checked={idx >= 0}
-                      onChange={() => toggleCard(s.id)}
-                      className="size-4"
+                  <button
+                    type="button"
+                    onClick={() => toggleCard(s.id)}
+                    aria-pressed={picked}
+                    aria-label={`${picked ? "Deselecteer" : "Selecteer"} ${s.label}`}
+                    className={cn(
+                      "relative block w-full overflow-hidden rounded-md border text-left transition-colors",
+                      picked ? "border-accent ring-2 ring-accent/40" : "border-border hover:border-accent/50",
+                    )}
+                  >
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={`/api/creatives/render?id=${s.id}`}
+                      alt={s.label}
+                      loading="lazy"
+                      className="aspect-square w-full bg-background object-contain"
                     />
-                    {idx >= 0 && (
-                      <span className="rounded bg-accent/10 px-1.5 text-xs font-medium text-accent">
+                    {picked && (
+                      <span className="absolute left-1.5 top-1.5 flex size-6 items-center justify-center rounded-full bg-accent text-xs font-bold text-white">
                         {idx + 1}
                       </span>
                     )}
-                    {s.label}
-                  </label>
+                    <span className="block truncate px-1.5 py-1 text-[11px] text-muted" title={s.label}>
+                      {s.label}
+                    </span>
+                  </button>
                 </li>
               );
             })}
