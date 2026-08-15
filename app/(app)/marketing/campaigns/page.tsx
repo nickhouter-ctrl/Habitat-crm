@@ -44,8 +44,11 @@ export default async function CampaignsPage() {
   const campaigns = await db
     .select({
       campaign: adCampaigns,
-      adSetCount: sql<number>`(select count(*)::int from ${adSets} where ${adSets.campaignId} = ${adCampaigns.id})`,
-      adCount: sql<number>`(select count(*)::int from ${ads} a join ${adSets} s on a.ad_set_id = s.id where s.campaign_id = ${adCampaigns.id})`,
+      // Kolommen expliciet kwalificeren: in een correlated subquery rendert
+      // Drizzle `${adCampaigns.id}` als kaal "id", en dat is daar ambigu
+      // (ad_sets/ads hebben zelf ook een id) — Postgres weigert de query dan.
+      adSetCount: sql<number>`(select count(*)::int from ${adSets} where ${adSets}.campaign_id = ${adCampaigns}.id)`,
+      adCount: sql<number>`(select count(*)::int from ${ads} a join ${adSets} s on a.ad_set_id = s.id where s.campaign_id = ${adCampaigns}.id)`,
     })
     .from(adCampaigns)
     .orderBy(desc(adCampaigns.createdAt));
