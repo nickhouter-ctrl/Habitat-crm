@@ -5,7 +5,7 @@
  * Manager. Elke mislukte publicatie belandt zichtbaar op de ad-rij in de UI
  * mét de vertaalde Meta-foutmelding, niet alleen in een log.
  */
-import { eq } from "drizzle-orm";
+import { eq, inArray } from "drizzle-orm";
 
 import { db } from "@/lib/db";
 import { adCampaigns, ads, adSets, creativeSpecs } from "@/lib/db/schema";
@@ -91,6 +91,57 @@ export function buildObjectStorySpec(input: ObjectStorySpecInput): ObjectStorySp
       message: input.message,
       link: input.link,
       call_to_action: { type: input.callToAction, value: { link: input.link } },
+    },
+  };
+  if (input.igUserId) spec.instagram_user_id = input.igUserId;
+  return spec;
+}
+
+/** Eén kaartje van een carrousel-advertentie. */
+export interface CarouselCard {
+  imageHash: string;
+  /** Kop onder het kaartje (name in child_attachments). */
+  headline: string | null;
+  /** Ondertitel (description) — optioneel. */
+  subline?: string | null;
+  /** Landingspagina van dit kaartje; default de hoofdlink. */
+  link?: string | null;
+}
+
+/** Invoer voor {@link buildCarouselStorySpec}. */
+export interface CarouselStorySpecInput {
+  pageId: string;
+  igUserId?: string | null;
+  message: string;
+  link: string;
+  callToAction: string;
+  /** 2–10 kaartjes, in de volgorde waarin ze getoond worden. */
+  cards: CarouselCard[];
+}
+
+/**
+ * Bouw de `object_story_spec` voor een carrousel: meerdere beelden in één
+ * advertentie, elk kaartje met eigen kop/ondertitel (child_attachments).
+ * `multi_share_optimized: false` — wij bepalen de volgorde, niet Meta; anders
+ * kloppen de per-kaart-cijfers niet met wat de maker bedoeld heeft.
+ */
+export function buildCarouselStorySpec(input: CarouselStorySpecInput): Record<string, unknown> {
+  if (input.cards.length < 2 || input.cards.length > 10) {
+    throw new Error(`Een carrousel heeft 2 t/m 10 kaartjes nodig (nu: ${input.cards.length}).`);
+  }
+  const spec: Record<string, unknown> = {
+    page_id: input.pageId,
+    link_data: {
+      message: input.message,
+      link: input.link,
+      call_to_action: { type: input.callToAction, value: { link: input.link } },
+      multi_share_optimized: false,
+      child_attachments: input.cards.map((card) => ({
+        image_hash: card.imageHash,
+        link: card.link ?? input.link,
+        ...(card.headline ? { name: card.headline } : {}),
+        ...(card.subline ? { description: card.subline } : {}),
+      })),
     },
   };
   if (input.igUserId) spec.instagram_user_id = input.igUserId;
@@ -591,6 +642,135 @@ export async function publishAdToMeta(input: PublishAdInput): Promise<PublishRes
       .where(eq(ads.id, ad.id));
 
     return { ok: true, metaAdId, imageHash, metaCreativeId };
+  } catch (err) {
+    const message = metaErrorMessage(err);
+    await db
+      .update(ads)
+      .set({
+        effectiveStatus: "PUBLISH_FAILED",
+        reviewFeedback: {
+          publishError: message,
+          code: err instanceof MetaError ? err.code : undefined,
+          at: new Date().toISOString(),
+        },
+      })
+      .where(eq(ads.id, ad.id));
+    return { ok: false, error: message };
+  }
+}
+
+/* --------------------------------------------------- carrousel-advertenties */
+
+/** Invoer voor {@link publishCarouselAdToMeta}. */
+export interface PublishCarouselInput {
+  /** Onze `ads`-rij met `carouselSpecIds` gevuld. */
+  adId: string;
+  /** PNG-bytes per kaartje, in dezelfde volgorde als `carouselSpecIds`. */
+  pngs: Uint8Array[];
+  /** Kop/ondertitel per kaartje, zelfde volgorde (uit de spec-copy). */
+  cards: { headline: string | null; subline: string | null }[];
+  message: string;
+  link: string;
+  callToAction?: string;
+}
+
+/**
+ * Publiceer een carrousel-advertentie (meerdere beelden, één advertentie) —
+ * altijd PAUSED. Zelfde stapsgewijze vastlegging als {@link publishAdToMeta}:
+ * creative-id en meta-id landen op de ad-rij zodat een herhaalde klik geen
+ * duplicaten maakt; alleen de beelduploads zijn niet individueel hervatbaar
+ * (Meta dedupliceert identieke uploads via de image-hash, dus dubbel uploaden
+ * kost alleen tijd, geen duplicaten).
+ */
+export async function publishCarouselAdToMeta(input: PublishCarouselInput): Promise<PublishResult> {
+  const pageId = process.env.META_PAGE_ID;
+  if (!pageId) {
+    return { ok: false, error: "META_PAGE_ID is niet ingesteld (zie .env.example)." };
+  }
+  const igUserId = process.env.IG_USER_ID ?? null;
+
+  const [ad] = await db.select().from(ads).where(eq(ads.id, input.adId)).limit(1);
+  if (!ad) return { ok: false, error: "Advertentie niet gevonden in het CRM." };
+  const specIds = (ad.carouselSpecIds ?? []) as string[];
+  if (specIds.length < 2) {
+    return { ok: false, error: "Deze advertentie is geen carrousel (minder dan 2 kaartjes)." };
+  }
+  if (input.pngs.length !== specIds.length || input.cards.length !== specIds.length) {
+    return { ok: false, error: "Aantal beelden of teksten klopt niet met het aantal kaartjes." };
+  }
+
+  const [adSet] = await db.select().from(adSets).where(eq(adSets.id, ad.adSetId)).limit(1);
+  if (!adSet?.metaId) {
+    return {
+      ok: false,
+      error: "De advertentieset staat nog niet in Meta. Publiceer eerst de advertentieset.",
+    };
+  }
+
+  const specs = await db
+    .select({ id: creativeSpecs.id, status: creativeSpecs.status })
+    .from(creativeSpecs)
+    .where(inArray(creativeSpecs.id, specIds));
+  const notApproved = specs.filter((s) => s.status !== "approved" && s.status !== "scheduled");
+  if (specs.length !== specIds.length || notApproved.length > 0) {
+    return {
+      ok: false,
+      error: "Alle kaartjes van een carrousel moeten goedgekeurde creatives zijn.",
+    };
+  }
+
+  try {
+    // Stap 1 — alle beelden uploaden (volgorde = kaartvolgorde).
+    const imageHashes: string[] = [];
+    for (const png of input.pngs) {
+      imageHashes.push(await withMetaRetry(() => meta.adImages.upload(png)));
+    }
+    await db.update(ads).set({ imageHash: imageHashes[0] }).where(eq(ads.id, ad.id));
+
+    // Stap 2 — één adcreative met child_attachments.
+    let metaCreativeId = ad.metaCreativeId;
+    if (!metaCreativeId) {
+      const creative = await withMetaRetry(() =>
+        meta.adCreatives.create({
+          name: ad.name,
+          object_story_spec: buildCarouselStorySpec({
+            pageId,
+            igUserId,
+            message: input.message,
+            link: input.link,
+            callToAction: input.callToAction ?? "LEARN_MORE",
+            cards: imageHashes.map((imageHash, i) => ({
+              imageHash,
+              headline: input.cards[i].headline,
+              subline: input.cards[i].subline,
+            })),
+          }),
+        }),
+      );
+      if (!creative.id) throw new MetaError(200, creative, "Meta gaf geen creative-id terug");
+      metaCreativeId = creative.id;
+      await db.update(ads).set({ metaCreativeId }).where(eq(ads.id, ad.id));
+    }
+
+    // Stap 3 — de advertentie zelf, altijd PAUSED.
+    let metaAdId = ad.metaId;
+    if (!metaAdId) {
+      const created = await withMetaRetry(() =>
+        meta.ads.create({
+          name: ad.name,
+          adset_id: adSet.metaId,
+          creative: { creative_id: metaCreativeId },
+        }),
+      );
+      if (!created.id) throw new MetaError(200, created, "Meta gaf geen ad-id terug");
+      metaAdId = created.id;
+    }
+    await db
+      .update(ads)
+      .set({ metaId: metaAdId, effectiveStatus: "PAUSED", lastSyncedAt: new Date() })
+      .where(eq(ads.id, ad.id));
+
+    return { ok: true, metaAdId, imageHash: imageHashes[0], metaCreativeId };
   } catch (err) {
     const message = metaErrorMessage(err);
     await db

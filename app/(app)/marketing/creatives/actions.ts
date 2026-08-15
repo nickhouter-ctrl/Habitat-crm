@@ -287,6 +287,55 @@ export async function approveCreative(formData: FormData): Promise<void> {
   redirect(`/marketing/creatives/${id}`);
 }
 
+/**
+ * Keur een hele set (basis-spec + varianten) in één keer goed. Zelfde
+ * poortwachter als per stuk: de controlelijst is verplicht (één keer voor de
+ * set — de vinkjes gaan over de gedeelde prijs/claim en over álle talen) en
+ * élke variant moet door de layoutvalidatie. Faalt er één, dan keurt er niets
+ * goed en wijst de melding aan welke.
+ */
+export async function approveCreativeSet(formData: FormData): Promise<void> {
+  await requireWriteUser();
+  const setId = z.uuid().parse(formData.get("setId"));
+
+  const missing = CHECKLIST_ITEMS.filter((item) => formData.get(`check-${item}`) !== "on");
+  if (missing.length > 0) {
+    redirect(`/marketing/creatives?set=${setId}&fout=controlelijst`);
+  }
+
+  const specs = await db
+    .select()
+    .from(creativeSpecs)
+    .where(
+      and(
+        or(eq(creativeSpecs.id, setId), eq(creativeSpecs.parentId, setId)),
+        eq(creativeSpecs.status, "draft"),
+      ),
+    );
+  if (specs.length === 0) redirect(`/marketing/creatives?set=${setId}&fout=leeg`);
+
+  const invalid = specs.filter((row) => {
+    const parsed = creativeSpecSchema.safeParse({ ...row, copy: row.copy ?? { headline: "" } });
+    return !parsed.success || validateSpecCopy(parsed.data).length > 0;
+  });
+  if (invalid.length > 0) {
+    redirect(`/marketing/creatives?set=${setId}&fout=validatie&aantal=${invalid.length}`);
+  }
+
+  await db
+    .update(creativeSpecs)
+    .set({ status: "approved" })
+    .where(
+      and(
+        inArray(creativeSpecs.id, specs.map((s) => s.id)),
+        eq(creativeSpecs.status, "draft"),
+      ),
+    );
+
+  revalidatePath("/marketing/creatives");
+  redirect(`/marketing/creatives?status=approved`);
+}
+
 /* ---------------------------------------------------------------- AI-copy */
 
 const aiRequestSchema = z.object({

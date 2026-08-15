@@ -1,0 +1,1 @@
+ALTER TABLE "ads" ADD COLUMN "carousel_spec_ids" jsonb;

@@ -2738,6 +2738,12 @@ export const ads = pgTable(
     metaCreativeId: text(),
     /** image_hash die Meta teruggeeft na upload — nodig voor de object_story_spec. */
     imageHash: text(),
+    /**
+     * Carrousel-advertentie: de spec-ids van álle kaartjes, in volgorde.
+     * `specId` verwijst dan naar het eerste kaartje (de xor-check blijft
+     * daardoor kloppen); een gewone beeld-ad laat dit veld null.
+     */
+    carouselSpecIds: jsonb().$type<string[]>(),
     effectiveStatus: text(),
     /** ad_review_feedback van Meta — afkeuringen prominent tonen in de lijst. */
     reviewFeedback: jsonb(),

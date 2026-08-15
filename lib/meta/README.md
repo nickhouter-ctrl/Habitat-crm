@@ -50,6 +50,17 @@ Zelfde stapsgewijze vastlegging, retries en NL-foutafhandeling als de
 beeldketen; het Meta-video-id wordt op de ad-rij bewaard zodat een halve
 keten hervatbaar is.
 
+## Carrousel-advertenties
+
+Meerdere goedgekeurde creatives als één advertentie (2–10 kaartjes, elk met
+eigen kop/ondertitel uit de spec-copy). `buildCarouselStorySpec` bouwt de
+`object_story_spec` met `child_attachments` (`multi_share_optimized: false`
+— wij bepalen de volgorde); `publishCarouselAdToMeta` draait dezelfde
+PAUSED-keten als de beeldketen. De ad-rij draagt `carouselSpecIds` (alle
+kaartjes, in volgorde) naast `specId` (het eerste kaartje, voor de
+xor-check). UI: het publicatieformulier op de campagnepagina heeft een
+carrouselmodus met aanvinkvolgorde = kaartvolgorde.
+
 ## Concurrentiemonitor (fase 5) — `ads-archive.ts`
 
 Leest het publieke DSA-advertentiearchief (`/ads_archive`,

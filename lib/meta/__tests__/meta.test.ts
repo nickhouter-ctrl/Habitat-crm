@@ -18,6 +18,7 @@ import {
 import {
   buildAdSetPayload,
   buildCampaignPayload,
+  buildCarouselStorySpec,
   buildObjectStorySpec,
   buildVideoStorySpec,
   validateAdSetScheduling,
@@ -337,6 +338,38 @@ describe("buildAdSetPayload", () => {
       buildAdSetPayload({ ...base, objective: "OUTCOME_AWARENESS" }).optimization_goal,
     ).toBe("REACH");
     expect(buildAdSetPayload(base).billing_event).toBe("IMPRESSIONS");
+  });
+});
+
+/* ------------------------------------------------ buildCarouselStorySpec */
+
+describe("buildCarouselStorySpec", () => {
+  const base = {
+    pageId: "111",
+    igUserId: null,
+    message: "Bekijk de collectie",
+    link: "https://habitat-one.com/",
+    callToAction: "LEARN_MORE",
+  };
+  const card = (n: number) => ({ imageHash: `hash${n}`, headline: `Kop ${n}`, subline: null });
+
+  it("bouwt child_attachments in kaartvolgorde, zonder Meta-herordening", () => {
+    const spec = buildCarouselStorySpec({ ...base, cards: [card(1), card(2), card(3)] });
+    const linkData = spec.link_data as {
+      multi_share_optimized: boolean;
+      child_attachments: { image_hash: string; name?: string; link: string }[];
+    };
+    expect(linkData.multi_share_optimized).toBe(false);
+    expect(linkData.child_attachments.map((c) => c.image_hash)).toEqual(["hash1", "hash2", "hash3"]);
+    expect(linkData.child_attachments[0].name).toBe("Kop 1");
+    expect(linkData.child_attachments[0].link).toBe("https://habitat-one.com/");
+  });
+
+  it("weigert minder dan 2 of meer dan 10 kaartjes", () => {
+    expect(() => buildCarouselStorySpec({ ...base, cards: [card(1)] })).toThrow();
+    expect(() =>
+      buildCarouselStorySpec({ ...base, cards: Array.from({ length: 11 }, (_, i) => card(i)) }),
+    ).toThrow();
   });
 });
 
