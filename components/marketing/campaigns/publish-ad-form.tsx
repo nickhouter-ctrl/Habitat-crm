@@ -13,7 +13,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
-import { prepareRenderAction } from "@/app/(app)/marketing/campaigns/actions";
+import { generateAdTextAction, prepareRenderAction } from "@/app/(app)/marketing/campaigns/actions";
 import { Card, Field, Input, buttonClass } from "@/components/ui";
 import { cn } from "@/lib/utils";
 
@@ -34,6 +34,9 @@ interface CarouselSetOption {
   /** AI-voorstel voor de advertentietekst (van de basis-spec). */
   message: string | null;
 }
+
+/** Busy-tekst van de AI-knop — ook de vergelijkingssleutel voor de knoplabel. */
+const AI_BUSY = "De AI bekijkt je kaartjes en schrijft de tekst…";
 
 /** Formaatuitleg: waar toont Meta dit — zodat de keuze niet technisch voelt. */
 const FORMAT_LABEL: Record<string, string> = {
@@ -88,6 +91,26 @@ export function PublishAdForm({
       (cardFormat === "" || s.format === cardFormat) &&
       (cardLocale === "" || s.locale === cardLocale),
   );
+
+  /** "Schrijf met AI": advertentietekst + naamvoorstel uit de gekozen creatives. */
+  async function generateMessage() {
+    setError(null);
+    setBusy(AI_BUSY);
+    try {
+      const ids = mode === "carousel" ? carouselIds : [specId];
+      const result = await generateAdTextAction({ specIds: ids, link: link || null });
+      if (result.error) {
+        setError(result.error);
+        return;
+      }
+      if (result.message) setMessage(result.message);
+      if (result.name && !name) setName(result.name);
+    } catch {
+      setError("De AI-aanvraag mislukte. Probeer het opnieuw.");
+    } finally {
+      setBusy(null);
+    }
+  }
 
   async function publish(e: React.FormEvent) {
     e.preventDefault();
@@ -344,6 +367,14 @@ export function PublishAdForm({
           onChange={(e) => setMessage(e.target.value)}
           className="w-full rounded-md border border-border bg-background px-2.5 py-1.5 text-sm"
         />
+        <button
+          type="button"
+          onClick={generateMessage}
+          disabled={!!busy || (mode === "carousel" ? carouselIds.length < 2 : !specId)}
+          className={buttonClass({ variant: "secondary", size: "sm", className: "mt-1" })}
+        >
+          ✨ {busy === AI_BUSY ? "AI schrijft…" : "Schrijf met AI (kijkt naar je kaartjes)"}
+        </button>
       </Field>
 
       <div aria-live="polite" className="space-y-2">

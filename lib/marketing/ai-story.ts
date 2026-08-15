@@ -99,6 +99,113 @@ export function parseCarouselStory(
   return { order, cards, message, name: name || "Carrousel" };
 }
 
+/* ------------------------------------------------------- advertentietekst */
+
+export interface AdMessageRequest {
+  /** De gekozen kaartjes/creative(s): kop + subregel, in kaartvolgorde. */
+  cards: { headline: string; subline?: string | null }[];
+  /** Beelden van de kaartjes (publieke URL's) — max ~5 gaan mee naar de AI. */
+  images: { url: string; label: string }[];
+  locale: "nl" | "en" | "es" | "de";
+  /** Landingspagina, zodat de tekst er logisch naartoe leidt. */
+  link?: string | null;
+}
+
+export interface AdMessage {
+  message: string;
+  name: string;
+}
+
+/** Parse en normaliseer het advertentietekst-antwoord (puur, testbaar). */
+export function parseAdMessage(text: string): AdMessage | null {
+  let raw: unknown;
+  try {
+    raw = JSON.parse(stripFences(text));
+  } catch {
+    return null;
+  }
+  if (!raw || typeof raw !== "object") return null;
+  const obj = raw as Record<string, unknown>;
+  const message = typeof obj.message === "string" ? obj.message.trim().slice(0, 2000) : "";
+  const name = typeof obj.name === "string" ? obj.name.trim().slice(0, 200) : "";
+  if (!message) return null;
+  return { message, name };
+}
+
+/**
+ * Schrijf de advertentietekst (Meta "message") boven een advertentie of
+ * carrousel, op basis van de gekozen creatives én hun beelden. Null bij
+ * ontbrekende ANTHROPIC_API_KEY of een fout — het formulier meldt dat.
+ */
+export async function generateAdMessage(req: AdMessageRequest): Promise<AdMessage | null> {
+  const key = process.env.ANTHROPIC_API_KEY;
+  if (!key) return null;
+
+  const langName = LANG_NAME[req.locale] ?? "Spaans (Castellano)";
+  const isCarousel = req.cards.length > 1;
+  const cardLines = req.cards
+    .map((c, i) => `${i + 1}. ${c.headline}${c.subline ? ` — ${c.subline}` : ""}`)
+    .join("\n");
+
+  const prompt = `Schrijf de advertentietekst (het "message"-veld boven ${isCarousel ? "een Meta-carrousel" : "een Meta-advertentiebeeld"}) voor Habitat One.
+
+De ${isCarousel ? "kaartjes dragen deze koppen (in deze volgorde)" : "creative draagt deze tekst"}:
+${cardLines}
+${req.link ? `De advertentie linkt naar: ${req.link}.` : ""}
+
+Opdracht:
+1. KIJK eerst naar de bijgevoegde beelden: de tekst moet passen bij wat er écht te zien is.
+2. Schrijf 2–4 korte zinnen in het ${langName} (moedertaalniveau) die het geheel opzetten en nieuwsgierig maken${isCarousel ? " naar de kaartjes" : ""} — herhaal de koppen niet letterlijk.
+3. Max 500 tekens. Geen hashtags, geen emoji, geen uitroeptekens.
+4. Bedenk ook een korte interne naam voor de advertentie (mag Nederlands zijn).
+
+Geef ALLEEN een JSON-object terug (geen markdown): {"message": "...", "name": "..."}`;
+
+  try {
+    const res = await fetch(API_URL, {
+      method: "POST",
+      headers: {
+        "x-api-key": key,
+        "anthropic-version": "2023-06-01",
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        model: MODEL,
+        max_tokens: 700,
+        temperature: 0.7,
+        system: SYSTEM,
+        messages: [
+          {
+            role: "user",
+            content: [
+              ...req.images.slice(0, 5).flatMap((img, i) => [
+                { type: "text", text: `Beeld ${i + 1}: ${img.label}` },
+                { type: "image", source: { type: "url", url: img.url } },
+              ]),
+              { type: "text", text: prompt },
+            ],
+          },
+        ],
+      }),
+      cache: "no-store",
+    });
+    if (!res.ok) {
+      console.warn("AI-advertentietekst faalde:", res.status, await res.text().catch(() => ""));
+      return null;
+    }
+    const data = (await res.json()) as { content?: { type: string; text?: string }[] };
+    const text = (data.content ?? [])
+      .filter((b) => b.type === "text" && b.text)
+      .map((b) => b.text!)
+      .join("\n");
+    if (!text) return null;
+    return parseAdMessage(text);
+  } catch (err) {
+    console.warn("AI-advertentietekst error:", err);
+    return null;
+  }
+}
+
 /**
  * Laat de AI het carrouselverhaal schrijven op basis van de beelden zelf.
  * Null bij ontbrekende ANTHROPIC_API_KEY of een fout — de bouwer meldt dat.

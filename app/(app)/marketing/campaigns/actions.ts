@@ -9,7 +9,7 @@
  * (`validateAdSetScheduling`) die de publish-keten gebruikt, draait hier
  * vóór het opslaan zodat de cryptische Meta-fout nooit optreedt.
  */
-import { eq } from "drizzle-orm";
+import { eq, inArray } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
@@ -17,7 +17,9 @@ import { z } from "zod";
 import { requireWriteUser } from "@/lib/auth/guards";
 import { ensureRenderForSpec } from "@/lib/creatives/export";
 import { db } from "@/lib/db";
-import { adCampaigns, adSets } from "@/lib/db/schema";
+import { adCampaigns, adSets, assets, creativeSpecs } from "@/lib/db/schema";
+import { generateAdMessage } from "@/lib/marketing/ai-story";
+import { marketingStorage } from "@/lib/marketing/storage";
 import { metaErrorMessage } from "@/lib/meta/client";
 import {
   linkExistingMetaId,
@@ -254,4 +256,71 @@ export async function syncNowAction(): Promise<void> {
     console.error("Handmatige Meta-sync mislukt:", metaErrorMessage(err));
   }
   revalidatePath("/marketing/campaigns");
+}
+
+/* -------------------------------------------------------- AI-advertentietekst */
+
+const adTextSchema = z.object({
+  /** De gekozen creative(s): één spec (beeld-ad) of de kaartjes in volgorde. */
+  specIds: z.array(z.uuid()).min(1).max(10),
+  link: z.url().nullish(),
+});
+
+/**
+ * "Schrijf met AI" op het publicatieformulier: schrijft de advertentietekst
+ * (message) en een naamvoorstel op basis van de gekozen creatives én hun
+ * beelden — in de taal van de creatives.
+ */
+export async function generateAdTextAction(input: unknown): Promise<{
+  message?: string;
+  name?: string;
+  error?: string;
+}> {
+  await requireWriteUser();
+  const parsed = adTextSchema.safeParse(input);
+  if (!parsed.success) return { error: "Kies eerst een creative of kaartjes." };
+  const req = parsed.data;
+
+  const rows = await db
+    .select({
+      id: creativeSpecs.id,
+      copy: creativeSpecs.copy,
+      locale: creativeSpecs.locale,
+      storagePath: assets.storagePath,
+      sourceRef: assets.sourceRef,
+    })
+    .from(creativeSpecs)
+    .leftJoin(assets, eq(assets.id, creativeSpecs.assetId))
+    .where(inArray(creativeSpecs.id, req.specIds));
+  const byId = new Map(rows.map((r) => [r.id, r]));
+  if (byId.size !== new Set(req.specIds).size) {
+    return { error: "Een van de gekozen creatives bestaat niet (meer). Ververs de pagina." };
+  }
+
+  const ordered = req.specIds.map((id) => byId.get(id)!);
+  const images = ordered.flatMap((r) => {
+    if (!r.storagePath) return [];
+    try {
+      return [{ url: marketingStorage().publicUrl(r.storagePath), label: r.sourceRef ?? "beeld" }];
+    } catch {
+      return [];
+    }
+  });
+
+  const result = await generateAdMessage({
+    cards: ordered.map((r) => ({
+      headline: r.copy?.headline ?? "(zonder kop)",
+      subline: r.copy?.subline ?? null,
+    })),
+    images,
+    locale: ordered[0].locale as "nl" | "en" | "es" | "de",
+    link: req.link ?? null,
+  });
+  if (!result) {
+    return {
+      error:
+        "AI-tekst is niet beschikbaar (geen ANTHROPIC_API_KEY of de aanvraag mislukte). Schrijf de tekst zelf of probeer opnieuw.",
+    };
+  }
+  return { message: result.message, name: result.name };
 }
