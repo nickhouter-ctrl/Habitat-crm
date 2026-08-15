@@ -26,6 +26,8 @@ import { FORMAT_NAMES } from "@/lib/creatives/tokens";
 import { db } from "@/lib/db";
 import { assets, copyBlocks, creativeSpecs, products } from "@/lib/db/schema";
 import { generateCreativeCopy } from "@/lib/marketing/ai-copy";
+import { generateCarouselStory } from "@/lib/marketing/ai-story";
+import { marketingStorage } from "@/lib/marketing/storage";
 import {
   formatPriceFrom,
   getCopySuggestion,
@@ -345,7 +347,25 @@ const aiRequestSchema = z.object({
   category: z.string().max(200).nullish(),
   template: z.enum(["frame", "split", "swatch", "price"]),
   format: z.enum(["1080x1080", "1080x1350", "1080x1920"]),
+  /** Gekozen beeld — de AI kijkt er dan naar en schrijft bij wat er te zien is. */
+  assetId: z.uuid().nullish(),
 });
+
+/** Publieke URL van een asset, of null als het beeld of de opslag ontbreekt. */
+async function assetPublicUrl(assetId: string | null | undefined): Promise<string | null> {
+  if (!assetId) return null;
+  const [row] = await db
+    .select({ storagePath: assets.storagePath })
+    .from(assets)
+    .where(eq(assets.id, assetId))
+    .limit(1);
+  if (!row) return null;
+  try {
+    return marketingStorage().publicUrl(row.storagePath);
+  } catch {
+    return null;
+  }
+}
 
 /**
  * "Genereer met AI" (taak U3): schrijf alle copyvelden in de doeltaal, binnen
@@ -373,6 +393,7 @@ export async function generateAiCopyAction(input: unknown): Promise<{
       ? formatPriceFrom(product.priceFromEur, req.locale)
       : null,
     limits,
+    imageUrl: await assetPublicUrl(req.assetId),
   });
   if (!copy) {
     return {
@@ -381,6 +402,193 @@ export async function generateAiCopyAction(input: unknown): Promise<{
     };
   }
   return { copy };
+}
+
+/* ----------------------------------------------------------- AI-carrousel */
+
+const carouselAiSchema = z.object({
+  /** Beelden in de door de gebruiker gekozen volgorde (2–10, zoals Meta eist). */
+  assetIds: z.array(z.uuid()).min(2).max(10),
+  locale: z.enum(["nl", "en", "es", "de"]),
+  angle: z.enum(["material", "price", "showroom", "project", "seasonal"]).nullish(),
+  subject: z.string().max(300).nullish(),
+  category: z.string().max(200).nullish(),
+  template: z.enum(["frame", "split", "swatch", "price"]),
+  format: z.enum(["1080x1080", "1080x1350", "1080x1920"]),
+});
+
+/**
+ * Laat de AI het carrouselverhaal schrijven: kijkt naar de gekozen beelden,
+ * stelt een kaartvolgorde voor en schrijft per kaartje kop + subregel die
+ * samen één verhaal vertellen, plus de advertentietekst erboven.
+ */
+export async function generateCarouselStoryAction(input: unknown): Promise<{
+  story?: {
+    /** Asset-ids in de AI-voorgestelde verhaalvolgorde. */
+    orderedAssetIds: string[];
+    cards: { headline: string; subline?: string }[];
+    message: string;
+    name: string;
+  };
+  error?: string;
+}> {
+  await requireWriteUser();
+  const parsed = carouselAiSchema.safeParse(input);
+  if (!parsed.success) return { error: "Ongeldige aanvraag voor het carrouselverhaal." };
+  const req = parsed.data;
+
+  const rows = await db
+    .select({
+      id: assets.id,
+      storagePath: assets.storagePath,
+      sourceRef: assets.sourceRef,
+      productName: products.name,
+    })
+    .from(assets)
+    .leftJoin(products, eq(products.id, assets.productId))
+    .where(inArray(assets.id, req.assetIds));
+  const byId = new Map(rows.map((r) => [r.id, r]));
+  if (byId.size !== req.assetIds.length) {
+    return { error: "Een van de gekozen beelden bestaat niet (meer). Open de beeldkiezer opnieuw." };
+  }
+
+  const images = req.assetIds.map((id) => {
+    const row = byId.get(id)!;
+    let url: string | null = null;
+    try {
+      url = marketingStorage().publicUrl(row.storagePath);
+    } catch {
+      url = null;
+    }
+    return { id, url, label: row.productName ?? row.sourceRef ?? "beeld" };
+  });
+  const missing = images.filter((i) => !i.url);
+  if (missing.length > 0) {
+    return { error: "Van een van de beelden ontbreekt de opslagkopie — kies een ander beeld." };
+  }
+
+  const story = await generateCarouselStory({
+    images: images.map((i) => ({ url: i.url!, label: i.label })),
+    locale: req.locale,
+    angle: req.angle ?? null,
+    subject: req.subject ?? null,
+    category: req.category ?? null,
+    limits: TEMPLATES[req.template].limits[req.format],
+  });
+  if (!story) {
+    return {
+      error:
+        "Het AI-verhaal is niet beschikbaar (geen ANTHROPIC_API_KEY of de aanvraag mislukte). Vul de kaartteksten met de hand in of probeer opnieuw.",
+    };
+  }
+
+  return {
+    story: {
+      orderedAssetIds: story.order.map((i) => req.assetIds[i]),
+      cards: story.cards,
+      message: story.message,
+      name: story.name,
+    },
+  };
+}
+
+const createCarouselSchema = carouselAiSchema.extend({
+  palette: z.enum(["diep", "creme", "terracotta", "salie"]),
+  /** Kaartjes in definitieve volgorde; assetIds hierboven zijn dan al herordend. */
+  cards: z
+    .array(
+      z.object({
+        assetId: z.uuid(),
+        headline: z.string().min(1, "Elke kaart heeft een kop nodig").max(400),
+        subline: z.string().max(600).optional(),
+      }),
+    )
+    .min(2)
+    .max(10),
+  message: z.string().max(2000).nullish(),
+  productId: z.uuid().nullish(),
+});
+
+/**
+ * Maak een carrouselset aan als concepten: de eerste kaart is de basis-spec,
+ * de rest verwijst ernaar via parentId; `carouselOrder` legt de kaartvolgorde
+ * vast en `suggestedMessage` bewaart de AI-advertentietekst voor de
+ * publicatiestap. Faalt één kaart op de layoutvalidatie, dan wordt er niets
+ * aangemaakt en wijst de melding aan welke.
+ */
+export async function createCarouselSetAction(input: unknown): Promise<{
+  setId?: string;
+  error?: string;
+}> {
+  const user = await requireWriteUser();
+  const parsed = createCarouselSchema.safeParse(input);
+  if (!parsed.success) return { error: "De carrousel is niet compleet — controleer de kaartteksten." };
+  const req = parsed.data;
+
+  const existing = await db
+    .select({ id: assets.id })
+    .from(assets)
+    .where(inArray(assets.id, req.cards.map((c) => c.assetId)));
+  if (existing.length !== new Set(req.cards.map((c) => c.assetId)).size) {
+    return { error: "Een van de gekozen beelden bestaat niet (meer). Open de beeldkiezer opnieuw." };
+  }
+
+  // Poortwachter vooraf: elke kaart moet door dezelfde layoutvalidatie als de
+  // approve-stap — anders maak je concepten aan die nooit goedgekeurd kunnen worden.
+  const invalid: number[] = [];
+  req.cards.forEach((card, i) => {
+    const spec = creativeSpecSchema.safeParse({
+      template: req.template,
+      palette: req.palette,
+      format: req.format,
+      locale: req.locale,
+      copy: { headline: card.headline, subline: card.subline },
+      copyAngle: req.angle ?? null,
+    });
+    if (!spec.success || validateSpecCopy(spec.data).length > 0) invalid.push(i + 1);
+  });
+  if (invalid.length > 0) {
+    return {
+      error: `Kaart ${invalid.join(", ")} past niet in het sjabloon (tekst te lang). Kort de kop of subregel in.`,
+    };
+  }
+
+  const common = {
+    productId: req.productId ?? null,
+    template: req.template,
+    palette: req.palette,
+    format: req.format,
+    locale: req.locale,
+    copyAngle: req.angle ?? null,
+    status: "draft" as const,
+    createdBy: user.email ?? user.name ?? user.id,
+  };
+
+  const [base] = await db
+    .insert(creativeSpecs)
+    .values({
+      ...common,
+      assetId: req.cards[0].assetId,
+      copy: { headline: req.cards[0].headline, subline: req.cards[0].subline },
+      carouselOrder: 1,
+      suggestedMessage: req.message ?? null,
+    })
+    .returning({ id: creativeSpecs.id });
+
+  if (req.cards.length > 1) {
+    await db.insert(creativeSpecs).values(
+      req.cards.slice(1).map((card, i) => ({
+        ...common,
+        assetId: card.assetId,
+        copy: { headline: card.headline, subline: card.subline },
+        parentId: base.id,
+        carouselOrder: i + 2,
+      })),
+    );
+  }
+
+  revalidatePath("/marketing/creatives");
+  return { setId: base.id };
 }
 
 /** Archiveer een spec (concept of goedgekeurd, niet live). */

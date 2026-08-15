@@ -26,16 +26,17 @@ function stripFences(s: string): string {
   return s.replace(/^```(?:json)?/i, "").replace(/```$/i, "").trim();
 }
 
-const SYSTEM = `Je bent een top-copywriter voor Habitat One, een exclusieve interieur- en bouwmaterialenleverancier aan de Costa Blanca (Xàbia/Jávea): keukenbladen, natuursteen, badkamers, buitenkeukens — geleverd én gemonteerd. Je schrijft korte advertentieteksten voor Meta-beelden (Instagram/Facebook). Verfijnd, warm en mediterraan-luxe; zintuiglijk en beeldend (licht, textuur, materiaal, ambacht) zonder zweverig te worden. Doelgroep: particulieren en professionals aan de Costa Blanca. Regels: geen clichés als "de beste kwaliteit", geen uitroeptekens, geen emoji, niet pusherig, geen beloftes die niet waargemaakt kunnen worden. Elke taal wordt op moedertaalniveau geschreven — Spaans is een eersterangs taal, geen vertaling.`;
+/** Huisstijl-systeemprompt — ook gebruikt door de carrousel-verhaalmodule (ai-story.ts). */
+export const SYSTEM = `Je bent een top-copywriter voor Habitat One, een exclusieve interieur- en bouwmaterialenleverancier aan de Costa Blanca (Xàbia/Jávea): keukenbladen, natuursteen, badkamers, buitenkeukens — geleverd én gemonteerd. Je schrijft korte advertentieteksten voor Meta-beelden (Instagram/Facebook). Verfijnd, warm en mediterraan-luxe; zintuiglijk en beeldend (licht, textuur, materiaal, ambacht) zonder zweverig te worden. Doelgroep: particulieren en professionals aan de Costa Blanca. Regels: geen clichés als "de beste kwaliteit", geen uitroeptekens, geen emoji, niet pusherig, geen beloftes die niet waargemaakt kunnen worden. Elke taal wordt op moedertaalniveau geschreven — Spaans is een eersterangs taal, geen vertaling.`;
 
-const LANG_NAME: Record<string, string> = {
+export const LANG_NAME: Record<string, string> = {
   es: "Spaans (Castellano)",
   nl: "Nederlands",
   de: "Duits",
   en: "Engels",
 };
 
-const ANGLE_BRIEF: Record<string, string> = {
+export const ANGLE_BRIEF: Record<string, string> = {
   material: "het materiaal zelf: textuur, herkomst, hoe het voelt en oogt",
   price: "de vanafprijs als laagdrempelige binnenkomer, zonder goedkoop te klinken",
   showroom: "een bezoek aan de showroom in Xàbia: zien, voelen, adviseren",
@@ -53,6 +54,8 @@ export interface CreativeCopyRequest {
   priceFormatted?: string | null;
   /** Tekenlimieten van het gekozen sjabloon × formaat (uit de registry). */
   limits: CopyLimits;
+  /** Publieke URL van het gekozen beeld — de AI schrijft dan bij wat er écht te zien is. */
+  imageUrl?: string | null;
 }
 
 export interface GeneratedCreativeCopy {
@@ -88,7 +91,7 @@ export async function generateCreativeCopy(
     : (req.category ?? "de collectie van Habitat One");
 
   const prompt = `Schrijf de tekstvelden voor één Meta-advertentiebeeld van Habitat One.
-BELANGRIJK: schrijf ALLE velden in het ${langName}, vlekkeloos en natuurlijk (moedertaalniveau).
+${req.imageUrl ? "Kijk eerst goed naar het bijgevoegde beeld: benoem wat er écht te zien is (materiaal, licht, ruimte, sfeer) — de tekst moet bij dít beeld passen, niet generiek zijn.\n" : ""}BELANGRIJK: schrijf ALLE velden in het ${langName}, vlekkeloos en natuurlijk (moedertaalniveau).
 
 Onderwerp: ${subject}.
 ${req.angle && ANGLE_BRIEF[req.angle] ? `Invalshoek: ${ANGLE_BRIEF[req.angle]}.` : ""}
@@ -116,7 +119,17 @@ Geef ALLEEN een JSON-object terug (geen markdown): {"eyebrow": "...", "headline"
         max_tokens: 500,
         temperature: 0.7,
         system: SYSTEM,
-        messages: [{ role: "user", content: prompt }],
+        messages: [
+          {
+            role: "user",
+            content: req.imageUrl
+              ? [
+                  { type: "image", source: { type: "url", url: req.imageUrl } },
+                  { type: "text", text: prompt },
+                ]
+              : prompt,
+          },
+        ],
       }),
       cache: "no-store",
     });

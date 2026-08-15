@@ -60,7 +60,14 @@ export default async function CreativesPage({
       <PageHeader
         title="Creatives"
         subtitle={`${rows.length} spec${rows.length === 1 ? "" : "s"} — de spec is de waarheid, de PNG een afgeleide`}
-        actions={<LinkButton href="/marketing/creatives/new">Nieuwe creative</LinkButton>}
+        actions={
+          <div className="flex gap-2">
+            <LinkButton href="/marketing/creatives/carousel" variant="secondary">
+              Carrousel met AI
+            </LinkButton>
+            <LinkButton href="/marketing/creatives/new">Nieuwe creative</LinkButton>
+          </div>
+        }
       />
 
       {(draftSetIds.length > 0 ? draftSetIds : setId ? [setId] : []).map((id) => (
@@ -198,8 +205,9 @@ async function SetApproval({ setId, fout, aantal }: { setId: string; fout: strin
   return (
     <Card className="mb-4 border-accent/40 bg-accent/5 p-4 text-sm" role="status">
       <p className="font-medium">
-        Set met {drafts.length} openstaand{drafts.length === 1 ? " concept" : "e concepten"} (beelden
-        × formaten × talen). Loop ze hieronder na en keur ze daarna hier in één keer goed.
+        {drafts.some((d) => d.carouselOrder != null)
+          ? `Carrouselset met ${drafts.length} kaartjes. Loop ze hieronder na en keur ze daarna hier in één keer goed.`
+          : `Set met ${drafts.length} openstaand${drafts.length === 1 ? " concept" : "e concepten"} (beelden × formaten × talen). Loop ze hieronder na en keur ze daarna hier in één keer goed.`}
       </p>
       {fout && FOUT[fout] && (
         <p className="mt-2 rounded-md border border-red-300 bg-red-50 px-3 py-2 text-red-900" role="alert">

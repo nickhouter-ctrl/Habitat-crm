@@ -24,6 +24,17 @@ interface ApprovedSpec {
   locale: string;
 }
 
+/** Goedgekeurde carrouselset uit de AI-bouwer — in één klik over te nemen. */
+interface CarouselSetOption {
+  baseId: string;
+  label: string;
+  cardIds: string[];
+  format: string;
+  locale: string;
+  /** AI-voorstel voor de advertentietekst (van de basis-spec). */
+  message: string | null;
+}
+
 /** Formaatuitleg: waar toont Meta dit — zodat de keuze niet technisch voelt. */
 const FORMAT_LABEL: Record<string, string> = {
   "1080x1080": "1080×1080 · vierkant (feed + carrousel)",
@@ -34,9 +45,11 @@ const FORMAT_LABEL: Record<string, string> = {
 export function PublishAdForm({
   adSetId,
   approvedSpecs,
+  carouselSets = [],
 }: {
   adSetId: string;
   approvedSpecs: ApprovedSpec[];
+  carouselSets?: CarouselSetOption[];
 }) {
   const router = useRouter();
   const [mode, setMode] = useState<"single" | "carousel">("single");
@@ -185,6 +198,31 @@ export function PublishAdForm({
           <legend className="mb-1 text-sm font-medium">
             Kaartjes ({carouselIds.length} gekozen — klikvolgorde = kaartvolgorde)
           </legend>
+          {carouselSets.length > 0 && (
+            <div className="mb-2 space-y-1 rounded-md border border-accent/40 bg-accent/5 p-2">
+              <p className="text-xs font-medium">
+                Kant-en-klare carrouselsets (AI-bouwer) — één klik vult kaartjes, volgorde en tekst:
+              </p>
+              <div className="flex flex-wrap gap-1.5">
+                {carouselSets.map((set) => (
+                  <button
+                    key={set.baseId}
+                    type="button"
+                    onClick={() => {
+                      setCarouselIds(set.cardIds);
+                      setCardFormat(set.format);
+                      setCardLocale(set.locale);
+                      if (set.message && !message) setMessage(set.message);
+                      if (!name) setName(set.label);
+                    }}
+                    className="rounded-md border border-border bg-background px-2 py-1 text-xs hover:border-accent"
+                  >
+                    {set.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
           <div className="mb-2 flex flex-wrap gap-2">
             <select
               value={cardFormat}

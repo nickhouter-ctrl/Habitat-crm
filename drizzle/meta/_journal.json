@@ -344,6 +344,13 @@
       "when": 1786786419712,
       "tag": "0048_lying_annihilus",
       "breakpoints": true
+    },
+    {
+      "idx": 49,
+      "version": "7",
+      "when": 1786790021599,
+      "tag": "0049_perfect_thundra",
+      "breakpoints": true
     }
   ]
 }

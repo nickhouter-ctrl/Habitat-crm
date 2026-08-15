@@ -242,6 +242,7 @@ export function CreativeEditor({
         category: category || product?.category || null,
         template,
         format,
+        assetId: assetIds[0] ?? null,
       });
       if (result.error) {
         setAiError(result.error);

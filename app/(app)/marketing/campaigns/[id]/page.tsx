@@ -83,6 +83,31 @@ export default async function CampaignDetailPage({
     locale: s.locale,
   }));
 
+  // Goedgekeurde carrouselsets (AI-bouwer): kaartjes gegroepeerd op basis-spec,
+  // in kaartvolgorde — het formulier kan zo'n set in één klik overnemen.
+  const carouselGroups = new Map<string, typeof approvedSpecs>();
+  for (const s of approvedSpecs) {
+    if (s.carouselOrder == null) continue;
+    const key = s.parentId ?? s.id;
+    carouselGroups.set(key, [...(carouselGroups.get(key) ?? []), s]);
+  }
+  const carouselSetOptions = [...carouselGroups.entries()]
+    .map(([baseId, members]) => {
+      const ordered = [...members].sort(
+        (a, b) => (a.carouselOrder ?? 0) - (b.carouselOrder ?? 0),
+      );
+      const base = ordered.find((m) => m.id === baseId) ?? ordered[0];
+      return {
+        baseId,
+        label: `${base.copy?.headline ?? "(zonder kop)"} · ${ordered.length} kaartjes · ${base.locale.toUpperCase()}`,
+        cardIds: ordered.map((m) => m.id),
+        format: base.format,
+        locale: base.locale,
+        message: base.suggestedMessage,
+      };
+    })
+    .filter((g) => g.cardIds.length >= 2);
+
   return (
     <>
       <PageHeader
@@ -206,7 +231,11 @@ export default async function CampaignDetailPage({
                 </summary>
                 <div className="mt-3">
                   {set.metaId ? (
-                    <PublishAdForm adSetId={set.id} approvedSpecs={approvedOptions} />
+                    <PublishAdForm
+                      adSetId={set.id}
+                      approvedSpecs={approvedOptions}
+                      carouselSets={carouselSetOptions}
+                    />
                   ) : campaign.metaId ? (
                     <div className="space-y-2">
                       <p className="text-sm text-muted">

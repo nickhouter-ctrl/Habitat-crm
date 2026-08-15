@@ -2623,6 +2623,13 @@ export const creativeSpecs = pgTable(
     status: creativeStatus().notNull().default("draft"),
     /** Gezet bij "Dupliceer en pas aan" — verwijst naar de bron-spec. */
     parentId: uuid().references((): AnyPgColumn => creativeSpecs.id),
+    /**
+     * Kaartvolgorde binnen een carrouselset (1..N, gegroepeerd via parentId;
+     * de basis-spec is kaart 1). Null bij losse creatives en gewone sets.
+     */
+    carouselOrder: integer(),
+    /** AI-voorstel voor de advertentietekst boven de carrousel — alleen op de basis-spec. */
+    suggestedMessage: text(),
     createdBy: text(),
     ...timestamps,
   },
