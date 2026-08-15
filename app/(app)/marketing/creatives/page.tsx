@@ -10,6 +10,8 @@ import { approveCreativeSet } from "@/app/(app)/marketing/creatives/actions";
 import { Badge, Card, EmptyState, LinkButton, PageHeader, buttonClass, type BadgeTone } from "@/components/ui";
 import { db } from "@/lib/db";
 import { creativeSpecs } from "@/lib/db/schema";
+import { creativeSpecSchema } from "@/lib/creatives/schema";
+import { validateSpecCopy } from "@/lib/creatives/validate";
 import { cn } from "@/lib/utils";
 
 export const metadata = { title: "Creatives" };
@@ -155,7 +157,7 @@ export default async function CreativesPage({
  */
 async function SetApproval({ setId, fout, aantal }: { setId: string; fout: string; aantal: string }) {
   const drafts = await db
-    .select({ id: creativeSpecs.id })
+    .select()
     .from(creativeSpecs)
     .where(
       and(
@@ -163,6 +165,22 @@ async function SetApproval({ setId, fout, aantal }: { setId: string; fout: strin
         eq(creativeSpecs.status, "draft"),
       ),
     );
+
+  // Vooraf laten zien wat er niet past — niet pas klagen na de klik. Groepeer
+  // identieke problemen (zelfde taal/rol/melding) met een voorbeeldlink.
+  const problems = new Map<string, { count: number; exampleId: string }>();
+  for (const row of drafts) {
+    const parsed = creativeSpecSchema.safeParse({ ...row, copy: row.copy ?? { headline: "" } });
+    const issues = parsed.success
+      ? validateSpecCopy(parsed.data).map((i) => i.message)
+      : ["Onvolledige spec (ontbrekende velden)"];
+    for (const message of issues) {
+      const key = `${row.locale.toUpperCase()} · ${message}`;
+      const entry = problems.get(key);
+      if (entry) entry.count += 1;
+      else problems.set(key, { count: 1, exampleId: row.id });
+    }
+  }
   if (drafts.length === 0) {
     return (
       <Card className="mb-4 border-green-300 bg-green-50 p-3 text-sm" role="status">
@@ -187,6 +205,23 @@ async function SetApproval({ setId, fout, aantal }: { setId: string; fout: strin
         <p className="mt-2 rounded-md border border-red-300 bg-red-50 px-3 py-2 text-red-900" role="alert">
           {FOUT[fout]}
         </p>
+      )}
+      {problems.size > 0 && (
+        <div className="mt-2 space-y-1 rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-amber-900" role="alert">
+          <p className="font-medium">
+            Deze set kan nog niet goedgekeurd worden — dit past niet:
+          </p>
+          <ul className="list-disc pl-5">
+            {[...problems.entries()].map(([key, { count, exampleId }]) => (
+              <li key={key}>
+                {count}× {key}{" "}
+                <Link href={`/marketing/creatives/${exampleId}`} className="font-medium underline">
+                  bekijk voorbeeld
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </div>
       )}
       <form action={approveCreativeSet} className="mt-3 space-y-2">
         <input type="hidden" name="setId" value={setId} />
