@@ -20,7 +20,16 @@ import { cn } from "@/lib/utils";
 interface ApprovedSpec {
   id: string;
   label: string;
+  format: string;
+  locale: string;
 }
+
+/** Formaatuitleg: waar toont Meta dit — zodat de keuze niet technisch voelt. */
+const FORMAT_LABEL: Record<string, string> = {
+  "1080x1080": "1080×1080 · vierkant (feed + carrousel)",
+  "1080x1350": "1080×1350 · staand (mobiele feed)",
+  "1080x1920": "1080×1920 · story/reel",
+};
 
 export function PublishAdForm({
   adSetId,
@@ -34,6 +43,9 @@ export function PublishAdForm({
   const [specId, setSpecId] = useState(approvedSpecs[0]?.id ?? "");
   /** Carrousel: aangevinkte specs, in aanvinkvolgorde (= kaartvolgorde). */
   const [carouselIds, setCarouselIds] = useState<string[]>([]);
+  /** Carrouselfilters: vierkant is de standaard — dat toont Meta overal. */
+  const [cardFormat, setCardFormat] = useState("1080x1080");
+  const [cardLocale, setCardLocale] = useState("");
   const [name, setName] = useState("");
   const [message, setMessage] = useState("");
   const [link, setLink] = useState("https://habitat-one.com/");
@@ -55,6 +67,14 @@ export function PublishAdForm({
 
   const toggleCard = (id: string) =>
     setCarouselIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
+
+  const formats = [...new Set(approvedSpecs.map((s) => s.format))].sort();
+  const locales = [...new Set(approvedSpecs.map((s) => s.locale))].sort();
+  const visibleCards = approvedSpecs.filter(
+    (s) =>
+      (cardFormat === "" || s.format === cardFormat) &&
+      (cardLocale === "" || s.locale === cardLocale),
+  );
 
   async function publish(e: React.FormEvent) {
     e.preventDefault();
@@ -165,8 +185,41 @@ export function PublishAdForm({
           <legend className="mb-1 text-sm font-medium">
             Kaartjes ({carouselIds.length} gekozen — klikvolgorde = kaartvolgorde)
           </legend>
+          <div className="mb-2 flex flex-wrap gap-2">
+            <select
+              value={cardFormat}
+              onChange={(e) => setCardFormat(e.target.value)}
+              aria-label="Filter op formaat"
+              className="h-8 rounded-md border border-border bg-background px-2 text-sm"
+            >
+              <option value="">Alle formaten</option>
+              {formats.map((f) => (
+                <option key={f} value={f}>
+                  {FORMAT_LABEL[f] ?? f}
+                </option>
+              ))}
+            </select>
+            <select
+              value={cardLocale}
+              onChange={(e) => setCardLocale(e.target.value)}
+              aria-label="Filter op taal"
+              className="h-8 rounded-md border border-border bg-background px-2 text-sm"
+            >
+              <option value="">Alle talen</option>
+              {locales.map((l) => (
+                <option key={l} value={l}>
+                  {l.toUpperCase()}
+                </option>
+              ))}
+            </select>
+          </div>
+          {visibleCards.length === 0 && (
+            <p className="rounded-md border border-border p-3 text-sm text-muted">
+              Geen goedgekeurde creatives in dit formaat/deze taal.
+            </p>
+          )}
           <ul className="grid max-h-96 list-none grid-cols-3 gap-2 overflow-y-auto rounded-md border border-border p-2 sm:grid-cols-4">
-            {approvedSpecs.map((s) => {
+            {visibleCards.map((s) => {
               const idx = carouselIds.indexOf(s.id);
               const picked = idx >= 0;
               return (
@@ -205,6 +258,20 @@ export function PublishAdForm({
             Elk kaartje krijgt zijn eigen kop en ondertitel uit de creative; kies dus varianten met
             hetzelfde formaat en dezelfde taal.
           </p>
+          {(() => {
+            const picked = approvedSpecs.filter((s) => carouselIds.includes(s.id));
+            const mixedFormat = new Set(picked.map((s) => s.format)).size > 1;
+            const mixedLocale = new Set(picked.map((s) => s.locale)).size > 1;
+            if (!mixedFormat && !mixedLocale) return null;
+            return (
+              <p className="mt-1 text-xs font-medium text-amber-700" role="alert">
+                ⚠ Je selectie mixt {mixedFormat ? "formaten" : ""}
+                {mixedFormat && mixedLocale ? " én " : ""}
+                {mixedLocale ? "talen" : ""} — de carrousel oogt dan rommelig. Kies bij voorkeur
+                één formaat en één taal.
+              </p>
+            );
+          })()}
         </fieldset>
       )}
 

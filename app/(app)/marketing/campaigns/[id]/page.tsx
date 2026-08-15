@@ -79,6 +79,8 @@ export default async function CampaignDetailPage({
   const approvedOptions = approvedSpecs.map((s) => ({
     id: s.id,
     label: `${s.copy?.headline ?? "(zonder kop)"} — ${s.template}/${s.format}/${s.locale.toUpperCase()}`,
+    format: s.format,
+    locale: s.locale,
   }));
 
   return (
