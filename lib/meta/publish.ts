@@ -117,6 +117,10 @@ export function buildCampaignPayload(input: CampaignPushInput): Record<string, u
     objective: input.objective ?? "OUTCOME_TRAFFIC",
     status: "PAUSED",
     special_ad_categories: ["NONE"],
+    // Verplicht (v23, subcode 4834011) zodra budgetten op adset-niveau staan —
+    // zoals bij ons. `false`: adsets delen geen 20% van elkaars budget; de
+    // leerlaag rekent per adset en budgetdeling zou die cijfers vervuilen.
+    is_adset_budget_sharing_enabled: false,
   };
 }
 
@@ -132,6 +136,11 @@ export interface AdSetPushInput {
   lifetimeBudgetEur: string | null;
   dayparting: unknown[] | null;
   targeting: unknown | null;
+}
+
+/** DSA-begunstigde (EU-transparantie): configureerbaar, default de eigen zaak. */
+function dsaBeneficiary(): string {
+  return process.env.META_DSA_BENEFICIARY ?? "Habitat One & One SL";
 }
 
 /**
@@ -151,6 +160,14 @@ export function buildAdSetPayload(input: AdSetPushInput): Record<string, unknown
     status: "PAUSED",
     billing_event: "IMPRESSIONS",
     optimization_goal: input.objective === "OUTCOME_AWARENESS" ? "REACH" : "LINK_CLICKS",
+    // Verplicht (v23, subcode 2490487): zonder expliciete strategie eist Meta
+    // een bodbedrag. Laagste kosten zonder limiet = geen bod nodig en past bij
+    // kleine showroombudgetten; een bodlimiet is voor later, als er data is.
+    bid_strategy: "LOWEST_COST_WITHOUT_CAP",
+    // DSA-transparantie (EU, subcode 3858081): wie profiteert van en wie
+    // betaalt voor de advertentie. Bij ons allebei de eigen zaak.
+    dsa_beneficiary: dsaBeneficiary(),
+    dsa_payor: process.env.META_DSA_PAYOR ?? dsaBeneficiary(),
     targeting: input.targeting ?? { geo_locations: { countries: ["ES"] } },
   };
   if (input.dailyBudgetEur) payload.daily_budget = eurToCents(input.dailyBudgetEur);

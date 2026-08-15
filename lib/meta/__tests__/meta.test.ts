@@ -259,6 +259,9 @@ describe("buildCampaignPayload", () => {
     expect(payload.name).toBe("Zomer ES");
     expect(payload.objective).toBe("OUTCOME_TRAFFIC");
     expect(payload.special_ad_categories).toEqual(["NONE"]);
+    // Verplicht veld bij adset-budgetten (v23); false = geen budgetdeling,
+    // anders kloppen de per-adset-cijfers van de leerlaag niet meer.
+    expect(payload.is_adset_budget_sharing_enabled).toBe(false);
   });
 
   it("valt terug op OUTCOME_TRAFFIC zonder doelstelling", () => {
@@ -287,6 +290,8 @@ describe("buildAdSetPayload", () => {
     const payload = buildAdSetPayload(base);
     expect(payload.status).toBe("PAUSED");
     expect(payload.campaign_id).toBe("meta-camp-1");
+    // Zonder expliciete bodstrategie eist Meta een bodbedrag (subcode 2490487).
+    expect(payload.bid_strategy).toBe("LOWEST_COST_WITHOUT_CAP");
     expect(payload.daily_budget).toBe(2500);
     expect(payload).not.toHaveProperty("lifetime_budget");
     expect(payload.start_time).toBe("2026-09-01T06:00:00.000Z");
