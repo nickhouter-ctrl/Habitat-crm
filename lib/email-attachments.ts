@@ -271,6 +271,24 @@ export function detectCategory(ctx: CategorizeCtx): AttachmentCategory {
   return "other";
 }
 
+/**
+ * Namen die een mailclient zélf verzint voor beeld dat in de body staat —
+ * handtekening-logo's, social-icoontjes, tracking-pixels. Gekalibreerd op de
+ * 384 afbeeldingen die door de inbox zijn gekomen: alles onder de 25 kB heet
+ * zo, en niets wat iemand bewust stuurde.
+ */
+export function isAutomatischeBeeldnaam(filename: string): boolean {
+  const n = filename.trim();
+  return (
+    /^image\d{3,}\.(png|jpe?g|gif|bmp)$/i.test(n) || // Outlook/Word inline
+    /^~WRD\d+\.(jpg|png)$/i.test(n) || // Word-tijdelijk
+    /^@images\//i.test(n) || // nieuwsbrief-sjablonen
+    /^Outlook-[\w.-]*\.(gif|png|jpe?g)$/i.test(n) || // Outlook-handtekening
+    /^[A-Za-z0-9_-]{12,24}\.(png|jpe?g|gif)$/i.test(n) || // willekeurige hash
+    /^noname$/i.test(n)
+  );
+}
+
 function safeFilename(name: string): string {
   return name.replace(/[^a-zA-Z0-9._-]/g, "_").slice(0, 120);
 }
@@ -303,20 +321,21 @@ export async function storeMailAttachments(args: {
       skipped++;
       continue;
     }
-    // Afbeeldingen: alleen overslaan wat in de body is INGESLOTEN — logo's en
-    // handtekeningen dus. Wat iemand bewust bijvoegt bewaren we, hoe klein ook.
+    // Afbeeldingen: onderscheid op BESTANDSNAAM, niet op grootte of inline-zijn.
     //
-    // Dit ging eerder op bestandsgrootte (< 500 kB eruit). Dat kostte echte
-    // foto's: een kiekje van een bon dat Hans naar purchase@ stuurde was 71 kB
-    // en verdween daarmee uit het archief — je zag alleen nog de metadata en
-    // moest terug naar Gmail. Grootte zegt niets over bedoeling; de
-    // content-disposition van de mail zelf wél.
+    // Twee eerdere pogingen sneuvelden op echte foto's. Eerst ging alles onder
+    // 500 kB eruit — daar verdween een kiekje van een bon van 71 kB mee. Toen
+    // op "ingesloten in de body", maar juist een doorgestuurde WhatsApp-foto
+    // staat ín de body: die van Elles (57 kB) sneuvelde alsnog.
+    //
+    // Wat wél scheidt is de naam. Mailclients verzinnen zelf namen voor logo's
+    // en handtekening-iconen (image001.png, ~WRD0001.jpg, @images/fb-icon.png);
+    // een foto die iemand stuurt houdt zijn eigen naam. Boven de 100 kB bewaren
+    // we ook de automatisch benoemde: geen enkel handtekening-logo is zo groot,
+    // een in de body geplakte foto wel.
     if (att.contentType.startsWith("image/")) {
-      const ingesloten = att.related === true || att.contentDisposition === "inline";
-      // Valt de disposition weg (oudere parser of rare client), dan is een
-      // afbeelding van enkele kB's alsnog vrijwel zeker een logo.
-      const nietigKlein = att.size < 10 * 1024;
-      if (ingesloten || (att.contentDisposition == null && nietigKlein)) {
+      const autoNaam = isAutomatischeBeeldnaam(att.filename);
+      if (autoNaam ? att.size < 100 * 1024 : att.size < 8 * 1024) {
         skipped++;
         continue;
       }

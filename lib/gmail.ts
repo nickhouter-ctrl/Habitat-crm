@@ -150,6 +150,58 @@ function envelopeToPurchase(env: FetchMessageObject["envelope"]): boolean {
 }
 
 /**
+ * Haalt specifieke berichten op UID op, om bijlagen alsnog binnen te halen die
+ * bij de eerste poll zijn overgeslagen. UID's lopen PER postvak, dus dezelfde
+ * UID bestaat in beide accounts — de aanroeper moet het Message-ID controleren
+ * voordat hij de inhoud aan een mail koppelt.
+ */
+export async function fetchMailsByUid(uids: number[], account?: MailAccount): Promise<ParsedEmail[]> {
+  if (uids.length === 0) return [];
+  const client = createImapClient(account);
+  await client.connect();
+  let lock: MailboxLockObject | null = null;
+  try {
+    const folder = await findAllMailFolder(client);
+    lock = await client.getMailboxLock(folder);
+    const mails: ParsedEmail[] = [];
+    const generator = client.fetch(uids.join(","), { uid: true, envelope: true, source: true }, { uid: true });
+    for await (const msg of generator as AsyncIterable<FetchMessageObject>) {
+      if (!msg.source) continue;
+      const parsed = await simpleParser(msg.source as Buffer);
+      const attachments: ParsedAttachment[] = (parsed.attachments ?? [])
+        .filter((a) => a.filename)
+        .map((a) => ({
+          filename: a.filename ?? "attachment",
+          size: a.size ?? 0,
+          contentType: a.contentType ?? "application/octet-stream",
+          content: a.content as Buffer,
+          contentDisposition: a.contentDisposition,
+          related: (a as { related?: boolean }).related === true,
+        }));
+      mails.push({
+        messageId: clean(parsed.messageId ?? msg.envelope?.messageId) ?? `imap-uid-${msg.uid}`,
+        imapUid: msg.uid ?? 0,
+        threadId: null,
+        referencesHeader: null,
+        fromEmail: joinAddresses(parsed.from),
+        fromName: clean(parsed.from?.value?.[0]?.name ?? null),
+        toEmail: joinAddresses(parsed.to),
+        ccEmail: joinAddresses(parsed.cc),
+        subject: clean(parsed.subject ?? null),
+        bodyText: clean(parsed.text ?? null),
+        bodyHtml: clean(typeof parsed.html === "string" ? parsed.html : null),
+        receivedAt: parsed.date ?? new Date(),
+        attachments,
+      });
+    }
+    return mails;
+  } finally {
+    lock?.release();
+    await client.logout().catch(() => {});
+  }
+}
+
+/**
  * Haal nieuwe mails op sinds UID `sinceUid` (exclusief). Returns geparseerde mails.
  *
  * Pollt de "Alle e-mail"-map i.p.v. INBOX, zodat ook mail die door een Gmail-
