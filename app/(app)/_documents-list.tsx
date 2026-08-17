@@ -1,5 +1,6 @@
-import { and, desc, eq, inArray, isNotNull, ne } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, isNotNull, ne, sql, type SQL } from "drizzle-orm";
 import { Trash2 } from "lucide-react";
+import Link from "next/link";
 
 import {
   Badge,
@@ -14,6 +15,7 @@ import {
   Th,
   THead,
 } from "@/components/ui";
+import { SubmitButton } from "@/components/submit-button";
 import { SyncHoldedButton } from "@/components/sync-holded-button";
 import { db } from "@/lib/db";
 import { documents } from "@/lib/db/schema";
@@ -33,24 +35,86 @@ type Kind =
   | "salesreceipt"
   | "deliverynote";
 
+/**
+ * Sorteerbare kolommen. De sortering gebeurt in SQL en niet in JavaScript:
+ * de lijst is afgekapt op 300 rijen, dus achteraf sorteren zou de verkeerde
+ * 300 pakken — je zou "oudste eerst" vragen en de nieuwste 300 gesorteerd
+ * terugkrijgen.
+ */
+const SORTEERBAAR = {
+  docNumber: documents.docNumber,
+  kind: documents.kind,
+  // Klant zit in een relatie; via een subquery sorteert de database er wél op.
+  klant: sql`coalesce(
+    (select c.name from contacts c where c.id = ${documents.contactId}),
+    (select b.name from companies b where b.id = ${documents.companyId})
+  )`,
+  status: documents.status,
+  issueDate: documents.issueDate,
+  dueDate: documents.dueDate,
+  subtotalEur: documents.subtotalEur,
+  totalEur: documents.totalEur,
+  paidEur: documents.paidEur,
+} as const;
+
+type SorteerSleutel = keyof typeof SORTEERBAAR;
+
 export async function DocumentsList({
   kind,
   title,
   subtitle,
   newLabel,
+  searchParams,
 }: {
   kind: Kind | Kind[];
   title: string;
   subtitle: string;
   newLabel: string;
+  /** `sort` = kolomsleutel, `dir` = asc/desc. Leeg = nieuwste datum eerst. */
+  searchParams?: Record<string, string | undefined>;
 }) {
   const kinds = Array.isArray(kind) ? kind : [kind];
   const primaryKind = kinds[0];
   const showKindColumn = kinds.length > 1;
 
+  const gevraagd = searchParams?.sort;
+  const sorteerOp = (gevraagd && gevraagd in SORTEERBAAR ? gevraagd : null) as SorteerSleutel | null;
+  const oplopend = searchParams?.dir === "asc";
+  const richting = oplopend ? asc : desc;
+
+  // Lege datums en bedragen altijd onderaan, ongeacht de richting — een rij
+  // zonder factuurnummer bovenaan zetten helpt niemand bij het zoeken.
+  const sortering: SQL[] = sorteerOp
+    ? [sql`${richting(SORTEERBAAR[sorteerOp] as never)} nulls last`, desc(documents.createdAt)]
+    : [sql`${desc(documents.issueDate)} nulls last`, desc(documents.createdAt)];
+
+  // Filter op documentsoort: op de facturenpagina staan facturen en creditnota's
+  // door elkaar, en soms wil je er maar één zien.
+  const soortFilter = searchParams?.soort;
+  const zichtbareKinds = soortFilter && kinds.includes(soortFilter as Kind) ? [soortFilter as Kind] : kinds;
+
+  // Zoeken op nummer, omschrijving, klant of project. De klant- en projectnaam
+  // staan in een andere tabel; met een subquery zoekt de DATABASE mee, zodat
+  // ook een klant buiten de eerste 300 rijen gevonden wordt.
+  const zoek = (searchParams?.q ?? "").trim();
+  const zoekFilter = zoek
+    ? sql`(
+        ${documents.docNumber} ilike ${`%${zoek}%`}
+        or ${documents.title} ilike ${`%${zoek}%`}
+        or exists (select 1 from contacts c where c.id = ${documents.contactId} and c.name ilike ${`%${zoek}%`})
+        or exists (select 1 from companies b where b.id = ${documents.companyId} and b.name ilike ${`%${zoek}%`})
+        or exists (select 1 from projects p where p.id = ${documents.projectId} and p.name ilike ${`%${zoek}%`})
+      )`
+    : undefined;
+
   const rows = await db.query.documents.findMany({
-    where: kinds.length === 1 ? eq(documents.kind, primaryKind) : inArray(documents.kind, kinds),
-    orderBy: [desc(documents.issueDate), desc(documents.createdAt)],
+    where: and(
+      zichtbareKinds.length === 1
+        ? eq(documents.kind, zichtbareKinds[0])
+        : inArray(documents.kind, zichtbareKinds),
+      zoekFilter,
+    ),
+    orderBy: sortering,
     limit: 300,
     with: {
       contact: { columns: { id: true, name: true } },
@@ -58,6 +122,53 @@ export async function DocumentsList({
       project: { columns: { id: true, name: true } },
     },
   });
+
+  /** Huidige URL met een paar parameters aangepast; lege waarde haalt hem weg. */
+  const metParams = (wijziging: Record<string, string | undefined>) => {
+    const sp = new URLSearchParams();
+    for (const [k, v] of Object.entries({ ...searchParams, ...wijziging })) {
+      if (v != null && v !== "") sp.set(k, v);
+    }
+    const q = sp.toString();
+    return q ? `?${q}` : "?";
+  };
+
+  /**
+   * Kolomkop die op zichzelf sorteert. Klikken op de actieve kolom draait de
+   * richting om; een andere kolom begint bij de richting die voor dat soort
+   * gegevens het nuttigst is — datums en bedragen aflopend (grootste/nieuwste
+   * eerst), tekst oplopend (A→Z).
+   */
+  const SorteerKop = ({
+    sleutel,
+    children,
+    className,
+  }: {
+    sleutel: SorteerSleutel;
+    children: React.ReactNode;
+    className?: string;
+  }) => {
+    const actief = sorteerOp === sleutel;
+    const aflopendEerst = ["issueDate", "dueDate", "subtotalEur", "totalEur", "paidEur"].includes(sleutel);
+    const volgende = actief ? (oplopend ? "desc" : "asc") : aflopendEerst ? "desc" : "asc";
+    return (
+      <Th className={className}>
+        <Link
+          href={metParams({ sort: sleutel, dir: volgende })}
+          className={cn(
+            "inline-flex items-center gap-1 hover:text-foreground",
+            actief ? "text-foreground" : "text-muted",
+          )}
+          title={`Sorteren op ${String(children)}`}
+        >
+          {children}
+          <span aria-hidden className={cn("text-[10px]", actief ? "opacity-100" : "opacity-0")}>
+            {oplopend ? "▲" : "▼"}
+          </span>
+        </Link>
+      </Th>
+    );
+  };
 
   // Welke offertes zijn al gefactureerd? (factuur verwijst via source_document_id)
   const invoicedEstimateIds = kinds.includes("estimate")
@@ -110,6 +221,59 @@ export async function DocumentsList({
         <StatTile label="Openstaand" value={formatEUR(outstanding)} hint="incl. BTW" />
       </div>
 
+      {/* Zoeken als GET-formulier: de zoekterm staat in de URL, dus een
+          gesorteerde zoekopdracht is te delen en te bookmarken. De sortering
+          reist mee als verborgen veld, anders val je bij zoeken terug op de
+          standaardvolgorde. */}
+      <form method="get" className="mb-4 flex flex-wrap items-center gap-2">
+        <input
+          type="search"
+          name="q"
+          defaultValue={zoek}
+          placeholder="Zoek op nummer, omschrijving, klant of project…"
+          className="h-9 w-full max-w-sm rounded-md border border-border bg-background px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
+        />
+        {sorteerOp && <input type="hidden" name="sort" value={sorteerOp} />}
+        {sorteerOp && <input type="hidden" name="dir" value={oplopend ? "asc" : "desc"} />}
+        {soortFilter && <input type="hidden" name="soort" value={soortFilter} />}
+        <SubmitButton size="sm" variant="secondary" pendingLabel="Zoeken…">
+          Zoeken
+        </SubmitButton>
+        {zoek && (
+          <Link href={metParams({ q: undefined })} className="text-sm text-muted hover:underline">
+            wissen
+          </Link>
+        )}
+        {zoek && (
+          <span className="text-sm text-muted">
+            {rows.length} {rows.length === 1 ? "resultaat" : "resultaten"} voor “{zoek}”
+          </span>
+        )}
+      </form>
+
+      {showKindColumn && (
+        <div className="mb-4 flex flex-wrap items-center gap-1.5 text-sm">
+          <span className="mr-1 text-xs uppercase tracking-wide text-muted">Tonen</span>
+          {[{ waarde: "", label: "Alles" }, ...kinds.map((k) => ({ waarde: k, label: documentKindMeta[k] }))].map(
+            (optie) => {
+              const actief = (soortFilter ?? "") === optie.waarde;
+              return (
+                <Link
+                  key={optie.waarde || "alles"}
+                  href={metParams({ soort: optie.waarde || undefined })}
+                  className={cn(
+                    "rounded-md border px-2.5 py-1 transition-colors",
+                    actief ? "border-accent bg-accent/10 font-medium text-accent" : "text-muted hover:bg-background",
+                  )}
+                >
+                  {optie.label}
+                </Link>
+              );
+            },
+          )}
+        </div>
+      )}
+
       {rows.length === 0 ? (
         <EmptyState
           title={`Nog geen ${title.toLowerCase()}`}
@@ -121,15 +285,15 @@ export async function DocumentsList({
           <Table>
             <THead>
               <tr>
-                <Th>Nr.</Th>
-                {showKindColumn && <Th>Type</Th>}
-                <Th>Klant</Th>
-                <Th>Status</Th>
-                <Th>Datum</Th>
-                <Th>Vervaldatum</Th>
-                <Th className="text-right">Subtotaal</Th>
-                <Th className="text-right">Totaal</Th>
-                <Th className="text-right">Betaald</Th>
+                <SorteerKop sleutel="docNumber">Nr.</SorteerKop>
+                {showKindColumn && <SorteerKop sleutel="kind">Type</SorteerKop>}
+                <SorteerKop sleutel="klant">Klant</SorteerKop>
+                <SorteerKop sleutel="status">Status</SorteerKop>
+                <SorteerKop sleutel="issueDate">Datum</SorteerKop>
+                <SorteerKop sleutel="dueDate">Vervaldatum</SorteerKop>
+                <SorteerKop sleutel="subtotalEur" className="text-right">Subtotaal</SorteerKop>
+                <SorteerKop sleutel="totalEur" className="text-right">Totaal</SorteerKop>
+                <SorteerKop sleutel="paidEur" className="text-right">Betaald</SorteerKop>
                 <Th />
               </tr>
             </THead>

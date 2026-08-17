@@ -7,9 +7,14 @@ export const metadata = { title: "Voorschotten" };
  * (die laatste hebben geen eigen factuur-/offertelijst en waren anders alleen
  * via het project, de klant of zoeken te vinden).
  */
-export default function VoorschottenPage() {
+export default async function VoorschottenPage({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | undefined>>;
+}) {
   return (
     <DocumentsList
+      searchParams={await searchParams}
       kind={["proforma", "fondos"]}
       title="Voorschotten"
       subtitle="Proforma's en provisiones de fondos — betaalde voorschotten verrekenen automatisch op de eindfactuur"
