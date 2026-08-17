@@ -628,11 +628,13 @@ function DocumentPdf({ doc }: { doc: PdfDoc }) {
           {doc.title ? <Text style={cs.coverSubject}>{doc.title}</Text> : null}
           <Text style={cs.coverIntro}>{coverTxt.intro}</Text>
           <View style={cs.coverMetaRow}>
-            <View>
+            {/* Lange bedrijfsnamen moeten binnen het linkerblok omslaan i.p.v.
+                door de datumkolom heen te lopen. */}
+            <View style={{ flex: 1, paddingRight: 28 }}>
               <Text style={cs.coverMetaLabel}>{coverTxt.for.toUpperCase()}</Text>
               <Text style={cs.coverMetaValue}>{doc.companyName ?? doc.contactName ?? "—"}</Text>
             </View>
-            <View>
+            <View style={{ flexShrink: 0 }}>
               <Text style={[cs.coverMetaLabel, { textAlign: "right" }]}>{coverTxt.date.toUpperCase()}</Text>
               <Text style={[cs.coverMetaValue, { textAlign: "right" }]}>{fdate(doc.issueDate)}</Text>
             </View>
