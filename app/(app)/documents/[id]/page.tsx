@@ -22,7 +22,7 @@ import {
   Tr,
 } from "@/components/ui";
 import { db } from "@/lib/db";
-import { deliveries, documents, holdedSyncMap, products } from "@/lib/db/schema";
+import { companies, deliveries, documents, holdedSyncMap, products } from "@/lib/db/schema";
 import { SubmitButton } from "@/components/submit-button";
 import { lineCostEur, lineNet, lineTax, normalizeDocItems } from "@/lib/documents";
 import { missingBillingFields } from "@/lib/invoice-validation";
@@ -99,7 +99,7 @@ export default async function DocumentDetailPage({
   const doc = await db.query.documents.findFirst({
     where: eq(documents.id, id),
     with: {
-      contact: { columns: { id: true, name: true, email: true, taxId: true, addressLine: true, postalCode: true, city: true, country: true } },
+      contact: { columns: { id: true, name: true, email: true, taxId: true, companyId: true, addressLine: true, postalCode: true, city: true, country: true } },
       company: { columns: { id: true, name: true, vatNumber: true, addressLine: true, postalCode: true, city: true, country: true } },
       deal: { columns: { id: true, title: true } },
       property: { columns: { id: true, title: true } },
@@ -319,8 +319,18 @@ export default async function DocumentDetailPage({
   const partyName = doc.contact?.name ?? doc.company?.name ?? null;
   const kindLabel = documentKindMeta[doc.kind];
   // Facturatie-check: welke verplichte klantgegevens ontbreken (blokkeert versturen).
+  // Bedrijf: van de factuur zelf, anders dat van het contact (zakelijke klant) —
+  // zelfde volgorde als de PDF-route, anders vraagt de check een NIE/BSN van een SL.
+  const billingCompany =
+    doc.company ??
+    (doc.contact?.companyId
+      ? await db.query.companies.findFirst({
+          where: eq(companies.id, doc.contact.companyId),
+          columns: { name: true, vatNumber: true, addressLine: true, postalCode: true, city: true, country: true },
+        })
+      : null);
   const invoiceMissing =
-    doc.kind === "invoice" || doc.kind === "creditnote" ? missingBillingFields(doc.contact, doc.company) : [];
+    doc.kind === "invoice" || doc.kind === "creditnote" ? missingBillingFields(doc.contact, billingCompany) : [];
 
   // Alleen facturen met productregels kunnen daadwerkelijk geleverd of opgehaald
   // worden — een factuur voor uren heeft niets om mee te geven.

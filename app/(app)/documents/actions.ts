@@ -764,20 +764,21 @@ async function assertInvoiceClientComplete(docId: string) {
     columns: { kind: true, contactId: true, companyId: true },
   });
   if (!doc || (doc.kind !== "invoice" && doc.kind !== "creditnote")) return;
-  const [contact, company] = await Promise.all([
-    doc.contactId
-      ? db.query.contacts.findFirst({
-          where: eq(contacts.id, doc.contactId),
-          columns: { name: true, taxId: true, addressLine: true, postalCode: true, city: true, country: true },
-        })
-      : null,
-    doc.companyId
-      ? db.query.companies.findFirst({
-          where: eq(companies.id, doc.companyId),
-          columns: { name: true, vatNumber: true, addressLine: true, postalCode: true, city: true, country: true },
-        })
-      : null,
-  ]);
+  const contact = doc.contactId
+    ? await db.query.contacts.findFirst({
+        where: eq(contacts.id, doc.contactId),
+        columns: { name: true, taxId: true, companyId: true, addressLine: true, postalCode: true, city: true, country: true },
+      })
+    : null;
+  // Bedrijf: van de factuur zelf, anders dat van het contact (zakelijke klant) —
+  // zelfde volgorde als de PDF-route, anders vragen we een NIE/BSN van een SL.
+  const companyId = doc.companyId ?? contact?.companyId ?? null;
+  const company = companyId
+    ? await db.query.companies.findFirst({
+        where: eq(companies.id, companyId),
+        columns: { name: true, vatNumber: true, addressLine: true, postalCode: true, city: true, country: true },
+      })
+    : null;
   const missing = missingBillingFields(contact, company);
   if (missing.length) {
     redirect(`/documents/${docId}?fout=${encodeURIComponent(`Klantgegevens onvolledig — vul eerst aan: ${missing.join(", ")}`)}`);
