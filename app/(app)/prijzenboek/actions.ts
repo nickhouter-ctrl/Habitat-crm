@@ -219,7 +219,7 @@ export async function createQuoteFromPriceBook(formData: FormData) {
       });
     }
   }
-  if (items.length === 0) redirect("/prijzenboek/offerte?fout=leeg");
+  if (items.length === 0) redirect("/calculator?fout=leeg");
 
   // Betalingsschema: vrij aantal termijnen met eigen omschrijving en %. De
   // terugval is dezelfde fase-lijst als het voorbeeld toonde — pas daarna het
@@ -290,7 +290,7 @@ export async function createQuoteFromPriceBook(formData: FormData) {
     subject: `Offerte ${docNumber} gecalculeerd uit het prijzenboek`,
     body: `${items.length} regels · verkoop ${round2(totals.subtotal)} · kostprijs ${round2(kost)}${
       overgeslagen.length ? ` · overgeslagen (geen prijs): ${overgeslagen.join(", ")}` : ""
-    }${wizardQuery ? `\nGebruikte maten (opnieuw calculeren): /prijzenboek/offerte?${wizardQuery}` : ""}`,
+    }${wizardQuery ? `\nGebruikte maten (opnieuw calculeren): /calculator?${wizardQuery}` : ""}`,
     contactId: contactId ?? project?.contactId ?? null,
     documentId: id,
     authorId: user.id,

@@ -138,14 +138,15 @@ export const DEFAULT_PRIJZENBOEK_MARGE = 30;
  * zonder dat iemand er met de hand aan rekent. */
 
 /**
- * Wat de ploeg ons kost per uur — het maximum dat we betalen (Nick, 07-08-2026;
- * komt overeen met de hoogste `workers.hourlyCostEur` in het systeem). Onze
- * marge komt hier bovenop, die zit NIET in dit tarief.
+ * Wat de ploeg ons kost per uur. Gekalibreerd op project 't Palijsje
+ * (17-08-2026): 1.042 geboekte uren voor € 25.092 = € 24,10/uur werkelijk
+ * betaald (Zerghini-ploeg); € 25 houdt een kleine buffer aan. Onze marge komt
+ * hier bovenop, die zit NIET in dit tarief.
  *
  * Staat hier als constante en niet als los kostbedrag per post, zodat een
  * tariefwijziging in één keer door het hele prijzenboek loopt.
  */
-export const UURTARIEF_ONDERAANNEMER = 28;
+export const UURTARIEF_ONDERAANNEMER = 25;
 
 /** Standaard snijverlies voor materiaal dat op maat wordt gezaagd. */
 export const SNIJVERLIES_PCT = 10;

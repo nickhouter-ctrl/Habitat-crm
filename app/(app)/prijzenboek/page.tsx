@@ -54,7 +54,7 @@ export default async function PrijzenboekPage() {
                 Sanitair ← catalogus
               </SubmitButton>
             </form>
-            <LinkButton href="/prijzenboek/offerte" variant="primary">
+            <LinkButton href="/calculator" variant="primary">
               Offerte calculeren
             </LinkButton>
           </div>
@@ -212,7 +212,7 @@ export default async function PrijzenboekPage() {
         Verkoopprijs = kost ÷ (1 − marge), excl. btw. Voorbeeld: kost € 70 met 30% marge → {formatEUR(100)}. Pas je
         kost of marge aan, dan rekent het verkoopveld direct mee; zelf een verkoopprijs typen mag altijd. Eigen producten kies
         je in de offerte-editor via de productkiezer — die rekenen met hun eigen catalogusmarge.{" "}
-        <Link href="/prijzenboek/offerte" className="text-accent hover:underline">
+        <Link href="/calculator" className="text-accent hover:underline">
           Naar de calculator
         </Link>
         .
