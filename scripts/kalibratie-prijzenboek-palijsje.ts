@@ -10,9 +10,9 @@
  * Twee ingrepen, allebei aan de kostenkant (de marges blijven zoals Nick ze
  * heeft gezet):
  *
- * 1. Uurtarief 28 → 25 (werkelijk betaald: € 24,10/u over 1.042 geboekte
- *    uren). Staat in lib/price-book.ts; hier rekenen we de opgeslagen kost-
- *    en verkoopprijzen ermee door.
+ * 1. Uurtarief: blijft € 28 (keuze Nick 17-08 — buffer boven de werkelijk
+ *    betaalde € 24,10/u). Staat in lib/price-book.ts; hier rekenen we de
+ *    opgeslagen kost- en verkoopprijzen ermee door.
  * 2. Normuren en materiaal-marktschattingen per post bijgesteld waar de
  *    seed aantoonbaar te hoog zat. Grootste uitschieter: "Kelder uitgraven"
  *    had 1,2 manuur + € 61,40 afvoer per m³ (per ongeluk de seed van
@@ -34,7 +34,7 @@ for (const line of readFileSync(".env.local", "utf-8").split("\n")) {
   if (m && !process.env[m[1]]) process.env[m[1]] = m[2].replace(/^"|"$/g, "");
 }
 
-const TARIEF = 25; // moet gelijk zijn aan UURTARIEF_ONDERAANNEMER
+const TARIEF = 28; // moet gelijk zijn aan UURTARIEF_ONDERAANNEMER (Nick 17-08: 28 blijft)
 
 /** Bijstellingen per post: nieuwe normuren en/of materiaalkost per eenheid. */
 const BIJSTELLINGEN: Record<string, { u?: number; mat?: number; reden: string }> = {
