@@ -16,6 +16,7 @@ import {
   THead,
   Tr,
 } from "@/components/ui";
+import { SorteerbareKop } from "@/components/sorteerbare-kop";
 import { db } from "@/lib/db";
 import { emailInbox, mailAttachments, projects, purchaseInvoiceReviews, purchaseOrders } from "@/lib/db/schema";
 import { formatMoney, poExVat, poExVatAmount, PO_OPEN_STATUSES, PO_STATUS_META } from "@/lib/purchase-orders";
@@ -113,15 +114,83 @@ export default async function PurchaseOrdersPage({
     return true;
   });
 
+  /**
+   * Sorteren gebeurt hier in JavaScript en niet in SQL — anders dan bij de
+   * documentenlijst, met opzet. De hele set staat al in het geheugen (de
+   * totalen hierboven worden over álles berekend, los van het filter), en twee
+   * kolommen bestaan niet als databasekolom: "Ex. BTW" komt uit `poExVat()`
+   * (subtotaal, of totaal − btw, of totaal) en "Regels" is het aantal
+   * factuurregels. Die in SQL sorteren zou die logica moeten dupliceren.
+   */
+  const sorteerbaar = {
+    supplier: (r: (typeof rows)[number]) => r.supplier.toLowerCase(),
+    reference: (r: (typeof rows)[number]) => (r.reference ?? "").toLowerCase(),
+    project: (r: (typeof rows)[number]) => (r.projectId ? (projectNamen.get(r.projectId) ?? "") : "").toLowerCase(),
+    orderDate: (r: (typeof rows)[number]) => r.orderDate ?? "",
+    expectedDate: (r: (typeof rows)[number]) => r.expectedDate ?? "",
+    regels: (r: (typeof rows)[number]) => (Array.isArray(r.items) ? r.items.length : 0),
+    exVat: (r: (typeof rows)[number]) => poExVatAmount(r),
+    total: (r: (typeof rows)[number]) => Number(r.total ?? 0),
+    status: (r: (typeof rows)[number]) => r.status,
+    betaald: (r: (typeof rows)[number]) => Number(r.paidEur ?? 0),
+  } as const;
+  type SorteerSleutel = keyof typeof sorteerbaar;
+
+  const gevraagd = typeof params.sort === "string" ? params.sort : "";
+  const sorteerOp = (gevraagd in sorteerbaar ? gevraagd : null) as SorteerSleutel | null;
+  const oplopend = params.dir === "asc";
+
+  const gesorteerd = sorteerOp
+    ? [...filtered].sort((a, b) => {
+        const x = sorteerbaar[sorteerOp](a);
+        const y = sorteerbaar[sorteerOp](b);
+        // Lege waarden altijd onderaan, ongeacht de richting — een rij zonder
+        // datum bovenaan zetten helpt niemand bij het zoeken.
+        const aLeeg = x === "" || x == null;
+        const bLeeg = y === "" || y == null;
+        if (aLeeg !== bLeeg) return aLeeg ? 1 : -1;
+        const c = typeof x === "number" && typeof y === "number" ? x - y : String(x).localeCompare(String(y), "nl");
+        return oplopend ? c : -c;
+      })
+    : filtered;
+
   const buildHref = (overrides: Record<string, string | undefined>) => {
     const sp = new URLSearchParams();
-    const merged = { q, status: statusFilter, pay: payFilter, ...overrides };
+    const merged = {
+      q,
+      status: statusFilter,
+      pay: payFilter,
+      sort: sorteerOp ?? "",
+      dir: sorteerOp ? (oplopend ? "asc" : "desc") : "",
+      ...overrides,
+    };
     for (const [k, v] of Object.entries(merged)) {
       if (v != null && v !== "") sp.set(k, v as string);
     }
     const s = sp.toString();
     return s ? `/inkooporders?${s}` : "/inkooporders";
   };
+
+  const SorteerKop = ({
+    sleutel,
+    children,
+    className,
+  }: {
+    sleutel: SorteerSleutel;
+    children: React.ReactNode;
+    className?: string;
+  }) => (
+    <SorteerbareKop
+      sleutel={sleutel}
+      actief={sorteerOp === sleutel}
+      oplopend={oplopend}
+      aflopendEerst={["orderDate", "expectedDate", "regels", "exVat", "total", "betaald"].includes(sleutel)}
+      href={(s, richting) => buildHref({ sort: s, dir: richting })}
+      className={className}
+    >
+      {children}
+    </SorteerbareKop>
+  );
 
   const hasFilter = !!(q || statusFilter || payFilter);
 
@@ -173,6 +242,10 @@ export default async function PurchaseOrdersPage({
             <form action="/inkooporders" className="flex gap-2">
               {statusFilter && <input type="hidden" name="status" value={statusFilter} />}
               {payFilter && <input type="hidden" name="pay" value={payFilter} />}
+              {/* Sortering meesturen, anders val je bij het zoeken terug op de
+                  standaardvolgorde terwijl de kolomkop nog gesorteerd oogt. */}
+              {sorteerOp && <input type="hidden" name="sort" value={sorteerOp} />}
+              {sorteerOp && <input type="hidden" name="dir" value={oplopend ? "asc" : "desc"} />}
               <Input
                 name="q"
                 defaultValue={q}
@@ -226,16 +299,16 @@ export default async function PurchaseOrdersPage({
             <Table>
               <THead>
                 <tr>
-                  <Th>Leverancier</Th>
-                  <Th>Referentie</Th>
-                  <Th>Project</Th>
-                  <Th>Datum</Th>
-                  <Th>Verwacht</Th>
-                  <Th className="text-right">Regels</Th>
-                  <Th className="text-right">Ex. BTW</Th>
-                  <Th className="text-right">Incl. BTW</Th>
-                  <Th>Status</Th>
-                  <Th>Betaald</Th>
+                  <SorteerKop sleutel="supplier">Leverancier</SorteerKop>
+                  <SorteerKop sleutel="reference">Referentie</SorteerKop>
+                  <SorteerKop sleutel="project">Project</SorteerKop>
+                  <SorteerKop sleutel="orderDate">Datum</SorteerKop>
+                  <SorteerKop sleutel="expectedDate">Verwacht</SorteerKop>
+                  <SorteerKop sleutel="regels" className="text-right">Regels</SorteerKop>
+                  <SorteerKop sleutel="exVat" className="text-right">Ex. BTW</SorteerKop>
+                  <SorteerKop sleutel="total" className="text-right">Incl. BTW</SorteerKop>
+                  <SorteerKop sleutel="status">Status</SorteerKop>
+                  <SorteerKop sleutel="betaald">Betaald</SorteerKop>
                 </tr>
               </THead>
               <TBody>
@@ -246,7 +319,7 @@ export default async function PurchaseOrdersPage({
                     </Td>
                   </Tr>
                 ) : (
-                  filtered.map((po) => {
+                  gesorteerd.map((po) => {
                     const meta = PO_STATUS_META[po.status];
                     const ps = payState(po);
                     const pay =

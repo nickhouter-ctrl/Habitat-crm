@@ -15,6 +15,7 @@ import {
   Th,
   THead,
 } from "@/components/ui";
+import { SorteerbareKop } from "@/components/sorteerbare-kop";
 import { SubmitButton } from "@/components/submit-button";
 import { SyncHoldedButton } from "@/components/sync-holded-button";
 import { db } from "@/lib/db";
@@ -133,12 +134,6 @@ export async function DocumentsList({
     return q ? `?${q}` : "?";
   };
 
-  /**
-   * Kolomkop die op zichzelf sorteert. Klikken op de actieve kolom draait de
-   * richting om; een andere kolom begint bij de richting die voor dat soort
-   * gegevens het nuttigst is — datums en bedragen aflopend (grootste/nieuwste
-   * eerst), tekst oplopend (A→Z).
-   */
   const SorteerKop = ({
     sleutel,
     children,
@@ -147,28 +142,18 @@ export async function DocumentsList({
     sleutel: SorteerSleutel;
     children: React.ReactNode;
     className?: string;
-  }) => {
-    const actief = sorteerOp === sleutel;
-    const aflopendEerst = ["issueDate", "dueDate", "subtotalEur", "totalEur", "paidEur"].includes(sleutel);
-    const volgende = actief ? (oplopend ? "desc" : "asc") : aflopendEerst ? "desc" : "asc";
-    return (
-      <Th className={className}>
-        <Link
-          href={metParams({ sort: sleutel, dir: volgende })}
-          className={cn(
-            "inline-flex items-center gap-1 hover:text-foreground",
-            actief ? "text-foreground" : "text-muted",
-          )}
-          title={`Sorteren op ${String(children)}`}
-        >
-          {children}
-          <span aria-hidden className={cn("text-[10px]", actief ? "opacity-100" : "opacity-0")}>
-            {oplopend ? "▲" : "▼"}
-          </span>
-        </Link>
-      </Th>
-    );
-  };
+  }) => (
+    <SorteerbareKop
+      sleutel={sleutel}
+      actief={sorteerOp === sleutel}
+      oplopend={oplopend}
+      aflopendEerst={["issueDate", "dueDate", "subtotalEur", "totalEur", "paidEur"].includes(sleutel)}
+      href={(s, richting) => metParams({ sort: s, dir: richting })}
+      className={className}
+    >
+      {children}
+    </SorteerbareKop>
+  );
 
   // Welke offertes zijn al gefactureerd? (factuur verwijst via source_document_id)
   const invoicedEstimateIds = kinds.includes("estimate")
