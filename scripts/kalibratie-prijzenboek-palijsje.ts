@@ -83,7 +83,6 @@ const BIJSTELLINGEN: Record<string, { u?: number; mat?: number; reden: string }>
   "Aanbouw casco": { u: 10, mat: 550, reden: "casco-nieuwbouw ± € 800/m² kost" },
   "Nieuw zwembad": { u: 10, mat: 500, reden: "8×4-betonbad ± € 30–38k verkoop totaal" },
   "Zwembad renoveren": { u: 3.5, mat: 170, reden: "licht bijgesteld" },
-  "Kozijn (aluminium, geleverd en geplaatst)": { mat: 450, reden: "57 leveranciersoffertes: gem. € 391/m² inkoop + toebehoren" },
   "Trap vervangen": { u: 30, mat: 2500, reden: "marktconform bijgesteld" },
 };
 
