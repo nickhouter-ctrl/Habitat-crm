@@ -11,6 +11,7 @@ import { sql } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { COMPANY } from "@/lib/company";
 import { sendEmail } from "@/lib/email";
+import { NOTIFY_RECIPIENTS, NOTIFY_TO } from "@/lib/mail-bcc";
 import { formatEUR } from "@/lib/utils";
 
 type Finding = { key: string; label: string; count: number; detail?: string; severity: "warn" | "info" };
@@ -92,11 +93,13 @@ export async function runDataHealth(): Promise<{ ok: boolean; findings: Finding[
   if (findings.length === 0) return { ok: true, findings, emailed: false };
 
   const aiSummary = await summarize(findings);
-  const to = process.env.NOTIFY_EMAIL?.trim() || COMPANY.email;
   const html = buildHtml(findings, aiSummary);
   const text = findings.map((f) => `• ${f.label}: ${f.count}${f.detail ? ` (${f.detail})` : ""}`).join("\n");
+  // Zelfde ontvangers als de andere team-meldingen (hi@, nick@, frederique@) —
+  // één centrale lijst in lib/mail-bcc.ts in plaats van hier een eigen adres.
   const res = await sendEmail({
-    to,
+    to: NOTIFY_TO,
+    bcc: NOTIFY_RECIPIENTS.slice(1).join(", ") || undefined,
     subject: `Habitat — dagelijkse data-check (${findings.length} ${findings.length === 1 ? "punt" : "punten"})`,
     html,
     text,

@@ -21,7 +21,7 @@ import { verzamelWeekcontrole } from "@/lib/weekcontrole";
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
-const ONTVANGERS = ["nick@habitat-one.com", "hans@habitat-one.com"];
+const ONTVANGERS = ["nick@habitat-one.com", "hans@habitat-one.com", "frederique@habitat-one.com"];
 
 export async function GET(req: Request) {
   const denied = requireCron(req);

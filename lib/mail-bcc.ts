@@ -38,7 +38,7 @@ export const ALWAYS_BCC = (() => {
 export const NOTIFY_RECIPIENTS = (
   process.env.NOTIFY_EMAILS?.trim() ||
   process.env.NOTIFY_EMAIL?.trim() ||
-  "hi@habitat-one.com, nick@habitat-one.com"
+  "hi@habitat-one.com, nick@habitat-one.com, frederique@habitat-one.com"
 )
   .split(",")
   .map((a) => a.trim())
