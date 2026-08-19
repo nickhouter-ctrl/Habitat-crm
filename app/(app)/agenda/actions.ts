@@ -45,7 +45,7 @@ export async function createAppointment(formData: FormData) {
 
 /** Een taak met (optionele) deadline — verschijnt in de agenda op de deadline. */
 export async function createTask(formData: FormData) {
-  await requireUser();
+  const user = await requireUser();
   const subject = str(formData, "subject");
   if (!subject) throw new Error("Taakomschrijving is verplicht");
 
@@ -58,13 +58,14 @@ export async function createTask(formData: FormData) {
     body: str(formData, "body") || null,
     dueAt,
     contactId: contactId.length === 36 ? contactId : null,
+    authorId: user.id,
   });
   revalidatePath("/agenda");
 }
 
 /** Een losse notitie vastleggen (zonder deadline). */
 export async function createNote(formData: FormData) {
-  await requireUser();
+  const user = await requireUser();
   const body = str(formData, "body");
   if (!body) throw new Error("Notitie is leeg");
   const contactId = str(formData, "contactId");
@@ -73,6 +74,7 @@ export async function createNote(formData: FormData) {
     subject: str(formData, "subject") || null,
     body,
     contactId: contactId.length === 36 ? contactId : null,
+    authorId: user.id,
   });
   revalidatePath("/agenda");
 }

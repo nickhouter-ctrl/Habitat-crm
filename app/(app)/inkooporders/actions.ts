@@ -737,7 +737,7 @@ export async function createReorderPurchaseOrder(group: string) {
  * bijstellen.
  */
 export async function createPoFromEmail(emailId: string) {
-  await requireUser();
+  const user = await requireUser();
   const mail = await db.query.emailInbox.findFirst({ where: eq(emailInbox.id, emailId) });
   if (!mail) return;
   if (mail.linkedPurchaseOrderId) redirect(`/inkooporders/${mail.linkedPurchaseOrderId}`);
@@ -822,6 +822,7 @@ export async function createPoFromEmail(emailId: string) {
         ? ` (ex. btw €${subtotal.toFixed(2)})`
         : " · btw niet uitgelezen — vul het subtotaal in") +
       " · controleer en stel zo nodig bij. Nog niet naar Holded gesynced.",
+    authorId: user.id,
   });
 
   revalidatePath("/inkooporders");

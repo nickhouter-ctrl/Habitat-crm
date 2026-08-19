@@ -743,7 +743,7 @@ export async function sendAdvanceRequest(projectId: string, formData: FormData) 
  * Concept, niet verstuurd: dit is een voorstel dat nagelopen hoort te worden.
  */
 export async function createFinalSettlement(projectId: string, formData?: FormData) {
-  await requireUser();
+  const user = await requireUser();
   // De klant hoeft op de factuur niet te lezen hoe hij betaald heeft. Met deze
   // optie komen alle voorschotten op één regel "Reeds ontvangen voorschotten".
   // De BEDRAGEN blijven volledig op de factuur staan — alleen de specificatie
@@ -926,6 +926,7 @@ export async function createFinalSettlement(projectId: string, formData?: FormDa
     subject: `Eindafrekening opgesteld: ${project.name}`,
     body: `Aanneemsom ${formatEUR(doel)} minus ${formatEUR(gefactureerd)} reeds gefactureerd en ${ontvangsten.length} voorschot(ten). Staat als concept klaar.`,
     contactId: project.contactId ?? null,
+    authorId: user.id,
   });
 
   revalidatePath(`/projects/${projectId}`);

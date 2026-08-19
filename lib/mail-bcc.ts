@@ -14,7 +14,7 @@ export const COMPANY_INBOX = "hi@habitat-one.com";
  * eager te laden.
  */
 export const ALWAYS_BCC = (() => {
-  const configured = (process.env.EMAIL_BCC_ALWAYS?.trim() || "nick@habitat-one.com")
+  const configured = (process.env.EMAIL_BCC_ALWAYS?.trim() || "nick@habitat-one.com, frederique@habitat-one.com")
     .split(",")
     .map((a) => a.trim())
     .filter(Boolean);
