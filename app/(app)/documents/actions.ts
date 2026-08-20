@@ -355,6 +355,7 @@ export async function createDocumentFromWizard(formData: FormData) {
 
 export async function updateDocument(id: string, formData: FormData) {
   const user = await requireUser();
+  await assertNotLocked(id, "bewerken");
   const parsed = docSchema.safeParse(Object.fromEntries(formData));
   if (!parsed.success) redirect(`/documents/${id}/edit?error=validation`);
 
@@ -422,6 +423,7 @@ export async function updateDocument(id: string, formData: FormData) {
 /** Upload bijlage(n) via een server-action (kleine bestanden < ~4,5 MB). */
 export async function uploadDocumentAttachment(id: string, formData: FormData) {
   await requireUser();
+  await assertNotLocked(id, "een bijlage toevoegen");
   const files = formData.getAll("files").filter((f): f is File => f instanceof File && f.size > 0);
   if (files.length === 0) return;
   const doc = await db.query.documents.findFirst({
@@ -455,6 +457,7 @@ export async function attachDocumentFiles(
   files: Array<{ name: string; path: string; size: number; contentType: string }>,
 ) {
   await requireUser();
+  await assertNotLocked(id, "een bijlage koppelen");
   if (!files?.length) return;
   const doc = await db.query.documents.findFirst({
     where: eq(documents.id, id),
@@ -478,6 +481,7 @@ export async function attachDocumentFiles(
 /** Verwijder een documentbijlage (uit de lijst + uit storage). */
 export async function deleteDocumentAttachment(id: string, path: string) {
   await requireUser();
+  await assertNotLocked(id, "een bijlage verwijderen");
   const doc = await db.query.documents.findFirst({
     where: eq(documents.id, id),
     columns: { attachments: true },
@@ -792,6 +796,9 @@ export async function setDocumentStatus(id: string, formData: FormData) {
 
   // Factuur mag niet verstuurd/betaald gemarkeerd worden bij incomplete klant.
   if (status === "sent" || status === "paid") await assertInvoiceClientComplete(id);
+  // Vooruit mag (geaccepteerd → betaald/vervallen), terug naar concept niet:
+  // een ondertekende overeenkomst is geen concept meer.
+  if (status === "draft" || status === "rejected") await assertNotLocked(id, `terugzetten naar "${status}"`);
 
   const doc = await db.query.documents.findFirst({
     where: eq(documents.id, id),
@@ -949,8 +956,75 @@ export async function toggleReserveEstimate(id: string) {
   if (doc.projectId) revalidatePath(`/projects/${doc.projectId}`);
 }
 
+/**
+ * Getekende overeenkomst = op slot.
+ *
+ * De handtekening verwijst naar een bevroren kopie van de offerte, dus het
+ * bewijs overleeft een wijziging sowieso. Maar een document dat je nog kunt
+ * bewerken nádat de klant getekend heeft nodigt uit tot precies de verwarring
+ * die we willen voorkomen. Ontgrendelen kan, met een reden die wordt vastgelegd.
+ */
+async function assertNotLocked(id: string, wat: string): Promise<void> {
+  const doc = await db.query.documents.findFirst({
+    where: eq(documents.id, id),
+    columns: { lockedAt: true, unlockedAt: true, docNumber: true },
+  });
+  if (doc?.lockedAt && !doc.unlockedAt) {
+    throw new Error(
+      `Offerte ${doc.docNumber ?? ""} is ondertekend door de klant en staat op slot; ${wat} kan niet. Ontgrendel hem eerst met een reden.`.trim(),
+    );
+  }
+}
+
+/**
+ * Zet "contract vereist" aan of uit. Standaard aan voor offertes uit de
+ * calculator (daar ontstaat een volledige verbouwing); handmatig voor de rest.
+ */
+export async function toggleContractRequired(id: string) {
+  await requireUser();
+  const doc = await db.query.documents.findFirst({
+    where: eq(documents.id, id),
+    columns: { id: true, kind: true, requiresContract: true, signature: true },
+  });
+  if (!doc || doc.kind !== "estimate") return;
+  // Na ondertekening is het geen keuze meer.
+  if (doc.signature) return;
+  await db
+    .update(documents)
+    .set({ requiresContract: !doc.requiresContract, updatedAt: new Date() })
+    .where(eq(documents.id, id));
+  revalidatePath(`/documents/${id}`);
+}
+
+/** Ontgrendel een ondertekende offerte — alleen met reden, en die wordt gelogd. */
+export async function unlockDocument(id: string, formData: FormData) {
+  const user = await requireUser();
+  const reden = String(formData.get("reason") ?? "").trim().slice(0, 500);
+  if (!reden) redirect(`/documents/${id}?fout=reden-verplicht`);
+  const doc = await db.query.documents.findFirst({
+    where: eq(documents.id, id),
+    columns: { id: true, docNumber: true, dealId: true, contactId: true, lockedAt: true },
+  });
+  if (!doc?.lockedAt) return;
+  await db
+    .update(documents)
+    .set({ unlockedAt: new Date(), unlockedBy: user.id, updatedAt: new Date() })
+    .where(eq(documents.id, id));
+  await db.insert(activities).values({
+    type: "note",
+    subject: `Ondertekende offerte ${doc.docNumber ?? ""} ontgrendeld`.trim(),
+    body: `Reden: ${reden}`,
+    documentId: doc.id,
+    dealId: doc.dealId,
+    contactId: doc.contactId,
+    authorId: user.id,
+  });
+  revalidatePath(`/documents/${id}`);
+}
+
 export async function deleteDocument(id: string) {
   await requireUser();
+  await assertNotLocked(id, "verwijderen");
   const doc = await db.query.documents.findFirst({
     where: eq(documents.id, id),
     columns: { kind: true, status: true, stockAppliedAt: true },
@@ -1011,6 +1085,9 @@ export async function sendDocument(id: string) {
     .update(documents)
     .set({
       acceptToken: token,
+      // De offerte is 30 dagen geldig; de link krijgt 45 zodat een verlopen link
+      // een uitzondering is en geen dagelijks gedoe. Opnieuw versturen ververst.
+      acceptTokenExpiresAt: new Date(Date.now() + 45 * 86_400_000),
       sentAt: new Date(),
       // Don't downgrade a paid invoice etc.
       status: doc.status === "draft" || doc.status === "void" ? "sent" : doc.status,
@@ -1144,6 +1221,7 @@ export async function sendDocumentCustom(id: string, formData: FormData) {
     .update(documents)
     .set({
       acceptToken: token,
+      acceptTokenExpiresAt: new Date(Date.now() + 45 * 86_400_000),
       sentAt: new Date(),
       status: doc.status === "draft" || doc.status === "void" ? "sent" : doc.status,
     })

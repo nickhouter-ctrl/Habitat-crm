@@ -1,4 +1,5 @@
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
+import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { db } from "@/lib/db";
@@ -32,6 +33,10 @@ const T: Record<Lang, Record<string, string>> = {
     rejected: "U heeft deze offerte afgewezen.",
     unavailable: "Deze offerte is niet meer beschikbaar.",
     confirm: "Bekijk de offerte en geef akkoord:",
+    toContract: "Doorgaan naar ondertekenen",
+    contractNote: "Voor een volledige verbouwing tekent u een aannemingsovereenkomst met de voorbehouden over meerwerk en onvoorziene kosten.",
+    signed: "U heeft de overeenkomst ondertekend op",
+    expired: "Deze link is verlopen. Neem contact met ons op voor een actuele offerte.",
   },
   en: {
     quote: "Quote",
@@ -53,6 +58,10 @@ const T: Record<Lang, Record<string, string>> = {
     rejected: "You declined this quote.",
     unavailable: "This quote is no longer available.",
     confirm: "Review the quote and approve it:",
+    toContract: "Continue to signing",
+    contractNote: "For a full renovation you sign a construction contract covering the reservations on additional work and unforeseen costs.",
+    signed: "You signed the contract on",
+    expired: "This link has expired. Please contact us for an up-to-date quote.",
   },
   es: {
     quote: "Presupuesto",
@@ -74,6 +83,10 @@ const T: Record<Lang, Record<string, string>> = {
     rejected: "Ha rechazado este presupuesto.",
     unavailable: "Este presupuesto ya no está disponible.",
     confirm: "Revise el presupuesto y apruébelo:",
+    toContract: "Continuar a la firma",
+    contractNote: "Para una reforma completa se firma un contrato de obra que recoge las reservas sobre trabajos adicionales y costes imprevistos.",
+    signed: "Ha firmado el contrato el",
+    expired: "Este enlace ha caducado. Póngase en contacto con nosotros para un presupuesto actualizado.",
   },
   de: {
     quote: "Angebot",
@@ -95,6 +108,10 @@ const T: Record<Lang, Record<string, string>> = {
     rejected: "Sie haben dieses Angebot abgelehnt.",
     unavailable: "Dieses Angebot ist nicht mehr verfügbar.",
     confirm: "Prüfen Sie das Angebot und genehmigen Sie es:",
+    toContract: "Weiter zur Unterzeichnung",
+    contractNote: "Für eine komplette Renovierung unterzeichnen Sie einen Bauvertrag mit den Vorbehalten zu Zusatzarbeiten und unvorhergesehenen Kosten.",
+    signed: "Sie haben den Vertrag unterzeichnet am",
+    expired: "Dieser Link ist abgelaufen. Bitte kontaktieren Sie uns für ein aktuelles Angebot.",
   },
 };
 
@@ -106,6 +123,11 @@ export default async function PublicOffertePage({
   const { token } = await params;
   const doc = await db.query.documents.findFirst({
     where: eq(documents.acceptToken, token),
+    // Verlopen bepalen in SQL: een klokaflezing in een component is geen zuivere
+    // functie (React kan opnieuw renderen), en de database heeft de klok toch al.
+    extras: {
+      verlopen: sql<boolean>`coalesce(${documents.acceptTokenExpiresAt} < now(), false)`.as("verlopen"),
+    },
     with: { contact: { columns: { name: true, preferredLanguage: true } } },
   });
   if (!doc) notFound();
@@ -127,6 +149,7 @@ export default async function PublicOffertePage({
           ? "Provisión de fondos"
           : t.quote;
   const isClosed = doc.status === "void";
+  const verlopen = doc.verlopen;
   const accept = acceptOfferte.bind(null, token);
   const reject = rejectOfferte.bind(null, token);
   const pdfHref = `/offerte/${token}/pdf`;
@@ -222,11 +245,20 @@ export default async function PublicOffertePage({
       </div>
 
       {/* Action area */}
-      <div className="mt-6">
-        {doc.acceptedAt ? (
+      <div className="mt-6" id="akkoord">
+        {doc.signature ? (
+          <p className="rounded-xl border bg-green-50 px-5 py-4 text-sm text-success">
+            ✍️ {t.signed} {formatDate(doc.signature.signedAt)} —{" "}
+            <Link href={`/offerte/${token}/contract`} className="underline">
+              {doc.signature.name}
+            </Link>
+          </p>
+        ) : doc.acceptedAt ? (
           <p className="rounded-xl border bg-green-50 px-5 py-4 text-sm text-success">
             ✓ {t.accepted} {formatDate(doc.acceptedAt)}.
           </p>
+        ) : verlopen ? (
+          <p className="rounded-xl border bg-background px-5 py-4 text-sm text-muted">{t.expired}</p>
         ) : doc.rejectedAt ? (
           <p className="rounded-xl border bg-red-50 px-5 py-4 text-sm text-danger">
             {t.rejected}
@@ -237,16 +269,30 @@ export default async function PublicOffertePage({
           </p>
         ) : doc.kind !== "estimate" ? null : (
           <div className="rounded-xl border bg-surface p-5 shadow-sm">
-            <p className="mb-3 text-sm text-muted">{t.confirm}</p>
+            <p className="mb-3 text-sm text-muted">
+              {doc.requiresContract ? t.contractNote : t.confirm}
+            </p>
             <div className="flex flex-wrap items-center gap-3">
-              <form action={accept}>
-                <button
-                  type="submit"
+              {doc.requiresContract ? (
+                // Een volledige verbouwing wordt ondertekend, niet weggeklikt.
+                // De guard zit óók in acceptOfferte — deze knop verbergen is niet
+                // genoeg, de server action is publiek aanroepbaar.
+                <Link
+                  href={`/offerte/${token}/contract`}
                   className="rounded-md bg-accent px-4 py-2 text-sm font-medium text-accent-foreground hover:opacity-90"
                 >
-                  ✓ {t.accept}
-                </button>
-              </form>
+                  ✍️ {t.toContract}
+                </Link>
+              ) : (
+                <form action={accept}>
+                  <button
+                    type="submit"
+                    className="rounded-md bg-accent px-4 py-2 text-sm font-medium text-accent-foreground hover:opacity-90"
+                  >
+                    ✓ {t.accept}
+                  </button>
+                </form>
+              )}
               <form action={reject} className="flex flex-wrap items-center gap-2">
                 <input
                   name="reason"

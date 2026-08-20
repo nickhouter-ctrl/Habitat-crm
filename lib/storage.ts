@@ -210,6 +210,29 @@ export async function uploadDocumentFile(
   };
 }
 
+/**
+ * Server-side gegenereerde bytes opslaan (de getekende overeenkomst). Zelfde
+ * private bucket en prefix als `uploadDocumentFile`, maar zonder `File` — die
+ * bestaat hier niet, de PDF komt uit `renderDocumentPdf`.
+ */
+export async function uploadDocumentBytes(
+  documentId: string,
+  name: string,
+  bytes: Buffer | Uint8Array,
+  contentType = "application/pdf",
+): Promise<{ name: string; path: string; size: number; contentType: string; uploadedAt: string }> {
+  if (!bytes || bytes.byteLength === 0) throw new Error("Leeg bestand.");
+  if (bytes.byteLength > MAX_BYTES) throw new Error("Bestand te groot (max 25 MB).");
+  await ensurePoBucket();
+  const path = `documents/${documentId}/${crypto.randomUUID()}-${safeName(name)}`;
+  const body = bytes instanceof Buffer ? new Uint8Array(bytes) : bytes;
+  const { error } = await supabase()
+    .storage.from(PO_BUCKET)
+    .upload(path, body, { contentType, upsert: false });
+  if (error) throw new Error(`Upload mislukt: ${error.message}`);
+  return { name, path, size: bytes.byteLength, contentType, uploadedAt: new Date().toISOString() };
+}
+
 /** Short-lived signed download URL voor een documentbijlage. */
 export async function documentFileUrl(path: string, expiresInSec = 3600): Promise<string | null> {
   return purchaseOrderFileUrl(path, expiresInSec);

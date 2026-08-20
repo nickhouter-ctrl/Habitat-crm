@@ -12,8 +12,10 @@ import {
   renderToBuffer,
 } from "@react-pdf/renderer";
 
+import { shortHash } from "@/lib/canonical-json";
 import { COMPANY } from "@/lib/company";
-import type { DocumentLineItem } from "@/lib/db/schema";
+import { CONTRACT_T } from "@/lib/contract-terms";
+import type { DocumentLineItem, DocumentSignature } from "@/lib/db/schema";
 import { lineNet } from "@/lib/documents";
 import { amountEur, phaseKey } from "@/lib/pdf-shared";
 import type { Locale } from "@/lib/translate";
@@ -502,6 +504,14 @@ export type PdfDoc = {
   exampleImages?: ExampleImage[];
   /** Productfoto's per productId — getoond op de pakbon. */
   lineImages?: Record<string, ExampleImage>;
+  /**
+   * Ondertekend: voegt de overeenkomstpagina met artikelen en bewijsblok toe.
+   * De regels en bedragen komen dan uit de bevroren snapshot (zie
+   * `lib/document-render.ts`), niet uit de huidige documentrij.
+   */
+  signature?: DocumentSignature | null;
+  /** Nog niet getekend: dezelfde artikelenpagina, met een leeg handtekeningblok. */
+  contractPreview?: { lang: "nl" | "en" | "es"; articles: string[] } | null;
 };
 
 /** Teksten voor het voor- en eindblad, per taal. */
@@ -517,6 +527,26 @@ const ENDPAGE_TXT: Record<Locale, { sub: string; thanks: string; body: string }>
   en: { sub: "Endless possibilities in colour and texture", thanks: "Thank you for your interest", body: "Every colour and texture is chosen with care. We would love to help you find the right finish for your project." },
   es: { sub: "Posibilidades infinitas en color y textura", thanks: "Gracias por su interés", body: "Cada color y textura se elige con cuidado. Estaremos encantados de ayudarle a encontrar el acabado perfecto para su proyecto." },
 };
+
+/* Overeenkomstpagina: bewust sober. Een contract met een sfeerfoto erboven
+ * leest als een brochure; dit moet leesbaar en dicht zijn. */
+const sig = StyleSheet.create({
+  page: { paddingTop: 44, paddingBottom: 72, paddingHorizontal: 44, fontSize: 9, fontFamily: "Sora", color: C.charcoal },
+  heading: { fontFamily: "Sora", fontWeight: 700, fontSize: 15, color: C.terracotta, letterSpacing: 1 },
+  sub: { fontSize: 8.5, color: C.muted, marginTop: 3, marginBottom: 16 },
+  sectie: { fontFamily: "Sora", fontWeight: 700, fontSize: 9, color: C.brown, letterSpacing: 1, marginTop: 14, marginBottom: 6 },
+  artikel: { flexDirection: "row", marginBottom: 7 },
+  artikelNr: { width: 54, fontSize: 8, color: C.muted, fontFamily: "Sora", fontWeight: 700 },
+  artikelTxt: { flex: 1, fontSize: 8, lineHeight: 1.55, color: C.charcoal },
+  bewijs: { borderWidth: 1, borderColor: C.gold, padding: 12, marginTop: 14 },
+  rij: { flexDirection: "row", marginBottom: 3 },
+  label: { width: 118, fontSize: 7.5, color: C.muted },
+  waarde: { flex: 1, fontSize: 7.5, color: C.charcoal },
+  vink: { flexDirection: "row", marginTop: 5 },
+  vinkMark: { width: 12, fontSize: 8, color: C.brown },
+  vinkTxt: { flex: 1, fontSize: 7, lineHeight: 1.5, color: C.charcoal },
+  naam: { fontFamily: "Cormorant", fontWeight: 600, fontSize: 17, color: C.brown, marginTop: 2 },
+});
 
 const cs = StyleSheet.create({
   cover: {
@@ -855,6 +885,16 @@ function DocumentPdf({ doc }: { doc: PdfDoc }) {
         />
       </Page>
 
+      {doc.signature || doc.contractPreview ? (
+        <HandtekeningPagina
+          sig={doc.signature ?? null}
+          preview={doc.contractPreview ?? null}
+          docNumber={doc.docNumber}
+          contactName={doc.contactName}
+          footerLine={footerLine}
+        />
+      ) : null}
+
       {showExtras && endImgs.length > 0 ? (
         <Page size="A4" style={cs.endPage}>
           <Text style={cs.endHeading}>Flexible Stone</Text>
@@ -881,6 +921,95 @@ function DocumentPdf({ doc }: { doc: PdfDoc }) {
         </Page>
       ) : null}
     </Document>
+  );
+}
+
+/**
+ * De overeenkomstpagina: genummerde artikelen plus het bewijsblok.
+ *
+ * Het bewijsblok is de pagina die je aan een advocaat geeft. Alles staat er
+ * letterlijk in — inclusief de zinnen die de klant heeft aangevinkt, want "hij
+ * vinkte vakje 2 aan" is geen bewijs en de zin wel.
+ */
+function HandtekeningPagina({
+  sig: h,
+  preview,
+  docNumber,
+  contactName,
+  footerLine,
+}: {
+  sig: DocumentSignature | null;
+  preview: { lang: "nl" | "en" | "es"; articles: string[] } | null;
+  docNumber: string | null;
+  contactName: string | null;
+  footerLine: string;
+}) {
+  const lang = h?.lang ?? preview?.lang ?? "es";
+  const t = CONTRACT_T[lang];
+  const artikelen = h?.snapshot.articles ?? preview?.articles ?? [];
+  const nr = h?.snapshot.docNumber ?? docNumber ?? "";
+  const rij = (label: string, waarde: string) => (
+    <View style={sig.rij}>
+      <Text style={sig.label}>{label}</Text>
+      <Text style={sig.waarde}>{waarde}</Text>
+    </View>
+  );
+  return (
+    <Page size="A4" style={sig.page}>
+      <Text style={sig.heading}>{t.heading}</Text>
+      <Text style={sig.sub}>
+        {C.legalName} · {nr}
+        {h ? ` · ${t.fingerprint}: ${shortHash(h.snapshotSha256)}` : ""}
+      </Text>
+
+      <Text style={sig.sectie}>{t.parties.toUpperCase()}</Text>
+      {rij(t.contractor, `${C.legalName}${C.vatNumber ? ` · ${C.vatNumber}` : ""}`)}
+      {rij(
+        t.client,
+        h ? `${h.name}${h.taxId ? ` · ${h.taxId}` : ""} · ${h.email}` : (contactName ?? "—"),
+      )}
+
+      <Text style={sig.sectie}>{t.articles.toUpperCase()}</Text>
+      {artikelen.map((a, i) => (
+        <View key={i} style={sig.artikel} wrap={false}>
+          <Text style={sig.artikelNr}>
+            {t.article} {i + 1}
+          </Text>
+          <Text style={sig.artikelTxt}>{a}</Text>
+        </View>
+      ))}
+
+      {h ? (
+        <View style={sig.bewijs} wrap={false}>
+          <Text style={sig.sectie}>{t.evidence.toUpperCase()}</Text>
+          <Text style={sig.naam}>{h.name}</Text>
+          {rij(t.signedOn, `${new Date(h.signedAt).toISOString().slice(0, 19).replace("T", " ")} UTC`)}
+          {rij("E-mail", h.email)}
+          {h.taxId ? rij("NIE / NIF", h.taxId) : null}
+          {rij("IP", h.ip ?? "—")}
+          {rij("Browser", (h.userAgent ?? "—").slice(0, 90))}
+          {rij(t.fingerprint, h.snapshotSha256)}
+          {rij("Versie", h.termsVersion)}
+          {h.consentTexts
+            .filter((c) => h.confirmed.includes(c.key))
+            .map((c) => (
+              <View key={c.key} style={sig.vink}>
+                <Text style={sig.vinkMark}>[x]</Text>
+                <Text style={sig.vinkTxt}>{c.text}</Text>
+              </View>
+            ))}
+        </View>
+      ) : (
+        <View style={sig.bewijs} wrap={false}>
+          <Text style={sig.sectie}>{t.sign.toUpperCase()}</Text>
+          <Text style={sig.vinkTxt}>{t.signIntro}</Text>
+        </View>
+      )}
+
+      <Text style={s.footer} fixed>
+        {footerLine}
+      </Text>
+    </Page>
   );
 }
 

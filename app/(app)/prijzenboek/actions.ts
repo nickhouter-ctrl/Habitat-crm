@@ -282,6 +282,10 @@ export async function createQuoteFromPriceBook(formData: FormData) {
       .filter((t) => t.pct > 0 && t.label)
       .map((t) => ({ label: t.label, pct: t.pct, amountEur: Math.round((totals.subtotal * t.pct) / 100) })),
     notes: [quoteClauses(taal), betalingsschemaTekst(taal, totals.subtotal, termijnen)].filter(Boolean).join("\n\n"),
+    // Een gecalculeerde offerte is per definitie een volledige verbouwing: fases,
+    // stelposten, betaling in termijnen. Die tekent de klant, in plaats van hem
+    // met één klik weg te drukken. Uit te zetten op de offertepagina.
+    requiresContract: true,
   });
 
   const kost = items.reduce((s, it) => s + (Number(it.costEur) || 0) * (Number(it.units) || 0), 0);

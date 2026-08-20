@@ -751,6 +751,58 @@ export type DocumentPhase = {
   note?: string;
 };
 
+/**
+ * Bewijs van ondertekening bij een aannemingsovereenkomst.
+ *
+ * `snapshot` is een bevroren kopie van precies wat de klant op het scherm had:
+ * regels, totalen, betalingsschema en de artikelen letterlijk. Die wordt na het
+ * wegschrijven NOOIT meer aangeraakt — anders wijst `acceptedAt` naar tekst die
+ * inmiddels is bijgewerkt, en dat is precies het gat waar de discussie na afloop
+ * doorheen glipt. `consentTexts` bewaart de zin naast elk vinkje, niet alleen de
+ * sleutel: "hij vinkte vakje 2 aan" is geen bewijs, de zin wel.
+ */
+export type DocumentSignature = {
+  signedAt: string;
+  name: string;
+  email: string;
+  /** NIE/NIF zoals de klant zelf invulde (alleen gevraagd als contacts.taxId leeg was). */
+  taxId: string | null;
+  lang: "nl" | "en" | "es";
+  confirmed: string[];
+  consentTexts: { key: string; text: string }[];
+  termsVersion: string;
+  snapshotSha256: string;
+  snapshot: DocumentSignatureSnapshot;
+  ip: string | null;
+  userAgent: string | null;
+  /** Pad in de private bucket; null als het renderen faalde (de PDF is afgeleid). */
+  pdfPath: string | null;
+};
+
+export type DocumentSignatureSnapshot = {
+  docNumber: string | null;
+  title: string | null;
+  items: DocumentLineItem[];
+  notes: string | null;
+  subtotalEur: string;
+  taxEur: string;
+  totalEur: string;
+  paymentSchedule: { label: string; pct: number; amountEur: number }[] | null;
+  articles: string[];
+};
+
+/**
+ * Lichte variant voor een gewone offerte: één klik blijft één klik, maar we
+ * leggen wél vast wat er op dat moment stond en vanaf waar geklikt is.
+ */
+export type DocumentAcceptRecord = {
+  acceptedAt: string;
+  snapshotSha256: string;
+  snapshot: DocumentSignatureSnapshot;
+  ip: string | null;
+  userAgent: string | null;
+};
+
 export const documents = pgTable(
   "documents",
   {
@@ -796,6 +848,24 @@ export const documents = pgTable(
     acceptedAt: timestamp({ withTimezone: true }),
     rejectedAt: timestamp({ withTimezone: true }),
     rejectReason: text(),
+    /** Klantlink verloopt. Zonder dit leeft een token eeuwig; de offerte zelf is
+     * volgens de voorbehouden 30 dagen geldig, de link krijgt wat ruimte (45
+     * dagen) zodat een verlopen link een uitzondering is en geen dagelijks gedoe. */
+    acceptTokenExpiresAt: timestamp({ withTimezone: true }),
+    /** Volledige verbouwing: de klant tekent (naam + bevestiging per onderwerp)
+     * in plaats van één klik op akkoord. Wordt automatisch gezet bij offertes uit
+     * de prijzenboek-calculator; handmatig aan/uit op de offertepagina. */
+    requiresContract: boolean().notNull().default(false),
+    /** Het ondertekeningsbewijs; null zolang er niet getekend is. */
+    signature: jsonb().$type<DocumentSignature>(),
+    /** Gewone (niet-contract) acceptatie: wat er stond en waarvandaan geklikt is. */
+    acceptRecord: jsonb().$type<DocumentAcceptRecord>(),
+    /** Getekend = op slot: bewerken en verwijderen geweigerd. Ontgrendelen kan,
+     * maar alleen met een reden die als activity wordt vastgelegd — een slot dat
+     * geruisloos opengaat is erger dan geen slot. */
+    lockedAt: timestamp({ withTimezone: true }),
+    unlockedAt: timestamp({ withTimezone: true }),
+    unlockedBy: uuid().references(() => users.id, { onDelete: "set null" }),
     /** Voor pakbonnen: op dit moment is de voorraad afgeboekt (één keer). */
     stockAppliedAt: timestamp({ withTimezone: true }),
     /** Offerte: producten alvast gereserveerd (vóór acceptatie) — telt mee als

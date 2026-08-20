@@ -45,7 +45,9 @@ import {
   setDeliveryNoteDelivered,
   setDocumentStatus,
   signDocumentUploadAction,
+  toggleContractRequired,
   toggleReserveEstimate,
+  unlockDocument,
 } from "../actions";
 import { markPickedUp, undoPickedUp } from "../../leveringen/actions";
 import { documentFileUrl } from "@/lib/storage";
@@ -341,6 +343,8 @@ export default async function DocumentDetailPage({
   const removeDoc = deleteDocument.bind(null, id);
   const makeInvoice = createInvoiceFromEstimate.bind(null, id);
   const reserveAction = toggleReserveEstimate.bind(null, id);
+  const contractAction = toggleContractRequired.bind(null, id);
+  const unlockAction = unlockDocument.bind(null, id);
   const makeDeliveryNote = createDeliveryNoteFromDocument.bind(null, id);
   const makeCreditNote = createCreditNoteFromInvoice.bind(null, id);
 
@@ -633,7 +637,38 @@ export default async function DocumentDetailPage({
                       </a>
                     </p>
                   )}
-                  {doc.acceptedAt ? (
+                  {publicUrl && doc.requiresContract && (
+                    <p className="break-all">
+                      Overeenkomst:{" "}
+                      <a
+                        href={`${publicUrl}/contract`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-accent hover:underline"
+                      >
+                        {publicUrl}/contract
+                      </a>
+                    </p>
+                  )}
+                  {doc.signature ? (
+                    <div className="font-medium text-success">
+                      <p>
+                        ✍️ Ondertekend door {doc.signature.name} op {formatDate(doc.signature.signedAt)}
+                      </p>
+                      <p className="text-[11px] font-normal text-muted">
+                        {doc.signature.email} · IP {doc.signature.ip ?? "onbekend"} · vingerafdruk{" "}
+                        {doc.signature.snapshotSha256.slice(0, 12)} · versie {doc.signature.termsVersion}
+                      </p>
+                      <a
+                        href={`/documents/${id}/contract/pdf`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-[11px] font-normal text-accent hover:underline"
+                      >
+                        ↓ Getekende overeenkomst (PDF)
+                      </a>
+                    </div>
+                  ) : doc.acceptedAt ? (
                     <p className="font-medium text-success">
                       ✓ Geaccepteerd door klant op {formatDate(doc.acceptedAt)}
                     </p>
@@ -646,6 +681,50 @@ export default async function DocumentDetailPage({
                     <p className="text-muted">Nog geen reactie van de klant.</p>
                   )}
                 </div>
+              )}
+
+              {doc.kind === "estimate" && !doc.signature && (
+                <form action={contractAction} className="rounded-md bg-background px-3 py-2.5">
+                  <p className="text-xs font-medium text-muted">
+                    {doc.requiresContract ? "✓ Contract vereist" : "Contract vereist"}
+                  </p>
+                  <p className="mb-2 text-[11px] text-muted">
+                    {doc.requiresContract
+                      ? "De klant ondertekent een aannemingsovereenkomst — met bevestiging per onderwerp (meerwerk, onvoorziene kosten, stelposten, betaling) in plaats van één klik op akkoord."
+                      : "Zet dit aan bij een volledige verbouwing: de klant tekent dan een overeenkomst in plaats van alleen op 'akkoord' te klikken."}
+                  </p>
+                  <SubmitButton size="sm" variant={doc.requiresContract ? "ghost" : "secondary"} pendingLabel="Bezig…">
+                    {doc.requiresContract ? "Contract niet nodig" : "✍️ Contract vereisen"}
+                  </SubmitButton>
+                </form>
+              )}
+
+              {doc.lockedAt && !doc.unlockedAt && (
+                <form action={unlockAction} className="rounded-md border border-warning/40 bg-warning/10 px-3 py-2.5">
+                  <p className="text-xs font-medium text-warning">🔒 Op slot — ondertekend door de klant</p>
+                  <p className="mb-2 text-[11px] text-muted">
+                    Bewerken en verwijderen zijn geblokkeerd. Ontgrendelen kan met een reden; die wordt
+                    vastgelegd in de tijdlijn.
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    <input
+                      name="reason"
+                      required
+                      placeholder="Reden voor ontgrendelen"
+                      className="min-w-48 flex-1 rounded-md border bg-surface px-2.5 py-1.5 text-sm outline-none focus:border-ring focus:ring-2 focus:ring-ring/20"
+                    />
+                    <SubmitButton size="sm" variant="ghost" pendingLabel="Bezig…">
+                      Ontgrendelen
+                    </SubmitButton>
+                  </div>
+                </form>
+              )}
+
+              {doc.unlockedAt && (
+                <p className="rounded-md bg-warning/10 px-3 py-2 text-[11px] text-warning">
+                  Ontgrendeld op {formatDate(doc.unlockedAt)} — het getekende exemplaar blijft ongewijzigd
+                  bewaard; wijzigingen hier gelden niet met terugwerkende kracht.
+                </p>
               )}
 
               {doc.kind === "estimate" && (

@@ -56,6 +56,15 @@ export function quoteClauses(lang: QuoteLang): string {
 }
 
 /**
+ * Dezelfde voorbehouden als losse alinea's. Het contract nummert ze als
+ * artikelen en legt ze stuk voor stuk vast in de handtekening-snapshot; daar is
+ * één aaneengeplakte tekst niet bruikbaar voor. Zie `lib/contract-terms.ts`.
+ */
+export function quoteClauseList(lang: QuoteLang): string[] {
+  return [...CLAUSES[lang]];
+}
+
+/**
  * De vaste fase-termijnen van het betalingsschema. Volgorde = bouwvolgorde;
  * de wizard laat per termijn het percentage instellen (0 = vervalt).
  * `key` is de veldnaam in de wizard (f1…f5), `nl` ook het label daar.

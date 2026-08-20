@@ -46,3 +46,9 @@ next-env.d.ts
 Scherm*afbeelding*.png
 WhatsApp Image*.jpeg
 tmp-*.ts
+
+# Klantdocumenten die in de projectmap belanden (facturen, urenstaten,
+# bankoverzichten). Horen niet in de repo — ze bevatten klantfinanciën.
+/*.pdf
+/*.xlsx
+/*.csv

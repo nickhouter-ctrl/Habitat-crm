@@ -267,7 +267,11 @@ export function offerteEmail(args: {
       : `<a href="${href}" style="color:${COMPANY.brown};text-decoration:none;padding:12px 22px;border:1px solid ${COMPANY.sand};border-radius:8px;display:inline-block;font-weight:600;font-size:15px">${label}</a>`;
   const buttons =
     kind === "estimate"
-      ? `${btn(`${args.url}?actie=accepteren`, t.accept, true)}<span style="display:inline-block;width:10px"></span>${btn(args.url, t.review(kind), false)}`
+      ? // #akkoord scrollt naar de knoppen. Stond hier eerst als
+        // "?actie=accepteren", maar de pagina leest geen searchParams — die
+        // deeplink deed dus niets. Een URL die zélf de actie uitvoert willen we
+        // sowieso niet: mailscanners halen links vooraf op.
+        `${btn(`${args.url}#akkoord`, t.accept, true)}<span style="display:inline-block;width:10px"></span>${btn(args.url, t.review(kind), false)}`
       : btn(args.url, `${t.review(kind)} (${nr})`, true);
   const html = `<div style="margin:0;padding:32px 12px;background:${COMPANY.cream};font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;color:${COMPANY.charcoal}">
   <div style="max-width:600px;margin:0 auto;background:#ffffff;border-radius:14px;overflow:hidden;border:1px solid ${COMPANY.sand}">
@@ -363,6 +367,67 @@ export function offerteAcceptedEmail(args: {
 </div>`;
   const text = `${greeting}\n\n${ta.body}\n\n${t.regards}\n${COMPANY.legalName}`;
   return { subject: ta.subject(nr), html, text };
+}
+
+/**
+ * Bevestiging na het ondertekenen van de aannemingsovereenkomst, met het
+ * getekende exemplaar als bijlage. De klant moet zijn eigen kopie hebben — een
+ * overeenkomst die alleen bij ons in de kast ligt is de helft waard.
+ */
+const CS: Record<Lang, { subject: (nr: string) => string; body: string; keep: string }> = {
+  nl: {
+    subject: (nr) => `Ondertekende overeenkomst ${nr}`,
+    body: "Bedankt — we hebben uw ondertekening ontvangen en de overeenkomst is daarmee rond. Het ondertekende exemplaar zit als bijlage bij deze e-mail.",
+    keep: "Bewaar deze e-mail goed: hij bevat uw exemplaar van de overeenkomst met de voorbehouden waarop de prijs is gebaseerd.",
+  },
+  en: {
+    subject: (nr) => `Signed contract ${nr}`,
+    body: "Thank you — we have received your signature and the contract is now in place. The signed copy is attached to this email.",
+    keep: "Please keep this email: it contains your copy of the contract, including the reservations the price is based on.",
+  },
+  es: {
+    subject: (nr) => `Contrato firmado ${nr}`,
+    body: "Gracias — hemos recibido su firma y el contrato queda formalizado. Adjuntamos el ejemplar firmado a este correo.",
+    keep: "Conserve este correo: contiene su ejemplar del contrato, incluidas las reservas en las que se basa el precio.",
+  },
+  de: {
+    subject: (nr) => `Unterzeichneter Vertrag ${nr}`,
+    body: "Vielen Dank — wir haben Ihre Unterschrift erhalten und der Vertrag ist damit geschlossen. Das unterzeichnete Exemplar finden Sie im Anhang.",
+    keep: "Bitte bewahren Sie diese E-Mail auf: Sie enthält Ihr Vertragsexemplar einschließlich der Vorbehalte, auf denen der Preis beruht.",
+  },
+};
+
+export function contractSignedEmail(args: {
+  lang?: string | null;
+  docNumber: string;
+  contactName?: string | null;
+  signedAt: Date;
+}): { subject: string; html: string; text: string } {
+  const lang: Lang = (["en", "nl", "es", "de"] as const).includes(args.lang as Lang)
+    ? (args.lang as Lang)
+    : "es";
+  const cs = CS[lang];
+  const t = T[lang];
+  const nr = args.docNumber || "—";
+  const greeting = args.contactName ? `${t.hi} ${escapeHtml(args.contactName)},` : `${t.hi},`;
+  const stamp = args.signedAt.toISOString().slice(0, 16).replace("T", " ");
+  const html = `<div style="font-family:Helvetica,Arial,sans-serif;background:${COMPANY.cream};padding:24px 0">
+  <div style="max-width:560px;margin:0 auto;background:#fff;border-radius:12px;overflow:hidden;color:#1c1c1a">
+    <div style="background:${COMPANY.cream};padding:22px 28px">
+      ${logoHeaderHtml()}
+    </div>
+    <div style="padding:24px 28px">
+      <p style="margin:0">${greeting}</p>
+      <p>${cs.body}</p>
+      <p style="font-size:13px;color:#555">${escapeHtml(nr)} · ${escapeHtml(stamp)} UTC</p>
+      <p style="font-size:13px;color:#555">${cs.keep}</p>
+      <p style="margin-top:28px">${t.regards}</p>
+      <div style="font-size:13px;color:#555;margin-top:6px">${signatureHtml()}</div>
+    </div>
+  </div>
+</div>`;
+  const text = `${greeting}\n\n${cs.body}\n\n${nr} · ${stamp} UTC\n\n${cs.keep}\n\n${t.regards}\n${COMPANY.legalName}`;
+  return { subject: cs.subject(nr), html, text };
 }
 
 /**

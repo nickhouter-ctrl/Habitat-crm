@@ -42,9 +42,17 @@ export async function rateLimit(key: string, max: number, windowSec: number): Pr
 
 /** Client-IP uit de proxy-headers (Vercel zet x-forwarded-for betrouwbaar). */
 export function clientIp(req: Request): string {
-  const fwd = req.headers.get("x-forwarded-for");
+  return clientIpFromHeaders(req.headers);
+}
+
+/**
+ * Zelfde logica, maar vanaf losse headers — een server action heeft `headers()`,
+ * geen `Request`.
+ */
+export function clientIpFromHeaders(h: Headers): string {
+  const fwd = h.get("x-forwarded-for");
   if (fwd) return fwd.split(",")[0].trim();
-  return req.headers.get("x-real-ip") ?? "onbekend";
+  return h.get("x-real-ip") ?? "onbekend";
 }
 
 /** Standaard 429-body voor JSON-endpoints. */
