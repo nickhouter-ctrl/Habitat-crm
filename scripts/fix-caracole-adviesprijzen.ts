@@ -24,6 +24,13 @@ import { db } from "@/lib/db";
 const CSV_PATH = process.env.CARACOLE_CSV ?? "full-catalogue-20262239304 (1).csv";
 const DRY = process.argv.includes("--dry");
 
+/** Typefouten in de catalogus-CSV → gecorrigeerde adviesprijs (incl. btw).
+ *  CLA-024-417: CSV zegt €42.111 bij inkoop €1.740; het vaste 2×-patroon geeft
+ *  €4.211 — cijfer te veel (akkoord Nick 23-08-2026). */
+const ADVIES_CORRECTIES: Record<string, number> = {
+  "CLA-024-417": 4211,
+};
+
 /** Kale CSV-parser (velden met komma's staan tussen dubbele quotes). */
 function parseCsv(text: string): string[][] {
   const rows: string[][] = [];
@@ -75,11 +82,12 @@ async function main() {
       if (!bySku.has(sku)) skipped.push(sku);
       continue;
     }
+    const adviesCorr = ADVIES_CORRECTIES[sku] ?? advies;
     const prev = bySku.get(sku);
-    if (prev && (prev.inkoop !== inkoop || prev.advies !== advies)) {
+    if (prev && (prev.inkoop !== inkoop || prev.advies !== adviesCorr)) {
       throw new Error(`SKU ${sku} heeft tegenstrijdige prijzen in de CSV`);
     }
-    bySku.set(sku, { inkoop, advies, titel: (r[iTitle] ?? "").trim() });
+    bySku.set(sku, { inkoop, advies: adviesCorr, titel: (r[iTitle] ?? "").trim() });
   }
   console.log(`CSV: ${bySku.size} unieke SKUs met beide prijzen, ${skipped.length} zonder adviesprijs${skipped.length ? ` (${skipped.join(", ")})` : ""}`);
 
@@ -114,6 +122,7 @@ async function main() {
 
     const curPrice = p.price_eur ? Number.parseFloat(p.price_eur) : null;
     if (
+      !(sku in ADVIES_CORRECTIES) &&
       curPrice !== null &&
       Math.abs(curPrice - entry.inkoop) > 0.005 &&
       Math.abs(curPrice - Number.parseFloat(excl)) > 0.005
