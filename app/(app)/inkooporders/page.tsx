@@ -22,6 +22,7 @@ import { emailInbox, mailAttachments, projects, purchaseInvoiceReviews, purchase
 import { formatMoney, poExVat, poExVatAmount, PO_OPEN_STATUSES, PO_STATUS_META } from "@/lib/purchase-orders";
 import { cn, formatEUR } from "@/lib/utils";
 
+import { BetaalsyncButton } from "./betaalsync-button";
 import { SyncHoldedButton } from "./sync-holded-button";
 
 export const metadata = { title: "Inkooporders" };
@@ -68,6 +69,10 @@ export default async function PurchaseOrdersPage({
   );
 
   const pendingHolded = rows.filter((r) => !r.holdedId).length;
+  // Gekoppeld aan Holded maar hier nog niet (volledig) betaald → betaalsync zinvol.
+  const openPayments = rows.filter(
+    (r) => r.holdedId && !r.paidAt && r.status !== "cancelled",
+  ).length;
 
   // Facturen die op goedkeuring wachten. Die staan NIET in purchase_orders — pas
   // na goedkeuring ontstaat daar een rij.
@@ -205,6 +210,7 @@ export default async function PurchaseOrdersPage({
         actions={
           <>
             <SyncHoldedButton pendingCount={pendingHolded} />
+            <BetaalsyncButton openCount={openPayments} />
             {queueCount > 0 && (
               <LinkButton href="/inkooporders/te-verwerken" variant="secondary">
                 📥 Te keuren ({queueCount})

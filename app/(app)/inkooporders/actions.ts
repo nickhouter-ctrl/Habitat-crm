@@ -18,6 +18,7 @@ import { buildPurchaseReference } from "@/lib/auto-purchase-invoice";
 import { extractInvoiceFieldsWithAI } from "@/lib/ai-invoice-extract";
 import { holded } from "@/lib/holded/client";
 import { pushPurchaseOrderToHolded as syncPushToHolded } from "@/lib/holded/sync";
+import { syncPurchasePaymentsFromHolded, type PurchasePaymentSyncResult } from "@/lib/purchase-payment-sync";
 
 /** Financiële categorieën die een (te-betalen) inkoopfactuur kunnen zijn. */
 const FINANCIAL_CATEGORIES = ["supplier-invoice", "freight-invoice", "agent-fee-china", "agent-fee-spain", "opex"];
@@ -443,6 +444,16 @@ export async function pushAllPendingToHolded(): Promise<{ pushed: number; failed
   revalidatePath("/inkooporders");
   revalidatePath("/");
   return { pushed, failed, errors };
+}
+
+/** Knop "Betalingen ophalen": neem de betaalstatus van gekoppelde
+ *  inkooporders over uit Holded (zelfde sync als de nachtelijke cron). */
+export async function syncPurchasePayments(): Promise<PurchasePaymentSyncResult> {
+  await requireUser();
+  const result = await syncPurchasePaymentsFromHolded();
+  revalidatePath("/inkooporders");
+  revalidatePath("/");
+  return result;
 }
 
 /**
