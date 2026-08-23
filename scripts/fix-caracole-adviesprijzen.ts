@@ -10,6 +10,8 @@
  *   - price_eur / trade_price_eur → adviesprijs ÷ (1 + btw%), op 4 decimalen
  *     zodat er incl. btw weer exact de adviesprijs uitrolt
  *   - purchase_cost_eur           → de inkoopprijs uit de CSV
+ *   - cost_eur                    → idem (landed cost; geen aparte vracht bekend)
+ *   - target_margin_pct           → werkelijke marge = (verkoop − kost) / verkoop
  *
  * Idempotent: rijen die al goed staan worden overgeslagen.
  * Dry-run: `npx tsx scripts/fix-caracole-adviesprijzen.ts --dry`
@@ -85,11 +87,14 @@ async function main() {
     select id, sku, name, vat_rate,
            price_eur::numeric as price_eur,
            trade_price_eur::numeric as trade_price_eur,
-           purchase_cost_eur::numeric as purchase_cost_eur
+           purchase_cost_eur::numeric as purchase_cost_eur,
+           cost_eur::numeric as cost_eur,
+           target_margin_pct::numeric as target_margin_pct
     from products where collection = 'Caracole'`);
   const items = (dbRows.rows ?? dbRows) as Array<{
     id: string; sku: string | null; name: string; vat_rate: number;
     price_eur: string | null; trade_price_eur: string | null; purchase_cost_eur: string | null;
+    cost_eur: string | null; target_margin_pct: string | null;
   }>;
   console.log(`DB: ${items.length} Caracole-producten`);
 
@@ -101,8 +106,11 @@ async function main() {
     if (!entry) { notInCsv.push(sku || `(geen sku: ${p.name})`); continue; }
 
     const btw = 1 + (p.vat_rate ?? 21) / 100;
-    const excl = (Math.round((entry.advies / btw) * 10000) / 10000).toFixed(4);
+    const exclNum = Math.round((entry.advies / btw) * 10000) / 10000;
+    const excl = exclNum.toFixed(4);
     const inkoop = entry.inkoop.toFixed(2);
+    // Marge als % van de verkoopprijs (excl. btw), zelfde definitie als het productoverzicht.
+    const marge = (Math.round(((exclNum - entry.inkoop) / exclNum) * 10000) / 100).toFixed(2);
 
     const curPrice = p.price_eur ? Number.parseFloat(p.price_eur) : null;
     if (
@@ -116,8 +124,10 @@ async function main() {
       continue;
     }
     if (
-      curPrice !== null && Math.abs(curPrice - Number.parseFloat(excl)) <= 0.005 &&
-      p.purchase_cost_eur !== null && Math.abs(Number.parseFloat(p.purchase_cost_eur) - entry.inkoop) <= 0.005
+      curPrice !== null && Math.abs(curPrice - exclNum) <= 0.005 &&
+      p.purchase_cost_eur !== null && Math.abs(Number.parseFloat(p.purchase_cost_eur) - entry.inkoop) <= 0.005 &&
+      p.cost_eur !== null && Math.abs(Number.parseFloat(p.cost_eur) - entry.inkoop) <= 0.005 &&
+      p.target_margin_pct !== null && Math.abs(Number.parseFloat(p.target_margin_pct) - Number.parseFloat(marge)) <= 0.005
     ) { alreadyOk++; continue; }
 
     if (!DRY) {
@@ -126,6 +136,8 @@ async function main() {
         set price_eur = ${excl}::numeric,
             trade_price_eur = ${excl}::numeric,
             purchase_cost_eur = ${inkoop}::numeric,
+            cost_eur = ${inkoop}::numeric,
+            target_margin_pct = ${marge}::numeric,
             updated_at = now()
         where id = ${p.id}::uuid`);
     }
