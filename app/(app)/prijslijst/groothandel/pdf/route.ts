@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { auth } from "@/auth";
+import { uploadBrochurePdf } from "@/lib/storage";
 import { buildWholesaleItems } from "@/lib/wholesale-brochure-data";
 import { renderWholesaleBrochure, type BrochureLocale } from "@/lib/wholesale-brochure-pdf";
 
@@ -8,7 +9,7 @@ const LOCALES: BrochureLocale[] = ["nl", "de", "en", "es"];
 
 // Elke productfoto wordt opgehaald; de volledige collectie (300+ foto's) mag
 // wat langer duren dan de standaard-timeout.
-export const maxDuration = 60;
+export const maxDuration = 300;
 
 export async function GET(req: Request) {
   const session = await auth();
@@ -29,12 +30,8 @@ export async function GET(req: Request) {
   const pdf = await renderWholesaleBrochure({ items, meta, locale });
   const serie = category ? "-" + category.toLowerCase().replace(/\s+/g, "-") : "";
   const filename = `flexibel-stone-groothandel-${locale}${serie}.pdf`.replace(/[^a-z0-9.-]/gi, "-");
-  return new NextResponse(new Uint8Array(pdf), {
-    status: 200,
-    headers: {
-      "content-type": "application/pdf",
-      "content-disposition": `inline; filename="${filename}"`,
-      "cache-control": "no-store",
-    },
-  });
+  // De volledige collectie is 20+ MB — te groot als directe function-response.
+  // Via de opslag-bucket serveren en daarheen doorsturen.
+  const downloadUrl = await uploadBrochurePdf(filename, new Uint8Array(pdf));
+  return NextResponse.redirect(downloadUrl, 302);
 }

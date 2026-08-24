@@ -238,6 +238,25 @@ export async function documentFileUrl(path: string, expiresInSec = 3600): Promis
   return purchaseOrderFileUrl(path, expiresInSec);
 }
 
+/**
+ * Sla een gegenereerde brochure-PDF op (vast pad per bestandsnaam, overschrijft
+ * de vorige versie) en geef een signed download-URL terug. Nodig omdat de
+ * volledige-collectie-PDF (20+ MB) te groot is om direct als function-response
+ * te serveren — de route redirect naar deze URL.
+ */
+export async function uploadBrochurePdf(filename: string, bytes: Uint8Array): Promise<string> {
+  if (!bytes || bytes.byteLength === 0) throw new Error("Lege PDF.");
+  await ensurePoBucket();
+  const path = `brochures/${safeName(filename)}`;
+  const { error } = await supabase()
+    .storage.from(PO_BUCKET)
+    .upload(path, bytes, { contentType: "application/pdf", upsert: true });
+  if (error) throw new Error(`Upload mislukt: ${error.message}`);
+  const url = await purchaseOrderFileUrl(path, 3600);
+  if (!url) throw new Error("Kon geen download-link voor de brochure maken.");
+  return url;
+}
+
 export async function deleteDocumentFile(path: string): Promise<void> {
   await deletePurchaseOrderFile(path);
 }
