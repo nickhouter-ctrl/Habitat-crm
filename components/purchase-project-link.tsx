@@ -14,6 +14,7 @@ import { useState } from "react";
 import { Clock, Package } from "lucide-react";
 
 import { Combobox } from "@/components/combobox";
+import { urenUitTarief } from "@/lib/labor-hours";
 import { SubmitButton } from "@/components/submit-button";
 import { Badge, Input } from "@/components/ui";
 import { cn } from "@/lib/utils";
@@ -46,21 +47,38 @@ export function PurchaseProjectLink({
 }) {
   const [kind, setKind] = useState<"material" | "labor">(current.countAsLabor ? "labor" : "material");
   const [wijzigen, setWijzigen] = useState(!current.projectId);
-  const [workerId, setWorkerId] = useState(defaultWorkerId ?? "");
-  const [uren, setUren] = useState(String(current.hours ?? suggestion?.hours ?? ""));
   const opties = projects.map((p) => ({ value: p.id, label: p.name }));
   const werkerOpties = workers.map((w) => ({
     value: w.id,
     label: w.name,
     hint: w.hourlyCostEur ? `€ ${w.hourlyCostEur}/u` : undefined,
   }));
-  const tarief = Number(workers.find((w) => w.id === workerId)?.hourlyCostEur ?? 0);
-  // Uren leeg laten is de normale gang van zaken bij een weekfactuur; laat dan
-  // zien wat het systeem eruit afleidt in plaats van stil "1 uur" te boeken.
-  const afgeleideUren =
-    !uren.trim() && tarief > 0 && amountExVat > 0
-      ? Math.round((amountExVat / tarief) * 100) / 100
-      : null;
+  const tariefVan = (id: string) => Number(workers.find((w) => w.id === id)?.hourlyCostEur ?? 0);
+
+  /** Uren die volgen uit bedrag ÷ uurtarief van de ploegkaart. */
+  const urenBij = (id: string) => urenUitTarief(amountExVat, tariefVan(id));
+
+  const [workerId, setWorkerId] = useState(defaultWorkerId ?? "");
+  // Uren die al vaststaan winnen altijd: wat er geboekt is, of wat de AI van de
+  // factuur las. Staat er niets, dan rekenen we ze uit het tarief van de
+  // arbeider — een bouwer factureert een weekbedrag en noemt zelden uren.
+  const [uren, setUren] = useState(() => {
+    const vast = current.hours ?? suggestion?.hours ?? null;
+    if (vast != null) return String(vast);
+    const berekend = defaultWorkerId ? urenBij(defaultWorkerId) : null;
+    return berekend != null ? String(berekend) : "";
+  });
+  // Zelf getypte uren nooit overschrijven als je daarna van arbeider wisselt.
+  const [zelfGetypt, setZelfGetypt] = useState(false);
+  const tarief = tariefVan(workerId);
+  const berekendUitTarief = !zelfGetypt && uren.trim() !== "" && workerId !== "" && urenBij(workerId) === Number(uren);
+
+  function kiesArbeider(id: string) {
+    setWorkerId(id);
+    if (zelfGetypt) return;
+    const berekend = id ? urenBij(id) : null;
+    setUren(berekend != null ? String(berekend) : "");
+  }
 
   // Gekoppeld en niet aan het wijzigen: alleen tonen wat er staat.
   if (current.projectId && !wijzigen) {
@@ -163,7 +181,7 @@ export function PurchaseProjectLink({
                 placeholder="Zoek in de ploeg…"
                 options={werkerOpties}
                 menuClassName="w-full"
-                onSelect={(v) => setWorkerId(v)}
+                onSelect={(v) => kiesArbeider(v)}
               />
               <p className="mt-1 text-xs text-muted">
                 {workerId
@@ -184,15 +202,19 @@ export function PurchaseProjectLink({
                   min="0"
                   className="text-right"
                   value={uren}
-                  onChange={(e) => setUren(e.target.value)}
-                  placeholder={afgeleideUren ? String(afgeleideUren) : "bijv. 94,5"}
+                  onChange={(e) => {
+                    setUren(e.target.value);
+                    setZelfGetypt(true);
+                  }}
+                  placeholder="bijv. 94,5"
                 />
               </div>
               <p className="flex-1 text-xs text-muted">
-                Het uurtarief volgt uit bedrag ÷ uren.{" "}
-                {afgeleideUren
-                  ? `Laat je dit leeg, dan wordt het ${afgeleideUren} uur — het bedrag gedeeld door zijn tarief van € ${tarief}.`
-                  : "Laat je dit leeg en kent het systeem geen uurtarief, dan komt het hele bedrag als één post van 1 uur op het project te staan."}
+                {berekendUitTarief
+                  ? `Berekend: € ${amountExVat.toFixed(2)} ex btw ÷ € ${tarief}/u van zijn ploegkaart. Noemt de factuur andere uren, typ ze er dan overheen.`
+                  : workerId && tarief <= 0
+                    ? "Op zijn ploegkaart staat geen uurtarief, dus de uren zijn niet te berekenen. Vul ze zelf in — anders komt het hele bedrag als één post van 1 uur op het project."
+                    : "Het uurtarief volgt uit bedrag ÷ uren."}
               </p>
             </div>
             <label className="flex items-start gap-2 text-sm">

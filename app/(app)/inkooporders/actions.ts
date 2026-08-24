@@ -10,6 +10,7 @@ import { auth } from "@/auth";
 import { db } from "@/lib/db";
 import { activities, emailInbox, mailAttachments, products, purchaseOrders, timeEntries, workers } from "@/lib/db/schema";
 import type { PurchaseOrderAttachment } from "@/lib/db/schema";
+import { urenUitTarief } from "@/lib/labor-hours";
 import { nextSequentialSku } from "@/lib/products";
 import { matchWorkerByName, normalizePoAttachments, parsePoLineItems, poExVatAssumingSpanishVat, poTotal, PO_STATUSES } from "@/lib/purchase-orders";
 import { copyMailAttachmentToPoBucket, deletePurchaseOrderFile, downloadMailAttachmentBuffer, downloadPurchaseOrderBuffer } from "@/lib/storage";
@@ -37,6 +38,13 @@ const schema = z.object({
   amountTotal: z.string().trim().optional(),
   amountSubtotal: z.string().trim().optional(),
   attachments: z.string().optional(),
+  // Meteen op een werf boeken vanaf het toevoegscherm. Kon eerst alleen achteraf
+  // op de detailpagina, waardoor een werknemersfactuur er los in belandde en de
+  // uren nooit onder zijn naam kwamen te staan.
+  linkProjectId: z.string().trim().optional(),
+  linkKind: z.enum(["material", "labor"]).optional(),
+  linkWorkerId: z.string().trim().optional(),
+  linkHours: z.string().trim().optional(),
 });
 
 /** Bedrag-string (NL-komma of punt) → number; leeg/ongeldig → null. */
@@ -131,6 +139,27 @@ export async function createPurchaseOrder(formData: FormData) {
   // bestellingen boeken bij ontvangst voorraad in.
   if (d.status === "received" && d.kind === "order") await applyStock(row.id, user.id);
 
+  // Direct aan een werf gehangen? Dan meteen boeken, langs dezelfde weg als de
+  // koppelkaart op de detailpagina — anders lopen de twee routes uiteen.
+  const linkProject = (d.linkProjectId ?? "").trim();
+  if (linkProject.length === 36) {
+    if (d.linkKind === "labor") {
+      const w = (d.linkWorkerId ?? "").trim();
+      await koppelAlsUren(row.id, {
+        projectId: linkProject,
+        workerId: w.length === 36 ? w : null,
+        hours: Number((d.linkHours ?? "").replace(",", ".")),
+        alreadyLogged: false,
+      });
+    } else {
+      await db
+        .update(purchaseOrders)
+        .set({ projectId: linkProject, countAsLabor: false, updatedAt: new Date() })
+        .where(eq(purchaseOrders.id, row.id));
+    }
+    revalidatePath(`/projects/${linkProject}`);
+  }
+
   revalidatePath("/inkooporders");
   revalidatePath("/");
   redirect(`/inkooporders/${row.id}`);
@@ -218,6 +247,28 @@ export async function linkPurchaseOrderAsHours(id: string, formData: FormData) {
     revalidatePath(`/inkooporders/${id}`);
     return;
   }
+  const gekozenWorker = String(formData.get("workerId") ?? "").trim();
+  await koppelAlsUren(id, {
+    projectId,
+    workerId: gekozenWorker.length === 36 ? gekozenWorker : null,
+    hours: Number(String(formData.get("hours") ?? "").replace(",", ".")),
+    alreadyLogged: formData.get("alreadyLogged") === "on",
+  });
+
+  revalidatePath(`/inkooporders/${id}`);
+  revalidatePath("/inkooporders");
+  revalidatePath(`/projects/${projectId}`);
+}
+
+/**
+ * De koppeling zelf, los van het formulier: ook het toevoegscherm boekt een
+ * werknemersfactuur meteen op een werf, en die mocht dit niet overschrijven.
+ */
+async function koppelAlsUren(
+  id: string,
+  args: { projectId: string; workerId: string | null; hours: number; alreadyLogged: boolean },
+) {
+  const { projectId } = args;
   const po = await db.query.purchaseOrders.findFirst({ where: eq(purchaseOrders.id, id) });
   if (!po) return;
 
@@ -233,27 +284,21 @@ export async function linkPurchaseOrderAsHours(id: string, formData: FormData) {
   const allWorkers = await db.query.workers.findMany({
     columns: { id: true, name: true, hourlyCostEur: true },
   });
-  const gekozen = String(formData.get("workerId") ?? "").trim();
   const worker =
-    (gekozen.length === 36 ? allWorkers.find((w) => w.id === gekozen) : undefined) ??
+    (args.workerId ? allWorkers.find((w) => w.id === args.workerId) : undefined) ??
     matchWorkerByName(po.supplier, allWorkers);
 
-  const hoursRaw = Number(String(formData.get("hours") ?? "").replace(",", "."));
+  const hoursRaw = args.hours;
   // Geen uren ingevuld? Dan uit het uurtarief van de arbeider afleiden. De oude
   // terugval — één post van het hele bedrag "à 1 uur" — klopte financieel wel,
   // maar zette de urenstand van het project op 1 uur voor een factuur van
   // duizenden euro's. Zonder tarief blijft die terugval staan.
   const tarief = Number(worker?.hourlyCostEur ?? 0);
-  const hours =
-    hoursRaw > 0
-      ? hoursRaw
-      : tarief > 0 && amount > 0
-        ? Math.round((amount / tarief) * 100) / 100
-        : 1;
+  const hours = hoursRaw > 0 ? hoursRaw : (urenUitTarief(amount, tarief) ?? 1);
   const rate = amount > 0 ? amount / hours : 0;
   // "Uren staan al geregistreerd" (bv. via het urenportaal ingevuld): wel als
   // arbeid koppelen, maar GEEN nieuwe uren-regel maken — anders telt het dubbel.
-  const alreadyLogged = formData.get("alreadyLogged") === "on";
+  const alreadyLogged = args.alreadyLogged;
 
   // Idempotent: eerder DOOR DEZE KOPPELING gegenereerde regel vervangen — maar
   // NOOIT portaal-uren (selfLoggedAt) verwijderen die aan deze PO hangen.
@@ -308,10 +353,6 @@ export async function linkPurchaseOrderAsHours(id: string, formData: FormData) {
     .update(purchaseOrders)
     .set({ projectId, countAsLabor: true, updatedAt: new Date() })
     .where(eq(purchaseOrders.id, id));
-
-  revalidatePath(`/inkooporders/${id}`);
-  revalidatePath("/inkooporders");
-  revalidatePath(`/projects/${projectId}`);
 }
 
 export async function setPurchaseOrderStatus(id: string, status: (typeof PO_STATUSES)[number]) {

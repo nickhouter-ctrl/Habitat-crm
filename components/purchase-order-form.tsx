@@ -11,12 +11,15 @@ import type {
   PurchaseOrderAttachment,
   PurchaseOrderLineItem,
 } from "@/lib/db/schema";
+import { urenUitTarief } from "@/lib/labor-hours";
 import { formatMoney, poLineTotal, PO_STATUS_META } from "@/lib/purchase-orders";
 import { cn } from "@/lib/utils";
 
 export type POProductOption = { id: string; name: string; sku: string | null };
 /** Naam die je bij "Leverancier" kunt kiezen: een eerdere leverancier of iemand uit de ploeg. */
 export type POSupplierOption = { name: string; hint?: string };
+export type POProjectOption = { id: string; name: string };
+export type POWorkerOption = { id: string; name: string; hourlyCostEur: number | null };
 
 type Row = {
   productId: string;
@@ -74,12 +77,18 @@ export function PurchaseOrderForm({
   order,
   products,
   suppliers = [],
+  projects = [],
+  workers = [],
   action,
 }: {
   order?: PurchaseOrder;
   products: POProductOption[];
   /** Bekende namen voor het leveranciersveld — vrij typen blijft gewoon werken. */
   suppliers?: POSupplierOption[];
+  /** Werven om de factuur meteen op te boeken (alleen bij toevoegen). */
+  projects?: POProjectOption[];
+  /** De eigen ploeg, met hun uurtarief — daaruit volgen de uren. */
+  workers?: POWorkerOption[];
   action: (formData: FormData) => void | Promise<void>;
 }) {
   const [kind, setKind] = useState<"order" | "invoice">(
@@ -106,6 +115,15 @@ export function PurchaseOrderForm({
   const [attachments, setAttachments] = useState<PurchaseOrderAttachment[]>(
     order?.attachments ?? [],
   );
+  // Meteen op een werf boeken. Alleen bij toevoegen: bij bewerken doet de
+  // koppelkaart op de detailpagina dit al, en twee plekken die hetzelfde
+  // beweren is vragen om verschil.
+  const nieuw = !order;
+  const [linkProjectId, setLinkProjectId] = useState("");
+  const [linkKind, setLinkKind] = useState<"material" | "labor">("labor");
+  const [linkWorkerId, setLinkWorkerId] = useState("");
+  const [linkHours, setLinkHours] = useState("");
+  const [urenZelfGetypt, setUrenZelfGetypt] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [uploadMsg, setUploadMsg] = useState<{ kind: "ok" | "err"; text: string } | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -123,6 +141,36 @@ export function PurchaseOrderForm({
 
   const items = rowsToItems(rows);
   const total = items.reduce((s, it) => s + poLineTotal(it), 0);
+
+  // Arbeidskost rekent ex. btw. Staat er een subtotaal, dan is dat het; anders
+  // is het totaal het beste dat we hebben (bij btw verlegd is dat ook juist).
+  const bedragExBtw = (() => {
+    const n = (v: string) => Number(v.replace(/\s/g, "").replace(/\.(?=\d{3}\b)/g, "").replace(",", "."));
+    const sub = n(amountSubtotal);
+    if (Number.isFinite(sub) && sub > 0) return sub;
+    const tot = n(amountTotal);
+    return Number.isFinite(tot) && tot > 0 ? tot : 0;
+  })();
+  const werkerTarief = Number(workers.find((w) => w.id === linkWorkerId)?.hourlyCostEur ?? 0);
+  const berekendeUren = urenUitTarief(bedragExBtw, werkerTarief);
+
+  function kiesWerker(id: string) {
+    setLinkWorkerId(id);
+    if (urenZelfGetypt) return;
+    const berekend = urenUitTarief(bedragExBtw, workers.find((w) => w.id === id)?.hourlyCostEur);
+    setLinkHours(berekend != null ? String(berekend) : "");
+  }
+
+  // Het bedrag komt vaak ná de arbeider binnen (de PDF wordt uitgelezen, of je
+  // typt het totaal pas daarna). Dan moeten de uren mee veranderen — anders
+  // staat er een getal dat bij een ouder bedrag hoorde.
+  function herberekenUren(nieuwExBtw: number) {
+    if (urenZelfGetypt || !linkWorkerId) return;
+    const berekend = urenUitTarief(nieuwExBtw, werkerTarief);
+    setLinkHours(berekend != null ? String(berekend) : "");
+  }
+  const alsBedrag = (v: string) =>
+    Number(v.replace(/\s/g, "").replace(/\.(?=\d{3}\b)/g, "").replace(",", "."));
 
   const update = (i: number, patch: Partial<Row>) =>
     setRows((rs) => rs.map((r, idx) => (idx === i ? { ...r, ...patch } : r)));
@@ -153,6 +201,9 @@ export function PurchaseOrderForm({
           if (status === "ordered") setStatus("received");
           if (p.total != null) setAmountTotal(String(p.total));
           if (p.subtotal != null) setAmountSubtotal(String(p.subtotal));
+          // Uit de PDF gelezen bedrag telt net zo goed als een getypt bedrag:
+          // staat er al een arbeider, dan volgen de uren daar nu uit.
+          herberekenUren(p.subtotal ?? p.total ?? 0);
         }
         if (p.items.length) {
           setRows((rs) => {
@@ -350,13 +401,18 @@ export function PurchaseOrderForm({
       </div>
 
       {kind === "invoice" ? (
+        <>
         <div className="grid gap-4 sm:grid-cols-2">
           <Field label={`Bedrag totaal (incl. btw, ${currency})`} htmlFor="amountTotal">
             <Input
               id="amountTotal"
               inputMode="decimal"
               value={amountTotal}
-              onChange={(e) => setAmountTotal(e.target.value)}
+              onChange={(e) => {
+                setAmountTotal(e.target.value);
+                // Zonder subtotaal is het totaal het bedrag waar we mee rekenen.
+                if (!amountSubtotal.trim()) herberekenUren(alsBedrag(e.target.value));
+              }}
               placeholder="1.210,00"
               className="text-right"
             />
@@ -366,12 +422,108 @@ export function PurchaseOrderForm({
               id="amountSubtotal"
               inputMode="decimal"
               value={amountSubtotal}
-              onChange={(e) => setAmountSubtotal(e.target.value)}
+              onChange={(e) => {
+                setAmountSubtotal(e.target.value);
+                herberekenUren(alsBedrag(e.target.value) || alsBedrag(amountTotal));
+              }}
               placeholder="1.000,00"
               className="text-right"
             />
           </Field>
         </div>
+
+        {nieuw && projects.length > 0 && (
+          <div className="space-y-3 rounded-lg border bg-background/50 p-4">
+            <div>
+              <span className="text-sm font-semibold">Bij welke werf hoort dit? </span>
+              <span className="text-xs text-muted">optioneel — kan ook later</span>
+            </div>
+            <Combobox
+              name="linkProjectId"
+              options={projects.map((p) => ({ value: p.id, label: p.name }))}
+              defaultValue=""
+              clearable
+              placeholder="Zoek een werf…"
+              menuClassName="w-full"
+              onSelect={(v) => setLinkProjectId(v)}
+            />
+
+            {linkProjectId && (
+              <>
+                <input type="hidden" name="linkKind" value={linkKind} />
+                <div className="flex flex-wrap gap-2 text-sm">
+                  {(
+                    [
+                      ["labor", "Uren / arbeid"],
+                      ["material", "Materiaal"],
+                    ] as const
+                  ).map(([v, label]) => (
+                    <button
+                      key={v}
+                      type="button"
+                      onClick={() => setLinkKind(v)}
+                      aria-pressed={linkKind === v}
+                      className={cn(
+                        "rounded-md border px-3 py-1.5 font-medium transition-colors",
+                        linkKind === v ? "border-accent bg-accent/10 text-accent" : "bg-surface text-muted hover:text-ink",
+                      )}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+
+                {linkKind === "labor" && (
+                  <div className="space-y-3">
+                    <div>
+                      <label className="mb-1.5 block text-sm font-medium">Wie heeft deze uren gemaakt?</label>
+                      <Combobox
+                        name="linkWorkerId"
+                        options={workers.map((w) => ({
+                          value: w.id,
+                          label: w.name,
+                          hint: w.hourlyCostEur ? `€ ${w.hourlyCostEur}/u` : undefined,
+                        }))}
+                        defaultValue=""
+                        clearable
+                        placeholder="Zoek in de ploeg…"
+                        menuClassName="w-full"
+                        onSelect={(v) => kiesWerker(v)}
+                      />
+                    </div>
+                    <div className="flex flex-wrap items-end gap-3">
+                      <div className="w-32">
+                        <label className="mb-1.5 block text-sm font-medium" htmlFor="linkHours">
+                          Aantal uren
+                        </label>
+                        <Input
+                          id="linkHours"
+                          name="linkHours"
+                          inputMode="decimal"
+                          className="text-right"
+                          value={linkHours}
+                          onChange={(e) => {
+                            setLinkHours(e.target.value);
+                            setUrenZelfGetypt(true);
+                          }}
+                          placeholder="bijv. 94,5"
+                        />
+                      </div>
+                      <p className="flex-1 text-xs text-muted">
+                        {berekendeUren != null && !urenZelfGetypt && linkHours === String(berekendeUren)
+                          ? `Berekend: € ${bedragExBtw.toFixed(2)} ex btw ÷ € ${werkerTarief}/u van zijn ploegkaart. Noemt de factuur andere uren, typ ze er dan overheen.`
+                          : linkWorkerId && werkerTarief <= 0
+                            ? "Op zijn ploegkaart staat geen uurtarief. Vul de uren zelf in, anders komt het hele bedrag als één post van 1 uur op de werf."
+                            : "Kies eerst het bedrag en de arbeider; de uren volgen dan uit zijn tarief."}
+                      </p>
+                    </div>
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+        )}
+        </>
       ) : (
       <div>
         <div className="mb-2 flex items-center justify-between">
