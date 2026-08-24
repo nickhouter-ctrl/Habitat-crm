@@ -28,6 +28,7 @@ import {
   Textarea,
 } from "@/components/ui";
 import { Combobox, type ComboOption } from "@/components/combobox";
+import { TimeEntryForm } from "@/components/time-entry-form";
 import { TabsRoot, TabsBar, TabPanel } from "@/components/tabs";
 import { LayoutDashboard, Wallet, Clock, FileText, Settings, Check, ArrowLeft, RotateCcw, Printer, Send } from "lucide-react";
 import { db } from "@/lib/db";
@@ -654,6 +655,9 @@ export default async function ProjectDetailPage({
     value: w.id,
     label: w.name + (w.role ? ` · ${w.role}` : ""),
     rate: Number(w.hourlyCostEur ?? 0),
+    hourlyCostEur: w.hourlyCostEur != null ? Number(w.hourlyCostEur) : null,
+    hourlyCostCashEur: w.hourlyCostCashEur != null ? Number(w.hourlyCostCashEur) : null,
+    defaultPaymentMethod: w.defaultPaymentMethod,
   }));
 
   const contactOptions: ComboOption[] = contactOpts.map((c) => ({ value: c.id, label: c.name }));
@@ -1629,34 +1633,7 @@ export default async function ProjectDetailPage({
                   Voeg eerst arbeiders toe in <Link href="/ploeg" className="text-accent hover:underline">Ploeg</Link>.
                 </p>
               ) : (
-                <form action={addTimeEntry.bind(null, id)} className="grid gap-3 sm:grid-cols-2 lg:grid-cols-[1.4fr_0.8fr_0.9fr_1fr_auto] lg:items-end">
-                  <Field label="Arbeider">
-                    <Combobox
-                      name="workerId"
-                      placeholder="Zoek een arbeider…"
-                      options={workerOptions.map((w) => ({ value: w.value, label: w.label }))}
-                    />
-                  </Field>
-                  <Field label="Uren">
-                    <Input name="hours" inputMode="decimal" required placeholder="8" />
-                  </Field>
-                  <Field label="Datum">
-                    <Input name="date" type="date" required />
-                  </Field>
-                  <Field label="Betaling">
-                    <Select name="paymentMethod" defaultValue="cash">
-                      <option value="cash">Contant</option>
-                      <option value="invoice">Per factuur</option>
-                    </Select>
-                  </Field>
-                  <SubmitButton size="sm" variant="secondary" pendingLabel="…">+ Uren</SubmitButton>
-                  <Field label="Tarief (€/u) — leeg = standaard" className="lg:col-span-2">
-                    <Input name="hourlyCostEur" inputMode="decimal" placeholder="overschrijf tarief" />
-                  </Field>
-                  <Field label="Notitie" className="lg:col-span-3">
-                    <Input name="note" placeholder="optioneel" />
-                  </Field>
-                </form>
+                <TimeEntryForm workers={workerOptions} action={addTimeEntry.bind(null, id)} />
               )}
 
               {/* Urenportaal: verwijs een arbeider/ploegbaas naar dit project — hij

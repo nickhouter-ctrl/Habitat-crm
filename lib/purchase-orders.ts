@@ -171,10 +171,39 @@ export function parsePoLineItems(raw: unknown): PurchaseOrderLineItem[] {
   return out;
 }
 
+/** Naam → losse woorden, hoofdletters en leestekens weg. */
+export function naamWoorden(naam: string | null | undefined): string[] {
+  return (naam ?? "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z]+/g, " ")
+    .trim()
+    .split(" ")
+    .filter(Boolean);
+}
+
 /**
- * Zoekt bij een leveranciersnaam de arbeider uit de eigen ploeg — bevat-elkaar,
- * hoofdletterongevoelig ("Ferhaoui Mohamed" ↔ "FERHAOUI MOHAMED", factuur
- * "Zerghini Abdelmjid" ↔ arbeider "Abdelmjid").
+ * Hoort deze leveranciersnaam bij deze arbeider? Elk woord van de ploegnaam moet
+ * in de andere naam voorkomen.
+ *
+ * Woord-voor-woord en niet "bevat elkaar", want de factuur draagt vaak een naam
+ * méér dan de ploegkaart: "Wilhelmus Mark Strijks" tegenover "Wilhelmus
+ * Strijks". Aan elkaar geplakt bevat de een de ander niet, dus die vergelijking
+ * liet zijn hele overzicht leeg — precies zoals bij "Zerghini Abdelmjid" naast
+ * arbeider "Abdelmjid".
+ *
+ * Korte woorden (≤ 2 letters) tellen niet mee: "de", "el", initialen.
+ */
+export function naamHoortBij(ploegNaam: string | null | undefined, andereNaam: string | null | undefined): boolean {
+  const ploeg = naamWoorden(ploegNaam).filter((w) => w.length >= 3);
+  const ander = naamWoorden(andereNaam);
+  if (ploeg.length === 0 || ander.length === 0) return false;
+  return ploeg.every((w) => ander.includes(w));
+}
+
+/**
+ * Zoekt bij een leveranciersnaam de arbeider uit de eigen ploeg.
  *
  * Bij twijfel (geen match of meer dan één) geeft dit `null` terug: liever laten
  * kiezen dan de uren onder de verkeerde naam boeken.
@@ -183,11 +212,6 @@ export function matchWorkerByName<T extends { id: string; name: string }>(
   supplier: string | null | undefined,
   workers: T[],
 ): T | null {
-  const sup = (supplier ?? "").trim().toLowerCase();
-  if (sup.length < 4) return null;
-  const treffers = workers.filter((w) => {
-    const n = w.name.trim().toLowerCase();
-    return n.length >= 4 && (sup.includes(n) || n.includes(sup));
-  });
+  const treffers = workers.filter((w) => naamHoortBij(w.name, supplier));
   return treffers.length === 1 ? treffers[0] : null;
 }

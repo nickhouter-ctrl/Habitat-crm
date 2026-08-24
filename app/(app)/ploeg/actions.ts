@@ -21,7 +21,10 @@ async function requireUser() {
 const workerSchema = z.object({
   name: z.string().trim().min(1, "Naam is verplicht"),
   role: z.string().trim().optional(),
+  /** Tarief bij betaling per factuur. */
   hourlyCostEur: z.string().trim().optional(),
+  /** Tarief bij contante betaling; leeg = zelfde als per factuur. */
+  hourlyCostCashEur: z.string().trim().optional(),
   defaultPaymentMethod: z.enum(["cash", "invoice"]).default("cash"),
   portalLang: z.enum(["nl", "es", "en"]).default("es"),
   notes: z.string().trim().optional(),
@@ -36,6 +39,7 @@ export async function createWorker(formData: FormData) {
     name: d.name,
     role: d.role || null,
     hourlyCostEur: moneyOrNull(d.hourlyCostEur),
+    hourlyCostCashEur: moneyOrNull(d.hourlyCostCashEur),
     defaultPaymentMethod: d.defaultPaymentMethod,
     portalLang: d.portalLang,
     notes: d.notes || null,
@@ -54,6 +58,7 @@ export async function updateWorker(id: string, formData: FormData) {
       name: d.name,
       role: d.role || null,
       hourlyCostEur: moneyOrNull(d.hourlyCostEur),
+      hourlyCostCashEur: moneyOrNull(d.hourlyCostCashEur),
       defaultPaymentMethod: d.defaultPaymentMethod,
       portalLang: d.portalLang,
       notes: d.notes || null,
@@ -61,11 +66,13 @@ export async function updateWorker(id: string, formData: FormData) {
     })
     .where(eq(workers.id, id));
   revalidatePath("/ploeg");
+  revalidatePath(`/ploeg/${id}`);
 }
 
 export async function toggleWorkerActive(id: string, active: boolean) {
   await requireUser();
   await db.update(workers).set({ active, updatedAt: new Date() }).where(eq(workers.id, id));
   revalidatePath("/ploeg");
+  revalidatePath(`/ploeg/${id}`);
 }
 

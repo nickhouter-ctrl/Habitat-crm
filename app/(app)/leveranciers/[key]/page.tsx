@@ -39,7 +39,6 @@ type Factuur = {
   order_date: string | null;
   ex_btw: string | null;
   total: string | null;
-  paid_at: string | null;
   status: string;
   count_as_labor: boolean;
   project_id: string | null;
@@ -63,7 +62,7 @@ export default async function LeverancierPage({ params }: { params: Promise<{ ke
            coalesce(nullif(po.subtotal, 0),
                     case when coalesce(po.tax, 0) <> 0 then round(po.total - po.tax, 2) else po.total end,
                     0)::text as ex_btw,
-           po.total::text, po.paid_at::text, po.count_as_labor,
+           po.total::text, po.count_as_labor,
            po.project_id, p.name as project_naam
     from purchase_orders po
     left join projects p on p.id = po.project_id
@@ -98,8 +97,12 @@ export default async function LeverancierPage({ params }: { params: Promise<{ ke
   });
 
   const totaalEx = facturen.reduce((s, f) => s + Number(f.ex_btw ?? 0), 0);
-  const open = facturen.filter((f) => !f.paid_at).reduce((s, f) => s + Number(f.total ?? 0), 0);
   const gewerkteUren = Number(uren?.uren ?? 0);
+
+  // Hoort deze partij bij de eigen ploeg? Dan staat zijn hele verhaal — uren,
+  // werven, tarieven — op zijn ploegpagina; hier alleen een verwijzing.
+  const [ploegkaart] = await db.execute<{ id: string; name: string }>(sql`
+    select id, name from workers where ${sql.raw(SUPPLIER_KEY_SQL("name"))} = ${key} limit 1`);
 
   return (
     <>
@@ -119,9 +122,20 @@ export default async function LeverancierPage({ params }: { params: Promise<{ ke
         }
       />
 
-      <div className="mb-5 grid grid-cols-2 gap-3 sm:grid-cols-4">
+      {ploegkaart && (
+        <Card className="mb-5">
+          <CardContent className="py-3 text-sm">
+            {ploegkaart.name} hoort bij de eigen ploeg.{" "}
+            <Link href={`/ploeg/${ploegkaart.id}`} className="text-accent hover:underline">
+              Naar zijn ploegpagina
+            </Link>{" "}
+            <span className="text-muted">— daar staan zijn uren per werf, zijn tarieven en zijn facturen bij elkaar.</span>
+          </CardContent>
+        </Card>
+      )}
+
+      <div className="mb-5 grid grid-cols-2 gap-3 sm:grid-cols-3">
         <StatTile label="Ingekocht (ex. btw)" value={formatEUR(totaalEx)} />
-        <StatTile label="Nog te betalen" value={formatEUR(open)} tone={open > 0 ? "warning" : "neutral"} />
         <StatTile
           label="Uren geboekt"
           value={gewerkteUren > 0 ? gewerkteUren.toLocaleString("nl-NL") : "—"}

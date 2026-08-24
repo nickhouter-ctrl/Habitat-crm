@@ -1,0 +1,1 @@
+ALTER TABLE "workers" ADD COLUMN "hourly_cost_cash_eur" numeric(12, 6);

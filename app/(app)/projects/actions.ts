@@ -33,6 +33,7 @@ import { brandedEmail, escapeHtml, sendEmail } from "@/lib/email";
 import { recordSentEmail } from "@/lib/sent-email";
 import { COMPANY } from "@/lib/company";
 import { formatEUR } from "@/lib/utils";
+import { workerRate } from "@/lib/worker-rate";
 import { moneyOrNull, moneyOrZero as numOrZero } from "@/lib/parse-money";
 
 async function requireUser() {
@@ -186,13 +187,17 @@ export async function addTimeEntry(projectId: string, formData: FormData) {
   if (!parsed.success) throw new Error(parsed.error.issues.map((i) => i.message).join(", "));
   const d = parsed.data;
   const workerId = uuidOrNull(d.workerId);
-  // Tarief: expliciet ingevuld wint; anders het kostentarief van de gekozen arbeider.
+  // Tarief: expliciet ingevuld wint; anders het tarief van de arbeider dat bij
+  // DEZE betaalwijze hoort — contant werken gaat vaak tegen een ander tarief.
   let rate = moneyOrNull(d.hourlyCostEur);
   let workerName: string | null = null;
   if (workerId) {
     const w = await db.query.workers.findFirst({ where: eq(workers.id, workerId) });
     workerName = w?.name ?? null;
-    if (rate == null) rate = w?.hourlyCostEur != null ? String(w.hourlyCostEur) : null;
+    if (rate == null) {
+      const tarief = workerRate(w, d.paymentMethod);
+      rate = tarief != null ? String(tarief) : null;
+    }
   }
   await db.insert(timeEntries).values({
     projectId,

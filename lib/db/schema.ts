@@ -1103,8 +1103,16 @@ export const workers = pgTable(
     name: text().notNull(),
     /** Functie/rol (bv. tegelzetter, schilder). Vrij veld. */
     role: text(),
-    /** Kostentarief per uur (ex. BTW) — wat de arbeider ons kost. */
+    /** Kostentarief per uur (ex. BTW) bij betaling PER FACTUUR — wat hij ons kost. */
     hourlyCostEur: numeric({ precision: 12, scale: 6 }),
+    /**
+     * Kostentarief per uur bij CONTANTE betaling. Vaak lager dan het
+     * factuurtarief; stond eerder als een tweede ploegkaart met dezelfde naam in
+     * de lijst (imad € 24 per factuur naast imad € 20 contant), waardoor zijn
+     * uren over twee kaarten verspreid raakten en geen van beide compleet was.
+     * Leeg = geen apart contant tarief, dan geldt {@link hourlyCostEur}.
+     */
+    hourlyCostCashEur: numeric({ precision: 12, scale: 6 }),
     /** Standaard betaalwijze (contant/factuur) — per urenregel te overschrijven. */
     defaultPaymentMethod: paymentMethod().notNull().default("cash"),
     /** Taal van het urenportaal voor deze arbeider: "nl" | "es" | "en". */

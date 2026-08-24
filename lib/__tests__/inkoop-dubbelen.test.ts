@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { isProformaOrQuote, isSpecificationAttachment } from "@/lib/invoice-attachment-kind";
-import { matchWorkerByName } from "@/lib/purchase-orders";
+import { matchWorkerByName, naamHoortBij } from "@/lib/purchase-orders";
 
 describe("isSpecificationAttachment", () => {
   it("herkent de urenverantwoording die Wilhelmus naast zijn factuur stuurt", () => {
@@ -60,5 +60,29 @@ describe("matchWorkerByName", () => {
       { id: "y", name: "Mohamed Ferhaoui" },
     ];
     expect(matchWorkerByName("Mohamed Ferhaoui", dubbel)).toBeNull();
+  });
+});
+
+describe("naamHoortBij", () => {
+  it("herkent een factuurnaam met een naam extra", () => {
+    // Zijn ploegkaart heet "Wilhelmus Strijks", zijn facturen "Wilhelmus Mark
+    // Strijks" — aan elkaar geplakt bevat geen van beide de ander.
+    expect(naamHoortBij("Wilhelmus Strijks", "Wilhelmus Mark Strijks")).toBe(true);
+    expect(naamHoortBij("Abdelmjid", "Zerghini Abdelmjid")).toBe(true);
+    expect(naamHoortBij("FERHAOUI MOHAMED", "Ferhaoui Mohamed")).toBe(true);
+  });
+
+  it("houdt verschillende mensen uit elkaar", () => {
+    expect(naamHoortBij("Wilhelmus Strijks", "Pieter Hoogendijk")).toBe(false);
+    expect(naamHoortBij("Ahmed Bouzekri", "Ahmed Javea")).toBe(false);
+  });
+
+  it("negeert een toevoeging tussen haakjes en de rechtsvorm niet ten onrechte", () => {
+    expect(naamHoortBij("Ahmed Bouzekri", "Ahmed Bouzekri (Construcciones Ahmed Javea)")).toBe(true);
+  });
+
+  it("valt niet om op lege namen", () => {
+    expect(naamHoortBij("", "Wilhelmus")).toBe(false);
+    expect(naamHoortBij("Wilhelmus", null)).toBe(false);
   });
 });
