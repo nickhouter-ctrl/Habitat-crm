@@ -720,7 +720,12 @@ export async function approveInvoiceReview(args: {
   // op zijn ploegpagina staan en niet als losse tekst.
   const werker =
     kind === "labor"
-      ? matchWorkerByName(supplier, await db.select({ id: workers.id, name: workers.name }).from(workers))
+      ? matchWorkerByName(
+          supplier,
+          await db
+            .select({ id: workers.id, name: workers.name, defaultPaymentMethod: workers.defaultPaymentMethod })
+            .from(workers),
+        )
       : null;
   const split = o.split?.length ? o.split : null;
   const projectId = split ? null : (o.projectId ?? review.suggestedProjectId);
@@ -783,11 +788,13 @@ export async function approveInvoiceReview(args: {
         workerName: werker?.name ?? supplier,
         date: review.proposedInvoiceDate ?? new Date().toISOString().slice(0, 10),
         hours: String(uren),
-        // Dit KOMT van een factuur, dus is het per factuur betaald. De kolom
-        // valt terug op 'cash' als je niets meegeeft, en daardoor stond er
-        // € 45.322 aan arbeid als "contant" geboekt terwijl er geen cent
-        // contant is gegaan.
-        paymentMethod: "invoice",
+        // Betaalwijze zegt hoe het geld is gegaan, niet waar de regel vandaan
+        // komt: een factuur kan contant afgerekend worden, en zo gaat het bij
+        // een deel van de ploeg ook. Daarom de standaard van zijn ploegkaart —
+        // die zet je per persoon. Zonder ploegkaart is "per factuur" de regel;
+        // contant komt nog maar zelden voor. Voorheen stond hier niets en viel
+        // de kolom terug op 'cash', wat bij nieuwe facturen altijd fout was.
+        paymentMethod: werker?.defaultPaymentMethod ?? "invoice",
         // Zes decimalen, want de geboekte kost moet EXACT het factuurbedrag zijn.
         // Met twee decimalen werd € 3.000 ÷ 107,14 uur afgerond op € 28,00 en
         // boekte het systeem € 2.999,92 — 8 cent minder dan de leverancier vraagt.
