@@ -16,9 +16,6 @@ import { copyMailAttachmentToPoBucket, deletePurchaseOrderFile, downloadMailAtta
 import { buildInvoicePdfAttachment, isExcelAttachment, pdfNameFor } from "@/lib/excel-to-pdf";
 import { buildPurchaseReference } from "@/lib/auto-purchase-invoice";
 import { extractInvoiceFieldsWithAI } from "@/lib/ai-invoice-extract";
-import { holded } from "@/lib/holded/client";
-import { pushPurchaseOrderToHolded as syncPushToHolded } from "@/lib/holded/sync";
-import { syncPurchasePaymentsFromHolded, type PurchasePaymentSyncResult } from "@/lib/purchase-payment-sync";
 
 /** Financiële categorieën die een (te-betalen) inkoopfactuur kunnen zijn. */
 const FINANCIAL_CATEGORIES = ["supplier-invoice", "freight-invoice", "agent-fee-china", "agent-fee-spain", "opex"];
@@ -327,57 +324,6 @@ export async function setPurchaseOrderStatus(id: string, status: (typeof PO_STAT
   revalidatePath("/");
 }
 
-/**
- * Markeer een inkoopfactuur als betaald: zet paidAt + paidEur in het CRM en
- * registreert (best-effort) de betaling ook in Holded.
- */
-export async function markPurchaseOrderPaid(id: string) {
-  const user = await requireUser();
-  const po = await db.query.purchaseOrders.findFirst({ where: eq(purchaseOrders.id, id) });
-  if (!po) throw new Error("Inkooporder niet gevonden");
-
-  const amount = Number(po.total ?? 0);
-  // Atomair claimen (WHERE paid_at IS NULL): een dubbelklik of gelijktijdige
-  // submit zou anders twee keer een betaling in Holded registreren.
-  const [claimed] = await db
-    .update(purchaseOrders)
-    .set({ paidAt: new Date(), paidEur: po.total ?? "0", updatedAt: new Date() })
-    .where(and(eq(purchaseOrders.id, id), isNull(purchaseOrders.paidAt)))
-    .returning({ id: purchaseOrders.id });
-  if (!claimed) return; // al betaald
-
-  // Betaling doorzetten naar Holded — best-effort, faalt zacht.
-  let holdedNote = "";
-  if (po.holdedId) {
-    try {
-      await holded.documents.pay("purchase", po.holdedId, {
-        date: Math.floor(Date.now() / 1000),
-        amount,
-      });
-    } catch (e) {
-      holdedNote = `\nLet op: betaling niet naar Holded doorgezet (${e instanceof Error ? e.message : String(e)}).`;
-      console.error("[markPurchaseOrderPaid] Holded pay failed:", e);
-    }
-  }
-
-  // Gekoppelde (portaal-)uren als afgerekend markeren.
-  await db
-    .update(timeEntries)
-    .set({ paidAt: new Date(), updatedAt: new Date() })
-    .where(and(eq(timeEntries.purchaseOrderId, id), isNull(timeEntries.paidAt)));
-
-  await db.insert(activities).values({
-    type: "note",
-    subject: `Inkoopfactuur betaald: ${po.supplier} ${po.reference ?? ""}`.trim(),
-    body: `Bedrag: €${amount.toFixed(2)}${holdedNote}`,
-    authorId: user.id,
-  });
-
-  revalidatePath("/");
-  revalidatePath("/inkooporders");
-  revalidatePath(`/inkooporders/${id}`);
-}
-
 /** Keur een proforma goed: van concept ('draft') naar bevestigde inkooporder ('ordered'). */
 export async function approveProforma(id: string) {
   const user = await requireUser();
@@ -400,60 +346,6 @@ export async function approveProforma(id: string) {
   revalidatePath("/");
   revalidatePath("/inkooporders");
   revalidatePath(`/inkooporders/${id}`);
-}
-
-/**
- * Maak deze inkooporder aan in Holded (purchase-document). Slaat de Holded-id
- * op zodat een volgende sync 'm vindt en geen duplicaat maakt.
- */
-export async function pushPurchaseOrderToHolded(id: string) {
-  await requireUser();
-  try {
-    await syncPushToHolded(id);
-  } catch (err) {
-    throw new Error(err instanceof Error ? err.message : "Push naar Holded mislukt.");
-  }
-  revalidatePath("/inkooporders");
-  revalidatePath(`/inkooporders/${id}`);
-  revalidatePath("/");
-}
-
-/**
- * Push alle inkooporders die nog geen Holded-id hebben in 1 batch.
- * Stopt niet bij fouten — verzamelt resultaten en geeft samenvatting terug.
- */
-export async function pushAllPendingToHolded(): Promise<{ pushed: number; failed: number; errors: string[] }> {
-  await requireUser();
-  const pending = await db
-    .select({ id: purchaseOrders.id, supplier: purchaseOrders.supplier, reference: purchaseOrders.reference })
-    .from(purchaseOrders)
-    .where(sql`${purchaseOrders.holdedId} IS NULL AND ${purchaseOrders.status} NOT IN ('draft', 'cancelled')`);
-
-  let pushed = 0;
-  let failed = 0;
-  const errors: string[] = [];
-  for (const p of pending) {
-    try {
-      await syncPushToHolded(p.id);
-      pushed++;
-    } catch (e) {
-      failed++;
-      errors.push(`${p.supplier} ${p.reference ?? ""}: ${e instanceof Error ? e.message : String(e)}`);
-    }
-  }
-  revalidatePath("/inkooporders");
-  revalidatePath("/");
-  return { pushed, failed, errors };
-}
-
-/** Knop "Betalingen ophalen": neem de betaalstatus van gekoppelde
- *  inkooporders over uit Holded (zelfde sync als de nachtelijke cron). */
-export async function syncPurchasePayments(): Promise<PurchasePaymentSyncResult> {
-  await requireUser();
-  const result = await syncPurchasePaymentsFromHolded();
-  revalidatePath("/inkooporders");
-  revalidatePath("/");
-  return result;
 }
 
 /**

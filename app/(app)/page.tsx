@@ -34,7 +34,7 @@ import { formatDate, formatEUR } from "@/lib/utils";
 import { documentKindMeta } from "./_meta";
 import { SubmitButton } from "@/components/submit-button";
 import { reorderShortagesToDrafts } from "./bestellen/actions";
-import { approveProforma, markPurchaseOrderPaid } from "./inkooporders/actions";
+import { approveProforma } from "./inkooporders/actions";
 import { markPickedUp, setDeliveryStatus } from "./leveringen/actions";
 
 export const metadata = { title: "Dashboard" };
@@ -103,7 +103,7 @@ export default async function DashboardPage() {
 
   const openExpr = sql`${documents.status} not in ('paid', 'void', 'draft')`;
 
-  const [[contactsTotal], recentProjects, [docAgg], [creditAgg], [purchaseAgg], [productsAgg], openPurchaseOrders, [activeProjectsAgg], recentActivity, holdedExpensesYTD, [openRequestsAgg], [invoiceReviewAgg], unpaidInvoices, proformas, [acceptedAgg], unbookedStockRows] =
+  const [[contactsTotal], recentProjects, [docAgg], [creditAgg], [purchaseAgg], [productsAgg], openPurchaseOrders, [activeProjectsAgg], recentActivity, holdedExpensesYTD, [openRequestsAgg], [invoiceReviewAgg], proformas, [acceptedAgg], unbookedStockRows] =
     await Promise.all([
       db.select({ n: count() }).from(contacts),
       db.query.projects.findMany({
@@ -183,17 +183,6 @@ export default async function DashboardPage() {
         })
         .from(purchaseInvoiceReviews)
         .where(eq(purchaseInvoiceReviews.status, "pending")),
-      // Openstaande inkoopfacturen — nog te betalen (nieuwste eerst)
-      db
-        .select()
-        .from(purchaseOrders)
-        .where(
-          and(
-            isNull(purchaseOrders.paidAt),
-            sql`${purchaseOrders.status} not in ('draft', 'cancelled')`,
-          ),
-        )
-        .orderBy(desc(purchaseOrders.createdAt)),
       // Proforma's die op goedkeuring wachten
       db
         .select()
@@ -472,7 +461,6 @@ export default async function DashboardPage() {
   const marginPctMonth = revenueMonth > 0 ? Math.round((marginMonth / revenueMonth) * 100) : 0;
   const unpushedPurchase = Number(purchaseAgg.totalEur);
   const totalPurchase = Number(holdedExpensesYTD) + unpushedPurchase;
-  const unpaidPurchaseTotal = unpaidInvoices.reduce((s, p) => s + Number(p.total ?? 0), 0);
   const acceptedN = acceptedAgg?.n ?? 0;
   const poSoon = openPurchaseOrders.filter((po) => {
     if (!po.expectedDate) return false;
@@ -488,7 +476,6 @@ export default async function DashboardPage() {
     (openRequestsAgg?.n ?? 0) > 0 ||
     docAgg.overdueN > 0 ||
     unbookedStockN > 0 ||
-    unpaidInvoices.length > 0 ||
     proformas.length > 0 ||
     (invoiceReviewAgg?.n ?? 0) > 0 ||
     poSoon > 0 ||
@@ -550,7 +537,6 @@ export default async function DashboardPage() {
                 : "ex. BTW · uit Holded"
             }
           />
-          <StatTile label="Te betalen (inkoop)" value={unpaidInvoices.length} hint={formatEUR(unpaidPurchaseTotal)} />
           <StatTile label="Inkooporders onderweg" value={openPurchaseOrders.length} hint="aankomende voorraad" />
           <StatTile label="Actieve projecten" value={activeProjectsAgg?.n ?? 0} hint="lopende klussen" />
           <StatTile label="Contacten" value={contactsTotal.n} />
@@ -591,11 +577,6 @@ export default async function DashboardPage() {
             {unbookedStockN > 0 && (
               <ActionRow href="/invoices" emoji="📦" tone="warning">
                 <strong>{unbookedStockN}</strong> verstuurde/betaalde factu{unbookedStockN === 1 ? "ur" : "ren"} met productregels — voorraad nog niet afgeboekt.
-              </ActionRow>
-            )}
-            {unpaidInvoices.length > 0 && (
-              <ActionRow href="/inkooporders" emoji="💶" tone="warning">
-                <strong>{unpaidInvoices.length}</strong> inkoopfactu{unpaidInvoices.length === 1 ? "ur" : "ren"} te betalen — {formatEUR(unpaidPurchaseTotal)}.
               </ActionRow>
             )}
             {proformas.length > 0 && (
@@ -1096,69 +1077,6 @@ export default async function DashboardPage() {
           </Table>
         </Card>
       )}
-
-      <Card className="mt-6">
-        <CardHeader>
-          <CardTitle>Openstaande inkoopfacturen</CardTitle>
-          <Link href="/inkooporders" className="text-xs text-accent hover:underline">
-            Alle inkooporders
-          </Link>
-        </CardHeader>
-        {unpaidInvoices.length === 0 ? (
-          <CardContent>
-            <EmptyState title="Alles betaald ✓" description="Geen openstaande inkoopfacturen." />
-          </CardContent>
-        ) : (
-          <Table wrapperClassName="max-h-80 overflow-y-auto">
-            <THead>
-              <tr>
-                <Th>Leverancier</Th>
-                <Th>Referentie</Th>
-                <Th>Vervaldatum</Th>
-                <Th className="text-right">Bedrag</Th>
-                <Th />
-              </tr>
-            </THead>
-            <TBody>
-              {unpaidInvoices.map((po) => {
-                const overdue = !!po.dueDate && po.dueDate < today;
-                return (
-                  <Tr key={po.id}>
-                    <Td>
-                      <Link href={`/inkooporders/${po.id}`} className="font-medium hover:underline">
-                        {po.supplier}
-                      </Link>
-                    </Td>
-                    <Td className="text-muted">{po.reference ?? "—"}</Td>
-                    <Td className={overdue ? "font-medium text-danger" : "text-muted"}>
-                      {po.dueDate ? formatDate(po.dueDate) : "—"}
-                      {overdue ? " · vervallen" : ""}
-                    </Td>
-                    <Td className="text-right font-medium tabular-nums">
-                      {formatMoney(po.total, po.currency)}
-                    </Td>
-                    <Td className="text-right">
-                      <form
-                        action={async () => {
-                          "use server";
-                          await markPurchaseOrderPaid(po.id);
-                        }}
-                      >
-                        <button
-                          type="submit"
-                          className="rounded-md bg-accent/10 px-2.5 py-1 text-xs font-medium text-accent hover:bg-accent/20"
-                        >
-                          Betaald
-                        </button>
-                      </form>
-                    </Td>
-                  </Tr>
-                );
-              })}
-            </TBody>
-          </Table>
-        )}
-      </Card>
 
         </TabPanel>
 

@@ -142,7 +142,6 @@ export default async function LeverancierPage({ params }: { params: Promise<{ ke
                 <Th>Datum</Th>
                 <Th>Project</Th>
                 <Th className="text-right">Ex. btw</Th>
-                <Th>Betaald</Th>
               </tr>
             </THead>
             <TBody>
@@ -169,13 +168,6 @@ export default async function LeverancierPage({ params }: { params: Promise<{ ke
                     )}
                   </Td>
                   <Td className="text-right tabular-nums">{formatEUR(Number(f.ex_btw ?? 0))}</Td>
-                  <Td>
-                    {f.paid_at ? (
-                      <Badge tone="success">betaald</Badge>
-                    ) : (
-                      <Badge tone="warning">openstaand</Badge>
-                    )}
-                  </Td>
                 </Tr>
               ))}
             </TBody>

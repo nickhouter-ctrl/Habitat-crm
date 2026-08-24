@@ -39,9 +39,7 @@ import { SubmitButton } from "@/components/submit-button";
 import {
   createProductFromPoLine,
   deletePurchaseOrder,
-  markPurchaseOrderPaid,
   linkPurchaseOrderAsHours,
-  pushPurchaseOrderToHolded,
   regeneratePurchaseOrderPdfs,
   setPurchaseOrderProject,
   setPurchaseOrderStatus,
@@ -173,22 +171,10 @@ export default async function PurchaseOrderPage({ params }: { params: Promise<{ 
   const meta = PO_STATUS_META[po.status];
   const remove = deletePurchaseOrder.bind(null, id);
 
-  // Betaalstatus: "ontvangen" gaat over de goederen — dit gaat over de factuur.
-  // Komt automatisch binnen via de Holded-sync (Holded ↔ bank); lokaal kun je 'm
-  // handmatig op betaald zetten.
-  const poTotal = Number(po.total ?? 0);
+  // Betaalstatus houden we hier bewust niet bij — die leeft in Holded
+  // (keuze Nick 24-08-2026); inkoop is voor het project-overzicht.
   // Kosten/marges rekenen ex. btw; toon dat bedrag hier expliciet naast het totaal.
   const exVat = poExVat(po);
-  const poPaid = Number(po.paidEur ?? 0);
-  const poPaidFull = !!po.paidAt || (poTotal > 0 && poPaid >= poTotal - 0.01);
-  const payBadge =
-    po.status === "draft"
-      ? null
-      : poPaidFull
-        ? { tone: "success" as const, label: "Betaald" }
-        : poPaid > 0
-          ? { tone: "warning" as const, label: "Deels betaald" }
-          : { tone: "danger" as const, label: "Openstaand" };
 
   const Action = ({ status, label, variant = "secondary" }: { status: Parameters<typeof setPurchaseOrderStatus>[1]; label: string; variant?: "primary" | "secondary" }) => (
     <form action={setPurchaseOrderStatus.bind(null, id, status)}>
@@ -206,7 +192,6 @@ export default async function PurchaseOrderPage({ params }: { params: Promise<{ 
             {po.supplier}
             {po.kind === "invoice" && <Badge tone="neutral">Factuur / bon</Badge>}
             <Badge tone={meta.tone}>{meta.label}</Badge>
-            {payBadge && <Badge tone={payBadge.tone}>{payBadge.label}</Badge>}
           </span>
         }
         subtitle={
@@ -228,13 +213,6 @@ export default async function PurchaseOrderPage({ params }: { params: Promise<{ 
             <LinkButton href="/inkooporders" variant="ghost">
               ← Overzicht
             </LinkButton>
-            {payBadge && !poPaidFull && (
-              <form action={markPurchaseOrderPaid.bind(null, id)}>
-                <SubmitButton variant="primary" pendingLabel="Bezig…">
-                  Markeer als betaald
-                </SubmitButton>
-              </form>
-            )}
             <LinkButton href={`/inkooporders/${id}/edit`} variant="secondary">
               Bewerken
             </LinkButton>
@@ -480,30 +458,6 @@ export default async function PurchaseOrderPage({ params }: { params: Promise<{ 
                 <p className="text-xs text-muted">
                   Bij ‘Ontvangen’ worden de aantallen van gekoppelde producten bij de voorraad opgeteld.
                 </p>
-              )}
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <CardTitle>Holded</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-2">
-              {po.holdedId ? (
-                <p className="text-xs text-muted">
-                  Gekoppeld aan Holded (id <span className="font-mono">{po.holdedId}</span>).
-                </p>
-              ) : (
-                <>
-                  <form action={pushPurchaseOrderToHolded.bind(null, id)}>
-                    <SubmitButton variant="secondary" size="sm" pendingLabel="Bezig…">
-                      Push naar Holded
-                    </SubmitButton>
-                  </form>
-                  <p className="text-xs text-muted">
-                    Maakt deze bestelling als concept-aankoopfactuur in Holded en koppelt 'm.
-                  </p>
-                </>
               )}
             </CardContent>
           </Card>

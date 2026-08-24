@@ -22,8 +22,6 @@ import { emailInbox, mailAttachments, projects, purchaseInvoiceReviews, purchase
 import { formatMoney, poExVat, poExVatAmount, PO_OPEN_STATUSES, PO_STATUS_META } from "@/lib/purchase-orders";
 import { cn, formatEUR } from "@/lib/utils";
 
-import { BetaalsyncButton } from "./betaalsync-button";
-import { SyncHoldedButton } from "./sync-holded-button";
 
 export const metadata = { title: "Inkooporders" };
 
@@ -39,13 +37,6 @@ const STATUS_FILTERS = [
   { key: "cancelled", label: "Geannuleerd" },
 ] as const;
 
-const PAY_FILTERS = [
-  { key: "", label: "Alle" },
-  { key: "open", label: "Openstaand" },
-  { key: "deels", label: "Deels betaald" },
-  { key: "betaald", label: "Betaald" },
-] as const;
-
 export default async function PurchaseOrdersPage({
   searchParams,
 }: {
@@ -54,7 +45,6 @@ export default async function PurchaseOrdersPage({
   const params = await searchParams;
   const q = (typeof params.q === "string" ? params.q : "").trim();
   const statusFilter = typeof params.status === "string" ? params.status : "";
-  const payFilter = typeof params.pay === "string" ? params.pay : "";
 
   const rows = await db
     .select()
@@ -67,12 +57,6 @@ export default async function PurchaseOrdersPage({
   const projectNamen = new Map(
     (await db.select({ id: projects.id, name: projects.name }).from(projects)).map((p) => [p.id, p.name]),
   );
-
-  const pendingHolded = rows.filter((r) => !r.holdedId).length;
-  // Gekoppeld aan Holded maar hier nog niet (volledig) betaald → betaalsync zinvol.
-  const openPayments = rows.filter(
-    (r) => r.holdedId && !r.paidAt && r.status !== "cancelled",
-  ).length;
 
   // Facturen die op goedkeuring wachten. Die staan NIET in purchase_orders — pas
   // na goedkeuring ontstaat daar een rij.
@@ -92,26 +76,12 @@ export default async function PurchaseOrdersPage({
   const open = rows.filter((r) => PO_OPEN_STATUSES.includes(r.status));
   const received = rows.filter((r) => r.status === "received");
   const drafts = rows.filter((r) => r.status === "draft");
-  const isFullyPaid = (r: (typeof rows)[number]) =>
-    !!r.paidAt || (Number(r.total ?? 0) > 0 && Number(r.paidEur ?? 0) >= Number(r.total ?? 0) - 0.01);
-  const unpaid = rows.filter((r) => r.status !== "draft" && !isFullyPaid(r));
-  const unpaidTotal = unpaid
-    .filter((r) => (r.currency ?? "EUR") === "EUR")
-    .reduce((s, r) => s + (Number(r.total ?? 0) - Number(r.paidEur ?? 0)), 0);
   const nonEur = rows.filter((r) => (r.currency ?? "EUR") !== "EUR");
-
-  // Betaalstatus per regel (voor filter + badge).
-  const payState = (r: (typeof rows)[number]): "concept" | "betaald" | "deels" | "open" => {
-    if (r.status === "draft") return "concept";
-    if (isFullyPaid(r)) return "betaald";
-    return Number(r.paidEur ?? 0) > 0 ? "deels" : "open";
-  };
 
   // Zoeken/filteren in JS (lijst is klein, en zo blijven de aggregaten stabiel).
   const needle = q.toLowerCase();
   const filtered = rows.filter((r) => {
     if (statusFilter && r.status !== statusFilter) return false;
-    if (payFilter && payState(r) !== payFilter) return false;
     if (needle) {
       const hay = `${r.supplier} ${r.reference ?? ""} ${r.containerRef ?? ""} ${r.shipmentRef ?? ""} ${r.notes ?? ""}`.toLowerCase();
       if (!hay.includes(needle)) return false;
@@ -137,7 +107,6 @@ export default async function PurchaseOrdersPage({
     exVat: (r: (typeof rows)[number]) => poExVatAmount(r),
     total: (r: (typeof rows)[number]) => Number(r.total ?? 0),
     status: (r: (typeof rows)[number]) => r.status,
-    betaald: (r: (typeof rows)[number]) => Number(r.paidEur ?? 0),
   } as const;
   type SorteerSleutel = keyof typeof sorteerbaar;
 
@@ -164,7 +133,6 @@ export default async function PurchaseOrdersPage({
     const merged = {
       q,
       status: statusFilter,
-      pay: payFilter,
       sort: sorteerOp ?? "",
       dir: sorteerOp ? (oplopend ? "asc" : "desc") : "",
       ...overrides,
@@ -189,7 +157,7 @@ export default async function PurchaseOrdersPage({
       sleutel={sleutel}
       actief={sorteerOp === sleutel}
       oplopend={oplopend}
-      aflopendEerst={["orderDate", "expectedDate", "regels", "exVat", "total", "betaald"].includes(sleutel)}
+      aflopendEerst={["orderDate", "expectedDate", "regels", "exVat", "total"].includes(sleutel)}
       href={(s, richting) => buildHref({ sort: s, dir: richting })}
       className={className}
     >
@@ -197,20 +165,18 @@ export default async function PurchaseOrdersPage({
     </SorteerbareKop>
   );
 
-  const hasFilter = !!(q || statusFilter || payFilter);
+  const hasFilter = !!(q || statusFilter);
 
   return (
     <>
       <PageHeader
         title="Inkooporders"
         subtitle={
-          `${rows.length} ${rows.length === 1 ? "bestelling/aankoop" : "bestellingen/aankopen"} — incl. aankoopfacturen uit Holded` +
+          `${rows.length} ${rows.length === 1 ? "bestelling/aankoop" : "bestellingen/aankopen"} — overzicht per project; betaalstatus zie je in Holded` +
           (nonEur.length ? ` · ${nonEur.length} in vreemde valuta (niet in het totaal)` : "")
         }
         actions={
           <>
-            <SyncHoldedButton pendingCount={pendingHolded} />
-            <BetaalsyncButton openCount={openPayments} />
             {queueCount > 0 && (
               <LinkButton href="/inkooporders/te-verwerken" variant="secondary">
                 📥 Te keuren ({queueCount})
@@ -225,11 +191,10 @@ export default async function PurchaseOrdersPage({
       />
 
       {rows.length > 0 && (
-        <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+        <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
           <StatTile label="Aantal" value={rows.length} hint={drafts.length ? `${drafts.length} concept(en) niet meegeteld` : undefined} />
           <StatTile label="Totaal ex. BTW" value={formatEUR(totalEurEx)} hint="zonder concept" />
           <StatTile label="Totaal incl. BTW" value={formatEUR(totalEurIncl)} hint="zonder concept" />
-          <StatTile label="Te betalen" value={formatEUR(unpaidTotal)} hint={`${unpaid.length} openstaand`} tone="danger" />
           <StatTile label="Onderweg" value={open.length} hint={open.length ? formatEUR(sumEx(open.filter((r) => (r.currency ?? "EUR") === "EUR"))) : "—"} tone="info" />
           <StatTile label="Ontvangen / gefactureerd" value={received.length} hint={formatEUR(sumEx(received.filter((r) => (r.currency ?? "EUR") === "EUR")))} tone="success" />
         </div>
@@ -238,7 +203,7 @@ export default async function PurchaseOrdersPage({
       {rows.length === 0 ? (
         <EmptyState
           title="Nog geen inkooporders"
-          description="Voeg een leveranciersbestelling toe (bv. een KKR/Magic Stone proforma) of synchroniseer met Holded om aankoopfacturen op te halen."
+          description="Voeg een leveranciersbestelling toe (bv. een KKR/Magic Stone proforma) — inkoopfacturen uit de mail verschijnen hier na goedkeuring."
           action={<LinkButton href="/inkooporders/new">Toevoegen</LinkButton>}
         />
       ) : (
@@ -247,7 +212,6 @@ export default async function PurchaseOrdersPage({
           <div className="mb-4 space-y-3">
             <form action="/inkooporders" className="flex gap-2">
               {statusFilter && <input type="hidden" name="status" value={statusFilter} />}
-              {payFilter && <input type="hidden" name="pay" value={payFilter} />}
               {/* Sortering meesturen, anders val je bij het zoeken terug op de
                   standaardvolgorde terwijl de kolomkop nog gesorteerd oogt. */}
               {sorteerOp && <input type="hidden" name="sort" value={sorteerOp} />}
@@ -280,19 +244,6 @@ export default async function PurchaseOrdersPage({
                   {f.label}
                 </Link>
               ))}
-              <span className="mx-1 text-border">·</span>
-              {PAY_FILTERS.map((f) => (
-                <Link
-                  key={f.key || "allpay"}
-                  href={buildHref({ pay: f.key || undefined })}
-                  className={cn(
-                    "rounded-full px-3 py-1 text-xs font-medium",
-                    payFilter === f.key ? "bg-accent text-white" : "bg-background text-muted hover:bg-border",
-                  )}
-                >
-                  {f.label}
-                </Link>
-              ))}
             </div>
             {hasFilter && (
               <p className="text-xs text-muted">
@@ -314,28 +265,18 @@ export default async function PurchaseOrdersPage({
                   <SorteerKop sleutel="exVat" className="text-right">Ex. BTW</SorteerKop>
                   <SorteerKop sleutel="total" className="text-right">Incl. BTW</SorteerKop>
                   <SorteerKop sleutel="status">Status</SorteerKop>
-                  <SorteerKop sleutel="betaald">Betaald</SorteerKop>
                 </tr>
               </THead>
               <TBody>
                 {filtered.length === 0 ? (
                   <Tr>
-                    <Td className="text-muted" colSpan={10}>
+                    <Td className="text-muted" colSpan={9}>
                       Geen inkooporders gevonden voor deze zoekopdracht/filter.
                     </Td>
                   </Tr>
                 ) : (
                   gesorteerd.map((po) => {
                     const meta = PO_STATUS_META[po.status];
-                    const ps = payState(po);
-                    const pay =
-                      ps === "concept"
-                        ? null
-                        : ps === "betaald"
-                          ? { tone: "success" as const, label: "Betaald" }
-                          : ps === "deels"
-                            ? { tone: "warning" as const, label: "Deels" }
-                            : { tone: "danger" as const, label: "Openstaand" };
                     return (
                       <Tr key={po.id}>
                         <Td className="font-medium">
@@ -385,9 +326,6 @@ export default async function PurchaseOrdersPage({
                         <Td className="text-right tabular-nums">{formatMoney(po.total, po.currency)}</Td>
                         <Td>
                           <Badge tone={meta.tone}>{meta.label}</Badge>
-                        </Td>
-                        <Td>
-                          {pay ? <Badge tone={pay.tone}>{pay.label}</Badge> : <span className="text-muted">—</span>}
                         </Td>
                       </Tr>
                     );

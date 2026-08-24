@@ -10,7 +10,6 @@ import { extractInvoiceFieldsWithAI } from "@/lib/ai-invoice-extract";
 import { extractAttachmentAmount } from "@/lib/amount-extract";
 import { db } from "@/lib/db";
 import { activities, emailInbox, mailAttachments, purchaseOrders, quoteRequests } from "@/lib/db/schema";
-import { pushPurchaseOrderToHolded } from "@/lib/holded/sync";
 import { runImapPoll, type ImapPollResult } from "@/lib/imap-poll";
 import { copyMailAttachmentToPoBucket } from "@/lib/storage";
 
@@ -346,17 +345,9 @@ async function maakInkoopfactuurUitMail(
     authorId: userId,
   });
 
-  // 5. Best-effort push naar Holded — alleen echte facturen, geen proforma's.
-  let holdedId: string | null = null;
-  let holdedError: string | undefined;
-  if (!isProforma) {
-    try {
-      holdedId = await pushPurchaseOrderToHolded(po.id);
-    } catch (e) {
-      holdedError = e instanceof Error ? e.message : String(e);
-      console.error("[createPurchaseInvoiceFromMail] Holded push failed:", holdedError);
-    }
-  }
+  // Geen Holded-push meer: inkoop leeft alleen in het CRM voor het
+  // project-overzicht; de boekhoudkant loopt via Holded zelf (keuze Nick 24-08-2026).
+  const holdedId: string | null = null;
 
   revalidatePath("/");
   revalidatePath("/inbox");
@@ -364,7 +355,7 @@ async function maakInkoopfactuurUitMail(
   revalidatePath("/inkooporders");
   revalidatePath(`/inkooporders/${po.id}`);
 
-  return { purchaseOrderId: po.id, holdedId, total, holdedError };
+  return { purchaseOrderId: po.id, holdedId, total };
 }
 
 /** Handmatig mails ophalen — handig om niet op de kwartier-cron te wachten. */
