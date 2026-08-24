@@ -149,6 +149,8 @@ export type WorkerInvoiceRow = {
   ex_btw: string;
   project: string | null;
   count_as_labor: boolean;
+  urenregels: number;
+  contant: number;
 };
 
 /** Facturen die op zijn naam in de inkoop staan. */
@@ -159,7 +161,12 @@ export async function workerInvoices(id: string): Promise<WorkerInvoiceRow[]> {
       coalesce(nullif(po.subtotal, 0),
                case when coalesce(po.tax, 0) <> 0 then round(po.total - po.tax, 2) else po.total end,
                0)::text as ex_btw,
-      p.name as project, po.count_as_labor
+      p.name as project, po.count_as_labor,
+      (select count(*) from time_entries te
+        where te.purchase_order_id = po.id and te.self_logged_at is null)::int as urenregels,
+      (select count(*) from time_entries te
+        where te.purchase_order_id = po.id and te.self_logged_at is null
+          and te.payment_method = 'cash')::int as contant
     from purchase_orders po
     join workers w on w.id = ${id}
     left join projects p on p.id = po.project_id

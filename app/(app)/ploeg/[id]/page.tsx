@@ -37,9 +37,9 @@ import { SubmitButton } from "@/components/submit-button";
 import { db } from "@/lib/db";
 import { workers } from "@/lib/db/schema";
 import { moneyForInput } from "@/lib/parse-money";
-import { formatDate, formatEUR } from "@/lib/utils";
+import { cn, formatDate, formatEUR } from "@/lib/utils";
 import { workerEntries, workerInvoices, workerProjects } from "@/lib/worker-stats";
-import { toggleWorkerActive, updateWorker } from "../actions";
+import { setInvoicePayment, toggleTimeEntryPayment, toggleWorkerActive, updateWorker } from "../actions";
 
 export const dynamic = "force-dynamic";
 
@@ -259,9 +259,31 @@ export default async function WorkerPage({ params }: { params: Promise<{ id: str
                       <Td className="text-right tabular-nums text-muted">{formatEUR(Number(r.hourly_cost_eur))}</Td>
                       <Td className="text-right tabular-nums font-medium">{formatEUR(Number(r.kost))}</Td>
                       <Td className="whitespace-nowrap text-xs">
-                        <Badge tone={r.payment_method === "cash" ? "warning" : "neutral"}>
-                          {BETAALWIJZE[r.payment_method]}
-                        </Badge>
+                        {/* Hoe iets is afgerekend staat nergens in de gegevens: een
+                            factuur kan contant betaald zijn en andersom. Afleiden
+                            ging mis, dus is het hier gewoon een knop. */}
+                        <form
+                          action={toggleTimeEntryPayment.bind(
+                            null,
+                            worker.id,
+                            r.id,
+                            r.payment_method === "cash" ? "invoice" : "cash",
+                          )}
+                          className="inline"
+                        >
+                          <button
+                            type="submit"
+                            title={`Klik om op "${r.payment_method === "cash" ? "Per factuur" : "Contant"}" te zetten`}
+                            className={cn(
+                              "rounded-full border px-2 py-0.5 transition-colors",
+                              r.payment_method === "cash"
+                                ? "border-warning/40 bg-warning/10 text-warning hover:bg-warning/20"
+                                : "bg-surface text-muted hover:bg-background",
+                            )}
+                          >
+                            {BETAALWIJZE[r.payment_method]}
+                          </button>
+                        </form>
                         {r.wacht_op_akkoord && (
                           <Badge tone="warning" className="ml-1">wacht op akkoord</Badge>
                         )}
@@ -293,6 +315,7 @@ export default async function WorkerPage({ params }: { params: Promise<{ id: str
                     <Th>Datum</Th>
                     <Th>Werf</Th>
                     <Th className="text-right">Ex. btw</Th>
+                    <Th className="text-right">Betaald als</Th>
                   </Tr>
                 </THead>
                 <TBody>
@@ -309,6 +332,30 @@ export default async function WorkerPage({ params }: { params: Promise<{ id: str
                       </Td>
                       <Td className="text-muted">{f.project ?? "—"}</Td>
                       <Td className="text-right tabular-nums">{formatEUR(Number(f.ex_btw))}</Td>
+                      <Td className="whitespace-nowrap text-right text-xs">
+                        {f.urenregels > 0 ? (
+                          <form
+                            action={setInvoicePayment.bind(
+                              null,
+                              worker.id,
+                              f.id,
+                              f.contant > 0 ? "invoice" : "cash",
+                            )}
+                          >
+                            <button
+                              type="submit"
+                              className="text-accent hover:underline"
+                              title="Zet alle urenregels van deze factuur in één keer om"
+                            >
+                              {f.contant > 0
+                                ? `${f.contant} van ${f.urenregels} contant → alles per factuur`
+                                : `alles op contant`}
+                            </button>
+                          </form>
+                        ) : (
+                          <span className="text-muted">—</span>
+                        )}
+                      </Td>
                     </Tr>
                   ))}
                 </TBody>
