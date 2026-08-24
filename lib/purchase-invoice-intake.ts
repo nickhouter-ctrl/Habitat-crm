@@ -50,10 +50,9 @@ export const FINANCIAL_CATEGORIES = [
   "contractor",
 ] as const;
 
-/** Proforma's/offertes zijn nooit een te-betalen post. */
-export function isProformaOrQuote(filename: string): boolean {
-  return /\bproforma\b|\bquotation\b|\bquote\b|^PI[\s._-]|\bPI\s+for\b/i.test(filename);
-}
+// Puur op de bestandsnaam en dus los te testen; hier doorgegeven zodat
+// bestaande aanroepers dit pad houden.
+export { isProformaOrQuote, isSpecificationAttachment } from "@/lib/invoice-attachment-kind";
 
 /**
  * Bouw een nette referentie "Fabrieksnaam Factuurnummer" uit het mail-onderwerp.
@@ -153,6 +152,22 @@ export async function findExistingPurchaseOrder(args: {
     .where(sql`lower(regexp_replace(${purchaseOrders.supplier}, '[^0-9a-zA-Z]', '', 'g')) = ${leverancier}`);
 
   const nummer = norm(args.invoiceNumber);
+  // Korte nummers als heel woord vergelijken. Wilhelmus factureert "0-01" t/m
+  // "0-05"; genormaliseerd is dat "001" — drie tekens, dus de bevat-regel
+  // hieronder sloeg hem over en factuur N° 3 kwam twee keer in de administratie.
+  // Woord-voor-woord kijken vangt zowel "Wilhelmus Mark Strijks 0-04" als een
+  // gesplitste referentie ("Wilhelmus 0-04 — Showroom"), zónder dat "0-04" op
+  // "1004" aanslaat zoals een kale bevat-regel zou doen.
+  const woord = (args.invoiceNumber ?? "").trim().toLowerCase();
+  if (woord.length >= 2) {
+    for (const k of kandidaten) {
+      const ref = (k.reference ?? "").trim().toLowerCase();
+      const woorden = ref.split(/[\s,;]+/).map((w) => w.replace(/[.,;:]+$/, ""));
+      if (ref === woord || woorden.includes(woord)) {
+        return { id: k.id, reference: k.reference, reason: `zelfde factuurnummer (${args.invoiceNumber})` };
+      }
+    }
+  }
   if (nummer.length >= 4) {
     for (const k of kandidaten) {
       const ref = norm(k.reference);
@@ -515,12 +530,74 @@ export async function upsertInvoiceReview(p: InvoiceProposal, source: "auto" | "
       setWhere: eq(purchaseInvoiceReviews.status, "pending"),
     })
     .returning({ id: purchaseInvoiceReviews.id });
-  if (row) return row.id;
+  if (row) {
+    await supersedePendingDuplicate(row.id);
+    return row.id;
+  }
   const bestaand = await db.query.purchaseInvoiceReviews.findFirst({
     where: eq(purchaseInvoiceReviews.mailAttachmentId, p.attachmentId),
     columns: { id: true },
   });
   return bestaand!.id;
+}
+
+/**
+ * Staat dezelfde factuur al te wachten? Dan hoort er maar één kaart in de
+ * wachtrij te staan.
+ *
+ * Nodig omdat de dubbelcontrole tot nu toe alleen naar `purchase_orders` keek:
+ * twee nog niet goedgekeurde kaarten zagen elkaar niet. Een doorgestuurde mail
+ * ("Fwd: factura … nummer 3") leverde zo een tweede kaart voor factuur N° 3 op
+ * die al geboekt was — en de eerste die je goedkeurt lijkt gewoon te kloppen.
+ *
+ * Zelfde leverancier én zelfde factuurnummer is per definitie dezelfde factuur.
+ * De oudste kaart blijft staan; de nieuwe gaat op `superseded` — niet weg, wel
+ * uit de wachtrij, met een spoor in het logboek.
+ */
+async function supersedePendingDuplicate(reviewId: string): Promise<void> {
+  const nieuw = await db.query.purchaseInvoiceReviews.findFirst({
+    where: eq(purchaseInvoiceReviews.id, reviewId),
+  });
+  if (!nieuw || nieuw.status !== "pending") return;
+  const nummer = (nieuw.aiFields as AiInvoiceFields | null)?.invoiceNumber?.trim();
+  if (!nummer || nummer.length < 2) return;
+
+  const norm = (v: string | null | undefined) => (v ?? "").replace(/[^0-9a-z]/gi, "").toLowerCase();
+  const leverancier = norm(nieuw.proposedSupplier);
+  if (!leverancier) return;
+
+  const wachtenden = await db
+    .select()
+    .from(purchaseInvoiceReviews)
+    .where(and(eq(purchaseInvoiceReviews.status, "pending"), ne(purchaseInvoiceReviews.id, reviewId)));
+
+  const tweeling = wachtenden.find(
+    (r) =>
+      norm(r.proposedSupplier) === leverancier &&
+      norm((r.aiFields as AiInvoiceFields | null)?.invoiceNumber) === norm(nummer) &&
+      r.createdAt <= nieuw.createdAt,
+  );
+  if (!tweeling) return;
+
+  await db
+    .update(purchaseInvoiceReviews)
+    .set({
+      status: "superseded",
+      decisionNote: `dubbel-van:${tweeling.id}`,
+      decidedAt: new Date(),
+      decidedVia: "app",
+      updatedAt: new Date(),
+    })
+    .where(and(eq(purchaseInvoiceReviews.id, reviewId), eq(purchaseInvoiceReviews.status, "pending")));
+
+  await db.insert(activities).values({
+    type: "note",
+    subject: `Dezelfde factuur stond al klaar: ${nieuw.proposedSupplier ?? ""} ${nummer}`.trim(),
+    body:
+      `Deze bijlage levert factuurnummer ${nummer} van ${nieuw.proposedSupplier ?? "onbekende leverancier"} op, ` +
+      `en die staat al ter beoordeling als "${tweeling.proposedReference ?? tweeling.id}". ` +
+      `De nieuwe kaart is uit de wachtrij gehaald zodat dezelfde factuur niet twee keer geboekt kan worden.`,
+  });
 }
 
 /* ─────────────────────────── goedkeuren ─────────────────────────── */

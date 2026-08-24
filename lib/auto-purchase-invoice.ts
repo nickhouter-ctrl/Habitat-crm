@@ -11,10 +11,12 @@ import { and, asc, eq, lt, sql } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { emailInbox, mailAttachments, purchaseInvoiceReviews } from "@/lib/db/schema";
 import {
+  attachReviewToSibling,
   buildInvoiceProposal,
   buildPurchaseReference,
   FINANCIAL_CATEGORIES,
   isProformaOrQuote,
+  isSpecificationAttachment,
   upsertInvoiceReview,
 } from "@/lib/purchase-invoice-intake";
 
@@ -94,6 +96,11 @@ export async function tryAutoCreatePurchaseInvoice(emailId: string): Promise<Aut
   const financial = atts.filter((a) => FINANCIAL_CATEGORIES.includes(a.category as (typeof FINANCIAL_CATEGORIES)[number]) && !isProformaOrQuote(a.filename));
   if (financial.length === 0) return result;
 
+  // Bijhouden welke kaart bij welke bijlage hoort: is er in deze mail zowel een
+  // factuur als een specificatie, dan hangen we die straks aan elkaar in plaats
+  // van er twee te-betalen posten van te maken.
+  const gemaakt: { reviewId: string; filename: string; spec: boolean }[] = [];
+
   for (const a of financial) {
     try {
       const proposal = await buildInvoiceProposal({ emailId, attachmentId: a.id });
@@ -101,6 +108,7 @@ export async function tryAutoCreatePurchaseInvoice(emailId: string): Promise<Aut
       const reviewId = await upsertInvoiceReview(proposal, "auto");
       result.reviewIds.push(reviewId);
       result.created++;
+      gemaakt.push({ reviewId, filename: a.filename, spec: isSpecificationAttachment(a.filename) });
 
       // De uitgelezen gegevens ook op de bijlage bijwerken, zodat de bestaande
       // schermen (inbox, archief) hetzelfde bedrag en dezelfde leverancier tonen.
@@ -117,5 +125,58 @@ export async function tryAutoCreatePurchaseInvoice(emailId: string): Promise<Aut
     }
   }
 
+  await koppelSpecificatiesAanFactuur(gemaakt, result);
+
   return result;
+}
+
+
+/** Volgnummer uit een bestandsnaam: "JUSTIFICACION HORAS N°4 WILHELMUS" → "4". */
+function volgnummer(filename: string): string | null {
+  const m = filename.match(/(?:n[º°o]\.?|nr\.?|nummer|number)\s*([0-9]{1,4})/i);
+  return m ? String(Number(m[1])) : null;
+}
+
+/**
+ * Eén mail met een factuur én haar urenverantwoording levert twee kaarten in de
+ * wachtrij op. Alleen de factuur is een te-betalen post; de specificatie hoort
+ * als bijlage op diezelfde inkooporder. Dat kon al met de hand — nu gebeurt het
+ * vanzelf, want twee kaarten die er hetzelfde uitzien wórden ook allebei
+ * goedgekeurd (zie Wilhelmus N° 4).
+ *
+ * Alleen als er in dezelfde mail ook echt een factuur zit: een leverancier die
+ * enkel een urenstaat stuurt houdt gewoon zijn plek in de wachtrij.
+ */
+async function koppelSpecificatiesAanFactuur(
+  gemaakt: { reviewId: string; filename: string; spec: boolean }[],
+  result: AutoInvoiceResult,
+): Promise<void> {
+  const specs = gemaakt.filter((g) => g.spec);
+  const facturen = gemaakt.filter((g) => !g.spec);
+  if (specs.length === 0 || facturen.length === 0) return;
+
+  for (const spec of specs) {
+    // Bij meerdere facturen in één mail alleen koppelen als het volgnummer
+    // hetzelfde is ("N°4" ↔ "N° 4"); anders liever laten staan dan gokken.
+    const doel =
+      facturen.length === 1
+        ? facturen[0]
+        : (() => {
+            const n = volgnummer(spec.filename);
+            const treffers = n ? facturen.filter((f) => volgnummer(f.filename) === n) : [];
+            return treffers.length === 1 ? treffers[0] : null;
+          })();
+    if (!doel) continue;
+
+    const uitkomst = await attachReviewToSibling({
+      reviewId: spec.reviewId,
+      targetReviewId: doel.reviewId,
+      userId: null,
+    });
+    if (uitkomst.ok) {
+      result.reviewIds = result.reviewIds.filter((id) => id !== spec.reviewId);
+      result.created--;
+      console.log(`[inkoop] "${spec.filename}" gekoppeld als specificatie bij "${doel.filename}"`);
+    }
+  }
 }
