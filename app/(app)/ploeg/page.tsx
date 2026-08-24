@@ -75,7 +75,7 @@ export default async function PloegPage() {
       <Card className="mb-5 overflow-hidden">
         <CardHeader>
           <CardTitle>Arbeiders</CardTitle>
-          <span className="text-xs text-muted">uren en kosten ex. btw, over alle werven</span>
+          <span className="text-xs text-muted">tarieven, uren en kosten ex. btw, over alle werven</span>
         </CardHeader>
         {rows.length === 0 ? (
           <CardContent>
@@ -142,14 +142,14 @@ export default async function PloegPage() {
             <Field label="Functie" htmlFor="w-role">
               <Input id="w-role" name="role" placeholder="bijv. tegelzetter" />
             </Field>
-            <Field label="Tarief per factuur (€/u)" htmlFor="w-rate">
+            <Field label="Tarief per factuur (€/u)" htmlFor="w-rate" hint="ex. btw">
               <Input id="w-rate" name="hourlyCostEur" inputMode="decimal" placeholder="25,00" />
             </Field>
-            <Field label="Tarief contant (€/u)" htmlFor="w-rate-cash" hint="leeg = zelfde als per factuur">
+            <Field label="Tarief contant (€/u)" htmlFor="w-rate-cash" hint="ex. btw · leeg = zelfde als per factuur">
               <Input id="w-rate-cash" name="hourlyCostCashEur" inputMode="decimal" placeholder="20,00" />
             </Field>
             <Field label="Standaard betaalwijze" htmlFor="w-pay">
-              <Select id="w-pay" name="defaultPaymentMethod" defaultValue="cash">
+              <Select id="w-pay" name="defaultPaymentMethod" defaultValue="invoice">
                 <option value="cash">Contant</option>
                 <option value="invoice">Per factuur</option>
               </Select>

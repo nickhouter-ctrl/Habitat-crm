@@ -25,7 +25,7 @@ const workerSchema = z.object({
   hourlyCostEur: z.string().trim().optional(),
   /** Tarief bij contante betaling; leeg = zelfde als per factuur. */
   hourlyCostCashEur: z.string().trim().optional(),
-  defaultPaymentMethod: z.enum(["cash", "invoice"]).default("cash"),
+  defaultPaymentMethod: z.enum(["cash", "invoice"]).default("invoice"),
   portalLang: z.enum(["nl", "es", "en"]).default("es"),
   notes: z.string().trim().optional(),
 });

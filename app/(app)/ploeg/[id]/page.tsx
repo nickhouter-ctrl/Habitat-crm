@@ -108,7 +108,7 @@ export default async function WorkerPage({ params }: { params: Promise<{ id: str
             <CardHeader>
               <CardTitle>Gegevens</CardTitle>
               <span className="text-xs text-muted">
-                twee tarieven: contant werken gaat vaak tegen een ander tarief
+                twee tarieven, allebei ex. btw — contant werken gaat vaak tegen een ander tarief
               </span>
             </CardHeader>
             <CardContent>
@@ -120,14 +120,14 @@ export default async function WorkerPage({ params }: { params: Promise<{ id: str
                   <Input name="role" defaultValue={worker.role ?? ""} placeholder="bijv. tegelzetter" />
                 </Field>
                 <div className="grid gap-3 sm:grid-cols-2">
-                  <Field label="Tarief per factuur (€/u)">
+                  <Field label="Tarief per factuur (€/u)" hint="ex. btw">
                     <Input
                       name="hourlyCostEur"
                       inputMode="decimal"
                       defaultValue={moneyForInput(worker.hourlyCostEur)}
                     />
                   </Field>
-                  <Field label="Tarief contant (€/u)" hint="leeg = zelfde als per factuur">
+                  <Field label="Tarief contant (€/u)" hint="ex. btw · leeg = zelfde als per factuur">
                     <Input
                       name="hourlyCostCashEur"
                       inputMode="decimal"
@@ -226,7 +226,7 @@ export default async function WorkerPage({ params }: { params: Promise<{ id: str
                     <Th className="text-right">Uren</Th>
                     <Th className="text-right">Tarief</Th>
                     <Th className="text-right">Kost</Th>
-                    <Th>Betaling</Th>
+                    <Th>Betaald als</Th>
                   </Tr>
                 </THead>
                 <TBody>
@@ -241,26 +241,32 @@ export default async function WorkerPage({ params }: { params: Promise<{ id: str
                         ) : (
                           <span className="text-muted">—</span>
                         )}
-                        {r.note && <span className="block text-xs text-muted">{r.note}</span>}
+                        {/* Komt de regel van een inkoopfactuur, dan is de notitie
+                            zelf de weg ernaartoe. Een los linkje "factuur" ernaast
+                            leverde in de kolom Betaling "Per factuur factuur" op. */}
+                        {r.purchase_order_id ? (
+                          <Link
+                            href={`/inkooporders/${r.purchase_order_id}`}
+                            className="block text-xs text-accent hover:underline"
+                          >
+                            {r.note ?? `via factuur ${r.reference ?? ""}`.trim()}
+                          </Link>
+                        ) : (
+                          r.note && <span className="block text-xs text-muted">{r.note}</span>
+                        )}
                       </Td>
                       <Td className="text-right tabular-nums">{Number(r.hours).toLocaleString("nl-NL")}</Td>
                       <Td className="text-right tabular-nums text-muted">{formatEUR(Number(r.hourly_cost_eur))}</Td>
                       <Td className="text-right tabular-nums font-medium">{formatEUR(Number(r.kost))}</Td>
                       <Td className="whitespace-nowrap text-xs">
-                        {BETAALWIJZE[r.payment_method]}
-                        {r.purchase_order_id && (
-                          <Link
-                            href={`/inkooporders/${r.purchase_order_id}`}
-                            className="ml-1 text-accent hover:underline"
-                          >
-                            factuur
-                          </Link>
-                        )}
+                        <Badge tone={r.payment_method === "cash" ? "warning" : "neutral"}>
+                          {BETAALWIJZE[r.payment_method]}
+                        </Badge>
                         {r.wacht_op_akkoord && (
-                          <Badge tone="warning" className="ml-1">wacht</Badge>
+                          <Badge tone="warning" className="ml-1">wacht op akkoord</Badge>
                         )}
                         {r.zelf_geboekt && !r.wacht_op_akkoord && (
-                          <span className="ml-1 text-muted">· portaal</span>
+                          <span className="ml-1 text-muted">via portaal</span>
                         )}
                       </Td>
                     </Tr>

@@ -34,7 +34,9 @@ export function TimeEntryForm({
   action: (formData: FormData) => void | Promise<void>;
 }) {
   const [workerId, setWorkerId] = useState("");
-  const [betaling, setBetaling] = useState<"cash" | "invoice">("cash");
+  // Per factuur is de regel: contant komt nog maar zelden voor. Kies je een
+  // arbeider die standaard contant werkt, dan schakelt het veld vanzelf om.
+  const [betaling, setBetaling] = useState<"cash" | "invoice">("invoice");
   const [tarief, setTarief] = useState("");
   const [zelfGetypt, setZelfGetypt] = useState(false);
 
@@ -92,7 +94,7 @@ export function TimeEntryForm({
         + Uren
       </SubmitButton>
       <Field
-        label="Tarief (€/u)"
+        label="Tarief (€/u, ex. btw)"
         className="lg:col-span-2"
         hint={
           gekozen

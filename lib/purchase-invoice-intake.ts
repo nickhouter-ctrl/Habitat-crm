@@ -35,7 +35,7 @@ import { buildInvoicePdfAttachment, isExcelAttachment } from "@/lib/excel-to-pdf
 import { rateToEur } from "@/lib/fx";
 import { evaluateInvoice, type Check, type InvoiceVerdict } from "@/lib/invoice-checks";
 import { matchProject, type ProjectNeedle } from "@/lib/project-match";
-import { poExVatAssumingSpanishVat } from "@/lib/purchase-orders";
+import { matchWorkerByName, poExVatAssumingSpanishVat } from "@/lib/purchase-orders";
 import { sendEmail } from "@/lib/email";
 import { recordSentEmail } from "@/lib/sent-email";
 import { copyMailAttachmentToPoBucket, downloadMailAttachmentBuffer } from "@/lib/storage";
@@ -716,6 +716,12 @@ export async function approveInvoiceReview(args: {
   }
 
   const kind = o.kind ?? (review.suggestedKind as "labor" | "material" | null);
+  // Bij een urenfactuur de arbeider erbij zoeken, zodat de uren onder zijn naam
+  // op zijn ploegpagina staan en niet als losse tekst.
+  const werker =
+    kind === "labor"
+      ? matchWorkerByName(supplier, await db.select({ id: workers.id, name: workers.name }).from(workers))
+      : null;
   const split = o.split?.length ? o.split : null;
   const projectId = split ? null : (o.projectId ?? review.suggestedProjectId);
 
@@ -753,15 +759,35 @@ export async function approveInvoiceReview(args: {
 
   // Kosten op de juiste plek zetten.
   const ex = poExVatAssumingSpanishVat({ subtotal, total, tax: null, items: [] });
-  const verdelingen = split ?? (projectId ? [{ projectId, hours: o.hours ?? null, amount: ex.amount }] : []);
+  const ruw = split ?? (projectId ? [{ projectId, hours: o.hours ?? null, amount: ex.amount }] : []);
+
+  // Een verdeling kan nooit méér kosten dan de factuur ex btw waard is. Bij
+  // Wilhelmus 0-05 telden de ingevulde bedragen op tot € 1.061,78 — het totaal
+  // INCLUSIEF btw — en stond er dus 21% te veel arbeidskost op drie werven.
+  // De verhouding tussen de delen blijft; alleen de schaal gaat terug naar het
+  // bedrag ex btw. Btw is geen kostprijs.
+  const somDelen = ruw.reduce((s, d) => s + (d.amount ?? 0), 0);
+  const factor = somDelen > ex.amount + 0.01 && somDelen > 0 ? ex.amount / somDelen : 1;
+  const verdelingen = ruw.map((d) => ({ ...d, amount: (d.amount ?? 0) * factor }));
+  if (factor !== 1) {
+    console.warn(
+      `[inkoop] verdeling van ${reference ?? supplier} telde op tot ${somDelen.toFixed(2)} terwijl de factuur ${ex.amount.toFixed(2)} ex btw is — teruggeschaald`,
+    );
+  }
   for (const deel of verdelingen) {
     if (kind === "labor" && !o.hoursAlreadyLogged) {
       const uren = deel.hours && deel.hours > 0 ? deel.hours : 1;
       await db.insert(timeEntries).values({
         projectId: deel.projectId,
-        workerName: supplier,
+        workerId: werker?.id ?? null,
+        workerName: werker?.name ?? supplier,
         date: review.proposedInvoiceDate ?? new Date().toISOString().slice(0, 10),
         hours: String(uren),
+        // Dit KOMT van een factuur, dus is het per factuur betaald. De kolom
+        // valt terug op 'cash' als je niets meegeeft, en daardoor stond er
+        // € 45.322 aan arbeid als "contant" geboekt terwijl er geen cent
+        // contant is gegaan.
+        paymentMethod: "invoice",
         // Zes decimalen, want de geboekte kost moet EXACT het factuurbedrag zijn.
         // Met twee decimalen werd € 3.000 ÷ 107,14 uur afgerond op € 28,00 en
         // boekte het systeem € 2.999,92 — 8 cent minder dan de leverancier vraagt.

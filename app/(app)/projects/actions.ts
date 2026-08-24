@@ -177,7 +177,7 @@ const timeEntrySchema = z.object({
   date: z.string().trim().min(1, "Datum is verplicht"),
   hours: z.string().trim().min(1, "Uren zijn verplicht"),
   hourlyCostEur: z.string().trim().optional(),
-  paymentMethod: z.enum(["cash", "invoice"]).default("cash"),
+  paymentMethod: z.enum(["cash", "invoice"]).default("invoice"),
   note: z.string().trim().optional(),
 });
 
