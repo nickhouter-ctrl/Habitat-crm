@@ -75,7 +75,7 @@ export default async function PloegPage() {
       <Card className="mb-5 overflow-hidden">
         <CardHeader>
           <CardTitle>Arbeiders</CardTitle>
-          <span className="text-xs text-muted">tarieven, uren en kosten ex. btw, over alle werven</span>
+          <span className="text-xs text-muted">alle bedragen zonder btw, over alle werven</span>
         </CardHeader>
         {rows.length === 0 ? (
           <CardContent>
@@ -145,7 +145,7 @@ export default async function PloegPage() {
             <Field label="Tarief per factuur (€/u)" htmlFor="w-rate" hint="ex. btw">
               <Input id="w-rate" name="hourlyCostEur" inputMode="decimal" placeholder="25,00" />
             </Field>
-            <Field label="Tarief contant (€/u)" htmlFor="w-rate-cash" hint="ex. btw · leeg = zelfde als per factuur">
+            <Field label="Tarief contant (€/u)" htmlFor="w-rate-cash" hint="contant kent geen btw · leeg = zelfde als per factuur">
               <Input id="w-rate-cash" name="hourlyCostCashEur" inputMode="decimal" placeholder="20,00" />
             </Field>
             <Field label="Standaard betaalwijze" htmlFor="w-pay">

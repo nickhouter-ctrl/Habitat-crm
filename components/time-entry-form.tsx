@@ -94,12 +94,14 @@ export function TimeEntryForm({
         + Uren
       </SubmitButton>
       <Field
-        label="Tarief (€/u, ex. btw)"
+        label="Tarief (€/u)"
         className="lg:col-span-2"
         hint={
           gekozen
             ? standaard != null
-              ? `zijn tarief ${betaling === "cash" ? "contant" : "per factuur"} is € ${standaard}/u — pas aan als het deze keer anders is`
+              ? betaling === "cash"
+                ? `contant € ${standaard}/u — daar zit geen btw op. Pas aan als het deze keer anders is.`
+                : `per factuur € ${standaard}/u ex. btw — pas aan als het deze keer anders is`
               : "op zijn ploegkaart staat geen tarief; vul het hier in"
             : "kies een arbeider, dan volgt zijn tarief"
         }

@@ -108,7 +108,7 @@ export default async function WorkerPage({ params }: { params: Promise<{ id: str
             <CardHeader>
               <CardTitle>Gegevens</CardTitle>
               <span className="text-xs text-muted">
-                twee tarieven, allebei ex. btw — contant werken gaat vaak tegen een ander tarief
+                contant werken gaat vaak tegen een ander tarief dan op factuur
               </span>
             </CardHeader>
             <CardContent>
@@ -127,7 +127,7 @@ export default async function WorkerPage({ params }: { params: Promise<{ id: str
                       defaultValue={moneyForInput(worker.hourlyCostEur)}
                     />
                   </Field>
-                  <Field label="Tarief contant (€/u)" hint="ex. btw · leeg = zelfde als per factuur">
+                  <Field label="Tarief contant (€/u)" hint="contant kent geen btw · leeg = zelfde als per factuur">
                     <Input
                       name="hourlyCostCashEur"
                       inputMode="decimal"
