@@ -21,13 +21,15 @@ import {
   Tr,
 } from "@/components/ui";
 import { db } from "@/lib/db";
-import { projectCosts, products, projects, purchaseInvoiceReviews, purchaseOrders, timeEntries, users } from "@/lib/db/schema";
+import { projectCosts, products, projects, purchaseInvoiceReviews, purchaseOrders, timeEntries, users, workers } from "@/lib/db/schema";
 import { nextSequentialSku } from "@/lib/products";
 import {
   formatMoney,
+  matchWorkerByName,
   normalizePoAttachments,
   parsePoLineItems,
   poExVat,
+  poExVatAssumingSpanishVat,
   poLineTotal,
   PO_STATUS_META,
 } from "@/lib/purchase-orders";
@@ -127,6 +129,21 @@ export default async function PurchaseOrderPage({ params }: { params: Promise<{ 
     .from(projects)
     .where(eq(projects.status, "active"))
     .orderBy(asc(projects.name));
+
+  // De ploeg, om een urenfactuur onder de juiste naam te boeken. De leverancier
+  // op een werknemersfactuur ís de arbeider, dus we zoeken hem alvast op naam —
+  // maar alleen als het geen gok is (precies één treffer).
+  const workerRows = await db
+    .select({ id: workers.id, name: workers.name, hourlyCostEur: workers.hourlyCostEur })
+    .from(workers)
+    .where(eq(workers.active, true))
+    .orderBy(asc(workers.name));
+  const workerOptions = workerRows.map((w) => ({
+    id: w.id,
+    name: w.name,
+    hourlyCostEur: w.hourlyCostEur != null ? Number(w.hourlyCostEur) : null,
+  }));
+  const gevondenWorker = matchWorkerByName(po.supplier, workerOptions);
 
   const items = parsePoLineItems(po.items);
   const linkedIds = items.map((i) => i.productId).filter(Boolean) as string[];
@@ -371,6 +388,9 @@ export default async function PurchaseOrderPage({ params }: { params: Promise<{ 
           <CardContent>
             <PurchaseProjectLink
               projects={projectRows}
+              workers={workerOptions}
+              defaultWorkerId={gevondenWorker?.id ?? null}
+              amountExVat={poExVatAssumingSpanishVat(po).amount}
               current={{
                 projectId: po.projectId,
                 projectName: projectRows.find((p) => p.id === po.projectId)?.name ?? null,

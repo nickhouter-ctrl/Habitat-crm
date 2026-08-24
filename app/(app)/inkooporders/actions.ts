@@ -11,7 +11,7 @@ import { db } from "@/lib/db";
 import { activities, emailInbox, mailAttachments, products, purchaseOrders, timeEntries, workers } from "@/lib/db/schema";
 import type { PurchaseOrderAttachment } from "@/lib/db/schema";
 import { nextSequentialSku } from "@/lib/products";
-import { normalizePoAttachments, parsePoLineItems, poExVatAssumingSpanishVat, poTotal, PO_STATUSES } from "@/lib/purchase-orders";
+import { matchWorkerByName, normalizePoAttachments, parsePoLineItems, poExVatAssumingSpanishVat, poTotal, PO_STATUSES } from "@/lib/purchase-orders";
 import { copyMailAttachmentToPoBucket, deletePurchaseOrderFile, downloadMailAttachmentBuffer, downloadPurchaseOrderBuffer } from "@/lib/storage";
 import { buildInvoicePdfAttachment, isExcelAttachment, pdfNameFor } from "@/lib/excel-to-pdf";
 import { buildPurchaseReference } from "@/lib/auto-purchase-invoice";
@@ -226,8 +226,30 @@ export async function linkPurchaseOrderAsHours(id: string, formData: FormData) {
   // altijd van een lokale (Spaanse) partij, dus zonder uitgelezen btw is 21%
   // aannemen juister dan het totaal; dat wordt op de regel vermeld.
   const { amount, vatAssumed } = poExVatAssumingSpanishVat(po);
+
+  // Wie heeft die uren gemaakt? Expliciet gekozen wint; anders zoeken we hem op
+  // naam. Zonder arbeider blijft de regel losse tekst en telt hij nergens onder
+  // zijn eigen naam mee.
+  const allWorkers = await db.query.workers.findMany({
+    columns: { id: true, name: true, hourlyCostEur: true },
+  });
+  const gekozen = String(formData.get("workerId") ?? "").trim();
+  const worker =
+    (gekozen.length === 36 ? allWorkers.find((w) => w.id === gekozen) : undefined) ??
+    matchWorkerByName(po.supplier, allWorkers);
+
   const hoursRaw = Number(String(formData.get("hours") ?? "").replace(",", "."));
-  const hours = hoursRaw > 0 ? hoursRaw : 1; // geen uren opgegeven → 1 post t.w.v. het bedrag
+  // Geen uren ingevuld? Dan uit het uurtarief van de arbeider afleiden. De oude
+  // terugval — één post van het hele bedrag "à 1 uur" — klopte financieel wel,
+  // maar zette de urenstand van het project op 1 uur voor een factuur van
+  // duizenden euro's. Zonder tarief blijft die terugval staan.
+  const tarief = Number(worker?.hourlyCostEur ?? 0);
+  const hours =
+    hoursRaw > 0
+      ? hoursRaw
+      : tarief > 0 && amount > 0
+        ? Math.round((amount / tarief) * 100) / 100
+        : 1;
   const rate = amount > 0 ? amount / hours : 0;
   // "Uren staan al geregistreerd" (bv. via het urenportaal ingevuld): wel als
   // arbeid koppelen, maar GEEN nieuwe uren-regel maken — anders telt het dubbel.
@@ -243,18 +265,10 @@ export async function linkPurchaseOrderAsHours(id: string, formData: FormData) {
     // koppel de nog niet-gefactureerde portaal-uren van deze leverancier op dit
     // project aan deze inkooporder. Zo is zichtbaar welke uren de factuur dekt
     // en telt niets dubbel.
-    // Naam-match leverancier ↔ arbeider: bevat-elkaar (factuur "Zerghini
-    // Abdelmjid" ↔ arbeider "Abdelmjid"); bij twijfel (0 of 2+ matches) niets
-    // koppelen — liever handmatig dan verkeerd.
-    const allWorkers = await db.query.workers.findMany({ columns: { id: true, name: true } });
-    const sup = po.supplier.trim().toLowerCase();
-    const matches = allWorkers.filter((w) => {
-      const n = w.name.trim().toLowerCase();
-      return n.length >= 4 && (sup.includes(n) || n.includes(sup));
-    });
-    const worker = matches.length === 1 ? matches[0] : null;
-    if (matches.length > 1) {
-      console.warn(`[inkooporder] meerdere arbeiders matchen leverancier "${po.supplier}" — uren niet automatisch gekoppeld`);
+    // De arbeider is hierboven bepaald: gekozen in het formulier, of op naam
+    // gevonden (bij twijfel niets — liever handmatig dan verkeerd).
+    if (!worker) {
+      console.warn(`[inkooporder] geen arbeider gevonden bij leverancier "${po.supplier}" — portaal-uren niet automatisch gekoppeld`);
     }
     if (worker) {
       const linked = await db
@@ -276,13 +290,17 @@ export async function linkPurchaseOrderAsHours(id: string, formData: FormData) {
   if (!alreadyLogged) {
     await db.insert(timeEntries).values({
       projectId,
-      workerName: po.supplier,
+      workerId: worker?.id ?? null,
+      workerName: worker?.name ?? po.supplier,
       date: po.orderDate ?? new Date().toISOString().slice(0, 10),
       hours: String(hours),
       hourlyCostEur: String(rate),
       paymentMethod: "invoice",
       purchaseOrderId: id,
-      note: `Uren via inkooporder${po.reference ? ` ${po.reference}` : ""}${vatAssumed ? " — ex. btw afgeleid van het totaal (21% aangenomen; controleer de factuur)" : ""}`,
+      note:
+        `Uren via inkooporder${po.reference ? ` ${po.reference}` : ""}` +
+        (hoursRaw > 0 ? "" : tarief > 0 ? ` — uren afgeleid uit het tarief van ${worker!.name} (${tarief}/u)` : "") +
+        (vatAssumed ? " — ex. btw afgeleid van het totaal (21% aangenomen; controleer de factuur)" : ""),
     });
   }
   // Inkooporder aan het project koppelen maar als arbeid markeren (niet als materiaal).

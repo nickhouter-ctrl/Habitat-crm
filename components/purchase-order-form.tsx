@@ -15,6 +15,8 @@ import { formatMoney, poLineTotal, PO_STATUS_META } from "@/lib/purchase-orders"
 import { cn } from "@/lib/utils";
 
 export type POProductOption = { id: string; name: string; sku: string | null };
+/** Naam die je bij "Leverancier" kunt kiezen: een eerdere leverancier of iemand uit de ploeg. */
+export type POSupplierOption = { name: string; hint?: string };
 
 type Row = {
   productId: string;
@@ -71,10 +73,13 @@ type ParseResult = {
 export function PurchaseOrderForm({
   order,
   products,
+  suppliers = [],
   action,
 }: {
   order?: PurchaseOrder;
   products: POProductOption[];
+  /** Bekende namen voor het leveranciersveld — vrij typen blijft gewoon werken. */
+  suppliers?: POSupplierOption[];
   action: (formData: FormData) => void | Promise<void>;
 }) {
   const [kind, setKind] = useState<"order" | "invoice">(
@@ -269,15 +274,33 @@ export function PurchaseOrderForm({
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2">
-        <Field label="Leverancier" htmlFor="supplier">
+        <Field
+          label="Leverancier"
+          htmlFor="supplier"
+          hint={suppliers.length ? "kies uit de lijst of typ een nieuwe naam" : undefined}
+        >
+          {/* Bewust een datalist en geen keuzelijst: een leverancier kan ook
+              iemand zijn die er nog niet in staat, en het veld wordt door het
+              uitlezen van de PDF ingevuld. Zo houd je vrij typen én krijg je de
+              ploeg en eerdere leveranciers als suggestie — met de exacte
+              schrijfwijze, want dáárop worden uren aan een arbeider gekoppeld. */}
           <Input
             id="supplier"
             name="supplier"
             required
+            list="po-suppliers"
+            autoComplete="off"
             value={supplier}
             onChange={(e) => setSupplier(e.target.value)}
             placeholder="KingKonree International (H.K) Limited"
           />
+          <datalist id="po-suppliers">
+            {suppliers.map((s) => (
+              <option key={s.name} value={s.name}>
+                {s.hint}
+              </option>
+            ))}
+          </datalist>
         </Field>
         <Field label="Referentie / PI-nummer" htmlFor="reference">
           <Input

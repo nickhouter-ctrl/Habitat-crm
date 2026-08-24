@@ -170,3 +170,24 @@ export function parsePoLineItems(raw: unknown): PurchaseOrderLineItem[] {
   }
   return out;
 }
+
+/**
+ * Zoekt bij een leveranciersnaam de arbeider uit de eigen ploeg — bevat-elkaar,
+ * hoofdletterongevoelig ("Ferhaoui Mohamed" ↔ "FERHAOUI MOHAMED", factuur
+ * "Zerghini Abdelmjid" ↔ arbeider "Abdelmjid").
+ *
+ * Bij twijfel (geen match of meer dan één) geeft dit `null` terug: liever laten
+ * kiezen dan de uren onder de verkeerde naam boeken.
+ */
+export function matchWorkerByName<T extends { id: string; name: string }>(
+  supplier: string | null | undefined,
+  workers: T[],
+): T | null {
+  const sup = (supplier ?? "").trim().toLowerCase();
+  if (sup.length < 4) return null;
+  const treffers = workers.filter((w) => {
+    const n = w.name.trim().toLowerCase();
+    return n.length >= 4 && (sup.includes(n) || n.includes(sup));
+  });
+  return treffers.length === 1 ? treffers[0] : null;
+}

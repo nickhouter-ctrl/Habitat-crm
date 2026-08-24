@@ -19,15 +19,25 @@ import { Badge, Input } from "@/components/ui";
 import { cn } from "@/lib/utils";
 
 export type ProjectOption = { id: string; name: string };
+export type WorkerOption = { id: string; name: string; hourlyCostEur: number | null };
 
 export function PurchaseProjectLink({
   projects,
+  workers,
+  defaultWorkerId,
+  amountExVat,
   current,
   suggestion,
   linkAsMaterial,
   linkAsHours,
 }: {
   projects: ProjectOption[];
+  /** De eigen ploeg — om de uren onder de juiste naam te boeken. */
+  workers: WorkerOption[];
+  /** Op naam gevonden arbeider bij deze leverancier; leeg als het gokken werd. */
+  defaultWorkerId: string | null;
+  /** Factuurbedrag ex. btw — om te laten zien hoeveel uur eruit volgt. */
+  amountExVat: number;
   current: { projectId: string | null; projectName: string | null; countAsLabor: boolean; hours: number | null };
   /** Voorstel van de AI bij binnenkomst; alleen getoond zolang er niets gekoppeld is. */
   suggestion: { projectId: string | null; projectName: string | null; kind: "labor" | "material" | null; hours: number | null } | null;
@@ -36,7 +46,21 @@ export function PurchaseProjectLink({
 }) {
   const [kind, setKind] = useState<"material" | "labor">(current.countAsLabor ? "labor" : "material");
   const [wijzigen, setWijzigen] = useState(!current.projectId);
+  const [workerId, setWorkerId] = useState(defaultWorkerId ?? "");
+  const [uren, setUren] = useState(String(current.hours ?? suggestion?.hours ?? ""));
   const opties = projects.map((p) => ({ value: p.id, label: p.name }));
+  const werkerOpties = workers.map((w) => ({
+    value: w.id,
+    label: w.name,
+    hint: w.hourlyCostEur ? `€ ${w.hourlyCostEur}/u` : undefined,
+  }));
+  const tarief = Number(workers.find((w) => w.id === workerId)?.hourlyCostEur ?? 0);
+  // Uren leeg laten is de normale gang van zaken bij een weekfactuur; laat dan
+  // zien wat het systeem eruit afleidt in plaats van stil "1 uur" te boeken.
+  const afgeleideUren =
+    !uren.trim() && tarief > 0 && amountExVat > 0
+      ? Math.round((amountExVat / tarief) * 100) / 100
+      : null;
 
   // Gekoppeld en niet aan het wijzigen: alleen tonen wat er staat.
   if (current.projectId && !wijzigen) {
@@ -83,7 +107,12 @@ export function PurchaseProjectLink({
             {suggestion.hours ? ` (${suggestion.hours} uur)` : ""} voor <strong>{suggestion.projectName}</strong>.
           </p>
           <input type="hidden" name="projectId" value={suggestion.projectId} />
-          {suggestion.kind === "labor" && <input type="hidden" name="hours" value={suggestion.hours ?? ""} />}
+          {suggestion.kind === "labor" && (
+            <>
+              <input type="hidden" name="hours" value={suggestion.hours ?? ""} />
+              <input type="hidden" name="workerId" value={defaultWorkerId ?? ""} />
+            </>
+          )}
           <SubmitButton size="sm" variant="primary" pendingLabel="…">
             Klopt, koppelen
           </SubmitButton>
@@ -125,6 +154,23 @@ export function PurchaseProjectLink({
 
         {kind === "labor" && (
           <div className="space-y-3 rounded-lg border bg-background/50 p-3">
+            <div>
+              <label className="mb-1.5 block text-sm font-medium">Wie heeft deze uren gemaakt?</label>
+              <Combobox
+                name="workerId"
+                defaultValue={workerId}
+                clearable
+                placeholder="Zoek in de ploeg…"
+                options={werkerOpties}
+                menuClassName="w-full"
+                onSelect={(v) => setWorkerId(v)}
+              />
+              <p className="mt-1 text-xs text-muted">
+                {workerId
+                  ? "De uren komen onder zijn naam op het project te staan."
+                  : "Zonder naam blijft de urenregel losse tekst en telt hij niet mee in zijn urenoverzicht."}
+              </p>
+            </div>
             <div className="flex flex-wrap items-end gap-3">
               <div className="w-32">
                 <label className="mb-1.5 block text-sm font-medium" htmlFor="po-hours">
@@ -137,13 +183,16 @@ export function PurchaseProjectLink({
                   step="0.5"
                   min="0"
                   className="text-right"
-                  defaultValue={current.hours ?? suggestion?.hours ?? ""}
-                  placeholder="bijv. 94,5"
+                  value={uren}
+                  onChange={(e) => setUren(e.target.value)}
+                  placeholder={afgeleideUren ? String(afgeleideUren) : "bijv. 94,5"}
                 />
               </div>
               <p className="flex-1 text-xs text-muted">
-                Het uurtarief volgt uit bedrag ÷ uren. Laat je dit leeg, dan komt het hele bedrag als één post op het
-                project te staan.
+                Het uurtarief volgt uit bedrag ÷ uren.{" "}
+                {afgeleideUren
+                  ? `Laat je dit leeg, dan wordt het ${afgeleideUren} uur — het bedrag gedeeld door zijn tarief van € ${tarief}.`
+                  : "Laat je dit leeg en kent het systeem geen uurtarief, dan komt het hele bedrag als één post van 1 uur op het project te staan."}
               </p>
             </div>
             <label className="flex items-start gap-2 text-sm">

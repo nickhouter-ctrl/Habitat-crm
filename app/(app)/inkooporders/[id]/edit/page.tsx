@@ -5,6 +5,7 @@ import { Card, PageHeader } from "@/components/ui";
 import { PurchaseOrderForm } from "@/components/purchase-order-form";
 import { db } from "@/lib/db";
 import { products, purchaseOrders } from "@/lib/db/schema";
+import { supplierNameOptions } from "@/lib/supplier-options";
 import { updatePurchaseOrder } from "../../actions";
 
 export const metadata = { title: "Inkooporder bewerken" };
@@ -18,10 +19,13 @@ export default async function EditPurchaseOrderPage({
   const order = await db.query.purchaseOrders.findFirst({ where: eq(purchaseOrders.id, id) });
   if (!order) notFound();
 
-  const productOptions = await db
-    .select({ id: products.id, name: products.name, sku: products.sku })
-    .from(products)
-    .orderBy(asc(products.name));
+  const [productOptions, suppliers] = await Promise.all([
+    db
+      .select({ id: products.id, name: products.name, sku: products.sku })
+      .from(products)
+      .orderBy(asc(products.name)),
+    supplierNameOptions(),
+  ]);
 
   const action = updatePurchaseOrder.bind(null, id);
 
@@ -29,7 +33,7 @@ export default async function EditPurchaseOrderPage({
     <>
       <PageHeader title="Inkooporder bewerken" subtitle={order.supplier} />
       <Card className="p-5">
-        <PurchaseOrderForm order={order} products={productOptions} action={action} />
+        <PurchaseOrderForm order={order} products={productOptions} suppliers={suppliers} action={action} />
       </Card>
     </>
   );
