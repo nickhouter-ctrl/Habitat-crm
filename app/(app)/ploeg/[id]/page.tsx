@@ -39,7 +39,7 @@ import { workers } from "@/lib/db/schema";
 import { moneyForInput } from "@/lib/parse-money";
 import { cn, formatDate, formatEUR } from "@/lib/utils";
 import { workerEntries, workerInvoices, workerProjects } from "@/lib/worker-stats";
-import { setInvoicePayment, toggleTimeEntryPayment, toggleWorkerActive, updateWorker } from "../actions";
+import { toggleWorkerActive, updateWorker } from "../actions";
 
 export const dynamic = "force-dynamic";
 
@@ -48,8 +48,6 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
   const w = await db.query.workers.findFirst({ where: eq(workers.id, id), columns: { name: true } });
   return { title: w ? `${w.name} · Ploeg` : "Ploeg" };
 }
-
-const BETAALWIJZE = { cash: "Contant", invoice: "Per factuur" } as const;
 
 export default async function WorkerPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -64,9 +62,8 @@ export default async function WorkerPage({ params }: { params: Promise<{ id: str
 
   const uren = perWerf.reduce((s, p) => s + Number(p.uren ?? 0), 0);
   const kost = perWerf.reduce((s, p) => s + Number(p.kost ?? 0), 0);
-  const contant = perWerf.reduce((s, p) => s + Number(p.contant ?? 0), 0);
-  const gefactureerd = perWerf.reduce((s, p) => s + Number(p.gefactureerd ?? 0), 0);
   const wachtend = regels.filter((r) => r.wacht_op_akkoord);
+  const laatst = regels.find((r) => !r.wacht_op_akkoord)?.date ?? null;
 
   return (
     <>
@@ -83,8 +80,8 @@ export default async function WorkerPage({ params }: { params: Promise<{ id: str
       <div className="mb-5 grid grid-cols-2 gap-3 sm:grid-cols-4">
         <StatTile label="Uren geboekt" value={uren.toLocaleString("nl-NL")} hint="goedgekeurd" />
         <StatTile label="Arbeidskost" value={formatEUR(kost)} hint="ex. btw" />
-        <StatTile label="Contant" value={formatEUR(contant)} hint="uitbetaald in de hand" />
-        <StatTile label="Per factuur" value={formatEUR(gefactureerd)} hint="via zijn facturen" />
+        <StatTile label="Werven" value={String(perWerf.length)} hint="waar hij gewerkt heeft" />
+        <StatTile label="Laatst gewerkt" value={laatst ? formatDate(laatst) : "—"} />
       </div>
 
       {wachtend.length > 0 && (
@@ -108,7 +105,7 @@ export default async function WorkerPage({ params }: { params: Promise<{ id: str
             <CardHeader>
               <CardTitle>Gegevens</CardTitle>
               <span className="text-xs text-muted">
-                contant werken gaat vaak tegen een ander tarief dan op factuur
+een tweede tarief is optioneel; bij het boeken van uren kies je welke geldt
               </span>
             </CardHeader>
             <CardContent>
@@ -120,14 +117,14 @@ export default async function WorkerPage({ params }: { params: Promise<{ id: str
                   <Input name="role" defaultValue={worker.role ?? ""} placeholder="bijv. tegelzetter" />
                 </Field>
                 <div className="grid gap-3 sm:grid-cols-2">
-                  <Field label="Tarief per factuur (€/u)" hint="ex. btw">
+                  <Field label="Uurtarief (€/u)" hint="ex. btw">
                     <Input
                       name="hourlyCostEur"
                       inputMode="decimal"
                       defaultValue={moneyForInput(worker.hourlyCostEur)}
                     />
                   </Field>
-                  <Field label="Tarief contant (€/u)" hint="contant kent geen btw · leeg = zelfde als per factuur">
+                  <Field label="Tweede tarief (€/u)" hint="optioneel — een afwijkend tarief dat soms geldt">
                     <Input
                       name="hourlyCostCashEur"
                       inputMode="decimal"
@@ -135,12 +132,6 @@ export default async function WorkerPage({ params }: { params: Promise<{ id: str
                     />
                   </Field>
                 </div>
-                <Field label="Standaard betaalwijze" hint="voorinvulling bij het boeken van uren">
-                  <Select name="defaultPaymentMethod" defaultValue={worker.defaultPaymentMethod}>
-                    <option value="cash">Contant</option>
-                    <option value="invoice">Per factuur</option>
-                  </Select>
-                </Field>
                 <Field label="Taal urenportaal">
                   <Select name="portalLang" defaultValue={worker.portalLang ?? "es"}>
                     <option value="es">Español</option>
@@ -191,11 +182,8 @@ export default async function WorkerPage({ params }: { params: Promise<{ id: str
                         {p.laatst ? ` · tot ${formatDate(p.laatst)}` : ""}
                       </span>
                     </span>
-                    <span className="shrink-0 text-right">
-                      <span className="block font-medium tabular-nums">{formatEUR(Number(p.kost))}</span>
-                      <span className="block text-xs text-muted tabular-nums">
-                        {formatEUR(Number(p.contant))} contant · {formatEUR(Number(p.gefactureerd))} factuur
-                      </span>
+                    <span className="shrink-0 text-right font-medium tabular-nums">
+                      {formatEUR(Number(p.kost))}
                     </span>
                   </div>
                 ))}
@@ -226,7 +214,7 @@ export default async function WorkerPage({ params }: { params: Promise<{ id: str
                     <Th className="text-right">Uren</Th>
                     <Th className="text-right">Tarief</Th>
                     <Th className="text-right">Kost</Th>
-                    <Th>Betaald als</Th>
+                    <Th></Th>
                   </Tr>
                 </THead>
                 <TBody>
@@ -259,36 +247,9 @@ export default async function WorkerPage({ params }: { params: Promise<{ id: str
                       <Td className="text-right tabular-nums text-muted">{formatEUR(Number(r.hourly_cost_eur))}</Td>
                       <Td className="text-right tabular-nums font-medium">{formatEUR(Number(r.kost))}</Td>
                       <Td className="whitespace-nowrap text-xs">
-                        {/* Hoe iets is afgerekend staat nergens in de gegevens: een
-                            factuur kan contant betaald zijn en andersom. Afleiden
-                            ging mis, dus is het hier gewoon een knop. */}
-                        <form
-                          action={toggleTimeEntryPayment.bind(
-                            null,
-                            worker.id,
-                            r.id,
-                            r.payment_method === "cash" ? "invoice" : "cash",
-                          )}
-                          className="inline"
-                        >
-                          <button
-                            type="submit"
-                            title={`Klik om op "${r.payment_method === "cash" ? "Per factuur" : "Contant"}" te zetten`}
-                            className={cn(
-                              "rounded-full border px-2 py-0.5 transition-colors",
-                              r.payment_method === "cash"
-                                ? "border-warning/40 bg-warning/10 text-warning hover:bg-warning/20"
-                                : "bg-surface text-muted hover:bg-background",
-                            )}
-                          >
-                            {BETAALWIJZE[r.payment_method]}
-                          </button>
-                        </form>
-                        {r.wacht_op_akkoord && (
-                          <Badge tone="warning" className="ml-1">wacht op akkoord</Badge>
-                        )}
+                        {r.wacht_op_akkoord && <Badge tone="warning">wacht op akkoord</Badge>}
                         {r.zelf_geboekt && !r.wacht_op_akkoord && (
-                          <span className="ml-1 text-muted">via portaal</span>
+                          <span className="text-muted">via portaal</span>
                         )}
                       </Td>
                     </Tr>
@@ -315,7 +276,6 @@ export default async function WorkerPage({ params }: { params: Promise<{ id: str
                     <Th>Datum</Th>
                     <Th>Werf</Th>
                     <Th className="text-right">Ex. btw</Th>
-                    <Th className="text-right">Betaald als</Th>
                   </Tr>
                 </THead>
                 <TBody>
@@ -332,30 +292,7 @@ export default async function WorkerPage({ params }: { params: Promise<{ id: str
                       </Td>
                       <Td className="text-muted">{f.project ?? "—"}</Td>
                       <Td className="text-right tabular-nums">{formatEUR(Number(f.ex_btw))}</Td>
-                      <Td className="whitespace-nowrap text-right text-xs">
-                        {f.urenregels > 0 ? (
-                          <form
-                            action={setInvoicePayment.bind(
-                              null,
-                              worker.id,
-                              f.id,
-                              f.contant > 0 ? "invoice" : "cash",
-                            )}
-                          >
-                            <button
-                              type="submit"
-                              className="text-accent hover:underline"
-                              title="Zet alle urenregels van deze factuur in één keer om"
-                            >
-                              {f.contant > 0
-                                ? `${f.contant} van ${f.urenregels} contant → alles per factuur`
-                                : `alles op contant`}
-                            </button>
-                          </form>
-                        ) : (
-                          <span className="text-muted">—</span>
-                        )}
-                      </Td>
+
                     </Tr>
                   ))}
                 </TBody>

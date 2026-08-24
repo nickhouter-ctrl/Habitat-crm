@@ -79,8 +79,6 @@ export type WorkerProjectRow = {
   project: string | null;
   uren: string;
   kost: string;
-  contant: string;
-  gefactureerd: string;
   laatst: string | null;
 };
 
@@ -91,8 +89,6 @@ export async function workerProjects(id: string): Promise<WorkerProjectRow[]> {
       p.id as project_id, p.name as project,
       sum(te.hours)::text as uren,
       round(sum(te.hours * te.hourly_cost_eur), 2)::text as kost,
-      round(sum(case when te.payment_method = 'cash' then te.hours * te.hourly_cost_eur else 0 end), 2)::text as contant,
-      round(sum(case when te.payment_method = 'invoice' then te.hours * te.hourly_cost_eur else 0 end), 2)::text as gefactureerd,
       max(te.date)::text as laatst
     from time_entries te
     join workers w on w.id = ${id}
@@ -112,7 +108,6 @@ export type WorkerEntryRow = {
   hours: string;
   hourly_cost_eur: string;
   kost: string;
-  payment_method: "cash" | "invoice";
   purchase_order_id: string | null;
   reference: string | null;
   zelf_geboekt: boolean;
@@ -127,7 +122,7 @@ export async function workerEntries(id: string, limiet = 200): Promise<WorkerEnt
       te.id, te.date::text, te.project_id, p.name as project,
       te.hours::text, te.hourly_cost_eur::text,
       round(te.hours * te.hourly_cost_eur, 2)::text as kost,
-      te.payment_method, te.purchase_order_id, po.reference,
+      te.purchase_order_id, po.reference,
       te.self_logged_at is not null as zelf_geboekt,
       (te.self_logged_at is not null and te.approved_at is null) as wacht_op_akkoord,
       te.note
@@ -149,8 +144,6 @@ export type WorkerInvoiceRow = {
   ex_btw: string;
   project: string | null;
   count_as_labor: boolean;
-  urenregels: number;
-  contant: number;
 };
 
 /** Facturen die op zijn naam in de inkoop staan. */
@@ -161,12 +154,7 @@ export async function workerInvoices(id: string): Promise<WorkerInvoiceRow[]> {
       coalesce(nullif(po.subtotal, 0),
                case when coalesce(po.tax, 0) <> 0 then round(po.total - po.tax, 2) else po.total end,
                0)::text as ex_btw,
-      p.name as project, po.count_as_labor,
-      (select count(*) from time_entries te
-        where te.purchase_order_id = po.id and te.self_logged_at is null)::int as urenregels,
-      (select count(*) from time_entries te
-        where te.purchase_order_id = po.id and te.self_logged_at is null
-          and te.payment_method = 'cash')::int as contant
+      p.name as project, po.count_as_labor
     from purchase_orders po
     join workers w on w.id = ${id}
     left join projects p on p.id = po.project_id

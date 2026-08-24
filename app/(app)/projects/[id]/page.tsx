@@ -657,7 +657,6 @@ export default async function ProjectDetailPage({
     rate: Number(w.hourlyCostEur ?? 0),
     hourlyCostEur: w.hourlyCostEur != null ? Number(w.hourlyCostEur) : null,
     hourlyCostCashEur: w.hourlyCostCashEur != null ? Number(w.hourlyCostCashEur) : null,
-    defaultPaymentMethod: w.defaultPaymentMethod,
   }));
 
   const contactOptions: ComboOption[] = contactOpts.map((c) => ({ value: c.id, label: c.name }));
@@ -1548,17 +1547,16 @@ export default async function ProjectDetailPage({
                       <Th className="text-right">Uren</Th>
                       <Th className="text-right">Tarief</Th>
                       <Th className="text-right">Kosten</Th>
-                      <Th>Betaling</Th>
                       <Th />
                     </tr>
                   </THead>
                   <TBody>
                     {timeRows.map((t) => {
                       if (t.id === editEntryId) {
-                        // Bewerk-modus: hele regel als één formulier (uren/tarief/datum/betaling).
+                        // Bewerk-modus: hele regel als één formulier (datum/uren/tarief).
                         return (
                           <Tr key={t.id} className="bg-amber-50/50">
-                            <Td colSpan={7} className="p-3">
+                            <Td colSpan={6} className="p-3">
                               <form action={updateTimeEntry.bind(null, id, t.id)} className="flex flex-wrap items-end gap-3">
                                 <input type="hidden" name="note" defaultValue={t.note ?? ""} />
                                 <div className="text-sm">
@@ -1575,12 +1573,6 @@ export default async function ProjectDetailPage({
                                   {/* Zonder opschonen staat hier "3800.000000" — en dat
                                       werd bij opslaan 3,8 miljard. Zie lib/parse-money.ts. */}
                                   <Input name="hourlyCostEur" defaultValue={moneyForInput(t.hourlyCostEur)} inputMode="decimal" className="w-24 text-right tabular-nums" />
-                                </Field>
-                                <Field label="Betaling">
-                                  <Select name="paymentMethod" defaultValue={t.paymentMethod}>
-                                    <option value="cash">Contant</option>
-                                    <option value="invoice">Per factuur</option>
-                                  </Select>
                                 </Field>
                                 <SubmitButton size="sm" variant="secondary" pendingLabel="…">Opslaan</SubmitButton>
                                 <Link href={`/projects/${id}#uren`} className="px-2 py-2 text-xs text-muted hover:underline">
@@ -1604,7 +1596,6 @@ export default async function ProjectDetailPage({
                           <Td className="text-right tabular-nums">{Number(t.hours).toLocaleString("nl-NL")}</Td>
                           <Td className="text-right tabular-nums text-muted">{formatEUR(t.hourlyCostEur)}</Td>
                           <Td className="text-right tabular-nums font-medium">{formatEUR(Number(t.hours) * Number(t.hourlyCostEur))}</Td>
-                          <Td><Badge tone={t.paymentMethod === "cash" ? "warning" : "neutral"}>{PAY_LABEL[t.paymentMethod]}</Badge></Td>
                           <Td className="text-right whitespace-nowrap">
                             <div className="flex items-center justify-end gap-1">
                               {pending && (

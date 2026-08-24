@@ -63,10 +63,9 @@ export default async function PloegPage() {
               {dubbel.length} ploegkaarten delen een naam met een andere kaart.
             </p>
             <p className="mt-1 text-muted">
-              Dan staan zijn uren verspreid en klopt geen van beide overzichten. Werkt iemand soms
-              contant en soms op factuur, gebruik dan één kaart met twee tarieven —{" "}
-              <span className="whitespace-nowrap">contant én per factuur</span> staan allebei op zijn
-              pagina. Het gaat om: {dubbel.map((w) => w.name).join(", ")}.
+              Dan staan zijn uren verspreid en klopt geen van beide overzichten. Werkt iemand tegen
+              twee verschillende tarieven, gebruik dan één kaart met beide tarieven erop. Het gaat om:{" "}
+              {dubbel.map((w) => w.name).join(", ")}.
             </p>
           </CardContent>
         </Card>
@@ -87,8 +86,8 @@ export default async function PloegPage() {
               <Tr>
                 <Th>Naam</Th>
                 <Th>Functie</Th>
-                <Th className="text-right">Per factuur</Th>
-                <Th className="text-right">Contant</Th>
+                <Th className="text-right">Uurtarief</Th>
+                <Th className="text-right">Tweede tarief</Th>
                 <Th className="text-right">Uren</Th>
                 <Th className="text-right">Arbeidskost</Th>
                 <Th className="text-right">Werven</Th>
@@ -131,7 +130,7 @@ export default async function PloegPage() {
         <CardHeader>
           <CardTitle>Arbeider toevoegen</CardTitle>
           <span className="text-xs text-muted">
-            twee tarieven, want contant werken gaat vaak tegen een ander tarief dan op factuur
+een tweede tarief is optioneel — je kiest bij het boeken van uren welke geldt
           </span>
         </CardHeader>
         <CardContent>
@@ -142,17 +141,11 @@ export default async function PloegPage() {
             <Field label="Functie" htmlFor="w-role">
               <Input id="w-role" name="role" placeholder="bijv. tegelzetter" />
             </Field>
-            <Field label="Tarief per factuur (€/u)" htmlFor="w-rate" hint="ex. btw">
+            <Field label="Uurtarief (€/u)" htmlFor="w-rate" hint="ex. btw">
               <Input id="w-rate" name="hourlyCostEur" inputMode="decimal" placeholder="25,00" />
             </Field>
-            <Field label="Tarief contant (€/u)" htmlFor="w-rate-cash" hint="contant kent geen btw · leeg = zelfde als per factuur">
+            <Field label="Tweede tarief (€/u)" htmlFor="w-rate-cash" hint="optioneel — geldt soms">
               <Input id="w-rate-cash" name="hourlyCostCashEur" inputMode="decimal" placeholder="20,00" />
-            </Field>
-            <Field label="Standaard betaalwijze" htmlFor="w-pay">
-              <Select id="w-pay" name="defaultPaymentMethod" defaultValue="invoice">
-                <option value="cash">Contant</option>
-                <option value="invoice">Per factuur</option>
-              </Select>
             </Field>
             <Field label="Taal urenportaal" htmlFor="w-lang">
               <Select id="w-lang" name="portalLang" defaultValue="es">
