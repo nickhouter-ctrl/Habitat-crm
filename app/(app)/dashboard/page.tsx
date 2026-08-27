@@ -24,6 +24,7 @@ import {
 import { TabsRoot, TabsBar, TabPanel } from "@/components/tabs";
 import { DagtakenLijst } from "@/components/dagtaken-lijst";
 import { db } from "@/lib/db";
+import { OFFERTE_TE_FACTUREREN } from "@/lib/quote-status";
 import { verzamelDagtaken } from "@/lib/dagtaken";
 import { activities, contacts, deliveries, documents, products, projects, purchaseOrders } from "@/lib/db/schema";
 import { normalizeDocItems } from "@/lib/documents";
@@ -141,10 +142,7 @@ export default async function DashboardPage() {
         .where(eq(purchaseOrders.status, "draft"))
         .orderBy(desc(purchaseOrders.createdAt)),
       // Geaccepteerde offertes die klaarstaan om gefactureerd te worden.
-      db
-        .select({ n: sql<number>`count(*)::int` })
-        .from(documents)
-        .where(and(eq(documents.kind, "estimate"), eq(documents.status, "accepted"))),
+      db.select({ n: sql<number>`count(*)::int` }).from(documents).where(OFFERTE_TE_FACTUREREN),
       // De "Wat moet er gebeuren"-signalen — gedeelde bron met de startpagina.
       verzamelDagtaken(),
     ]);
@@ -181,7 +179,7 @@ export default async function DashboardPage() {
       })
       .from(documents)
       .leftJoin(contacts, eq(documents.contactId, contacts.id))
-      .where(and(eq(documents.kind, "estimate"), eq(documents.status, "accepted"))),
+      .where(OFFERTE_TE_FACTUREREN),
     db
       .select({
         src: documents.sourceDocumentId,

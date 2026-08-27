@@ -10,6 +10,7 @@ import "server-only";
 import { and, count, eq, inArray, isNotNull, isNull, sql } from "drizzle-orm";
 
 import { db } from "@/lib/db";
+import { OFFERTE_TE_FACTUREREN } from "@/lib/quote-status";
 import { documents, purchaseInvoiceReviews, purchaseOrders, quoteRequests, timeEntries } from "@/lib/db/schema";
 import { normalizeDocItems } from "@/lib/documents";
 import { PO_OPEN_STATUSES } from "@/lib/purchase-orders";
@@ -47,11 +48,9 @@ export async function verzamelDagtaken(): Promise<Dagtaak[]> {
         })
         .from(timeEntries)
         .where(and(isNotNull(timeEntries.selfLoggedAt), isNull(timeEntries.approvedAt))),
-      // Geaccepteerde offertes die klaarstaan om gefactureerd te worden.
-      db
-        .select({ n: sql<number>`count(*)::int` })
-        .from(documents)
-        .where(and(eq(documents.kind, "estimate"), eq(documents.status, "accepted"))),
+      // Geaccepteerde offertes die klaarstaan om gefactureerd te worden — de
+      // offertes waar de factuur al uit gemaakt is horen er niet meer bij.
+      db.select({ n: sql<number>`count(*)::int` }).from(documents).where(OFFERTE_TE_FACTUREREN),
       // Open offerte-aanvragen via de website.
       db
         .select({ n: sql<number>`count(*)::int` })
