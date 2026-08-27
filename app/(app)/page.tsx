@@ -74,6 +74,15 @@ export default async function StartPage() {
     db.select({ startPrefs: users.startPrefs, name: users.name }).from(users).where(eq(users.id, userId)).limit(1),
   ]);
 
+  // Tellers op de tegels: de nav-badges aangevuld met de dagtaken-signalen,
+  // zodat bv. "Facturen" een teller krijgt bij vervallen facturen. Tegels met
+  // een teller schuiven in de hoofdrij automatisch naar voren.
+  const tegelBadges: Record<string, number> = { ...badges };
+  for (const taak of dagtaken) {
+    const route = taak.href.split("?")[0];
+    tegelBadges[route] = Math.max(tegelBadges[route] ?? 0, taak.aantal);
+  }
+
   const mijnTaken: MijnTaak[] = taakRows.map((t) => ({
     id: t.id,
     subject: t.subject,
@@ -112,7 +121,7 @@ export default async function StartPage() {
         <MijnTaken taken={mijnTaken} teamleden={teamleden} readOnly={isViewer} />
       </div>
 
-      <TegelGrid prefs={(prefsRow?.startPrefs as StartPrefs | null) ?? null} badges={badges} saveAction={saveStartPrefs} />
+      <TegelGrid prefs={(prefsRow?.startPrefs as StartPrefs | null) ?? null} badges={tegelBadges} saveAction={saveStartPrefs} />
     </>
   );
 }

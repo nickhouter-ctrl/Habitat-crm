@@ -150,12 +150,17 @@ export function TegelGrid({
 
   // Hoofdknoppen: de eigen vastgepinde tegels, anders de standaardselectie
   // van het dagelijkse werk. De rest staat ingeklapt achter "Alle functies".
-  const hoofd =
+  // Knoppen met openstaand werk (teller) schuiven automatisch naar voren —
+  // meeste werk eerst; de onderlinge volgorde blijft verder intact.
+  const basis =
     view.pinned.length > 0
       ? view.pinned
       : STANDAARD_HOOFDKNOPPEN.map((k) => view.zichtbaar.find((x) => x.key === k)).filter(
           (x): x is StartTegel => !!x,
         );
+  const hoofd = [...basis].sort(
+    (a, b) => ((badges[b.href] ?? 0) > 0 ? 1 : 0) - ((badges[a.href] ?? 0) > 0 ? 1 : 0),
+  );
   const hoofdKeys = new Set(hoofd.map((x) => x.key));
   const overige = view.zichtbaar.filter((x) => !hoofdKeys.has(x.key));
 
