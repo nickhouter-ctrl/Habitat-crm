@@ -24,6 +24,8 @@ function Tegel({ tegel, badge, groot = false }: { tegel: StartTegel; badge?: num
       className={cn(
         "group relative flex items-center gap-3 rounded-xl border bg-surface transition-all hover:-translate-y-0.5 hover:border-accent/40 hover:shadow-md",
         groot ? "p-5" : "p-4",
+        // Openstaand werk → laat de knop eruit springen.
+        (badge ?? 0) > 0 && "border-accent/50 shadow-sm",
       )}
     >
       <span

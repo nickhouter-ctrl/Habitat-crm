@@ -32,6 +32,19 @@ export interface Dagtaak {
 
 const PRIO_VOLGORDE: Record<DagtaakPrioriteit, number> = { hoog: 0, middel: 1, laag: 2 };
 
+/** Vaste werkvolgorde binnen gelijke prioriteit: eerst keuren/controleren
+ *  (daar wacht iemand op), dan klantwerk, dan opruimwerk. */
+const RANG: Record<string, number> = {
+  "vervallen-facturen": 0,
+  "inkoopfacturen-keuren": 1,
+  "portaal-uren": 2,
+  "open-aanvragen": 3,
+  "offertes-factureren": 4,
+  "voorraad-afboeken": 5,
+  "proformas": 6,
+  "po-deze-week": 7,
+};
+
 export async function verzamelDagtaken(): Promise<Dagtaak[]> {
   const now = new Date();
   const today = now.toISOString().slice(0, 10);
@@ -205,5 +218,9 @@ export async function verzamelDagtaken(): Promise<Dagtaak[]> {
     });
   }
 
-  return taken.sort((a, b) => PRIO_VOLGORDE[a.prioriteit] - PRIO_VOLGORDE[b.prioriteit]);
+  return taken.sort(
+    (a, b) =>
+      PRIO_VOLGORDE[a.prioriteit] - PRIO_VOLGORDE[b.prioriteit] ||
+      (RANG[a.key] ?? 99) - (RANG[b.key] ?? 99),
+  );
 }
