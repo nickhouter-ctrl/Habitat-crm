@@ -70,7 +70,8 @@ export default async function StartPage() {
       .limit(25),
     db.select({ id: users.id, name: users.name, email: users.email }).from(users).orderBy(asc(users.name)),
     verzamelNavBadges(),
-    db.select({ startPrefs: users.startPrefs }).from(users).where(eq(users.id, userId)).limit(1),
+    // Naam vers uit de DB: de JWT-sessie kan een oude naam cachen (30 dagen).
+    db.select({ startPrefs: users.startPrefs, name: users.name }).from(users).where(eq(users.id, userId)).limit(1),
   ]);
 
   const mijnTaken: MijnTaak[] = taakRows.map((t) => ({
@@ -82,7 +83,8 @@ export default async function StartPage() {
     isVanAnder: !!t.authorId && t.authorId !== userId,
   }));
 
-  const naam = session?.user?.name?.trim().split(" ")[0] || session?.user?.email || "";
+  const volleNaam = prefsRow?.name?.trim() || session?.user?.name?.trim() || "";
+  const naam = volleNaam.split(" ")[0] || session?.user?.email || "";
   const datum = new Date().toLocaleDateString("nl-NL", {
     timeZone: "Europe/Madrid",
     weekday: "long",
