@@ -31,16 +31,24 @@ export function DagtaakRow({ taak }: { taak: Dagtaak }) {
 }
 
 /** De volledige kaart, incl. de "alles is bij"-variant bij een lege lijst. */
-export function DagtakenLijst({ taken, titel = "Wat moet er gebeuren" }: { taken: Dagtaak[]; titel?: string }) {
+export function DagtakenLijst({
+  taken,
+  titel = "Wat moet er gebeuren",
+  className = "mb-6",
+}: {
+  taken: Dagtaak[];
+  titel?: string;
+  className?: string;
+}) {
   if (taken.length === 0) {
     return (
-      <div className="mb-6 rounded-lg border border-success/30 bg-success/5 px-4 py-3 text-sm font-medium text-success">
+      <div className={`rounded-lg border border-success/30 bg-success/5 px-4 py-3 text-sm font-medium text-success ${className}`}>
         ✓ Niets dringends — alles is bij.
       </div>
     );
   }
   return (
-    <Card className="mb-6 border-accent/30">
+    <Card className={`border-accent/30 ${className}`}>
       <CardHeader>
         <CardTitle>{titel}</CardTitle>
       </CardHeader>

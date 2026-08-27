@@ -130,6 +130,22 @@ export const START_TEGELS: StartTegel[] = [
 /** Volgorde van de groepskopjes = volgorde van eerste voorkomen in START_TEGELS. */
 export const START_GROEPEN = [...new Set(START_TEGELS.map((x) => x.groep))];
 
+/**
+ * Standaard-hoofdknoppen: het dagelijkse werk, groot bovenaan. Zodra een
+ * gebruiker zelf tegels vastpint, vervangen die deze selectie.
+ */
+export const STANDAARD_HOOFDKNOPPEN = [
+  "/inbox",
+  "/aanvragen",
+  "/quotes",
+  "/projects",
+  "/invoices",
+  "/inkooporders/te-verwerken",
+  "/inkooporders",
+  "/agenda",
+  "/dashboard",
+];
+
 const geldigeKeys = new Set(START_TEGELS.map((x) => x.key));
 
 /** Schoon prefs op: alleen bekende keys, geen dubbelen. */

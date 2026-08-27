@@ -106,7 +106,7 @@ export default async function StartPage() {
       </div>
 
       <div className="mb-8 grid items-start gap-5 lg:grid-cols-2">
-        <DagtakenLijst taken={dagtaken} titel="Wat moet er vandaag gebeuren" />
+        <DagtakenLijst taken={dagtaken} titel="Wat moet er vandaag gebeuren" className="" />
         <MijnTaken taken={mijnTaken} teamleden={teamleden} readOnly={isViewer} />
       </div>
 
