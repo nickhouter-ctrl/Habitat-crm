@@ -12,8 +12,8 @@
  */
 
 const API_BASE = "https://generativelanguage.googleapis.com/v1beta";
-const IMAGE_MODEL = process.env.GEMINI_IMAGE_MODEL ?? "gemini-2.5-flash-image";
-const VIDEO_MODEL = process.env.GEMINI_VIDEO_MODEL ?? "veo-3.1-fast-generate-001";
+const IMAGE_MODEL = process.env.GEMINI_IMAGE_MODEL ?? "gemini-3.1-flash-image";
+const VIDEO_MODEL = process.env.GEMINI_VIDEO_MODEL ?? "veo-3.1-fast-generate-preview";
 
 export function visualsAiConfigured(): boolean {
   return !!process.env.GEMINI_API_KEY;
