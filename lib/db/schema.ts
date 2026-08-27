@@ -142,6 +142,9 @@ export const activityType = pgEnum("activity_type", [
   "task",
 ]);
 
+/** Prioriteit van een taak — zelfde schaal als de weekcontrole-signalen. */
+export const taskPriority = pgEnum("task_priority", ["hoog", "middel", "laag"]);
+
 export const syncEntity = pgEnum("sync_entity", ["contact", "company", "document"]);
 export const syncDirection = pgEnum("sync_direction", ["pull", "push"]);
 
@@ -217,6 +220,9 @@ export const users = pgTable("users", {
   /** Telefoonnummer voor de ondertekening van brieven (voorschotverzoeken).
    *  Leeg → het algemene bedrijfsnummer uit lib/company.ts. */
   phone: text(),
+  /** Persoonlijke indeling van de startpagina-tegels (pin/verberg/volgorde);
+   *  overlay op de standaardlijst in lib/start-tegels.ts, keys = hrefs. */
+  startPrefs: jsonb().$type<{ pinned?: string[]; hidden?: string[]; order?: string[] }>(),
   ...timestamps,
 });
 
@@ -1699,12 +1705,16 @@ export const activities = pgTable(
     propertyId: uuid().references(() => properties.id, { onDelete: "cascade" }),
     documentId: uuid().references(() => documents.id, { onDelete: "cascade" }),
     authorId: uuid().references(() => users.id, { onDelete: "set null" }),
+    /** Voor taken: aan wie is 'ie toegewezen (leeg = bij de maker zelf). */
+    assigneeId: uuid().references(() => users.id, { onDelete: "set null" }),
+    priority: taskPriority().notNull().default("middel"),
     ...timestamps,
   },
   (t) => [
     index("activities_contact_idx").on(t.contactId),
     index("activities_deal_idx").on(t.dealId),
     index("activities_due_idx").on(t.dueAt),
+    index("activities_assignee_idx").on(t.assigneeId),
   ],
 );
 
@@ -1884,7 +1894,8 @@ export const activitiesRelations = relations(activities, ({ one }) => ({
   deal: one(deals, { fields: [activities.dealId], references: [deals.id] }),
   property: one(properties, { fields: [activities.propertyId], references: [properties.id] }),
   document: one(documents, { fields: [activities.documentId], references: [documents.id] }),
-  author: one(users, { fields: [activities.authorId], references: [users.id] }),
+  author: one(users, { fields: [activities.authorId], references: [users.id], relationName: "activityAuthor" }),
+  assignee: one(users, { fields: [activities.assigneeId], references: [users.id], relationName: "activityAssignee" }),
 }));
 
 /* ----------------------------------------------------------------- exports */

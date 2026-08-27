@@ -43,7 +43,10 @@ export async function createAppointment(formData: FormData) {
   revalidatePath("/agenda");
 }
 
-/** Een taak met (optionele) deadline — verschijnt in de agenda op de deadline. */
+const PRIORITEITEN = ["hoog", "middel", "laag"] as const;
+
+/** Een taak met (optionele) deadline — verschijnt in de agenda op de deadline
+ *  en op de startpagina van degene aan wie 'ie is toegewezen. */
 export async function createTask(formData: FormData) {
   const user = await requireUser();
   const subject = str(formData, "subject");
@@ -52,6 +55,11 @@ export async function createTask(formData: FormData) {
   const date = str(formData, "date");
   const dueAt = date ? combineDateTime(date, str(formData, "time"), "17:00") : null;
   const contactId = str(formData, "contactId");
+  const assigneeId = str(formData, "assigneeId");
+  const prioRaw = str(formData, "priority");
+  const priority = (PRIORITEITEN as readonly string[]).includes(prioRaw)
+    ? (prioRaw as (typeof PRIORITEITEN)[number])
+    : "middel";
   await db.insert(activities).values({
     type: "task",
     subject,
@@ -59,8 +67,12 @@ export async function createTask(formData: FormData) {
     dueAt,
     contactId: contactId.length === 36 ? contactId : null,
     authorId: user.id,
+    // Geen keuze = bij de maker zelf.
+    assigneeId: assigneeId.length === 36 ? assigneeId : user.id,
+    priority,
   });
   revalidatePath("/agenda");
+  revalidatePath("/");
 }
 
 /** Een losse notitie vastleggen (zonder deadline). */
@@ -83,18 +95,21 @@ export async function completeTask(id: string) {
   await requireUser();
   await db.update(activities).set({ completedAt: new Date() }).where(eq(activities.id, id));
   revalidatePath("/agenda");
+  revalidatePath("/");
 }
 
 export async function reopenTask(id: string) {
   await requireUser();
   await db.update(activities).set({ completedAt: null }).where(eq(activities.id, id));
   revalidatePath("/agenda");
+  revalidatePath("/");
 }
 
 export async function deleteTask(id: string) {
   await requireUser();
   await db.delete(activities).where(eq(activities.id, id));
   revalidatePath("/agenda");
+  revalidatePath("/");
 }
 
 export async function deleteAppointment(id: string) {

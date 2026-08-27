@@ -24,6 +24,7 @@ import {
   Calculator,
   Euro,
   HardHat,
+  Home,
   Layers,
   Settings,
   ShoppingCart,
@@ -57,7 +58,8 @@ const NAV_GROUPS: { label: string | null; items: NavItem[] }[] = [
   {
     label: null,
     items: [
-      { href: "/", label: "Dashboard", icon: LayoutDashboard, exact: true },
+      { href: "/", label: "Start", icon: Home, exact: true },
+      { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
       { href: "/scan", label: "Scannen", icon: ScanLine },
       { href: "/agenda", label: "Agenda", icon: CalendarDays },
     ],

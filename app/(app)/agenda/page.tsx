@@ -1,4 +1,5 @@
 import { and, asc, eq, gte, isNull } from "drizzle-orm";
+import { alias } from "drizzle-orm/pg-core";
 import Link from "next/link";
 
 import {
@@ -11,12 +12,13 @@ import {
   Field,
   Input,
   PageHeader,
+  Select,
   Textarea,
 } from "@/components/ui";
 import { SubmitButton } from "@/components/submit-button";
 import { ConfirmSubmit } from "@/components/confirm-submit";
 import { db } from "@/lib/db";
-import { activities, appointments, contacts } from "@/lib/db/schema";
+import { activities, appointments, contacts, users } from "@/lib/db/schema";
 
 import {
   completeTask,
@@ -48,6 +50,8 @@ type TaskRow = {
   dueAt: Date | null;
   contactId: string | null;
   contactName: string | null;
+  priority: "hoog" | "middel" | "laag";
+  assigneeName: string | null;
 };
 
 type Item =
@@ -59,7 +63,8 @@ export default async function AgendaPage() {
   startOfToday.setHours(0, 0, 0, 0);
   const todayStr = new Date().toLocaleDateString("sv-SE"); // YYYY-MM-DD (lokale dag)
 
-  const [apptRows, taskRows] = await Promise.all([
+  const assignee = alias(users, "assignee");
+  const [apptRows, taskRows, teamleden] = await Promise.all([
     db
       .select({
         id: appointments.id,
@@ -83,11 +88,15 @@ export default async function AgendaPage() {
         dueAt: activities.dueAt,
         contactId: activities.contactId,
         contactName: contacts.name,
+        priority: activities.priority,
+        assigneeName: assignee.name,
       })
       .from(activities)
       .leftJoin(contacts, eq(activities.contactId, contacts.id))
+      .leftJoin(assignee, eq(activities.assigneeId, assignee.id))
       .where(and(eq(activities.type, "task"), isNull(activities.completedAt)))
       .orderBy(asc(activities.dueAt)),
+    db.select({ id: users.id, name: users.name, email: users.email }).from(users).orderBy(asc(users.name)),
   ]);
 
   const overdueTasks = taskRows.filter((t) => t.dueAt && t.dueAt < startOfToday);
@@ -161,6 +170,25 @@ export default async function AgendaPage() {
                 </Field>
                 <Field label="Tijd" htmlFor="task-time">
                   <Input id="task-time" name="time" type="time" />
+                </Field>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <Field label="Toewijzen aan" htmlFor="task-assignee" hint="leeg = jezelf">
+                  <Select id="task-assignee" name="assigneeId" defaultValue="">
+                    <option value="">— Mijzelf —</option>
+                    {teamleden.map((u) => (
+                      <option key={u.id} value={u.id}>
+                        {u.name ?? u.email}
+                      </option>
+                    ))}
+                  </Select>
+                </Field>
+                <Field label="Prioriteit" htmlFor="task-priority">
+                  <Select id="task-priority" name="priority" defaultValue="middel">
+                    <option value="hoog">Hoog</option>
+                    <option value="middel">Middel</option>
+                    <option value="laag">Laag</option>
+                  </Select>
                 </Field>
               </div>
               <Field label="Toelichting" htmlFor="task-body">
@@ -275,10 +303,15 @@ function TaskCard({ task: t, overdue = false }: { task: TaskRow; overdue?: boole
       <div className="min-w-0 flex-1">
         <div className="flex items-start justify-between gap-2">
           <p className="font-medium">{t.subject}</p>
-          <Badge tone={overdue ? "danger" : "warning"}>Taak</Badge>
+          <span className="flex shrink-0 items-center gap-1.5">
+            {t.priority === "hoog" && <Badge tone="danger">Hoog</Badge>}
+            {t.priority === "laag" && <Badge tone="neutral">Laag</Badge>}
+            <Badge tone={overdue ? "danger" : "warning"}>Taak</Badge>
+          </span>
         </div>
         {t.body && <p className="mt-0.5 whitespace-pre-line text-sm text-muted">{t.body}</p>}
         <div className="mt-1 flex flex-wrap items-center gap-3 text-xs">
+          {t.assigneeName && <span className="font-medium text-foreground/80">👤 {t.assigneeName}</span>}
           {t.dueAt && (
             <span className={overdue ? "font-medium text-danger" : "text-muted"}>
               {DAY_FMT.format(t.dueAt)} · {TIME_FMT.format(t.dueAt)}
