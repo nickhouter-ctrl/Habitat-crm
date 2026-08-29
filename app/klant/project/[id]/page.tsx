@@ -63,14 +63,19 @@ export default async function KlantProjectPage({
         </Badge>
       </div>
 
-      {/* Samenvatting: totaal · betaald · openstaand */}
+      {/* Samenvatting: aanneemsom · betaald · openstaand — alles excl. btw */}
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-        <StatTile label={t.totaalVoorU} value={formatEUR(kosten.totaalEur)} hint={t.exclBtw} tone="info" />
-        <StatTile label={t.betaald} value={formatEUR(betaaldTotaal)} hint={t.inclBtw} tone="success" />
+        <StatTile
+          label={kosten.aanneemsomEur != null ? t.aanneemsom : t.totaalVoorU}
+          value={formatEUR(kosten.totaalEur)}
+          hint={t.exclBtw}
+          tone="info"
+        />
+        <StatTile label={t.betaald} value={formatEUR(betaaldTotaal)} hint={t.exclBtw} tone="success" />
         <StatTile
           label={t.openstaand}
           value={formatEUR(openstaand)}
-          hint={t.inclBtw}
+          hint={t.exclBtw}
           tone={openstaand > 0.01 ? "warning" : "success"}
         />
       </div>
@@ -172,8 +177,11 @@ export default async function KlantProjectPage({
             <TBody>
               {docs.map((d) => (
                 <Tr key={d.id}>
-                  <Td className="font-medium">
-                    {t.docLabels[d.kind] ?? d.kind} {d.docNumber ?? ""}
+                  <Td>
+                    <span className="block font-medium">
+                      {t.docLabels[d.kind] ?? d.kind} {d.docNumber ?? ""}
+                    </span>
+                    {d.title && <span className="block text-xs text-muted">{d.title}</span>}
                   </Td>
                   <Td className="text-muted">{d.issueDate ? formatDate(d.issueDate) : "—"}</Td>
                   <Td className="text-right tabular-nums">{formatEUR(d.totalEur)}</Td>
