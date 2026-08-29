@@ -1304,6 +1304,11 @@ export const projectCosts = pgTable(
     purchaseOrderId: uuid().references((): AnyPgColumn => purchaseOrders.id, { onDelete: "set null" }),
     /** Bedrag ex. BTW. */
     amountEur: numeric({ precision: 14, scale: 2 }).notNull().default("0"),
+    /** Doorbelaste klantprijs (ex. btw) voor deze post — wat de klant er echt
+     *  voor betaalt (bv. kozijn-inkoop × 1,55 invoer/handling × 1,15 marge).
+     *  Leeg → de standaardnorm kost ÷ (1 − marge%). Dit is wat het
+     *  klantportaal toont; nooit de kale kost aan de klant laten zien. */
+    chargeEur: numeric({ precision: 14, scale: 2 }),
     paymentMethod: paymentMethod().notNull().default("invoice"),
     paidAt: timestamp({ withTimezone: true }),
     note: text(),

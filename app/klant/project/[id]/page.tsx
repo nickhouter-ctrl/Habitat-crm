@@ -100,12 +100,12 @@ export default async function KlantProjectPage({
                   <span className="font-medium tabular-nums">{formatEUR(kosten.arbeidEur)}</span>
                 </div>
               )}
-              {kosten.materialenEur > 0 && (
-                <div className="flex items-center justify-between py-2">
-                  <span>{t.materialen}</span>
-                  <span className="font-medium tabular-nums">{formatEUR(kosten.materialenEur)}</span>
+              {kosten.materiaalPosten.map((post, i) => (
+                <div key={i} className="flex items-center justify-between gap-3 py-2">
+                  <span className="min-w-0 truncate">{post.omschrijving || t.materialen}</span>
+                  <span className="shrink-0 font-medium tabular-nums">{formatEUR(post.bedragEur)}</span>
                 </div>
-              )}
+              ))}
             </>
           )}
           {kosten.meerwerkEur > 0 && (

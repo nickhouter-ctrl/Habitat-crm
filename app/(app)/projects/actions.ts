@@ -338,6 +338,8 @@ const costSchema = z.object({
   description: z.string().trim().min(1, "Omschrijving is verplicht"),
   supplier: z.string().trim().optional(),
   amountEur: z.string().trim().optional(),
+  /** Doorbelaste klantprijs (ex. btw) — leeg = standaardnorm kost + marge. */
+  chargeEur: z.string().trim().optional(),
   paymentMethod: z.enum(["cash", "invoice"]).default("invoice"),
   note: z.string().trim().optional(),
 });
@@ -354,6 +356,7 @@ export async function addProjectCost(projectId: string, formData: FormData) {
     description: d.description,
     supplier: d.supplier || null,
     amountEur: numOrZero(d.amountEur),
+    chargeEur: d.chargeEur?.trim() ? numOrZero(d.chargeEur) : null,
     paymentMethod: d.paymentMethod,
     note: d.note || null,
   });

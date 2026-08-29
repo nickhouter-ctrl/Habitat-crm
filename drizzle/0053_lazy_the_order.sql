@@ -1,0 +1,1 @@
+ALTER TABLE "project_costs" ADD COLUMN "charge_eur" numeric(14, 2);

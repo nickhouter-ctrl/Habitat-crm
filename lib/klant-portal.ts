@@ -265,6 +265,8 @@ export async function klantKostenOverzicht(projectId: string): Promise<{
   meerwerkEur: number;
   arbeidEur: number; // doorbelaste verkoopwaarde, ex. btw
   materialenEur: number; // doorbelaste verkoopwaarde, ex. btw
+  /** Specificatie van de materiaalkant: omschrijving + doorbelast bedrag. */
+  materiaalPosten: { omschrijving: string; bedragEur: number }[];
   totaalEur: number; // ex. btw
 }> {
   const [[proj], tijdRows, poRows, losseKosten, [meerwerkAgg]] = await Promise.all([
@@ -290,6 +292,8 @@ export async function klantKostenOverzicht(projectId: string): Promise<{
     // Materiaal-inkoop (als-uren-geboekte PO's zitten al in de uren).
     db
       .select({
+        supplier: purchaseOrders.supplier,
+        reference: purchaseOrders.reference,
         subtotal: purchaseOrders.subtotal,
         tax: purchaseOrders.tax,
         total: purchaseOrders.total,
@@ -304,7 +308,11 @@ export async function klantKostenOverzicht(projectId: string): Promise<{
         ),
       ),
     db
-      .select({ amountEur: projectCosts.amountEur })
+      .select({
+        description: projectCosts.description,
+        amountEur: projectCosts.amountEur,
+        chargeEur: projectCosts.chargeEur,
+      })
       .from(projectCosts)
       .where(eq(projectCosts.projectId, projectId)),
     db
@@ -314,29 +322,44 @@ export async function klantKostenOverzicht(projectId: string): Promise<{
   ]);
 
   const laborCost = tijdRows.reduce((s, t) => s + Number(t.hours ?? 0) * Number(t.hourlyCostEur ?? 0), 0);
-  const purchaseCost =
-    poRows.reduce((s, p) => s + poExVat(p).amount, 0) +
-    losseKosten.reduce((s, c) => s + Number(c.amountEur ?? 0), 0);
 
   const marges = deriveProjectMargins({
     laborCost,
     laborMarginPct: proj?.laborMarginPct != null ? Number(proj.laborMarginPct) : null,
     productRevenue: 0,
     productCost: 0,
-    purchaseCost,
+    purchaseCost: 0,
     purchaseMarginPct: proj?.purchaseMarginPct != null ? Number(proj.purchaseMarginPct) : null,
   });
+
+  // Materiaal per post: expliciet doorbelast bedrag als dat is vastgelegd,
+  // anders de standaardnorm kost ÷ (1 − marge%). Nooit de kale kost tonen.
+  const margePct = Math.min(Math.max(Number(proj?.purchaseMarginPct ?? 15), 0), 99);
+  const doorbelast = (kost: number) => Math.round((kost / (1 - margePct / 100)) * 100) / 100;
+  const materiaalPosten: { omschrijving: string; bedragEur: number }[] = [];
+  for (const c of losseKosten) {
+    const bedrag = c.chargeEur != null ? Number(c.chargeEur) : doorbelast(Number(c.amountEur ?? 0));
+    if (bedrag > 0) materiaalPosten.push({ omschrijving: c.description, bedragEur: bedrag });
+  }
+  for (const po of poRows) {
+    const bedrag = doorbelast(poExVat(po).amount);
+    if (bedrag > 0)
+      materiaalPosten.push({
+        omschrijving: [po.supplier, po.reference].filter(Boolean).join(" · "),
+        bedragEur: bedrag,
+      });
+  }
 
   const aanneemsomEur = proj?.contractPriceEur != null ? Number(proj.contractPriceEur) : null;
   const meerwerkEur = Number(meerwerkAgg?.som ?? 0);
   const arbeidEur = marges.laborRevenue;
-  const materialenEur = marges.purchaseRevenue;
+  const materialenEur = Math.round(materiaalPosten.reduce((s, p) => s + p.bedragEur, 0) * 100) / 100;
   // Vaste aanneemsom → kosten vallen binnen de som; anders (regie) telt het
   // doorbelaste werk zelf op tot het totaal.
   const totaalEur =
     aanneemsomEur != null ? aanneemsomEur + meerwerkEur : arbeidEur + materialenEur + meerwerkEur;
 
-  return { aanneemsomEur, meerwerkEur, arbeidEur, materialenEur, totaalEur };
+  return { aanneemsomEur, meerwerkEur, arbeidEur, materialenEur, materiaalPosten, totaalEur };
 }
 
 /** Mag deze klant dit document (PDF) inzien? Via project óf direct contact. */

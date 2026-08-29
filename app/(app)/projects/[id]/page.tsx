@@ -1775,7 +1775,7 @@ export default async function ProjectDetailPage({
                   </TBody>
                 </Table>
               )}
-              <form action={addProjectCost.bind(null, id)} className="grid gap-3 sm:grid-cols-2 lg:grid-cols-[0.9fr_1fr_1.6fr_0.9fr_0.9fr_auto] lg:items-end">
+              <form action={addProjectCost.bind(null, id)} className="grid gap-3 sm:grid-cols-2 lg:grid-cols-[0.9fr_1fr_1.6fr_0.9fr_0.9fr_0.9fr_auto] lg:items-end">
                 <Field label="Datum">
                   <Input name="date" type="date" required />
                 </Field>
@@ -1792,6 +1792,9 @@ export default async function ProjectDetailPage({
                 </Field>
                 <Field label="Bedrag (€)">
                   <Input name="amountEur" inputMode="decimal" required placeholder="0,00" />
+                </Field>
+                <Field label="Doorbelast (€)" hint="klantprijs ex. btw — leeg = kost + marge">
+                  <Input name="chargeEur" inputMode="decimal" placeholder="auto" />
                 </Field>
                 <Field label="Betaling">
                   <Select name="paymentMethod" defaultValue="invoice">
