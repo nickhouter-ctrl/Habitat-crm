@@ -129,8 +129,12 @@ export async function bewaarGegevens(formData: FormData) {
   redirect(`/klant/gegevens?lang=${taal}&saved=1`);
 }
 
-/** Interne actie (staff): stuur de klant van een project een portaal-uitnodiging. */
-export async function stuurKlantportaalUitnodiging(projectId: string) {
+/**
+ * Interne actie (staff): stuur de klant van een project een portaal-uitnodiging.
+ * `testNaarMij` = de mail gaat naar de ingelogde medewerker zelf (met
+ * test-banner), maar logt wél in als de klant — om te zien wat die ziet.
+ */
+export async function stuurKlantportaalUitnodiging(projectId: string, testNaarMij = false) {
   const { requireWriteUser } = await import("@/lib/auth/guards");
   const user = await requireWriteUser();
 
@@ -155,11 +159,15 @@ export async function stuurKlantportaalUitnodiging(projectId: string) {
     en: `In our client portal you can follow the progress of <strong>${proj.name}</strong>, see invoices and payments, and complete your details.`,
     es: `En nuestro portal del cliente puede seguir el progreso de <strong>${proj.name}</strong>, ver facturas y pagos, y completar sus datos.`,
   }[taal];
+  const testBanner = testNaarMij
+    ? `<p style="background:#fff3cd;padding:8px 12px;border-radius:6px;font-size:13px">⚠️ <strong>Testversie</strong> — deze mail zou normaal naar ${contact.name} &lt;${contact.email}&gt; gaan. Met de knop log je in als de klant en zie je exact wat die ziet.</p>`
+    : "";
   await sendMail({
-    to: contact.email,
-    subject: `${t.portaal} — Habitat One`,
+    to: testNaarMij ? user.email! : contact.email,
+    subject: `${testNaarMij ? "TEST — " : ""}${t.portaal} — Habitat One`,
     html: `
       <div style="font-family:Arial,sans-serif;max-width:520px;margin:0 auto;color:#402419">
+        ${testBanner}
         <h2 style="color:#402419">${t.portaal}</h2>
         <p>${intro}</p>
         <p style="margin:28px 0">
@@ -170,12 +178,14 @@ export async function stuurKlantportaalUitnodiging(projectId: string) {
     noCompanyBcc: true,
   });
 
-  await db.insert(activities).values({
-    type: "email",
-    subject: `Klantportaal-uitnodiging gestuurd: ${proj.name}`,
-    body: `Naar ${contact.name} <${contact.email}>`,
-    contactId: proj.contactId,
-    authorId: user.id,
-  });
+  if (!testNaarMij) {
+    await db.insert(activities).values({
+      type: "email",
+      subject: `Klantportaal-uitnodiging gestuurd: ${proj.name}`,
+      body: `Naar ${contact.name} <${contact.email}>`,
+      contactId: proj.contactId,
+      authorId: user.id,
+    });
+  }
   revalidatePath(`/projects/${projectId}`);
 }

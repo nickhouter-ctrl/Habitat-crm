@@ -1862,11 +1862,18 @@ export default async function ProjectDetailPage({
                   De klant volgt op <span className="font-mono text-xs">/klant</span> de voortgang en betalingen
                   (alleen klantprijzen) en kan er zelf ontbrekende gegevens aanvullen (adres, NIF/NIE, telefoon).
                 </p>
-                <form action={stuurKlantportaalUitnodiging.bind(null, id)}>
-                  <SubmitButton variant="secondary" size="sm" pendingLabel="Versturen…">
-                    ✉️ Portaal-uitnodiging mailen
-                  </SubmitButton>
-                </form>
+                <div className="flex flex-wrap gap-2">
+                  <form action={stuurKlantportaalUitnodiging.bind(null, id, false)}>
+                    <SubmitButton variant="secondary" size="sm" pendingLabel="Versturen…">
+                      ✉️ Portaal-uitnodiging mailen
+                    </SubmitButton>
+                  </form>
+                  <form action={stuurKlantportaalUitnodiging.bind(null, id, true)}>
+                    <SubmitButton variant="ghost" size="sm" pendingLabel="Versturen…" title="Stuurt de uitnodiging naar jouw eigen mailadres; de knop logt in als de klant zodat je ziet wat die ziet.">
+                      🧪 Testversie naar mijzelf
+                    </SubmitButton>
+                  </form>
+                </div>
               </CardContent>
             </Card>
           )}
