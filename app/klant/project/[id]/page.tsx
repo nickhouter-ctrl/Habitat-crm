@@ -234,6 +234,9 @@ export default async function KlantProjectPage({
                   ) : (
                     <Badge tone="warning">{t.openstaand}</Badge>
                   )}
+                  <Link href={`/klant/voorschot/${v.id}?lang=${taal}`} className="text-accent hover:underline">
+                    {t.bekijk}
+                  </Link>
                 </span>
               </div>
             ))}

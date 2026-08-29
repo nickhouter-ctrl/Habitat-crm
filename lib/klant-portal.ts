@@ -300,6 +300,28 @@ export async function klantVoorschotten(projectId: string) {
 }
 
 /**
+ * Eén voorschotbericht (de verstuurde mail met betaalinstructies), alléén als
+ * het bij een project van deze klant hoort.
+ */
+export async function klantVoorschotBericht(email: string, voorschotId: string) {
+  const [row] = await db
+    .select({
+      id: sentEmails.id,
+      subject: sentEmails.subject,
+      html: sentEmails.html,
+      body: sentEmails.body,
+      datum: sentEmails.createdAt,
+      projectId: sentEmails.projectId,
+    })
+    .from(sentEmails)
+    .where(and(eq(sentEmails.id, voorschotId), like(sentEmails.subject, "Voorschot: %")))
+    .limit(1);
+  if (!row?.projectId) return null;
+  if (!(await klantMagProject(email, row.projectId))) return null;
+  return row;
+}
+
+/**
  * Kostenoverzicht voor de klant — uitsluitend VERKOOPwaarden verlaten deze
  * functie. Gemaakte kosten (uren, inkoop) worden hier eerst doorbelast met de
  * projectmarge (kost ÷ (1 − marge%)), precies zoals intern; de onderliggende
