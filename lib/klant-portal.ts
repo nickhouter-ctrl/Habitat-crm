@@ -72,6 +72,28 @@ export function verifieerLoginToken(token: string): string | null {
   return verify(token, "klant-login")?.email ?? null;
 }
 
+/**
+ * Echt-maar-verlopen inloglink: handtekening klopt, alleen de tijd is om.
+ * Daarmee mogen we het e-mailadres vertrouwen om er een VERSE link heen te
+ * sturen (naar dat adres zelf — nooit een sessie geven).
+ */
+export function emailUitVerlopenLoginToken(token: string): string | null {
+  if (!token || !SECRET) return null;
+  const dot = token.indexOf(".");
+  if (dot < 1) return null;
+  const body = token.slice(0, dot);
+  const expected = b64url(createHmac("sha256", SECRET).update(`klant.${body}`).digest());
+  const a = Buffer.from(token.slice(dot + 1));
+  const b = Buffer.from(expected);
+  if (a.length !== b.length || !timingSafeEqual(a, b)) return null;
+  try {
+    const payload = JSON.parse(Buffer.from(body, "base64url").toString("utf8")) as KlantToken;
+    return payload.aud === "klant-login" && payload.email ? payload.email : null;
+  } catch {
+    return null;
+  }
+}
+
 /** Deelbare aanmeldlink (WhatsApp) voor nieuwe klanten — niet persoonsgebonden. */
 export function maakAanmeldToken(): string {
   return sign({ aud: "klant-aanmelden", email: "*", exp: nu() + AANMELD_TTL_SEC });

@@ -9,6 +9,7 @@ import { db } from "@/lib/db";
 import { activities, contacts, projects } from "@/lib/db/schema";
 import { sendMail } from "@/lib/gmail";
 import {
+  emailUitVerlopenLoginToken,
   kiesTaal,
   klantContacten,
   klantEmail,
@@ -90,6 +91,26 @@ export async function loginMetToken(token: string, taal: string) {
   if (!email) redirect(`/klant?lang=${kiesTaal(taal)}&invalid=1`);
   await zetKlantSessie(email);
   redirect(`/klant/projecten?lang=${kiesTaal(taal)}`);
+}
+
+/**
+ * Verlopen-maar-echte maillink: stuur met één klik een verse inloglink naar
+ * het adres uit die link. Geeft nooit direct een sessie — de nieuwe link
+ * belandt alleen in de eigen mailbox van de klant.
+ */
+export async function stuurNieuweLink(oudeToken: string, taalRaw: string) {
+  const taal = kiesTaal(taalRaw);
+  const email = emailUitVerlopenLoginToken(oudeToken);
+  if (!email) redirect(`/klant?lang=${taal}&invalid=1`);
+  const magDoor = (await rateLimit(`klant-login:${email}`, 5, 15 * 60)) && (await ipLimietOk("login", 20));
+  if (magDoor) {
+    const url = `${PORTAAL_URL}/klant/login/${maakLoginToken(email)}?lang=${taal}`;
+    const mail = loginMailHtml(taal, url);
+    await sendMail({ to: email, subject: mail.subject, html: mail.html, noCompanyBcc: true }).catch((e) => {
+      console.error("[klant-portal] verse inloglink mislukt:", e);
+    });
+  }
+  redirect(`/klant?lang=${taal}&sent=1`);
 }
 
 export async function uitloggen(taal: string) {
