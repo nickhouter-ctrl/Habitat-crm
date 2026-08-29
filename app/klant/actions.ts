@@ -1,5 +1,6 @@
 "use server";
 
+import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { eq, inArray, sql } from "drizzle-orm";
@@ -19,7 +20,13 @@ import {
   zetKlantSessie,
 } from "@/lib/klant-portal";
 import { klantT } from "./_t";
-import { rateLimit } from "@/lib/rate-limit";
+import { clientIpFromHeaders, rateLimit } from "@/lib/rate-limit";
+
+/** Per-IP-rem op de publieke portaal-acties (naast de per-e-mail-rem). */
+async function ipLimietOk(actie: string, maxPerUur: number): Promise<boolean> {
+  const ip = clientIpFromHeaders(await headers());
+  return rateLimit(`klant-${actie}:${ip}`, maxPerUur, 60 * 60);
+}
 
 const APP_URL = (process.env.APP_URL ?? "https://crm.habitat-one.com").replace(/\/$/, "");
 
@@ -53,7 +60,7 @@ export async function vraagLoginLink(formData: FormData) {
   const taal = kiesTaal(String(formData.get("lang") ?? "nl"));
   if (!email || !email.includes("@")) redirect(`/klant?lang=${taal}&sent=1`);
 
-  const magDoor = await rateLimit(`klant-login:${email}`, 5, 15 * 60);
+  const magDoor = (await rateLimit(`klant-login:${email}`, 5, 15 * 60)) && (await ipLimietOk("login", 20));
   if (magDoor) {
     const cts = await klantContacten(email);
     const heeftProject =
@@ -145,7 +152,7 @@ export async function verwerkAanmelding(token: string, formData: FormData) {
   const naam = s("name");
   if (!email || !email.includes("@") || !naam) throw new Error("Naam en e-mailadres zijn verplicht");
 
-  const magDoor = await rateLimit(`klant-aanmelden:${email}`, 5, 60 * 60);
+  const magDoor = (await rateLimit(`klant-aanmelden:${email}`, 5, 60 * 60)) && (await ipLimietOk("aanmelden", 10));
   if (!magDoor) redirect(`/klant?lang=${taal}`);
 
   const velden = {
@@ -163,24 +170,30 @@ export async function verwerkAanmelding(token: string, formData: FormData) {
   };
 
   const bestaand = await klantContacten(email);
-  let contactId: string;
   if (bestaand.length > 0) {
-    // Bestaat al → aanvullen, nooit dubbel aanmaken.
-    for (const c of bestaand) await db.update(contacts).set(velden).where(eq(contacts.id, c.id));
-    contactId = bestaand[0].id;
-  } else {
-    const [nieuw] = await db
-      .insert(contacts)
-      .values({ ...velden, email, type: "customer", source: "aanmeldlink" })
-      .returning({ id: contacts.id });
-    contactId = nieuw.id;
+    // VEILIGHEID: een bestaand e-mailadres krijgt via de (deelbare!) aanmeldlink
+    // nooit direct een sessie én we overschrijven niets — anders zou iedereen
+    // met de link andermans adres kunnen intypen en diens projecten zien of
+    // gegevens vervuilen. De echte eigenaar krijgt gewoon een inloglink in de
+    // eigen mailbox; daarna kan hij zelf zijn gegevens aanpassen.
+    const url = `${APP_URL}/klant/login/${maakLoginToken(email)}?lang=${taal}`;
+    const mail = loginMailHtml(taal, url);
+    await sendMail({ to: email, subject: mail.subject, html: mail.html, noCompanyBcc: true }).catch((e) => {
+      console.error("[klant-portal] inloglink-mail (aanmeldlink) mislukt:", e);
+    });
+    redirect(`/klant?lang=${taal}&sent=1`);
   }
+
+  const [nieuw] = await db
+    .insert(contacts)
+    .values({ ...velden, email, type: "customer", source: "aanmeldlink" })
+    .returning({ id: contacts.id });
 
   await db.insert(activities).values({
     type: "note",
-    subject: bestaand.length > 0 ? "Klant vulde gegevens aan via de aanmeldlink" : "Nieuwe klant via de aanmeldlink",
+    subject: "Nieuwe klant via de aanmeldlink",
     body: `${naam} <${email}>`,
-    contactId,
+    contactId: nieuw.id,
   });
 
   await zetKlantSessie(email);
