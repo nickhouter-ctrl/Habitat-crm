@@ -11,7 +11,9 @@ import {
   kiesTaal,
   klantContacten,
   klantEmail,
+  maakAanmeldToken,
   maakLoginToken,
+  verifieerAanmeldToken,
   verifieerLoginToken,
   wisKlantSessie,
   zetKlantSessie,
@@ -127,6 +129,69 @@ export async function bewaarGegevens(formData: FormData) {
 
   revalidatePath("/klant/gegevens");
   redirect(`/klant/gegevens?lang=${taal}&saved=1`);
+}
+
+/**
+ * Nieuwe klant meldt zich aan via een gedeelde aanmeldlink: gegevens invullen →
+ * contact aangemaakt (of aangevuld als het e-mailadres al bestaat, zodat er
+ * nooit een dubbele klant ontstaat) → meteen ingelogd op het portaal.
+ */
+export async function verwerkAanmelding(token: string, formData: FormData) {
+  const taal = kiesTaal(String(formData.get("lang") ?? "nl"));
+  if (!verifieerAanmeldToken(token)) redirect(`/klant?lang=${taal}&invalid=1`);
+
+  const s = (k: string, max = 200) => String(formData.get(k) ?? "").trim().slice(0, max) || null;
+  const email = (s("email", 200) ?? "").toLowerCase();
+  const naam = s("name");
+  if (!email || !email.includes("@") || !naam) throw new Error("Naam en e-mailadres zijn verplicht");
+
+  const magDoor = await rateLimit(`klant-aanmelden:${email}`, 5, 60 * 60);
+  if (!magDoor) redirect(`/klant?lang=${taal}`);
+
+  const velden = {
+    name: naam,
+    phone: s("phone", 40),
+    mobile: s("mobile", 40),
+    taxId: s("taxId", 40),
+    addressLine: s("addressLine"),
+    postalCode: s("postalCode", 16),
+    city: s("city", 80),
+    province: s("province", 80),
+    country: s("country", 40) ?? "ES",
+    preferredLanguage: kiesTaal(String(formData.get("preferredLanguage") ?? "")),
+    updatedAt: new Date(),
+  };
+
+  const bestaand = await klantContacten(email);
+  let contactId: string;
+  if (bestaand.length > 0) {
+    // Bestaat al → aanvullen, nooit dubbel aanmaken.
+    for (const c of bestaand) await db.update(contacts).set(velden).where(eq(contacts.id, c.id));
+    contactId = bestaand[0].id;
+  } else {
+    const [nieuw] = await db
+      .insert(contacts)
+      .values({ ...velden, email, type: "customer", source: "aanmeldlink" })
+      .returning({ id: contacts.id });
+    contactId = nieuw.id;
+  }
+
+  await db.insert(activities).values({
+    type: "note",
+    subject: bestaand.length > 0 ? "Klant vulde gegevens aan via de aanmeldlink" : "Nieuwe klant via de aanmeldlink",
+    body: `${naam} <${email}>`,
+    contactId,
+  });
+
+  await zetKlantSessie(email);
+  redirect(`/klant/projecten?lang=${taal}`);
+}
+
+/** Interne actie (staff): maak een deelbare aanmeldlink (14 dagen geldig). */
+export async function maakAanmeldlink(): Promise<string> {
+  const { requireWriteUser } = await import("@/lib/auth/guards");
+  await requireWriteUser();
+  return `${APP_URL}/klant/aanmelden/${maakAanmeldToken()}`;
 }
 
 /**

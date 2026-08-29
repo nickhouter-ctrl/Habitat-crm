@@ -21,6 +21,7 @@ import { db } from "@/lib/db";
 import { contacts } from "@/lib/db/schema";
 import { cn, formatDate } from "@/lib/utils";
 import { SyncHoldedButton } from "@/components/sync-holded-button";
+import { AanmeldlinkKnop } from "./aanmeldlink-knop";
 import { contactTypeMeta, leadStageMeta } from "../_meta";
 
 export const metadata = { title: "Contacten" };
@@ -107,6 +108,7 @@ export default async function ContactsPage({
         subtitle={`${rows.length} ${rows.length === 1 ? "contact" : "contacten"}`}
         actions={
           <>
+            <AanmeldlinkKnop />
             <SyncHoldedButton />
             <LinkButton href="/contacts/new">Nieuw contact</LinkButton>
           </>

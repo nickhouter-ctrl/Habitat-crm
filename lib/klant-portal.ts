@@ -23,12 +23,14 @@ const COOKIE = "klant_sessie";
 const LOGIN_TTL_SEC = 30 * 60; // inloglink: 30 minuten
 const SESSIE_TTL_SEC = 30 * 24 * 60 * 60; // cookie: 30 dagen
 
-type Aud = "klant-login" | "klant-sessie";
+type Aud = "klant-login" | "klant-sessie" | "klant-aanmelden";
 interface KlantToken {
   aud: Aud;
   email: string;
   exp: number;
 }
+
+const AANMELD_TTL_SEC = 14 * 24 * 60 * 60; // aanmeldlink: 14 dagen deelbaar
 
 const b64url = (buf: Buffer) => buf.toString("base64url");
 
@@ -65,6 +67,14 @@ export function maakLoginToken(email: string): string {
 }
 export function verifieerLoginToken(token: string): string | null {
   return verify(token, "klant-login")?.email ?? null;
+}
+
+/** Deelbare aanmeldlink (WhatsApp) voor nieuwe klanten — niet persoonsgebonden. */
+export function maakAanmeldToken(): string {
+  return sign({ aud: "klant-aanmelden", email: "*", exp: nu() + AANMELD_TTL_SEC });
+}
+export function verifieerAanmeldToken(token: string): boolean {
+  return verify(token, "klant-aanmelden") !== null;
 }
 
 export async function zetKlantSessie(email: string): Promise<void> {
