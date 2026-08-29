@@ -89,6 +89,7 @@ import {
   reverseStockOutFromDocument,
   toggleReserveEstimate,
 } from "../../documents/actions";
+import { stuurKlantportaalUitnodiging } from "@/app/klant/actions";
 
 export const metadata = { title: "Project" };
 
@@ -1850,6 +1851,25 @@ export default async function ProjectDetailPage({
               )}
             </CardContent>
           </Card>
+
+          {project.contactId && (
+            <Card className="mt-5">
+              <CardHeader>
+                <CardTitle>Klantportaal</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3 text-sm">
+                <p className="text-muted">
+                  De klant volgt op <span className="font-mono text-xs">/klant</span> de voortgang en betalingen
+                  (alleen klantprijzen) en kan er zelf ontbrekende gegevens aanvullen (adres, NIF/NIE, telefoon).
+                </p>
+                <form action={stuurKlantportaalUitnodiging.bind(null, id)}>
+                  <SubmitButton variant="secondary" size="sm" pendingLabel="Versturen…">
+                    ✉️ Portaal-uitnodiging mailen
+                  </SubmitButton>
+                </form>
+              </CardContent>
+            </Card>
+          )}
         </TabPanel>
 
         {/* ── Tab: Documenten — facturen, offertes, producten ── */}
