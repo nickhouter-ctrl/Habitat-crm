@@ -1,10 +1,10 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 
-import { Badge, Card, CardContent } from "@/components/ui";
+import { Badge, Card, CardContent, CardHeader, CardTitle } from "@/components/ui";
 import { SubmitButton } from "@/components/submit-button";
-import { kiesTaal, klantEmail, klantProjecten } from "@/lib/klant-portal";
-import { formatEUR } from "@/lib/utils";
+import { kiesTaal, klantCommissies, klantEmail, klantLosseOffertes, klantProjecten } from "@/lib/klant-portal";
+import { formatDate, formatEUR } from "@/lib/utils";
 
 import { klantT } from "../_t";
 import { uitloggen } from "../actions";
@@ -21,9 +21,14 @@ export default async function KlantProjectenPage({
   const email = await klantEmail();
   if (!email) redirect(`/klant?lang=${taal}`);
 
-  const { projecten } = await klantProjecten(email);
-  // Eén project → meteen door naar de detailpagina.
-  if (projecten.length === 1) redirect(`/klant/project/${projecten[0].id}?lang=${taal}`);
+  const [{ projecten }, offertes, commissies] = await Promise.all([
+    klantProjecten(email),
+    klantLosseOffertes(email),
+    klantCommissies(email),
+  ]);
+  // Eén project en verder niets → meteen door naar de detailpagina.
+  if (projecten.length === 1 && offertes.length === 0 && commissies.length === 0)
+    redirect(`/klant/project/${projecten[0].id}?lang=${taal}`);
 
   return (
     <div>
@@ -41,7 +46,7 @@ export default async function KlantProjectenPage({
         </span>
       </div>
 
-      {projecten.length === 0 ? (
+      {projecten.length === 0 && offertes.length === 0 && commissies.length === 0 ? (
         <Card>
           <CardContent className="pt-5 text-sm text-muted">{t.geenProjecten}</CardContent>
         </Card>
@@ -67,6 +72,58 @@ export default async function KlantProjectenPage({
             </Link>
           ))}
         </div>
+      )}
+
+      {offertes.length > 0 && (
+        <Card className="mt-6">
+          <CardHeader>
+            <CardTitle>{t.mijnOffertes}</CardTitle>
+          </CardHeader>
+          <CardContent className="divide-y divide-border/70 text-sm">
+            {offertes.map((o) => (
+              <div key={o.id} className="flex items-center justify-between gap-3 py-2">
+                <span className="min-w-0">
+                  <span className="block font-medium">
+                    {t.docLabels.estimate} {o.docNumber ?? ""}
+                  </span>
+                  {o.title && <span className="block truncate text-xs text-muted">{o.title}</span>}
+                </span>
+                <span className="flex shrink-0 items-center gap-3">
+                  {o.issueDate && <span className="text-xs text-muted">{formatDate(o.issueDate)}</span>}
+                  <span className="font-medium tabular-nums">{formatEUR(o.totalEur)}</span>
+                  <a href={`/klant/document/${o.id}/pdf`} target="_blank" className="text-accent hover:underline">
+                    {t.pdf}
+                  </a>
+                </span>
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+      )}
+
+      {commissies.length > 0 && (
+        <Card className="mt-6">
+          <CardHeader>
+            <CardTitle>{t.commissies}</CardTitle>
+            <span className="text-xs text-muted">{t.commissieUitleg}</span>
+          </CardHeader>
+          <CardContent className="divide-y divide-border/70 text-sm">
+            {commissies.map((c) => (
+              <div key={c.id} className="flex flex-wrap items-center justify-between gap-2 py-2">
+                <span className="font-medium">{c.refereeNaam}</span>
+                <span className="flex shrink-0 items-center gap-4 text-xs">
+                  <span className="text-muted">{Number(c.commissionPct)}%</span>
+                  <span>
+                    {t.opgebouwd}: <strong className="tabular-nums">{formatEUR(c.opgebouwd)}</strong>
+                  </span>
+                  <span>
+                    {t.uitbetaald}: <strong className="tabular-nums">{formatEUR(c.uitbetaald)}</strong>
+                  </span>
+                </span>
+              </div>
+            ))}
+          </CardContent>
+        </Card>
       )}
     </div>
   );

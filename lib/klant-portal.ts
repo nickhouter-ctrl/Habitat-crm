@@ -16,7 +16,8 @@ import { cookies } from "next/headers";
 import { and, asc, eq, inArray, isNotNull, sql } from "drizzle-orm";
 
 import { db } from "@/lib/db";
-import { contacts, documents, projectCosts, projectExtras, projectPhases, projectPayments, projects, purchaseOrders, timeEntries } from "@/lib/db/schema";
+import { commissionEntries, contacts, documents, projectCosts, projectExtras, projectPhases, projectPayments, projects, purchaseOrders, referrals, timeEntries } from "@/lib/db/schema";
+import { alias } from "drizzle-orm/pg-core";
 import { deriveProjectMargins } from "@/lib/project-financials";
 import { poExVat } from "@/lib/purchase-orders";
 
@@ -316,15 +317,65 @@ export async function klantKostenOverzicht(projectId: string): Promise<{
   return { aanneemsomEur, meerwerkEur, arbeidEur, materialenEur, totaalEur };
 }
 
-/** Mag deze klant dit document (PDF) inzien? */
+/** Mag deze klant dit document (PDF) inzien? Via project óf direct contact. */
 export async function klantMagDocument(email: string, docId: string): Promise<boolean> {
   const [doc] = await db
-    .select({ projectId: documents.projectId, status: documents.status })
+    .select({ projectId: documents.projectId, contactId: documents.contactId, status: documents.status })
     .from(documents)
     .where(eq(documents.id, docId))
     .limit(1);
-  if (!doc?.projectId || doc.status === "draft" || doc.status === "void") return false;
-  return klantMagProject(email, doc.projectId);
+  if (!doc || doc.status === "draft" || doc.status === "void") return false;
+  if (doc.projectId) return klantMagProject(email, doc.projectId);
+  if (doc.contactId) {
+    const cts = await klantContacten(email);
+    return cts.some((c) => c.id === doc.contactId);
+  }
+  return false;
+}
+
+/** Losse offertes van deze klant (zonder project) — bv. webshop/meubels. */
+export async function klantLosseOffertes(email: string) {
+  const cts = await klantContacten(email);
+  if (cts.length === 0) return [];
+  return db
+    .select({
+      id: documents.id,
+      docNumber: documents.docNumber,
+      title: documents.title,
+      status: documents.status,
+      issueDate: documents.issueDate,
+      totalEur: documents.totalEur,
+    })
+    .from(documents)
+    .where(
+      and(
+        inArray(documents.contactId, cts.map((c) => c.id)),
+        sql`${documents.projectId} is null`,
+        eq(documents.kind, "estimate"),
+        sql`${documents.status} not in ('draft', 'void')`,
+      ),
+    )
+    .orderBy(asc(documents.issueDate));
+}
+
+/** Commissie-overzicht: aangebrachte klanten + opgebouwd/uitbetaald bedrag. */
+export async function klantCommissies(email: string) {
+  const cts = await klantContacten(email);
+  if (cts.length === 0) return [];
+  const referee = alias(contacts, "referee");
+  return db
+    .select({
+      id: referrals.id,
+      refereeNaam: referee.name,
+      commissionPct: referrals.commissionPct,
+      opgebouwd: sql<string>`coalesce(sum(${commissionEntries.amountEur}) filter (where ${commissionEntries.status} in ('pending', 'approved')), 0)`,
+      uitbetaald: sql<string>`coalesce(sum(${commissionEntries.amountEur}) filter (where ${commissionEntries.status} = 'paid'), 0)`,
+    })
+    .from(referrals)
+    .innerJoin(referee, eq(referrals.refereeContactId, referee.id))
+    .leftJoin(commissionEntries, eq(commissionEntries.referralId, referrals.id))
+    .where(and(inArray(referrals.referrerContactId, cts.map((c) => c.id)), eq(referrals.active, true)))
+    .groupBy(referrals.id, referee.name, referrals.commissionPct);
 }
 
 /* ------------------------------------------------------------- vertaling */
