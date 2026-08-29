@@ -5,6 +5,12 @@
       "has": [{ "type": "host", "value": "mijn.habitat-one.com" }],
       "destination": "/klant",
       "permanent": false
+    },
+    {
+      "source": "/klant/:pad*",
+      "has": [{ "type": "host", "value": "crm.habitat-one.com" }],
+      "destination": "https://mijn.habitat-one.com/klant/:pad*",
+      "permanent": false
     }
   ],
   "crons": [
