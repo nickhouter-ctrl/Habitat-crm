@@ -1,8 +1,8 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 
-import { Badge, Card, CardContent, CardHeader, CardTitle, TBody, Table, Td, Th, THead, Tr } from "@/components/ui";
-import { kiesTaal, klantEmail, klantProjectDetail } from "@/lib/klant-portal";
+import { Badge, Card, CardContent, CardHeader, CardTitle, StatTile, TBody, Table, Td, Th, THead, Tr } from "@/components/ui";
+import { kiesTaal, klantEmail, klantKostenOverzicht, klantProjectDetail } from "@/lib/klant-portal";
 import { formatDate, formatEUR } from "@/lib/utils";
 
 import { klantT } from "../../_t";
@@ -31,6 +31,7 @@ export default async function KlantProjectPage({
   const detail = await klantProjectDetail(email, id);
   if (!detail) notFound();
   const { project, fases, docs, betalingen, meerwerk } = detail;
+  const kosten = await klantKostenOverzicht(id);
 
   // Gewogen totaalvoortgang: gelijke weging per fase (zelfde beeld als de
   // voortgangs-PDF wanneer er geen begrotingsbedragen per fase zijn).
@@ -41,6 +42,12 @@ export default async function KlantProjectPage({
   const openstaand = facturen
     .filter((d) => d.kind !== "creditnote")
     .reduce((s, d) => s + Math.max(0, Number(d.totalEur ?? 0) - Number(d.paidEur ?? 0)), 0);
+  // Betaald: de daadwerkelijk ontvangen betalingen; terugval op de factuurstanden.
+  const betaaldViaBank = betalingen.reduce((s, b) => s + Number(b.amountEur ?? 0), 0);
+  const betaaldTotaal =
+    betaaldViaBank > 0
+      ? betaaldViaBank
+      : facturen.reduce((s, d) => s + Number(d.paidEur ?? 0) * (d.kind === "creditnote" ? -1 : 1), 0);
 
   return (
     <div className="space-y-6">
@@ -55,6 +62,59 @@ export default async function KlantProjectPage({
           {t.statusLabels[project.status] ?? project.status}
         </Badge>
       </div>
+
+      {/* Samenvatting: totaal · betaald · openstaand */}
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+        <StatTile label={t.totaalVoorU} value={formatEUR(kosten.totaalEur)} hint={t.exclBtw} tone="info" />
+        <StatTile label={t.betaald} value={formatEUR(betaaldTotaal)} hint={t.inclBtw} tone="success" />
+        <StatTile
+          label={t.openstaand}
+          value={formatEUR(openstaand)}
+          hint={t.inclBtw}
+          tone={openstaand > 0.01 ? "warning" : "success"}
+        />
+      </div>
+
+      {/* Kostenoverzicht — doorbelaste verkoopbedragen, nooit kost/marge */}
+      <Card>
+        <CardHeader>
+          <CardTitle>{t.kostenOverzicht}</CardTitle>
+          <span className="text-xs text-muted">{t.exclBtw}</span>
+        </CardHeader>
+        <CardContent className="divide-y divide-border/70 text-sm">
+          {kosten.aanneemsomEur != null ? (
+            <div className="flex items-center justify-between py-2">
+              <span>{t.aanneemsom}</span>
+              <span className="font-medium tabular-nums">{formatEUR(kosten.aanneemsomEur)}</span>
+            </div>
+          ) : (
+            <>
+              {kosten.arbeidEur > 0 && (
+                <div className="flex items-center justify-between py-2">
+                  <span>{t.arbeid}</span>
+                  <span className="font-medium tabular-nums">{formatEUR(kosten.arbeidEur)}</span>
+                </div>
+              )}
+              {kosten.materialenEur > 0 && (
+                <div className="flex items-center justify-between py-2">
+                  <span>{t.materialen}</span>
+                  <span className="font-medium tabular-nums">{formatEUR(kosten.materialenEur)}</span>
+                </div>
+              )}
+            </>
+          )}
+          {kosten.meerwerkEur > 0 && (
+            <div className="flex items-center justify-between py-2">
+              <span>{t.meerwerk}</span>
+              <span className="font-medium tabular-nums">{formatEUR(kosten.meerwerkEur)}</span>
+            </div>
+          )}
+          <div className="flex items-center justify-between py-2 font-semibold">
+            <span>{t.totaal}</span>
+            <span className="tabular-nums">{formatEUR(kosten.totaalEur)}</span>
+          </div>
+        </CardContent>
+      </Card>
 
       {/* Voortgang */}
       <Card>

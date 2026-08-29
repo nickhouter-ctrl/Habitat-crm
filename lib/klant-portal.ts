@@ -16,7 +16,9 @@ import { cookies } from "next/headers";
 import { and, asc, eq, inArray, isNotNull, sql } from "drizzle-orm";
 
 import { db } from "@/lib/db";
-import { contacts, documents, projectExtras, projectPhases, projectPayments, projects } from "@/lib/db/schema";
+import { contacts, documents, projectCosts, projectExtras, projectPhases, projectPayments, projects, purchaseOrders, timeEntries } from "@/lib/db/schema";
+import { deriveProjectMargins } from "@/lib/project-financials";
+import { poExVat } from "@/lib/purchase-orders";
 
 const SECRET = process.env.PORTAL_JWT_SECRET ?? process.env.AUTH_SECRET ?? "";
 const COOKIE = "klant_sessie";
@@ -227,6 +229,91 @@ export async function klantProjectDetail(email: string, projectId: string) {
   ]);
 
   return { project, fases, docs, betalingen, meerwerk };
+}
+
+/**
+ * Kostenoverzicht voor de klant — uitsluitend VERKOOPwaarden verlaten deze
+ * functie. Gemaakte kosten (uren, inkoop) worden hier eerst doorbelast met de
+ * projectmarge (kost ÷ (1 − marge%)), precies zoals intern; de onderliggende
+ * kost- en margecijfers blijven binnen deze functie.
+ */
+export async function klantKostenOverzicht(projectId: string): Promise<{
+  aanneemsomEur: number | null;
+  meerwerkEur: number;
+  arbeidEur: number; // doorbelaste verkoopwaarde, ex. btw
+  materialenEur: number; // doorbelaste verkoopwaarde, ex. btw
+  totaalEur: number; // ex. btw
+}> {
+  const [[proj], tijdRows, poRows, losseKosten, [meerwerkAgg]] = await Promise.all([
+    db
+      .select({
+        contractPriceEur: projects.contractPriceEur,
+        laborMarginPct: projects.laborMarginPct,
+        purchaseMarginPct: projects.purchaseMarginPct,
+      })
+      .from(projects)
+      .where(eq(projects.id, projectId))
+      .limit(1),
+    // Goedgekeurde uren (portaal-uren die nog op controle wachten tellen niet).
+    db
+      .select({ hours: timeEntries.hours, hourlyCostEur: timeEntries.hourlyCostEur })
+      .from(timeEntries)
+      .where(
+        and(
+          eq(timeEntries.projectId, projectId),
+          sql`not (${timeEntries.selfLoggedAt} is not null and ${timeEntries.approvedAt} is null)`,
+        ),
+      ),
+    // Materiaal-inkoop (als-uren-geboekte PO's zitten al in de uren).
+    db
+      .select({
+        subtotal: purchaseOrders.subtotal,
+        tax: purchaseOrders.tax,
+        total: purchaseOrders.total,
+        items: purchaseOrders.items,
+      })
+      .from(purchaseOrders)
+      .where(
+        and(
+          eq(purchaseOrders.projectId, projectId),
+          sql`${purchaseOrders.status} <> 'cancelled'`,
+          sql`coalesce(${purchaseOrders.countAsLabor}, false) = false`,
+        ),
+      ),
+    db
+      .select({ amountEur: projectCosts.amountEur })
+      .from(projectCosts)
+      .where(eq(projectCosts.projectId, projectId)),
+    db
+      .select({ som: sql<string>`coalesce(sum(${projectExtras.amountEur}), 0)` })
+      .from(projectExtras)
+      .where(and(eq(projectExtras.projectId, projectId), isNotNull(projectExtras.approvedAt))),
+  ]);
+
+  const laborCost = tijdRows.reduce((s, t) => s + Number(t.hours ?? 0) * Number(t.hourlyCostEur ?? 0), 0);
+  const purchaseCost =
+    poRows.reduce((s, p) => s + poExVat(p).amount, 0) +
+    losseKosten.reduce((s, c) => s + Number(c.amountEur ?? 0), 0);
+
+  const marges = deriveProjectMargins({
+    laborCost,
+    laborMarginPct: proj?.laborMarginPct != null ? Number(proj.laborMarginPct) : null,
+    productRevenue: 0,
+    productCost: 0,
+    purchaseCost,
+    purchaseMarginPct: proj?.purchaseMarginPct != null ? Number(proj.purchaseMarginPct) : null,
+  });
+
+  const aanneemsomEur = proj?.contractPriceEur != null ? Number(proj.contractPriceEur) : null;
+  const meerwerkEur = Number(meerwerkAgg?.som ?? 0);
+  const arbeidEur = marges.laborRevenue;
+  const materialenEur = marges.purchaseRevenue;
+  // Vaste aanneemsom → kosten vallen binnen de som; anders (regie) telt het
+  // doorbelaste werk zelf op tot het totaal.
+  const totaalEur =
+    aanneemsomEur != null ? aanneemsomEur + meerwerkEur : arbeidEur + materialenEur + meerwerkEur;
+
+  return { aanneemsomEur, meerwerkEur, arbeidEur, materialenEur, totaalEur };
 }
 
 /** Mag deze klant dit document (PDF) inzien? */
