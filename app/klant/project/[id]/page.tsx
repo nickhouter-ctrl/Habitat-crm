@@ -2,7 +2,7 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 
 import { Badge, Card, CardContent, CardHeader, CardTitle, StatTile, TBody, Table, Td, Th, THead, Tr } from "@/components/ui";
-import { kiesTaal, klantEmail, klantKostenOverzicht, klantProjectDetail } from "@/lib/klant-portal";
+import { kiesTaal, klantEmail, klantKostenOverzicht, klantProjectDetail, klantVoorschotten } from "@/lib/klant-portal";
 import { formatDate, formatEUR } from "@/lib/utils";
 
 import { klantT } from "../../_t";
@@ -31,7 +31,7 @@ export default async function KlantProjectPage({
   const detail = await klantProjectDetail(email, id);
   if (!detail) notFound();
   const { project, fases, docs, betalingen, meerwerk } = detail;
-  const kosten = await klantKostenOverzicht(id);
+  const [kosten, voorschotten] = await Promise.all([klantKostenOverzicht(id), klantVoorschotten(id)]);
 
   // Gewogen totaalvoortgang: gelijke weging per fase (zelfde beeld als de
   // voortgangs-PDF wanneer er geen begrotingsbedragen per fase zijn).
@@ -39,9 +39,12 @@ export default async function KlantProjectPage({
     fases.length > 0 ? Math.round(fases.reduce((s, f) => s + (f.progressPct ?? 0), 0) / fases.length) : null;
 
   const facturen = docs.filter((d) => d.kind !== "estimate");
-  const openstaand = facturen
-    .filter((d) => d.kind !== "creditnote")
-    .reduce((s, d) => s + Math.max(0, Number(d.totalEur ?? 0) - Number(d.paidEur ?? 0)), 0);
+  // Openstaand = open factuurbedragen + nog niet ontvangen voorschotverzoeken.
+  const openVoorschot = voorschotten.reduce((s, v) => s + v.openEur, 0);
+  const openstaand =
+    facturen
+      .filter((d) => d.kind !== "creditnote")
+      .reduce((s, d) => s + Math.max(0, Number(d.totalEur ?? 0) - Number(d.paidEur ?? 0)), 0) + openVoorschot;
   // Betaald: de daadwerkelijk ontvangen betalingen; terugval op de factuurstanden.
   const betaaldViaBank = betalingen.reduce((s, b) => s + Number(b.amountEur ?? 0), 0);
   const betaaldTotaal =
@@ -202,6 +205,41 @@ export default async function KlantProjectPage({
           </Table>
         )}
       </Card>
+
+      {/* Voorschotten */}
+      {voorschotten.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle>{t.voorschotten}</CardTitle>
+          </CardHeader>
+          <CardContent className="divide-y divide-border/70 text-sm">
+            {voorschotten.map((v) => (
+              <div key={v.id} className="flex flex-wrap items-center justify-between gap-2 py-2">
+                <span className="min-w-0">
+                  <span className="block font-medium">{v.omschrijving || t.voorschotten}</span>
+                  {v.datum && (
+                    <span className="block text-xs text-muted">{formatDate(v.datum)}</span>
+                  )}
+                </span>
+                <span className="flex shrink-0 items-center gap-3">
+                  <span className="text-xs text-muted">
+                    {t.gevraagd}: <span className="tabular-nums">{formatEUR(v.gevraagdEur)}</span>
+                  </span>
+                  {v.openEur <= 0.01 ? (
+                    <Badge tone="success">{t.betaald}</Badge>
+                  ) : v.ontvangenEur > 0 ? (
+                    <Badge tone="warning">
+                      {t.ontvangen}: {formatEUR(v.ontvangenEur)}
+                    </Badge>
+                  ) : (
+                    <Badge tone="warning">{t.openstaand}</Badge>
+                  )}
+                </span>
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+      )}
 
       {/* Ontvangen betalingen */}
       {betalingen.length > 0 && (

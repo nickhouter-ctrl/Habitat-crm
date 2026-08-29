@@ -16,7 +16,8 @@ import { cookies } from "next/headers";
 import { and, asc, eq, inArray, isNotNull, sql } from "drizzle-orm";
 
 import { db } from "@/lib/db";
-import { commissionEntries, contacts, documents, projectCosts, projectExtras, projectPhases, projectPayments, projects, purchaseOrders, referrals, timeEntries } from "@/lib/db/schema";
+import { commissionEntries, contacts, documents, projectCosts, projectExtras, projectPhases, projectPayments, projects, purchaseOrders, referrals, sentEmails, timeEntries } from "@/lib/db/schema";
+import { desc, like } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import { deriveProjectMargins } from "@/lib/project-financials";
 import { poExVat } from "@/lib/purchase-orders";
@@ -252,6 +253,50 @@ export async function klantProjectDetail(email: string, projectId: string) {
   ]);
 
   return { project, fases, docs, betalingen, meerwerk };
+}
+
+/**
+ * Voorschotverzoeken van een project: gevraagd bedrag + wat daarop al is
+ * ontvangen (zelfde bron als de interne voorschotkaart).
+ */
+export async function klantVoorschotten(projectId: string) {
+  const [proj] = await db
+    .select({ name: projects.name })
+    .from(projects)
+    .where(eq(projects.id, projectId))
+    .limit(1);
+  const rows = await db
+    .select({
+      id: sentEmails.id,
+      subject: sentEmails.subject,
+      datum: sentEmails.createdAt,
+      gevraagd: sentEmails.amountEur,
+      ontvangen: sql<number>`(
+        select coalesce(sum(pp.amount_eur), 0)::float8
+        from project_payments pp where pp.advance_request_id = ${sentEmails.id}
+      )`,
+    })
+    .from(sentEmails)
+    .where(and(eq(sentEmails.projectId, projectId), like(sentEmails.subject, "Voorschot: %")))
+    .orderBy(desc(sentEmails.createdAt))
+    .limit(20);
+  return rows.map((v) => {
+    const gevraagd = v.gevraagd != null ? Number(v.gevraagd) : 0;
+    const ontvangen = Number(v.ontvangen);
+    // "Voorschot: <projectnaam> <omschrijving>" → alleen de omschrijving tonen.
+    let omschrijving = (v.subject ?? "").replace(/^Voorschot:\s*/i, "").trim();
+    if (proj?.name && omschrijving.toLowerCase().startsWith(proj.name.toLowerCase())) {
+      omschrijving = omschrijving.slice(proj.name.length).trim();
+    }
+    return {
+      id: v.id,
+      omschrijving,
+      datum: v.datum,
+      gevraagdEur: gevraagd,
+      ontvangenEur: ontvangen,
+      openEur: Math.max(0, Math.round((gevraagd - ontvangen) * 100) / 100),
+    };
+  });
 }
 
 /**
