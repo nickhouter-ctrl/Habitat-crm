@@ -29,6 +29,9 @@ async function ipLimietOk(actie: string, maxPerUur: number): Promise<boolean> {
 }
 
 const APP_URL = (process.env.APP_URL ?? "https://crm.habitat-one.com").replace(/\/$/, "");
+/** Basis voor klant-links in mails/gedeelde links — nette voordeur zodra
+ *  mijn.habitat-one.com aan dit project hangt (env KLANT_PORTAAL_URL). */
+const PORTAAL_URL = (process.env.KLANT_PORTAAL_URL ?? APP_URL).replace(/\/$/, "");
 
 /** Mailtekst van de inloglink, in de taal van de klant. */
 function loginMailHtml(taal: ReturnType<typeof kiesTaal>, url: string): { subject: string; html: string } {
@@ -70,7 +73,7 @@ export async function vraagLoginLink(formData: FormData) {
         .from(projects)
         .where(inArray(projects.contactId, cts.map((c) => c.id))))[0]!.n > 0;
     if (heeftProject) {
-      const url = `${APP_URL}/klant/login/${maakLoginToken(email)}?lang=${taal}`;
+      const url = `${PORTAAL_URL}/klant/login/${maakLoginToken(email)}?lang=${taal}`;
       const mail = loginMailHtml(taal, url);
       // Persoonlijke inloglink → geen vaste bedrijfs-BCC.
       await sendMail({ to: email, subject: mail.subject, html: mail.html, noCompanyBcc: true }).catch((e) => {
@@ -176,7 +179,7 @@ export async function verwerkAanmelding(token: string, formData: FormData) {
     // met de link andermans adres kunnen intypen en diens projecten zien of
     // gegevens vervuilen. De echte eigenaar krijgt gewoon een inloglink in de
     // eigen mailbox; daarna kan hij zelf zijn gegevens aanpassen.
-    const url = `${APP_URL}/klant/login/${maakLoginToken(email)}?lang=${taal}`;
+    const url = `${PORTAAL_URL}/klant/login/${maakLoginToken(email)}?lang=${taal}`;
     const mail = loginMailHtml(taal, url);
     await sendMail({ to: email, subject: mail.subject, html: mail.html, noCompanyBcc: true }).catch((e) => {
       console.error("[klant-portal] inloglink-mail (aanmeldlink) mislukt:", e);
@@ -204,7 +207,7 @@ export async function verwerkAanmelding(token: string, formData: FormData) {
 export async function maakAanmeldlink(): Promise<string> {
   const { requireWriteUser } = await import("@/lib/auth/guards");
   await requireWriteUser();
-  return `${APP_URL}/klant/aanmelden/${maakAanmeldToken()}`;
+  return `${PORTAAL_URL}/klant/aanmelden/${maakAanmeldToken()}`;
 }
 
 /**
@@ -231,7 +234,7 @@ export async function stuurKlantportaalUitnodiging(projectId: string, testNaarMi
 
   const taal = kiesTaal(contact.preferredLanguage);
   const t = klantT(taal);
-  const url = `${APP_URL}/klant/login/${maakLoginToken(contact.email)}?lang=${taal}`;
+  const url = `${PORTAAL_URL}/klant/login/${maakLoginToken(contact.email)}?lang=${taal}`;
   const intro = {
     nl: `Via ons klantportaal volgt u de voortgang van <strong>${proj.name}</strong>, ziet u facturen en betalingen, en kunt u uw gegevens aanvullen.`,
     en: `In our client portal you can follow the progress of <strong>${proj.name}</strong>, see invoices and payments, and complete your details.`,

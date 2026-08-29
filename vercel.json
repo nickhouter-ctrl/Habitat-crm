@@ -1,4 +1,12 @@
 {
+  "redirects": [
+    {
+      "source": "/",
+      "has": [{ "type": "host", "value": "mijn.habitat-one.com" }],
+      "destination": "/klant",
+      "permanent": false
+    }
+  ],
   "crons": [
     {
       "path": "/api/cron/imap-poll",
