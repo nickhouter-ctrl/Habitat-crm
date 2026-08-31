@@ -32,6 +32,7 @@ import { formatDate, formatEUR } from "@/lib/utils";
 import {
   applyStockOutFromDocument,
   attachDocumentFiles,
+  createAdjustedInvoiceForRemainder,
   createCreditNoteFromInvoice,
   createDeliveryNoteFromDocument,
   createInvoiceFromEstimate,
@@ -148,9 +149,45 @@ export default async function DocumentDetailPage({
     (doc.kind === "invoice" || doc.kind === "proforma") && doc.sourceDocumentId
       ? await db.query.documents.findFirst({
           where: eq(documents.id, doc.sourceDocumentId),
-          columns: { id: true, docNumber: true, status: true },
+          // `kind` erbij: een aangepaste factuur verwijst naar een FACTUUR als
+          // bron, en dat vraagt een ander label dan "gemaakt van offerte".
+          columns: { id: true, docNumber: true, status: true, kind: true },
         })
       : null;
+
+  // Verrekening: creditnota's die bij deze factuur horen, en een eventuele
+  // aangepaste factuur die dit document vervangt. Concept-/afgewezen
+  // creditnota's tellen niet mee in het verrekende bedrag (nooit verstuurd).
+  const linkedCreditNotes =
+    doc.kind === "invoice"
+      ? await db.query.documents.findMany({
+          where: and(
+            eq(documents.sourceDocumentId, id),
+            eq(documents.kind, "creditnote"),
+            ne(documents.status, "void"),
+          ),
+          columns: { id: true, docNumber: true, status: true, totalEur: true },
+          orderBy: [asc(documents.issueDate)],
+        })
+      : [];
+  const creditedEur = linkedCreditNotes
+    .filter((c) => c.status !== "draft" && c.status !== "rejected")
+    .reduce((s, c) => s + Number(c.totalEur ?? 0), 0);
+  const restNaCredit = Math.max(
+    0,
+    Number(doc.totalEur ?? 0) - Number(doc.paidEur ?? 0) - creditedEur,
+  );
+  const replacementInvoices =
+    doc.kind === "invoice"
+      ? await db.query.documents.findMany({
+          where: and(
+            eq(documents.sourceDocumentId, id),
+            eq(documents.kind, "invoice"),
+            ne(documents.status, "void"),
+          ),
+          columns: { id: true, docNumber: true, status: true },
+        })
+      : [];
   // Pakbonnen die bij deze factuur horen (met afgeleverd-status).
   const linkedDeliveryNotes =
     doc.kind === "invoice"
@@ -347,6 +384,7 @@ export default async function DocumentDetailPage({
   const unlockAction = unlockDocument.bind(null, id);
   const makeDeliveryNote = createDeliveryNoteFromDocument.bind(null, id);
   const makeCreditNote = createCreditNoteFromInvoice.bind(null, id);
+  const makeAdjustedInvoice = createAdjustedInvoiceForRemainder.bind(null, id);
 
   const h = await headers();
   const host = h.get("host") ?? "";
@@ -484,10 +522,45 @@ export default async function DocumentDetailPage({
 
       {(doc.kind === "invoice" || doc.kind === "proforma") && sourceEstimate && (
         <div className="mb-4 flex flex-wrap items-center gap-2 rounded-md border border-border bg-muted/30 px-3 py-2 text-sm">
-          <span className="text-muted">{doc.kind === "proforma" ? "Voorschot bij offerte" : "Gemaakt van offerte"}</span>
+          <span className="text-muted">
+            {sourceEstimate.kind === "invoice"
+              ? "Aangepaste factuur — vervangt"
+              : doc.kind === "proforma"
+                ? "Voorschot bij offerte"
+                : "Gemaakt van offerte"}
+          </span>
           <Link href={`/documents/${sourceEstimate.id}`} className="font-medium text-accent hover:underline">
-            {sourceEstimate.docNumber ?? "(offerte)"} →
+            {sourceEstimate.docNumber ?? (sourceEstimate.kind === "invoice" ? "(factuur)" : "(offerte)")} →
           </Link>
+        </div>
+      )}
+
+      {doc.kind === "invoice" && linkedCreditNotes.length > 0 && (
+        <div className="mb-4 flex flex-wrap items-center gap-x-3 gap-y-1 rounded-md border border-border bg-muted/30 px-3 py-2 text-sm">
+          <span className="text-muted">Verrekening:</span>
+          {linkedCreditNotes.map((cn) => (
+            <Link key={cn.id} href={`/documents/${cn.id}`} className="font-medium text-accent hover:underline">
+              {cn.docNumber ?? "(creditnota)"} ({formatEUR(-Number(cn.totalEur ?? 0))}
+              {cn.status === "draft" ? " · concept" : ""}) →
+            </Link>
+          ))}
+          <span className={restNaCredit <= 0.01 ? "font-medium text-success" : "text-muted"}>
+            {restNaCredit <= 0.01
+              ? "✓ volledig verrekend — er staat niets meer open"
+              : `nog ${formatEUR(restNaCredit)} open na verrekening`}
+          </span>
+        </div>
+      )}
+
+      {doc.kind === "invoice" && replacementInvoices.length > 0 && (
+        <div className="mb-4 flex flex-wrap items-center gap-2 rounded-md border border-border bg-muted/30 px-3 py-2 text-sm">
+          <span className="text-muted">Vervangen door aangepaste factuur</span>
+          {replacementInvoices.map((f) => (
+            <Link key={f.id} href={`/documents/${f.id}`} className="font-medium text-accent hover:underline">
+              {f.docNumber ?? "(factuur)"}
+              {f.status === "draft" ? " (concept)" : ""} →
+            </Link>
+          ))}
         </div>
       )}
 
@@ -929,6 +1002,21 @@ export default async function DocumentDetailPage({
                   </SubmitButton>
                 </form>
               )}
+              {doc.kind === "invoice" &&
+                creditedEur > 0.01 &&
+                restNaCredit > 0.01 &&
+                replacementInvoices.length === 0 && (
+                  <form action={makeAdjustedInvoice}>
+                    <SubmitButton size="sm" variant="secondary" pendingLabel="Bezig…">
+                      → Aangepaste factuur (restant {formatEUR(restNaCredit)})
+                    </SubmitButton>
+                    <p className="mt-1 text-xs text-muted">
+                      Deze factuur is deels gecrediteerd. Dit crediteert ook het restant en zet een
+                      aangepaste conceptfactuur klaar met alle originele regels — beide blijven
+                      concept totdat jij ze controleert en verstuurt.
+                    </p>
+                  </form>
+                )}
               {(doc.kind === "deliverynote" || doc.kind === "invoice") && doc.stockAppliedAt && (
                 <div className="space-y-1">
                   <p className="text-xs text-success">

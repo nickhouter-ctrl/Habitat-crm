@@ -1,6 +1,6 @@
 "use server";
 
-import { and, desc, eq, inArray, isNotNull, isNull, ne, or, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, isNotNull, isNull, ne, notInArray, or, sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
@@ -1545,6 +1545,139 @@ export async function createCreditNoteFromInvoice(invoiceId: string) {
   revalidateAround("creditnote");
   revalidatePath(`/documents/${invoiceId}`);
   redirect(`/documents/${row.id}/edit`);
+}
+
+/**
+ * Deels gecrediteerde factuur → aangepaste factuur, kloppend voor de boekhouding.
+ *
+ * Waarom niet gewoon een nieuwe factuur met de creditnota als minregel: de
+ * originele factuur blijft dan in Holded openstaan en het klantsaldo telt het
+ * restant dubbel. Daarom maakt deze actie in één klik twee CONCEPTEN (er gaat
+ * niets vanzelf de deur uit):
+ *  1. een aanvullende creditnota die het RESTANT crediteert — de originele
+ *     regels plus een tegenboeking van wat al gecrediteerd is, zodat het netto
+ *     precies het restant is mét de juiste btw per regel, en de originele
+ *     factuur (ook in Holded) volledig verrekend raakt;
+ *  2. een aangepaste conceptfactuur met alle originele regels, om bij te werken
+ *     naar de juiste inhoud en daarna te versturen.
+ */
+export async function createAdjustedInvoiceForRemainder(invoiceId: string) {
+  await requireUser();
+  const inv = await db.query.documents.findFirst({ where: eq(documents.id, invoiceId) });
+  if (!inv || inv.kind !== "invoice") return;
+
+  // Alleen zinvol bij een échte deelcreditering: er is al iets gecrediteerd
+  // (concepten tellen niet — die zijn nooit naar de klant gegaan) én er staat
+  // nog iets open.
+  const credits = await db.query.documents.findMany({
+    where: and(
+      eq(documents.sourceDocumentId, invoiceId),
+      eq(documents.kind, "creditnote"),
+      notInArray(documents.status, ["void", "draft", "rejected"]),
+    ),
+  });
+  const som = (veld: "totalEur" | "subtotalEur" | "taxEur") =>
+    credits.reduce((s, c) => s + Number(c[veld] ?? 0), 0);
+  const restIncl = Number(inv.totalEur ?? 0) - som("totalEur");
+  if (som("totalEur") <= 0.01 || restIncl <= 0.01) return;
+
+  // Dubbelklik-rem: bestaat er al een aangepaste factuur bij dit origineel,
+  // dan niets nieuws aanmaken maar daarheen sturen.
+  const alVervangen = await db.query.documents.findFirst({
+    where: and(
+      eq(documents.sourceDocumentId, invoiceId),
+      eq(documents.kind, "invoice"),
+      ne(documents.status, "void"),
+    ),
+    columns: { id: true },
+  });
+  if (alVervangen) redirect(`/documents/${alVervangen.id}/edit`);
+
+  const invNr = (inv.docNumber ?? "").trim();
+  const today = new Date().toISOString().slice(0, 10);
+
+  // Nummer in dezelfde reeks als de eerste creditnota (CN-… met -2/-3-suffix).
+  const facMatch = invNr.match(/^FAC[-_ ]?(.+)$/i);
+  const basis = invNr ? `CN-${facMatch ? facMatch[1] : invNr}` : "CN";
+  let cnNummer = basis;
+  for (let i = 2; ; i++) {
+    const bestaat = await db.query.documents.findFirst({
+      where: eq(documents.docNumber, cnNummer),
+      columns: { id: true },
+    });
+    if (!bestaat) break;
+    cnNummer = `${basis}-${i}`;
+  }
+
+  // Regels van de restant-creditnota: alle originele regels + de eerdere
+  // crediteringen als tegenboeking (negatieve aantallen). Zo blijft de
+  // btw-uitsplitsing per regel exact kloppen.
+  const restItems: DocumentLineItem[] = [
+    ...normalizeDocItems(inv.items),
+    ...credits.flatMap((cn) =>
+      normalizeDocItems(cn.items).map((it) => ({
+        ...it,
+        units: -(Number(it.units) || 0),
+        name: `Reeds gecrediteerd via ${cn.docNumber ?? "creditnota"}: ${it.name}`,
+      })),
+    ),
+  ];
+
+  const [restCn] = await db
+    .insert(documents)
+    .values({
+      kind: "creditnote",
+      status: "draft",
+      docNumber: cnNummer,
+      sourceDocumentId: inv.id,
+      title: `Creditnota restant ${invNr || "factuur"} — vervangen door aangepaste factuur`,
+      contactId: inv.contactId,
+      companyId: inv.companyId,
+      dealId: inv.dealId,
+      propertyId: inv.propertyId,
+      projectId: inv.projectId,
+      issueDate: today,
+      currency: inv.currency,
+      subtotalEur: (Number(inv.subtotalEur ?? 0) - som("subtotalEur")).toFixed(2),
+      taxEur: (Number(inv.taxEur ?? 0) - som("taxEur")).toFixed(2),
+      totalEur: restIncl.toFixed(2),
+      items: restItems,
+      notes: `Restant-creditering van factuur ${invNr}; er volgt een aangepaste factuur.`,
+    })
+    .returning({ id: documents.id, docNumber: documents.docNumber });
+
+  // De aangepaste factuur: alle originele regels, klaar om bij te werken.
+  // Nummer in de gewone FAC-reeks; koppeling naar het origineel via
+  // source_document_id zodat beide kanten elkaar tonen.
+  const cnLijst = [...credits.map((c) => c.docNumber).filter(Boolean), restCn.docNumber].join(", ");
+  const nieuw = await insertNumberedDocument("invoice", {
+    kind: "invoice",
+    status: "draft",
+    sourceDocumentId: inv.id,
+    title: `Aangepaste factuur — vervangt ${invNr || "factuur"}`,
+    contactId: inv.contactId,
+    companyId: inv.companyId,
+    dealId: inv.dealId,
+    propertyId: inv.propertyId,
+    projectId: inv.projectId,
+    issueDate: today,
+    currency: inv.currency,
+    subtotalEur: inv.subtotalEur,
+    taxEur: inv.taxEur,
+    totalEur: inv.totalEur,
+    items: normalizeDocItems(inv.items),
+    notes: [
+      inv.notes?.trim(),
+      `Vervangt factuur ${invNr}; die is volledig gecrediteerd via ${cnLijst}.`,
+    ]
+      .filter(Boolean)
+      .join("\n\n"),
+  });
+
+  revalidateAround("creditnote");
+  revalidateAround("invoice");
+  revalidatePath(`/documents/${invoiceId}`);
+  redirect(`/documents/${nieuw.id}/edit`);
 }
 
 /**
