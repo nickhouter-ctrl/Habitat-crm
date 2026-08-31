@@ -1,5 +1,5 @@
-import { and, asc, desc, eq, inArray, isNotNull, ne, sql, type SQL } from "drizzle-orm";
-import { Trash2 } from "lucide-react";
+import { and, asc, desc, eq, inArray, isNotNull, ne, notInArray, sql, type SQL } from "drizzle-orm";
+import { CornerDownRight, Trash2 } from "lucide-react";
 import Link from "next/link";
 
 import {
@@ -123,6 +123,59 @@ export async function DocumentsList({
       project: { columns: { id: true, name: true } },
     },
   });
+  type Rij = (typeof rows)[number];
+
+  /**
+   * Gecrediteerd bedrag per factuur (creditnota's gekoppeld via
+   * source_document_id). Over de HELE tabel berekend, niet alleen de zichtbare
+   * 300 rijen — anders zou een factuur "openstaand" lijken zodra zijn
+   * creditnota buiten beeld valt. Concept-/afgewezen creditnota's tellen niet:
+   * die zijn nooit naar de klant gegaan.
+   */
+  const creditedByInvoice = new Map<string, number>();
+  if (kinds.includes("invoice")) {
+    const sommen = await db
+      .select({
+        src: documents.sourceDocumentId,
+        som: sql<string>`sum(coalesce(${documents.totalEur}, 0))`,
+      })
+      .from(documents)
+      .where(
+        and(
+          eq(documents.kind, "creditnote"),
+          notInArray(documents.status, ["void", "draft", "rejected"]),
+          isNotNull(documents.sourceDocumentId),
+        ),
+      )
+      .groupBy(documents.sourceDocumentId);
+    for (const r of sommen) if (r.src) creditedByInvoice.set(r.src, Number(r.som ?? 0));
+  }
+  const credited = (d: Rij) => (d.kind === "invoice" ? (creditedByInvoice.get(d.id) ?? 0) : 0);
+  /** Netto open op een factuur: totaal − betaald − gecrediteerd (nooit negatief). */
+  const openNetto = (d: Rij) =>
+    Math.max(0, Number(d.totalEur ?? 0) - Number(d.paidEur ?? 0) - credited(d));
+
+  /**
+   * Creditnota's horen bij hun factuur, niet er los tussen: staat de
+   * bronfactuur in beeld, dan wordt de creditnota een ingesprongen subregel
+   * daaronder. Alleen als beide soorten zichtbaar zijn — wie op "Creditnota"
+   * filtert wil juist de platte lijst.
+   */
+  const nestBaar =
+    zichtbareKinds.includes("invoice") && zichtbareKinds.includes("creditnote");
+  const factuurInBeeld = new Map(rows.filter((r) => r.kind === "invoice").map((r) => [r.id, r]));
+  const creditsOnder = new Map<string, Rij[]>();
+  const genest = new Set<string>();
+  if (nestBaar) {
+    for (const r of rows) {
+      if (r.kind !== "creditnote" || !r.sourceDocumentId) continue;
+      if (!factuurInBeeld.has(r.sourceDocumentId)) continue;
+      const lijst = creditsOnder.get(r.sourceDocumentId) ?? [];
+      lijst.push(r);
+      creditsOnder.set(r.sourceDocumentId, lijst);
+      genest.add(r.id);
+    }
+  }
 
   /** Huidige URL met een paar parameters aangepast; lege waarde haalt hem weg. */
   const metParams = (wijziging: Record<string, string | undefined>) => {
@@ -179,11 +232,149 @@ export async function DocumentsList({
   const totalEx = rows.reduce((s, d) => s + sign(d.kind) * Number(d.subtotalEur ?? 0), 0);
   const totalIncl = rows.reduce((s, d) => s + sign(d.kind) * Number(d.totalEur ?? 0), 0);
   const paid = rows.reduce((s, d) => s + sign(d.kind) * Number(d.paidEur ?? 0), 0);
+  // Openstaand = netto: wat er ná verrekening van gekoppelde creditnota's nog
+  // echt van klanten moet komen.
   const outstanding = rows
     .filter((d) => d.kind !== "creditnote" && d.status !== "paid" && d.status !== "void")
-    .reduce((s, d) => s + (Number(d.totalEur ?? 0) - Number(d.paidEur ?? 0)), 0);
+    .reduce((s, d) => s + openNetto(d), 0);
 
   const newHref = `/documents/new?kind=${primaryKind}`;
+
+  /** Eén tabelrij; `sub` = ingesprongen creditnota-regel onder zijn factuur. */
+  const renderRij = (d: Rij, sub = false) => {
+    const partyName = d.contact?.name ?? d.company?.name ?? "—";
+    const creditBedrag = credited(d);
+    const isVerrekend = d.kind === "invoice" && creditBedrag > 0.01 && openNetto(d) <= 0.01;
+    const isDeelsVerrekend = d.kind === "invoice" && creditBedrag > 0.01 && !isVerrekend;
+    return (
+      <RowLink
+        key={d.id}
+        href={`/documents/${d.id}`}
+        className={cn(sub && "bg-warning/[0.04] hover:bg-warning/[0.08]")}
+      >
+        <Td className={cn("font-medium", sub && "py-2")}>
+          <span className={cn(sub && "flex items-center gap-1.5 pl-5 text-sm text-muted")}>
+            {sub && <CornerDownRight className="size-3.5 shrink-0 text-warning" />}
+            {d.docNumber ?? "(geen nr.)"}
+          </span>
+          {!sub && d.title && <span className="block text-xs text-muted">{d.title}</span>}
+        </Td>
+        {showKindColumn && (
+          <Td className={cn(sub && "py-2")}>
+            <Badge tone={d.kind === "creditnote" ? "warning" : "neutral"}>
+              {documentKindMeta[d.kind]}
+            </Badge>
+          </Td>
+        )}
+        <Td className={cn(sub && "py-2")}>
+          {sub ? (
+            // Zelfde klant als de factuur erboven — niet herhalen, dat is ruis.
+            <span className="text-xs text-muted">bij {factuurInBeeld.get(d.sourceDocumentId!)?.docNumber ?? "factuur"}</span>
+          ) : (
+            <>
+              {d.contact ? (
+                <StopLink href={`/contacts/${d.contact.id}`} className="hover:underline">
+                  {partyName}
+                </StopLink>
+              ) : (
+                <span className="text-muted">{partyName}</span>
+              )}
+              {d.project ? (
+                <StopLink
+                  href={`/projects/${d.project.id}`}
+                  className="mt-0.5 block text-xs text-accent hover:underline"
+                >
+                  📁 {d.project.name}
+                </StopLink>
+              ) : null}
+            </>
+          )}
+        </Td>
+        <Td className={cn(sub && "py-2")}>
+          {d.kind === "deliverynote" ? (
+            d.deliveredAt ? (
+              <span className="flex items-center gap-1">
+                <Badge tone="success">Afgeleverd {formatDate(d.deliveredAt)}</Badge>
+                <form action={setDeliveryNoteDelivered.bind(null, d.id, false)}>
+                  <ConfirmSubmit
+                    message="Afgeleverd ongedaan maken?"
+                    className="rounded p-1 text-muted transition-colors hover:bg-muted/50"
+                  >
+                    ↺
+                  </ConfirmSubmit>
+                </form>
+              </span>
+            ) : (
+              <form action={setDeliveryNoteDelivered.bind(null, d.id, true)}>
+                <ConfirmSubmit
+                  message="Pakbon markeren als afgeleverd?"
+                  className="rounded bg-accent/10 px-2 py-0.5 text-xs font-medium text-accent transition-colors hover:bg-accent/20"
+                >
+                  Markeer afgeleverd
+                </ConfirmSubmit>
+              </form>
+            )
+          ) : (
+            <span className="flex flex-wrap items-center gap-1">
+              {isVerrekend ? (
+                // Volledig gecrediteerd: er hoeft niets meer te gebeuren met
+                // deze factuur — dat is belangrijker dan "verstuurd/vervallen".
+                <Badge tone="success">Verrekend</Badge>
+              ) : (
+                <Badge tone={documentStatusMeta[d.status].tone}>
+                  {documentStatusMeta[d.status].label}
+                </Badge>
+              )}
+              {isDeelsVerrekend && (
+                <Badge tone="warning">Deels verrekend</Badge>
+              )}
+              {d.kind === "estimate" && invoicedEstimateIds.has(d.id) && (
+                <Badge tone="success">Gefactureerd</Badge>
+              )}
+            </span>
+          )}
+        </Td>
+        <Td className={cn("text-muted", sub && "py-2")}>{formatDate(d.issueDate)}</Td>
+        <Td className={cn("text-muted", sub && "py-2")}>{sub ? "" : formatDate(d.dueDate)}</Td>
+        <Td className={cn("text-right tabular-nums", sub && "py-2")}>
+          {formatEUR(sign(d.kind) * Number(d.subtotalEur ?? 0))}
+        </Td>
+        <Td
+          className={cn(
+            "text-right tabular-nums font-medium",
+            d.kind === "creditnote" && "text-danger",
+            sub && "py-2",
+          )}
+        >
+          {formatEUR(sign(d.kind) * Number(d.totalEur ?? 0))}
+        </Td>
+        <Td className={cn("text-right tabular-nums text-muted", sub && "py-2")}>
+          {formatEUR(sign(d.kind) * Number(d.paidEur ?? 0))}
+        </Td>
+        <Td className={cn("text-right", sub && "py-2")}>
+          <span className="inline-flex items-center justify-end gap-1">
+            {d.kind === "invoice" &&
+              d.status !== "paid" &&
+              d.status !== "void" &&
+              d.status !== "draft" &&
+              // Netto: een volledig gecrediteerde factuur mag nooit een
+              // herinnering (laat staan aanmaning) naar de klant uitlokken.
+              openNetto(d) > 0.01 && <ReminderButton documentId={d.id} />}
+            {(d.kind === "estimate" || d.status === "draft") && (
+              <form action={deleteDocument.bind(null, d.id)}>
+                <ConfirmSubmit
+                  message={`${documentKindMeta[d.kind]} ${d.docNumber ?? ""} definitief verwijderen?`}
+                  className="rounded p-1 text-muted transition-colors hover:bg-danger/10 hover:text-danger"
+                >
+                  <Trash2 className="size-4" />
+                </ConfirmSubmit>
+              </form>
+            )}
+          </span>
+        </Td>
+      </RowLink>
+    );
+  };
 
   return (
     <>
@@ -203,7 +394,7 @@ export async function DocumentsList({
         <StatTile label="Totaal ex. BTW" value={formatEUR(totalEx)} hint={showKindColumn ? "fact. − creditnota's" : undefined} />
         <StatTile label="Totaal incl. BTW" value={formatEUR(totalIncl)} hint="met BTW" />
         <StatTile label="Betaald" value={formatEUR(paid)} hint="incl. BTW" />
-        <StatTile label="Openstaand" value={formatEUR(outstanding)} hint="incl. BTW" />
+        <StatTile label="Openstaand" value={formatEUR(outstanding)} hint="na verrekening creditnota's" />
       </div>
 
       {/* Zoeken als GET-formulier: de zoekterm staat in de URL, dus een
@@ -283,114 +474,12 @@ export async function DocumentsList({
               </tr>
             </THead>
             <TBody>
-              {rows.map((d) => {
-                const partyName = d.contact?.name ?? d.company?.name ?? "—";
-                return (
-                  <RowLink key={d.id} href={`/documents/${d.id}`}>
-                    <Td className="font-medium">
-                      {d.docNumber ?? "(geen nr.)"}
-                      {d.title && (
-                        <span className="block text-xs text-muted">{d.title}</span>
-                      )}
-                    </Td>
-                    {showKindColumn && (
-                      <Td>
-                        <Badge tone={d.kind === "creditnote" ? "warning" : "neutral"}>
-                          {documentKindMeta[d.kind]}
-                        </Badge>
-                      </Td>
-                    )}
-                    <Td>
-                      {d.contact ? (
-                        <StopLink href={`/contacts/${d.contact.id}`} className="hover:underline">
-                          {partyName}
-                        </StopLink>
-                      ) : (
-                        <span className="text-muted">{partyName}</span>
-                      )}
-                      {d.project ? (
-                        <StopLink
-                          href={`/projects/${d.project.id}`}
-                          className="mt-0.5 block text-xs text-accent hover:underline"
-                        >
-                          📁 {d.project.name}
-                        </StopLink>
-                      ) : null}
-                    </Td>
-                    <Td>
-                      {d.kind === "deliverynote" ? (
-                        d.deliveredAt ? (
-                          <span className="flex items-center gap-1">
-                            <Badge tone="success">Afgeleverd {formatDate(d.deliveredAt)}</Badge>
-                            <form action={setDeliveryNoteDelivered.bind(null, d.id, false)}>
-                              <ConfirmSubmit
-                                message="Afgeleverd ongedaan maken?"
-                                className="rounded p-1 text-muted transition-colors hover:bg-muted/50"
-                              >
-                                ↺
-                              </ConfirmSubmit>
-                            </form>
-                          </span>
-                        ) : (
-                          <form action={setDeliveryNoteDelivered.bind(null, d.id, true)}>
-                            <ConfirmSubmit
-                              message="Pakbon markeren als afgeleverd?"
-                              className="rounded bg-accent/10 px-2 py-0.5 text-xs font-medium text-accent transition-colors hover:bg-accent/20"
-                            >
-                              Markeer afgeleverd
-                            </ConfirmSubmit>
-                          </form>
-                        )
-                      ) : (
-                        <span className="flex flex-wrap items-center gap-1">
-                          <Badge tone={documentStatusMeta[d.status].tone}>
-                            {documentStatusMeta[d.status].label}
-                          </Badge>
-                          {d.kind === "estimate" && invoicedEstimateIds.has(d.id) && (
-                            <Badge tone="success">Gefactureerd</Badge>
-                          )}
-                        </span>
-                      )}
-                    </Td>
-                    <Td className="text-muted">{formatDate(d.issueDate)}</Td>
-                    <Td className="text-muted">{formatDate(d.dueDate)}</Td>
-                    <Td className="text-right tabular-nums">
-                      {formatEUR(sign(d.kind) * Number(d.subtotalEur ?? 0))}
-                    </Td>
-                    <Td
-                      className={cn(
-                        "text-right tabular-nums font-medium",
-                        d.kind === "creditnote" && "text-danger",
-                      )}
-                    >
-                      {formatEUR(sign(d.kind) * Number(d.totalEur ?? 0))}
-                    </Td>
-                    <Td className="text-right tabular-nums text-muted">
-                      {formatEUR(sign(d.kind) * Number(d.paidEur ?? 0))}
-                    </Td>
-                    <Td className="text-right">
-                      <span className="inline-flex items-center justify-end gap-1">
-                        {d.kind === "invoice" &&
-                          d.status !== "paid" &&
-                          d.status !== "void" &&
-                          d.status !== "draft" &&
-                          Number(d.totalEur ?? 0) - Number(d.paidEur ?? 0) > 0.01 && (
-                            <ReminderButton documentId={d.id} />
-                          )}
-                        {(d.kind === "estimate" || d.status === "draft") && (
-                          <form action={deleteDocument.bind(null, d.id)}>
-                            <ConfirmSubmit
-                              message={`${documentKindMeta[d.kind]} ${d.docNumber ?? ""} definitief verwijderen?`}
-                              className="rounded p-1 text-muted transition-colors hover:bg-danger/10 hover:text-danger"
-                            >
-                              <Trash2 className="size-4" />
-                            </ConfirmSubmit>
-                          </form>
-                        )}
-                      </span>
-                    </Td>
-                  </RowLink>
-                );
+              {rows.flatMap((d) => {
+                // Geneste creditnota's komen niet los in de lijst — ze hangen
+                // als subregel onder hun factuur.
+                if (genest.has(d.id)) return [];
+                const subs = creditsOnder.get(d.id) ?? [];
+                return [renderRij(d), ...subs.map((c) => renderRij(c, true))];
               })}
             </TBody>
           </Table>
