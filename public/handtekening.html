@@ -1,0 +1,427 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Habitat One handtekening</title>
+</head>
+<body>
+<style>
+  /* Lichte grond is de basis: de handtekening zelf is een licht artefact en
+     de pagina eromheen hoort daar niet mee te vloeken. */
+  :root{
+    --paper:#F5F3EF;
+    --card:#FFFFFF;
+    --ink:#1F2321;
+    --ink-soft:#3C403E;
+    --muted:#6E7472;
+    --line:#D9D3C7;
+    --line-soft:#E7E2D9;
+    --field:#FFFFFF;
+    --btn-bg:#1F2321;
+    --btn-ink:#FFFFFF;
+    --btn-bg-hover:#000000;
+
+    --sans: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+  }
+
+  /* Standaardstand van het systeem: alleen prefers-color-scheme bepaalt het,
+     tenzij de lezer expliciet licht heeft gekozen. */
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --paper:#161917;
+      --card:#1E2220;
+      --ink:#ECEAE4;
+      --ink-soft:#C9C6BE;
+      --muted:#9AA09D;
+      --line:#333937;
+      --line-soft:#272C2A;
+      --field:#171B19;
+      --btn-bg:#ECEAE4;
+      --btn-ink:#161917;
+      --btn-bg-hover:#FFFFFF;
+    }
+  }
+  /* Expliciete keuze van de lezer wint in beide richtingen. */
+  :root[data-theme="dark"]{
+    --paper:#161917;
+    --card:#1E2220;
+    --ink:#ECEAE4;
+    --ink-soft:#C9C6BE;
+    --muted:#9AA09D;
+    --line:#333937;
+    --line-soft:#272C2A;
+    --field:#171B19;
+    --btn-bg:#ECEAE4;
+    --btn-ink:#161917;
+    --btn-bg-hover:#FFFFFF;
+  }
+
+  *{ box-sizing:border-box; }
+
+  body{
+    margin:0;
+    background:var(--paper);
+    color:var(--ink);
+    font-family:var(--sans);
+    font-size:15px;
+    line-height:1.55;
+    -webkit-font-smoothing:antialiased;
+    padding:clamp(28px, 5vw, 56px) clamp(18px, 4vw, 32px) 88px;
+  }
+
+  .page{ max-width:1020px; margin:0 auto; display:flex; flex-direction:column; gap:38px; }
+
+  /* ── kop ─────────────────────────────────────────────────────────── */
+  header{ display:flex; flex-direction:column; gap:10px; }
+  .eyebrow{
+    font-family:var(--mono);
+    font-size:11px;
+    letter-spacing:0.14em;
+    text-transform:uppercase;
+    color:var(--muted);
+  }
+  h1{
+    font-size:clamp(24px, 3.4vw, 31px);
+    font-weight:600;
+    letter-spacing:-0.02em;
+    margin:0;
+    text-wrap:balance;
+  }
+  header p{ margin:0; color:var(--muted); font-size:15px; max-width:62ch; }
+
+  .rule{ height:1px; background:var(--line); border:0; margin:0; }
+
+  /* ── werkvlak ────────────────────────────────────────────────────── */
+  .work{ display:grid; grid-template-columns:300px 1fr; gap:clamp(24px, 4vw, 44px); align-items:start; }
+  @media (max-width:820px){ .work{ grid-template-columns:1fr; } }
+
+  .form{ display:flex; flex-direction:column; gap:16px; }
+  .legend{
+    font-family:var(--mono);
+    font-size:11px;
+    letter-spacing:0.12em;
+    text-transform:uppercase;
+    color:var(--muted);
+    margin:0;
+  }
+  .field{ display:flex; flex-direction:column; gap:5px; }
+  label{ font-size:13px; color:var(--ink-soft); }
+  label .opt{ color:var(--muted); font-weight:400; }
+  input{
+    width:100%;
+    padding:10px 12px;
+    font:inherit;
+    font-size:14px;
+    color:var(--ink);
+    background:var(--field);
+    border:1px solid var(--line);
+    border-radius:3px;
+    transition:border-color .12s ease, box-shadow .12s ease;
+  }
+  input::placeholder{ color:var(--muted); opacity:.75; }
+  input:focus{
+    outline:none;
+    border-color:var(--ink);
+    box-shadow:0 0 0 3px color-mix(in srgb, var(--ink) 14%, transparent);
+  }
+
+  /* ── proefvel ────────────────────────────────────────────────────── */
+  .preview{ display:flex; flex-direction:column; gap:10px; min-width:0; }
+  .caption{ font-size:13px; color:var(--muted); margin:0; }
+
+  /* Het proefvel blijft in beide thema's wit met donkere tekst: dit ís de
+     mail zoals hij bij de ontvanger aankomt, geen onderdeel van de pagina. */
+  .proof{
+    background:#FFFFFF;
+    color:#1F2321;
+    border:1px solid var(--line);
+    border-radius:3px;
+    padding:clamp(20px, 3.5vw, 32px);
+    overflow-x:auto;
+  }
+
+  .actions{ display:flex; gap:14px; align-items:center; flex-wrap:wrap; min-height:38px; }
+  button{
+    font:inherit;
+    font-size:14px;
+    font-weight:500;
+    padding:10px 20px;
+    border:0;
+    border-radius:3px;
+    background:var(--btn-bg);
+    color:var(--btn-ink);
+    cursor:pointer;
+    transition:background-color .12s ease;
+  }
+  button:hover{ background:var(--btn-bg-hover); }
+  button:focus-visible{ outline:2px solid var(--ink); outline-offset:3px; }
+  .status{ font-size:13px; color:var(--muted); }
+
+  /* ── instellen ───────────────────────────────────────────────────── */
+  .setup h2{ font-size:17px; font-weight:600; margin:0 0 4px; letter-spacing:-0.01em; }
+  .setup > p{ margin:0 0 22px; color:var(--muted); font-size:14px; }
+  .clients{ display:grid; grid-template-columns:repeat(3, 1fr); gap:clamp(20px, 3vw, 34px); }
+  @media (max-width:820px){ .clients{ grid-template-columns:1fr; } }
+
+  .client{
+    background:var(--card);
+    border:1px solid var(--line-soft);
+    border-radius:3px;
+    padding:20px 22px 22px;
+    display:flex;
+    flex-direction:column;
+    gap:12px;
+  }
+  .client h3{ font-size:14px; font-weight:600; margin:0; }
+  /* De stappen bínnen één programma zijn wél een volgorde, dus genummerd.
+     De drie programma's onderling niet — dat zijn alternatieven. */
+  .client ol{
+    margin:0;
+    padding-left:0;
+    list-style:none;
+    counter-reset:stap;
+    display:flex;
+    flex-direction:column;
+    gap:9px;
+  }
+  /* Bewust GEEN grid op de li: inline-elementen in de tekst (een <strong>)
+     worden dan elk een eigen rasteritem en springen naar een nieuwe regel.
+     Het nummer hangt daarom absoluut in de inspringing. */
+  .client li{
+    counter-increment:stap;
+    position:relative;
+    padding-left:31px;
+    font-size:14px;
+    color:var(--ink-soft);
+    line-height:1.5;
+  }
+  .client li::before{
+    content:counter(stap);
+    position:absolute;
+    left:0;
+    top:2px;
+    width:22px;
+    text-align:right;
+    font-family:var(--mono);
+    font-size:11px;
+    color:var(--muted);
+    font-variant-numeric:tabular-nums;
+  }
+
+  .note{
+    border-left:2px solid var(--line);
+    padding:2px 0 2px 16px;
+    margin:0;
+    max-width:70ch;
+    color:var(--ink-soft);
+    font-size:14px;
+  }
+
+  @media (prefers-reduced-motion: reduce){
+    *{ transition:none !important; animation:none !important; }
+  }
+</style>
+
+<div class="page">
+
+  <header>
+    <span class="eyebrow">Habitat One &#183; intern</span>
+    <h1>Je e-mailhandtekening</h1>
+    <p>Vul je gegevens in, kopieer de handtekening en plak hem in je mailprogramma. Logo, adres en website staan vast, zodat iedereen dezelfde handtekening voert.</p>
+  </header>
+
+  <hr class="rule">
+
+  <div class="work">
+
+    <div class="form">
+      <p class="legend">Jouw gegevens</p>
+
+      <div class="field">
+        <label for="f-naam">Naam</label>
+        <input id="f-naam" type="text" value="" placeholder="Voornaam Achternaam" autocomplete="name">
+      </div>
+
+      <div class="field">
+        <label for="f-functie">Functie <span class="opt">&#8212; leeg laten mag</span></label>
+        <input id="f-functie" type="text" value="" placeholder="Bijvoorbeeld: Projectbegeleider">
+      </div>
+
+      <div class="field">
+        <label for="f-tel">Telefoon</label>
+        <input id="f-tel" type="text" value="" placeholder="+34 600 00 00 00" autocomplete="tel">
+      </div>
+
+      <div class="field">
+        <label for="f-mail">E-mailadres</label>
+        <input id="f-mail" type="text" value="" placeholder="naam@habitat-one.com" autocomplete="email">
+      </div>
+    </div>
+
+    <div class="preview">
+      <p class="caption">Zo komt hij bij de ontvanger aan</p>
+
+      <div class="proof">
+        <div id="sig">
+          <table cellpadding="0" cellspacing="0" border="0" style="border-collapse:collapse; font-family:Helvetica,Arial,sans-serif;">
+            <tr>
+              <td style="vertical-align:top; padding:0 22px 0 0;">
+                <img src="data:image/png;base64,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" alt="Habitat One" width="120" style="display:block; width:120px; height:auto; border:0;">
+                <div style="font-size:9px; line-height:14px; letter-spacing:2.4px; color:#4A4F4C; padding-top:7px; text-align:center; width:120px;">J&Aacute;VEA &middot; X&Agrave;BIA</div>
+              </td>
+              <td style="width:1px; background:#D9D3C7; font-size:0; line-height:0;">&nbsp;</td>
+              <td style="vertical-align:top; padding:0 0 0 22px;">
+                <div id="s-naam" style="font-size:15px; line-height:20px; color:#1F2321; font-weight:600; letter-spacing:0.2px;">Voornaam Achternaam</div>
+                <div id="s-functie" style="font-size:12px; line-height:18px; color:#7A7F6E;">Habitat One</div>
+                <div style="height:10px; font-size:0; line-height:0;">&nbsp;</div>
+                <div style="font-size:12px; line-height:20px; color:#4A4F4C;">
+                  <a id="s-tel" href="tel:" style="color:#4A4F4C; text-decoration:none;">+34 600 00 00 00</a><br>
+                  <a id="s-mail" href="mailto:" style="color:#4A4F4C; text-decoration:none;">naam@habitat-one.com</a><br>
+                  <a href="https://habitat-one.com" style="color:#4A4F4C; text-decoration:none;">habitat-one.com</a>
+                </div>
+                <div style="height:10px; font-size:0; line-height:0;">&nbsp;</div>
+                <div style="font-size:12px; line-height:18px; color:#8A8F8B;">
+                  Cam&iacute; de la Fontana 3, Locales 2, 3 en 5<br>
+                  03730 J&aacute;vea (Alicante) &middot; Espa&ntilde;a
+                </div>
+              </td>
+            </tr>
+          </table>
+        </div>
+      </div>
+
+      <div class="actions">
+        <button id="copy" type="button">Kopieer handtekening</button>
+        <span class="status" id="status" role="status"></span>
+      </div>
+    </div>
+
+  </div>
+
+  <hr class="rule">
+
+  <section class="setup">
+    <h2>In je mailprogramma zetten</h2>
+    <p>Zoek hieronder het programma dat je gebruikt.</p>
+
+    <div class="clients">
+
+      <article class="client">
+        <h3>Apple Mail op de Mac</h3>
+        <ol>
+          <li>Mail &rarr; Instellingen &rarr; Handtekeningen.</li>
+          <li>Klik links op je eigen account en daarna op <strong>+</strong>.</li>
+          <li>Haal rechtsonder het vinkje weg bij &ldquo;Pas aan standaardberichtlettertype aan&rdquo;.</li>
+          <li>Klik in het rechtervak en plak met &#8984;V.</li>
+          <li>Zet onderin &ldquo;Kies handtekening&rdquo; op je nieuwe handtekening.</li>
+        </ol>
+      </article>
+
+      <article class="client">
+        <h3>Gmail in de browser</h3>
+        <ol>
+          <li>Tandwiel rechtsboven &rarr; Alle instellingen bekijken.</li>
+          <li>Scrol bij Algemeen naar Handtekening en klik op Nieuwe maken.</li>
+          <li>Plak in het vak met &#8984;V of Ctrl+V.</li>
+          <li>Kies je handtekening onderaan bij nieuwe e-mails en bij antwoorden.</li>
+          <li>Onderaan de pagina op Wijzigingen opslaan klikken.</li>
+        </ol>
+      </article>
+
+      <article class="client">
+        <h3>Outlook</h3>
+        <ol>
+          <li>Instellingen &rarr; E-mail &rarr; Opstellen en beantwoorden.</li>
+          <li>Maak een nieuwe handtekening en plak hem in het vak.</li>
+          <li>Kies hem bij nieuwe berichten en bij antwoorden, en sla op.</li>
+        </ol>
+      </article>
+
+    </div>
+
+    <p class="note" style="margin-top:26px;">Komt het logo niet mee of ziet alles er kaal uit? Dan heeft je mailprogramma de opmaak weggegooid. Maak het vak helemaal leeg, controleer bij Apple Mail dat het lettertype-vinkje uitstaat, en plak opnieuw.</p>
+  </section>
+
+</div>
+
+<script>
+(function(){
+  var naam    = document.getElementById('f-naam');
+  var functie = document.getElementById('f-functie');
+  var tel     = document.getElementById('f-tel');
+  var mail    = document.getElementById('f-mail');
+
+  var sNaam    = document.getElementById('s-naam');
+  var sFunctie = document.getElementById('s-functie');
+  var sTel     = document.getElementById('s-tel');
+  var sMail    = document.getElementById('s-mail');
+
+  function render(){
+    sNaam.textContent = naam.value.trim() || 'Voornaam Achternaam';
+
+    var f = functie.value.trim();
+    sFunctie.textContent = f ? f + ' \u00b7 Habitat One' : 'Habitat One';
+
+    var t = tel.value.trim() || '+34 600 00 00 00';
+    sTel.textContent = t;
+    sTel.setAttribute('href', 'tel:' + t.replace(/[^0-9+]/g, ''));
+
+    var m = mail.value.trim() || 'naam@habitat-one.com';
+    sMail.textContent = m;
+    sMail.setAttribute('href', 'mailto:' + m.toLowerCase());
+  }
+
+  [naam, functie, tel, mail].forEach(function(el){
+    el.addEventListener('input', render);
+  });
+  render();
+
+  var btn = document.getElementById('copy');
+  var status = document.getElementById('status');
+
+  function melding(tekst){
+    status.textContent = tekst;
+    window.setTimeout(function(){ status.textContent = ''; }, 4000);
+  }
+
+  function kopieerViaSelectie(){
+    var sig = document.getElementById('sig');
+    var range = document.createRange();
+    range.selectNodeContents(sig);
+    var sel = window.getSelection();
+    sel.removeAllRanges();
+    sel.addRange(range);
+    var gelukt = false;
+    try { gelukt = document.execCommand('copy'); } catch(e){ gelukt = false; }
+    sel.removeAllRanges();
+    return gelukt;
+  }
+
+  btn.addEventListener('click', function(){
+    var sig = document.getElementById('sig');
+
+    if (window.ClipboardItem && navigator.clipboard && navigator.clipboard.write) {
+      var item = new ClipboardItem({
+        'text/html': new Blob([sig.innerHTML], {type:'text/html'}),
+        'text/plain': new Blob([sig.innerText], {type:'text/plain'})
+      });
+      navigator.clipboard.write([item]).then(function(){
+        melding('Gekopieerd. Plak hem nu in je mailprogramma.');
+      }).catch(function(){
+        melding(kopieerViaSelectie()
+          ? 'Gekopieerd. Plak hem nu in je mailprogramma.'
+          : 'Kopi\u00ebren lukte niet. Selecteer de handtekening hierboven met de muis en gebruik \u2318C.');
+      });
+    } else {
+      melding(kopieerViaSelectie()
+        ? 'Gekopieerd. Plak hem nu in je mailprogramma.'
+        : 'Kopi\u00ebren lukte niet. Selecteer de handtekening hierboven met de muis en gebruik \u2318C.');
+    }
+  });
+})();
+</script>
+</body>
+</html>

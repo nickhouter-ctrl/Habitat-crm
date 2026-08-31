@@ -23,6 +23,7 @@ export const authConfig = {
         pathname.startsWith("/book") || // public "pick an appointment slot" page
         pathname.startsWith("/uren") || // zzp-urenportaal (personal token links)
         pathname.startsWith("/inkoop/keuren") || // inkoopfactuur keuren via de knop in de melding
+        pathname === "/handtekening" || // handtekening-generator voor het personeel (geen gegevens, alleen bedrijfsinfo)
         pathname === "/klant" || pathname.startsWith("/klant/") || // klantportaal (eigen sessie-cookie via inloglink)
         pathname.startsWith("/handleiding"); // alleen metadata/deelkaart publiek — de pagina zelf checkt de sessie
       return isPublic || isLoggedIn;

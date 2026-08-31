@@ -21,6 +21,12 @@ const nextConfig: NextConfig = {
   outputFileTracingIncludes: {
     "/**/*": ["./public/fonts/**/*"],
   },
+  // De handtekening-generator is één los HTML-bestand in public/. Zo houdt het
+  // personeel een korte link en blijft het bestand gewoon te openen en te
+  // bewerken zonder dat er een React-pagina omheen hoeft.
+  async rewrites() {
+    return [{ source: "/handtekening", destination: "/handtekening.html" }];
+  },
   async headers() {
     return [
       {
