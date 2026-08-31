@@ -36,6 +36,7 @@ import { rateToEur } from "@/lib/fx";
 import { evaluateInvoice, type Check, type InvoiceVerdict } from "@/lib/invoice-checks";
 import { matchProject, type ProjectNeedle } from "@/lib/project-match";
 import { matchWorkerByName, poExVatAssumingSpanishVat } from "@/lib/purchase-orders";
+import { verdeelBedragen } from "@/lib/verdeel-bedragen";
 import { sendEmail } from "@/lib/email";
 import { recordSentEmail } from "@/lib/sent-email";
 import { copyMailAttachmentToPoBucket, downloadMailAttachmentBuffer } from "@/lib/storage";
@@ -613,7 +614,7 @@ export type ApprovalOverrides = {
   /** Uren staan al via het portaal op het project — geen nieuwe urenregel maken. */
   hoursAlreadyLogged?: boolean;
   /** Verdeling over meerdere werven; overschrijft `projectId` als 'ie gevuld is. */
-  split?: { projectId: string; hours?: number | null; amount: number }[];
+  split?: { projectId: string; hours?: number | null; amount?: number | null }[];
   /**
    * Vaste last (energie, telefonie, verzekering): hoort bij geen project. Zet de
    * leverancier op de overhead-lijst, zodat de volgende factuur van dezelfde
@@ -723,7 +724,12 @@ export async function approveInvoiceReview(args: {
       ? matchWorkerByName(
           supplier,
           await db
-            .select({ id: workers.id, name: workers.name, defaultPaymentMethod: workers.defaultPaymentMethod })
+            .select({
+              id: workers.id,
+              name: workers.name,
+              defaultPaymentMethod: workers.defaultPaymentMethod,
+              hourlyCostEur: workers.hourlyCostEur,
+            })
             .from(workers),
         )
       : null;
@@ -771,14 +777,19 @@ export async function approveInvoiceReview(args: {
   // INCLUSIEF btw — en stond er dus 21% te veel arbeidskost op drie werven.
   // De verhouding tussen de delen blijft; alleen de schaal gaat terug naar het
   // bedrag ex btw. Btw is geen kostprijs.
+  // Ontbrekende bedragen aanvullen en het geheel binnen de factuur houden —
+  // zie lib/verdeel-bedragen.ts voor de regel en de tests.
+  // Staat de leverancier als arbeider in de ploeg, dan is zijn uurtarief bekend
+  // en volgt het bedrag per werf uit uren × tarief. Zo hoef je bij het
+  // goedkeuren alleen de uren per werf in te vullen.
+  const verdelingen = verdeelBedragen(ruw, ex.amount, werker?.hourlyCostEur != null ? Number(werker.hourlyCostEur) : null);
   const somDelen = ruw.reduce((s, d) => s + (d.amount ?? 0), 0);
-  const factor = somDelen > ex.amount + 0.01 && somDelen > 0 ? ex.amount / somDelen : 1;
-  const verdelingen = ruw.map((d) => ({ ...d, amount: (d.amount ?? 0) * factor }));
-  if (factor !== 1) {
+  if (somDelen > ex.amount + 0.01) {
     console.warn(
       `[inkoop] verdeling van ${reference ?? supplier} telde op tot ${somDelen.toFixed(2)} terwijl de factuur ${ex.amount.toFixed(2)} ex btw is — teruggeschaald`,
     );
   }
+
   for (const deel of verdelingen) {
     if (kind === "labor" && !o.hoursAlreadyLogged) {
       const uren = deel.hours && deel.hours > 0 ? deel.hours : 1;

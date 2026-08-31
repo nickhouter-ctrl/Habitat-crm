@@ -43,14 +43,23 @@ export async function approveReviewAction(reviewId: string, formData: FormData) 
   const user = await requireWriteUser();
 
   // Verdeling over meerdere werven: regel-index → project + uren + bedrag.
+  //
+  // Een regel telt zodra er een PROJECT op staat. Het bedrag mocht eerder niet
+  // ontbreken, en dat kostte een factuur zijn koppeling: wie de werven invulde
+  // maar de bedragen leeg liet — bij een urenfactuur vul je uren, niet bedragen —
+  // hield niets over, en het losse projectveld is bij een verdeling verborgen.
+  // Wat er dan gebeurde: "goedgekeurd · nog geen project".
   const split: NonNullable<ApprovalOverrides["split"]> = [];
   for (const [key, value] of formData.entries()) {
     const m = key.match(/^split_(\d+)_projectId$/);
     if (!m) continue;
     const projectId = uuidOrNull(value);
-    const amount = amountOrNull(formData.get(`split_${m[1]}_amount`));
-    if (!projectId || amount == null) continue;
-    split.push({ projectId, amount, hours: amountOrNull(formData.get(`split_${m[1]}_hours`)) });
+    if (!projectId) continue;
+    split.push({
+      projectId,
+      amount: amountOrNull(formData.get(`split_${m[1]}_amount`)),
+      hours: amountOrNull(formData.get(`split_${m[1]}_hours`)),
+    });
   }
 
   const overrides: ApprovalOverrides = {
@@ -58,9 +67,10 @@ export async function approveReviewAction(reviewId: string, formData: FormData) 
     reference: String(formData.get("reference") ?? "").trim() || null,
     total: amountOrNull(formData.get("total")),
     subtotal: amountOrNull(formData.get("subtotal")),
-    projectId: uuidOrNull(formData.get("projectId")),
+    // Eén werf is geen verdeling: dan hangt de inkooporder er gewoon zelf aan.
+    projectId: uuidOrNull(formData.get("projectId")) ?? (split.length === 1 ? split[0].projectId : null),
     kind: formData.get("kind") === "labor" ? "labor" : formData.get("kind") === "material" ? "material" : null,
-    hours: amountOrNull(formData.get("hours")),
+    hours: amountOrNull(formData.get("hours")) ?? (split.length === 1 ? split[0].hours ?? null : null),
     hoursAlreadyLogged: formData.get("hoursAlreadyLogged") === "on",
     overhead: formData.get("overhead") === "on",
     split: split.length > 1 ? split : undefined,

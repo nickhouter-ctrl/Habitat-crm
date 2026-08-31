@@ -296,7 +296,7 @@ export function ReviewCard({
                     <Input
                       name={`split_${i}_amount`}
                       inputMode="decimal"
-                      placeholder="bedrag ex. btw"
+                      placeholder="bedrag ex. btw (optioneel)"
                       className="text-right"
                       defaultValue={l.amount != null ? String(l.amount).replace(".", ",") : ""}
                     />
@@ -311,7 +311,8 @@ export function ReviewCard({
                   + werf toevoegen
                 </button>
                 <p className="text-xs text-muted">
-                  De bedragen samen horen op {data.subtotal != null ? formatEUR(data.subtotal) : "het bedrag ex. btw"} uit te
+                  Bedrag leeg laten mag: dan wordt {data.subtotal != null ? formatEUR(data.subtotal) : "het bedrag ex. btw"}{" "}
+                  over de werven verdeeld naar rato van de uren. Vul je ze wél in, dan horen ze samen op dat bedrag uit te
                   komen. De inkooporder zelf blijft bij een verdeling ongekoppeld — anders telt het bedrag dubbel.
                 </p>
               </div>
