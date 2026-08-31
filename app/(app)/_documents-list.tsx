@@ -349,7 +349,24 @@ export async function DocumentsList({
           {formatEUR(sign(d.kind) * Number(d.totalEur ?? 0))}
         </Td>
         <Td className={cn("text-right tabular-nums text-muted", sub && "py-2")}>
-          {formatEUR(sign(d.kind) * Number(d.paidEur ?? 0))}
+          {sub ? (
+            // Betaald zegt niets op een verrekenings-subregel — geen "€ -0,00".
+            "—"
+          ) : d.kind === "invoice" && creditBedrag > 0.01 ? (
+            // Afgedekt = echt betaald + verrekend via creditnota('s); het label
+            // houdt het verschil met echt ontvangen geld zichtbaar.
+            <>
+              {formatEUR(Number(d.paidEur ?? 0) + creditBedrag)}
+              <span className="block text-xs">
+                {Number(d.paidEur ?? 0) > 0.01
+                  ? `waarvan ${formatEUR(creditBedrag)} verrekend`
+                  : "verrekend"}
+              </span>
+            </>
+          ) : (
+            // `|| 0` voorkomt "€ -0,00" bij creditnota's zonder betaald bedrag.
+            formatEUR(sign(d.kind) * Number(d.paidEur ?? 0) || 0)
+          )}
         </Td>
         <Td className={cn("text-right", sub && "py-2")}>
           <span className="inline-flex items-center justify-end gap-1">
