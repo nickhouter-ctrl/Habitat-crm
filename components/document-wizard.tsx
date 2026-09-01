@@ -23,7 +23,6 @@ import {
 import type { ProductOption } from "@/app/(app)/_options";
 import type { DocumentLineItem } from "@/lib/db/schema";
 import type { DocKind } from "@/lib/documents";
-import { quoteClauses } from "@/lib/quote-clauses";
 import { cn } from "@/lib/utils";
 
 type Option = { id: string; name: string };
@@ -306,9 +305,11 @@ export function DocumentWizard({
         <Card>
           <CardContent className="space-y-3">
             <Field label="Notities / voorwaarden" htmlFor="notes">
-              {/* Offertes starten met de vaste voorbehouden (onvoorzien, meerwerk,
-                  stelposten) — aanpasbaar, maar nooit per ongeluk afwezig. */}
-              <Textarea id="notes" name="notes" defaultValue={kind === "estimate" ? quoteClauses("nl") : undefined} />
+              {/* Bewust leeg: de verbouwings-voorbehouden (onvoorzien, meerwerk,
+                  stelposten) horen alleen op gecalculeerde verbouwingsoffertes —
+                  de calculator zet ze daar zelf op, in de taal van de klant. Een
+                  gewone offerte (producten, showroom) heeft ze niet nodig. */}
+              <Textarea id="notes" name="notes" />
             </Field>
             {(kind === "invoice" || kind === "estimate") && (
               <label className="flex cursor-pointer items-center gap-2 text-sm text-foreground">
