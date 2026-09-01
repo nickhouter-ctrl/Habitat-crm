@@ -67,9 +67,15 @@ const CATEGORY_RULES: Array<{ cat: AttachmentCategory; test: (ctx: CategorizeCtx
   // Piter Hoogendijk = boekhouder die Habitat-INKOOPfacturen doorstuurt
   // ("factuur 2600xx inkoop Pedros/Obramat/Inwood/…"). Werden als 'other'
   // geclassificeerd → niet opgepakt door de auto-inkoop. Nu als inkoopfactuur.
+  // 01-09: "facturen 260058 …" (meervoud) en bestandsnamen "fact 260063" vielen
+  // buiten \bfact(uu)?r\b — vijf Hollandse-Meesters-facturen bleven zo buiten de
+  // keurwachtrij. Daarom nu ook fact/facturen herkennen én de bestandsnaam
+  // meewegen.
   { cat: "supplier-invoice", test: (c) =>
       /piterhoogendijk@|piter\s*hoogendijk/i.test(c.fromEmail + " " + c.fromName) &&
-      /\bfact(uu)?r\b|\binkoop\b|\binvoice\b/i.test(c.subject + " " + c.allText) },
+      /\bfact(uu?r(en)?)?\b|\binkoop\b|\binvoice\b/i.test(
+        c.subject + " " + c.filename + " " + c.allText,
+      ) },
 
   // DUA / douane — alleen wanneer FILENAME of strong signaal in TEKST matcht
   // (niet wanneer alleen het woord 'DUA' ergens in een mail-body voorkomt).
