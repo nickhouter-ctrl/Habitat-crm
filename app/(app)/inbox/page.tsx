@@ -7,6 +7,8 @@ import { db } from "@/lib/db";
 import { emailInbox, emailSyncState } from "@/lib/db/schema";
 import { cn } from "@/lib/utils";
 
+import { bulkArchiveMails, bulkDeleteMails } from "./actions";
+import { BulkMailBar } from "./bulk-bar";
 import { FetchMailsButton } from "./fetch-mails-button";
 
 export const metadata = { title: "Mail-inbox" };
@@ -245,21 +247,35 @@ export default async function InboxPage({
         />
       ) : (
         <Card>
-          <Table>
-            <THead>
-              <tr>
-                <Th>Ontvangen</Th>
-                <Th>Van</Th>
-                <Th>Onderwerp</Th>
-                <Th>Bijlagen</Th>
-                <Th>Status</Th>
-              </tr>
-            </THead>
+          {/* Bulk-selectie: de checkboxes zijn formuliervelden, dus archiveren en
+              verwijderen werken ook zonder JavaScript; de balk telt alleen mee. */}
+          <form>
+            <BulkMailBar archiveAction={bulkArchiveMails} deleteAction={bulkDeleteMails} />
+            <Table>
+              <THead>
+                <tr>
+                  <Th className="w-8" />
+                  <Th>Ontvangen</Th>
+                  <Th>Van</Th>
+                  <Th>Onderwerp</Th>
+                  <Th>Bijlagen</Th>
+                  <Th>Status</Th>
+                </tr>
+              </THead>
             <TBody>
               {rows.map((r) => {
                 const attCount = (r.attachments as Array<unknown> | null)?.length ?? 0;
                 return (
                   <Tr key={r.id}>
+                    <Td className="pr-0">
+                      <input
+                        type="checkbox"
+                        name="ids"
+                        value={r.id}
+                        aria-label={`Selecteer mail van ${r.fromName ?? r.fromEmail ?? "onbekend"}`}
+                        className="size-4 rounded border bg-background"
+                      />
+                    </Td>
                     <Td className="whitespace-nowrap text-xs text-muted">
                       {formatDate(r.receivedAt)}
                     </Td>
@@ -296,7 +312,8 @@ export default async function InboxPage({
                 );
               })}
             </TBody>
-          </Table>
+            </Table>
+          </form>
         </Card>
       )}
     </>

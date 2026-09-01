@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { eq, ilike, sql } from "drizzle-orm";
+import { and, eq, ilike, inArray, isNull, ne, sql } from "drizzle-orm";
 import { requireWriteUser } from "@/lib/auth/guards";
 
 import { auth } from "@/auth";
@@ -81,6 +81,52 @@ export async function archiveMail(emailId: string) {
     .where(eq(emailInbox.id, emailId));
   revalidatePath("/inbox");
   revalidatePath(`/inbox/${emailId}`);
+}
+
+/** Ids uit de bulk-selectie (checkboxes met name="ids") — hooguit 200 per keer,
+ *  gelijk aan de paginagrootte van de lijst. */
+function bulkIds(formData: FormData): string[] {
+  return formData
+    .getAll("ids")
+    .map(String)
+    .filter(Boolean)
+    .slice(0, 200);
+}
+
+/** Bulk: geselecteerde mails in één keer archiveren. */
+export async function bulkArchiveMails(formData: FormData) {
+  await requireUser();
+  const ids = bulkIds(formData);
+  if (!ids.length) return;
+  await db
+    .update(emailInbox)
+    .set({ status: "archived", updatedAt: new Date() })
+    .where(and(inArray(emailInbox.id, ids), ne(emailInbox.status, "archived")));
+  revalidatePath("/inbox");
+}
+
+/**
+ * Bulk: geselecteerde mails definitief verwijderen.
+ *
+ * Gelinkte mails (aan een inkooporder of aanvraag) worden overgeslagen — dat is
+ * papierspoor. Verwijderen cascadeert naar `mail_attachments` (het Archief) en
+ * `purchase_invoice_reviews` (keuren-wachtrij); de bestanden in de storage-bucket
+ * blijven staan, dat is bewust: liever een wees-bestand dan een gat in het dossier.
+ */
+export async function bulkDeleteMails(formData: FormData) {
+  await requireUser();
+  const ids = bulkIds(formData);
+  if (!ids.length) return;
+  await db.delete(emailInbox).where(
+    and(
+      inArray(emailInbox.id, ids),
+      ne(emailInbox.status, "linked"),
+      isNull(emailInbox.linkedPurchaseOrderId),
+      isNull(emailInbox.linkedQuoteRequestId),
+    ),
+  );
+  revalidatePath("/inbox");
+  revalidatePath("/archief");
 }
 
 /** Terug naar "new". */
