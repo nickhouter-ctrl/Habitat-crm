@@ -1676,12 +1676,18 @@ export const appointments = pgTable(
     notes: text(),
     /** scheduled | completed | cancelled */
     status: text().notNull().default("scheduled"),
+    /** Wie de afspraak doet. Leeg = van de zaak, niemand in het bijzonder. */
+    assigneeId: uuid().references((): AnyPgColumn => users.id, { onDelete: "set null" }),
+    /** Afgevinkt op. Net als bij een taak: het moment zelf is de administratie,
+     *  `status` blijft het label dat ook de agenda-feed leest. */
+    completedAt: timestamp({ withTimezone: true }),
     createdBy: uuid().references((): AnyPgColumn => users.id, { onDelete: "set null" }),
     ...timestamps,
   },
   (t) => [
     index("appointments_starts_idx").on(t.startsAt),
     index("appointments_contact_idx").on(t.contactId),
+    index("appointments_assignee_idx").on(t.assigneeId),
   ],
 );
 export type Appointment = typeof appointments.$inferSelect;

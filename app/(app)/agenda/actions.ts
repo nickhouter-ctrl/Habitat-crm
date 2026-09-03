@@ -32,15 +32,42 @@ export async function createAppointment(formData: FormData) {
   if (!title || !startsAt) throw new Error("Titel en datum zijn verplicht");
 
   const contactId = str(formData, "contactId");
+  const assigneeId = str(formData, "assigneeId");
   await db.insert(appointments).values({
     title,
     startsAt,
     location: str(formData, "location") || null,
     notes: str(formData, "notes") || null,
     contactId: contactId.length === 36 ? contactId : null,
+    // Leeg mag: niet elke afspraak is van iemand in het bijzonder.
+    assigneeId: assigneeId.length === 36 ? assigneeId : null,
     status: "scheduled",
   });
   revalidatePath("/agenda");
+  revalidatePath("/");
+}
+
+/** Afspraak afvinken. Net als een taak verdwijnt hij dan uit de agenda; wat
+ *  geweest is hoeft er niet meer te staan. `status` blijft het label dat ook de
+ *  agenda-feed (/api/calendar) leest. */
+export async function completeAppointment(id: string) {
+  await requireUser();
+  await db
+    .update(appointments)
+    .set({ status: "completed", completedAt: new Date(), updatedAt: new Date() })
+    .where(eq(appointments.id, id));
+  revalidatePath("/agenda");
+  revalidatePath("/");
+}
+
+export async function reopenAppointment(id: string) {
+  await requireUser();
+  await db
+    .update(appointments)
+    .set({ status: "scheduled", completedAt: null, updatedAt: new Date() })
+    .where(eq(appointments.id, id));
+  revalidatePath("/agenda");
+  revalidatePath("/");
 }
 
 const PRIORITEITEN = ["hoog", "middel", "laag"] as const;

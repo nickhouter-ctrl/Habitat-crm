@@ -21,6 +21,7 @@ import { db } from "@/lib/db";
 import { activities, appointments, contacts, users } from "@/lib/db/schema";
 
 import {
+  completeAppointment,
   completeTask,
   createAppointment,
   createTask,
@@ -42,6 +43,7 @@ type ApptRow = {
   contactId: string | null;
   contactName: string | null;
   contactPhone: string | null;
+  assigneeName: string | null;
 };
 type TaskRow = {
   id: string;
@@ -75,10 +77,13 @@ export default async function AgendaPage() {
         contactId: appointments.contactId,
         contactName: contacts.name,
         contactPhone: contacts.phone,
+        assigneeName: assignee.name,
       })
       .from(appointments)
       .leftJoin(contacts, eq(appointments.contactId, contacts.id))
-      .where(gte(appointments.startsAt, startOfToday))
+      .leftJoin(assignee, eq(appointments.assigneeId, assignee.id))
+      // Afgevinkte afspraken vallen weg, net als afgeronde taken.
+      .where(and(gte(appointments.startsAt, startOfToday), isNull(appointments.completedAt)))
       .orderBy(asc(appointments.startsAt)),
     db
       .select({
@@ -144,9 +149,21 @@ export default async function AgendaPage() {
                   <Input id="appt-time" name="time" type="time" defaultValue="09:00" />
                 </Field>
               </div>
-              <Field label="Locatie" htmlFor="appt-loc">
-                <Input id="appt-loc" name="location" placeholder="bv. Showroom Jávea" />
-              </Field>
+              <div className="grid grid-cols-2 gap-3">
+                <Field label="Locatie" htmlFor="appt-loc">
+                  <Input id="appt-loc" name="location" placeholder="bv. Showroom Jávea" />
+                </Field>
+                <Field label="Toewijzen aan" htmlFor="appt-assignee" hint="leeg = van de zaak">
+                  <Select id="appt-assignee" name="assigneeId" defaultValue="">
+                    <option value="">— Niemand in het bijzonder —</option>
+                    {teamleden.map((u) => (
+                      <option key={u.id} value={u.id}>
+                        {u.name ?? u.email}
+                      </option>
+                    ))}
+                  </Select>
+                </Field>
+              </div>
               <Field label="Notitie" htmlFor="appt-notes">
                 <Textarea id="appt-notes" name="notes" rows={2} />
               </Field>
@@ -254,8 +271,21 @@ export default async function AgendaPage() {
 function ApptCard({ appt: a }: { appt: ApptRow }) {
   return (
     <Card className="flex items-start gap-4 p-4">
-      <div className="w-12 shrink-0 text-center text-lg font-semibold tabular-nums">
-        {TIME_FMT.format(a.startsAt)}
+      <div className="flex shrink-0 flex-col items-center gap-1.5">
+        <div className="w-12 text-center text-lg font-semibold tabular-nums">
+          {TIME_FMT.format(a.startsAt)}
+        </div>
+        <form action={completeAppointment.bind(null, a.id)}>
+          <SubmitButton
+            size="sm"
+            variant="ghost"
+            pendingLabel="…"
+            className="size-6 rounded-full border p-0 text-xs hover:bg-success/10 hover:text-success"
+            title="Afronden"
+          >
+            ✓
+          </SubmitButton>
+        </form>
       </div>
       <div className="min-w-0 flex-1">
         <div className="flex items-start justify-between gap-2">
@@ -265,6 +295,7 @@ function ApptCard({ appt: a }: { appt: ApptRow }) {
         {a.location && <p className="text-xs text-muted">{a.location}</p>}
         {a.notes && <p className="mt-1 whitespace-pre-line text-sm">{a.notes}</p>}
         <div className="mt-1 flex flex-wrap items-center gap-3 text-xs">
+          {a.assigneeName && <span className="font-medium text-foreground/80">👤 {a.assigneeName}</span>}
           {a.contactId && (
             <Link href={`/contacts/${a.contactId}`} className="text-accent hover:underline">
               {a.contactName ?? "contact"}
