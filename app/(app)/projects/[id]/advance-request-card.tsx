@@ -336,6 +336,14 @@ export async function AdvanceRequestCard({
                     <LinkButton href={`/sent-mail/${m.id}`} variant="ghost" size="sm">
                       Brief bekijken
                     </LinkButton>
+                    <LinkButton
+                      href={`/sent-mail/${m.id}/print?auto=1`}
+                      variant="ghost"
+                      size="sm"
+                      target="_blank"
+                    >
+                      Printen
+                    </LinkButton>
                   </div>
                 </div>
               );
