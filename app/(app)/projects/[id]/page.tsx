@@ -912,7 +912,7 @@ export default async function ProjectDetailPage({
             {/* Het stoplicht: dekt wat er binnen is de kasuitgaven (uren + inkoop
                 derden)? Eigen voorraad staat hier bewust buiten. */}
             <div className="rounded-lg border bg-background p-3">
-              <p className="text-xs text-muted">Voorschotdekking</p>
+              <p className="text-xs text-muted">Voorschotdekking (kas)</p>
               <p
                 className={`text-lg font-semibold tabular-nums ${
                   cover.tone === "success" ? "text-success" : cover.tone === "warning" ? "text-warning" : "text-danger"
@@ -1113,7 +1113,11 @@ export default async function ProjectDetailPage({
               én nogmaals als eerste regel van dit sommetje — dubbel en rommelig. */}
           {margins.totalRevenue > 0 && (
             <div className="rounded-lg border border-accent/30 bg-accent/5 p-3 text-sm">
-              <p className="mb-2 font-semibold">Wat moet er nu nog binnenkomen?</p>
+              <p className="font-semibold">Wat moet er nu nog binnenkomen?</p>
+              <p className="mb-2 text-xs text-muted">
+                gerekend mét marge en mét eigen producten — dit is dus een ander getal dan de voorschotdekking bij
+                Geldstroom, die alleen naar kale kasuitgaven kijkt
+              </p>
               <dl className="space-y-1">
                 <div className="flex justify-between gap-2">
                   <dt className="text-muted">
