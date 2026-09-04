@@ -119,6 +119,28 @@ export function docProductMargin(
   return { revenue: round2(revenue), cost: round2(cost), uncostedRevenue: round2(uncostedRevenue) };
 }
 
+/**
+ * Eigen-productaandeel van een document, voor de voorschotdekking: welk deel van
+ * het subtotaal is verkoop van eigen (voorraad)producten? Een betaling op dit
+ * document telt dan voor (1 − aandeel) mee als dekking van uren + inkoop derden.
+ *
+ * Alleen de GEMETEN productregels tellen (bekende kostprijs of
+ * catalogus-koppeling, zelfde afbakening als de marge-kaart "Eigen producten").
+ * Regels zonder kostprijs — termijnen, doorbelaste verbouwingsposten — horen bij
+ * de verbouwing en dus bij de dekking. Geklemd op [0,1]: eindafrekeningen met
+ * negatieve verrekenregels drukken het subtotaal en zouden anders boven de 1
+ * uitkomen.
+ */
+export function docOwnShare(
+  items: unknown,
+  subtotalEur: number,
+  productCost?: (item: DocumentLineItem) => number | undefined,
+): number {
+  if (!(subtotalEur > 0)) return 0;
+  const pm = docProductMargin(items, productCost);
+  return Math.min(1, Math.max(0, pm.revenue / subtotalEur));
+}
+
 type AddressParts = { addressLine?: string | null; postalCode?: string | null; city?: string | null };
 
 /**

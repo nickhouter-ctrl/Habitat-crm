@@ -50,10 +50,11 @@ import {
   workerPortalLinks,
   workers,
 } from "@/lib/db/schema";
-import { docProductMargin, lineCostEur, lineMaterialCostEur, normalizeDocItems } from "@/lib/documents";
+import { docOwnShare, docProductMargin, lineCostEur, lineMaterialCostEur, normalizeDocItems } from "@/lib/documents";
 import { deliveryTotals } from "@/lib/project-delivery";
 import { poExVat, poExVatAmount, poExVatAssumingSpanishVat } from "@/lib/purchase-orders";
-import { DEFAULT_LABOR_MARGIN_PCT, DEFAULT_PURCHASE_MARGIN_PCT, deriveProjectMargins } from "@/lib/project-financials";
+import { DEFAULT_LABOR_MARGIN_PCT, DEFAULT_PURCHASE_MARGIN_PCT, deriveAdvanceCover, deriveProjectMargins } from "@/lib/project-financials";
+import { coverReceivedEx, receiptExVat as exBtwVanOntvangst } from "@/lib/receipts";
 import type { DocumentLineItem } from "@/lib/db/schema";
 import { moneyForInput } from "@/lib/parse-money";
 import { formatEUR } from "@/lib/utils";
@@ -237,9 +238,13 @@ export default async function ProjectDetailPage({
   let ownCost = 0;
   let ownUncostedRevenue = 0;
   const marginByDoc = new Map<string, { margin: number; pct: number | null }>();
+  // Eigen-productaandeel per document — voor de voorschotdekking: een betaling
+  // op een factuur telt maar voor (1 − aandeel) mee als dekking.
+  const ownShareByDoc = new Map<string, number>();
   for (const d of marginDocs) {
     const rev = Number(d.subtotalEur ?? 0);
     if (d.kind === "estimate") continue;
+    ownShareByDoc.set(d.id, docOwnShare(d.items, rev, productCostOf));
     const marginCost = docMarginCost(d.items);
     marginByDoc.set(d.id, { margin: rev - marginCost, pct: rev > 0 ? Math.round(((rev - marginCost) / rev) * 100) : null });
     // Concepten en geannuleerde documenten tellen niet als omzet (zelfde filter
@@ -483,42 +488,10 @@ export default async function ProjectDetailPage({
     margePct >= 100 ? null : Math.round((margePct / (100 - margePct)) * 1000) / 10;
 
   const receivedTotal = paymentRows.reduce((s, p) => s + Number(p.amountEur ?? 0), 0);
-  // Betalingen worden incl. btw geboekt; de samenvattingen rekenen ex. btw (÷1,21).
+  // Betalingen worden incl. btw geboekt; de samenvattingen rekenen ex. btw.
+  // De omrekening per ontvangst (contant, factuurverhouding, 21%-aanname)
+  // staat in lib/receipts.ts en wordt gedeeld met de projectenlijst.
   const VAT_DIVISOR = 1.21;
-  /**
-   * Ex. btw per ontvangst, niet blind alles ÷ 1,21:
-   *  - contant: daar zit geen btw op (opgave van Nick, 04-08-2026);
-   *  - hangt de ontvangst aan een factuur: de verhouding van díé factuur, dus
-   *    ook goed bij btw verlegd of een provisión de fondos zonder btw;
-   *  - de rest: 21% aannemen, zoals het altijd al ging.
-   */
-  const exBtwVanOntvangst = (p: {
-    method: string;
-    amountEur: string | number | null;
-    vatRate?: string | null;
-    vatAmountEur?: string | null;
-    docSubtotal?: string | null;
-    docTotal?: string | null;
-  }) => {
-    const bedrag = Number(p.amountEur ?? 0);
-    // Een vastgelegd btw-BEDRAG wint: bij gemengde tarieven (deels 21%, deels
-    // 10%) komt geen enkel percentage op de cent uit.
-    if (p.vatAmountEur != null && p.vatAmountEur !== "") {
-      const btw = Number(p.vatAmountEur);
-      if (Number.isFinite(btw)) return Math.round((bedrag - btw) * 100) / 100;
-    }
-    // Expliciet ingevuld tarief wint altijd: een voorschot kan mét of zonder
-    // btw zijn en dat valt niet uit de betaalwijze af te leiden.
-    if (p.vatRate != null && p.vatRate !== "") {
-      const pct = Number(p.vatRate);
-      if (Number.isFinite(pct)) return Math.round((bedrag / (1 + pct / 100)) * 100) / 100;
-    }
-    if (p.method === "cash") return bedrag;
-    const sub = Number(p.docSubtotal ?? 0);
-    const tot = Number(p.docTotal ?? 0);
-    if (sub > 0 && tot > 0) return Math.round(bedrag * (sub / tot) * 100) / 100;
-    return bedrag / VAT_DIVISOR;
-  };
   const receivedTotalEx = paymentRows.reduce((s, p) => s + exBtwVanOntvangst(p), 0);
 
   /**
@@ -543,6 +516,12 @@ export default async function ProjectDetailPage({
   // "100% marge" (offerte nog niet gefactureerd) als dubbeltelling.
   const ownProductCostRealized = projCost;
   const realizedCost = laborCost + materialCost + ownProductCostRealized; // kosten tot nu toe
+
+  // Voorschotdekking: schieten wij geld voor? Alleen kasgeld telt (uren + inkoop
+  // derden) — eigen voorraadproducten niet, en van betaalde facturen alleen het
+  // niet-productdeel. Methodiek: zie deriveAdvanceCover.
+  const dekkingOntvangenEx = coverReceivedEx(paymentRows, ownShareByDoc);
+  const cover = deriveAdvanceCover({ laborCost, purchaseCost: materialCost, coverReceivedEx: dekkingOntvangenEx });
 
   // Begroting: targetprijzen (verkoop) + geraamde kosten per onderdeel.
   const budgetTargetBase = budgetRows.reduce((s, b) => s + Number(b.amountEur ?? 0), 0);
@@ -883,7 +862,7 @@ export default async function ProjectDetailPage({
             }`}
             tone={receivedTotalEx > 0 ? "success" : "neutral"}
           />
-          <StatTile label="Kosten" value={formatEUR(realizedCost)} hint="arbeid + inkoop + materiaal" tone="neutral" />
+          <StatTile label="Kosten" value={formatEUR(realizedCost)} hint="uren + inkoop derden + kostprijs eigen voorraad" tone="neutral" />
           {/* "Resultaat" las alsof het verdiend was, terwijl het een vooruitblik
               is: doel − kosten, dus alleen waar als de volle aanneemprijs ook
               echt gefactureerd wordt. Bij Silvestre is daarvan pas € 49.736,80
@@ -908,9 +887,14 @@ export default async function ProjectDetailPage({
         <CardContent>
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
             <div className="rounded-lg border bg-background p-3">
-              <p className="text-xs text-muted">Eruit gegaan (kosten)</p>
-              <p className="text-lg font-semibold tabular-nums text-danger">− {formatEUR(realizedCost)}</p>
-              <p className="text-xs text-muted">arbeid + inkoop + materiaal · ex. btw</p>
+              <p className="text-xs text-muted">Eruit gegaan (kasgeld)</p>
+              <p className="text-lg font-semibold tabular-nums text-danger">− {formatEUR(cover.prefinanced)}</p>
+              <p className="text-xs text-muted">
+                uren {formatEUR(laborCost)} + inkoop derden {formatEUR(materialCost)} · ex. btw
+                {ownProductCostRealized > 0.01
+                  ? ` · kostprijs eigen voorraad ${formatEUR(ownProductCostRealized)} telt niet mee — geen kasuitgave`
+                  : ""}
+              </p>
             </div>
             <div className="rounded-lg border bg-background p-3">
               <p className="text-xs text-muted">Ontvangen van klant</p>
@@ -918,14 +902,37 @@ export default async function ProjectDetailPage({
               <p className="text-xs text-muted">
                 {paymentRows.length} {paymentRows.length === 1 ? "betaling" : "betalingen"} · ex. btw van{" "}
                 {formatEUR(receivedTotal)} ontvangen
+                {receivedTotalEx - dekkingOntvangenEx > 0.01
+                  ? ` · waarvan ${formatEUR(receivedTotalEx - dekkingOntvangenEx)} voor eigen producten`
+                  : ""}
               </p>
             </div>
+            {/* Het stoplicht: dekt wat er binnen is de kasuitgaven (uren + inkoop
+                derden)? Eigen voorraad staat hier bewust buiten. */}
             <div className="rounded-lg border bg-background p-3">
-              <p className="text-xs text-muted">Saldo (ontvangen − eruit)</p>
-              <p className={`text-lg font-semibold tabular-nums ${receivedTotalEx - realizedCost < 0 ? "text-danger" : "text-success"}`}>
-                {formatEUR(receivedTotalEx - realizedCost)}
+              <p className="text-xs text-muted">Voorschotdekking</p>
+              <p
+                className={`text-lg font-semibold tabular-nums ${
+                  cover.tone === "success" ? "text-success" : cover.tone === "warning" ? "text-warning" : "text-danger"
+                }`}
+              >
+                {cover.saldo < 0 ? `− ${formatEUR(-cover.saldo)}` : formatEUR(cover.saldo)}
               </p>
-              <p className="text-xs text-muted">saldo op dit project · ex. btw</p>
+              <p className="text-xs text-muted">
+                {cover.status === "gedekt"
+                  ? "gedekt door voorschotten en betalingen · ex. btw"
+                  : cover.status === "bijna_op"
+                    ? "bijna op — nieuw voorschot voorbereiden · ex. btw"
+                    : "zelf voorgeschoten · ex. btw"}
+                {cover.status !== "gedekt" && (
+                  <>
+                    {" · "}
+                    <Link href="#voorschot-opvragen" className="underline underline-offset-2">
+                      nieuw voorschot vragen →
+                    </Link>
+                  </>
+                )}
+              </p>
             </div>
             <div className="rounded-lg border bg-background p-3">
               <p className="text-xs text-muted">Nog te factureren</p>
@@ -1376,8 +1383,10 @@ export default async function ProjectDetailPage({
         siteAlias={project.siteAlias}
         contactId={project.contactId}
         contractDate={project.contractDate}
-        kostenTotaal={realizedCost}
-        ontvangenEx={receivedTotalEx}
+        cover={cover}
+        laborCost={laborCost}
+        purchaseCost={materialCost}
+        ownProductCost={ownProductCostRealized}
         aanneemsom={targetRevenue}
         doorTeBelasten={margins.totalRevenue}
         params={voorschotParams}

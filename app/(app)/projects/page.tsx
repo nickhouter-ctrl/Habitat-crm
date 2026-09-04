@@ -28,9 +28,10 @@ import {
   timeEntries,
   users,
 } from "@/lib/db/schema";
-import { docProductMargin, normalizeDocItems } from "@/lib/documents";
+import { docOwnShare, docProductMargin, normalizeDocItems } from "@/lib/documents";
 import type { DocumentLineItem } from "@/lib/db/schema";
-import { deriveProjectMargins, deriveProjectFinancials } from "@/lib/project-financials";
+import { deriveAdvanceCover, deriveProjectMargins, deriveProjectFinancials } from "@/lib/project-financials";
+import { coverReceivedEx } from "@/lib/receipts";
 import { poExVatSql } from "@/lib/purchase-orders-sql";
 import { formatEUR } from "@/lib/utils";
 
@@ -150,7 +151,7 @@ export default async function ProjectsPage({
   const aggById = new Map(aggRows.map((a) => [a.projectId, a]));
 
   // 3. Kosten- en ontvangst-aggregaten per project (ex. btw; ontvangsten incl. btw).
-  const [laborAgg, looseAgg, poAgg, budgetAgg, receivedAgg, costDocs, invAdvanceAgg] = projectIds.length
+  const [laborAgg, looseAgg, poAgg, budgetAgg, paymentRecords, costDocs, invAdvanceAgg] = projectIds.length
     ? await Promise.all([
         db
           .select({ projectId: timeEntries.projectId, v: sql<number>`coalesce(sum(${timeEntries.hours} * ${timeEntries.hourlyCostEur}), 0)::float8` })
@@ -185,11 +186,23 @@ export default async function ProjectsPage({
           .from(projectBudgetLines)
           .where(inArray(projectBudgetLines.projectId, projectIds))
           .groupBy(projectBudgetLines.projectId),
+        // Ontvangsten als losse rijen (niet als som): de voorschotdekking moet
+        // per betaling ex. btw rekenen en het eigen-productdeel van de factuur
+        // eraf halen — zelfde helpers als het detailscherm (lib/receipts.ts).
         db
-          .select({ projectId: projectPayments.projectId, v: sql<number>`coalesce(sum(${projectPayments.amountEur}), 0)::float8` })
+          .select({
+            projectId: projectPayments.projectId,
+            amountEur: projectPayments.amountEur,
+            method: projectPayments.method,
+            vatRate: projectPayments.vatRate,
+            vatAmountEur: projectPayments.vatAmountEur,
+            documentId: projectPayments.documentId,
+            docSubtotal: documents.subtotalEur,
+            docTotal: documents.totalEur,
+          })
           .from(projectPayments)
-          .where(inArray(projectPayments.projectId, projectIds))
-          .groupBy(projectPayments.projectId),
+          .leftJoin(documents, eq(documents.id, projectPayments.documentId))
+          .where(inArray(projectPayments.projectId, projectIds)),
         // Voor de gereserveerd-berekening én de kostprijs van eigen producten.
         db
           .select({
@@ -235,8 +248,18 @@ export default async function ProjectsPage({
   const looseBy = mapBy(looseAgg);
   const poBy = mapBy(poAgg);
   const budgetBy = mapBy(budgetAgg);
-  const receivedBy = mapBy(receivedAgg);
   const invAdvanceBy = mapBy(invAdvanceAgg);
+
+  // Ontvangen per project (incl. btw — zelfde cijfer als de oude som-aggregate).
+  const receivedBy = new Map<string, number>();
+  const paymentsByProject = new Map<string, typeof paymentRecords>();
+  for (const r of paymentRecords) {
+    if (!r.projectId) continue;
+    receivedBy.set(r.projectId, (receivedBy.get(r.projectId) ?? 0) + Number(r.amountEur ?? 0));
+    const list = paymentsByProject.get(r.projectId) ?? [];
+    list.push(r);
+    paymentsByProject.set(r.projectId, list);
+  }
 
   // Kostprijs eigen producten: koppel offerte-/factuurregels aan de productcatalogus
   // (op productId of op SKU=omschrijving). Verwacht = max(gefactureerd, offerte).
@@ -308,6 +331,16 @@ export default async function ProjectsPage({
     ownProductMarginByProject.set(pid, own);
   }
 
+  // Voorschotdekking per project — zelfde methodiek als het detailscherm: een
+  // betaling op een factuur telt maar voor (1 − eigen-productaandeel) mee.
+  const ownShareByDoc = new Map<string, number>();
+  for (const d of costDocs) {
+    if (d.kind === "estimate") continue;
+    ownShareByDoc.set(d.id, docOwnShare(d.items, Number(d.subtotalEur ?? 0), productCostOf));
+  }
+  const coverReceivedBy = new Map<string, number>();
+  for (const [pid, list] of paymentsByProject) coverReceivedBy.set(pid, coverReceivedEx(list, ownShareByDoc));
+
   // 4. Samenvoegen + per-project financiën afleiden (zelfde formule als detailscherm).
   const rows = projectRows
     .map((p) => {
@@ -342,6 +375,13 @@ export default async function ProjectsPage({
         purchaseCost: materialCost,
         purchaseMarginPct: p.purchaseMarginPct != null ? Number(p.purchaseMarginPct) : null,
       });
+      // Voorschotdekking: kasgeld (uren + inkoop derden) tegenover ontvangen
+      // dekking — eigen voorraadproducten staan hier bewust buiten.
+      const cover = deriveAdvanceCover({
+        laborCost,
+        purchaseCost: materialCost,
+        coverReceivedEx: coverReceivedBy.get(p.id) ?? 0,
+      });
       const lastActivity =
         a?.lastDocAt && new Date(a.lastDocAt) > new Date(p.updatedAt)
           ? a.lastDocAt
@@ -349,6 +389,7 @@ export default async function ProjectsPage({
       return {
         ...p,
         margins,
+        cover,
         docCount: a?.docCount ?? 0,
         invoiced,
         outstanding: Number(a?.outstanding ?? 0),
@@ -369,9 +410,11 @@ export default async function ProjectsPage({
       s.toInvoice += r.fin.toInvoice;
       s.resultToDate += r.fin.resultToDate;
       s.contract += r.contractPriceEur != null ? Number(r.contractPriceEur) : 0;
+      // Alleen echte tekorten optellen: waar wij op dit moment geld voorschieten.
+      s.voorgeschoten += r.cover.saldo < 0 ? -r.cover.saldo : 0;
       return s;
     },
-    { invoiced: 0, outstanding: 0, toInvoice: 0, resultToDate: 0, contract: 0 },
+    { invoiced: 0, outstanding: 0, toInvoice: 0, resultToDate: 0, contract: 0, voorgeschoten: 0 },
   );
 
   const statusBadge = (s: string) =>
@@ -394,12 +437,18 @@ export default async function ProjectsPage({
         }
       />
 
-      <div className="mb-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="mb-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
         <StatTile
           label="Projecten"
           value={String(rows.length)}
           hint={FILTERS.find((f) => f.key === filter)?.label}
           tone="neutral"
+        />
+        <StatTile
+          label="Zelf voorgeschoten"
+          value={formatEUR(totals.voorgeschoten)}
+          hint="uren + inkoop derden boven de ontvangen dekking · ex. BTW"
+          tone={totals.voorgeschoten > 0.01 ? "danger" : "success"}
         />
         <StatTile
           label="Gefactureerd"
@@ -451,6 +500,7 @@ export default async function ProjectsPage({
                 <Th className="text-right">Aanneemprijs</Th>
                 <Th className="text-right">Gefactureerd</Th>
                 <Th className="text-right">Openstaand</Th>
+                <Th className="text-right">Voorschot</Th>
                 <Th className="text-right">Open facturen</Th>
                 <Th className="text-right">Nog te factureren</Th>
                 <Th className="text-right">Marge uren</Th>
@@ -508,6 +558,25 @@ export default async function ProjectsPage({
                         <span className="font-medium text-warning">{formatEUR(p.outstanding)}</span>
                       ) : (
                         <span className="text-muted">—</span>
+                      )}
+                    </Td>
+                    {/* Voorschotdekking: rood = wij schieten voor, oranje = bijna
+                        op. Zonder kasuitgaven valt er niets te dekken → "—". */}
+                    <Td className="text-right tabular-nums">
+                      {p.cover.prefinanced <= 0.01 ? (
+                        <span className="text-muted">—</span>
+                      ) : p.cover.status === "voorgeschoten" ? (
+                        <Link href={`/projects/${p.id}#voorschot-opvragen`} title="Zelf voorgeschoten — nieuw voorschot vragen">
+                          <Badge tone="danger">− {formatEUR(-p.cover.saldo)}</Badge>
+                        </Link>
+                      ) : p.cover.status === "bijna_op" ? (
+                        <Link href={`/projects/${p.id}#voorschot-opvragen`} title={`Nog ${formatEUR(p.cover.saldo)} dekking over`}>
+                          <Badge tone="warning">bijna op</Badge>
+                        </Link>
+                      ) : (
+                        <span className="text-success" title={`${formatEUR(p.cover.saldo)} dekking over`}>
+                          ✓
+                        </span>
                       )}
                     </Td>
                     <Td className="text-right tabular-nums">

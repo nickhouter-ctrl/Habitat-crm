@@ -15,6 +15,7 @@ import { auth } from "@/auth";
 import { db } from "@/lib/db";
 import { companies, contacts, projectPayments, sentEmails, users } from "@/lib/db/schema";
 import { buildAdvanceReminderEmail, buildAdvanceRequestEmail, buildAdvanceStatusEmail } from "@/lib/advance-request";
+import type { AdvanceCover } from "@/lib/project-financials";
 import { formatEUR } from "@/lib/utils";
 import { sendAdvanceRequest } from "../actions";
 
@@ -43,8 +44,10 @@ export async function AdvanceRequestCard({
   siteAlias,
   contactId,
   contractDate,
-  kostenTotaal,
-  ontvangenEx,
+  cover,
+  laborCost,
+  purchaseCost,
+  ownProductCost,
   aanneemsom,
   doorTeBelasten,
   params,
@@ -54,17 +57,20 @@ export async function AdvanceRequestCard({
   siteAlias: string | null;
   contactId: string | null;
   contractDate: string | null;
-  /** Arbeid + inkoop + kostprijs van geleverde producten (ex. btw). */
-  kostenTotaal: number;
-  /** Alles wat er binnen is (ex. btw). */
-  ontvangenEx: number;
+  /** Voorschotdekking: uren + inkoop derden tegenover ontvangen dekking (ex. btw). */
+  cover: AdvanceCover;
+  /** De uitsplitsing van cover.prefinanced, voor de toelichting. */
+  laborCost: number;
+  purchaseCost: number;
+  /** Kostprijs eigen (voorraad)producten — telt bewust NIET mee in de dekking. */
+  ownProductCost: number;
   /** Aanneemsom/doel en wat er minimaal doorbelast moet worden. */
   aanneemsom: number;
   doorTeBelasten: number;
   params: { vbedrag?: string; vtermijn?: string; vdatum?: string; vmail?: string; vstand?: string; vrestant?: string };
 }) {
   // Tekort afgerond op duizendtallen: een voorschot vraag je niet op de cent.
-  const tekortAfgerond = Math.max(0, Math.ceil((kostenTotaal - ontvangenEx) / 1000) * 1000);
+  const tekortAfgerond = cover.suggestedRequestEur;
   const amount = parseAmount(params.vbedrag);
   const termLabel = params.vtermijn?.trim() || "";
   const agreementDate = params.vdatum?.trim() || contractDate;
@@ -208,29 +214,44 @@ export async function AdvanceRequestCard({
       </CardHeader>
       <CardContent className="space-y-4">
         {/* De aanleiding om een voorschot te vragen: schieten we voor? Niet de
-            verkoopwaarde maar ONZE KOSTEN tegenover wat er binnen is. */}
-        <div className={`rounded-lg border p-3 ${ontvangenEx >= kostenTotaal ? "bg-success/5" : "bg-danger/5"}`}>
+            verkoopwaarde maar ons KASGELD (uren + inkoop derden) tegenover wat
+            er binnen is — eigen voorraad staat hier bewust buiten. */}
+        <div
+          className={`rounded-lg border p-3 ${
+            cover.tone === "success" ? "bg-success/5" : cover.tone === "warning" ? "bg-warning/5" : "bg-danger/5"
+          }`}
+        >
           <div className="flex flex-wrap items-baseline justify-between gap-x-6 gap-y-1 text-sm">
             <span className="font-medium">Lopen we voor of achter?</span>
             <span className="text-muted">
-              onze kosten tot nu toe <strong className="tabular-nums text-foreground">{formatEUR(kostenTotaal)}</strong>
+              voorgeschoten (uren {formatEUR(laborCost)} + inkoop derden {formatEUR(purchaseCost)}){" "}
+              <strong className="tabular-nums text-foreground">{formatEUR(cover.prefinanced)}</strong>
             </span>
             <span className="text-muted">
-              ontvangen <strong className="tabular-nums text-foreground">{formatEUR(ontvangenEx)}</strong>
+              dekking ontvangen <strong className="tabular-nums text-foreground">{formatEUR(cover.received)}</strong>
             </span>
-            <span className={`font-semibold tabular-nums ${ontvangenEx >= kostenTotaal ? "text-success" : "text-danger"}`}>
-              {ontvangenEx >= kostenTotaal
-                ? `+ ${formatEUR(ontvangenEx - kostenTotaal)} vooruit`
-                : `− ${formatEUR(kostenTotaal - ontvangenEx)} voorgeschoten`}
+            <span
+              className={`font-semibold tabular-nums ${
+                cover.tone === "success" ? "text-success" : cover.tone === "warning" ? "text-warning" : "text-danger"
+              }`}
+            >
+              {cover.saldo >= 0 ? `+ ${formatEUR(cover.saldo)} vooruit` : `− ${formatEUR(-cover.saldo)} voorgeschoten`}
             </span>
           </div>
           <p className="mt-1 text-xs text-muted">
-            {ontvangenEx >= kostenTotaal
-              ? "Er is meer binnen dan er tot nu toe is uitgegeven — precies waarvoor je met voorschotten werkt."
-              : `Er is meer uitgegeven dan er binnen is: dit deel financier je zelf. Hieronder staat ${formatEUR(
-                  tekortAfgerond,
-                )} al ingevuld.`}{" "}
+            {cover.status === "gedekt"
+              ? "Er is meer binnen dan er aan uren en inkoop is uitgegeven — precies waarvoor je met voorschotten werkt."
+              : cover.status === "bijna_op"
+                ? "De dekking is bijna op: één week uren of één levering en je schiet voor. Bereid het volgende voorschot alvast voor."
+                : `Er is meer aan uren en inkoop uitgegeven dan er binnen is: dit deel financier je zelf. Hieronder staat ${formatEUR(
+                    tekortAfgerond,
+                  )} al ingevuld.`}{" "}
             Alle bedragen ex. btw.
+          </p>
+          <p className="mt-1 text-xs text-muted">
+            Eigen producten uit voorraad{ownProductCost > 0.01 ? ` (${formatEUR(ownProductCost)} kostprijs)` : ""} tellen
+            hier niet mee: dat is voorraad, geen voorgeschoten geld. Betalingen op facturen tellen mee zonder het
+            eigen-productdeel.
           </p>
           {aanneemsom > 0 && doorTeBelasten > aanneemsom && (
             <p className="mt-2 text-xs text-warning">

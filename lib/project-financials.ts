@@ -178,6 +178,76 @@ export function deriveProjectMargins(i: {
   };
 }
 
+/* ─────────────── Voorschotdekking: schieten wij geld voor? ─────────────── */
+
+/**
+ * Onder deze buffer kleurt de dekking oranje: het saldo is nog net positief,
+ * maar één weekje uren of één levering eet het op — tijd om het volgende
+ * voorschot alvast voor te bereiden.
+ */
+export const ADVANCE_WARN_BUFFER_EUR = 2500;
+
+export type AdvanceCoverInput = {
+  /** Goedgekeurde uren × uurkost, ex. btw. */
+  laborCost: number;
+  /** Inkooporders bij derden (zonder countAsLabor) + losse projectkosten, ex. btw. */
+  purchaseCost: number;
+  /** Ontvangen dekking ex. btw — zie {@link deriveAdvanceCover} voor wat meetelt. */
+  coverReceivedEx: number;
+  /** Standaard {@link ADVANCE_WARN_BUFFER_EUR}. */
+  warnBufferEur?: number;
+};
+
+export type AdvanceCover = {
+  /** Wat wij tot nu toe uit eigen zak betaalden: uren + inkoop derden. */
+  prefinanced: number;
+  received: number;
+  /** received − prefinanced; negatief = wij schieten voor. */
+  saldo: number;
+  status: "gedekt" | "bijna_op" | "voorgeschoten";
+  tone: "success" | "warning" | "danger";
+  /** Voorstel voor het volgende voorschot: tekort, omhoog afgerond op duizendtallen. */
+  suggestedRequestEur: number;
+};
+
+/**
+ * Voorschotdekking: lopen wij geld voor te schieten op deze klus?
+ *
+ * Aan de kostenkant tellen alleen échte kasuitgaven aan de klus: de uren van de
+ * eigen ploeg en wat er bij derden (in Spanje) wordt ingekocht — inkooporders
+ * plus losse projectkosten. **Eigen producten uit voorraad tellen niet mee**:
+ * die liggen al op de plank en kosten op dat moment geen kasgeld; ze zijn een
+ * eigen stroom met een eigen marge (zie {@link deriveProjectMargins}).
+ * Meerwerk hoeft niet apart: meerwerk-uren en -inkoop stromen vanzelf mee via
+ * laborCost/purchaseCost.
+ *
+ * Aan de ontvangstenkant telt alles wat er echt binnen is (ex. btw), mínus het
+ * eigen-productdeel van betalingen die aan een factuur hangen — voorschotten
+ * tellen dus helemaal mee, van een betaalde factuur telt alleen het deel dat
+ * geen eigen producten is. Niet alleen `method='advance'`: een betaalde
+ * deelfactuur voor uren/inkoop dekt het voorschieten net zo goed, anders zou je
+ * geld vragen dat al binnen is.
+ *
+ * Alles ex. btw: de IVA op inkoop wordt teruggevorderd — dit is een
+ * dekkingssom, geen kasboek.
+ */
+export function deriveAdvanceCover(i: AdvanceCoverInput): AdvanceCover {
+  const buffer = i.warnBufferEur ?? ADVANCE_WARN_BUFFER_EUR;
+  const prefinanced = round2(i.laborCost + i.purchaseCost);
+  const received = round2(i.coverReceivedEx);
+  const saldo = round2(received - prefinanced);
+  const status: AdvanceCover["status"] = saldo < 0 ? "voorgeschoten" : saldo < buffer ? "bijna_op" : "gedekt";
+  return {
+    prefinanced,
+    received,
+    saldo,
+    status,
+    tone: status === "gedekt" ? "success" : status === "bijna_op" ? "warning" : "danger",
+    // Een voorschot vraag je niet op de cent — zelfde afronding als de oude prefill.
+    suggestedRequestEur: Math.max(0, Math.ceil(-saldo / 1000) * 1000),
+  };
+}
+
 function clampPct(n: number): number {
   return Math.min(95, Math.max(0, n));
 }
