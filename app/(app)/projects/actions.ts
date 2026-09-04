@@ -10,6 +10,7 @@ import { auth } from "@/auth";
 import { db } from "@/lib/db";
 import {
   activities,
+  contacts,
   documents,
   projectBudgetLines,
   projectCosts,
@@ -25,6 +26,7 @@ import {
   type DocumentPhase,
 } from "@/lib/db/schema";
 import { poExVatAssumingSpanishVat } from "@/lib/purchase-orders";
+import { contractLang } from "@/lib/contract-terms";
 import { computeTotals } from "@/lib/documents";
 import { insertNumberedDocument } from "@/lib/doc-number";
 import { quoteClauses } from "@/lib/quote-clauses";
@@ -604,6 +606,17 @@ export async function createEstimateFromBudget(projectId: string) {
   ]);
   if (lines.length === 0) redirect(`/projects/${projectId}?begroting=leeg`);
 
+  // De voorbehouden in de taal van de klant. Stond hier eerder hard op "nl",
+  // waardoor een Spaanse of Engelse klant zijn kleine lettertjes in het
+  // Nederlands kreeg; de calculator deed dit al wél goed.
+  const contact = project.contactId
+    ? await db.query.contacts.findFirst({
+        where: eq(contacts.id, project.contactId),
+        columns: { preferredLanguage: true },
+      })
+    : null;
+  const taal = contractLang(contact?.preferredLanguage);
+
   const items: DocumentLineItem[] = lines.map((l) => ({
     name: l.description,
     description: l.section ?? undefined,
@@ -651,7 +664,7 @@ export async function createEstimateFromBudget(projectId: string) {
     phases: phases.length > 0 ? phases : null,
     // Zelfde voorbehouden als onder de gecalculeerde offerte — onvoorzien en
     // meerwerk moeten op élke offerte staan.
-    notes: quoteClauses("nl"),
+    notes: quoteClauses(taal),
   });
   revalidatePath(`/projects/${projectId}`);
   redirect(`/documents/${id}/edit`);

@@ -27,7 +27,7 @@ import type { DocumentLineItem, DocumentSignatureSnapshot } from "@/lib/db/schem
 import { canonicalJson, sha256Hex } from "@/lib/canonical-json";
 import { type QuoteLang, quoteClauseList } from "@/lib/quote-clauses";
 
-export const CONTRACT_TERMS_VERSION = "2026-08-concept";
+export const CONTRACT_TERMS_VERSION = "2026-09-concept";
 
 /** Plakplek voor de advocaat: extra artikelen ná de bestaande voorbehouden. */
 export const EXTRA_ARTICLES: Record<QuoteLang, string[]> = { nl: [], en: [], es: [] };

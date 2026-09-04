@@ -8,6 +8,16 @@
  * schriftelijk akkoord (dat sluit aan op de meerwerk-kaart met akkoord-vlag),
  * en betaling in termijnen vóór levering (het voorschotten-model).
  *
+ * De uitsluitingen staan bij elkaar (asbest/vocht, architect): de klant leest
+ * een aanneemsom van een paar ton en gaat er anders van uit dat álles erin zit.
+ *
+ * De architect-clausule is bewust VOORWAARDELIJK ("tenzij … is opgenomen").
+ * Meestal contracteert de opdrachtgever de architect zelf en loopt dat geld
+ * nooit via ons; soms factureren wij hem door, en dan staat hij als post in de
+ * calculatie. Eén onvoorwaardelijke uitsluiting zou in dat tweede geval
+ * onwaar zijn — en een onware bepaling in een ondertekend contract is erger
+ * dan geen bepaling.
+ *
  * Eén taal per offerte; de teksten zijn per taal gelijkwaardig, geen vertaling
  * van een "hoofdtekst".
  */
@@ -21,6 +31,7 @@ const CLAUSES: Record<QuoteLang, string[]> = {
     "Verborgen gebreken: gebreken die pas tijdens de uitvoering zichtbaar worden — zoals verouderde of ondeugdelijke elektrische bekabeling, leidingwerk, riolering of een defecte septictank — vallen buiten deze offerte en worden na overleg op regiebasis verrekend.",
     "Grondwerk: bij graafwerk (kelder, zwembad, fundering) is uitgegaan van normale grondslag. Blijkt de ondergrond rotsachtig of harder dan verwacht, dan geldt voor het extra werk een meerprijs op regiebasis.",
     "Asbest en vocht: het verwijderen van asbesthoudende materialen en het verhelpen van verborgen vochtproblemen zijn niet inbegrepen.",
+    "Architect en technische leiding: tenzij in deze offerte een post “Architect en technische leiding” is opgenomen, vallen het honorarium van de architect, de technische leiding (arquitecto técnico) en de daarbij horende studies erbuiten. De opdrachtgever contracteert hen dan zelf en voldoet die facturen rechtstreeks.",
     "Meerwerk wordt uitsluitend uitgevoerd na schriftelijk akkoord van de opdrachtgever en wordt verrekend op de eindafrekening.",
     "Betaling: in termijnen volgens overeen te komen schema; leveringen en werkzaamheden volgen na ontvangst van het bijbehorende voorschot.",
     "Onvoorzien: het opgenomen percentage dekt kleine onvoorziene werkzaamheden; het wordt uitsluitend verrekend voor zover daadwerkelijk gebruikt.",
@@ -32,6 +43,7 @@ const CLAUSES: Record<QuoteLang, string[]> = {
     "Hidden defects: defects that only become visible during the works — such as outdated or faulty electrical wiring, plumbing, drainage or a defective septic tank — fall outside this quotation and will be charged on a time-and-materials basis after consultation.",
     "Groundwork: excavation (basement, pool, foundations) assumes normal ground conditions. If the ground proves rocky or harder than expected, the additional work will be charged on a time-and-materials basis.",
     "Asbestos and damp: removal of asbestos-containing materials and remedying hidden damp problems are not included.",
+    "Architect and technical supervision: unless this quotation includes a line item “Architect and technical supervision”, the architect’s fee, the technical supervision (arquitecto técnico) and any related studies fall outside it. In that case the client engages them directly and settles those invoices directly.",
     "Additional work is carried out only after the client's written approval and is settled on the final invoice.",
     "Payment: in instalments as per the agreed schedule; deliveries and works follow receipt of the corresponding advance payment.",
     "Contingency: the stated percentage covers minor unforeseen works and is only charged to the extent actually used.",
@@ -43,6 +55,7 @@ const CLAUSES: Record<QuoteLang, string[]> = {
     "Vicios ocultos: los defectos que solo se hagan visibles durante la ejecución — como instalación eléctrica, fontanería o saneamiento en mal estado, o una fosa séptica defectuosa — quedan fuera de este presupuesto y se facturarán por administración previa consulta.",
     "Movimiento de tierras: en las excavaciones (sótano, piscina, cimentación) se presupone un terreno normal. Si el terreno resulta rocoso o más duro de lo previsto, el trabajo adicional se facturará por administración.",
     "Amianto y humedades: la retirada de materiales con amianto y la reparación de humedades ocultas no están incluidas.",
+    "Arquitecto y dirección técnica: salvo que este presupuesto incluya una partida «Arquitecto y dirección técnica», los honorarios del arquitecto, la dirección técnica (arquitecto técnico) y los estudios correspondientes quedan fuera del mismo. En ese caso el cliente los contrata directamente y abona esas facturas de forma directa.",
     "Los trabajos adicionales se ejecutan únicamente previa conformidad por escrito del cliente y se liquidan en la factura final.",
     "Pago: por certificaciones según el calendario acordado; las entregas y los trabajos se realizan tras la recepción del anticipo correspondiente.",
     "Imprevistos: el porcentaje indicado cubre pequeños trabajos imprevistos y solo se factura en la medida en que se utilice.",
@@ -50,7 +63,19 @@ const CLAUSES: Record<QuoteLang, string[]> = {
   ],
 };
 
-/** De voorbehouden als één tekst voor `documents.notes` (alinea's met witregel). */
+/**
+ * De naam van de architect-post op de offerte. Staat hier en niet elders, omdat
+ * clausule 6 er woordelijk naar verwijst ("tenzij in deze offerte een post
+ * “Architect en technische leiding” is opgenomen"). Wijzigt de ene, dan hoort
+ * de andere in dezelfde beweging mee.
+ */
+export const ARCHITECT_POST: Record<QuoteLang, string> = {
+  nl: "Architect en technische leiding",
+  en: "Architect and technical supervision",
+  es: "Arquitecto y dirección técnica",
+};
+
+/** De voorbehouden als Ã©Ã©n tekst voor `documents.notes` (alinea's met witregel). */
 export function quoteClauses(lang: QuoteLang): string {
   return CLAUSES[lang].join("\n\n");
 }

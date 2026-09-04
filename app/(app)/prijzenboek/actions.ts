@@ -17,13 +17,23 @@ import { computeTotals } from "@/lib/documents";
 import { insertNumberedDocument } from "@/lib/doc-number";
 import { parseMoney } from "@/lib/parse-money";
 import {
+  ARCHITECT_MARGE,
+  architectVerkoop,
   badkamerSamenstelling,
   DEFAULT_PRIJZENBOEK_MARGE,
   HOOFDSTUKKEN,
   kostUitOpbouw,
   snijverliesToelichting,
 } from "@/lib/price-book";
-import { autoTermijnen, betalingsschemaTekst, MAX_TERMIJNEN, quoteClauses, SCHEMA_FASEN, type QuoteLang } from "@/lib/quote-clauses";
+import {
+  ARCHITECT_POST,
+  autoTermijnen,
+  betalingsschemaTekst,
+  MAX_TERMIJNEN,
+  quoteClauses,
+  SCHEMA_FASEN,
+  type QuoteLang,
+} from "@/lib/quote-clauses";
 import { syncSanitairPrijzen } from "@/lib/sanitair-prijzen";
 import { suggestedPrice } from "@/lib/pricing";
 
@@ -157,7 +167,7 @@ export async function createQuoteFromPriceBook(formData: FormData) {
   // (zelfde helper als het voorbeeld). Vroeger reisden die als hidden velden
   // mee en stapelden ze zich bij elke herberekening op in de URL.
   const { spec: badkamerSpec } = badkamerSamenstelling((veld) => String(formData.get(veld) ?? ""));
-  const invoerVelden = /^(bereken|taal|onvoorzien|contactId|projectId|b_aantal|b\d+_|d_|s_aantal|s\d+_|q_|qb_|nieuwProject)/;
+  const invoerVelden = /^(bereken|taal|onvoorzien|architect|contactId|projectId|b_aantal|b\d+_|d_|s_aantal|s\d+_|q_|qb_|nieuwProject)/;
   const wizardQuery = new URLSearchParams(
     [...formData.entries()].filter(
       (e): e is [string, string] => typeof e[1] === "string" && e[1] !== "" && invoerVelden.test(e[0]),
@@ -253,6 +263,39 @@ export async function createQuoteFromPriceBook(formData: FormData) {
       taxRate: 21,
       category: "renovatie",
       phase: gebruikteHoofdstukken[gebruikteHoofdstukken.length - 1],
+    });
+  }
+
+  // Architect als eerste regel, vóór het bouwwerk — het is voorbereiding, niet
+  // een bouwhoofdstuk.
+  //
+  // Bewust PAS HIER, ná de onvoorzien-regel: onvoorzien dekt tegenvallers in
+  // het bouwwerk, niet in een doorbelaste rekening van een derde. Zou hij
+  // eerder staan, dan rekende je er stilzwijgend 10% overheen.
+  //
+  // En bewust ZONDER fase: zo houdt hij zijn eigen groepje boven de
+  // hoofdstukken op de PDF, en blijven het fase-gewogen betalingsschema en de
+  // projectfasen na akkoord ongemoeid.
+  //
+  // Het ingevulde bedrag is wat de architect ÓNS kost; de klant ziet dat met de
+  // marge erbovenop. Staat er niets, dan komt er geen regel en sluit de
+  // voorbehouden-tekst de architect uit ("tenzij … is opgenomen").
+  const architectKost = parseMoney(String(formData.get("architect") ?? "")) ?? 0;
+  if (architectKost > 0) {
+    items.unshift({
+      name: ARCHITECT_POST[taal],
+      description:
+        taal === "es"
+          ? "honorarios de arquitecto y dirección técnica, facturados a través nuestro"
+          : taal === "en"
+            ? "architect's fee and technical supervision, invoiced through us"
+            : "honorarium architect en technische leiding, via ons gefactureerd",
+      units: 1,
+      price: architectVerkoop(architectKost),
+      costEur: architectKost,
+      marginPct: ARCHITECT_MARGE,
+      taxRate: 21,
+      category: "ontwerp",
     });
   }
 

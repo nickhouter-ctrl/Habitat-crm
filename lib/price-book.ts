@@ -133,6 +133,26 @@ export const EENHEDEN = ["m²", "m", "m³", "stuk", "punt", "ruimte", "forfait"]
 /** Standaardmarge (van de verkoopprijs) — keuze van Nick, 06-08-2026: ruim. */
 export const DEFAULT_PRIJZENBOEK_MARGE = 30;
 
+/**
+ * Marge op doorbelaste architectkosten — keuze van Nick, 04-09-2026.
+ *
+ * Lager dan het prijzenboek: hier zit geen eigen werk in, alleen het regelen
+ * en voorschieten. Net als overal in dit systeem is dit een marge VAN DE
+ * VERKOOPPRIJS, dus € 18.000 kostprijs wordt € 18.000 / 0,85 = € 21.176,47.
+ */
+export const ARCHITECT_MARGE = 15;
+
+/**
+ * De verkoopprijs van de architect-post. Naar boven afgerond op hele centen,
+ * want anders komt de marge een haar ónder de 15% uit (18.000 / 0,85 =
+ * 21.176,4705…) en zet de offerte-editor er een waarschuwingsdriehoek bij die
+ * nergens op slaat. Eén functie, zodat het voorbeeld in de calculator en de
+ * regel op de offerte niet een cent uit elkaar kunnen lopen.
+ */
+export function architectVerkoop(kostprijs: number): number {
+  return Math.ceil((kostprijs / (1 - ARCHITECT_MARGE / 100)) * 100) / 100;
+}
+
 /* ─────────────────────────── kostopbouw & snijverlies ─────────────────────
  * Twee dingen die de calculator zelf moet doen, zodat een offerte klopt
  * zonder dat iemand er met de hand aan rekent. */

@@ -104,6 +104,13 @@ export async function renderBudgetPdf(projectId: string): Promise<BudgetPdf | nu
     });
   }
 
+  // Staat de architect als begrotingsregel, dan belasten we hem door en mag de
+  // uitsluiting hieronder er niet staan — precies dezelfde voorwaarde als in
+  // clausule 6 van de offerte (lib/quote-clauses.ts).
+  const architectInBegroting = lines.some((l) =>
+    /architect|direcci[oó]n t[eé]cnica|technische leiding/i.test(l.description ?? ""),
+  );
+
   // Vaste slotpassage — zelfde strekking als de voorbehouden onder de offerte
   // (lib/quote-clauses.ts): onvoorzien en meerwerk vallen buiten de begroting.
   tables.push({
@@ -112,6 +119,11 @@ export async function renderBudgetPdf(projectId: string): Promise<BudgetPdf | nu
       "Bij een verbouwing kunnen zich altijd onvoorziene kosten en meerwerk voordoen (verborgen gebreken, hardere ondergrond, gewijzigde keuzes). Werkzaamheden die niet in deze begroting zijn opgenomen vallen erbuiten en worden na overleg apart verrekend.",
       "Meerwerk wordt uitsluitend uitgevoerd na schriftelijk akkoord van de opdrachtgever en wordt apart verrekend. Een opgenomen onvoorzien-post wordt uitsluitend verrekend voor zover daadwerkelijk gebruikt.",
       "Stelposten zijn richtbedragen: kiest de opdrachtgever een duurdere uitvoering, dan wordt het verschil als meerprijs verrekend; een voordeliger keuze wordt als minderprijs in mindering gebracht.",
+      ...(architectInBegroting
+        ? []
+        : [
+            "Architect en technische leiding vallen buiten deze begroting: de opdrachtgever contracteert hen zelf en voldoet die facturen rechtstreeks.",
+          ]),
       "Alle bedragen zijn exclusief btw.",
     ].join("\n"),
     columns: [],

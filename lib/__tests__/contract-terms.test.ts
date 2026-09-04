@@ -10,6 +10,7 @@ import {
   contractLang,
   contractSnapshotHash,
 } from "@/lib/contract-terms";
+import { ARCHITECT_POST, quoteClauseList } from "@/lib/quote-clauses";
 
 const doc = {
   docNumber: "EST-2026-0042",
@@ -116,5 +117,39 @@ describe("snapshot", () => {
 describe("shortHash", () => {
   it("maakt er iets van dat een mens kan vergelijken", () => {
     expect(shortHash("a".repeat(64))).toBe("AAAA-AAAA-AAAA");
+  });
+});
+
+describe("uitsluiting architect", () => {
+  const talen = ["nl", "en", "es"] as const;
+
+  it("staat in alle drie de talen bij de voorbehouden", () => {
+    for (const taal of talen) {
+      const clausules = quoteClauseList(taal);
+      const architect = clausules.filter((c) => /arquitecto t[eé]cnico/.test(c));
+      expect(architect, `taal ${taal}`).toHaveLength(1);
+    }
+  });
+
+  it("noemt de post woordelijk zoals hij op de offerte komt te staan", () => {
+    // De clausule sluit de architect uit "tenzij … een post <naam> is opgenomen".
+    // Wijkt die naam af van wat createQuoteFromPriceBook op de regel zet, dan
+    // spreekt de offerte zichzelf tegen. Vandaar dat dit vastligt.
+    for (const taal of talen) {
+      const architect = quoteClauseList(taal).find((c) => /arquitecto t[eé]cnico/.test(c))!;
+      expect(architect, `taal ${taal}`).toContain(ARCHITECT_POST[taal]);
+    }
+  });
+
+  it("is voorwaardelijk, want soms factureren we de architect zelf door", () => {
+    expect(quoteClauseList("nl").join("\n")).toMatch(/tenzij/);
+    expect(quoteClauseList("en").join("\n")).toMatch(/unless/);
+    expect(quoteClauseList("es").join("\n")).toMatch(/salvo/);
+  });
+
+  it("staat niet vooraan — die plek is van de LET OP-clausule, die de PDF vet zet", () => {
+    for (const taal of talen) {
+      expect(quoteClauseList(taal)[0], `taal ${taal}`).not.toMatch(/arquitecto t[eé]cnico/);
+    }
   });
 });

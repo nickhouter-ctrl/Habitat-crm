@@ -33,6 +33,8 @@ import { moneyForInput, parseMoney } from "@/lib/parse-money";
 import { marginOf } from "@/lib/pricing";
 import {
   aantalMetSnijverlies,
+  ARCHITECT_MARGE,
+  architectVerkoop,
   badkamerSamenstelling,
   DRIVERS,
   DRIVER_GROEP_LABEL,
@@ -112,6 +114,10 @@ export default async function OfferteCalculatorPage({
   }
   const margePct = verkoop > 0 ? (marginOf(verkoop, kost)?.pct ?? null) : null;
   const onvoorzien = parseMoney(params.onvoorzien ?? "") ?? 10;
+  // Architect: ingevuld bedrag is wat híj ons kost; de klant ziet dat bedrag
+  // met de marge erbovenop. Zie ARCHITECT_MARGE in lib/price-book.ts.
+  const architectKost = parseMoney(params.architect ?? "") ?? 0;
+  const architectPrijs = architectKost > 0 ? architectVerkoop(architectKost) : 0;
 
   // Betalingsschema: aantal termijnen + omschrijving en % per termijn uit de
   // URL; standaard de bouwfase-termijnen in de gekozen offertetaal.
@@ -149,7 +155,11 @@ export default async function OfferteCalculatorPage({
     termijnen = schemaStandaard.map((t) => ({ ...t }));
     schemaSom = termijnen.reduce((s, t) => s + t.pct, 0);
   }
-  const verkoopMetOnvoorzien = verkoop * (1 + onvoorzien / 100);
+  // De grondslag voor het betalingsschema: bouwwerk + onvoorzien + de
+  // doorbelaste architect. Precies wat createQuoteFromPriceBook straks als
+  // subtotaal op de offerte zet, anders belooft dit voorbeeld termijnen die
+  // niet optellen tot wat de klant te zien krijgt.
+  const verkoopMetOnvoorzien = verkoop * (1 + onvoorzien / 100) + architectPrijs;
 
   const groepen = [...new Set(DRIVERS.map((d) => d.groep))] as DriverGroep[];
 
@@ -199,6 +209,22 @@ export default async function OfferteCalculatorPage({
               </Field>
               <Field label="Onvoorzien (%)" hint="zichtbare regel op de offerte">
                 <Input name="onvoorzien" inputMode="decimal" defaultValue={params.onvoorzien ?? "10"} className="text-right" />
+              </Field>
+              {/* Meestal contracteert de klant de architect zelf en laat je dit
+                  leeg; dan sluit de voorbehouden-tekst hem uit. Vul je hier wat
+                  de architect ONS kost, dan komt hij als eigen post op de
+                  offerte met de marge erbovenop. */}
+              <Field
+                label="Architect (kostprijs)"
+                hint={`leeg = klant regelt zelf · marge ${ARCHITECT_MARGE}%`}
+              >
+                <Input
+                  name="architect"
+                  inputMode="decimal"
+                  placeholder="0,00"
+                  defaultValue={params.architect ?? ""}
+                  className="text-right"
+                />
               </Field>
             </div>
 
@@ -300,7 +326,16 @@ export default async function OfferteCalculatorPage({
               <div className="rounded-md border bg-background p-3 text-sm">
                 <div className="flex flex-wrap items-baseline justify-between gap-x-6 gap-y-1">
                   <span className="text-muted">Voorgerekend: verkoop <strong className="tabular-nums text-foreground">{formatEUR(verkoop)}</strong></span>
-                  <span className="text-muted">+ onvoorzien {onvoorzien}% → <strong className="tabular-nums text-foreground">{formatEUR(verkoop * (1 + onvoorzien / 100))}</strong></span>
+                  <span className="text-muted">
+                    + onvoorzien {onvoorzien}%{architectPrijs > 0 ? " en architect" : ""} →{" "}
+                    <strong className="tabular-nums text-foreground">{formatEUR(verkoopMetOnvoorzien)}</strong>
+                  </span>
+                  {architectPrijs > 0 && (
+                    <span className="text-muted">
+                      waarvan architect <strong className="tabular-nums text-foreground">{formatEUR(architectPrijs)}</strong>{" "}
+                      <span className="text-xs">({formatEUR(architectKost)} kostprijs + {ARCHITECT_MARGE}%)</span>
+                    </span>
+                  )}
                   <span className="text-muted">kostprijs <strong className="tabular-nums text-foreground">{formatEUR(kost)}</strong></span>
                   <span className={`font-semibold tabular-nums ${margePct != null && margePct < 15 ? "text-danger" : "text-success"}`}>
                     marge {margePct != null ? `${margePct.toFixed(1).replace(".", ",")}%` : "—"}
