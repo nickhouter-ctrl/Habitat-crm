@@ -764,7 +764,7 @@ export default async function ProjectDetailPage({
               <Field
                 label="Marge op inkoop derden (%)"
                 htmlFor="purchaseMarginPct"
-                hint={`marge \u00f7 verkoopprijs \u2014 leeg = ${DEFAULT_PURCHASE_MARGIN_PCT}%`}
+                hint={`marge ÷ verkoopprijs — leeg = ${DEFAULT_PURCHASE_MARGIN_PCT}%`}
               >
                 <Input
                   id="purchaseMarginPct"
@@ -1006,7 +1006,7 @@ export default async function ProjectDetailPage({
           <div className="grid gap-3 lg:grid-cols-3">
             <div className="rounded-lg border bg-background p-3">
               <div className="mb-2 flex items-baseline justify-between gap-2">
-                <p className="text-sm font-semibold">Uren \u2014 arbeid</p>
+                <p className="text-sm font-semibold">Uren — arbeid</p>
                 <span className="text-xs text-muted">norm {margins.laborMarginPct}%</span>
               </div>
               <dl className="space-y-1 text-sm">
@@ -1026,9 +1026,7 @@ export default async function ProjectDetailPage({
                   </dd>
                 </div>
               </dl>
-              <p className="mt-2 text-xs text-muted">
-                {laborHours.toLocaleString("nl-NL")} uur \u00b7 norm, geen gemeten verkoopprijs per uur
-              </p>
+              <p className="mt-2 text-xs text-muted">{laborHours.toLocaleString("nl-NL")} uur gewerkt</p>
             </div>
 
             <div className="rounded-lg border bg-background p-3">
@@ -1063,7 +1061,7 @@ export default async function ProjectDetailPage({
                   <p className="mt-2 text-xs text-muted">
                     gemeten uit de factuurregels
                     {margins.uncostedProductRevenue > 0
-                      ? ` \u00b7 ${formatEUR(margins.uncostedProductRevenue)} zonder kostprijs, niet meegeteld`
+                      ? ` · ${formatEUR(margins.uncostedProductRevenue)} zonder kostprijs, niet meegeteld`
                       : ""}
                   </p>
                 </>
@@ -1071,7 +1069,7 @@ export default async function ProjectDetailPage({
                 <p className="text-sm text-muted">
                   Nog niets van onszelf gefactureerd op dit project.
                   {margins.uncostedProductRevenue > 0
-                    ? ` ${formatEUR(margins.uncostedProductRevenue)} gefactureerd zonder kostprijs \u2014 vul die op de regels in om de marge te zien.`
+                    ? ` ${formatEUR(margins.uncostedProductRevenue)} gefactureerd zonder kostprijs — vul die op de regels in om de marge te zien.`
                     : ""}
                 </p>
               )}
@@ -1104,36 +1102,26 @@ export default async function ProjectDetailPage({
               </p>
             </div>
           </div>
+          {/* Eén uitlegregel voor alle drie — beter dan drie keer jargon in de kaarten. */}
+          <p className="text-xs text-muted">
+            &quot;Norm {margins.laborMarginPct}%&quot; betekent: uren en inkoop hebben geen eigen verkoopprijs, dus
+            &quot;door te belasten&quot; is de kostprijs plus onze vaste marge. Eigen producten zijn wél echt gemeten:
+            verkoopprijs min kostprijs van de factuurregels.
+          </p>
 
-          {/* Wat de klus tot nu toe minimaal moet opbrengen om alle drie de marges te halen. */}
-          {margins.totalRevenue > 0 && (
-            <div className="rounded-lg border bg-background p-3 text-sm">
-              <div className="flex flex-wrap items-baseline justify-between gap-2">
-                <span className="font-semibold">Minimaal door te belasten tot nu toe</span>
-                <span className="tabular-nums font-semibold">{formatEUR(margins.totalRevenue)}</span>
-              </div>
-              <p className="mt-1 text-xs text-muted">
-                uren {formatEUR(margins.laborRevenue)} + inkoop {formatEUR(margins.purchaseRevenue)} + eigen producten{" "}
-                {formatEUR(margins.productRevenue)} \u00b7 samen {formatEUR(margins.totalMargin)} marge
-                {targetRevenue > 0
-                  ? margins.totalRevenue > targetRevenue
-                    ? ` \u00b7 \u26a0 dat is ${formatEUR(margins.totalRevenue - targetRevenue)} MEER dan de aanneemprijs van ${formatEUR(targetRevenue)}`
-                    : ` \u00b7 past binnen de aanneemprijs van ${formatEUR(targetRevenue)} (nog ${formatEUR(targetRevenue - margins.totalRevenue)} ruimte)`
-                  : ""}
-              </p>
-            </div>
-          )}
-
-          {/* De vraag die "minimaal door te belasten" oproept: er is al
-              gefactureerd en er is al voorgeschoten — wat moet er dan NU nog uit? */}
+          {/* Eén blok i.p.v. twee: "minimaal door te belasten" stond eerst los
+              én nogmaals als eerste regel van dit sommetje — dubbel en rommelig. */}
           {margins.totalRevenue > 0 && (
             <div className="rounded-lg border border-accent/30 bg-accent/5 p-3 text-sm">
               <p className="mb-2 font-semibold">Wat moet er nu nog binnenkomen?</p>
               <dl className="space-y-1">
                 <div className="flex justify-between gap-2">
                   <dt className="text-muted">
-                    Minimaal door te belasten tot nu toe
-                    <span className="block text-xs">alle bedragen hier zijn ex. btw</span>
+                    Werk tot nu toe moet minimaal opbrengen
+                    <span className="block text-xs">
+                      uren {formatEUR(margins.laborRevenue)} + inkoop {formatEUR(margins.purchaseRevenue)} + eigen
+                      producten {formatEUR(margins.productRevenue)} · alle bedragen ex. btw
+                    </span>
                   </dt>
                   <dd className="tabular-nums">{formatEUR(margins.totalRevenue)}</dd>
                 </div>
@@ -1144,15 +1132,29 @@ export default async function ProjectDetailPage({
                       {/* Gefactureerd is géén geld: een verstuurde factuur kan onbetaald
                           zijn. Daarom telt hier wat er ECHT binnen is — betalingen op
                           facturen én voorschotten. */}
-                      alle betalingen samen, of ze nu op een factuur kwamen of als voorschot
+                      alle betalingen, op factuur én als voorschot
                     </span>
                   </dt>
                   <dd className="tabular-nums">− {formatEUR(receivedTotalEx)}</dd>
                 </div>
-                <div className="flex justify-between gap-2 border-t pt-1 font-semibold">
-                  <dt>Nog te ontvangen</dt>
-                  <dd className="tabular-nums">{formatEUR(margins.totalRevenue - receivedTotalEx)}</dd>
-                </div>
+                {/* Een negatief "nog te ontvangen" leest als een fout; zeg dan
+                    gewoon wat het is: de klant heeft vooruitbetaald. */}
+                {margins.totalRevenue - receivedTotalEx >= -0.01 ? (
+                  <div className="flex justify-between gap-2 border-t pt-1 font-semibold">
+                    <dt>Nog te ontvangen</dt>
+                    <dd className="tabular-nums">{formatEUR(Math.max(0, margins.totalRevenue - receivedTotalEx))}</dd>
+                  </div>
+                ) : (
+                  <div className="flex justify-between gap-2 border-t pt-1 font-semibold">
+                    <dt>
+                      Vooruit ontvangen
+                      <span className="block text-xs font-normal text-muted">
+                        de klant heeft vooruitbetaald voor werk dat nog komt
+                      </span>
+                    </dt>
+                    <dd className="tabular-nums text-success">{formatEUR(receivedTotalEx - margins.totalRevenue)}</dd>
+                  </div>
+                )}
                 {openInvoicedEx > 0.01 && (
                   <div className="flex justify-between gap-2 pt-1">
                     <dt className="text-muted">
@@ -1162,13 +1164,19 @@ export default async function ProjectDetailPage({
                     <dd className="tabular-nums text-warning">{formatEUR(openInvoicedEx)}</dd>
                   </div>
                 )}
-                <div className="flex justify-between gap-2">
-                  <dt className="text-muted">nog te factureren</dt>
-                  <dd className="tabular-nums">
-                    {formatEUR(Math.max(0, margins.totalRevenue - receivedTotalEx - openInvoicedEx))}
-                  </dd>
-                </div>
+                {margins.totalRevenue - receivedTotalEx - openInvoicedEx > 0.01 && (
+                  <div className="flex justify-between gap-2">
+                    <dt className="text-muted">nog te factureren</dt>
+                    <dd className="tabular-nums">{formatEUR(margins.totalRevenue - receivedTotalEx - openInvoicedEx)}</dd>
+                  </div>
+                )}
               </dl>
+              {targetRevenue > 0 && margins.totalRevenue > targetRevenue && (
+                <p className="mt-2 text-xs text-warning">
+                  ⚠ Wat het werk moet opbrengen ({formatEUR(margins.totalRevenue)}) ligt {formatEUR(margins.totalRevenue - targetRevenue)} boven
+                  de aanneemprijs van {formatEUR(targetRevenue)} — leg het verschil vast als meerwerk.
+                </p>
+              )}
               {voorschottenOnverrekendEx > 0 && (
                 <p className="mt-2 text-xs text-muted">
                   Op de eindafrekening moet er méér op papier dan er nog binnenkomt:{" "}
