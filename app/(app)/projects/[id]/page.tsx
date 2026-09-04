@@ -977,6 +977,8 @@ export default async function ProjectDetailPage({
                   </span>
                 )}
               </p>
+              {/* Anders dan de kas-/voorschotkant telt hier de voorraad WEL mee. */}
+              <p className="text-xs text-muted">incl. kostprijs producten uit eigen voorraad</p>
             </div>
             <div className="rounded-lg border bg-background p-3">
               <p className="text-xs text-muted">Ruimte tot plafond</p>
