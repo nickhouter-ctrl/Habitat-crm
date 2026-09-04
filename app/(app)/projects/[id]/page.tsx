@@ -885,16 +885,18 @@ export default async function ProjectDetailPage({
           </span>
         </CardHeader>
         <CardContent>
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
             <div className="rounded-lg border bg-background p-3">
               <p className="text-xs text-muted">Eruit gegaan (kasgeld)</p>
               <p className="text-lg font-semibold tabular-nums text-danger">− {formatEUR(cover.prefinanced)}</p>
-              <p className="text-xs text-muted">
-                uren {formatEUR(laborCost)} + inkoop derden {formatEUR(materialCost)} · ex. btw
-                {ownProductCostRealized > 0.01
-                  ? ` · kostprijs eigen voorraad ${formatEUR(ownProductCostRealized)} telt niet mee — geen kasuitgave`
-                  : ""}
-              </p>
+              <p className="text-xs text-muted">uren {formatEUR(laborCost)} + inkoop derden {formatEUR(materialCost)} · ex. btw</p>
+            </div>
+            {/* Eigen voorraad apart: wel kostprijs, geen kasuitgave — telt dus
+                niet mee in "eruit gegaan" en niet in de voorschotdekking. */}
+            <div className="rounded-lg border bg-background p-3">
+              <p className="text-xs text-muted">Eigen voorraad (kostprijs)</p>
+              <p className="text-lg font-semibold tabular-nums">{formatEUR(ownProductCostRealized)}</p>
+              <p className="text-xs text-muted">uit eigen voorraad geleverd · geen kasuitgave, telt niet mee in de dekking</p>
             </div>
             <div className="rounded-lg border bg-background p-3">
               <p className="text-xs text-muted">Ontvangen van klant</p>
