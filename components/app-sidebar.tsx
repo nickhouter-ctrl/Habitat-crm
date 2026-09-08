@@ -50,6 +50,7 @@ import { usePathname } from "next/navigation";
 import { useState } from "react";
 
 import { signOutAction } from "@/lib/auth/actions";
+import { ThemaSchakelaar } from "@/components/thema-schakelaar";
 import { GlobalSearch } from "@/components/global-search";
 import { cn, initials } from "@/lib/utils";
 
@@ -195,12 +196,12 @@ export function AppSidebar({
         ))}
       </nav>
 
-      <div className="border-t px-2 py-2">
+      <div className="flex items-center gap-1 border-t px-2 py-2">
         <Link
           href="/settings"
           onClick={onNavigate}
           className={cn(
-            "flex items-center gap-2.5 rounded-md px-2.5 py-2 text-sm transition-colors",
+            "flex flex-1 items-center gap-2.5 rounded-md px-2.5 py-2 text-sm transition-colors",
             isActive("/settings")
               ? "bg-accent/10 font-medium text-accent"
               : "text-foreground hover:bg-background",
@@ -209,6 +210,7 @@ export function AppSidebar({
           <Settings className="size-4 shrink-0" />
           Instellingen
         </Link>
+        <ThemaSchakelaar className="ml-auto" />
       </div>
 
       <div className="flex items-center gap-2.5 border-t px-3 py-3">

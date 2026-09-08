@@ -5,11 +5,13 @@
   (warm cream/sand achtergrond, brown text, terracotta accent).
 */
 :root {
-  --background: #faf7f1;    /* warm cream */
-  --surface: #ffffff;
+  /* Sinds sept. 2026 geen zuiver wit meer: een tint dieper zand als grond en
+     crème kaarten die erin zakken in plaats van erop te liggen. */
+  --background: #efe8dc;    /* warm zand */
+  --surface: #f9f5ee;       /* crème */
   --foreground: #2a2520;    /* COMPANY.charcoal */
   --muted: #7a6f63;         /* COMPANY.muted */
-  --border: #e8dfd0;        /* COMPANY.sand */
+  --border: #ddd2c0;        /* haarlijn */
   --accent: #b6552d;        /* COMPANY.terracotta — primary brand accent */
   --accent-foreground: #ffffff;
   --ring: #b6552d;
@@ -56,4 +58,104 @@ body {
 * {
   scrollbar-width: thin;
   scrollbar-color: var(--color-border) transparent;
+}
+
+/* Kaarten zonder zweefschaduw: ze horen in de grond te zakken, niet erop te liggen. */
+.bg-surface.shadow-sm {
+  box-shadow: none;
+}
+
+/* ----------------------------------------------------------------------------
+   Donkere modus — warm, in de lijn van de website (espresso). Wordt gezet door
+   het inline-script in app/layout.tsx op basis van de cookie `crm-thema`
+   (systeem = meedoen met de computer). Tokens eerst; daaronder de vaste
+   status-tinten (rood/amber/groen/blauw-50 e.d.) die her en der als losse
+   Tailwind-klassen staan en op donker anders niet leesbaar zijn.
+---------------------------------------------------------------------------- */
+html[data-thema="donker"] {
+  color-scheme: dark;
+  --background: #171310;
+  --surface: #221c18;
+  --foreground: #ece4d8;
+  --muted: #a3968a;
+  --border: #362d27;
+  --accent: #d0703f;
+  --accent-foreground: #ffffff;
+  --ring: #d0703f;
+  --danger: #f07070;
+  --warning: #e0a04a;
+  --success: #6cc48a;
+  --brand-brown: #e6d5c3;
+  --brand-gold: #d3b26e;
+}
+/* Status-tinten: zelfde betekenis, donkere uitvoering. Attribuutselectors
+   vangen ook de doorzichtige varianten (bg-red-50/40 e.d.). Effen knoppen
+   (bg-red-500) vallen erbuiten: die matchen alleen op "-50/" of "-100/". */
+html[data-thema="donker"] :is(.bg-red-50, [class*="bg-red-50/"], .bg-rose-50, [class*="bg-rose-50/"]) {
+  background-color: color-mix(in oklab, var(--danger) 14%, transparent);
+}
+html[data-thema="donker"] :is(.bg-red-100, [class*="bg-red-100/"], .bg-rose-100, [class*="bg-rose-100/"]) {
+  background-color: color-mix(in oklab, var(--danger) 24%, transparent);
+}
+html[data-thema="donker"] :is([class*="border-red-"], [class*="border-rose-"]) {
+  border-color: color-mix(in oklab, var(--danger) 40%, transparent);
+}
+html[data-thema="donker"] :is([class*="text-red-"], [class*="text-rose-"]) {
+  color: #f5a3a3;
+}
+html[data-thema="donker"] :is(.bg-amber-50, [class*="bg-amber-50/"], .bg-orange-50, [class*="bg-orange-50/"], .bg-yellow-50, [class*="bg-yellow-50/"]) {
+  background-color: color-mix(in oklab, var(--warning) 14%, transparent);
+}
+html[data-thema="donker"] :is(.bg-amber-100, [class*="bg-amber-100/"], .bg-orange-100, [class*="bg-orange-100/"], .bg-yellow-100, [class*="bg-yellow-100/"]) {
+  background-color: color-mix(in oklab, var(--warning) 24%, transparent);
+}
+html[data-thema="donker"] :is([class*="border-amber-"], [class*="border-orange-"], [class*="border-yellow-"]) {
+  border-color: color-mix(in oklab, var(--warning) 40%, transparent);
+}
+html[data-thema="donker"] :is([class*="text-amber-"], [class*="text-orange-"], [class*="text-yellow-"]) {
+  color: #ecc27e;
+}
+html[data-thema="donker"] :is(.bg-green-50, [class*="bg-green-50/"], .bg-emerald-50, [class*="bg-emerald-50/"]) {
+  background-color: color-mix(in oklab, var(--success) 14%, transparent);
+}
+html[data-thema="donker"] :is(.bg-green-100, [class*="bg-green-100/"], .bg-emerald-100, [class*="bg-emerald-100/"]) {
+  background-color: color-mix(in oklab, var(--success) 24%, transparent);
+}
+html[data-thema="donker"] :is([class*="border-green-"], [class*="border-emerald-"]) {
+  border-color: color-mix(in oklab, var(--success) 40%, transparent);
+}
+html[data-thema="donker"] :is([class*="text-green-"], [class*="text-emerald-"]) {
+  color: #9bdcb1;
+}
+html[data-thema="donker"] :is(.bg-sky-50, [class*="bg-sky-50/"], .bg-blue-50, [class*="bg-blue-50/"]) {
+  background-color: color-mix(in oklab, #60a5fa 14%, transparent);
+}
+html[data-thema="donker"] :is(.bg-sky-100, [class*="bg-sky-100/"], .bg-blue-100, [class*="bg-blue-100/"]) {
+  background-color: color-mix(in oklab, #60a5fa 24%, transparent);
+}
+html[data-thema="donker"] :is([class*="border-sky-"], [class*="border-blue-"]) {
+  border-color: color-mix(in oklab, #60a5fa 40%, transparent);
+}
+html[data-thema="donker"] :is([class*="text-sky-"], [class*="text-blue-"]) {
+  color: #9cc7fb;
+}
+html[data-thema="donker"] :is(.text-stone-800, .text-stone-700) {
+  color: var(--foreground);
+}
+html[data-thema="donker"] :is(.text-stone-600, .text-stone-500, .text-stone-400) {
+  color: var(--muted);
+}
+html[data-thema="donker"] :is(.border-stone-300, .border-stone-500) {
+  border-color: var(--border);
+}
+/* Afdrukken altijd licht */
+@media print {
+  html[data-thema="donker"] {
+    color-scheme: light;
+    --background: #ffffff;
+    --surface: #ffffff;
+    --foreground: #2a2520;
+    --muted: #7a6f63;
+    --border: #e8dfd0;
+  }
 }

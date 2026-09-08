@@ -105,6 +105,7 @@ export async function pushBrandProductToWebsite(productId: string): Promise<Merk
     description_i18n: product.descriptionI18n ?? null,
     brand: merk?.slug ?? null,
     series: product.subcategory ?? null,
+    product_type: product.category ?? null,
     collection: collectie,
   };
 

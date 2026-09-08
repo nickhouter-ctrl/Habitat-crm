@@ -52,7 +52,18 @@ export default function RootLayout({
     <html
       lang="nl"
       className={`${sora.variable} ${geistMono.variable} h-full antialiased`}
+      suppressHydrationWarning
     >
+      <head>
+        {/* Licht/donker vóór de eerste paint, uit de cookie `crm-thema`
+            (systeem | licht | donker; zie components/thema-schakelaar.tsx).
+            Print- en labelpagina's blijven altijd licht. */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `(function(){try{var m=document.cookie.match(/(?:^|; )crm-thema=(systeem|licht|donker)/);var k=m?m[1]:"systeem";var eerste=location.pathname.split("/")[1];if(["labels","print-labels","book","uren"].indexOf(eerste)>=0)k="licht";var d=k==="donker"||(k==="systeem"&&matchMedia("(prefers-color-scheme: dark)").matches);document.documentElement.dataset.thema=d?"donker":"licht";document.documentElement.dataset.themaKeuze=k;}catch(e){}})();`,
+          }}
+        />
+      </head>
       <body className="min-h-dvh">{children}</body>
     </html>
   );
