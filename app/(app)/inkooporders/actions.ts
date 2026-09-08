@@ -8,9 +8,10 @@ import { requireWriteUser } from "@/lib/auth/guards";
 
 import { auth } from "@/auth";
 import { db } from "@/lib/db";
-import { activities, emailInbox, mailAttachments, products, purchaseOrders, timeEntries, workers } from "@/lib/db/schema";
+import { activities, emailInbox, mailAttachments, products, projectCosts, purchaseOrders, timeEntries, workers } from "@/lib/db/schema";
 import type { PurchaseOrderAttachment } from "@/lib/db/schema";
 import { urenUitTarief } from "@/lib/labor-hours";
+import { verdeelBedragen } from "@/lib/verdeel-bedragen";
 import { nextSequentialSku } from "@/lib/products";
 import { matchWorkerByName, normalizePoAttachments, parsePoLineItems, poExVatAssumingSpanishVat, poTotal, PO_STATUSES } from "@/lib/purchase-orders";
 import { copyMailAttachmentToPoBucket, deletePurchaseOrderFile, downloadMailAttachmentBuffer, downloadPurchaseOrderBuffer } from "@/lib/storage";
@@ -225,9 +226,16 @@ export async function setPurchaseOrderProject(id: string, formData: FormData) {
   await requireUser();
   const raw = String(formData.get("projectId") ?? "").trim();
   const projectId = raw.length === 36 ? raw : null;
-  // Als materiaal koppelen: eventuele arbeid-markering + de bijhorende uren-regel
-  // opruimen (idempotent, zodat wisselen materiaal↔uren klopt).
+  // Als materiaal koppelen: eventuele arbeid-markering, de bijhorende uren-regel
+  // én een eerdere verdeling over werven opruimen (idempotent, zodat wisselen
+  // materiaal↔uren↔verdeeld klopt). Portaal-uren (selfLoggedAt) blijven staan:
+  // die heeft de bouwer zelf ingevuld, alleen hun factuur-koppeling vervalt.
+  await db
+    .update(timeEntries)
+    .set({ purchaseOrderId: null, updatedAt: new Date() })
+    .where(and(eq(timeEntries.purchaseOrderId, id), isNotNull(timeEntries.selfLoggedAt)));
   await db.delete(timeEntries).where(eq(timeEntries.purchaseOrderId, id));
+  await db.delete(projectCosts).where(eq(projectCosts.purchaseOrderId, id));
   await db
     .update(purchaseOrders)
     .set({ projectId, countAsLabor: false, updatedAt: new Date() })
@@ -305,6 +313,9 @@ async function koppelAlsUren(
   await db
     .delete(timeEntries)
     .where(and(eq(timeEntries.purchaseOrderId, id), isNull(timeEntries.selfLoggedAt)));
+  // Ook een eerdere materiaal-verdeling over werven vervalt: die zou anders
+  // dubbel tellen naast de nieuwe arbeidsregel.
+  await db.delete(projectCosts).where(eq(projectCosts.purchaseOrderId, id));
   if (alreadyLogged) {
     // Weekfactuur van een bouwer wiens uren al via het portaal binnenkwamen:
     // koppel de nog niet-gefactureerde portaal-uren van deze leverancier op dit
@@ -353,6 +364,144 @@ async function koppelAlsUren(
     .update(purchaseOrders)
     .set({ projectId, countAsLabor: true, updatedAt: new Date() })
     .where(eq(purchaseOrders.id, id));
+}
+
+/**
+ * Verdeel een inkoopfactuur over meerdere werven — hetzelfde als de verdeling
+ * bij het goedkeuren (lib/purchase-invoice-intake.ts), maar dan achteraf vanaf
+ * de detailpagina. De inkooporder blijft zelf ongekoppeld (projectId null):
+ * de koppeling zit in de uren- of kostenregels per werf, anders telt het
+ * bedrag dubbel. Een eerdere koppeling of verdeling wordt vervangen;
+ * portaal-uren (selfLoggedAt) blijven altijd staan.
+ */
+export async function verdeelPurchaseOrder(id: string, formData: FormData) {
+  await requireWriteUser();
+  const po = await db.query.purchaseOrders.findFirst({ where: eq(purchaseOrders.id, id) });
+  if (!po) return;
+
+  const kind = formData.get("kind") === "labor" ? "labor" : "material";
+  const num = (v: FormDataEntryValue | null) => {
+    const n = Number(String(v ?? "").trim().replace(",", "."));
+    return Number.isFinite(n) && n > 0 ? n : null;
+  };
+  // Regel-index → project + uren + bedrag; een regel telt zodra er een project
+  // op staat (zelfde afspraak als het goedkeur-scherm).
+  const delen: { projectId: string; hours: number | null; amount: number | null }[] = [];
+  for (const [key, value] of formData.entries()) {
+    const m = key.match(/^split_(\d+)_projectId$/);
+    if (!m) continue;
+    const projectId = String(value).trim();
+    if (projectId.length !== 36) continue;
+    delen.push({
+      projectId,
+      hours: num(formData.get(`split_${m[1]}_hours`)),
+      amount: num(formData.get(`split_${m[1]}_amount`)),
+    });
+  }
+  if (delen.length === 0) {
+    revalidatePath(`/inkooporders/${id}`);
+    return;
+  }
+
+  const gekozenWorker = String(formData.get("workerId") ?? "").trim();
+
+  // Eén werf is geen verdeling: dan gewoon de bestaande één-project-koppeling,
+  // zodat de inkooporder zichtbaar aan die werf hangt.
+  if (delen.length === 1) {
+    if (kind === "labor") {
+      await koppelAlsUren(id, {
+        projectId: delen[0].projectId,
+        workerId: gekozenWorker.length === 36 ? gekozenWorker : null,
+        hours: delen[0].hours ?? 0,
+        alreadyLogged: false,
+      });
+    } else {
+      await db
+        .delete(timeEntries)
+        .where(and(eq(timeEntries.purchaseOrderId, id), isNull(timeEntries.selfLoggedAt)));
+      await db.delete(projectCosts).where(eq(projectCosts.purchaseOrderId, id));
+      await db
+        .update(purchaseOrders)
+        .set({ projectId: delen[0].projectId, countAsLabor: false, updatedAt: new Date() })
+        .where(eq(purchaseOrders.id, id));
+    }
+    revalidatePath(`/inkooporders/${id}`);
+    revalidatePath("/inkooporders");
+    revalidatePath(`/projects/${delen[0].projectId}`);
+    redirect(`/inkooporders/${id}`);
+  }
+
+  // Arbeidskost is altijd ex. btw; zonder uitgelezen btw is 21% de aanname.
+  const { amount, vatAssumed } = poExVatAssumingSpanishVat(po);
+  const allWorkers =
+    kind === "labor"
+      ? await db.query.workers.findMany({
+          columns: { id: true, name: true, hourlyCostEur: true, defaultPaymentMethod: true },
+        })
+      : [];
+  const worker =
+    kind === "labor"
+      ? ((gekozenWorker.length === 36 ? allWorkers.find((w) => w.id === gekozenWorker) : undefined) ??
+        matchWorkerByName(po.supplier, allWorkers))
+      : null;
+
+  // Ontbrekende bedragen aanvullen en het geheel binnen de factuur ex btw
+  // houden — zie lib/verdeel-bedragen.ts voor de regel en de tests.
+  const verdelingen = verdeelBedragen(
+    delen,
+    amount,
+    worker?.hourlyCostEur != null ? Number(worker.hourlyCostEur) : null,
+  );
+
+  // Eerder door een koppeling of verdeling gemaakte regels vervangen
+  // (idempotent); portaal-uren houden alleen hun factuur-koppeling niet.
+  await db
+    .update(timeEntries)
+    .set({ purchaseOrderId: null, updatedAt: new Date() })
+    .where(and(eq(timeEntries.purchaseOrderId, id), isNotNull(timeEntries.selfLoggedAt)));
+  await db.delete(timeEntries).where(eq(timeEntries.purchaseOrderId, id));
+  await db.delete(projectCosts).where(eq(projectCosts.purchaseOrderId, id));
+
+  for (const deel of verdelingen) {
+    if (kind === "labor") {
+      const uren = deel.hours && deel.hours > 0 ? deel.hours : 1;
+      await db.insert(timeEntries).values({
+        projectId: deel.projectId,
+        workerId: worker?.id ?? null,
+        workerName: worker?.name ?? po.supplier,
+        date: po.orderDate ?? new Date().toISOString().slice(0, 10),
+        hours: String(uren),
+        // Zes decimalen: de geboekte kost moet exact het deelbedrag zijn (zie
+        // dezelfde regel in lib/purchase-invoice-intake.ts).
+        hourlyCostEur: (deel.amount / uren).toFixed(6),
+        paymentMethod: worker?.defaultPaymentMethod ?? "invoice",
+        purchaseOrderId: id,
+        note:
+          `Uren via inkoopfactuur${po.reference ? ` ${po.reference}` : ""} — verdeeld over werven` +
+          (vatAssumed ? " — ex. btw afgeleid van het totaal (21% aangenomen; controleer de factuur)" : ""),
+      });
+    } else {
+      await db.insert(projectCosts).values({
+        projectId: deel.projectId,
+        date: po.orderDate ?? new Date().toISOString().slice(0, 10),
+        category: "material",
+        description: `Inkoopfactuur ${po.reference ?? po.supplier} — verdeeld over werven`,
+        supplier: po.supplier,
+        purchaseOrderId: id,
+        amountEur: deel.amount.toFixed(2),
+      });
+    }
+  }
+
+  await db
+    .update(purchaseOrders)
+    .set({ projectId: null, countAsLabor: kind === "labor", updatedAt: new Date() })
+    .where(eq(purchaseOrders.id, id));
+
+  revalidatePath(`/inkooporders/${id}`);
+  revalidatePath("/inkooporders");
+  for (const deel of verdelingen) revalidatePath(`/projects/${deel.projectId}`);
+  redirect(`/inkooporders/${id}`);
 }
 
 export async function setPurchaseOrderStatus(id: string, status: (typeof PO_STATUSES)[number]) {

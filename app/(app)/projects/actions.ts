@@ -421,6 +421,21 @@ export async function linkPurchaseOrderToProject(projectId: string, formData: Fo
   await requireUser();
   const poId = String(formData.get("purchaseOrderId") ?? "").trim();
   if (poId.length !== 36) return;
+  // Een inkooporder die al over werven verdeeld is (uren-/kostenregels met deze
+  // order als bron) mag niet óók nog aan één project hangen — dan telt het
+  // bedrag dubbel. De keuzelijst filtert ze er al uit; dit vangt de rest.
+  const [verdeeld] = await db
+    .select({
+      n: sql<number>`(select count(*) from ${timeEntries} where ${timeEntries.purchaseOrderId} = ${poId})::int
+        + (select count(*) from ${projectCosts} where ${projectCosts.purchaseOrderId} = ${poId})::int`,
+    })
+    .from(purchaseOrders)
+    .where(eq(purchaseOrders.id, poId));
+  if ((verdeeld?.n ?? 0) > 0) {
+    console.warn(`[projecten] inkooporder ${poId} is al over werven verdeeld — niet nogmaals gekoppeld`);
+    revalidatePath(`/projects/${projectId}`);
+    return;
+  }
   await db.update(purchaseOrders).set({ projectId, updatedAt: new Date() }).where(eq(purchaseOrders.id, poId));
   revalidatePath(`/projects/${projectId}`);
   revalidatePath(`/inkooporders/${poId}`);

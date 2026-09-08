@@ -46,6 +46,7 @@ import {
   regeneratePurchaseOrderPdfs,
   setPurchaseOrderProject,
   setPurchaseOrderStatus,
+  verdeelPurchaseOrder,
 } from "../actions";
 
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }) {
@@ -62,8 +63,17 @@ const fmtDate = (d: string | Date | null) =>
     ? new Date(d).toLocaleDateString("nl-NL", { day: "numeric", month: "long", year: "numeric" })
     : "—";
 
-export default async function PurchaseOrderPage({ params }: { params: Promise<{ id: string }> }) {
+export default async function PurchaseOrderPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ id: string }>;
+  searchParams: Promise<{ verdeel?: string }>;
+}) {
   const { id } = await params;
+  // ?verdeel=1: een bestaande verdeling aanpassen — dan het formulier tonen
+  // (voorgevuld) in plaats van de kaart "Verdeeld over projecten".
+  const verdeelBewerken = (await searchParams).verdeel === "1";
   const po = await db.query.purchaseOrders.findFirst({ where: eq(purchaseOrders.id, id) });
   if (!po) notFound();
 
@@ -316,7 +326,7 @@ export default async function PurchaseOrderPage({ params }: { params: Promise<{ 
         </Card>
         )}
 
-        {po.projectId == null && verdeling.length > 0 ? (
+        {po.projectId == null && verdeling.length > 0 && !verdeelBewerken ? (
           <Card>
             <CardHeader>
               <CardTitle>Verdeeld over projecten</CardTitle>
@@ -346,10 +356,15 @@ export default async function PurchaseOrderPage({ params }: { params: Promise<{ 
                 <span>Samen</span>
                 <span className="tabular-nums">{formatMoney(verdeling.reduce((s, r) => s + (r.bedrag ?? 0), 0), "EUR")}</span>
               </div>
-              <p className="pt-1 text-xs text-muted">
-                Klopt een bedrag of datum niet? Pas de regel aan op het project zelf (kaart Uren / arbeid of Kosten) —
-                daar staan ze als losse regels met deze inkooporder als bron.
-              </p>
+              <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
+                <p className="text-xs text-muted">
+                  Klopt een bedrag of datum niet? Pas de regel aan op het project zelf (kaart Uren / arbeid of Kosten) —
+                  daar staan ze als losse regels met deze inkooporder als bron.
+                </p>
+                <LinkButton href={`/inkooporders/${id}?verdeel=1`} size="sm" variant="secondary">
+                  Verdeling aanpassen
+                </LinkButton>
+              </div>
             </CardContent>
           </Card>
         ) : (
@@ -384,6 +399,16 @@ export default async function PurchaseOrderPage({ params }: { params: Promise<{ 
               }
               linkAsMaterial={setPurchaseOrderProject.bind(null, id)}
               linkAsHours={linkPurchaseOrderAsHours.bind(null, id)}
+              verdeel={verdeelPurchaseOrder.bind(null, id)}
+              initialSplit={
+                verdeelBewerken
+                  ? verdeling.map((r) => ({
+                      projectId: r.projectId,
+                      hours: r.uren,
+                      amount: Math.round(r.bedrag * 100) / 100,
+                    }))
+                  : undefined
+              }
             />
           </CardContent>
         </Card>

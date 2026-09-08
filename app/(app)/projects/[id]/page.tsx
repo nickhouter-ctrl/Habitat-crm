@@ -429,7 +429,17 @@ export default async function ProjectDetailPage({
           status: purchaseOrders.status,
         })
         .from(purchaseOrders)
-        .where(and(isNull(purchaseOrders.projectId), eq(purchaseOrders.currency, "EUR")))
+        .where(
+          and(
+            isNull(purchaseOrders.projectId),
+            eq(purchaseOrders.currency, "EUR"),
+            // Al over werven verdeeld (uren-/kostenregels met deze order als
+            // bron)? Dan hoort hij hier niet meer tussen — nogmaals koppelen
+            // zou het bedrag dubbel tellen.
+            sql`not exists (select 1 from ${timeEntries} te where te.purchase_order_id = ${purchaseOrders.id})`,
+            sql`not exists (select 1 from ${projectCosts} pc where pc.purchase_order_id = ${purchaseOrders.id})`,
+          ),
+        )
         .orderBy(desc(purchaseOrders.orderDate))
         .limit(200),
       db

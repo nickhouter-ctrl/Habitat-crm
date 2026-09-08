@@ -9,6 +9,10 @@
  * voorrang streden en een uitleg van vier regels eronder. Je moest de tekst
  * lezen om te weten welke knop je nodig had. Nu kies je eerst het project, dan
  * één van twee kaarten, en pas dán zie je de velden die daarbij horen.
+ *
+ * Loopt de factuur over meerdere werven (vinkje bij stap 1), dan vul je per
+ * werf een regel in — project, uren en/of bedrag — en gaat het formulier naar
+ * de verdeel-actie: regels per project, de order zelf blijft ongekoppeld.
  */
 import { useState } from "react";
 import { Clock, Package } from "lucide-react";
@@ -21,6 +25,8 @@ import { cn } from "@/lib/utils";
 
 export type ProjectOption = { id: string; name: string };
 export type WorkerOption = { id: string; name: string; hourlyCostEur: number | null };
+/** Voorinvulling van de verdeel-regels, bv. uit een bestaande verdeling. */
+export type SplitRow = { projectId: string | null; hours: number | null; amount: number | null };
 
 export function PurchaseProjectLink({
   projects,
@@ -31,6 +37,8 @@ export function PurchaseProjectLink({
   suggestion,
   linkAsMaterial,
   linkAsHours,
+  verdeel,
+  initialSplit,
 }: {
   projects: ProjectOption[];
   /** De eigen ploeg — om de uren onder de juiste naam te boeken. */
@@ -44,6 +52,10 @@ export function PurchaseProjectLink({
   suggestion: { projectId: string | null; projectName: string | null; kind: "labor" | "material" | null; hours: number | null } | null;
   linkAsMaterial: (formData: FormData) => void | Promise<void>;
   linkAsHours: (formData: FormData) => void | Promise<void>;
+  /** Verdeling over meerdere werven — regels split_N_projectId/hours/amount. */
+  verdeel: (formData: FormData) => void | Promise<void>;
+  /** Bestaande verdeling om aan te passen; zet het formulier meteen in verdeel-stand. */
+  initialSplit?: SplitRow[];
 }) {
   const [kind, setKind] = useState<"material" | "labor">(current.countAsLabor ? "labor" : "material");
   const [wijzigen, setWijzigen] = useState(!current.projectId);
@@ -57,6 +69,13 @@ export function PurchaseProjectLink({
 
   /** Uren die volgen uit bedrag ÷ uurtarief van de ploegkaart. */
   const urenBij = (id: string) => urenUitTarief(amountExVat, tariefVan(id));
+
+  // Verdeling over meerdere werven: eigen regels i.p.v. één projectkeuze.
+  const leegRij = (): SplitRow => ({ projectId: null, hours: null, amount: null });
+  const [meerdereWerven, setMeerdereWerven] = useState((initialSplit?.length ?? 0) > 0);
+  const [rijen, setRijen] = useState<SplitRow[]>(() =>
+    initialSplit?.length ? initialSplit : [leegRij(), leegRij()],
+  );
 
   const [workerId, setWorkerId] = useState(defaultWorkerId ?? "");
   // Uren die al vaststaan winnen altijd: wat er geboekt is, of wat de AI van de
@@ -137,17 +156,72 @@ export function PurchaseProjectLink({
         </form>
       )}
 
-      <form action={kind === "labor" ? linkAsHours : linkAsMaterial} className="space-y-4">
+      <form action={meerdereWerven ? verdeel : kind === "labor" ? linkAsHours : linkAsMaterial} className="space-y-4">
         <div>
           <label className="mb-1.5 block text-sm font-medium">1 · Welk project?</label>
-          <Combobox
-            name="projectId"
-            defaultValue={current.projectId ?? suggestion?.projectId ?? ""}
-            clearable
-            placeholder="Zoek een werf…"
-            options={opties}
-            menuClassName="w-full"
-          />
+          {!meerdereWerven && (
+            <Combobox
+              name="projectId"
+              defaultValue={current.projectId ?? suggestion?.projectId ?? ""}
+              clearable
+              placeholder="Zoek een werf…"
+              options={opties}
+              menuClassName="w-full"
+            />
+          )}
+          <label className="mt-2 flex items-center gap-2 text-sm">
+            <input
+              type="checkbox"
+              className="size-4"
+              checked={meerdereWerven}
+              onChange={(e) => setMeerdereWerven(e.target.checked)}
+            />
+            <span>
+              Deze factuur loopt over <strong>meerdere werven</strong>
+            </span>
+          </label>
+          {meerdereWerven && (
+            <div className="mt-2 space-y-2">
+              {rijen.map((r, i) => (
+                <div key={i} className="grid gap-2 sm:grid-cols-[1fr_6rem_8rem]">
+                  <Combobox
+                    name={`split_${i}_projectId`}
+                    defaultValue={r.projectId ?? ""}
+                    clearable
+                    placeholder="Zoek een werf…"
+                    options={opties}
+                    menuClassName="w-full"
+                  />
+                  <Input
+                    name={`split_${i}_hours`}
+                    inputMode="decimal"
+                    placeholder="uren"
+                    className="text-right"
+                    defaultValue={r.hours != null ? String(r.hours) : ""}
+                  />
+                  <Input
+                    name={`split_${i}_amount`}
+                    inputMode="decimal"
+                    placeholder="bedrag ex. btw"
+                    className="text-right"
+                    defaultValue={r.amount != null ? String(r.amount).replace(".", ",") : ""}
+                  />
+                </div>
+              ))}
+              <button
+                type="button"
+                onClick={() => setRijen((rs) => [...rs, leegRij()])}
+                className="text-xs text-accent hover:underline"
+              >
+                + werf toevoegen
+              </button>
+              <p className="text-xs text-muted">
+                Bedrag leeg laten mag: dan wordt € {amountExVat.toFixed(2).replace(".", ",")} ex btw over de werven
+                verdeeld naar rato van de uren. De inkooporder zelf blijft bij een verdeling ongekoppeld — anders telt
+                het bedrag dubbel.
+              </p>
+            </div>
+          )}
         </div>
 
         <div>
@@ -189,6 +263,13 @@ export function PurchaseProjectLink({
                   : "Zonder naam blijft de urenregel losse tekst en telt hij niet mee in zijn urenoverzicht."}
               </p>
             </div>
+            {meerdereWerven && (
+              <p className="text-xs text-muted">
+                De uren vul je hierboven per werf in; het uurtarief volgt uit bedrag ÷ uren
+                {tarief > 0 ? ` (of uit zijn ploegkaart: € ${tarief}/u)` : ""}.
+              </p>
+            )}
+            {!meerdereWerven && (
             <div className="flex flex-wrap items-end gap-3">
               <div className="w-32">
                 <label className="mb-1.5 block text-sm font-medium" htmlFor="po-hours">
@@ -217,6 +298,8 @@ export function PurchaseProjectLink({
                     : "Het uurtarief volgt uit bedrag ÷ uren."}
               </p>
             </div>
+            )}
+            {!meerdereWerven && (
             <label className="flex items-start gap-2 text-sm">
               <input type="checkbox" name="alreadyLogged" className="mt-0.5 size-4" />
               <span>
@@ -226,12 +309,19 @@ export function PurchaseProjectLink({
                 </span>
               </span>
             </label>
+            )}
           </div>
         )}
 
         <div className="flex flex-wrap items-center gap-3">
-          <SubmitButton variant="primary" pendingLabel="Koppelen…">
-            {kind === "labor" ? "Koppelen als uren" : "Koppelen als materiaal"}
+          <SubmitButton variant="primary" pendingLabel={meerdereWerven ? "Verdelen…" : "Koppelen…"}>
+            {meerdereWerven
+              ? kind === "labor"
+                ? "Verdelen als uren"
+                : "Verdelen als materiaal"
+              : kind === "labor"
+                ? "Koppelen als uren"
+                : "Koppelen als materiaal"}
           </SubmitButton>
           {current.projectId && (
             <button
