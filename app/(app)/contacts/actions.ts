@@ -268,3 +268,11 @@ export async function deleteContact(id: string) {
   revalidatePath("/");
   redirect("/contacts");
 }
+
+/** Ververs het AI-dossier op de contactkaart (knop "Ververs"). */
+export async function verversContactDossier(contactId: string) {
+  await requireWriteUser();
+  const { genereerContactDossier } = await import("@/lib/contact-dossier");
+  await genereerContactDossier(contactId);
+  revalidatePath(`/contacts/${contactId}`);
+}

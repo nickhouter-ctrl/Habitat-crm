@@ -325,6 +325,10 @@ export const contacts = pgTable(
     tags: text().array(),
     notes: text(),
     lastContactedAt: timestamp({ withTimezone: true }),
+    /** AI-dossier: automatisch bijgehouden feiten-samenvatting (alleen data
+     *  uit het CRM, niets aangenomen). Zie lib/contact-dossier.ts. */
+    aiDossier: text(),
+    aiDossierAt: timestamp({ withTimezone: true }),
     ...timestamps,
   },
   (t) => [

@@ -51,7 +51,8 @@ import { SubmitButton } from "@/components/submit-button";
 import { AccountReminderButton } from "@/components/account-reminder-button";
 import { ReminderButton } from "@/components/reminder-button";
 import { ReviewRequestButton } from "@/components/review-request-button";
-import { addContactNote, deleteContact } from "../actions";
+import { dossierConfigured } from "@/lib/contact-dossier";
+import { addContactNote, deleteContact, verversContactDossier } from "../actions";
 import {
   contactTypeMeta,
   documentKindMeta,
@@ -869,6 +870,39 @@ export default async function ContactDetailPage({
 
         {/* Right: timeline */}
         <div className="space-y-4 lg:col-span-2">
+          {(contact.aiDossier || dossierConfigured()) && (
+            <Card>
+              <CardHeader>
+                <CardTitle>🤖 Dossier</CardTitle>
+                <div className="flex items-center gap-2">
+                  {contact.aiDossierAt && (
+                    <span className="text-xs text-muted">
+                      bijgewerkt {formatDate(contact.aiDossierAt)}
+                    </span>
+                  )}
+                  {dossierConfigured() && (
+                    <form action={verversContactDossier.bind(null, contact.id)}>
+                      <SubmitButton size="sm" variant="secondary" pendingLabel="AI leest alles…">
+                        Ververs
+                      </SubmitButton>
+                    </form>
+                  )}
+                </div>
+              </CardHeader>
+              <CardContent>
+                {contact.aiDossier ? (
+                  <DossierTekst tekst={contact.aiDossier} />
+                ) : (
+                  <p className="text-sm text-muted">
+                    Nog geen dossier — klik op Ververs en de AI vat alle feiten over deze klant
+                    samen (projecten, offertes, mails, betalingen). Alleen feiten uit het CRM,
+                    niets verzonnen.
+                  </p>
+                )}
+              </CardContent>
+            </Card>
+          )}
+
           <Card>
             <CardHeader>
               <CardTitle>Tijdlijn</CardTitle>
@@ -952,5 +986,22 @@ export default async function ContactDetailPage({
       </div>
       )}
     </>
+  );
+}
+
+/** Dossier-tekst: regels renderen, **kopjes** vet (simpele markdown-bold). */
+function DossierTekst({ tekst }: { tekst: string }) {
+  return (
+    <div className="space-y-1 text-sm leading-relaxed">
+      {tekst.split("\n").map((regel, i) => {
+        if (!regel.trim()) return <div key={i} className="h-1.5" />;
+        const delen = regel.split(/\*\*(.+?)\*\*/g);
+        return (
+          <p key={i} className="whitespace-pre-wrap">
+            {delen.map((deel, j) => (j % 2 === 1 ? <strong key={j}>{deel}</strong> : deel))}
+          </p>
+        );
+      })}
+    </div>
   );
 }

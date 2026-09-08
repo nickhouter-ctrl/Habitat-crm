@@ -29,6 +29,10 @@
       "schedule": "0 6 * * *"
     },
     {
+      "path": "/api/cron/contact-dossiers",
+      "schedule": "15 5 * * *"
+    },
+    {
       "path": "/api/cron/delivery-reminders",
       "schedule": "0 7 * * *"
     },
