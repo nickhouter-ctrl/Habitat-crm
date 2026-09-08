@@ -10,6 +10,7 @@ import "server-only";
 import { and, count, eq, inArray, isNotNull, isNull, sql } from "drizzle-orm";
 
 import { db } from "@/lib/db";
+import { aanvragenTeOpvolgen, offertesTeOpvolgen } from "@/lib/opvolging";
 import { OFFERTE_TE_FACTUREREN } from "@/lib/quote-status";
 import { documents, purchaseInvoiceReviews, purchaseOrders, quoteRequests, timeEntries } from "@/lib/db/schema";
 import { normalizeDocItems } from "@/lib/documents";
@@ -39,10 +40,12 @@ const RANG: Record<string, number> = {
   "inkoopfacturen-keuren": 1,
   "portaal-uren": 2,
   "open-aanvragen": 3,
-  "offertes-factureren": 4,
-  "voorraad-afboeken": 5,
-  "proformas": 6,
-  "po-deze-week": 7,
+  "offertes-opvolgen": 4,
+  "aanvragen-opvolgen": 5,
+  "offertes-factureren": 6,
+  "voorraad-afboeken": 7,
+  "proformas": 8,
+  "po-deze-week": 9,
 };
 
 export async function verzamelDagtaken(): Promise<Dagtaak[]> {
@@ -50,8 +53,18 @@ export async function verzamelDagtaken(): Promise<Dagtaak[]> {
   const today = now.toISOString().slice(0, 10);
   const openExpr = sql`${documents.status} not in ('paid', 'void', 'draft')`;
 
-  const [[uren], [accepted], [aanvragen], [vervallen], voorraadRows, [proformaAgg], [reviews], openPos] =
-    await Promise.all([
+  const [
+    [uren],
+    [accepted],
+    [aanvragen],
+    [vervallen],
+    voorraadRows,
+    [proformaAgg],
+    [reviews],
+    openPos,
+    opvolgOffertes,
+    opvolgAanvragen,
+  ] = await Promise.all([
       // Portaal-uren die op controle wachten.
       db
         .select({
@@ -109,6 +122,9 @@ export async function verzamelDagtaken(): Promise<Dagtaak[]> {
         .select({ expectedDate: purchaseOrders.expectedDate })
         .from(purchaseOrders)
         .where(inArray(purchaseOrders.status, PO_OPEN_STATUSES)),
+      // Klanten die stil zijn na een offerte / na ons laatste antwoord.
+      offertesTeOpvolgen(),
+      aanvragenTeOpvolgen(),
     ]);
 
   const voorraadN = voorraadRows.filter((d) =>
@@ -160,6 +176,29 @@ export async function verzamelDagtaken(): Promise<Dagtaak[]> {
       tone: "warning",
       prioriteit: "middel",
       aantal: uren.n,
+    });
+  }
+  if (opvolgOffertes.length > 0) {
+    const oudste = Math.max(...opvolgOffertes.map((o) => o.dagenStil));
+    taken.push({
+      key: "offertes-opvolgen",
+      emoji: "📬",
+      tekst: `offerte${ev(opvolgOffertes.length, "", "s")} zonder reactie van de klant (langste ${oudste} dagen stil) — opvolgen?`,
+      href: "/quotes",
+      tone: "warning",
+      prioriteit: "middel",
+      aantal: opvolgOffertes.length,
+    });
+  }
+  if (opvolgAanvragen.length > 0) {
+    taken.push({
+      key: "aanvragen-opvolgen",
+      emoji: "⏳",
+      tekst: `aanvra${ev(opvolgAanvragen.length, "ag", "gen")} waar de klant stil is na ons antwoord — herinnering sturen?`,
+      href: "/aanvragen",
+      tone: "warning",
+      prioriteit: "middel",
+      aantal: opvolgAanvragen.length,
     });
   }
   if ((accepted?.n ?? 0) > 0) {

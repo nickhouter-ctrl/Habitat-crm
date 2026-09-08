@@ -33,6 +33,7 @@ export function AiMailForm({
   placeholder,
   aiBeschikbaar,
   bijlagen = [],
+  suggestie,
 }: {
   /** Server action die de mail verstuurt (leest `subject`, `message` en `bijlage[]`). */
   verstuur: (formData: FormData) => Promise<void>;
@@ -46,6 +47,9 @@ export function AiMailForm({
   aiBeschikbaar: boolean;
   /** Beschikbare brochures/catalogi die als bijlage mee kunnen. */
   bijlagen?: MailBijlageOptie[];
+  /** Extra AI-knop met een vaste aanwijzing (bv. een opvolg-herinnering):
+   *  { label: "✨ Schrijf herinnering", instructie: "..." }. */
+  suggestie?: { label: string; instructie: string };
 }) {
   const [subject, setSubject] = useState(defaultSubject);
   const [message, setMessage] = useState("");
@@ -67,10 +71,10 @@ export function AiMailForm({
     });
   }
 
-  function schrijfMetAi() {
+  function schrijfMetAi(instructie?: string) {
     setFout(false);
     startTransition(async () => {
-      const concept = await genereer(message.trim());
+      const concept = await genereer(instructie ?? message.trim());
       if (!concept) {
         setFout(true);
         return;
@@ -94,14 +98,26 @@ export function AiMailForm({
       />
       {aiBeschikbaar && (
         <>
-          <button
-            type="button"
-            onClick={schrijfMetAi}
-            disabled={bezig}
-            className="w-full rounded-md border border-accent/40 bg-accent/10 px-3 py-2 text-sm font-medium text-accent transition-colors hover:bg-accent/20 disabled:opacity-60"
-          >
-            {bezig ? "AI schrijft…" : "✨ Schrijf met AI"}
-          </button>
+          <div className={suggestie ? "grid grid-cols-2 gap-2" : ""}>
+            <button
+              type="button"
+              onClick={() => schrijfMetAi()}
+              disabled={bezig}
+              className="w-full rounded-md border border-accent/40 bg-accent/10 px-3 py-2 text-sm font-medium text-accent transition-colors hover:bg-accent/20 disabled:opacity-60"
+            >
+              {bezig ? "AI schrijft…" : "✨ Schrijf met AI"}
+            </button>
+            {suggestie && (
+              <button
+                type="button"
+                onClick={() => schrijfMetAi(suggestie.instructie)}
+                disabled={bezig}
+                className="w-full rounded-md border border-warning/40 bg-warning/10 px-3 py-2 text-sm font-medium text-warning transition-colors hover:bg-warning/20 disabled:opacity-60"
+              >
+                {bezig ? "AI schrijft…" : suggestie.label}
+              </button>
+            )}
+          </div>
           {fout && (
             <p className="rounded-md bg-warning/10 px-3 py-2 text-xs text-warning">
               AI-concept lukte even niet — probeer opnieuw of schrijf zelf.

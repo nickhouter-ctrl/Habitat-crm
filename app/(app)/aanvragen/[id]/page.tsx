@@ -7,6 +7,7 @@ import { ConfirmSubmit } from "@/components/confirm-submit";
 import { SubmitButton } from "@/components/submit-button";
 import { aiReplyConfigured } from "@/lib/ai-reply";
 import { asStringArray } from "@/lib/documents";
+import { aanvraagStilSinds } from "@/lib/opvolging";
 import { listCatalogFiles } from "@/lib/storage";
 
 import {
@@ -61,6 +62,11 @@ export default async function QuoteRequestDetailPage({
   if (!req) notFound();
 
   const catalogi = await listCatalogFiles();
+  // Opvolg-banner: klant stil sinds onze laatste mail (alleen bij open/geaccepteerd).
+  const stilDagen =
+    req.status === "pending" || req.status === "accepted"
+      ? await aanvraagStilSinds(req.email)
+      : null;
 
   // Conversatie: alles wat wij naar dit adres stuurden (mailarchief) + alles
   // wat er per mail van dit adres binnenkwam (inbox), op datum. Zo blijft de
@@ -373,6 +379,12 @@ export default async function QuoteRequestDetailPage({
                   Mail kon niet verstuurd worden.
                 </p>
               )}
+              {stilDagen != null && (
+                <p className="mb-2 rounded-md bg-warning/10 px-3 py-2 text-xs text-warning">
+                  ⏳ De klant heeft al <strong>{stilDagen} dagen</strong> niet gereageerd op je
+                  laatste mail — stuur eventueel een vriendelijke herinnering.
+                </p>
+              )}
               <AiMailForm
                 verstuur={mailCustomer}
                 genereer={aiConcept}
@@ -380,6 +392,14 @@ export default async function QuoteRequestDetailPage({
                 toEmail={req.email}
                 aiBeschikbaar={aiReplyConfigured()}
                 bijlagen={catalogi.map((f) => ({ path: f.path, name: f.name, size: f.size }))}
+                suggestie={
+                  stilDagen != null
+                    ? {
+                        label: "✨ Schrijf herinnering",
+                        instructie: `De klant heeft ${stilDagen} dagen niet gereageerd op ons vorige bericht. Schrijf een korte, vriendelijke opvolging: verwijs naar ons eerdere bericht, vraag of het nog speelt en of we ergens mee kunnen helpen — niet pusherig.`,
+                      }
+                    : undefined
+                }
               />
             </CardContent>
           </Card>

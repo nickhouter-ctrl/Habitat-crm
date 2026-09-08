@@ -20,6 +20,7 @@ import { SubmitButton } from "@/components/submit-button";
 import { SyncHoldedButton } from "@/components/sync-holded-button";
 import { db } from "@/lib/db";
 import { documents } from "@/lib/db/schema";
+import { offertesTeOpvolgen } from "@/lib/opvolging";
 import { cn, formatDate, formatEUR } from "@/lib/utils";
 import { documentKindMeta, documentStatusMeta } from "./_meta";
 import { ConfirmSubmit } from "@/components/confirm-submit";
@@ -228,6 +229,12 @@ export async function DocumentsList({
       )
     : new Set<string>();
 
+  // Offertes waar de klant stil is (opvolg-signaal van de startpagina) →
+  // "N dgn stil"-badge in de lijst zodat je ziet wélke het zijn.
+  const opvolgDagen = kinds.includes("estimate")
+    ? new Map((await offertesTeOpvolgen()).map((o) => [o.id, o.dagenStil]))
+    : new Map<string, number>();
+
   const sign = (k: Kind) => (k === "creditnote" ? -1 : 1);
   const totalEx = rows.reduce((s, d) => s + sign(d.kind) * Number(d.subtotalEur ?? 0), 0);
   const totalIncl = rows.reduce((s, d) => s + sign(d.kind) * Number(d.totalEur ?? 0), 0);
@@ -330,6 +337,9 @@ export async function DocumentsList({
               )}
               {d.kind === "estimate" && invoicedEstimateIds.has(d.id) && (
                 <Badge tone="success">Gefactureerd</Badge>
+              )}
+              {d.kind === "estimate" && opvolgDagen.has(d.id) && (
+                <Badge tone="warning">⏳ {opvolgDagen.get(d.id)} dgn stil</Badge>
               )}
             </span>
           )}
