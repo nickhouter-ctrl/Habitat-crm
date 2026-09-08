@@ -602,8 +602,20 @@ export default async function ProductsPage({
                       {hasGrid && (
                         <Tr>
                           <Td colSpan={13} className="p-0">
-                            <div className="mx-3 mb-2 overflow-hidden rounded-md border border-border/60 bg-muted/15 text-[11px]">
-                              <div className="grid grid-cols-[1.2fr_1.4fr_0.7fr_1fr_1fr_1fr_1.1fr] gap-x-2 border-b border-border bg-background/60 px-3 py-1 font-medium text-muted">
+                            {/* Standaard ingeklapt — met tientallen uitvoeringen per product
+                                werd de lijst anders eindeloos scrollen. */}
+                            <details className="group mx-3 mb-2 overflow-hidden rounded-md border border-border/60 bg-muted/15 text-[11px]">
+                              <summary className="flex cursor-pointer select-none items-center gap-1.5 px-3 py-1.5 font-medium text-muted transition-colors hover:bg-background/60 hover:text-foreground">
+                                <span className="inline-block transition-transform group-open:rotate-90">▸</span>
+                                {sizeRowsDisp.length} uitvoeringen
+                                {(() => {
+                                  const totaal = sizeRowsDisp.reduce((sum, s) => sum + (s.stockQty ?? 0), 0);
+                                  return totaal > 0 ? (
+                                    <span className="font-normal text-success">· voorraad {totaal.toLocaleString("nl-NL")}</span>
+                                  ) : null;
+                                })()}
+                              </summary>
+                              <div className="grid grid-cols-[1.2fr_1.4fr_0.7fr_1fr_1fr_1fr_1.1fr] gap-x-2 border-y border-border bg-background/60 px-3 py-1 font-medium text-muted">
                                 <span>Afmeting</span>
                                 <span>SKU</span>
                                 <span className="text-right">Voorraad</span>
@@ -644,7 +656,7 @@ export default async function ProductsPage({
                                   </div>
                                 );
                               })}
-                            </div>
+                            </details>
                           </Td>
                         </Tr>
                       )}
