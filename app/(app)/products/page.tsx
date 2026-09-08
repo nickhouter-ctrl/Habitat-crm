@@ -42,6 +42,7 @@ export default async function ProductsPage({
   const q = typeof params.q === "string" ? params.q.trim() : "";
   const collectionParam =
     typeof params.collection === "string" ? params.collection.trim() : "";
+  const merkParam = typeof params.merk === "string" ? params.merk.trim() : "";
   const noBarcode = params.nobarcode === "1";
   const lowStock = params.lowstock === "1";
   const noPhoto = params.nofoto === "1";
@@ -55,8 +56,11 @@ export default async function ProductsPage({
   // Sets/kits hebben geen eigen voorraad (die volgt uit de componenten), dus
   // tellen we ze bij 'op voorraad' altijd mee en sluiten we ze uit van 'te
   // bestellen' — anders zouden de deur-sets nergens zichtbaar zijn.
+  // Bij een merkfilter geen voorraadfilter: een merkassortiment bestaat uit
+  // bestelartikelen zonder voorraad, dus de standaardweergave zou een lege
+  // lijst tonen terwijl er honderden producten staan.
   const stockFilter =
-    q || view === "alle"
+    q || view === "alle" || merkParam
       ? undefined
       : view === "te-bestellen"
         ? sql`(coalesce(${products.stockQty}, 0) <= 0 and ${products.components} is null)`
@@ -68,7 +72,6 @@ export default async function ProductsPage({
   // Merken: filter én logo in de lijst. Met een merkassortiment erbij groeit de
   // catalogus flink, dus hierop kunnen filteren is geen luxe.
   const alleMerken = await listBrands();
-  const merkParam = typeof params.merk === "string" ? params.merk.trim() : "";
   const merk = alleMerken.some((m) => m.id === merkParam) ? merkParam : "";
   const merkById = new Map(alleMerken.map((m) => [m.id, m]));
 
