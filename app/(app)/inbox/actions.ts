@@ -11,7 +11,7 @@ import { genereerMailAntwoord } from "@/lib/ai-reply";
 import { extractAttachmentAmount } from "@/lib/amount-extract";
 import { db } from "@/lib/db";
 import { activities, emailInbox, mailAttachments, purchaseOrders, quoteRequests, users } from "@/lib/db/schema";
-import { escapeHtml, sendEmail } from "@/lib/email";
+import { escapeHtml, persoonlijkeMail, sendEmail } from "@/lib/email";
 import { recordSentEmail } from "@/lib/sent-email";
 import { runImapPoll, type ImapPollResult } from "@/lib/imap-poll";
 import { catalogusMailBijlagen, copyMailAttachmentToPoBucket, listCatalogFiles } from "@/lib/storage";
@@ -229,11 +229,12 @@ export async function replyToMail(emailId: string, formData: FormData) {
   let sent = false;
   try {
     const attachments = await catalogusMailBijlagen(bijlagePaden);
+    const opgemaakt = persoonlijkeMail(message);
     const res = await sendEmail({
       to: mail.fromEmail,
       subject,
-      html: `<div style="font-family:Arial,Helvetica,sans-serif;color:#2a2620;max-width:560px;white-space:pre-wrap">${escapeHtml(message)}</div>`,
-      text: message,
+      html: opgemaakt.html,
+      text: opgemaakt.text,
       attachments: attachments.length > 0 ? attachments : undefined,
       fromUser: { name: me?.name ?? user.name },
       inReplyTo: mail.messageId ?? undefined,

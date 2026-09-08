@@ -843,6 +843,44 @@ function pickLang(l?: string | null): Lang {
 }
 
 /** Gebrande e-mail-shell (cream achtergrond, wordmark-header). */
+/**
+ * Persoonlijke mail in huisstijl — voor antwoorden aan klanten (aanvragen,
+ * inbox). Zelfde look als de offertemail (terracotta balk, logo, nette footer
+ * met bedrijfsgegevens), maar zonder documentblok. Het bericht is platte tekst
+ * mét eigen aanhef en ondertekening (die schrijft de medewerker of de AI al),
+ * dus de template voegt zelf geen groet toe.
+ */
+export function persoonlijkeMail(message: string): { html: string; text: string } {
+  const paragraphs = message
+    .replace(/\r\n/g, "\n")
+    .trim()
+    .split(/\n{2,}/)
+    .map(
+      (p) =>
+        `<p style="margin:0 0 14px;font-size:15px;line-height:1.65;color:${COMPANY.charcoal}">${escapeHtml(p).replace(/\n/g, "<br/>")}</p>`,
+    )
+    .join("");
+  const html = `<div style="margin:0;padding:32px 12px;background:${COMPANY.cream};font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;color:${COMPANY.charcoal}">
+  <div style="max-width:600px;margin:0 auto;background:#ffffff;border-radius:14px;overflow:hidden;border:1px solid ${COMPANY.sand}">
+    <div style="height:4px;background:${COMPANY.terracotta}"></div>
+    <div style="padding:24px 28px 18px">
+      <img src="${COMPANY.logoUrl}" height="40" alt="${escapeHtml(COMPANY.name)}" style="display:block;height:40px;width:auto;border:0" />
+    </div>
+    <div style="height:1px;background:${COMPANY.sand};margin:0 28px"></div>
+    <div style="padding:24px 28px 20px">
+      ${paragraphs}
+    </div>
+    <div style="background:${COMPANY.cream};padding:18px 28px;border-top:1px solid ${COMPANY.sand};font-size:12px;line-height:1.7;color:${COMPANY.muted}">
+      <span style="display:block;font-weight:700;color:${COMPANY.brown}">${escapeHtml(COMPANY.legalName)}</span>
+      ${escapeHtml(COMPANY.addressStreet)}, ${escapeHtml(COMPANY.addressRegion)}<br/>
+      ${escapeHtml(COMPANY.phone)} · <a href="mailto:${COMPANY.email}" style="color:${COMPANY.muted};text-decoration:none">${escapeHtml(COMPANY.email)}</a> · ${escapeHtml(COMPANY.website)}${COMPANY.vatNumber ? ` · NIF ${escapeHtml(COMPANY.vatNumber)}` : ""}
+    </div>
+  </div>
+</div>`;
+  const text = `${message.trim()}\n\n—\n${COMPANY.legalName}\n${COMPANY.address}\n${[COMPANY.phone, COMPANY.email].filter(Boolean).join(" · ")}`;
+  return { html, text };
+}
+
 export function brandedEmail(inner: string): string {
   return `<div style="font-family:Helvetica,Arial,sans-serif;background:${COMPANY.cream};padding:24px 0">
   <div style="max-width:560px;margin:0 auto;background:#fff;border-radius:12px;overflow:hidden;color:#1c1c1a">

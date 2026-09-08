@@ -11,7 +11,7 @@ import { genereerMailAntwoord } from "@/lib/ai-reply";
 import { db } from "@/lib/db";
 import { activities, contacts, quoteRequests, users } from "@/lib/db/schema";
 import { asStringArray } from "@/lib/documents";
-import { appointmentProposalEmail, sendEmail } from "@/lib/email";
+import { appointmentProposalEmail, persoonlijkeMail, sendEmail } from "@/lib/email";
 import { recordSentEmail } from "@/lib/sent-email";
 import { catalogusMailBijlagen, listCatalogFiles } from "@/lib/storage";
 import { confirmAppointment } from "@/lib/appointments";
@@ -248,11 +248,12 @@ export async function mailQuoteRequestCustomer(quoteRequestId: string, formData:
   let sent = false;
   try {
     const attachments = await catalogusMailBijlagen(bijlagePaden);
+    const opgemaakt = persoonlijkeMail(message);
     const res = await sendEmail({
       to: req.email,
       subject,
-      html: `<div style="font-family:Arial,Helvetica,sans-serif;color:#2a2620;max-width:560px;white-space:pre-wrap">${escapeHtml(message)}</div>`,
-      text: message,
+      html: opgemaakt.html,
+      text: opgemaakt.text,
       attachments: attachments.length > 0 ? attachments : undefined,
     });
     sent = res.sent;
