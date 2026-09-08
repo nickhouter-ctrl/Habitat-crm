@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 import { Plus, Trash2, Wand2, X } from "lucide-react";
 
-type Waarde = { value: string; label: string };
+type Waarde = { value: string; label: string; imageUrl?: string | null };
 type As = { key: string; label: string; values: Waarde[] };
 
 type Rij = {
@@ -72,6 +72,16 @@ export function VariantMatrixEditor({
     if (!assen.some((a) => a.key === key)) setAssen((a) => [...a, { key, label: naam, values: [] }]);
     setNieuweAs("");
   };
+
+  /** Het kleine plaatje bij één keuzewaarde — de staal of het tekeningetje. */
+  const fotoZetten = (asKey: string, waarde: string, url: string) =>
+    setAssen((a) =>
+      a.map((x) =>
+        x.key === asKey
+          ? { ...x, values: x.values.map((v) => (v.value === waarde ? { ...v, imageUrl: url || null } : v)) }
+          : x,
+      ),
+    );
 
   const waardeToevoegen = (key: string) => {
     const tekst = (nieuweWaarde[key] ?? "").trim();
@@ -164,27 +174,43 @@ export function VariantMatrixEditor({
                 keuze weghalen
               </button>
             </div>
-            <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+            <div className="mt-1.5 flex flex-wrap items-start gap-2">
               {as.values.map((v) => (
                 <span
                   key={v.value}
-                  className="inline-flex items-center gap-1 rounded-full border border-border px-2 py-0.5 text-xs"
+                  className="inline-flex flex-col gap-1 rounded-md border border-border p-1.5 text-xs"
                 >
-                  {v.label}
-                  <button
-                    type="button"
-                    onClick={() =>
-                      setAssen((a) =>
-                        a.map((x) =>
-                          x.key === as.key ? { ...x, values: x.values.filter((y) => y.value !== v.value) } : x,
-                        ),
-                      )
-                    }
-                    className="text-muted hover:text-danger"
-                    title={`${v.label} weghalen`}
-                  >
-                    <X className="size-3" />
-                  </button>
+                  <span className="flex items-center gap-1">
+                    {v.imageUrl ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={v.imageUrl} alt="" className="size-6 rounded border object-cover" />
+                    ) : (
+                      <span className="flex size-6 items-center justify-center rounded border border-dashed text-[8px] text-muted">
+                        geen
+                      </span>
+                    )}
+                    {v.label}
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setAssen((a) =>
+                          a.map((x) =>
+                            x.key === as.key ? { ...x, values: x.values.filter((y) => y.value !== v.value) } : x,
+                          ),
+                        )
+                      }
+                      className="text-muted hover:text-danger"
+                      title={`${v.label} weghalen`}
+                    >
+                      <X className="size-3" />
+                    </button>
+                  </span>
+                  <input
+                    value={v.imageUrl ?? ""}
+                    onChange={(e) => fotoZetten(as.key, v.value, e.target.value)}
+                    placeholder="foto-URL"
+                    className="h-6 w-36 rounded border border-border bg-background px-1.5 text-[11px]"
+                  />
                 </span>
               ))}
               <input

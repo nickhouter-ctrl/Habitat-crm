@@ -36,7 +36,14 @@ const asSchema = z.object({
   key: z.string().trim().min(1).max(40),
   label: z.string().trim().min(1).max(60),
   values: z
-    .array(z.object({ value: z.string().trim().min(1).max(60), label: z.string().trim().min(1).max(120) }))
+    .array(
+      z.object({
+        value: z.string().trim().min(1).max(60),
+        label: z.string().trim().min(1).max(120),
+        // Het kleine plaatje bij de keuze (kleurstaal, tekeningetje wandarm).
+        imageUrl: z.string().trim().max(600).nullable().optional(),
+      }),
+    )
     .default([]),
 });
 

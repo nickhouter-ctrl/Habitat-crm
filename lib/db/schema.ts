@@ -564,9 +564,18 @@ export const products = pgTable(
      * De keuze-assen van dit product, in weergavevolgorde. Elke uitvoering in
      * `product_variants` kiest per as één waarde. Leeg = product zonder assen.
      *   [{ key: "kleur", label: "Kleur", values: [{ value: "GM", label: "Gunmetal" }] }]
+     *
+     * `imageUrl` op een waarde is het kleine plaatje bij de keuze — een
+     * kleurstaal, of een tekeningetje van de wandarm. Bij kleuren mag het leeg
+     * blijven: dan valt de weergave terug op de foto van de uitvoering zelf,
+     * die per kleur toch al anders is.
      */
     optionAxes: jsonb().$type<
-      Array<{ key: string; label: string; values: Array<{ value: string; label: string }> }>
+      Array<{
+        key: string;
+        label: string;
+        values: Array<{ value: string; label: string; imageUrl?: string | null }>;
+      }>
     >(),
     /** Installatiehandleidingen, tekeningen en andere documentatie. */
     attachments: jsonb().$type<CatalogAttachment[]>().notNull().default(sql`'[]'::jsonb`),
