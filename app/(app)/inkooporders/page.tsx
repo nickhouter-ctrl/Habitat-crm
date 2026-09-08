@@ -18,7 +18,16 @@ import {
 } from "@/components/ui";
 import { SorteerbareKop } from "@/components/sorteerbare-kop";
 import { db } from "@/lib/db";
-import { emailInbox, mailAttachments, projects, purchaseInvoiceReviews, purchaseOrders } from "@/lib/db/schema";
+import {
+  emailInbox,
+  mailAttachments,
+  overheadSuppliers,
+  overheadSupplierKey,
+  projects,
+  purchaseInvoiceReviews,
+  purchaseOrders,
+} from "@/lib/db/schema";
+import { verdelingPerInkoop, type InkoopDeel } from "@/lib/inkoop-verdeling";
 import { formatMoney, poExVat, poExVatAmount, PO_OPEN_STATUSES, PO_STATUS_META } from "@/lib/purchase-orders";
 import { cn, formatEUR } from "@/lib/utils";
 
@@ -56,6 +65,21 @@ export default async function PurchaseOrdersPage({
   // inkoop op geboekt is zonder elke regel te openen.
   const projectNamen = new Map(
     (await db.select({ id: projects.id, name: projects.name }).from(projects)).map((p) => [p.id, p.name]),
+  );
+
+  // Facturen die over meerdere werven zijn verdeeld hebben zelf geen project —
+  // hun koppeling zit in de uren- en kostenregels. Zonder dit toonde de kolom
+  // "—" bij precies de facturen die het zorgvuldigst waren uitgesplitst.
+  const verdelingen = await verdelingPerInkoop(
+    rows.filter((r) => r.projectId == null).map((r) => r.id),
+  );
+
+  // Leveranciers die als algemene kosten zijn aangemerkt (stroom, telefoon,
+  // verzekering) horen bij géén werf. Die mogen dus niet als "nog geen project"
+  // opgemerkt worden, anders wordt die waarschuwing meubilair en kijkt niemand
+  // er meer naar.
+  const algemeneKosten = new Set(
+    (await db.select({ key: overheadSuppliers.supplierKey }).from(overheadSuppliers)).map((r) => r.key),
   );
 
   // Facturen die op goedkeuring wachten. Die staan NIET in purchase_orders — pas
@@ -100,7 +124,11 @@ export default async function PurchaseOrdersPage({
   const sorteerbaar = {
     supplier: (r: (typeof rows)[number]) => r.supplier.toLowerCase(),
     reference: (r: (typeof rows)[number]) => (r.reference ?? "").toLowerCase(),
-    project: (r: (typeof rows)[number]) => (r.projectId ? (projectNamen.get(r.projectId) ?? "") : "").toLowerCase(),
+    project: (r: (typeof rows)[number]) =>
+      (r.projectId
+        ? (projectNamen.get(r.projectId) ?? "")
+        : (verdelingen.get(r.id) ?? []).map((d) => d.projectNaam ?? "").join(" ")
+      ).toLowerCase(),
     orderDate: (r: (typeof rows)[number]) => r.orderDate ?? "",
     expectedDate: (r: (typeof rows)[number]) => r.expectedDate ?? "",
     regels: (r: (typeof rows)[number]) => (Array.isArray(r.items) ? r.items.length : 0),
@@ -306,7 +334,12 @@ export default async function PurchaseOrdersPage({
                               {po.countAsLabor && <span className="block text-xs text-muted">uren</span>}
                             </Link>
                           ) : (
-                            <span className="text-xs text-muted">—</span>
+                            <ProjectCel
+                              deel={verdelingen.get(po.id) ?? []}
+                              waarschuw={
+                                po.kind === "invoice" && !algemeneKosten.has(overheadSupplierKey(po.supplier))
+                              }
+                            />
                           )}
                         </Td>
                         <Td className="text-muted">{fmtDate(po.orderDate)}</Td>
@@ -337,5 +370,54 @@ export default async function PurchaseOrdersPage({
         </>
       )}
     </>
+  );
+}
+
+/**
+ * De projectkolom voor een inkoop zonder eigen `project_id`. Drie gevallen, en
+ * ze mogen er niet hetzelfde uitzien:
+ *
+ * - verdeeld over werven → de werven zelf, want dáár staat het geld;
+ * - een factuur die nergens landt → een waarschuwing, dit bedrag telt op geen
+ *   enkele werf mee (juist die viel eerder weg tussen de streepjes);
+ * - een bestelling voor voorraad of een leverancier van algemene kosten → een
+ *   streepje, dat hoort zo.
+ */
+function ProjectCel({ deel, waarschuw }: { deel: InkoopDeel[]; waarschuw: boolean }) {
+  if (deel.length === 0) {
+    return waarschuw ? (
+      <span title="Goedgekeurd, maar op geen enkele werf geboekt — deze kost telt nergens mee.">
+        <Badge tone="warning">nog geen project</Badge>
+      </span>
+    ) : (
+      <span className="text-xs text-muted">—</span>
+    );
+  }
+
+  const namen = deel.map((d) => d.projectNaam ?? "zonder project");
+  const soorten = [...new Set(deel.map((d) => d.soort))];
+  const toon = deel.slice(0, 2);
+  return (
+    <div title={namen.join(", ")}>
+      {toon.map((d, i) => (
+        <span key={`${d.soort}-${d.projectId ?? i}`}>
+          {i > 0 && <span className="text-muted">, </span>}
+          {d.projectId ? (
+            <Link href={`/projects/${d.projectId}`} className="hover:underline">
+              {d.projectNaam ?? "project"}
+            </Link>
+          ) : (
+            <span className="text-muted">zonder project</span>
+          )}
+        </span>
+      ))}
+      {deel.length > toon.length && (
+        <span className="text-muted"> +{deel.length - toon.length}</span>
+      )}
+      <span className="block text-xs text-muted">
+        {deel.length === 1 ? "" : `verdeeld over ${deel.length} werven · `}
+        {soorten.map((s) => (s === "uren" ? "uren" : "materiaal")).join(" + ")}
+      </span>
+    </div>
   );
 }

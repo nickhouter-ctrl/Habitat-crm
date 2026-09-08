@@ -33,6 +33,7 @@ import {
   poLineTotal,
   PO_STATUS_META,
 } from "@/lib/purchase-orders";
+import { verdelingVanInkoop } from "@/lib/inkoop-verdeling";
 import { purchaseOrderFileUrl } from "@/lib/storage";
 import { Combobox } from "@/components/combobox";
 import { PurchaseProjectLink } from "@/components/purchase-project-link";
@@ -93,35 +94,9 @@ export default async function PurchaseOrderPage({ params }: { params: Promise<{ 
   // Verdeling over projecten: de uren- en kostenregels die bij het goedkeuren
   // per werf zijn geboekt. Bestaan die, dan is de vraag "bij welk project hoort
   // deze factuur?" al beantwoord en tonen we het antwoord in plaats van het
-  // koppel-formulier.
-  const [urenPerProject, kostenPerProject] = await Promise.all([
-    db
-      .select({
-        projectId: timeEntries.projectId,
-        naam: projects.name,
-        uren: sql<number>`sum(${timeEntries.hours})::float8`,
-        bedrag: sql<number>`sum(${timeEntries.hours} * ${timeEntries.hourlyCostEur})::float8`,
-        datum: sql<string>`max(${timeEntries.date})`,
-      })
-      .from(timeEntries)
-      .leftJoin(projects, eq(projects.id, timeEntries.projectId))
-      .where(eq(timeEntries.purchaseOrderId, id))
-      .groupBy(timeEntries.projectId, projects.name),
-    db
-      .select({
-        projectId: projectCosts.projectId,
-        naam: projects.name,
-        bedrag: sql<number>`sum(${projectCosts.amountEur})::float8`,
-      })
-      .from(projectCosts)
-      .leftJoin(projects, eq(projects.id, projectCosts.projectId))
-      .where(eq(projectCosts.purchaseOrderId, id))
-      .groupBy(projectCosts.projectId, projects.name),
-  ]);
-  const verdeling = [
-    ...urenPerProject.map((r) => ({ ...r, soort: "uren" as const })),
-    ...kostenPerProject.map((r) => ({ ...r, uren: null as number | null, datum: null as string | null, soort: "materiaal" as const })),
-  ].sort((a, b) => (b.bedrag ?? 0) - (a.bedrag ?? 0));
+  // koppel-formulier. Dezelfde bron als de projectkolom in het overzicht
+  // (lib/inkoop-verdeling.ts), zodat de twee niet uit elkaar kunnen lopen.
+  const verdeling = await verdelingVanInkoop(id);
 
   // Projecten om deze inkoop aan te koppelen (telt dan mee als materiaalkost).
   const projectRows = await db
@@ -355,7 +330,7 @@ export default async function PurchaseOrderPage({ params }: { params: Promise<{ 
                   <span>
                     {r.projectId ? (
                       <Link href={`/projects/${r.projectId}`} className="font-medium hover:underline">
-                        {r.naam ?? "project"}
+                        {r.projectNaam ?? "project"}
                       </Link>
                     ) : (
                       <span className="text-muted">zonder project</span>
