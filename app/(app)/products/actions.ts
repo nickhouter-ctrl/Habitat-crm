@@ -15,6 +15,7 @@ import { hasCostBreakdown, landedCost } from "@/lib/pricing";
 import { deleteProductImageByUrl, uploadProductImage } from "@/lib/storage";
 import { syncVariantProjectionIfAny } from "@/lib/variants-sync";
 import { pushProductToWebsite } from "@/lib/website/push";
+import { pushBrandProductToWebsite } from "@/lib/website/push-brand";
 
 const num = z.preprocess(
   (v) => (v === "" || v === undefined || v === null ? undefined : v),
@@ -316,16 +317,40 @@ export async function removeProductPhoto(id: string) {
  * Push dit product nu naar habitat-one via één GitHub-commit (atomic).
  * De website re-deployt zelf na de push.
  */
+/**
+ * Naar de website. Een merkproduct gaat langs een eigen pad: dat schrijft de
+ * uitvoeringen mee (kleur, maat, hoofddouche) in één commit, terwijl de gewone
+ * push per product één standaardvariant aanmaakt.
+ */
 export async function pushProductToWebsiteAction(id: string) {
   await requireUser();
   let target: string;
   try {
-    const r = await pushProductToWebsite(id);
-    const sp = new URLSearchParams({
-      pushed: r.action,
-      websiteId: String(r.websiteProductId),
-      commit: r.commitSha.slice(0, 7),
+    const rij = await db.query.products.findFirst({
+      where: eq(products.id, id),
+      columns: { brandId: true },
     });
+    // Let op: hier geen redirect() aanroepen. Die werkt met een worp, en de
+    // catch hieronder zou hem opvangen en als "push mislukt" tonen. Alleen het
+    // doel zetten; de redirect staat onderaan.
+    const sp = rij?.brandId
+      ? await (async () => {
+          const m = await pushBrandProductToWebsite(id);
+          return new URLSearchParams({
+            pushed: m.actie === "aangemaakt" ? "created" : "updated",
+            websiteId: String(m.websiteProductId),
+            commit: m.commitSha.slice(0, 7),
+            uitvoeringen: String(m.uitvoeringen),
+          });
+        })()
+      : await (async () => {
+          const r = await pushProductToWebsite(id);
+          return new URLSearchParams({
+            pushed: r.action,
+            websiteId: String(r.websiteProductId),
+            commit: r.commitSha.slice(0, 7),
+          });
+        })();
     target = `/products/${id}/edit?${sp.toString()}`;
   } catch (err) {
     const msg = err instanceof Error ? err.message : "push mislukt";
