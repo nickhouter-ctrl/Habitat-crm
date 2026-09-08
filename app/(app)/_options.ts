@@ -2,7 +2,7 @@
 import { and, asc, desc, eq, sql } from "drizzle-orm";
 
 import { db } from "@/lib/db";
-import { contacts, deals, products, projects, properties, users } from "@/lib/db/schema";
+import { brands, contacts, deals, products, projects, properties, users } from "@/lib/db/schema";
 
 export type SelectOption = { id: string; name: string };
 
@@ -108,6 +108,17 @@ export async function getProductCollections(): Promise<string[]> {
   return rows
     .map((r) => r.collection?.trim())
     .filter((c): c is string => Boolean(c));
+}
+
+export type BrandOption = { id: string; name: string; logoUrl: string | null; skuPrefix: string | null };
+
+/** Actieve merken voor de keuzelijst op het productformulier. */
+export async function listBrands(): Promise<BrandOption[]> {
+  return db
+    .select({ id: brands.id, name: brands.name, logoUrl: brands.logoUrl, skuPrefix: brands.skuPrefix })
+    .from(brands)
+    .where(eq(brands.isActive, true))
+    .orderBy(asc(brands.sortOrder), asc(brands.name));
 }
 
 export async function getDealFormOptions() {

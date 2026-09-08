@@ -8,11 +8,12 @@ import { requireWriteUser } from "@/lib/auth/guards";
 
 import { auth } from "@/auth";
 import { db } from "@/lib/db";
-import { products } from "@/lib/db/schema";
+import { brands, products } from "@/lib/db/schema";
 import corneliusData from "@/lib/import/cornelius-products.json";
 import { isValidEan13, nextProductBarcode } from "@/lib/barcode";
 import { hasCostBreakdown, landedCost } from "@/lib/pricing";
 import { deleteProductImageByUrl, uploadProductImage } from "@/lib/storage";
+import { syncVariantProjectionIfAny } from "@/lib/variants-sync";
 import { pushProductToWebsite } from "@/lib/website/push";
 
 const num = z.preprocess(
@@ -35,6 +36,7 @@ const qty = z.preprocess(
 const productSchema = z.object({
   name: z.string().trim().min(1).max(300),
   sku: z.string().trim().max(60).optional().or(z.literal("")),
+  brandId: z.string().trim().uuid().optional().or(z.literal("")),
   barcode: z.string().trim().max(40).optional().or(z.literal("")),
   stockQty: qty,
   stockMin: qty,
@@ -79,6 +81,10 @@ const productSchema = z.object({
           costEur: z.number().nonnegative().nullable().optional(),
           stockQty: z.number().nonnegative().nullable().optional(),
           inStock: z.boolean().optional(),
+          // Komen van merkproducten, waar product_variants de bron is.
+          code: z.string().trim().nullable().optional(),
+          imageUrl: z.string().trim().nullable().optional(),
+          options: z.record(z.string(), z.string()).nullable().optional(),
         }),
       )
       .default([]),
@@ -87,7 +93,31 @@ const productSchema = z.object({
 
 const dec = (v: number | undefined) => (v === undefined ? null : String(v));
 
-function toValues(v: z.infer<typeof productSchema>) {
+/**
+ * De aannemersprijs.
+ *
+ * Voor de eigen collectie geldt de vaste regel: 20% onder de showroomprijs.
+ * Voor een MERK niet — daar koop je met dealerkorting in, en er nog eens 20%
+ * afhalen eet meer dan de helft van de marge op (keuze Nick 08-09-2026: geen
+ * automatische aannemerskorting tenzij hij er zelf een percentage op zet).
+ * Staat er een percentage op het merk, dan geldt dat.
+ */
+function aannemersprijs(
+  ingevuld: number | undefined,
+  verkoop: number | undefined,
+  merk: { tradeDiscountPct: string | null } | null,
+): string | null {
+  if (ingevuld !== undefined) return String(ingevuld);
+  if (verkoop === undefined) return null;
+  if (merk) {
+    const pct = merk.tradeDiscountPct == null ? null : Number(merk.tradeDiscountPct);
+    if (pct == null || !Number.isFinite(pct) || pct <= 0) return null;
+    return String(Math.round(verkoop * (1 - pct / 100) * 100) / 100);
+  }
+  return String(Math.round(verkoop * 0.8 * 100) / 100);
+}
+
+function toValues(v: z.infer<typeof productSchema>, merk: { tradeDiscountPct: string | null } | null = null) {
   const breakdown = {
     purchaseCostEur: v.purchaseCostEur,
     freightCostEur: v.freightCostEur,
@@ -99,6 +129,7 @@ function toValues(v: z.infer<typeof productSchema>) {
   return {
     name: v.name,
     sku: v.sku || null,
+    brandId: v.brandId || null,
     barcode: v.barcode ? v.barcode.replace(/\s+/g, "") : null,
     stockQty: v.stockQty === undefined ? null : String(v.stockQty),
     stockMin: v.stockMin === undefined ? null : String(v.stockMin),
@@ -107,11 +138,7 @@ function toValues(v: z.infer<typeof productSchema>) {
     subcategory: v.subcategory || null,
     unit: v.unit || null,
     priceEur: dec(v.priceEur),
-    // Aannemersprijs = vaste regel: altijd 20% onder de verkoopprijs.
-    // Leeg gelaten → automatisch op showroom × 0,80 (afgerond op centen).
-    tradePriceEur:
-      dec(v.tradePriceEur) ??
-      (v.priceEur !== undefined ? String(Math.round(v.priceEur * 0.8 * 100) / 100) : null),
+    tradePriceEur: aannemersprijs(v.tradePriceEur, v.priceEur, merk),
     vatRate: v.vatRate ?? 21,
     purchaseCostEur: dec(v.purchaseCostEur),
     freightCostEur: dec(v.freightCostEur),
@@ -137,11 +164,22 @@ async function requireUser() {
   return requireWriteUser();
 }
 
+/** Het merk erbij halen, want dat bepaalt of er een aannemerskorting geldt. */
+async function merkVan(brandId: string | undefined | null) {
+  if (!brandId) return null;
+  const rij = await db.query.brands.findFirst({
+    where: eq(brands.id, brandId),
+    columns: { tradeDiscountPct: true },
+  });
+  return rij ?? null;
+}
+
 export async function createProduct(formData: FormData) {
   await requireUser();
   const parsed = productSchema.safeParse(Object.fromEntries(formData));
   if (!parsed.success) redirect("/products/new?error=validation");
-  const [row] = await db.insert(products).values(toValues(parsed.data)).returning({ id: products.id });
+  const merk = await merkVan(parsed.data.brandId);
+  const [row] = await db.insert(products).values(toValues(parsed.data, merk)).returning({ id: products.id });
   revalidatePath("/products");
   redirect(`/products/${row.id}/edit?saved=1`);
 }
@@ -150,7 +188,12 @@ export async function updateProduct(id: string, formData: FormData) {
   await requireUser();
   const parsed = productSchema.safeParse(Object.fromEntries(formData));
   if (!parsed.success) redirect(`/products/${id}/edit?error=validation`);
-  await db.update(products).set(toValues(parsed.data)).where(eq(products.id, id));
+  const merk = await merkVan(parsed.data.brandId);
+  await db.update(products).set(toValues(parsed.data, merk)).where(eq(products.id, id));
+  // Heeft dit product uitvoeringen, dan is product_variants de bron en mag het
+  // formulier de afgeleide maten niet overschrijven. Zonder uitvoeringen blijft
+  // de handmatige lijst gewoon staan.
+  await syncVariantProjectionIfAny(id);
   revalidatePath("/products");
   revalidatePath(`/products/${id}/edit`);
   redirect(`/products/${id}/edit?saved=1`);

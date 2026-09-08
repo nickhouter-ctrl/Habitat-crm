@@ -18,6 +18,8 @@ export function ProductForm({
   product,
   collections,
   categories,
+  brands = [],
+  variantsManaged = false,
   submitLabel = "Opslaan",
 }: {
   action: (formData: FormData) => void | Promise<void>;
@@ -51,9 +53,14 @@ export function ProductForm({
     | "pushToWebsite"
     | "websiteProductId"
     | "additionalSizes"
+    | "brandId"
   >;
   collections: string[];
   categories: string[];
+  brands?: Array<{ id: string; name: string }>;
+  /** Aan = de uitvoeringen worden beheerd in hun eigen kaart (merkproducten),
+   *  en de maten hieronder zijn daar de afgeleide weergave van. */
+  variantsManaged?: boolean;
   submitLabel?: string;
 }) {
   return (
@@ -74,6 +81,22 @@ export function ProductForm({
             <Field label="SKU / code" htmlFor="sku">
               <Input id="sku" name="sku" defaultValue={product?.sku ?? ""} />
             </Field>
+            {brands.length > 0 && (
+              <Field
+                label="Merk"
+                htmlFor="brandId"
+                hint="bepaalt logo, inkoopkorting en of er aannemerskorting geldt"
+              >
+                <Select id="brandId" name="brandId" defaultValue={product?.brandId ?? ""}>
+                  <option value="">Eigen assortiment</option>
+                  {brands.map((b) => (
+                    <option key={b.id} value={b.id}>
+                      {b.name}
+                    </option>
+                  ))}
+                </Select>
+              </Field>
+            )}
             <Field
               label="Barcode (EAN-13)"
               htmlFor="barcode"
@@ -262,13 +285,33 @@ export function ProductForm({
             </div>
           </fieldset>
 
-          <Field
-            label="Beschikbare maten"
-            htmlFor="additionalSizes"
-            hint="Per maat: afmeting, eigen SKU, prijs (ex. BTW) en of die maat op voorraad is. Kiesbaar bij offertes/bestellen."
-          >
-            <SizesEditor initial={product?.additionalSizes ?? null} />
-          </Field>
+          {variantsManaged ? (
+            <Field
+              label="Beschikbare maten"
+              hint="dit product heeft uitvoeringen; die beheer je in de kaart hieronder"
+            >
+              <ul className="rounded-lg border border-border px-3 py-2 text-sm text-muted">
+                {(product?.additionalSizes ?? []).slice(0, 8).map((m) => (
+                  <li key={m.sku} className="flex justify-between gap-3">
+                    <span>{m.label}</span>
+                    <span className="font-mono text-xs">{m.sku}</span>
+                  </li>
+                ))}
+                {(product?.additionalSizes?.length ?? 0) > 8 && (
+                  <li className="pt-1 text-xs">en nog {(product?.additionalSizes?.length ?? 0) - 8}…</li>
+                )}
+                {!product?.additionalSizes?.length && <li>nog geen uitvoeringen</li>}
+              </ul>
+            </Field>
+          ) : (
+            <Field
+              label="Beschikbare maten"
+              htmlFor="additionalSizes"
+              hint="Per maat: afmeting, eigen SKU, prijs (ex. BTW) en of die maat op voorraad is. Kiesbaar bij offertes/bestellen."
+            >
+              <SizesEditor initial={product?.additionalSizes ?? null} />
+            </Field>
+          )}
 
           <Field
             label="Omschrijving"

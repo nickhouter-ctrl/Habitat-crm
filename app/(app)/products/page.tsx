@@ -28,7 +28,7 @@ import {
   type KitComponent,
 } from "@/lib/stock";
 import { cn, formatEUR } from "@/lib/utils";
-import { getProductCollections } from "../_options";
+import { getProductCollections, listBrands } from "../_options";
 import { Gs1ExcelDownload } from "./gs1-download";
 
 export const metadata = { title: "Producten" };
@@ -65,12 +65,20 @@ export default async function ProductsPage({
   const allCollections = await getProductCollections();
   const collection = allCollections.includes(collectionParam) ? collectionParam : "";
 
+  // Merken: filter én logo in de lijst. Met een merkassortiment erbij groeit de
+  // catalogus flink, dus hierop kunnen filteren is geen luxe.
+  const alleMerken = await listBrands();
+  const merkParam = typeof params.merk === "string" ? params.merk.trim() : "";
+  const merk = alleMerken.some((m) => m.id === merkParam) ? merkParam : "";
+  const merkById = new Map(alleMerken.map((m) => [m.id, m]));
+
   const rows = await db.query.products.findMany({
     where: and(
       // Gearchiveerde producten (bv. losse set-onderdelen) nooit in de lijst tonen.
       eq(products.isActive, true),
       stockFilter,
       collection ? eq(products.collection, collection) : undefined,
+      merk ? eq(products.brandId, merk) : undefined,
       noBarcode ? and(isNull(products.barcode), eq(products.isActive, true)) : undefined,
       noPhoto ? and(isNull(products.imageUrl), eq(products.isActive, true)) : undefined,
       lowStock
@@ -87,6 +95,10 @@ export default async function ProductsPage({
             ilike(products.category, `%${q}%`),
             ilike(products.sku, `%${q}%`),
             ilike(products.description, `%${q}%`),
+            // Ook op de code van een uitvoering kunnen zoeken: "5-GM-001-HD5"
+            // staat niet op het product zelf maar op zijn kleur.
+            sql`exists (select 1 from product_variants v
+                        where v.product_id = ${products.id} and v.code ilike ${`%${q}%`})`,
           )
         : undefined,
     ),
@@ -174,6 +186,7 @@ export default async function ProductsPage({
     const sp = new URLSearchParams();
     if (q) sp.set("q", q);
     if (collection) sp.set("collection", collection);
+    if (merk) sp.set("merk", merk);
     if (sort) sp.set("sort", sort);
     if (noBarcode) sp.set("nobarcode", "1");
     if (lowStock) sp.set("lowstock", "1");
@@ -268,6 +281,25 @@ export default async function ProductsPage({
               {col}
             </Link>
           ))}
+          {alleMerken.length > 0 && (
+            <>
+              <span className="mx-1 self-center text-border">|</span>
+              {alleMerken.map((m) => (
+                <Link
+                  key={m.id}
+                  href={buildHref({ merk: merk === m.id ? undefined : m.id })}
+                  className={cn(
+                    "rounded-md px-3 py-1.5 text-sm transition-colors",
+                    merk === m.id
+                      ? "bg-accent/10 font-medium text-accent"
+                      : "text-muted hover:bg-surface hover:text-foreground",
+                  )}
+                >
+                  {m.name}
+                </Link>
+              ))}
+            </>
+          )}
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <div className="flex gap-1 rounded-md bg-surface p-0.5">
@@ -431,9 +463,19 @@ export default async function ProductsPage({
                               <Link href={`/products/${p.id}/edit`} className="hover:underline">
                                 {p.name}
                               </Link>
-                              {p.subcategory && (
-                                <span className="block text-xs text-muted">{p.subcategory}</span>
-                              )}
+                              <span className="block text-xs text-muted">
+                                {p.brandId && merkById.get(p.brandId)?.logoUrl ? (
+                                  // eslint-disable-next-line @next/next/no-img-element
+                                  <img
+                                    src={merkById.get(p.brandId)!.logoUrl!}
+                                    alt={merkById.get(p.brandId)!.name}
+                                    className="mr-1.5 inline-block h-3 w-auto max-w-16 align-middle object-contain"
+                                  />
+                                ) : p.brandId ? (
+                                  <span className="mr-1.5">{merkById.get(p.brandId)?.name}</span>
+                                ) : null}
+                                {p.subcategory}
+                              </span>
                             </span>
                           </div>
                         </Td>

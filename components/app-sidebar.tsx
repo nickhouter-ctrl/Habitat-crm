@@ -98,6 +98,7 @@ const NAV_GROUPS: { label: string | null; items: NavItem[] }[] = [
     label: "Producten",
     items: [
       { href: "/products", label: "Producten", icon: Boxes },
+      { href: "/merken", label: "Merken", icon: Tag },
       { href: "/samples", label: "Samples", icon: Layers },
       { href: "/samplecatalogus", label: "Samplecatalogus", icon: Layers },
       { href: "/wederverkopers", label: "Wederverkopers", icon: Store },

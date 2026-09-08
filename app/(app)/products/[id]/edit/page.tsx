@@ -24,7 +24,11 @@ import {
 import { db } from "@/lib/db";
 import { companies, contacts, documents, products, projects } from "@/lib/db/schema";
 import { normalizeDocItems } from "@/lib/documents";
-import { getProductCategories, getProductCollections } from "../../../_options";
+import { getProductCategories, getProductCollections, listBrands } from "../../../_options";
+import { VariantMatrixEditor } from "@/components/variant-matrix-editor";
+import { SubmitButton } from "@/components/submit-button";
+import { brands, productVariants } from "@/lib/db/schema";
+import { saveVariants } from "../../variant-actions";
 import {
   deleteProduct,
   generateBarcode,
@@ -129,6 +133,22 @@ export default async function EditProductPage({
   const totSold = allocation.reduce((s, e) => s + e.sold, 0);
   const unit = product.unit ?? "";
 
+  // Uitvoeringen (kleur/model/maat) en het merk waar dit product van is.
+  const [uitvoeringen, merken, merk] = await Promise.all([
+    db
+      .select()
+      .from(productVariants)
+      .where(eq(productVariants.productId, id))
+      .orderBy(sql`${productVariants.sortOrder} asc, ${productVariants.label} asc`),
+    listBrands(),
+    product.brandId
+      ? db.query.brands.findFirst({
+          where: eq(brands.id, product.brandId),
+          columns: { name: true, logoUrl: true, dealerDiscountPct: true },
+        })
+      : Promise.resolve(undefined),
+  ]);
+
   const update = updateProduct.bind(null, id);
   const remove = deleteProduct.bind(null, id);
   const genBarcode = generateBarcode.bind(null, id);
@@ -161,6 +181,26 @@ export default async function EditProductPage({
       {sp.error === "upload" && (
         <p className="mb-4 max-w-2xl rounded-md bg-red-50 px-3 py-2 text-sm text-danger">
           Geen bestand gekozen of upload mislukt.
+        </p>
+      )}
+      {sp.error === "dubbel" && (
+        <p className="mb-4 max-w-2xl rounded-md bg-red-50 px-3 py-2 text-sm text-danger">
+          Artikelcode {sp.code} staat twee keer in de lijst. Elke uitvoering heeft een eigen code.
+        </p>
+      )}
+      {sp.error === "bezet" && (
+        <p className="mb-4 max-w-2xl rounded-md bg-red-50 px-3 py-2 text-sm text-danger">
+          Artikelcode {sp.code} hoort al bij een ander product van dit merk. Niets opgeslagen.
+        </p>
+      )}
+      {sp.error === "opties" && (
+        <p className="mb-4 max-w-2xl rounded-md bg-red-50 px-3 py-2 text-sm text-danger">
+          Een uitvoering verwijst naar een keuze die niet meer bestaat. Controleer de keuzes en probeer opnieuw.
+        </p>
+      )}
+      {sp.error === "variants" && (
+        <p className="mb-4 max-w-2xl rounded-md bg-red-50 px-3 py-2 text-sm text-danger">
+          De uitvoeringen konden niet worden opgeslagen.
         </p>
       )}
       {typeof sp.pushed === "string" && (
@@ -414,8 +454,49 @@ export default async function EditProductPage({
         product={product}
         collections={collections}
         categories={categories}
+        brands={merken}
+        variantsManaged={Boolean(product.brandId) || uitvoeringen.length > 0}
         submitLabel="Wijzigingen opslaan"
       />
+
+      <Card className="mt-4 max-w-4xl scroll-mt-4" id="uitvoeringen">
+        <CardHeader>
+          <CardTitle>
+            <span className="flex items-center gap-2">
+              {merk?.logoUrl ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={merk.logoUrl} alt="" className="h-5 w-auto max-w-24 object-contain" />
+              ) : null}
+              Uitvoeringen
+            </span>
+          </CardTitle>
+          <span className="text-xs text-muted">
+            kleur, model of maat — elk met een eigen artikelcode en eigen prijs. Ze zijn los kiesbaar op een
+            offerteregel.
+          </span>
+        </CardHeader>
+        <CardContent>
+          <form action={saveVariants.bind(null, id)} className="space-y-4">
+            <VariantMatrixEditor
+              axes={product.optionAxes}
+              variants={uitvoeringen.map((v) => ({
+                id: v.id,
+                code: v.code,
+                options: v.options ?? {},
+                priceEur: v.priceEur == null ? null : Number(v.priceEur),
+                discountPct: v.discountPct == null ? null : Number(v.discountPct),
+                purchaseCostEur: v.purchaseCostEur == null ? null : Number(v.purchaseCostEur),
+                imageUrl: v.imageUrl ?? "",
+                isActive: v.isActive,
+              }))}
+              dealerDiscountPct={merk?.dealerDiscountPct == null ? null : Number(merk.dealerDiscountPct)}
+            />
+            <SubmitButton variant="primary" pendingLabel="Bezig…">
+              Uitvoeringen opslaan
+            </SubmitButton>
+          </form>
+        </CardContent>
+      </Card>
       <form action={remove} className="mt-4 max-w-2xl">
         <ConfirmSubmit
           message={`Product "${product.name}" definitief verwijderen?`}

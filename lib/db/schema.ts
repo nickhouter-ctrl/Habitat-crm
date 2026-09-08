@@ -381,6 +381,62 @@ export const properties = pgTable(
  */
 export const productAvailability = pgEnum("product_availability", ["stock", "order_only"]);
 
+/** Bijlage bij een merk of product (brochure, handleiding, tekening). */
+export type CatalogAttachment = {
+  name: string;
+  path: string;
+  size?: number;
+  contentType?: string;
+  kind?: "brochure" | "handleiding" | "tekening" | "overig";
+  uploadedAt?: string;
+};
+
+/**
+ * Merken die we voeren (BRAUER, KingKonree, Cornelius …).
+ *
+ * Bewust een eigen tabel en geen tekstveld op het product: logo, dealerkorting,
+ * SKU-voorvoegsel en brochures zijn eigenschappen van het mérk die je één keer
+ * vastlegt en die de import nodig heeft. Als tekstveld zou het de derde
+ * impliciete indeling worden naast collection/category en de SKU-prefix.
+ */
+export const brands = pgTable(
+  "brands",
+  {
+    id: uuid().primaryKey().default(sql`gen_random_uuid()`),
+    name: text().notNull(),
+    slug: text().notNull(),
+    /** Publieke URL van het logo (bucket product-images, prefix brands/). */
+    logoUrl: text(),
+    websiteUrl: text(),
+    /** Voorvoegsel voor ónze productcodes, bv. "BRA". Houdt leverancierscodes
+     * uit elkaar: Brauer gebruikt DR- voor douchegoten, bij ons zijn dat deuren. */
+    skuPrefix: text(),
+    /** Naam zoals die op inkoopfacturen staat (purchaseOrders.supplier is vrij tekst). */
+    supplierName: text(),
+    /** Onze inkoopkorting op de adviesprijs, in procenten. */
+    dealerDiscountPct: numeric({ precision: 6, scale: 2 }),
+    /**
+     * Korting voor aannemers/architecten op de adviesprijs, in procenten.
+     * Leeg = geen aannemerskorting. Bewust niet de globale −20% uit
+     * `app/(app)/products/actions.ts`: bij een dealermarge eet die meer dan de
+     * helft van de marge op.
+     */
+    tradeDiscountPct: numeric({ precision: 6, scale: 2 }),
+    defaultVatRate: integer().notNull().default(21),
+    /** Brochures, prijslijsten en algemene documentatie van het merk. */
+    attachments: jsonb().$type<CatalogAttachment[]>().notNull().default(sql`'[]'::jsonb`),
+    notes: text(),
+    sortOrder: integer().notNull().default(0),
+    isActive: boolean().notNull().default(true),
+    ...timestamps,
+  },
+  (t) => [
+    uniqueIndex("brands_slug_uidx").on(t.slug),
+    uniqueIndex("brands_name_uidx").on(t.name),
+    index("brands_active_idx").on(t.isActive),
+  ],
+);
+
 /**
  * Product / material catalogue. For now maintained in the CRM; once the Holded
  * API key is supplied this becomes a mirror of Holded's products (linked via
@@ -458,6 +514,18 @@ export const products = pgTable(
         stockQty?: number | null;
         /** Afgeleid: stockQty > 0 (voor snelle weergave/filter). */
         inStock?: boolean;
+        /**
+         * De drie velden hieronder komen van producten met een merk, waar
+         * `product_variants` de bron is en dit veld de afgeleide weergave
+         * (zie lib/variants.ts). Alleen toegevoegd, nooit iets hernoemd: er
+         * lezen ~40 plekken mee, waaronder lib/website/push.ts.
+         */
+        /** Leverancierscode van deze uitvoering, bv. "5-GM-001-HD5". */
+        code?: string | null;
+        /** Eigen foto van deze uitvoering (kleur!). */
+        imageUrl?: string | null;
+        /** De keuze per as, bv. { kleur: "GM", model: "HD5" }. */
+        options?: Record<string, string> | null;
       }>
     >(),
     /**
@@ -490,10 +558,23 @@ export const products = pgTable(
     nameI18n: jsonb("name_i18n").$type<{ nl?: string; de?: string; en?: string; es?: string }>(),
     /** Vrije specs (afwerking, materiaal, …) voor invulpatronen in copy_blocks. */
     specs: jsonb().$type<Record<string, string | number>>(),
+    /** Het merk waar dit product van is. Leeg = eigen assortiment. */
+    brandId: uuid().references((): AnyPgColumn => brands.id, { onDelete: "set null" }),
+    /**
+     * De keuze-assen van dit product, in weergavevolgorde. Elke uitvoering in
+     * `product_variants` kiest per as één waarde. Leeg = product zonder assen.
+     *   [{ key: "kleur", label: "Kleur", values: [{ value: "GM", label: "Gunmetal" }] }]
+     */
+    optionAxes: jsonb().$type<
+      Array<{ key: string; label: string; values: Array<{ value: string; label: string }> }>
+    >(),
+    /** Installatiehandleidingen, tekeningen en andere documentatie. */
+    attachments: jsonb().$type<CatalogAttachment[]>().notNull().default(sql`'[]'::jsonb`),
     ...timestamps,
   },
   (t) => [
     index("products_collection_idx").on(t.collection),
+    index("products_brand_idx").on(t.brandId),
     index("products_category_idx").on(t.category),
     index("products_name_idx").on(t.name),
     uniqueIndex("products_holded_id_idx").on(t.holdedProductId),
@@ -508,6 +589,77 @@ export const products = pgTable(
     uniqueIndex("products_slug_uidx")
       .on(t.slug)
       .where(sql`slug is not null and slug <> ''`),
+  ],
+);
+
+/**
+ * Uitvoeringen van een product: één rij per verkoopbaar artikel.
+ *
+ * Een merkproduct staat één keer in de lijst ("Edition lage opbouw
+ * wastafelmengkraan") en heeft daaronder zijn kleuren, modellen en maten, elk
+ * met een eigen leverancierscode, eigen prijs en eigen foto. Zonder dat zouden
+ * de drie Brauer-catalogi bijna 10.000 losse regels opleveren in plaats van
+ * ± 690 producten.
+ *
+ * `products.additionalSizes` blijft hiervan de afgeleide weergave (zie
+ * lib/variants.ts): dat veld wordt op ~40 plekken gelezen — de maatkiezer op de
+ * offerteregel, de portal-prijzen voor de website, de prijslijst-PDF,
+ * /bestellen, /scan — en die blijven daardoor ongewijzigd werken.
+ *
+ * Voorraad staat hier wél als kolom maar wordt NIET automatisch geboekt: verkoop
+ * en inkoop schrijven `products.stockQty`. Merkartikelen zijn `order_only`, dus
+ * dat levert nu niets op en zou de gevoeligste code in de repo raken.
+ */
+export const productVariants = pgTable(
+  "product_variants",
+  {
+    id: uuid().primaryKey().default(sql`gen_random_uuid()`),
+    productId: uuid()
+      .notNull()
+      .references((): AnyPgColumn => products.id, { onDelete: "cascade" }),
+    /** Gedenormaliseerd vanaf het product — nodig voor de unieke index op (merk, code). */
+    brandId: uuid().references((): AnyPgColumn => brands.id, { onDelete: "set null" }),
+    /** De code van de leverancier, genormaliseerd. Dit is de import-sleutel én
+     * wat er op de bestelling naar de leverancier gaat. Bv. "5-GM-001-HD5". */
+    code: text().notNull(),
+    /** Onze eigen code, met het merk-voorvoegsel: "BRA-5-GM-001-HD5". */
+    sku: text(),
+    barcode: text(),
+    /** Leesbare samenvatting, afgeleid uit `options`: "Gunmetal · Hendel E". */
+    label: text().notNull(),
+    /** De keuze per as: { kleur: "GM", model: "HD5" }. Sleutels = products.optionAxes[].key. */
+    options: jsonb().$type<Record<string, string>>().notNull().default(sql`'{}'::jsonb`),
+    /** Verkoopprijs particulier, ex. btw. */
+    priceEur: numeric({ precision: 14, scale: 4 }),
+    /** De rauwe adviesprijs zoals geïmporteerd; `priceEur` mag daarvan afwijken. */
+    listPriceEur: numeric({ precision: 14, scale: 4 }),
+    tradePriceEur: numeric({ precision: 14, scale: 4 }),
+    dealerPriceEur: numeric({ precision: 14, scale: 4 }),
+    /** Gebruikte inkoopkorting op de adviesprijs, in procenten. */
+    discountPct: numeric({ precision: 6, scale: 2 }),
+    purchaseCostEur: numeric({ precision: 14, scale: 2 }),
+    costEur: numeric({ precision: 14, scale: 2 }),
+    /** Eigen foto van deze uitvoering — bij kleuren is dat de hele reden. */
+    imageUrl: text(),
+    stockQty: numeric({ precision: 14, scale: 3 }),
+    availability: productAvailability().notNull().default("order_only"),
+    isActive: boolean().notNull().default(true),
+    sortOrder: integer().notNull().default(0),
+    specs: jsonb().$type<Record<string, string | number>>(),
+    /** Bestand + regelnummer van de laatste import, om een waarde te kunnen herleiden. */
+    sourceRef: text(),
+    lastImportedAt: timestamp({ withTimezone: true }),
+    ...timestamps,
+  },
+  (t) => [
+    index("product_variants_product_idx").on(t.productId),
+    index("product_variants_code_idx").on(t.code),
+    // Dezelfde leverancierscode mag binnen één merk maar één keer bestaan. Dit
+    // is wat een herhaalde import onschadelijk maakt.
+    uniqueIndex("product_variants_brand_code_uidx").on(t.brandId, t.code),
+    uniqueIndex("product_variants_sku_uidx")
+      .on(t.sku)
+      .where(sql`sku is not null and sku <> ''`),
   ],
 );
 
@@ -1899,6 +2051,16 @@ export const purchaseOrdersRelations = relations(purchaseOrders, ({ one }) => ({
   project: one(projects, { fields: [purchaseOrders.projectId], references: [projects.id] }),
 }));
 
+export const brandsRelations = relations(brands, ({ many }) => ({
+  products: many(products),
+  variants: many(productVariants),
+}));
+
+export const productVariantsRelations = relations(productVariants, ({ one }) => ({
+  product: one(products, { fields: [productVariants.productId], references: [products.id] }),
+  brand: one(brands, { fields: [productVariants.brandId], references: [brands.id] }),
+}));
+
 export const activitiesRelations = relations(activities, ({ one }) => ({
   contact: one(contacts, { fields: [activities.contactId], references: [contacts.id] }),
   company: one(companies, { fields: [activities.companyId], references: [companies.id] }),
@@ -1918,6 +2080,14 @@ export type NewContact = typeof contacts.$inferInsert;
 export type Property = typeof properties.$inferSelect;
 export type Product = typeof products.$inferSelect;
 export type NewProduct = typeof products.$inferInsert;
+export type Brand = typeof brands.$inferSelect;
+export type NewBrand = typeof brands.$inferInsert;
+export type ProductVariant = typeof productVariants.$inferSelect;
+export type NewProductVariant = typeof productVariants.$inferInsert;
+/** Eén keuze-as van een product, bv. Kleur met zes waarden. */
+export type ProductOptionAxis = NonNullable<Product["optionAxes"]>[number];
+/** Eén regel in de afgeleide `products.additionalSizes`. */
+export type ProductSizeRow = NonNullable<Product["additionalSizes"]>[number];
 export type Deal = typeof deals.$inferSelect;
 export type NewDeal = typeof deals.$inferInsert;
 export type Document = typeof documents.$inferSelect;

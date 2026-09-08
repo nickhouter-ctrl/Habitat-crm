@@ -74,16 +74,29 @@ async function ensureProductBucket() {
   await sb.storage.createBucket(PRODUCT_BUCKET, { public: true });
 }
 
-/** Upload één foto voor een product; geeft een publieke URL terug. */
-export async function uploadProductImage(productId: string, file: File): Promise<string> {
+/**
+ * Upload een beeld naar de publieke productbucket onder een eigen mapje.
+ * Gedeeld door productfoto's, uitvoeringsfoto's (kleur!) en merklogo's, zodat
+ * ze allemaal dezelfde controles en dezelfde publieke URL-vorm krijgen.
+ */
+async function uploadNaarProductBucket(
+  prefix: string,
+  file: File,
+  toegestaan: ReadonlySet<string>,
+): Promise<string> {
   if (!file || file.size === 0) throw new Error("Leeg bestand.");
-  if (!IMAGE_MIME.has(file.type)) {
-    throw new Error(`Niet-ondersteund bestandstype (${file.type || "onbekend"}). Gebruik JPG, PNG, WebP of AVIF.`);
+  if (!toegestaan.has(file.type)) {
+    throw new Error(
+      `Niet-ondersteund bestandstype (${file.type || "onbekend"}). Gebruik ${
+        toegestaan.has("image/svg+xml") ? "SVG, JPG, PNG, WebP of AVIF" : "JPG, PNG, WebP of AVIF"
+      }.`,
+    );
   }
   if (file.size > MAX_BYTES) throw new Error("Bestand te groot (max 25 MB).");
 
   await ensureProductBucket();
-  const path = `${productId}/${crypto.randomUUID()}.${extensionFor(file)}`;
+  const ext = file.type === "image/svg+xml" ? "svg" : extensionFor(file);
+  const path = `${prefix}/${crypto.randomUUID()}.${ext}`;
   const { error } = await supabase()
     .storage.from(PRODUCT_BUCKET)
     .upload(path, file, { contentType: file.type, upsert: false });
@@ -91,6 +104,26 @@ export async function uploadProductImage(productId: string, file: File): Promise
   const { data } = supabase().storage.from(PRODUCT_BUCKET).getPublicUrl(path);
   return data.publicUrl;
 }
+
+/** Upload één foto voor een product; geeft een publieke URL terug. */
+export async function uploadProductImage(productId: string, file: File): Promise<string> {
+  return uploadNaarProductBucket(productId, file, IMAGE_MIME);
+}
+
+/** Foto van één uitvoering (bv. de gunmetal-versie van een kraan). */
+export async function uploadVariantImage(variantId: string, file: File): Promise<string> {
+  return uploadNaarProductBucket(`variants/${variantId}`, file, IMAGE_MIME);
+}
+
+/** Merklogo's mogen ook SVG zijn — zo levert een fabrikant ze meestal aan. */
+const LOGO_MIME = new Set([...IMAGE_MIME, "image/svg+xml"]);
+
+export async function uploadBrandLogo(brandId: string, file: File): Promise<string> {
+  return uploadNaarProductBucket(`brands/${brandId}`, file, LOGO_MIME);
+}
+
+/** Werkt voor alles wat via de productbucket is geüpload (foto, logo, uitvoering). */
+export const deleteBrandLogoByUrl = deleteProductImageByUrl;
 
 export async function deleteProductImageByUrl(url: string): Promise<void> {
   const marker = `/storage/v1/object/public/${PRODUCT_BUCKET}/`;
