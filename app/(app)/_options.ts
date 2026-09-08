@@ -77,7 +77,7 @@ async function listProjects(): Promise<SelectOption[]> {
 }
 
 async function listActiveProducts(): Promise<ProductOption[]> {
-  return db.query.products.findMany({
+  const rijen = await db.query.products.findMany({
     // Losse deuren (leaf) niet direct verkoopbaar — alleen de SET-producten.
     // De sets (sku …-SET) en het beslag (categorie Beslag) blijven gewoon kiesbaar.
     where: and(
@@ -88,6 +88,25 @@ async function listActiveProducts(): Promise<ProductOption[]> {
     orderBy: [asc(products.category), asc(products.name)],
     limit: 2000,
   });
+
+  // De uitvoeringen uitkleden tot wat de kiezer echt gebruikt.
+  //
+  // Twee redenen. De payload: met een merkassortiment erbij dragen 1.500
+  // producten samen ruim 9.000 uitvoeringen, en die gingen integraal mee naar
+  // de browser op élke offerte- en factuurpagina (2,4 MB). En de inhoud: in
+  // die volle jsonb zitten inkoop- en kostprijzen per uitvoering, en die horen
+  // sowieso niet in de browser thuis.
+  return rijen.map((p) => ({
+    ...p,
+    additionalSizes:
+      p.additionalSizes?.map((m) => ({
+        sku: m.sku,
+        label: m.label,
+        priceEur: m.priceEur ?? null,
+        inStock: m.inStock,
+        stockQty: m.stockQty ?? null,
+      })) ?? null,
+  }));
 }
 
 export async function getProductCategories(): Promise<string[]> {
