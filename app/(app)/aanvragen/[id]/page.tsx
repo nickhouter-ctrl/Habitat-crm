@@ -2,8 +2,10 @@ import { eq } from "drizzle-orm";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
+import { AiMailForm } from "@/components/ai-mail-form";
 import { ConfirmSubmit } from "@/components/confirm-submit";
 import { SubmitButton } from "@/components/submit-button";
+import { aiReplyConfigured } from "@/lib/ai-reply";
 import { asStringArray } from "@/lib/documents";
 
 import {
@@ -23,6 +25,7 @@ import { quoteRequests } from "@/lib/db/schema";
 import { formatDate } from "@/lib/utils";
 import {
   acceptQuoteRequest,
+  aiAanvraagConcept,
   deleteQuoteRequest,
   mailQuoteRequestCustomer,
   proposeSlots,
@@ -70,6 +73,7 @@ export default async function QuoteRequestDetailPage({
   const schedule = scheduleAppointment.bind(null, id);
   const propose = proposeSlots.bind(null, id);
   const mailCustomer = mailQuoteRequestCustomer.bind(null, id);
+  const aiConcept = aiAanvraagConcept.bind(null, id);
 
   return (
     <>
@@ -278,18 +282,13 @@ export default async function QuoteRequestDetailPage({
                   Mail kon niet verstuurd worden.
                 </p>
               )}
-              <form action={mailCustomer} className="space-y-2">
-                <Input name="subject" defaultValue="Je aanvraag bij Habitat One" />
-                <Textarea
-                  name="message"
-                  rows={4}
-                  required
-                  placeholder="Bijv. een extra vraag aan de klant…"
-                />
-                <SubmitButton variant="secondary" className="w-full" pendingLabel="Versturen…">
-                  Versturen naar {req.email}
-                </SubmitButton>
-              </form>
+              <AiMailForm
+                verstuur={mailCustomer}
+                genereer={aiConcept}
+                defaultSubject="Je aanvraag bij Habitat One"
+                toEmail={req.email}
+                aiBeschikbaar={aiReplyConfigured()}
+              />
             </CardContent>
           </Card>
 

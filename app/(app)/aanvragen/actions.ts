@@ -7,8 +7,10 @@ import { headers } from "next/headers";
 import { requireWriteUser } from "@/lib/auth/guards";
 
 import { auth } from "@/auth";
+import { genereerMailAntwoord } from "@/lib/ai-reply";
 import { db } from "@/lib/db";
-import { activities, contacts, quoteRequests } from "@/lib/db/schema";
+import { activities, contacts, quoteRequests, users } from "@/lib/db/schema";
+import { asStringArray } from "@/lib/documents";
 import { appointmentProposalEmail, sendEmail } from "@/lib/email";
 import { confirmAppointment } from "@/lib/appointments";
 
@@ -182,6 +184,50 @@ export async function proposeSlots(quoteRequestId: string, formData: FormData) {
   revalidatePath("/aanvragen");
   revalidatePath(`/aanvragen/${quoteRequestId}`);
   redirect(`/aanvragen/${quoteRequestId}?proposed=1`);
+}
+
+/** AI-concept voor "Mail de klant": nette, professionele mail in de taal van
+ *  de aanvraag. De `instructie` is wat de medewerker alvast in het tekstvak
+ *  typte (mag leeg). Alleen een concept — versturen blijft een aparte klik. */
+export async function aiAanvraagConcept(
+  quoteRequestId: string,
+  instructie: string,
+): Promise<{ subject: string; body: string } | null> {
+  const user = await requireUser();
+  const req = await db.query.quoteRequests.findFirst({ where: eq(quoteRequests.id, quoteRequestId) });
+  if (!req) throw new Error("Aanvraag niet gevonden");
+
+  // Naam vers uit de DB — de JWT-sessie kan een oude naam cachen.
+  const me = await db.query.users.findFirst({
+    where: eq(users.id, user.id),
+    columns: { name: true },
+  });
+
+  const kindTekst: Record<string, string> = {
+    quote: "offerte-aanvraag via de website",
+    appointment: "verzoek voor een showroombezoek/afspraak",
+    contact: "contactbericht via de website",
+  };
+
+  return genereerMailAntwoord({
+    soort: "aanvraag",
+    klantNaam: req.name,
+    klantEmail: req.email,
+    onderwerp: kindTekst[req.kind] ?? "aanvraag via de website",
+    bericht:
+      [
+        req.message?.trim(),
+        req.appointmentDate || req.appointmentTime
+          ? `Gewenst moment: ${[req.appointmentDate, req.appointmentTime].filter(Boolean).join(" ")}`
+          : null,
+      ]
+        .filter(Boolean)
+        .join("\n\n") || "(geen berichttekst — alleen gegevens en/of producten)",
+    taal: req.locale,
+    producten: asStringArray(req.productNames),
+    medewerker: me?.name ?? user.name ?? "Habitat One",
+    instructie,
+  });
 }
 
 /** Mail de klant direct vanuit een aanvraag (bv. met extra vragen). */

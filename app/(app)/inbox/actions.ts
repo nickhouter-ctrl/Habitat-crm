@@ -7,9 +7,12 @@ import { requireWriteUser } from "@/lib/auth/guards";
 
 import { auth } from "@/auth";
 import { extractInvoiceFieldsWithAI } from "@/lib/ai-invoice-extract";
+import { genereerMailAntwoord } from "@/lib/ai-reply";
 import { extractAttachmentAmount } from "@/lib/amount-extract";
 import { db } from "@/lib/db";
-import { activities, emailInbox, mailAttachments, purchaseOrders, quoteRequests } from "@/lib/db/schema";
+import { activities, emailInbox, mailAttachments, purchaseOrders, quoteRequests, users } from "@/lib/db/schema";
+import { escapeHtml, sendEmail } from "@/lib/email";
+import { recordSentEmail } from "@/lib/sent-email";
 import { runImapPoll, type ImapPollResult } from "@/lib/imap-poll";
 import { copyMailAttachmentToPoBucket } from "@/lib/storage";
 
@@ -153,6 +156,107 @@ export async function saveMailNotes(emailId: string, notes: string) {
     .set({ notes, updatedAt: new Date() })
     .where(eq(emailInbox.id, emailId));
   revalidatePath(`/inbox/${emailId}`);
+}
+
+/** Platte tekst van een mail voor de AI: bodyText, anders HTML zonder tags. */
+function mailPlainText(mail: { bodyText: string | null; bodyHtml: string | null }): string {
+  if (mail.bodyText?.trim()) return mail.bodyText.trim();
+  const html = mail.bodyHtml ?? "";
+  return html
+    .replace(/<(style|script)[\s\S]*?<\/\1>/gi, "")
+    .replace(/<br\s*\/?>/gi, "\n")
+    .replace(/<\/(p|div|tr|li|h[1-6])>/gi, "\n")
+    .replace(/<[^>]+>/g, "")
+    .replace(/&nbsp;/gi, " ")
+    .replace(/&amp;/gi, "&")
+    .replace(/&lt;/gi, "<")
+    .replace(/&gt;/gi, ">")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
+/** AI-concept voor een antwoord op een inbox-mail. Onderwerp blijft "Re: …";
+ *  de `instructie` is wat de medewerker alvast in het tekstvak typte. */
+export async function aiMailConcept(
+  emailId: string,
+  instructie: string,
+): Promise<{ subject: string; body: string } | null> {
+  const user = await requireUser();
+  const mail = await db.query.emailInbox.findFirst({ where: eq(emailInbox.id, emailId) });
+  if (!mail) throw new Error("Mail niet gevonden");
+
+  // Naam vers uit de DB — de JWT-sessie kan een oude naam cachen.
+  const me = await db.query.users.findFirst({
+    where: eq(users.id, user.id),
+    columns: { name: true },
+  });
+
+  const kaal = (mail.subject ?? "").replace(/^(re|fwd?|aw):\s*/i, "").trim();
+  return genereerMailAntwoord({
+    soort: "mail",
+    klantNaam: mail.fromName,
+    klantEmail: mail.fromEmail,
+    onderwerp: mail.subject,
+    bericht: mailPlainText(mail) || "(lege mail)",
+    medewerker: me?.name ?? user.name ?? "Habitat One",
+    instructie,
+    vastOnderwerp: kaal ? `Re: ${kaal}` : "Re: je bericht aan Habitat One",
+  });
+}
+
+/** Beantwoord een inbox-mail rechtstreeks vanuit het CRM. Threading via
+ *  In-Reply-To zodat het antwoord in dezelfde conversatie belandt. */
+export async function replyToMail(emailId: string, formData: FormData) {
+  const user = await requireUser();
+  const mail = await db.query.emailInbox.findFirst({ where: eq(emailInbox.id, emailId) });
+  if (!mail) throw new Error("Mail niet gevonden");
+  if (!mail.fromEmail) throw new Error("Mail heeft geen afzenderadres");
+
+  const kaal = (mail.subject ?? "").replace(/^(re|fwd?|aw):\s*/i, "").trim();
+  const subject =
+    String(formData.get("subject") ?? "").trim() || (kaal ? `Re: ${kaal}` : "Re: je bericht");
+  const message = String(formData.get("message") ?? "").trim();
+  if (!message) redirect(`/inbox/${emailId}?beantwoord=leeg`);
+
+  const me = await db.query.users.findFirst({
+    where: eq(users.id, user.id),
+    columns: { name: true },
+  });
+
+  let sent = false;
+  try {
+    const res = await sendEmail({
+      to: mail.fromEmail,
+      subject,
+      html: `<div style="font-family:Arial,Helvetica,sans-serif;color:#2a2620;max-width:560px;white-space:pre-wrap">${escapeHtml(message)}</div>`,
+      text: message,
+      fromUser: { name: me?.name ?? user.name },
+      inReplyTo: mail.messageId ?? undefined,
+      references: mail.messageId ?? undefined,
+    });
+    sent = res.sent;
+  } catch (err) {
+    console.warn("[inbox] antwoord versturen mislukt:", err);
+  }
+
+  if (sent) {
+    await recordSentEmail({
+      kind: "other",
+      toEmail: mail.fromEmail,
+      subject,
+      html: message,
+      text: message,
+    });
+    await db.insert(activities).values({
+      type: "email",
+      subject: `Antwoord op mail — ${subject}`,
+      body: message,
+      authorId: user.id,
+    });
+  }
+
+  revalidatePath(`/inbox/${emailId}`);
+  redirect(`/inbox/${emailId}?beantwoord=${sent ? "1" : "0"}`);
 }
 
 /**

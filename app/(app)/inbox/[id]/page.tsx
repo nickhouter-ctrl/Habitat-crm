@@ -3,7 +3,9 @@ import { ArrowLeft, Archive, Download, FileText, Link2, Mail, Paperclip, Receipt
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
+import { AiMailForm } from "@/components/ai-mail-form";
 import { Badge, Card, LinkButton, PageHeader, buttonClass } from "@/components/ui";
+import { aiReplyConfigured } from "@/lib/ai-reply";
 import { db } from "@/lib/db";
 import { emailInbox, mailAttachments, purchaseOrders, quoteRequests } from "@/lib/db/schema";
 import { CATEGORIES } from "@/lib/email-categories";
@@ -11,10 +13,12 @@ import { sanitizeMailHtml } from "@/lib/sanitize-mail-html";
 import { cn, formatEUR } from "@/lib/utils";
 
 import {
+  aiMailConcept,
   archiveMail,
   linkMailToPurchaseOrder,
   linkMailToQuoteRequest,
   reopenMail,
+  replyToMail,
   saveMailNotes,
 } from "../actions";
 import { InvoiceFromMailButtons } from "../invoice-from-mail-buttons";
@@ -31,8 +35,15 @@ function formatDate(d: Date | null): string {
   });
 }
 
-export default async function MailDetailPage({ params }: { params: Promise<{ id: string }> }) {
+export default async function MailDetailPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ id: string }>;
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}) {
   const { id } = await params;
+  const sp = await searchParams;
   const mail = await db.query.emailInbox.findFirst({ where: eq(emailInbox.id, id) });
   if (!mail) notFound();
 
@@ -217,6 +228,37 @@ export default async function MailDetailPage({ params }: { params: Promise<{ id:
 
         {/* RIGHT: actions sidebar */}
         <div className="space-y-4">
+          {/* Beantwoorden — met AI-concept */}
+          {mail.fromEmail && (
+            <Card className="p-4">
+              <p className="mb-3 text-xs font-medium uppercase tracking-wide text-muted">
+                <Mail className="mr-1 inline h-3 w-3" /> Beantwoorden
+              </p>
+              {sp.beantwoord === "1" && (
+                <p className="mb-2 rounded-md bg-success/10 px-3 py-2 text-xs text-success">
+                  ✓ Antwoord verstuurd naar {mail.fromEmail}.
+                </p>
+              )}
+              {sp.beantwoord === "0" && (
+                <p className="mb-2 rounded-md bg-warning/10 px-3 py-2 text-xs text-warning">
+                  Antwoord kon niet verstuurd worden.
+                </p>
+              )}
+              <AiMailForm
+                verstuur={replyToMail.bind(null, mail.id)}
+                genereer={aiMailConcept.bind(null, mail.id)}
+                defaultSubject={
+                  (mail.subject ?? "").replace(/^(re|fwd?|aw):\s*/i, "").trim()
+                    ? `Re: ${(mail.subject ?? "").replace(/^(re|fwd?|aw):\s*/i, "").trim()}`
+                    : "Re: je bericht"
+                }
+                toEmail={mail.fromEmail}
+                placeholder="Typ je antwoord, of kort wat je wilt zeggen en klik ✨…"
+                aiBeschikbaar={aiReplyConfigured()}
+              />
+            </Card>
+          )}
+
           {/* Status */}
           <Card className="p-4">
             <p className="text-xs font-medium uppercase tracking-wide text-muted">Status</p>
