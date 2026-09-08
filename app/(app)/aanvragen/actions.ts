@@ -12,6 +12,7 @@ import { db } from "@/lib/db";
 import { activities, contacts, quoteRequests, users } from "@/lib/db/schema";
 import { asStringArray } from "@/lib/documents";
 import { appointmentProposalEmail, sendEmail } from "@/lib/email";
+import { recordSentEmail } from "@/lib/sent-email";
 import { catalogusMailBijlagen, listCatalogFiles } from "@/lib/storage";
 import { confirmAppointment } from "@/lib/appointments";
 
@@ -257,6 +258,19 @@ export async function mailQuoteRequestCustomer(quoteRequestId: string, formData:
     sent = res.sent;
   } catch (err) {
     console.warn("[aanvragen] klant-mail mislukt:", err);
+  }
+
+  if (sent) {
+    // Archief: zo verschijnt de mail in de conversatie op de aanvraag-pagina.
+    const tekst = message + (bijlagePaden.length > 0 ? `\n\n📎 ${bijlagePaden.join(", ")}` : "");
+    await recordSentEmail({
+      kind: "other",
+      toEmail: req.email,
+      subject,
+      html: `<div style="white-space:pre-wrap">${escapeHtml(tekst)}</div>`,
+      text: tekst,
+      contactId: req.contactId,
+    });
   }
 
   await db.insert(activities).values({

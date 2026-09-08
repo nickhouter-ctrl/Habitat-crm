@@ -245,12 +245,14 @@ export async function replyToMail(emailId: string, formData: FormData) {
   }
 
   if (sent) {
+    const archiefTekst =
+      message + (bijlagePaden.length > 0 ? `\n\n📎 ${bijlagePaden.join(", ")}` : "");
     await recordSentEmail({
       kind: "other",
       toEmail: mail.fromEmail,
       subject,
-      html: message,
-      text: message,
+      html: `<div style="white-space:pre-wrap">${escapeHtml(archiefTekst)}</div>`,
+      text: archiefTekst,
     });
     await db.insert(activities).values({
       type: "email",

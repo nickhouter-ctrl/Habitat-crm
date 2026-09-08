@@ -1,4 +1,4 @@
-import { eq } from "drizzle-orm";
+import { desc, eq, ilike } from "drizzle-orm";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
@@ -22,7 +22,7 @@ import {
   Textarea,
 } from "@/components/ui";
 import { db } from "@/lib/db";
-import { quoteRequests } from "@/lib/db/schema";
+import { emailInbox, quoteRequests, sentEmails } from "@/lib/db/schema";
 import { formatDate } from "@/lib/utils";
 import {
   acceptQuoteRequest,
@@ -61,6 +61,53 @@ export default async function QuoteRequestDetailPage({
   if (!req) notFound();
 
   const catalogi = await listCatalogFiles();
+
+  // Conversatie: alles wat wij naar dit adres stuurden (mailarchief) + alles
+  // wat er per mail van dit adres binnenkwam (inbox), op datum. Zo blijft de
+  // hele uitwisseling bewaard op de plek van de aanvraag.
+  const [uitgaand, binnengekomen] = await Promise.all([
+    db
+      .select({
+        id: sentEmails.id,
+        subject: sentEmails.subject,
+        body: sentEmails.body,
+        createdAt: sentEmails.createdAt,
+      })
+      .from(sentEmails)
+      .where(ilike(sentEmails.toEmail, req.email))
+      .orderBy(desc(sentEmails.createdAt))
+      .limit(50),
+    db
+      .select({
+        id: emailInbox.id,
+        subject: emailInbox.subject,
+        bodyText: emailInbox.bodyText,
+        receivedAt: emailInbox.receivedAt,
+      })
+      .from(emailInbox)
+      .where(ilike(emailInbox.fromEmail, req.email))
+      .orderBy(desc(emailInbox.receivedAt))
+      .limit(50),
+  ]);
+
+  const conversatie = [
+    ...uitgaand.map((m) => ({
+      soort: "uit" as const,
+      id: m.id,
+      subject: m.subject,
+      tekst: m.body ?? "",
+      datum: m.createdAt,
+      href: null as string | null,
+    })),
+    ...binnengekomen.map((m) => ({
+      soort: "in" as const,
+      id: m.id,
+      subject: m.subject,
+      tekst: m.bodyText ?? "",
+      datum: m.receivedAt,
+      href: `/inbox/${m.id}`,
+    })),
+  ].sort((a, b) => (a.datum?.getTime() ?? 0) - (b.datum?.getTime() ?? 0));
 
   const meta = STATUS_META[req.status] ?? STATUS_META.pending;
   const kindMeta = KIND_META[req.kind] ?? KIND_META.quote;
@@ -121,6 +168,47 @@ export default async function QuoteRequestDetailPage({
               </CardHeader>
               <CardContent>
                 <p className="whitespace-pre-line text-sm leading-relaxed">{req.message}</p>
+              </CardContent>
+            </Card>
+          )}
+
+          {conversatie.length > 0 && (
+            <Card>
+              <CardHeader>
+                <CardTitle>Conversatie</CardTitle>
+                <span className="text-xs text-muted">{conversatie.length}</span>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                {conversatie.map((m) => (
+                  <div
+                    key={`${m.soort}-${m.id}`}
+                    className={
+                      m.soort === "uit"
+                        ? "rounded-lg border border-accent/30 bg-accent/5 p-3"
+                        : "rounded-lg border border-border bg-background-soft p-3"
+                    }
+                  >
+                    <div className="mb-1.5 flex flex-wrap items-center gap-2 text-xs">
+                      <Badge tone={m.soort === "uit" ? "info" : "neutral"}>
+                        {m.soort === "uit" ? "Wij → klant" : `${req.name} → ons`}
+                      </Badge>
+                      {m.datum && <span className="text-muted">{formatDate(m.datum)}</span>}
+                      {m.subject && (
+                        <span className="min-w-0 truncate font-medium" title={m.subject}>
+                          {m.subject}
+                        </span>
+                      )}
+                      {m.href && (
+                        <Link href={m.href} className="ml-auto text-accent hover:underline">
+                          Open in inbox →
+                        </Link>
+                      )}
+                    </div>
+                    <p className="max-h-56 overflow-y-auto whitespace-pre-line text-sm leading-relaxed">
+                      {m.tekst || "(geen tekst)"}
+                    </p>
+                  </div>
+                ))}
               </CardContent>
             </Card>
           )}
