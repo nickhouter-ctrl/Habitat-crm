@@ -421,3 +421,43 @@ export async function deleteCatalogFile(path: string): Promise<void> {
     /* best effort */
   }
 }
+
+/** Download één catalogus-PDF als bytes (voor mailbijlagen). Null bij fout. */
+export async function downloadCatalogFile(path: string): Promise<Buffer | null> {
+  if (!path) return null;
+  try {
+    const { data, error } = await supabase().storage.from(CATALOG_BUCKET).download(path);
+    if (error || !data) return null;
+    return Buffer.from(await data.arrayBuffer());
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Haal gekozen catalogus-PDF's op als mailbijlagen. Paden worden tegen de
+ * bibliotheek gecontroleerd (whitelist — het formulier kan geen willekeurige
+ * paden meesturen) en samen op max 20 MB begrensd; daarboven een duidelijke
+ * fout in plaats van een mail die stilletjes door de mailserver wordt geweigerd.
+ */
+export async function catalogusMailBijlagen(
+  paths: string[],
+): Promise<{ filename: string; content: Buffer; contentType: string }[]> {
+  const uniek = [...new Set(paths.filter(Boolean))];
+  if (uniek.length === 0) return [];
+  const bibliotheek = new Set((await listCatalogFiles()).map((f) => f.path));
+  const geldig = uniek.filter((p) => bibliotheek.has(p));
+
+  const bijlagen: { filename: string; content: Buffer; contentType: string }[] = [];
+  let totaal = 0;
+  for (const path of geldig) {
+    const bytes = await downloadCatalogFile(path);
+    if (!bytes) throw new Error(`Bijlage "${path}" kon niet worden opgehaald.`);
+    totaal += bytes.length;
+    if (totaal > 20 * 1024 * 1024) {
+      throw new Error("Bijlagen samen groter dan 20 MB — kies er minder.");
+    }
+    bijlagen.push({ filename: path, content: bytes, contentType: "application/pdf" });
+  }
+  return bijlagen;
+}

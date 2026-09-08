@@ -10,6 +10,7 @@ import { db } from "@/lib/db";
 import { emailInbox, mailAttachments, purchaseOrders, quoteRequests } from "@/lib/db/schema";
 import { CATEGORIES } from "@/lib/email-categories";
 import { sanitizeMailHtml } from "@/lib/sanitize-mail-html";
+import { listCatalogFiles } from "@/lib/storage";
 import { cn, formatEUR } from "@/lib/utils";
 
 import {
@@ -46,6 +47,8 @@ export default async function MailDetailPage({
   const sp = await searchParams;
   const mail = await db.query.emailInbox.findFirst({ where: eq(emailInbox.id, id) });
   if (!mail) notFound();
+
+  const catalogi = await listCatalogFiles();
 
   // Suggesties: PO's die mogelijk bij deze mail horen (zelfde supplier-naam in subject of from)
   const fromDomain = mail.fromEmail?.split("@")[1] ?? "";
@@ -255,6 +258,7 @@ export default async function MailDetailPage({
                 toEmail={mail.fromEmail}
                 placeholder="Typ je antwoord, of kort wat je wilt zeggen en klik ✨…"
                 aiBeschikbaar={aiReplyConfigured()}
+                bijlagen={catalogi.map((f) => ({ path: f.path, name: f.name, size: f.size }))}
               />
             </Card>
           )}

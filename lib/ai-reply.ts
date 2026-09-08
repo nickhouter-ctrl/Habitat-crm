@@ -47,6 +47,9 @@ export interface ReplyDraftRequest {
   instructie?: string | null;
   /** Vast onderwerp (bv. "Re: …" bij een mail-antwoord) — dan schrijft de AI alleen de body. */
   vastOnderwerp?: string | null;
+  /** Beschikbare brochures/catalogi (bestandsnamen uit /catalogi) — de AI kiest
+   *  welke als bijlage meegaan als de klant of de medewerker erom vraagt. */
+  beschikbareBijlagen?: string[];
 }
 
 const TAAL_NAAM: Record<string, string> = {
@@ -57,10 +60,15 @@ const TAAL_NAAM: Record<string, string> = {
   fr: "Frans",
 };
 
+export interface MailConcept {
+  subject: string;
+  body: string;
+  /** Door de AI gekozen bijlagen — altijd exact bestandsnamen uit `beschikbareBijlagen`. */
+  bijlagen: string[];
+}
+
 /** Genereer een conceptantwoord. Null bij ontbrekende key of fout. */
-export async function genereerMailAntwoord(
-  req: ReplyDraftRequest,
-): Promise<{ subject: string; body: string } | null> {
+export async function genereerMailAntwoord(req: ReplyDraftRequest): Promise<MailConcept | null> {
   const key = process.env.ANTHROPIC_API_KEY;
   if (!key) return null;
 
@@ -75,12 +83,19 @@ ${req.klantNaam ? `Naam van de klant: ${req.klantNaam}.` : ""}
 ${req.producten && req.producten.length > 0 ? `De aanvraag gaat over deze producten: ${req.producten.join(", ")}.` : ""}
 ${req.instructie?.trim() ? `AANWIJZING VAN DE MEDEWERKER (verwerk dit inhoudelijk in de mail, netjes uitgeschreven): ${req.instructie.trim()}` : "Er is geen aanwijzing meegegeven: schrijf een passend, concreet antwoord op wat de klant vraagt. Kun je iets niet toezeggen (prijs, levertijd, beschikbaarheid), zeg dan dat we er persoonlijk op terugkomen."}
 ${req.vastOnderwerp ? `Het onderwerp staat vast: "${req.vastOnderwerp}" — geef dat exact zo terug.` : "Bedenk een kort, passend onderwerp in de doeltaal."}
+${
+  req.beschikbareBijlagen && req.beschikbareBijlagen.length > 0
+    ? `BESCHIKBARE BIJLAGEN (brochures/catalogi die als PDF meegestuurd kunnen worden):
+${req.beschikbareBijlagen.map((n) => `- ${n}`).join("\n")}
+Kies er ALLEEN bijlagen uit als de klant erom vraagt óf de aanwijzing van de medewerker erom vraagt; anders een lege lijst. Gebruik de bestandsnamen EXACT zoals hierboven. Noem in de mailtekst UITSLUITEND een bijlage als je die ook echt in "attachments" teruggeeft ("in de bijlage vind je …"). Wordt er om een brochure gevraagd die NIET in de lijst staat, geef dan een lege lijst en schrijf dat we die informatie zo snel mogelijk nasturen — beweer nooit dat er iets is bijgevoegd wat er niet is.`
+    : ""
+}
 
 === BERICHT VAN DE KLANT ===
 ${req.onderwerp ? `Onderwerp: ${req.onderwerp}\n` : ""}${req.bericht.slice(0, 8000)}
 === EINDE BERICHT ===
 
-Geef ALLEEN een JSON-object terug (geen markdown): {"subject": "...", "body": "..."}. De body is platte tekst met \\n voor regeleindes, begint met een aanhef en eindigt met de ondertekening.`;
+Geef ALLEEN een JSON-object terug (geen markdown): {"subject": "...", "body": "...", "attachments": ["bestandsnaam", ...]}. De body is platte tekst met \\n voor regeleindes, begint met een aanhef en eindigt met de ondertekening. "attachments" is een lege lijst als er niets meegestuurd hoeft te worden.`;
 
   try {
     const res = await fetch(API_URL, {
@@ -109,13 +124,22 @@ Geef ALLEEN een JSON-object terug (geen markdown): {"subject": "...", "body": ".
       .map((b) => b.text!)
       .join("\n");
     if (!text) return null;
-    const raw = JSON.parse(stripFences(text)) as { subject?: unknown; body?: unknown };
+    const raw = JSON.parse(stripFences(text)) as {
+      subject?: unknown;
+      body?: unknown;
+      attachments?: unknown;
+    };
     const body = typeof raw.body === "string" ? raw.body.trim() : "";
     if (!body) return null;
     const subject =
       req.vastOnderwerp?.trim() ||
       (typeof raw.subject === "string" && raw.subject.trim() ? raw.subject.trim() : "Habitat One");
-    return { subject, body };
+    // Alleen bijlagen die écht in de bibliotheek bestaan — de AI mag niets verzinnen.
+    const beschikbaar = new Set(req.beschikbareBijlagen ?? []);
+    const bijlagen = Array.isArray(raw.attachments)
+      ? raw.attachments.filter((a): a is string => typeof a === "string" && beschikbaar.has(a))
+      : [];
+    return { subject, body, bijlagen };
   } catch (err) {
     console.warn("AI-antwoord error:", err);
     return null;

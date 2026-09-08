@@ -12,6 +12,7 @@ import { db } from "@/lib/db";
 import { activities, contacts, quoteRequests, users } from "@/lib/db/schema";
 import { asStringArray } from "@/lib/documents";
 import { appointmentProposalEmail, sendEmail } from "@/lib/email";
+import { catalogusMailBijlagen, listCatalogFiles } from "@/lib/storage";
 import { confirmAppointment } from "@/lib/appointments";
 
 async function requireUser() {
@@ -192,7 +193,7 @@ export async function proposeSlots(quoteRequestId: string, formData: FormData) {
 export async function aiAanvraagConcept(
   quoteRequestId: string,
   instructie: string,
-): Promise<{ subject: string; body: string } | null> {
+): Promise<{ subject: string; body: string; bijlagen: string[] } | null> {
   const user = await requireUser();
   const req = await db.query.quoteRequests.findFirst({ where: eq(quoteRequests.id, quoteRequestId) });
   if (!req) throw new Error("Aanvraag niet gevonden");
@@ -227,6 +228,7 @@ export async function aiAanvraagConcept(
     producten: asStringArray(req.productNames),
     medewerker: me?.name ?? user.name ?? "Habitat One",
     instructie,
+    beschikbareBijlagen: (await listCatalogFiles()).map((f) => f.path),
   });
 }
 
@@ -240,13 +242,17 @@ export async function mailQuoteRequestCustomer(quoteRequestId: string, formData:
   const message = String(formData.get("message") ?? "").trim();
   if (!message) redirect(`/aanvragen/${quoteRequestId}?error=leeg`);
 
+  const bijlagePaden = formData.getAll("bijlage").map((v) => String(v));
+
   let sent = false;
   try {
+    const attachments = await catalogusMailBijlagen(bijlagePaden);
     const res = await sendEmail({
       to: req.email,
       subject,
       html: `<div style="font-family:Arial,Helvetica,sans-serif;color:#2a2620;max-width:560px;white-space:pre-wrap">${escapeHtml(message)}</div>`,
       text: message,
+      attachments: attachments.length > 0 ? attachments : undefined,
     });
     sent = res.sent;
   } catch (err) {
@@ -256,7 +262,9 @@ export async function mailQuoteRequestCustomer(quoteRequestId: string, formData:
   await db.insert(activities).values({
     type: "email",
     subject: `Mail naar klant — ${subject}`,
-    body: message,
+    body:
+      message +
+      (bijlagePaden.length > 0 ? `\n\nBijlagen: ${bijlagePaden.join(", ")}` : ""),
     contactId: req.contactId,
     authorId: user.id,
   });

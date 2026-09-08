@@ -7,6 +7,7 @@ import { ConfirmSubmit } from "@/components/confirm-submit";
 import { SubmitButton } from "@/components/submit-button";
 import { aiReplyConfigured } from "@/lib/ai-reply";
 import { asStringArray } from "@/lib/documents";
+import { listCatalogFiles } from "@/lib/storage";
 
 import {
   Badge,
@@ -58,6 +59,8 @@ export default async function QuoteRequestDetailPage({
   const sp = await searchParams;
   const req = await db.query.quoteRequests.findFirst({ where: eq(quoteRequests.id, id) });
   if (!req) notFound();
+
+  const catalogi = await listCatalogFiles();
 
   const meta = STATUS_META[req.status] ?? STATUS_META.pending;
   const kindMeta = KIND_META[req.kind] ?? KIND_META.quote;
@@ -288,6 +291,7 @@ export default async function QuoteRequestDetailPage({
                 defaultSubject="Je aanvraag bij Habitat One"
                 toEmail={req.email}
                 aiBeschikbaar={aiReplyConfigured()}
+                bijlagen={catalogi.map((f) => ({ path: f.path, name: f.name, size: f.size }))}
               />
             </CardContent>
           </Card>

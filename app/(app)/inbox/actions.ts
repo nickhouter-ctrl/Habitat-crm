@@ -14,7 +14,7 @@ import { activities, emailInbox, mailAttachments, purchaseOrders, quoteRequests,
 import { escapeHtml, sendEmail } from "@/lib/email";
 import { recordSentEmail } from "@/lib/sent-email";
 import { runImapPoll, type ImapPollResult } from "@/lib/imap-poll";
-import { copyMailAttachmentToPoBucket } from "@/lib/storage";
+import { catalogusMailBijlagen, copyMailAttachmentToPoBucket, listCatalogFiles } from "@/lib/storage";
 
 async function requireUser() {
   // Centrale guard: ingelogd én geen alleen-lezen (viewer) account.
@@ -180,7 +180,7 @@ function mailPlainText(mail: { bodyText: string | null; bodyHtml: string | null 
 export async function aiMailConcept(
   emailId: string,
   instructie: string,
-): Promise<{ subject: string; body: string } | null> {
+): Promise<{ subject: string; body: string; bijlagen: string[] } | null> {
   const user = await requireUser();
   const mail = await db.query.emailInbox.findFirst({ where: eq(emailInbox.id, emailId) });
   if (!mail) throw new Error("Mail niet gevonden");
@@ -201,6 +201,7 @@ export async function aiMailConcept(
     medewerker: me?.name ?? user.name ?? "Habitat One",
     instructie,
     vastOnderwerp: kaal ? `Re: ${kaal}` : "Re: je bericht aan Habitat One",
+    beschikbareBijlagen: (await listCatalogFiles()).map((f) => f.path),
   });
 }
 
@@ -223,13 +224,17 @@ export async function replyToMail(emailId: string, formData: FormData) {
     columns: { name: true },
   });
 
+  const bijlagePaden = formData.getAll("bijlage").map((v) => String(v));
+
   let sent = false;
   try {
+    const attachments = await catalogusMailBijlagen(bijlagePaden);
     const res = await sendEmail({
       to: mail.fromEmail,
       subject,
       html: `<div style="font-family:Arial,Helvetica,sans-serif;color:#2a2620;max-width:560px;white-space:pre-wrap">${escapeHtml(message)}</div>`,
       text: message,
+      attachments: attachments.length > 0 ? attachments : undefined,
       fromUser: { name: me?.name ?? user.name },
       inReplyTo: mail.messageId ?? undefined,
       references: mail.messageId ?? undefined,
@@ -250,7 +255,9 @@ export async function replyToMail(emailId: string, formData: FormData) {
     await db.insert(activities).values({
       type: "email",
       subject: `Antwoord op mail — ${subject}`,
-      body: message,
+      body:
+        message +
+        (bijlagePaden.length > 0 ? `\n\nBijlagen: ${bijlagePaden.join(", ")}` : ""),
       authorId: user.id,
     });
   }
