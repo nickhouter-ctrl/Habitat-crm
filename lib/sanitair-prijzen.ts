@@ -10,6 +10,12 @@ import { db } from "@/lib/db";
  *
  * De montageposten (Badkamers & sanitair) blijven vast — dit ververst alleen
  * de productprijzen onder "Eigen producten".
+ *
+ * EIGEN COLLECTIE betekent hier letterlijk: producten zonder merk. Een
+ * merkassortiment als Brauer telt duizenden artikelen in dezelfde categorieën
+ * (Douchesets, Douchewanden, Kranen) en zou het gemiddelde — en dus elke
+ * calculatie — ongemerkt verschuiven. Wie mét Brauer wil calculeren, kiest dat
+ * straks bewust in de calculator, inclusief kleur.
  */
 
 type Gem = { kost: number; verkoop: number };
@@ -36,7 +42,8 @@ export async function syncSanitairPrijzen(): Promise<number> {
   const cats = await db.execute<{ cat: string; kost: number | null; verkoop: number | null }>(sql`
     select category cat, avg(cost_eur)::float8 kost, avg(price_eur)::float8 verkoop
     from products
-    where price_eur is not null and category in ('Douchebakken','Douchesets','Douchewanden','Baden','Kranen','Spiegels')
+    where price_eur is not null and brand_id is null
+      and category in ('Douchebakken','Douchesets','Douchewanden','Baden','Kranen','Spiegels')
     group by category`);
   for (const c of cats) per.set(c.cat, { kost: c.kost ?? 0, verkoop: c.verkoop ?? 0 });
 
@@ -44,10 +51,10 @@ export async function syncSanitairPrijzen(): Promise<number> {
   // binnen "Toiletten".
   const [meubel] = await db.execute<{ kost: number | null; verkoop: number | null }>(sql`
     select avg(cost_eur)::float8 kost, avg(price_eur)::float8 verkoop from products
-    where category = 'Wastafels' and name ~* 'cabinet' and price_eur is not null`);
+    where category = 'Wastafels' and name ~* 'cabinet' and price_eur is not null and brand_id is null`);
   const [toilet] = await db.execute<{ kost: number | null; verkoop: number | null }>(sql`
     select avg(cost_eur)::float8 kost, avg(price_eur)::float8 verkoop from products
-    where category = 'Toiletten' and name ~* 'wall.?hung' and price_eur is not null`);
+    where category = 'Toiletten' and name ~* 'wall.?hung' and price_eur is not null and brand_id is null`);
 
   const posten: { naam: string; g: Gem }[] = [];
   const bak = per.get("Douchebakken");
