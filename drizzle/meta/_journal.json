@@ -400,6 +400,13 @@
       "when": 1788871184115,
       "tag": "0056_black_kinsey_walden",
       "breakpoints": true
+    },
+    {
+      "idx": 57,
+      "version": "7",
+      "when": 1788946636858,
+      "tag": "0057_chunky_obadiah_stane",
+      "breakpoints": true
     }
   ]
 }

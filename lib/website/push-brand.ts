@@ -29,7 +29,7 @@ type WebsiteProduct = Record<string, unknown> & {
 type OptieBlok = {
   product_id: number;
   axes: Array<{ key: string; label: string; values: Array<{ value: string; label: string; image?: string | null }> }>;
-  combinations: Array<{ sku: string; options: Record<string, string>; image?: string | null }>;
+  combinations: Array<{ sku: string; options: Record<string, string>; image?: string | null; images?: string[] | null }>;
 };
 
 const normSku = (s: string | null | undefined) => (s ?? "").trim().toUpperCase().replace(/\s+/g, "");
@@ -107,6 +107,8 @@ export async function pushBrandProductToWebsite(productId: string): Promise<Merk
     series: product.subcategory ?? null,
     product_type: product.category ?? null,
     collection: collectie,
+    /** Productfoto uit de bucket; de website gebruikt hem als kaartbeeld. */
+    image_url: product.imageUrl ?? null,
   };
 
   let websiteId: number;
@@ -145,6 +147,7 @@ export async function pushBrandProductToWebsite(productId: string): Promise<Merk
         sku: v.sku!,
         options: (v.options as Record<string, string>) ?? {},
         image: v.imageUrl ?? null,
+        images: v.images?.length ? v.images : null,
       })),
   };
   const bestaandBlok = opties.findIndex((o) => o.product_id === websiteId);

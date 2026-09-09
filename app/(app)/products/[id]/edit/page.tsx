@@ -487,6 +487,8 @@ export default async function EditProductPage({
                 discountPct: v.discountPct == null ? null : Number(v.discountPct),
                 purchaseCostEur: v.purchaseCostEur == null ? null : Number(v.purchaseCostEur),
                 imageUrl: v.imageUrl ?? "",
+                images: v.images ?? null,
+                tekening: typeof v.specs?.tekening === "string" ? v.specs.tekening : null,
                 isActive: v.isActive,
               }))}
               dealerDiscountPct={merk?.dealerDiscountPct == null ? null : Number(merk.dealerDiscountPct)}

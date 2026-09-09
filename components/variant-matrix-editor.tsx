@@ -14,6 +14,9 @@ type Rij = {
   discountPct: number | null;
   purchaseCostEur: number | null;
   imageUrl: string;
+  /** Extra foto's en technische tekening — alleen tonen, komen uit de import. */
+  images?: string[] | null;
+  tekening?: string | null;
   isActive: boolean;
 };
 
@@ -379,12 +382,34 @@ export function VariantMatrixEditor({
               placeholder="uit korting"
               className={num}
             />
-            <input
-              value={rij.imageUrl}
-              onChange={(e) => wijzig(i, { imageUrl: e.target.value })}
-              placeholder="https://…"
-              className={`${cell} text-xs`}
-            />
+            <div className="flex min-w-0 items-center gap-1">
+              {rij.imageUrl ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={rij.imageUrl} alt="" className="size-6 shrink-0 rounded border object-cover" />
+              ) : null}
+              <input
+                value={rij.imageUrl}
+                onChange={(e) => wijzig(i, { imageUrl: e.target.value })}
+                placeholder="https://…"
+                className={`${cell} text-xs`}
+              />
+              {rij.images?.length ? (
+                <span className="shrink-0 text-[11px] text-muted" title={`${rij.images.length} extra foto's`}>
+                  +{rij.images.length}
+                </span>
+              ) : null}
+              {rij.tekening ? (
+                <a
+                  href={rij.tekening}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="shrink-0 text-[11px] text-accent hover:underline"
+                  title="Technische tekening (PDF)"
+                >
+                  tekening
+                </a>
+              ) : null}
+            </div>
             <button
               type="button"
               onClick={() => setRijen((r) => r.filter((_, j) => j !== i))}

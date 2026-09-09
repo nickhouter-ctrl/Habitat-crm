@@ -14,7 +14,8 @@
  */
 import { normalizeCode } from "@/lib/variants";
 
-/** De zes kleuren van het kranenprogramma, met hun codeletter. */
+/** De kleuren van het kranenprogramma, met hun codeletter. Coffee (CF) kwam
+    er in de prijslijst van augustus 2026 bij als zevende PVD-kleur. */
 export const BRAUER_KLEUREN = [
   { value: "CE", label: "Chroom", familie: "Chroom", hex: "#cfd3d6" },
   { value: "S", label: "Mat zwart", familie: "Zwart", hex: "#1c1c1c" },
@@ -22,6 +23,7 @@ export const BRAUER_KLEUREN = [
   { value: "NG", label: "RVS-kleurig geborsteld", familie: "RVS", hex: "#9a9a95" },
   { value: "GM", label: "Gunmetal", familie: "Zilver", hex: "#5b5b5f" },
   { value: "GG", label: "Goud", familie: "Goud", hex: "#c2a15a" },
+  { value: "CF", label: "Coffee", familie: "Bruin", hex: "#6b4a3a" },
 ] as const;
 
 /**

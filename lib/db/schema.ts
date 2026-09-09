@@ -654,6 +654,8 @@ export const productVariants = pgTable(
     costEur: numeric({ precision: 14, scale: 2 }),
     /** Eigen foto van deze uitvoering — bij kleuren is dat de hele reden. */
     imageUrl: text(),
+    /** Extra foto's (sfeer, detail) van deze uitvoering — publieke URL's, na de hoofdfoto. */
+    images: jsonb().$type<string[]>(),
     stockQty: numeric({ precision: 14, scale: 3 }),
     availability: productAvailability().notNull().default("order_only"),
     isActive: boolean().notNull().default(true),
