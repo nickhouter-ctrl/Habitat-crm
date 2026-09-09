@@ -29,7 +29,7 @@ type WebsiteProduct = Record<string, unknown> & {
 type OptieBlok = {
   product_id: number;
   axes: Array<{ key: string; label: string; values: Array<{ value: string; label: string; image?: string | null }> }>;
-  combinations: Array<{ sku: string; options: Record<string, string>; image?: string | null; images?: string[] | null; drawing?: string | null }>;
+  combinations: Array<{ sku: string; options: Record<string, string>; image?: string | null; images?: string[] | null; drawing?: string | null; drawingImage?: string | null }>;
 };
 
 const normSku = (s: string | null | undefined) => (s ?? "").trim().toUpperCase().replace(/\s+/g, "");
@@ -149,6 +149,7 @@ export async function pushBrandProductToWebsite(productId: string): Promise<Merk
         image: v.imageUrl ?? null,
         images: v.images?.length ? v.images : null,
         drawing: typeof v.specs?.tekening === "string" ? v.specs.tekening : null,
+        drawingImage: typeof v.specs?.tekeningAfbeelding === "string" ? v.specs.tekeningAfbeelding : null,
       })),
   };
   const bestaandBlok = opties.findIndex((o) => o.product_id === websiteId);
