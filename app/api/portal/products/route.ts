@@ -1,7 +1,7 @@
-import { and, eq, isNotNull } from "drizzle-orm";
+import { and, eq, isNotNull, or } from "drizzle-orm";
 
 import { db } from "@/lib/db";
-import { products } from "@/lib/db/schema";
+import { brands, products } from "@/lib/db/schema";
 import { jsonCors, portalAuth, portalCors, tierPrice } from "@/lib/portal/api";
 
 /**
@@ -41,9 +41,16 @@ export async function GET(req: Request) {
       tradePriceEur: products.tradePriceEur,
       vatRate: products.vatRate,
       additionalSizes: products.additionalSizes,
+      brandId: products.brandId,
+      // Merkproducten (Brauer): korting voor aannemers alleen als het merk die heeft;
+      // anders de adviesprijs — nooit de automatische 20%.
+      brandTradePct: brands.tradeDiscountPct,
     })
     .from(products)
-    .where(and(eq(products.isActive, true), isNotNull(products.priceEur)));
+    .leftJoin(brands, eq(brands.id, products.brandId))
+    // Merkproducten dragen hun prijzen op de uitvoeringen (additionalSizes),
+    // niet op het product zelf — die horen er dus ook bij.
+    .where(and(eq(products.isActive, true), or(isNotNull(products.priceEur), isNotNull(products.additionalSizes))));
 
   const out: Record<string, { price: number; vat: number }> = {};
   // Per grondnaam: verzamel prijzen → kies de meest voorkomende (tie: hoogste).
@@ -65,7 +72,16 @@ export async function GET(req: Request) {
     }
     const base = p.priceEur != null ? Number(p.priceEur) : null;
     const trade = p.tradePriceEur != null ? Number(p.tradePriceEur) : null;
-    const factor = effTier === "aannemer" ? (base && trade && base > 0 ? trade / base : 0.8) : 1;
+    const factor =
+      effTier !== "aannemer"
+        ? 1
+        : p.brandId
+          ? p.brandTradePct != null
+            ? 1 - Number(p.brandTradePct) / 100
+            : 1
+          : base && trade && base > 0
+            ? trade / base
+            : 0.8;
     for (const s of p.additionalSizes ?? []) {
       if (s.sku && s.priceEur != null) {
         out[s.sku] = { price: Math.round(Number(s.priceEur) * factor * 100) / 100, vat };
