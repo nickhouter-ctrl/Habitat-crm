@@ -7,7 +7,6 @@ const TABS = [
   { href: "/rapporten/business", label: "Business" },
   { href: "/rapporten/inkoop-marge", label: "Inkoop & marge" },
   { href: "/rapporten/btw", label: "BTW" },
-  { href: "/rapporten/windows", label: "Kozijnen" },
   { href: "/rapporten/analytics", label: "Analytics" },
   { href: "/rapporten/seo", label: "SEO" },
   { href: "/rapporten/data-check", label: "Data-check" },

@@ -136,13 +136,18 @@ const NAV_GROUPS: { label: string | null; items: NavItem[] }[] = [
     ],
   },
   {
+    label: "Kozijnen",
+    items: [
+      { href: "/kozijnen", label: "Kozijnen", icon: AppWindow },
+    ],
+  },
+  {
     label: "Rapporten",
     items: [
       { href: "/rapporten", label: "Rapporten", icon: BarChart3 },
       { href: "/rapporten/seo", label: "SEO", icon: LineChart },
       { href: "/rapporten/analytics", label: "Analytics", icon: Activity },
       { href: "/rapporten/business", label: "Bedrijfsprofiel", icon: Store },
-      { href: "/rapporten/windows", label: "Kozijnen", icon: AppWindow },
       { href: "/rapporten/logboek", label: "Logboek", icon: History },
     ],
   },
