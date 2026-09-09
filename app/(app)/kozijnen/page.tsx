@@ -1,7 +1,6 @@
-import { AppWindow } from "lucide-react";
+import { AppWindow, ExternalLink } from "lucide-react";
 
-import { Badge, Card, CardContent, CardHeader, CardTitle, EmptyState, PageHeader, StatTile, TBody, Table, Td, Th, THead, Tr } from "@/components/ui";
-import { ReportsNav } from "@/components/reports-nav";
+import { Badge, Card, CardContent, CardHeader, CardTitle, EmptyState, LinkButton, PageHeader, StatTile, TBody, Table, Td, Th, THead, Tr } from "@/components/ui";
 import { formatEUR } from "@/lib/utils";
 import { getWindowsReport, windowsStatusLabel } from "@/lib/windows-report";
 
@@ -22,8 +21,7 @@ export default async function WindowsReportPage() {
   if (!r.configured) {
     return (
       <>
-        <PageHeader title="Kozijnen" subtitle="Habitat One Windows" />
-        <ReportsNav active="/rapporten/windows" />
+        <PageHeader title="Kozijnen" subtitle="Habitat One Windows" actions={<LinkButton href="/kozijnen/portaal" target="_blank" rel="noreferrer"><ExternalLink className="size-4" /> Open kozijnportaal</LinkButton>} />
         <EmptyState icon={<AppWindow />} title="Windows-gegevens niet gevonden" description="Het schema `windows` bestaat niet in deze database." />
       </>
     );
@@ -31,8 +29,14 @@ export default async function WindowsReportPage() {
   const t = r.totals;
   return (
     <>
-      <PageHeader title="Kozijnen" subtitle={`Habitat One Windows · kostprijs = fabriek × (1 + ${Math.round(r.pricing.importPct * 100)}% invoer + ${Math.round(r.pricing.handlingPct * 100)}% handling) · Habitat-marge ${Math.round(r.pricing.habitatMarginPct * 100)}%`} />
-      <ReportsNav active="/rapporten/windows" />
+      <PageHeader
+        title="Kozijnen"
+        subtitle={`Habitat One Windows · kostprijs = fabriek × (1 + ${Math.round(r.pricing.importPct * 100)}% invoer + ${Math.round(r.pricing.handlingPct * 100)}% handling) · Habitat-marge ${Math.round(r.pricing.habitatMarginPct * 100)}%`}
+        actions={<>
+          <LinkButton href="/kozijnen/portaal?next=/dealer" variant="secondary" target="_blank" rel="noreferrer">Eigen projecten</LinkButton>
+          <LinkButton href="/kozijnen/portaal?next=/admin" target="_blank" rel="noreferrer"><ExternalLink className="size-4" /> Open kozijnportaal</LinkButton>
+        </>}
+      />
 
       <div className="mb-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <StatTile label="Winst op kozijnen" value={formatEUR(t.profit)} hint={`marge ${pct(t.marginPct)} op kostprijs · ${t.orders} orders`} tone="success" />
@@ -43,7 +47,7 @@ export default async function WindowsReportPage() {
       <div className="mb-5 grid gap-3 sm:grid-cols-3">
         <StatTile label="Lopende orders" value={t.active} hint={`${t.delivered} geleverd`} />
         <StatTile label="Open offertes" value={r.quotes.open} hint={`${formatEUR(r.quotes.openValue)} dealerwaarde · ${r.quotes.accepted} geaccepteerd`} />
-        <StatTile label="Kozijnportaal" value={<a href={`${WINDOWS_URL}/admin`} target="_blank" rel="noreferrer" className="text-base font-medium text-accent underline">windows.habitat-one.com</a>} hint="beheer, orders en facturen" />
+        <StatTile label="Kozijnportaal" value={<a href="/kozijnen/portaal?next=/admin" target="_blank" rel="noreferrer" className="text-base font-medium text-accent underline">{WINDOWS_URL.replace(/^https?:\/\//, "")}</a>} hint="beheer, orders en facturen — u wordt automatisch ingelogd" />
       </div>
 
       <Card>
