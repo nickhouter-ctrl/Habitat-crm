@@ -42,6 +42,7 @@ import {
   Send,
   TrendingUp,
   Radar,
+  AppWindow,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import Image from "next/image";
@@ -141,6 +142,7 @@ const NAV_GROUPS: { label: string | null; items: NavItem[] }[] = [
       { href: "/rapporten/seo", label: "SEO", icon: LineChart },
       { href: "/rapporten/analytics", label: "Analytics", icon: Activity },
       { href: "/rapporten/business", label: "Bedrijfsprofiel", icon: Store },
+      { href: "/rapporten/windows", label: "Kozijnen", icon: AppWindow },
       { href: "/rapporten/logboek", label: "Logboek", icon: History },
     ],
   },
