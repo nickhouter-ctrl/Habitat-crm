@@ -6,7 +6,6 @@ const nextConfig: NextConfig = {
       // Property photos — Supabase Storage (CRM project)
       { protocol: "https", hostname: "kcsqmsmferruwnhsibxk.supabase.co" },
       // Habitat One catalogue / Supabase storage (legacy)
-      { protocol: "https", hostname: "vokzfqjyujcuuldvajvo.supabase.co" },
       // Holded-hosted assets (logos, attachments)
       { protocol: "https", hostname: "app.holded.com" },
     ],

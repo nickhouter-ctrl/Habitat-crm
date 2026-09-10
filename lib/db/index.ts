@@ -33,6 +33,9 @@ const client =
     // nooit gepipelined; de Supabase-pooler multiplext ze server-side.
     max: 40,
     prepare: false,
+    // Versleuteld naar de Supabase-pooler: postgres.js zet standaard géén TLS op,
+    // waardoor het verkeer Vercel → AWS onversleuteld liep. Lokaal (localhost) niet.
+    ssl: connectionString && !/localhost|127\.0\.0\.1/.test(connectionString) ? "require" : undefined,
     idle_timeout: 10,
     connect_timeout: 15,
     connection: {
