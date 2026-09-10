@@ -49,7 +49,9 @@ export async function sendEmail(input: {
   // je altijd meeleest zonder dat de klant het meeziet. Niet naar de ontvanger
   // zelf bcc'en.
   const defaultBcc = process.env.EMAIL_BCC?.trim() || process.env.NOTIFY_EMAIL?.trim() || process.env.GMAIL_USER?.trim();
-  const bccBase = [defaultBcc, input.bcc]
+  // Persoonlijke meldingen (noCompanyBcc): óók geen standaardkopie naar hi@ — anders
+  // lag er per keurder een exemplaar mét persoonlijke inloglink in het gedeelde postvak.
+  const bccBase = [input.noCompanyBcc ? undefined : defaultBcc, input.bcc]
     .filter((a): a is string => !!a && a.toLowerCase() !== input.to.toLowerCase())
     .join(", ") || undefined;
   // Voeg de vaste bedrijfs-BCC (nick@) toe op ELK transport — ook Resend/stub, die
