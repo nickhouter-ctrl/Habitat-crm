@@ -1,4 +1,5 @@
 import { eq } from "drizzle-orm";
+import { timingSafeEqual } from "node:crypto";
 import { NextResponse } from "next/server";
 
 import { db } from "@/lib/db";
@@ -25,8 +26,10 @@ export async function POST(request: Request) {
   }
   const url = new URL(request.url);
   const provided =
-    url.searchParams.get("key") ?? request.headers.get("x-webhook-secret");
-  if (provided !== expected) {
+    request.headers.get("x-webhook-secret") ?? url.searchParams.get("key") ?? "";
+  const a = Buffer.from(provided);
+  const b = Buffer.from(expected);
+  if (a.length !== b.length || !timingSafeEqual(a, b)) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
 

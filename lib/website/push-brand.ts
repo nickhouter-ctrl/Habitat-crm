@@ -13,6 +13,7 @@
  * wordt door de andere push integraal herschreven; daar tientallen
  * combinaties in verbouwen is precies het risico dat we niet nemen.
  */
+import { requireWriteUser } from "@/lib/auth/guards";
 import { asc, eq } from "drizzle-orm";
 
 import { db } from "@/lib/db";
@@ -71,6 +72,7 @@ export type MerkPushResultaat = {
 };
 
 export async function pushBrandProductToWebsite(productId: string): Promise<MerkPushResultaat> {
+  await requireWriteUser(); // server action: alleen ingelogd personeel met schrijfrechten
   const product = await db.query.products.findFirst({ where: eq(products.id, productId) });
   if (!product) throw new Error("Product niet gevonden.");
   if (!product.sku) throw new Error("Product heeft geen productcode.");

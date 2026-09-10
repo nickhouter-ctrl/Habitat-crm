@@ -30,11 +30,14 @@ export function portalCors(origin?: string | null): HeadersInit {
   };
 }
 
-/** Leest de portal-token uit de Authorization: Bearer header (of ?token=). */
+/**
+ * Leest de portal-token uit de Authorization: Bearer header. Bewust niet meer
+ * uit ?token=: een sessietoken van 30 dagen hoort niet in URL's (logs,
+ * browsergeschiedenis, Referer).
+ */
 export function portalAuth(req: Request): PortalToken | null {
   const h = req.headers.get("authorization");
-  let token = h?.toLowerCase().startsWith("bearer ") ? h.slice(7).trim() : null;
-  if (!token) token = new URL(req.url).searchParams.get("token");
+  const token = h?.toLowerCase().startsWith("bearer ") ? h.slice(7).trim() : null;
   return verifyPortalToken(token);
 }
 

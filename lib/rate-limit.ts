@@ -14,7 +14,13 @@ import { db } from "@/lib/db";
  * Tel een hit voor `key` en geef terug of die nog binnen de limiet valt.
  * Vast venster: na `windowSec` zonder reset start de teller opnieuw.
  */
-export async function rateLimit(key: string, max: number, windowSec: number): Promise<boolean> {
+/**
+ * `strikt: true` = fail-closed: kan de teller niet bijgewerkt worden (database
+ * onbereikbaar), dan weigeren we. Gebruik dat op inlog- en tokenpaden; op
+ * gewone formulieren blijft de oude fail-open, zodat een storing geen klanten
+ * buitensluit.
+ */
+export async function rateLimit(key: string, max: number, windowSec: number, opties: { strikt?: boolean } = {}): Promise<boolean> {
   try {
     const rows = (await db.execute(sql`
       insert into rate_limits ("key", window_start, "count")
@@ -35,8 +41,8 @@ export async function rateLimit(key: string, max: number, windowSec: number): Pr
     const count = Number(rows?.[0]?.count ?? 0);
     return count <= max;
   } catch (err) {
-    console.warn("[rate-limit] check mislukt (fail-open):", err);
-    return true;
+    console.warn(`[rate-limit] check mislukt (${opties.strikt ? "fail-closed" : "fail-open"}):`, err);
+    return !opties.strikt;
   }
 }
 

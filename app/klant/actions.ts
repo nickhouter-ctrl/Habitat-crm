@@ -64,7 +64,7 @@ export async function vraagLoginLink(formData: FormData) {
   const taal = kiesTaal(String(formData.get("lang") ?? "nl"));
   if (!email || !email.includes("@")) redirect(`/klant?lang=${taal}&sent=1`);
 
-  const magDoor = (await rateLimit(`klant-login:${email}`, 5, 15 * 60)) && (await ipLimietOk("login", 20));
+  const magDoor = (await rateLimit(`klant-login:${email}`, 5, 15 * 60, { strikt: true })) && (await ipLimietOk("login", 20));
   if (magDoor) {
     const cts = await klantContacten(email);
     const heeftProject =
@@ -102,7 +102,7 @@ export async function stuurNieuweLink(oudeToken: string, taalRaw: string) {
   const taal = kiesTaal(taalRaw);
   const email = emailUitVerlopenLoginToken(oudeToken);
   if (!email) redirect(`/klant?lang=${taal}&invalid=1`);
-  const magDoor = (await rateLimit(`klant-login:${email}`, 5, 15 * 60)) && (await ipLimietOk("login", 20));
+  const magDoor = (await rateLimit(`klant-login:${email}`, 5, 15 * 60, { strikt: true })) && (await ipLimietOk("login", 20));
   if (magDoor) {
     const url = `${PORTAAL_URL}/klant/login/${maakLoginToken(email)}?lang=${taal}`;
     const mail = loginMailHtml(taal, url);
@@ -176,7 +176,7 @@ export async function verwerkAanmelding(token: string, formData: FormData) {
   const naam = s("name");
   if (!email || !email.includes("@") || !naam) throw new Error("Naam en e-mailadres zijn verplicht");
 
-  const magDoor = (await rateLimit(`klant-aanmelden:${email}`, 5, 60 * 60)) && (await ipLimietOk("aanmelden", 10));
+  const magDoor = (await rateLimit(`klant-aanmelden:${email}`, 5, 60 * 60, { strikt: true })) && (await ipLimietOk("aanmelden", 10));
   if (!magDoor) redirect(`/klant?lang=${taal}`);
 
   const velden = {

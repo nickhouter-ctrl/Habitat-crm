@@ -27,8 +27,8 @@ export async function POST(req: Request) {
   const { email, password } = parsed.data;
 
   // Brute-force-rem: per IP én per account (voorkomt onbeperkt wachtwoord-raden).
-  const ipOk = await rateLimit(`portal-login:ip:${clientIp(req)}`, 10, 300);
-  const mailOk = await rateLimit(`portal-login:email:${email.toLowerCase()}`, 5, 900);
+  const ipOk = await rateLimit(`portal-login:ip:${clientIp(req)}`, 10, 300, { strikt: true });
+  const mailOk = await rateLimit(`portal-login:email:${email.toLowerCase()}`, 5, 900, { strikt: true });
   if (!ipOk || !mailOk) return jsonCors(RATE_LIMITED, 429, origin);
 
   const acc = await db.query.customerAccounts.findFirst({

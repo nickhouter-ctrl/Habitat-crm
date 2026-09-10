@@ -44,8 +44,8 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         // e-mailadres, vóór de wachtwoordcheck.
         const ip = clientIp(request);
         const [ipOk, emailOk] = await Promise.all([
-          rateLimit(`crm-login:ip:${ip}`, 10, 5 * 60),
-          rateLimit(`crm-login:email:${email.toLowerCase()}`, 5, 15 * 60),
+          rateLimit(`crm-login:ip:${ip}`, 10, 5 * 60, { strikt: true }),
+          rateLimit(`crm-login:email:${email.toLowerCase()}`, 5, 15 * 60, { strikt: true }),
         ]);
         if (!ipOk || !emailOk) return null;
 

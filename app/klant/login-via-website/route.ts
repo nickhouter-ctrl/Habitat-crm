@@ -8,7 +8,7 @@
  * dan gebruiken we het e-mailadres van dat contact (accountmail en
  * contactmail kunnen nét verschillen).
  */
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { NextResponse } from "next/server";
 
 import { db } from "@/lib/db";
@@ -21,8 +21,18 @@ export const dynamic = "force-dynamic";
 export async function GET(req: Request) {
   const url = new URL(req.url);
   const taal = kiesTaal(url.searchParams.get("lang"));
-  const payload = verifyPortalToken(url.searchParams.get("token"));
-  if (!payload) {
+  // ?code=<eenmalig>.<kort token van 60 s> — uitgegeven door /api/portal/handoff.
+  const code = url.searchParams.get("code") ?? "";
+  const punt = code.indexOf(".");
+  const nonce = punt > 0 ? code.slice(0, punt) : "";
+  const payload = punt > 0 ? verifyPortalToken(code.slice(punt + 1)) : null;
+  let eenmalig = false;
+  if (payload && nonce) {
+    // De vlag uit rate_limits halen: bestaat hij niet (meer), dan is de code al gebruikt of verzonnen.
+    const r = (await db.execute(sql`delete from rate_limits where "key" = ${`handoff:${nonce}`} and window_start > now() - interval '2 minutes' returning "key"`)) as unknown as unknown[];
+    eenmalig = r.length === 1;
+  }
+  if (!payload || !eenmalig) {
     return NextResponse.redirect(new URL(`/klant?lang=${taal}&invalid=1`, url.origin));
   }
 

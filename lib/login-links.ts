@@ -21,7 +21,7 @@ import { and, eq, gt } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { loginTokens, users } from "@/lib/db/schema";
 
-const GELDIG_DAGEN = 30;
+const GELDIG_DAGEN = 7;
 
 /**
  * Geeft een geldige inloglink voor deze gebruiker: hergebruikt een bestaande
@@ -32,8 +32,8 @@ export async function getLoginToken(userId: string, purpose: string): Promise<st
     where: and(
       eq(loginTokens.userId, userId),
       eq(loginTokens.purpose, purpose),
-      // Nog minstens een week te gaan: anders liever een verse.
-      gt(loginTokens.expiresAt, new Date(Date.now() + 7 * 86_400_000)),
+      // Nog minstens twee dagen te gaan: anders liever een verse.
+      gt(loginTokens.expiresAt, new Date(Date.now() + 2 * 86_400_000)),
     ),
     columns: { token: true },
   });

@@ -6,6 +6,7 @@ import { customerAccounts } from "@/lib/db/schema";
 import { hashPassword } from "@/lib/auth/password";
 import { jsonCors, portalCors } from "@/lib/portal/api";
 import { signPortalToken } from "@/lib/portal/token";
+import { clientIp, rateLimit } from "@/lib/rate-limit";
 
 const schema = z.object({ token: z.string().min(10), password: z.string().min(8).max(200) });
 
@@ -17,6 +18,7 @@ export async function OPTIONS(req: Request) {
 export async function GET(req: Request) {
   const origin = req.headers.get("origin");
   const token = new URL(req.url).searchParams.get("token") ?? "";
+  if (!(await rateLimit(`portal-activate:ip:${clientIp(req)}`, 20, 900, { strikt: true }))) return jsonCors({ ok: false, error: "too-many-requests" }, 429, origin);
   const acc = token ? await db.query.customerAccounts.findFirst({ where: eq(customerAccounts.activationToken, token) }) : null;
   const valid = !!acc && (!acc.activationExpires || acc.activationExpires > new Date());
   return jsonCors({ ok: valid, email: valid ? acc!.email : undefined }, valid ? 200 : 404, origin);
@@ -32,6 +34,7 @@ export async function POST(req: Request) {
   }
   const parsed = schema.safeParse(payload);
   if (!parsed.success) return jsonCors({ ok: false, error: "validation", issues: parsed.error.issues.map((i) => i.message) }, 400, origin);
+  if (!(await rateLimit(`portal-activate:ip:${clientIp(req)}`, 20, 900, { strikt: true }))) return jsonCors({ ok: false, error: "too-many-requests" }, 429, origin);
 
   const acc = await db.query.customerAccounts.findFirst({ where: eq(customerAccounts.activationToken, parsed.data.token) });
   if (!acc || (acc.activationExpires && acc.activationExpires <= new Date())) {

@@ -135,7 +135,8 @@ export async function POST(req: Request) {
     });
     mailStatus = "sent";
   } catch (err) {
-    mailStatus = `failed: ${err instanceof Error ? err.message : String(err)}`;
+    console.error("[quote-requests] mail mislukt:", err);
+    mailStatus = "failed";
     console.warn("[quote-requests] meldings-mail mislukt:", err);
   }
 
@@ -153,7 +154,8 @@ export async function POST(req: Request) {
       await sendMail({ to: v.email, subject: ack.subject, html: ack.html, text: ack.text });
       confirmStatus = "sent";
     } catch (err) {
-      confirmStatus = `failed: ${err instanceof Error ? err.message : String(err)}`;
+      console.error("[quote-requests] bevestiging mislukt:", err);
+      confirmStatus = "failed";
       console.warn("[quote-requests] afspraak-bevestiging mislukt:", err);
     }
   } else if (v.kind === "contact") {
@@ -178,7 +180,8 @@ export async function POST(req: Request) {
       });
       confirmStatus = "sent";
     } catch (err) {
-      confirmStatus = `failed: ${err instanceof Error ? err.message : String(err)}`;
+      console.error("[quote-requests] bevestiging mislukt:", err);
+      confirmStatus = "failed";
       console.warn("[quote-requests] klant-bevestiging mislukt:", err);
     }
   }
