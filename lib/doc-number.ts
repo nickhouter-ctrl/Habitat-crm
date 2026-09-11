@@ -1,6 +1,6 @@
 /** Server-side opvolgend documentnummer (gapless, per soort + jaar). */
 import "server-only";
-import { sql } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 
 import { db } from "@/lib/db";
 import { documents } from "@/lib/db/schema";
@@ -63,6 +63,7 @@ export async function insertNumberedDocument(
   kind: DocKind,
   values: Omit<DocumentInsert, "docNumber"> & { docNumber?: string | null },
   year = new Date().getFullYear(),
+  onInserted?: (tx: Parameters<Parameters<typeof db.transaction>[0]>[0], document: { id: string; docNumber: string }) => Promise<void>,
 ): Promise<{ id: string; docNumber: string }> {
   const prefix = `${DOC_KIND_PREFIX[kind]}-${year}-`;
   const custom = isAutoNumber(values.docNumber, prefix) ? null : values.docNumber!.trim();
@@ -70,11 +71,18 @@ export async function insertNumberedDocument(
   return db.transaction(async (tx) => {
     // Serialiseer nummer-uitgifte per soort+jaar over alle connecties heen.
     await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${prefix}))`);
+    // Callers may supply a stable request-scoped id. Retries then return the
+    // same document, including after a lost HTTP response.
+    if (values.id) {
+      const [existing] = await tx.select({id:documents.id,docNumber:documents.docNumber}).from(documents).where(eq(documents.id,values.id));
+      if (existing?.docNumber) return {id:existing.id,docNumber:existing.docNumber};
+    }
     const docNumber = custom ?? `${prefix}${String((await maxSeqForPrefix(tx, prefix)) + 1).padStart(4, "0")}`;
     const [row] = await tx
       .insert(documents)
       .values({ ...values, docNumber })
       .returning({ id: documents.id });
+    if (onInserted) await onInserted(tx, {id:row.id,docNumber});
     return { id: row.id, docNumber };
   });
 }

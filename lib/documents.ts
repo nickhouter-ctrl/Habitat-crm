@@ -81,7 +81,7 @@ export function lineMaterialCostEur(
   item: DocumentLineItem,
   productCost?: (item: DocumentLineItem) => number | undefined,
 ): number {
-  if (isLaborLine(item)) return 0;
+  if (isLaborLine(item) || item.pricingBasis === "construction") return 0;
   const units = Number(item.units) || 0;
   if (item.costEur != null && Number(item.costEur) > 0) return round2(Number(item.costEur) * units);
   const pc = productCost?.(item);
@@ -106,7 +106,7 @@ export function docProductMargin(
   let cost = 0;
   let uncostedRevenue = 0;
   for (const it of normalizeDocItems(items)) {
-    if (isLaborLine(it)) continue;
+    if (isLaborLine(it) || it.pricingBasis === "construction") continue;
     const net = lineNet(it);
     const c = lineMaterialCostEur(it, productCost);
     if (c > 0) {
@@ -253,6 +253,7 @@ export function normaliseLineItem(raw: unknown): DocumentLineItem | null {
     category,
     productId,
     costEur: numOrU(r.costEur),
+    pricingBasis: r.pricingBasis === "construction" || r.pricingBasis === "catalog" ? r.pricingBasis : undefined,
     supplierPriceEur: numOrU(r.supplierPriceEur),
     marginPct: numOrU(r.marginPct),
     // Fase-koppeling en voorschot-verwijzing moeten het opslaan overleven:

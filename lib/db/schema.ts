@@ -901,6 +901,8 @@ export type DocumentLineItem = {
   /** Kostprijs per stuk (ex. btw) — bv. voor kozijnen op maat waar geen product
    * met kostprijs aan hangt. Gebruikt voor de marge-weergave. */
   costEur?: number;
+  /** Calculator: voorkomt dat begrote bouwkosten nogmaals als geleverde producten meetellen. */
+  pricingBasis?: "construction" | "catalog";
   /** Kozijn-calculator (import): leveranciersprijs + marge% waaruit costEur/price
    * zijn berekend (leverancier × 1,55 = kostprijs; × (1+marge%) = verkoop). */
   supplierPriceEur?: number;
@@ -1119,11 +1121,11 @@ export const projects = pgTable(
     /** Datum van de aannemingsovereenkomst — komt op het voorschotverzoek te
      *  staan ("conform overeenkomst 12-07-2026"). */
     contractDate: date(),
-    /** Margepercentage op gewerkte uren (marge ÷ verkoopprijs, bv. 15). Bepaalt de
-     * verkoopwaarde van de uren: kost ÷ (1 − pct). Leeg = de standaard (15%). */
+    /** Opslagpercentage op gewerkte uren (bovenop kostprijs, bv. 15). Bepaalt de
+     * verkoopwaarde van de uren: kost × (1 + pct). Leeg = de standaard (15%). */
     laborMarginPct: numeric({ precision: 5, scale: 2 }),
     /** Idem voor inkoop bij derden (inkooporders + losse projectkosten): die wordt
-     * doorbelast tegen kost ÷ (1 − pct). Leeg = de standaard (15%). */
+     * doorbelast tegen kost × (1 + pct). Leeg = de standaard (15%). */
     purchaseMarginPct: numeric({ precision: 5, scale: 2 }),
     /** Werf/adres-alias(sen) voor automatische factuurherkenning (komma-gescheiden,
      * bv. "Cap Negre, Cap Negre nº53"). Zo herkent de AI een bouwfactuur met de

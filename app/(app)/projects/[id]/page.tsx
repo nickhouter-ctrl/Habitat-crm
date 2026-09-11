@@ -1,3 +1,4 @@
+import { loadProjectFunding } from "@/lib/project-funding";
 import { and, asc, desc, eq, inArray, isNull, like, or, sql } from "drizzle-orm";
 import { headers } from "next/headers";
 import Link from "next/link";
@@ -491,12 +492,6 @@ export default async function ProjectDetailPage({
     })
     .filter((v) => v.open > 0.01);
 
-  // 15% "marge" betekent hier: 15% van de VERKOOPPRIJS (kost ÷ 0,85), niet 15%
-  // bovenop de kostprijs (kost × 1,15). Dat scheelt op Silvestre € 2.179 en werd
-  // verward, dus we zetten allebei de getallen erbij.
-  const opslagPct = (margePct: number) =>
-    margePct >= 100 ? null : Math.round((margePct / (100 - margePct)) * 1000) / 10;
-
   const receivedTotal = paymentRows.reduce((s, p) => s + Number(p.amountEur ?? 0), 0);
   // Betalingen worden incl. btw geboekt; de samenvattingen rekenen ex. btw.
   // De omrekening per ontvangst (contant, factuurverhouding, 21%-aanname)
@@ -531,7 +526,12 @@ export default async function ProjectDetailPage({
   // derden) — eigen voorraadproducten niet, en van betaalde facturen alleen het
   // niet-productdeel. Methodiek: zie deriveAdvanceCover.
   const dekkingOntvangenEx = coverReceivedEx(paymentRows, ownShareByDoc);
-  const cover = deriveAdvanceCover({ laborCost, purchaseCost: materialCost, coverReceivedEx: dekkingOntvangenEx });
+  const funding = await loadProjectFunding(id);
+  const cover = funding.get(id)?.cover ?? deriveAdvanceCover({ laborCost, purchaseCost: materialCost,
+    coverReceivedEx: receivedTotalEx,
+    requiredRevenue: laborCost * (1 + Number(project.laborMarginPct ?? 15) / 100)
+      + materialCost * (1 + Number(project.purchaseMarginPct ?? 15) / 100) + ownRevenue,
+  });
 
   // Begroting: targetprijzen (verkoop) + geraamde kosten per onderdeel.
   const budgetTargetBase = budgetRows.reduce((s, b) => s + Number(b.amountEur ?? 0), 0);
@@ -574,7 +574,7 @@ export default async function ProjectDetailPage({
 
   // Resultaat TOT NU TOE = doel − werkelijke (gerealiseerde) kosten tot nu toe.
   // Norm: minimaal 15% marge → kosten mogen max. 85% van het doel zijn (kostenplafond).
-  const MIN_MARGIN_PCT = 15;
+  const MIN_MARGIN_PCT = 100 * 15 / 115;
   const resultToDate = targetRevenue - realizedCost;
   const resultMarginPct = targetRevenue > 0 ? Math.round((resultToDate / targetRevenue) * 100) : null;
   const costRatio = targetRevenue > 0 ? realizedCost / targetRevenue : null;
@@ -772,9 +772,9 @@ export default async function ProjectDetailPage({
                 />
               </Field>
               <Field
-                label="Marge op inkoop derden (%)"
+                label="Opslag op inkoop derden (%)"
                 htmlFor="purchaseMarginPct"
-                hint={`marge ÷ verkoopprijs — leeg = ${DEFAULT_PURCHASE_MARGIN_PCT}%`}
+                hint={`bovenop kostprijs — leeg = ${DEFAULT_PURCHASE_MARGIN_PCT}%`}
               >
                 <Input
                   id="purchaseMarginPct"
@@ -785,9 +785,9 @@ export default async function ProjectDetailPage({
                 />
               </Field>
               <Field
-                label="Marge op uren (%)"
+                label="Opslag op uren (%)"
                 htmlFor="laborMarginPct"
-                hint={`marge ÷ verkoopprijs — leeg = ${DEFAULT_LABOR_MARGIN_PCT}%`}
+                hint={`bovenop kostprijs — leeg = ${DEFAULT_LABOR_MARGIN_PCT}%`}
               >
                 <Input
                   id="laborMarginPct"
@@ -889,15 +889,15 @@ export default async function ProjectDetailPage({
         <TabPanel id="overzicht" className="order-3">
       <Card id="geldstroom" className="mb-5 scroll-mt-24">
         <CardHeader>
-          <CardTitle>Geldstroom dit project</CardTitle>
+          <CardTitle>Kosten, klantbetalingen en voorschotruimte</CardTitle>
           <span className="text-xs text-muted">
-            wat eruit ging · wat de klant al betaalde · wat er nog gefactureerd moet worden — incl. wat via Creadores liep
+            geboekte kosten · ontvangen klantgeld · resterende ruimte inclusief opslag — incl. wat via Creadores liep
           </span>
         </CardHeader>
         <CardContent>
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
             <div className="rounded-lg border bg-background p-3">
-              <p className="text-xs text-muted">Eruit gegaan (kasgeld)</p>
+              <p className="text-xs text-muted">Geboekte uren en externe inkoop</p>
               <p className="text-lg font-semibold tabular-nums text-danger">− {formatEUR(cover.prefinanced)}</p>
               <p className="text-xs text-muted">uren {formatEUR(laborCost)} + inkoop derden {formatEUR(materialCost)} · ex. btw</p>
             </div>
@@ -906,7 +906,7 @@ export default async function ProjectDetailPage({
             <div className="rounded-lg border bg-background p-3">
               <p className="text-xs text-muted">Eigen voorraad (kostprijs)</p>
               <p className="text-lg font-semibold tabular-nums">{formatEUR(ownProductCostRealized)}</p>
-              <p className="text-xs text-muted">uit eigen voorraad geleverd · geen kasuitgave, telt niet mee in de dekking</p>
+              <p className="text-xs text-muted">verkoopprijs telt mee in de doorbelasting; kostprijs is voor de resultaatberekening</p>
             </div>
             <div className="rounded-lg border bg-background p-3">
               <p className="text-xs text-muted">Ontvangen van klant</p>
@@ -922,7 +922,7 @@ export default async function ProjectDetailPage({
             {/* Het stoplicht: dekt wat er binnen is de kasuitgaven (uren + inkoop
                 derden)? Eigen voorraad staat hier bewust buiten. */}
             <div className="rounded-lg border bg-background p-3">
-              <p className="text-xs text-muted">Voorschotdekking (kas)</p>
+              <p className="text-xs text-muted">Voorschotruimte incl. opslag</p>
               <p
                 className={`text-lg font-semibold tabular-nums ${
                   cover.tone === "success" ? "text-success" : cover.tone === "warning" ? "text-warning" : "text-danger"
@@ -935,7 +935,7 @@ export default async function ProjectDetailPage({
                   ? "gedekt door voorschotten en betalingen · ex. btw"
                   : cover.status === "bijna_op"
                     ? "bijna op — nieuw voorschot voorbereiden · ex. btw"
-                    : "zelf voorgeschoten · ex. btw"}
+                    : "onvoldoende voorschot incl. opslag · ex. btw"}
                 {cover.status !== "gedekt" && (
                   <>
                     {" · "}
@@ -1019,7 +1019,7 @@ export default async function ProjectDetailPage({
             <div className="rounded-lg border bg-background p-3">
               <div className="mb-2 flex items-baseline justify-between gap-2">
                 <p className="text-sm font-semibold">Uren — arbeid</p>
-                <span className="text-xs text-muted">norm {margins.laborMarginPct}%</span>
+                <span className="text-xs text-muted">opslag {margins.laborMarginPct}%</span>
               </div>
               <dl className="space-y-1 text-sm">
                 <div className="flex justify-between gap-2">
@@ -1090,7 +1090,7 @@ export default async function ProjectDetailPage({
             <div className="rounded-lg border bg-background p-3">
               <div className="mb-2 flex items-baseline justify-between gap-2">
                 <p className="text-sm font-semibold">Inkoop derden</p>
-                <span className="text-xs text-muted">norm {margins.purchaseMarginPct}%</span>
+                <span className="text-xs text-muted">opslag {margins.purchaseMarginPct}%</span>
               </div>
               <dl className="space-y-1 text-sm">
                 <div className="flex justify-between gap-2">
@@ -1117,7 +1117,7 @@ export default async function ProjectDetailPage({
           {/* Eén uitlegregel voor alle drie — beter dan drie keer jargon in de kaarten. */}
           <p className="text-xs text-muted">
             &quot;Norm {margins.laborMarginPct}%&quot; betekent: uren en inkoop hebben geen eigen verkoopprijs, dus
-            &quot;door te belasten&quot; is de kostprijs plus onze vaste marge. Eigen producten zijn wél echt gemeten:
+            &quot;door te belasten&quot; is de kostprijs plus onze opslag op kostprijs. Eigen producten zijn wél echt gemeten:
             verkoopprijs min kostprijs van de factuurregels.
           </p>
 
@@ -1556,7 +1556,7 @@ export default async function ProjectDetailPage({
                 {laborHours.toLocaleString("nl-NL")} uur · {formatEUR(laborCost)} kosten
                 {project.budgetHours ? ` · begroot ${Number(project.budgetHours).toLocaleString("nl-NL")} u` : ""}
                 {laborCost > 0
-                  ? ` · door te belasten ${formatEUR(margins.laborRevenue)} — ${margins.laborMarginPct}% marge op de verkoopprijs = ${formatEUR(margins.laborMargin)} (oftewel ${opslagPct(margins.laborMarginPct)}% bovenop de kostprijs)`
+                  ? ` · door te belasten ${formatEUR(margins.laborRevenue)} — ${margins.laborMarginPct}% opslag op kostprijs = ${formatEUR(margins.laborMargin)}`
                   : ""}
               </span>
             </CardHeader>
@@ -1723,7 +1723,7 @@ export default async function ProjectDetailPage({
               <span className="text-xs text-muted">
                 gekoppelde inkoop {formatEUR(poCost)} + losse kosten {formatEUR(looseCost)} = {formatEUR(materialCost)}
                 {" · alle bedragen ex. btw"}
-                {` · door te belasten ${formatEUR(margins.purchaseRevenue)} — ${margins.purchaseMarginPct}% marge op de verkoopprijs = ${formatEUR(margins.purchaseMargin)} (oftewel ${opslagPct(margins.purchaseMarginPct)}% bovenop de kostprijs)`}
+                {` · door te belasten ${formatEUR(margins.purchaseRevenue)} — ${margins.purchaseMarginPct}% opslag op kostprijs = ${formatEUR(margins.purchaseMargin)}`}
               </span>
             </CardHeader>
             <CardContent className="space-y-4">

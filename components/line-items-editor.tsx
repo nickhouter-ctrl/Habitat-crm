@@ -55,6 +55,7 @@ type Row = {
   unit?: string;
   /** Kozijn-calculator: kostprijs/leveranciersprijs/marge blijven op de regel. */
   costEur?: string;
+  pricingBasis?: "construction" | "catalog";
   supplierPriceEur?: string;
   marginPct?: string;
   /** Verwijzing naar het voorschot dat deze (negatieve) regel verrekent —
@@ -95,6 +96,7 @@ function rowToItem(r: Row): DocumentLineItem {
     phase: r.phase.trim() || undefined,
     unit: r.unit || undefined,
     costEur: r.costEur != null && r.costEur !== "" ? Number(r.costEur) : undefined,
+            pricingBasis: r.pricingBasis,
     supplierPriceEur:
       r.supplierPriceEur != null && r.supplierPriceEur !== "" ? Number(r.supplierPriceEur) : undefined,
     marginPct: r.marginPct != null && r.marginPct !== "" ? Number(r.marginPct) : undefined,
@@ -142,6 +144,7 @@ export function LineItemsEditor({
           phase: it.phase ?? "",
           unit: it.unit ?? undefined,
           costEur: it.costEur != null ? String(it.costEur) : undefined,
+          pricingBasis: it.pricingBasis,
           supplierPriceEur: it.supplierPriceEur != null ? String(it.supplierPriceEur) : undefined,
           marginPct: it.marginPct != null ? String(it.marginPct) : undefined,
           advanceRef: it.advanceRef ?? undefined,
@@ -438,6 +441,7 @@ export function LineItemsEditor({
             // Stille-datavelden meesturen — anders wist elke UI-save de
             // kostprijzen (marge!) en de voorschot-verrekening uit de regels.
             costEur: r.costEur != null && r.costEur !== "" ? Number(r.costEur) : undefined,
+            pricingBasis: r.pricingBasis,
             supplierPriceEur:
               r.supplierPriceEur != null && r.supplierPriceEur !== "" ? Number(r.supplierPriceEur) : undefined,
             marginPct: r.marginPct != null && r.marginPct !== "" ? Number(r.marginPct) : undefined,

@@ -222,9 +222,9 @@ export async function AdvanceRequestCard({
           }`}
         >
           <div className="flex flex-wrap items-baseline justify-between gap-x-6 gap-y-1 text-sm">
-            <span className="font-medium">Lopen we voor of achter?</span>
+            <span className="font-medium">Is het voorschot nog voldoende?</span>
             <span className="text-muted">
-              voorgeschoten (uren {formatEUR(laborCost)} + inkoop derden {formatEUR(purchaseCost)}){" "}
+              geboekte kosten (uren {formatEUR(laborCost)} + inkoop derden {formatEUR(purchaseCost)}){" "}
               <strong className="tabular-nums text-foreground">{formatEUR(cover.prefinanced)}</strong>
             </span>
             <span className="text-muted">
@@ -235,23 +235,19 @@ export async function AdvanceRequestCard({
                 cover.tone === "success" ? "text-success" : cover.tone === "warning" ? "text-warning" : "text-danger"
               }`}
             >
-              {cover.saldo >= 0 ? `+ ${formatEUR(cover.saldo)} vooruit` : `− ${formatEUR(-cover.saldo)} voorgeschoten`}
+              {cover.saldo >= 0 ? `${formatEUR(cover.saldo)} beschikbaar na doorbelasting` : `${formatEUR(-cover.saldo)} tekort na doorbelasting`}
             </span>
           </div>
           <p className="mt-1 text-xs text-muted">
-            {cover.status === "gedekt"
-              ? "Er is meer binnen dan er aan uren en inkoop is uitgegeven — precies waarvoor je met voorschotten werkt."
-              : cover.status === "bijna_op"
-                ? "De dekking is bijna op: één week uren of één levering en je schiet voor. Bereid het volgende voorschot alvast voor."
-                : `Er is meer aan uren en inkoop uitgegeven dan er binnen is: dit deel financier je zelf. Hieronder staat ${formatEUR(
-                    tekortAfgerond,
-                  )} al ingevuld.`}{" "}
-            Alle bedragen ex. btw.
+            {cover.status === "gedekt" ? "De ontvangen betalingen dekken de doorbelasting inclusief opslag en productverkoop."
+              : cover.status === "bijna_op" ? "Het voorschot is bijna verbruikt. Bereid een nieuw verzoek voor voordat je verdere kosten maakt."
+              : `Er is onvoldoende ontvangen om de doorbelasting inclusief verdiensten te dekken. Voorgesteld verzoek: ${formatEUR(tekortAfgerond)}.`}
+            {" "}Alle bedragen ex. btw.
           </p>
-          <p className="mt-1 text-xs text-muted">
-            Eigen producten uit voorraad{ownProductCost > 0.01 ? ` (${formatEUR(ownProductCost)} kostprijs)` : ""} tellen
-            hier niet mee: dat is voorraad, geen voorgeschoten geld. Betalingen op facturen tellen mee zonder het
-            eigen-productdeel.
+          <p className="mt-2 text-xs text-muted">
+            Doorbelasting: {formatEUR(cover.requiredRevenue)}. Arbeid en externe materialen inclusief opslag;
+            eigen producten tegen verkoopprijs. Een verstuurd voorschotverzoek telt pas mee na ontvangst.
+            Geboekte kosten geven geen bewijs dat leveranciers al betaald zijn; betaalstatus blijft in Holded.
           </p>
           {aanneemsom > 0 && doorTeBelasten > aanneemsom && (
             <p className="mt-2 text-xs text-warning">

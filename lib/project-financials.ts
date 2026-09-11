@@ -52,7 +52,7 @@ export function deriveProjectFinancials(i: ProjectFinancialsInput): ProjectFinan
 
   // Norm: minimaal 15% marge. "Op koers" alleen zinvol als er een doel én iets
   // gebeurd is (kosten of omzet).
-  const MIN_MARGIN_PCT = 15;
+  const MIN_MARGIN_PCT = 100 * 15 / 115;
   const meaningful = targetRevenue > 0 && (costToDate > 0 || i.invoicedSubtotal > 0 || i.received > 0);
   const tone: ProjectFinancials["tone"] = !meaningful
     ? "neutral"
@@ -76,7 +76,7 @@ export function deriveProjectFinancials(i: ProjectFinancialsInput): ProjectFinan
 
 /* ─────────────── Marge per stroom: uren, eigen producten, inkoop ─────────────── */
 
-/** Standaard marge op gewerkte uren, als percentage VAN DE VERKOOPPRIJS. */
+/** Standaard marge op gewerkte uren, als opslag op de kostprijs. */
 export const DEFAULT_LABOR_MARGIN_PCT = 15;
 
 /** Idem voor inkoop bij derden — die wordt met opslag doorbelast, niet tegen kostprijs. */
@@ -87,7 +87,7 @@ export type ProjectMargins = {
      een vaste marge-norm op de kostprijs. */
   laborMarginPct: number;
   laborCost: number;
-  /** Wat de uren moeten opbrengen: kost ÷ (1 − pct). */
+  /** Wat de uren moeten opbrengen: kost × (1 + pct). */
   laborRevenue: number;
   laborMargin: number;
 
@@ -104,7 +104,7 @@ export type ProjectMargins = {
      met opslag, niet tegen kostprijs. */
   purchaseMarginPct: number;
   purchaseCost: number;
-  /** Wat de inkoop moet opbrengen: kost ÷ (1 − pct). */
+  /** Wat de inkoop moet opbrengen: kost × (1 + pct). */
   purchaseRevenue: number;
   purchaseMargin: number;
 
@@ -122,7 +122,7 @@ export type ProjectMargins = {
  * Marge per stroom, elk op zijn eigen manier gemeten:
  *
  * - **Uren**: normatief. Een uur heeft geen eigen verkoopprijs, dus we hanteren
- *   een norm (`laborMarginPct`, marge ÷ verkoopprijs) en leiden de verkoopwaarde
+ *   een norm (`laborMarginPct`, opslag op kostprijs) en leiden de verkoopwaarde
  *   daaruit af.
  * - **Eigen producten**: gemeten. Verkoopprijs en kostprijs staan allebei op de
  *   factuurregel, dus dit is de echte marge — geen aanname.
@@ -149,11 +149,11 @@ export function deriveProjectMargins(i: {
   /** null/undefined → {@link DEFAULT_PURCHASE_MARGIN_PCT}. */
   purchaseMarginPct?: number | null;
 }): ProjectMargins {
-  // Boven de 100% zou de deling ontploffen; onder 0 is er geen marge-norm.
+  // Bewaar de bestaande begrenzing voor instelbare projectopslagen.
   const laborPct = clampPct(i.laborMarginPct ?? DEFAULT_LABOR_MARGIN_PCT);
   const purchasePct = clampPct(i.purchaseMarginPct ?? DEFAULT_PURCHASE_MARGIN_PCT);
-  const laborRevenue = round2(i.laborCost / (1 - laborPct / 100));
-  const purchaseRevenue = round2(i.purchaseCost / (1 - purchasePct / 100));
+  const laborRevenue = round2(i.laborCost * (1 + laborPct / 100));
+  const purchaseRevenue = round2(i.purchaseCost * (1 + purchasePct / 100));
   const laborMargin = round2(laborRevenue - i.laborCost);
   const purchaseMargin = round2(purchaseRevenue - i.purchaseCost);
   const productMargin = round2(i.productRevenue - i.productCost);
@@ -194,15 +194,19 @@ export type AdvanceCoverInput = {
   purchaseCost: number;
   /** Ontvangen dekking ex. btw — zie {@link deriveAdvanceCover} voor wat meetelt. */
   coverReceivedEx: number;
+  /** Doorbelasting inclusief opslag en eigen producten. Zonder dit veld: alleen kostendekking. */
+  requiredRevenue?: number;
   /** Standaard {@link ADVANCE_WARN_BUFFER_EUR}. */
   warnBufferEur?: number;
 };
 
 export type AdvanceCover = {
-  /** Wat wij tot nu toe uit eigen zak betaalden: uren + inkoop derden. */
+  /** Geboekte kosten van uren en inkoop derden; geen bewijs van leveranciersbetaling. */
   prefinanced: number;
+  requiredRevenue: number;
+  costSaldo: number;
   received: number;
-  /** received − prefinanced; negatief = wij schieten voor. */
+  /** Ontvangsten minus vereiste doorbelasting inclusief verdiensten. */
   saldo: number;
   status: "gedekt" | "bijna_op" | "voorgeschoten";
   tone: "success" | "warning" | "danger";
@@ -210,41 +214,28 @@ export type AdvanceCover = {
   suggestedRequestEur: number;
 };
 
-/**
- * Voorschotdekking: lopen wij geld voor te schieten op deze klus?
- *
- * Aan de kostenkant tellen alleen échte kasuitgaven aan de klus: de uren van de
- * eigen ploeg en wat er bij derden (in Spanje) wordt ingekocht — inkooporders
- * plus losse projectkosten. **Eigen producten uit voorraad tellen niet mee**:
- * die liggen al op de plank en kosten op dat moment geen kasgeld; ze zijn een
- * eigen stroom met een eigen marge (zie {@link deriveProjectMargins}).
- * Meerwerk hoeft niet apart: meerwerk-uren en -inkoop stromen vanzelf mee via
- * laborCost/purchaseCost.
- *
- * Aan de ontvangstenkant telt alles wat er echt binnen is (ex. btw), mínus het
- * eigen-productdeel van betalingen die aan een factuur hangen — voorschotten
- * tellen dus helemaal mee, van een betaalde factuur telt alleen het deel dat
- * geen eigen producten is. Niet alleen `method='advance'`: een betaalde
- * deelfactuur voor uren/inkoop dekt het voorschieten net zo goed, anders zou je
- * geld vragen dat al binnen is.
- *
- * Alles ex. btw: de IVA op inkoop wordt teruggevorderd — dit is een
- * dekkingssom, geen kasboek.
+/** Vergelijkt ontvangen bedragen excl. btw met de doorbelasting van geboekt werk,
+ * inclusief opslag en de verkoopwaarde van eigen producten. Zonder requiredRevenue
+ * blijft de bestaande berekening op uitsluitend geboekte kosten beschikbaar.
+ * Dit is voorschotdekking, geen kasboek of registratie van leveranciersbetalingen.
  */
 export function deriveAdvanceCover(i: AdvanceCoverInput): AdvanceCover {
   const buffer = i.warnBufferEur ?? ADVANCE_WARN_BUFFER_EUR;
   const prefinanced = round2(i.laborCost + i.purchaseCost);
   const received = round2(i.coverReceivedEx);
-  const saldo = round2(received - prefinanced);
+  const requiredRevenue = round2(i.requiredRevenue ?? prefinanced);
+  const saldo = round2(received - requiredRevenue);
   const status: AdvanceCover["status"] = saldo < 0 ? "voorgeschoten" : saldo < buffer ? "bijna_op" : "gedekt";
   return {
     prefinanced,
+    requiredRevenue,
+    costSaldo: round2(received - prefinanced),
     received,
     saldo,
     status,
     tone: status === "gedekt" ? "success" : status === "bijna_op" ? "warning" : "danger",
     // Een voorschot vraag je niet op de cent — zelfde afronding als de oude prefill.
-    suggestedRequestEur: Math.max(0, Math.ceil(-saldo / 1000) * 1000),
+    suggestedRequestEur: Math.max(0, Math.ceil((buffer - saldo) / 1000) * 1000),
   };
 }
 

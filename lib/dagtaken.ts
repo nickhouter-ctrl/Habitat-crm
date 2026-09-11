@@ -7,6 +7,7 @@
  * weergave het getal vet kan zetten (<strong>{aantal}</strong> {tekst}).
  */
 import "server-only";
+import { loadProjectFunding } from "@/lib/project-funding";
 import { and, count, eq, inArray, isNotNull, isNull, sql } from "drizzle-orm";
 
 import { db } from "@/lib/db";
@@ -64,6 +65,7 @@ export async function verzamelDagtaken(): Promise<Dagtaak[]> {
     openPos,
     opvolgOffertes,
     opvolgAanvragen,
+    funding,
   ] = await Promise.all([
       // Portaal-uren die op controle wachten.
       db
@@ -125,6 +127,7 @@ export async function verzamelDagtaken(): Promise<Dagtaak[]> {
       // Klanten die stil zijn na een offerte / na ons laatste antwoord.
       offertesTeOpvolgen(),
       aanvragenTeOpvolgen(),
+      loadProjectFunding(),
     ]);
 
   const voorraadN = voorraadRows.filter((d) =>
@@ -257,6 +260,8 @@ export async function verzamelDagtaken(): Promise<Dagtaak[]> {
     });
   }
 
+  const attention=[...funding.values()].filter(p=>p.cover.requiredRevenue>0&&p.cover.status!=="gedekt");
+  if(attention.length) taken.push({key:"project-voorschot",emoji:"💶",tekst:"projecten met bijna verbruikt of onvoldoende voorschot, inclusief opslag — nieuw voorschot voorbereiden.",href:"/projects?funding=attention",tone:attention.some(p=>p.cover.saldo<0)?"danger":"warning",prioriteit:"hoog",aantal:attention.length});
   return taken.sort(
     (a, b) =>
       PRIO_VOLGORDE[a.prioriteit] - PRIO_VOLGORDE[b.prioriteit] ||

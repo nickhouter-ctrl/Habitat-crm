@@ -1,3 +1,4 @@
+import { loadProjectFunding } from "@/lib/project-funding";
 import { and, asc, desc, eq, inArray, isNotNull, ne, sql } from "drizzle-orm";
 import Link from "next/link";
 
@@ -92,9 +93,10 @@ const TONE_BADGE: Record<string, { label: string; tone: "success" | "warning" | 
 export default async function ProjectsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ status?: string }>;
+  searchParams: Promise<{ status?: string; funding?: string }>;
 }) {
-  const { status } = await searchParams;
+  const { status, funding: fundingFilter } = await searchParams;
+  const funding = await loadProjectFunding();
   const filter: Filter = status === "inactive" || status === "all" ? status : "active";
 
   const statusWhere =
@@ -377,7 +379,7 @@ export default async function ProjectsPage({
       });
       // Voorschotdekking: kasgeld (uren + inkoop derden) tegenover ontvangen
       // dekking — eigen voorraadproducten staan hier bewust buiten.
-      const cover = deriveAdvanceCover({
+      const cover = funding.get(p.id)?.cover ?? deriveAdvanceCover({
         laborCost,
         purchaseCost: materialCost,
         coverReceivedEx: coverReceivedBy.get(p.id) ?? 0,
@@ -400,6 +402,7 @@ export default async function ProjectsPage({
         lastActivity,
       };
     })
+    .filter(p=>fundingFilter!=="attention" || p.cover.requiredRevenue>0&&p.cover.status!=="gedekt")
     .sort((x, y) => new Date(y.lastActivity).getTime() - new Date(x.lastActivity).getTime());
 
   // Samenvatting (over de getoonde selectie) — ex. btw.
@@ -437,6 +440,7 @@ export default async function ProjectsPage({
         }
       />
 
+      {fundingFilter==="attention"&&<p className="mb-4 rounded-lg bg-warning/10 p-3 text-sm">Projecten waar een aanvullend voorschot nodig is of binnenkort nodig wordt. <Link href="/projects" className="text-accent underline">Alle projecten tonen</Link></p>}
       <div className="mb-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
         <StatTile
           label="Projecten"
@@ -445,9 +449,9 @@ export default async function ProjectsPage({
           tone="neutral"
         />
         <StatTile
-          label="Zelf voorgeschoten"
+          label="Aanvullend voorschot nodig"
           value={formatEUR(totals.voorgeschoten)}
-          hint="uren + inkoop derden boven de ontvangen dekking · ex. BTW"
+          hint="tekort na doorbelasting inclusief opslag · ex. BTW"
           tone={totals.voorgeschoten > 0.01 ? "danger" : "success"}
         />
         <StatTile
@@ -563,10 +567,10 @@ export default async function ProjectsPage({
                     {/* Voorschotdekking: rood = wij schieten voor, oranje = bijna
                         op. Zonder kasuitgaven valt er niets te dekken → "—". */}
                     <Td className="text-right tabular-nums">
-                      {p.cover.prefinanced <= 0.01 ? (
+                      {p.cover.requiredRevenue <= 0.01 ? (
                         <span className="text-muted">—</span>
                       ) : p.cover.status === "voorgeschoten" ? (
-                        <Link href={`/projects/${p.id}#voorschot-opvragen`} title="Zelf voorgeschoten — nieuw voorschot vragen">
+                        <Link href={`/projects/${p.id}#voorschot-opvragen`} title="Voorschottekort inclusief opslag — nieuw voorschot vragen">
                           <Badge tone="danger">− {formatEUR(-p.cover.saldo)}</Badge>
                         </Link>
                       ) : p.cover.status === "bijna_op" ? (
