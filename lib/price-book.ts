@@ -126,6 +126,7 @@ export const HOOFDSTUKKEN = [
   "Buitenruimte",
   "Hekwerk & poort",
   "Aanbouw & kelder",
+  "Overige",
 ] as const;
 
 export const EENHEDEN = ["m²", "m", "m³", "stuk", "punt", "ruimte", "forfait"] as const;

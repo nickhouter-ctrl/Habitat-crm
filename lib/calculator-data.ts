@@ -22,7 +22,7 @@ export async function loadCalculatorData():Promise<CalcData> {
       and coalesce(v.price_eur,p.price_eur)>0`),
   ]);
   return {
-    posts:posts.map(p=>({id:p.id,name:p.name,chapter:p.chapter,unit:p.unit,driver:p.driver,factor:Number(p.factor),
+    posts:posts.map(p=>({id:p.id,name:p.name,chapter:p.name==="Waterdamphaard"?"Overige":p.chapter,unit:p.unit,driver:p.driver,factor:Number(p.factor),
       hours:p.laborHours==null?null:Number(p.laborHours),material:p.materialCostEur==null?null:Number(p.materialCostEur),
       cost:p.costEur==null?null:Number(p.costEur),price:p.priceEur==null?null:Number(p.priceEur),waste:Number(p.wastePct),
       review:p.needsReview,description:p.description??"",productId:p.productId})).map(confirmedCalculatorRate),
