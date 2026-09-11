@@ -4,6 +4,16 @@ import { db } from "@/lib/db";
 import { priceBookItems } from "@/lib/db/schema";
 import type { CalcData, CalcProduct } from "@/lib/calculator";
 import { confirmedCalculatorRate } from "@/lib/calculator-rates";
+import { HOOFDSTUKKEN } from "@/lib/price-book";
+
+const chapterCorrections: Record<string, string> = {
+  "Waterdamphaard": "Overige",
+  "Buitendeur": "Kozijnen",
+  "Trap vervangen": "Overige",
+  "Balustrade / leuning": "Overige",
+  "Zonnepanelen (per paneel)": "Elektra",
+};
+const chapterOrder = new Map<string, number>(HOOFDSTUKKEN.map((chapter, index) => [chapter, index]));
 
 /** Reading the calculator never rewrites prices or synchronizes the catalog. */
 export async function loadCalculatorData():Promise<CalcData> {
@@ -22,10 +32,11 @@ export async function loadCalculatorData():Promise<CalcData> {
       and coalesce(v.price_eur,p.price_eur)>0`),
   ]);
   return {
-    posts:posts.map(p=>({id:p.id,name:p.name,chapter:p.name==="Waterdamphaard"?"Overige":p.chapter,unit:p.unit,driver:p.driver,factor:Number(p.factor),
+    posts:posts.map(p=>({id:p.id,name:p.name,chapter:chapterCorrections[p.name]??p.chapter,unit:p.unit,driver:p.driver,factor:Number(p.factor),
       hours:p.laborHours==null?null:Number(p.laborHours),material:p.materialCostEur==null?null:Number(p.materialCostEur),
       cost:p.costEur==null?null:Number(p.costEur),price:p.priceEur==null?null:Number(p.priceEur),waste:Number(p.wastePct),
-      review:p.needsReview,description:p.description??"",productId:p.productId})).map(confirmedCalculatorRate),
+      review:p.needsReview,description:p.description??"",productId:p.productId})).map(confirmedCalculatorRate)
+      .sort((a,b)=>(chapterOrder.get(a.chapter)??HOOFDSTUKKEN.length)-(chapterOrder.get(b.chapter)??HOOFDSTUKKEN.length)),
     products:products.map((p):CalcProduct=>{
       const area=Number(p.width)*Number(p.height||p.length)/1_000_000;
       const panel=!p.brand && /wandpanel/i.test(p.collection??"") && p.unit!=="m²" && area>0;
