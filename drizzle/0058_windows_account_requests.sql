@@ -1,0 +1,1 @@
+ALTER TABLE "account_requests" ADD COLUMN "source" text DEFAULT 'website' NOT NULL;

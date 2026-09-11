@@ -59,6 +59,7 @@ export default async function QuoteRequestsPage({
         subtitle="Offerte-aanvragen via de website — bekijk, accepteer of wijs af."
       />
 
+      <p className="mb-4 text-sm"><Link href="/accounts?source=windows" className="text-accent underline">Aanvragen kozijnensysteem bekijken en goedkeuren →</Link></p>
       <div className="mb-5 grid grid-cols-2 gap-3 sm:grid-cols-3">
         <Link href="/aanvragen?status=pending" className="block">
           <StatTile label="Open" value={counts?.pending ?? 0} hint="wacht op behandeling" />

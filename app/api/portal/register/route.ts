@@ -12,6 +12,7 @@ import { crmUrl } from "@/lib/crm-url";
 
 const schema = z
   .object({
+    source: z.enum(["website", "windows"]).default("website"),
     name: z.string().trim().min(1).max(200),
     email: z.string().trim().email().max(200),
     phone: z.string().trim().max(40).optional().or(z.literal("")),
@@ -55,6 +56,7 @@ export async function POST(req: Request) {
   const [row] = await db
     .insert(accountRequests)
     .values({
+      source: v.source,
       name: v.name,
       email: v.email.toLowerCase(),
       phone: v.phone || null,
@@ -71,6 +73,7 @@ export async function POST(req: Request) {
   try {
     const base = crmUrl();
     const rows: [string, string][] = [
+      ["Aanvraag", v.source === "windows" ? "Aanvraag kozijnensysteem" : "Website-account"],
       ["Naam", v.name],
       ["E-mail", v.email],
       ["Telefoon", v.phone || "—"],
@@ -85,17 +88,17 @@ export async function POST(req: Request) {
       to: NOTIFY_TO,
       bcc: NOTIFY_RECIPIENTS.slice(1).join(", ") || undefined,
       replyTo: v.email,
-      subject: `Nieuwe accountaanvraag — accepteer of weiger (${v.name})`,
+      subject: `${v.source === "windows" ? "Aanvraag kozijnensysteem" : "Nieuwe accountaanvraag"} — accepteer of weiger (${v.name})`,
       html: `<div style="font-family:Arial,Helvetica,sans-serif;color:#2a2620;max-width:560px">
-  <h2 style="color:#402419;margin:0 0 8px">Nieuwe accountaanvraag</h2>
+  <h2 style="color:#402419;margin:0 0 8px">${v.source === "windows" ? "Aanvraag kozijnensysteem" : "Nieuwe accountaanvraag"}</h2>
   <p style="margin:0 0 16px;font-size:14px;line-height:1.5">Er wil een nieuwe klant een account aanmaken (<strong>${kindLabel}</strong>). Bekijk de gegevens hieronder en <strong>accepteer of weiger</strong> de aanvraag in het CRM.</p>
   <table style="border-collapse:collapse;width:100%;font-size:14px">${rows
     .map(([k, val]) => `<tr><td style="padding:6px 10px;color:#7a6a58;white-space:nowrap;vertical-align:top">${k}</td><td style="padding:6px 10px;white-space:pre-wrap">${escapeHtml(val)}</td></tr>`)
     .join("")}</table>
-  <p style="margin:22px 0 0"><a href="${base}/accounts" style="background:#b5532b;color:#fff;padding:11px 20px;border-radius:8px;text-decoration:none;font-size:14px">Accepteren of weigeren →</a></p>
+  <p style="margin:22px 0 0"><a href="${base}/accounts${v.source === "windows" ? "?source=windows" : ""}" style="background:#b5532b;color:#fff;padding:11px 20px;border-radius:8px;text-decoration:none;font-size:14px">Accepteren of weigeren →</a></p>
   <p style="margin:12px 0 0;font-size:12px;color:#9a8a78">Je kunt ook direct op deze mail antwoorden om de klant te bereiken.</p>
 </div>`,
-      text: `Er wil een nieuwe klant (${kindLabel}) een account aanmaken. Accepteer of weiger de aanvraag in het CRM:\n\n${rows.map(([k, val]) => `${k}: ${val}`).join("\n")}\n\nBeoordelen: ${base}/accounts`,
+      text: `Er wil een nieuwe klant (${kindLabel}) een account aanmaken. Accepteer of weiger de aanvraag in het CRM:\n\n${rows.map(([k, val]) => `${k}: ${val}`).join("\n")}\n\nBeoordelen: ${base}/accounts${v.source === "windows" ? "?source=windows" : ""}`,
     });
   } catch (err) {
     console.warn("[portal/register] meldings-mail mislukt:", err);

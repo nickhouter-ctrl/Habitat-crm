@@ -1726,6 +1726,8 @@ export const accountRequests = pgTable(
     name: text().notNull(),
     email: text().notNull(),
     phone: text(),
+    /** Aanvraag voor de algemene website of het kozijnenportaal. */
+    source: text().notNull().default("website"),
     kind: accountRequestKind().notNull().default("particulier"),
     businessName: text(),
     vatNumber: text(),

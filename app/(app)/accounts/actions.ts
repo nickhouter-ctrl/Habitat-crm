@@ -3,7 +3,7 @@
 import { randomBytes } from "node:crypto";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { eq } from "drizzle-orm";
+import { and, desc, eq, sql } from "drizzle-orm";
 import { z } from "zod";
 import { requireWriteUser } from "@/lib/auth/guards";
 
@@ -11,6 +11,8 @@ import { auth } from "@/auth";
 import { contactDisplayName } from "@/lib/contact-name";
 import { db } from "@/lib/db";
 import { accountRequests, companies, contacts, customerAccounts } from "@/lib/db/schema";
+import { grantWindowsAccess } from "@/lib/portal/windows-access";
+import { windowsActivationMail, windowsAccessReadyMail } from "@/lib/portal/windows-activation";
 import { sendMail } from "@/lib/gmail";
 
 async function requireUser() {
@@ -24,7 +26,11 @@ function newToken() {
   return randomBytes(24).toString("base64url");
 }
 
-async function sendActivationMail(email: string, name: string, token: string, tier: string) {
+async function sendActivationMail(email: string, name: string, token: string, tier: string, source = "website", locale: string | null = null) {
+  if (source === "windows") {
+    await sendMail({ to: email, ...windowsActivationMail(name, token, locale) });
+    return;
+  }
   const link = `${WEBSITE_URL}/account/activeren?token=${token}`;
   const tierText = tier === "aannemer" ? "zakelijk account" : "account";
   await sendMail({
@@ -134,12 +140,21 @@ export async function approveAccountRequest(requestId: string, formData: FormDat
       activationExpires: expires,
     });
   }
+  if (req.source === "windows") {
+    const account = await db.query.customerAccounts.findFirst({ where: eq(customerAccounts.email, email) });
+    if (!account) throw new Error("Account ontbreekt voor Windows-goedkeuring");
+    await grantWindowsAccess(account);
+  }
   await db.update(accountRequests).set({ status: "approved", contactId, updatedAt: new Date() }).where(eq(accountRequests.id, requestId));
 
+  if (req.source === "windows" && existingAccount?.status === "active") {
+    try { await sendMail({ to: req.email, ...windowsAccessReadyMail(req.locale) }); }
+    catch (err) { console.warn("[accounts] Windows-bevestiging mislukt:", err); }
+  }
   // Activatiemail alleen sturen als er een verse (niet-actieve) link is.
   if (!existingAccount || existingAccount.status !== "active") {
     try {
-      await sendActivationMail(req.email, req.name, token, tier);
+      await sendActivationMail(req.email, req.name, token, tier, req.source, req.locale);
     } catch (err) {
       console.warn("[accounts] activatiemail mislukt:", err);
     }
@@ -249,9 +264,20 @@ export async function resendActivation(accountId: string) {
     .set({ activationToken: token, activationExpires: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), updatedAt: new Date() })
     .where(eq(customerAccounts.id, accountId));
   try {
-    await sendActivationMail(acc.email, acc.businessName ?? acc.email, token, acc.priceTier);
+    const request = await db.query.accountRequests.findFirst({ where: and(eq(accountRequests.email, acc.email), eq(accountRequests.status, "approved")), orderBy: desc(accountRequests.updatedAt) });
+    await sendActivationMail(acc.email, acc.businessName ?? acc.email, token, acc.priceTier, request?.source, request?.locale);
   } catch (err) {
     console.warn("[accounts] activatiemail mislukt:", err);
   }
+  revalidatePath("/accounts");
+}
+
+/** Windows-toegang is afzonderlijk van de status van het website-account. */
+export async function setWindowsAccess(accountId: string, enabled: boolean) {
+  await requireUser();
+  const account = await db.query.customerAccounts.findFirst({ where: eq(customerAccounts.id, accountId) });
+  if (!account) throw new Error("Account niet gevonden");
+  if (enabled) await grantWindowsAccess(account);
+  else await db.execute(sql`update windows.dealers set access_approved_at = null, updated_at = now() where portal_account_id = ${accountId}`);
   revalidatePath("/accounts");
 }

@@ -1,4 +1,4 @@
-import { asc, desc, eq } from "drizzle-orm";
+import { asc, desc, eq, sql } from "drizzle-orm";
 import Link from "next/link";
 
 import {
@@ -30,6 +30,7 @@ import {
   resendActivation,
   setAccountStatus,
   setAccountTier,
+  setWindowsAccess,
 } from "./actions";
 
 export const metadata = { title: "Klant-accounts" };
@@ -37,12 +38,14 @@ export const metadata = { title: "Klant-accounts" };
 const STATUS_TONE = { pending: "warning", active: "success", suspended: "danger" } as const;
 const STATUS_LABEL = { pending: "Wacht op activatie", active: "Actief", suspended: "Geblokkeerd" } as const;
 
-export default async function AccountsPage() {
+export default async function AccountsPage({ searchParams }: { searchParams: Promise<{ source?: string }> }) {
+  const source = (await searchParams).source;
   const [requests, accounts, contactRows] = await Promise.all([
     db.select().from(accountRequests).where(eq(accountRequests.status, "pending")).orderBy(desc(accountRequests.createdAt)),
     db
       .select({
         id: customerAccounts.id,
+        windowsAccess: sql<boolean>`exists (select 1 from windows.dealers d where d.portal_account_id = ${customerAccounts.id}::text and d.access_approved_at is not null and d.status = 'active')`,
         email: customerAccounts.email,
         tier: customerAccounts.priceTier,
         status: customerAccounts.status,
@@ -58,6 +61,7 @@ export default async function AccountsPage() {
     db.select({ id: contacts.id, name: contacts.name, email: contacts.email }).from(contacts).orderBy(asc(contacts.name)),
   ]);
 
+  const visibleRequests = source === "windows" || source === "website" ? requests.filter(r => r.source === source) : requests;
   const contactOptions: ComboOption[] = contactRows.map((c) => ({
     value: c.id,
     label: c.name,
@@ -68,7 +72,7 @@ export default async function AccountsPage() {
 
   return (
     <>
-      <PageHeader title="Klant-accounts" subtitle="Website-accounts voor prijzen (particulier / zakelijk)" />
+      <PageHeader title="Klant-accounts" subtitle="Accountaanvragen voor Habitat One en het kozijnensysteem" />
 
       <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-3">
         <StatTile label="Openstaande aanvragen" value={String(requests.length)} tone={requests.length ? "warning" : "neutral"} />
@@ -98,12 +102,17 @@ export default async function AccountsPage() {
         </form>
       </Card>
 
+      <nav className="mb-4 flex flex-wrap gap-3" aria-label="Soort aanvraag">
+        <Link href="/accounts" className="text-sm underline">Alle aanvragen ({requests.length})</Link>
+        <Link href="/accounts?source=windows" className="text-sm underline">Kozijnensysteem ({requests.filter(r => r.source === "windows").length})</Link>
+        <Link href="/accounts?source=website" className="text-sm underline">Website ({requests.filter(r => r.source === "website").length})</Link>
+      </nav>
       <Card className="mb-5 overflow-hidden">
         <CardHeader>
           <CardTitle>Openstaande aanvragen</CardTitle>
           <span className="text-xs text-muted">goedkeuren → account + activatiemail; kies het prijsniveau</span>
         </CardHeader>
-        {requests.length === 0 ? (
+        {visibleRequests.length === 0 ? (
           <div className="px-5 pb-5 text-sm text-muted">Geen openstaande aanvragen.</div>
         ) : (
           <Table>
@@ -111,6 +120,7 @@ export default async function AccountsPage() {
               <tr>
                 <Th>Naam / bedrijf</Th>
                 <Th>Contact</Th>
+                <Th>Aanvraag</Th>
                 <Th>Type</Th>
                 <Th>IVA/BTW</Th>
                 <Th>Goedkeuren als</Th>
@@ -118,7 +128,7 @@ export default async function AccountsPage() {
               </tr>
             </THead>
             <TBody>
-              {requests.map((r) => (
+              {visibleRequests.map((r) => (
                 <Tr key={r.id}>
                   <Td>
                     {r.kind === "zakelijk" && r.businessName ? r.businessName : r.name}
@@ -128,6 +138,7 @@ export default async function AccountsPage() {
                     {r.email}
                     {r.phone ? <span className="block text-xs text-muted">{r.phone}</span> : null}
                   </Td>
+                  <Td><Badge tone={r.source === "windows" ? "info" : "neutral"}>{r.source === "windows" ? "Aanvraag kozijnensysteem" : "Website-account"}</Badge>{r.message && <p className="mt-1 max-w-xs whitespace-pre-wrap text-xs text-muted">{r.message}</p>}</Td>
                   <Td><Badge tone={r.kind === "zakelijk" ? "info" : "neutral"}>{r.kind === "zakelijk" ? "Zakelijk" : "Particulier"}</Badge></Td>
                   <Td className="text-xs">{r.vatNumber ?? "—"}</Td>
                   <Td>
@@ -164,6 +175,7 @@ export default async function AccountsPage() {
                 <Th>E-mail / bedrijf</Th>
                 <Th>Prijsniveau</Th>
                 <Th>Status</Th>
+                <Th>Habitat Windows</Th>
                 <Th>Laatste login</Th>
                 <Th>Acties</Th>
               </tr>
@@ -183,6 +195,10 @@ export default async function AccountsPage() {
                     <AccountTierSelect accountId={a.id} tier={a.tier} onChangeAction={setAccountTier} />
                   </Td>
                   <Td><Badge tone={STATUS_TONE[a.status]}>{STATUS_LABEL[a.status]}</Badge></Td>
+                  <Td><form action={setWindowsAccess.bind(null, a.id, !a.windowsAccess)}>
+                    <span className="block text-xs text-muted">{a.windowsAccess ? "Toegang toegestaan" : "Geen Windows-toegang"}</span>
+                    <SubmitButton size="sm" variant="ghost" pendingLabel="…">{a.windowsAccess ? "Windows-toegang intrekken" : "Windows-toegang toestaan"}</SubmitButton>
+                  </form></Td>
                   <Td className="text-xs text-muted">{dt(a.lastLoginAt)}</Td>
                   <Td>
                     <div className="flex flex-wrap items-center gap-2">
