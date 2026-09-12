@@ -25,6 +25,7 @@ import { consignments, contacts, products } from "@/lib/db/schema";
 import { formatEUR } from "@/lib/utils";
 import { DEALER_MIN_MARGIN_PCT, dealerMarginPct, dealerPrice } from "@/lib/reseller";
 import { createResellerInvoice, placeConsignment, recordConsignmentSale, returnConsignment } from "../actions";
+import { getWindowsDealers } from "@/lib/windows-report";
 
 export const metadata = { title: "Wederverkoper" };
 
@@ -32,6 +33,7 @@ export default async function ResellerDetailPage({ params }: { params: Promise<{
   const { id } = await params;
   const reseller = await db.query.contacts.findFirst({ where: eq(contacts.id, id) });
   if (!reseller) notFound();
+  const windowsDealers = (await getWindowsDealers()).filter(d => d.contactId === id);
 
   const [rows, productRows] = await Promise.all([
     db.select().from(consignments).where(eq(consignments.resellerId, id)).orderBy(asc(consignments.productName)),
@@ -154,6 +156,7 @@ export default async function ResellerDetailPage({ params }: { params: Promise<{
         }
       />
 
+      {windowsDealers.length > 0 && <Card className="mb-5 p-4"><Link href={`/contacts/${id}?tab=kozijnen`} className="font-medium text-accent hover:underline">Kozijnen: offertes, orders en betalingen bekijken →</Link><p className="mt-1 text-xs text-muted">Gekoppeld aan {windowsDealers.map(d => d.companyName || d.email).join(", ")} in Habitat One Windows.</p></Card>}
       <div className="mb-5 grid grid-cols-2 gap-3 sm:grid-cols-4">
         <StatTile label="Producten" value={String(rows.length)} tone="neutral" />
         <StatTile label="Nu in winkel" value={formatEUR(inStoreValue)} hint="dealerprijs · ex. BTW" tone={inStoreValue > 0 ? "info" : "neutral"} />

@@ -26,6 +26,7 @@ import { Combobox, type ComboOption } from "@/components/combobox";
 import { AccountTierSelect } from "@/components/account-tier-select";
 import { db } from "@/lib/db";
 import { accountRequests, contacts, customerAccounts } from "@/lib/db/schema";
+import { getWindowsDealers } from "@/lib/windows-report";
 import {
   approveAccountRequest,
   createAccountManually,
@@ -45,6 +46,7 @@ const STATUS_LABEL = { pending: "Wacht op activatie", active: "Actief", suspende
 
 export default async function AccountsPage({ searchParams, windowsPage = false }: { windowsPage?: boolean; searchParams: Promise<{ source?: string; tab?: string; q?: string; sort?: string; page?: string }> }) {
   const params = await searchParams;
+  const windowsDealers = await getWindowsDealers();
   const source = windowsPage ? "windows" : "website";
   const basePath = windowsPage ? "/windows-accounts" : "/accounts";
   const [requests, accounts, contactRows] = await Promise.all([
@@ -199,6 +201,7 @@ export default async function AccountsPage({ searchParams, windowsPage = false }
                 <Th>E-mail / bedrijf</Th>
                 {!windowsPage && <Th>Prijsniveau website</Th>}
                 <Th>Status</Th>
+                <Th>Kozijnen</Th>
 
                 <Th>Laatste login</Th>
                 <Th>Acties</Th>
@@ -219,6 +222,7 @@ export default async function AccountsPage({ searchParams, windowsPage = false }
                     <AccountTierSelect accountId={a.id} tier={a.tier} onChangeAction={setAccountTier} />
                   </Td>}
                   <Td><Badge tone={STATUS_TONE[accountStatus(a, windowsPage)]}>{STATUS_LABEL[accountStatus(a, windowsPage)]}</Badge></Td>
+                  <Td>{windowsDealers.filter(d => d.accountId === a.id).map(d => <Link key={d.id} className="block text-xs text-accent hover:underline" href={a.contactId ? `/contacts/${a.contactId}?tab=kozijnen` : `/kozijnen/dealers/${d.id}`}>Offertes, orders en totalen →</Link>)}</Td>
                   <Td className="text-xs text-muted">{dt(a.lastLoginAt)}</Td>
                   <Td>
                     <div className="flex flex-wrap items-center gap-2">

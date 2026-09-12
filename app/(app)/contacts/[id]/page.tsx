@@ -22,7 +22,6 @@ import {
   EmptyState,
   LinkButton,
   PageHeader,
-  Select,
   StatTile,
   TBody,
   Table,
@@ -51,6 +50,9 @@ import { AccountReminderButton } from "@/components/account-reminder-button";
 import { ReminderButton } from "@/components/reminder-button";
 import { ReviewRequestButton } from "@/components/review-request-button";
 import { dossierConfigured } from "@/lib/contact-dossier";
+import { getWindowsReport } from "@/lib/windows-report";
+import { WindowsOverview } from "@/components/windows-overview";
+import { windowsPortalHref } from "@/lib/windows-financials";
 import { addContactNote, deleteContact, verversContactDossier } from "../actions";
 import {
   contactTypeMeta,
@@ -107,7 +109,8 @@ export default async function ContactDetailPage({
   });
   if (!contact) notFound();
 
-
+  const windowsReport = await getWindowsReport(id);
+  const hasWindows = windowsReport.dealers.length > 0;
 
   const [relatedProjects, relatedDocs, timeline, holdedMap] = await Promise.all([
     db.query.projects.findMany({
@@ -216,6 +219,7 @@ export default async function ContactDetailPage({
     { key: "facturen", label: "Facturen" },
     { key: "pakbonnen", label: "Pakbonnen" },
     { key: "projecten", label: "Projecten" },
+    { key: "kozijnen", label: "Kozijnen" },
     { key: "archief", label: "Archief" },
   ] as const;
   type Tab = (typeof TABS)[number]["key"];
@@ -341,7 +345,7 @@ export default async function ContactDetailPage({
         </p>
       )}
 
-      <div className="mb-4 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+      {tab !== "kozijnen" && <div className="mb-4 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
         <StatTile label="Totale omzet" value={formatEUR(omzet)} hint="gefactureerd, incl. BTW" tone="success" />
         <StatTile label="Openstaand" value={formatEUR(openstaand)} hint="te ontvangen" tone={openstaand > 0 ? "warning" : "neutral"} />
         {margeCosted > 0 && (
@@ -359,10 +363,10 @@ export default async function ContactDetailPage({
         <StatTile label="Totaal geoffreerd" value={formatEUR(geoffreerd)} hint="lopende offertes" />
         <StatTile label="Offertes" value={String(estimates.length)} hint={`${invoicedEstimateIds.size} gefactureerd`} />
         <StatTile label="Conversie" value={`${conversie}%`} hint="offerte → factuur" tone="info" />
-      </div>
+      </div>}
 
       <div className="mb-4 flex flex-wrap gap-1 border-b">
-        {TABS.map((t) => {
+        {TABS.filter(t => t.key !== "kozijnen" || hasWindows).map((t) => {
           const cnt =
             t.key === "offertes"
               ? offertesList.length
@@ -390,6 +394,24 @@ export default async function ContactDetailPage({
           );
         })}
       </div>
+
+      {hasWindows && tab === "overzicht" && (
+        <Card className="mb-5">
+          <CardHeader><CardTitle>Kozijnen · Habitat One Windows</CardTitle><Link href={tabHref("kozijnen")} className="text-sm text-accent hover:underline">Bekijk kozijnendashboard →</Link></CardHeader>
+          <CardContent>
+            <div className="grid gap-4 sm:grid-cols-3 text-sm">
+              <div><p className="text-muted">Orderwaarde excl. btw</p><strong>{formatEUR(windowsReport.totals.dealer)}</strong><p className="text-xs text-muted">{windowsReport.totals.orders} orders · {windowsReport.totals.elements} kozijnen</p></div>
+              <div><p className="text-muted">Open offertes excl. btw</p><strong>{formatEUR(windowsReport.quotes.openValue)}</strong><p className="text-xs text-muted">{windowsReport.quotes.open} offertes · laatste versies</p></div>
+              <div><p className="text-muted">Openstaande Windows-facturen incl. btw</p><strong>{formatEUR(windowsReport.totals.open)}</strong><p className="text-xs text-muted">Betaald: {formatEUR(windowsReport.totals.paidGross)}</p></div>
+            </div>
+            <p className="mt-3 text-xs text-muted">Windows-overzicht. Facturen die ook in het CRM staan zijn dezelfde facturen; tel beide overzichten niet bij elkaar op.</p>
+          </CardContent>
+        </Card>
+      )}
+      {tab === "kozijnen" && (hasWindows ? <div className="space-y-4">
+        <div className="flex flex-wrap gap-3">{windowsReport.dealers.map(d => <LinkButton key={d.id} href={windowsPortalHref(`/admin/dealers/${d.id}`)} variant="secondary" target="_blank" rel="noreferrer" prefetch={false}>Windows-dashboard · {d.companyName || d.email}</LinkButton>)}</div>
+        <WindowsOverview report={windowsReport} scoped />
+      </div> : <Card className="p-5 text-sm text-muted">Aan dit CRM-contact is geen Windows-account gekoppeld.</Card>)}
 
       {tab === "offertes" && (
         <Card className="overflow-hidden">
