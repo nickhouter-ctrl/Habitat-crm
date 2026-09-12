@@ -1,3 +1,4 @@
+import { accountList, accountStatus } from "@/lib/portal/account-list";
 import { asc, desc, eq, sql } from "drizzle-orm";
 import Link from "next/link";
 
@@ -43,15 +44,13 @@ export default async function AccountsPage({ searchParams, windowsPage = false }
   const params = await searchParams;
   const source = windowsPage ? "windows" : "website";
   const basePath = windowsPage ? "/windows-accounts" : "/accounts";
-  const tab = ["windows", "no-windows", "pending", "suspended"].includes(params.tab ?? "") ? params.tab! : windowsPage ? "windows" : "all";
-  const query = (params.q ?? "").trim().slice(0, 200);
-  const sort = ["name", "email", "login", "newest"].includes(params.sort ?? "") ? params.sort! : "name";
   const [requests, accounts, contactRows] = await Promise.all([
     db.select().from(accountRequests).where(eq(accountRequests.status, "pending")).orderBy(desc(accountRequests.createdAt)),
     db
       .select({
         id: customerAccounts.id,
         createdAt: customerAccounts.createdAt,
+        windowsApproved: sql<boolean>`exists (select 1 from windows.dealers d where d.portal_account_id = ${customerAccounts.id}::text and d.access_approved_at is not null)`,
         windowsAccess: sql<boolean>`exists (select 1 from windows.dealers d where d.portal_account_id = ${customerAccounts.id}::text and d.access_approved_at is not null and d.status = 'active')`,
         email: customerAccounts.email,
         tier: customerAccounts.priceTier,
@@ -74,45 +73,23 @@ export default async function AccountsPage({ searchParams, windowsPage = false }
     label: c.name,
     hint: c.email ?? "geen e-mail",
   }));
-  const tabs = [
-    { id: "all", label: "Alle accounts", count: accounts.length },
-    { id: "windows", label: "Windows-toegang", count: accounts.filter(a => a.windowsAccess).length },
-    { id: "no-windows", label: "Zonder Windows", count: accounts.filter(a => !a.windowsAccess).length },
-    { id: "pending", label: "Wacht op activatie", count: accounts.filter(a => a.status === "pending" && (!windowsPage || a.windowsAccess)).length },
-    { id: "suspended", label: "Geblokkeerd", count: accounts.filter(a => a.status === "suspended" && (!windowsPage || a.windowsAccess)).length },
-  ].filter(t => windowsPage || !["windows", "no-windows"].includes(t.id));
-  const name = (a: typeof accounts[number]) => a.businessName || a.contactName || a.email;
-  const filtered = accounts.filter(a => {
-    if (tab === "windows" && !a.windowsAccess || tab === "no-windows" && a.windowsAccess) return false;
-    if ((tab === "pending" || tab === "suspended") && (a.status !== tab || windowsPage && !a.windowsAccess)) return false;
-    return !query || [a.email, a.businessName, a.contactName].some(v => v?.toLocaleLowerCase("nl").includes(query.toLocaleLowerCase("nl")));
-  }).sort((a, b) => {
-    const primary = sort === "email" ? a.email.localeCompare(b.email, "nl")
-      : sort === "login" ? (b.lastLoginAt?.getTime() ?? 0) - (a.lastLoginAt?.getTime() ?? 0)
-      : sort === "newest" ? b.createdAt.getTime() - a.createdAt.getTime()
-      : name(a).localeCompare(name(b), "nl", { sensitivity: "base" });
-    return primary || a.id.localeCompare(b.id);
-  });
-  const totalPages = Math.max(1, Math.ceil(filtered.length / 25));
-  const requestedPage = Number(params.page);
-  const page = Number.isSafeInteger(requestedPage) ? Math.min(totalPages, Math.max(1, requestedPage)) : 1;
-  const visibleAccounts = filtered.slice((page - 1) * 25, page * 25);
+  const {scoped, tab, query, sort, filtered, totalPages, page, tabs, visibleAccounts} = accountList(accounts, windowsPage, params);
   function href(change: Record<string, string>) {
     const values = new URLSearchParams({ tab, q: query, sort, ...(source ? { source } : {}), ...change });
     return `${basePath}?${values}#account-list`;
   }
-  const activeCount = accounts.filter((a) => a.status === "active" && (!windowsPage || a.windowsAccess)).length;
+  const activeCount = scoped.filter(a => accountStatus(a, windowsPage) === "active").length;
   const dt = (d: Date | null) => (d ? new Date(d).toLocaleDateString("nl-NL", { day: "numeric", month: "short", year: "numeric" }) : "—");
 
   return (
     <>
       <PageHeader title={windowsPage ? "Windows-accounts" : "Website-accounts"} subtitle={windowsPage ? "Toegang en aanvragen voor het kozijnensysteem" : "Klantaccounts voor de Habitat One-website"} />
-      <nav className="mb-5 flex gap-4 text-sm" aria-label="Online toegang"><Link className="underline" href="/accounts">Website-accounts</Link><Link className="underline" href="/windows-accounts">Windows-accounts</Link></nav>
+      
 
       <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-3">
-        <StatTile label="Openstaande aanvragen" value={String(visibleRequests.length)} tone={requests.length ? "warning" : "neutral"} />
+        <StatTile label="Openstaande aanvragen" value={String(visibleRequests.length)} tone={visibleRequests.length ? "warning" : "neutral"} />
         <StatTile label="Actieve accounts" value={String(activeCount)} tone={activeCount ? "success" : "neutral"} />
-        <StatTile label={windowsPage ? "Windows-accounts" : "Totaal accounts"} value={String(windowsPage ? accounts.filter(a => a.windowsAccess).length : accounts.length)} tone="neutral" />
+        <StatTile label={windowsPage ? "Windows-accounts" : "Totaal accounts"} value={String(scoped.length)} tone="neutral" />
       </div>
 
       {!windowsPage && <Card className="mb-5"><details><summary className="cursor-pointer px-5 py-4 text-sm font-semibold">+ Websiteaccount aanmaken</summary>
@@ -137,7 +114,7 @@ export default async function AccountsPage({ searchParams, windowsPage = false }
         </form>
       </details></Card>}
 
-      {windowsPage && <p className="mb-5 text-sm text-muted">Geef een bestaande klant toegang via <Link className="underline" href="/contacts">Contacten → Online toegang</Link>, of gebruik hieronder het tabblad Zonder Windows.</p>}
+      {windowsPage && <p className="mb-5 text-sm text-muted">Geef een bestaande klant toegang via <Link className="underline" href="/contacts">Contacten → Online toegang</Link>.</p>}
       <Card id="account-requests" className="mb-5 overflow-hidden">
         <CardHeader>
           <CardTitle>{source === "windows" ? "Windows-accountaanvragen" : "Website-aanvragen"}</CardTitle>
@@ -194,9 +171,9 @@ export default async function AccountsPage({ searchParams, windowsPage = false }
       </Card>
 
       <Card className="overflow-hidden" id="account-list">
-        <CardHeader><CardTitle>Accounts</CardTitle><span className="text-sm text-muted">{filtered.length} van {accounts.length} accounts</span></CardHeader>
+        <CardHeader><CardTitle>{windowsPage ? "Windows-accounts" : "Website-accounts"}</CardTitle><span className="text-sm text-muted">{filtered.length} van {scoped.length} accounts</span></CardHeader>
         <div className="space-y-4 px-5 pb-5">
-          <p className="text-sm text-muted">Windows-toegang wordt apart toegestaan. Een account moet ook geactiveerd en niet geblokkeerd zijn om te kunnen inloggen.</p>
+          
           <nav className="flex flex-wrap gap-2" aria-label="Accounts filteren">
             {tabs.map(t => <Link key={t.id} href={href({ tab: t.id, page: "1" })} aria-current={tab === t.id ? "page" : undefined} className={`rounded-lg border px-3 py-2 text-sm font-medium ${tab === t.id ? "border-accent bg-accent/15 text-accent" : "border-border text-muted hover:text-foreground"}`}>{t.label} <span className="ml-1 tabular-nums">{t.count}</span></Link>)}
           </nav>
@@ -217,7 +194,7 @@ export default async function AccountsPage({ searchParams, windowsPage = false }
                 <Th>E-mail / bedrijf</Th>
                 {!windowsPage && <Th>Prijsniveau website</Th>}
                 <Th>Status</Th>
-                {windowsPage && <Th>Habitat Windows</Th>}
+                
                 <Th>Laatste login</Th>
                 <Th>Acties</Th>
               </tr>
@@ -236,18 +213,14 @@ export default async function AccountsPage({ searchParams, windowsPage = false }
                   {!windowsPage && <Td>
                     <AccountTierSelect accountId={a.id} tier={a.tier} onChangeAction={setAccountTier} />
                   </Td>}
-                  <Td><Badge tone={STATUS_TONE[a.status]}>{STATUS_LABEL[a.status]}</Badge></Td>
-                  {windowsPage && <Td><form action={setWindowsAccess.bind(null, a.id, !a.windowsAccess)} className="flex flex-col items-start gap-2">
-                    <Badge tone={a.windowsAccess ? "success" : "neutral"}>{a.windowsAccess ? "Windows toegestaan" : "Geen Windows-toegang"}</Badge>
-                    <SubmitButton size="sm" variant={a.windowsAccess ? "ghost" : "secondary"} pendingLabel="Opslaan…">{a.windowsAccess ? "Toegang intrekken" : "Windows-toegang toestaan"}</SubmitButton>
-                  </form></Td>}
+                  <Td><Badge tone={STATUS_TONE[accountStatus(a, windowsPage)]}>{STATUS_LABEL[accountStatus(a, windowsPage)]}</Badge></Td>
                   <Td className="text-xs text-muted">{dt(a.lastLoginAt)}</Td>
                   <Td>
                     <div className="flex flex-wrap items-center gap-2">
                       <form action={resendActivation.bind(null, a.id)}>
-                        <SubmitButton size="sm" variant="ghost" className="text-accent" pendingLabel="…">activatie/reset</SubmitButton>
+                        <SubmitButton size="sm" variant="ghost" className="text-accent" pendingLabel="Versturen…">{a.status === "pending" ? "Activatiemail" : "Wachtwoordlink"}</SubmitButton>
                       </form>
-                      {a.status === "suspended" ? (
+                      {windowsPage ? <form action={setWindowsAccess.bind(null,a.id,!a.windowsAccess)}><SubmitButton size="sm" variant="ghost" className={a.windowsAccess?"text-danger":"text-success"}>{a.windowsAccess?"Windows-toegang intrekken":"Windows-toegang herstellen"}</SubmitButton></form> : a.status === "suspended" ? (
                         <form action={setAccountStatus.bind(null, a.id, "active")}>
                           <SubmitButton size="sm" variant="ghost" className="text-success" pendingLabel="…">activeren</SubmitButton>
                         </form>
