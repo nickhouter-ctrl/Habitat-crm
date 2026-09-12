@@ -23,7 +23,7 @@ export async function OPTIONS(req: Request) {
 
 export async function POST(req: Request) {
   const origin = req.headers.get("origin");
-  const payload = portalAuth(req);
+  const payload = await portalAuth(req);
   if (!payload) return jsonCors({ ok: false, error: "unauthorized" }, 401, origin);
   if (!(await rateLimit(`portal-handoff:ip:${clientIp(req)}`, 30, 300, { strikt: true }))) {
     return jsonCors({ ok: false, error: "too-many-requests" }, 429, origin);
@@ -32,6 +32,6 @@ export async function POST(req: Request) {
   // Eén rij in rate_limits als "nog niet gebruikt"-vlag; de login-route wist hem bij gebruik.
   await db.execute(sql`insert into rate_limits ("key", window_start, "count") values (${`handoff:${code}`}, now(), 0)`);
   // De claims zelf reizen in een kort ondertekend token mee (zelfde HMAC als het sessietoken).
-  const kort = signPortalToken({ sub: payload.sub, email: payload.email, tier: payload.tier, contactId: payload.contactId, exp: Math.floor(Date.now() / 1000) + GELDIG_SECONDEN });
+  const kort = signPortalToken({ scope: "website", sub: payload.sub, email: payload.email, tier: payload.tier, contactId: payload.contactId, exp: Math.floor(Date.now() / 1000) + GELDIG_SECONDEN });
   return jsonCors({ ok: true, code: `${code}.${kort}`, expiresIn: GELDIG_SECONDEN }, 200, origin);
 }

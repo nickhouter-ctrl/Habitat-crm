@@ -1,0 +1,1 @@
+ALTER TABLE "customer_accounts" ADD COLUMN "website_access" boolean DEFAULT true NOT NULL;

@@ -1,6 +1,6 @@
 export type AccountListRow = {
  id: string; email: string; businessName: string|null; contactName: string|null;
- status: "active"|"pending"|"suspended"; windowsAccess: boolean; windowsApproved: boolean;
+ status: "active"|"pending"|"suspended"; websiteAccess: boolean; windowsAccess: boolean; windowsApproved: boolean;
  createdAt: Date; lastLoginAt: Date|null;
 };
 export function accountStatus(a:AccountListRow,windows:boolean) {
@@ -8,7 +8,7 @@ export function accountStatus(a:AccountListRow,windows:boolean) {
 }
 export function accountList<T extends AccountListRow>(accounts:T[],windows:boolean,params:{tab?:string;q?:string;sort?:string;page?:string}) {
  // Eerst de scope bepalen: geen URL-filter mag websiteaccounts aan Windows toevoegen.
- const scoped=windows ? accounts.filter(a=>a.windowsApproved) : accounts;
+ const scoped=windows ? accounts.filter(a=>a.windowsApproved) : accounts.filter(a=>a.websiteAccess);
  const tab=["active","pending","suspended"].includes(params.tab??"")?params.tab!:"all";
  const query=(params.q??"").trim().slice(0,200);
  const sort=["name","email","login","newest"].includes(params.sort??"")?params.sort!:"name";

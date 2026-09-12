@@ -1,3 +1,7 @@
+import { eq } from "drizzle-orm";
+import { db } from "@/lib/db";
+import { customerAccounts } from "@/lib/db/schema";
+import { hasPortalAccess, type PortalScope } from "./access";
 import { NextResponse } from "next/server";
 
 import { verifyPortalToken, type PortalToken } from "./token";
@@ -35,10 +39,14 @@ export function portalCors(origin?: string | null): HeadersInit {
  * uit ?token=: een sessietoken van 30 dagen hoort niet in URL's (logs,
  * browsergeschiedenis, Referer).
  */
-export function portalAuth(req: Request): PortalToken | null {
+export async function portalAuth(req: Request, scope: PortalScope = "website"): Promise<PortalToken | null> {
   const h = req.headers.get("authorization");
   const token = h?.toLowerCase().startsWith("bearer ") ? h.slice(7).trim() : null;
-  return verifyPortalToken(token);
+  const payload = verifyPortalToken(token);
+  if (!payload || payload.scope && payload.scope !== scope) return null;
+  const account = await db.query.customerAccounts.findFirst({ where: eq(customerAccounts.id, payload.sub) });
+  if (!account || account.status !== "active" || !await hasPortalAccess(account, scope)) return null;
+  return payload;
 }
 
 export function jsonCors(body: unknown, init: number | ResponseInit, origin?: string | null) {

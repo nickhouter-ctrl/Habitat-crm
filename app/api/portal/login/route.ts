@@ -1,3 +1,4 @@
+import { hasPortalAccess } from "@/lib/portal/access";
 import { eq } from "drizzle-orm";
 import { z } from "zod";
 
@@ -8,7 +9,7 @@ import { jsonCors, portalCors } from "@/lib/portal/api";
 import { clientIp, rateLimit, RATE_LIMITED } from "@/lib/rate-limit";
 import { signPortalToken } from "@/lib/portal/token";
 
-const schema = z.object({ email: z.string().trim().email(), password: z.string().min(1) });
+const schema = z.object({ email: z.string().trim().email(), password: z.string().min(1), scope: z.enum(["website", "windows"]).default("website") });
 
 export async function OPTIONS(req: Request) {
   return new Response(null, { status: 204, headers: portalCors(req.headers.get("origin")) });
@@ -24,7 +25,7 @@ export async function POST(req: Request) {
   }
   const parsed = schema.safeParse(payload);
   if (!parsed.success) return jsonCors({ ok: false, error: "validation" }, 400, origin);
-  const { email, password } = parsed.data;
+  const { email, password, scope } = parsed.data;
 
   // Brute-force-rem: per IP én per account (voorkomt onbeperkt wachtwoord-raden).
   const ipOk = await rateLimit(`portal-login:ip:${clientIp(req)}`, 10, 300, { strikt: true });
@@ -39,9 +40,10 @@ export async function POST(req: Request) {
   if (!acc || acc.status !== "active" || !acc.passwordHash) return invalid();
   if (!(await verifyPassword(password, acc.passwordHash))) return invalid();
 
+  if (!await hasPortalAccess(acc, scope)) return jsonCors({ ok: false, error: scope === "windows" ? "windows-access-required" : "website-access-required" }, 403, origin);
   await db.update(customerAccounts).set({ lastLoginAt: new Date() }).where(eq(customerAccounts.id, acc.id));
 
-  const token = signPortalToken({ sub: acc.id, email: acc.email, tier: acc.priceTier, contactId: acc.contactId });
+  const token = signPortalToken({ scope, sub: acc.id, email: acc.email, tier: acc.priceTier, contactId: acc.contactId });
   return jsonCors(
     { ok: true, token, account: { email: acc.email, tier: acc.priceTier, businessName: acc.businessName } },
     200,

@@ -12,7 +12,7 @@ import { eq, sql } from "drizzle-orm";
 import { NextResponse } from "next/server";
 
 import { db } from "@/lib/db";
-import { contacts } from "@/lib/db/schema";
+import { contacts, customerAccounts } from "@/lib/db/schema";
 import { kiesTaal, zetKlantSessie } from "@/lib/klant-portal";
 import { verifyPortalToken } from "@/lib/portal/token";
 
@@ -26,13 +26,14 @@ export async function GET(req: Request) {
   const punt = code.indexOf(".");
   const nonce = punt > 0 ? code.slice(0, punt) : "";
   const payload = punt > 0 ? verifyPortalToken(code.slice(punt + 1)) : null;
+  const account = payload ? await db.query.customerAccounts.findFirst({where:eq(customerAccounts.id,payload.sub)}) : null;
   let eenmalig = false;
   if (payload && nonce) {
     // De vlag uit rate_limits halen: bestaat hij niet (meer), dan is de code al gebruikt of verzonnen.
     const r = (await db.execute(sql`delete from rate_limits where "key" = ${`handoff:${nonce}`} and window_start > now() - interval '2 minutes' returning "key"`)) as unknown as unknown[];
     eenmalig = r.length === 1;
   }
-  if (!payload || !eenmalig) {
+  if (!payload || !eenmalig || payload.scope === "windows" || !account?.websiteAccess || account.status !== "active") {
     return NextResponse.redirect(new URL(`/klant?lang=${taal}&invalid=1`, url.origin));
   }
 

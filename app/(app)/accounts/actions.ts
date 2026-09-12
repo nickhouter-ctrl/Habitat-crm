@@ -1,5 +1,6 @@
 "use server";
 
+import { registrationSchema } from "@/lib/portal/registration-schema";
 import { randomBytes } from "node:crypto";
 import { revalidatePath } from "next/cache";
 import { and, desc, eq, isNull, or, sql } from "drizzle-orm";
@@ -58,9 +59,16 @@ export async function approveAccountRequest(requestId: string, formData: FormDat
   const { tier } = approveSchema.parse(Object.fromEntries(formData));
   const req = await db.query.accountRequests.findFirst({ where: eq(accountRequests.id, requestId) });
   if (!req || req.status !== "pending") return;
+  if (req.source === "windows" && (req.kind !== "zakelijk" || !req.businessName?.trim() || !req.vatNumber?.trim())) throw new Error("Bedrijfsnaam en btw-nummer zijn verplicht voor Windows-toegang.");
 
   // Contact: hergebruik gekoppeld contact, anders aanmaken.
-  let contactId = req.contactId;
+  const linkedAccount = await db.query.customerAccounts.findFirst({where: eq(customerAccounts.email, req.email.toLowerCase())});
+  let contactId = req.contactId ?? linkedAccount?.contactId;
+  if (!contactId) {
+    const matches = await db.query.contacts.findMany({where: sql`lower(${contacts.email}) = ${req.email.toLowerCase()}`, limit: 2});
+    if (matches.length > 1) throw new Error("Meerdere contacten met dit e-mailadres. Koppel eerst het juiste contact.");
+    contactId = matches[0]?.id;
+  }
   if (!contactId) {
     const isZakelijk = req.kind === "zakelijk";
     // Zakelijk → bedrijf aanmaken en koppelen. Het CRM leidt "zakelijk" af van
@@ -138,16 +146,19 @@ export async function approveAccountRequest(requestId: string, formData: FormDat
       email,
       priceTier: tier,
       status: "pending",
+      websiteAccess: req.source !== "windows",
       businessName: req.businessName,
       vatNumber: req.vatNumber,
       activationToken: token,
       activationExpires: expires,
     });
   }
+  if (req.source === "website" && existingAccount) await db.update(customerAccounts).set({websiteAccess:true,updatedAt:new Date()}).where(eq(customerAccounts.id,existingAccount.id));
   if (req.source === "windows") {
     const account = await db.query.customerAccounts.findFirst({ where: eq(customerAccounts.email, email) });
     if (!account) throw new Error("Account ontbreekt voor Windows-goedkeuring");
-    await grantWindowsAccess(account);
+    await db.update(customerAccounts).set({businessName:req.businessName,vatNumber:req.vatNumber,updatedAt:new Date()}).where(eq(customerAccounts.id,account.id));
+    await grantWindowsAccess({...account,businessName:req.businessName,vatNumber:req.vatNumber});
   }
   await db.update(accountRequests).set({ status: "approved", contactId, updatedAt: new Date() }).where(eq(accountRequests.id, requestId));
 
@@ -176,6 +187,7 @@ async function createAccount(opts: {
   vatNumber?: string | null;
   windows?: boolean;
 }): Promise<{ ok: boolean; reason?: string }> {
+  if (opts.windows && (!opts.businessName?.trim() || !opts.vatNumber?.trim())) throw new Error("Bedrijfsnaam en btw-nummer zijn verplicht.");
   const email = opts.email.trim().toLowerCase();
   if (!email) return { ok: false, reason: "geen e-mail" };
   const existing = await db.query.customerAccounts.findFirst({ where: eq(customerAccounts.email, email) });
@@ -186,6 +198,7 @@ async function createAccount(opts: {
     email,
     priceTier: opts.tier,
     status: "pending",
+    websiteAccess: !opts.windows,
     businessName: opts.businessName ?? null,
     vatNumber: opts.vatNumber ?? null,
     activationToken: token,
@@ -245,9 +258,16 @@ export async function createAccountForContact(contactId: string, formData: FormD
       const linked = await db.update(customerAccounts).set({ contactId, updatedAt: new Date() }).where(and(eq(customerAccounts.id, existing.id), isNull(customerAccounts.contactId))).returning({ id: customerAccounts.id });
       if (!linked.length) throw new Error("De accountkoppeling is gewijzigd. Vernieuw de contactkaart.");
     }
-    if (windows) await grantWindowsAccess(existing);
+    if (windows) {
+      const businessName=String(formData.get("businessName") || existing.businessName || "").trim();
+      const vatNumber=String(formData.get("vatNumber") || existing.vatNumber || "").trim();
+      if(!businessName || !vatNumber) throw new Error("Bedrijfsnaam en btw-nummer zijn verplicht.");
+      await db.update(customerAccounts).set({businessName,vatNumber,updatedAt:new Date()}).where(eq(customerAccounts.id,existing.id));
+      await grantWindowsAccess({...existing,businessName,vatNumber});
+    }
+    else await db.update(customerAccounts).set({websiteAccess:true,updatedAt:new Date()}).where(eq(customerAccounts.id,existing.id));
   } else {
-    await createAccount({ email, name: c.name, tier, contactId, businessName: c.name, windows });
+    await createAccount({ email, name: c.name, tier: windows ? "aannemer" : tier, contactId, businessName: windows ? String(formData.get("businessName") || "") : c.name, vatNumber: windows ? String(formData.get("vatNumber") || "") : null, windows });
   }
   refreshAccountPages();
   revalidatePath(`/contacts/${contactId}`);
@@ -274,7 +294,7 @@ export async function setAccountStatus(accountId: string, status: "active" | "su
 }
 
 /** Stuur (opnieuw) een activatie-/wachtwoord-reset-link. */
-export async function resendActivation(accountId: string) {
+async function sendAccountActivation(accountId: string, scope?: "website" | "windows") {
   await requireUser();
   const acc = await db.query.customerAccounts.findFirst({ where: eq(customerAccounts.id, accountId) });
   if (!acc) return;
@@ -285,7 +305,7 @@ export async function resendActivation(accountId: string) {
     .where(eq(customerAccounts.id, accountId));
   try {
     const request = await db.query.accountRequests.findFirst({ where: and(eq(accountRequests.email, acc.email), eq(accountRequests.status, "approved")), orderBy: desc(accountRequests.updatedAt) });
-    await sendActivationMail(acc.email, acc.businessName ?? acc.email, token, acc.priceTier, request?.source, request?.locale);
+    await sendActivationMail(acc.email, acc.businessName ?? acc.email, token, acc.priceTier, scope ?? (acc.websiteAccess ? "website" : "windows"), request?.locale);
   } catch (err) {
     console.warn("[accounts] activatiemail mislukt:", err);
   }
@@ -301,3 +321,28 @@ export async function setWindowsAccess(accountId: string, enabled: boolean) {
   else await db.execute(sql`update windows.dealers set access_approved_at = null, updated_at = now() where portal_account_id = ${accountId}`);
   refreshAccountPages();
 }
+
+/** Website-toegang wijzigen zonder Windows-rechten of het wachtwoord te wijzigen. */
+export async function setWebsiteAccess(accountId:string,enabled:boolean) {
+ await requireUser();
+ await db.update(customerAccounts).set({websiteAccess:enabled,updatedAt:new Date()}).where(eq(customerAccounts.id,accountId));
+ refreshAccountPages();
+}
+
+/** Nieuwe zakelijke klant: dezelfde gecontroleerde goedkeuringsflow als een aanvraag. */
+export async function createWindowsCustomer(_state: { error?: string; success?: string }, formData: FormData): Promise<{error?:string;success?:string}> {
+  await requireUser();
+  const parsed = registrationSchema.safeParse({...Object.fromEntries(formData),source:"windows",kind:"zakelijk"});
+  if (!parsed.success) return {error:"Vul naam, een geldig e-mailadres, bedrijfsnaam en btw-nummer in."};
+  const v=parsed.data;
+  const existing=await db.query.customerAccounts.findFirst({where:eq(customerAccounts.email,v.email.toLowerCase())});
+  if(existing) return {error:"Dit e-mailadres heeft al een account. Geef Windows-toegang via de contactkaart, onder Online toegang."};
+  const [request]=await db.insert(accountRequests).values({...v,email:v.email.toLowerCase()}).returning({id:accountRequests.id});
+  const approval=new FormData(); approval.set("tier","aannemer");
+  try { await approveAccountRequest(request.id,approval); }
+  catch { refreshAccountPages(); return {error:"De aanvraag is opgeslagen, maar nog niet goedgekeurd. Controleer de aanvraag hieronder."}; }
+  return {success:"Zakelijke klant aangemaakt en Windows-toegang goedgekeurd. De activatiemail is aangevraagd; website-toegang staat uit."};
+}
+
+export async function resendActivation(accountId: string) { await sendAccountActivation(accountId); }
+export async function resendWindowsActivation(accountId: string) { await sendAccountActivation(accountId,"windows"); }

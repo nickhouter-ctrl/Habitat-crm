@@ -1757,6 +1757,7 @@ export const customerAccounts = pgTable(
     contactId: uuid().references(() => contacts.id, { onDelete: "set null" }),
     email: text().notNull(),
     passwordHash: text(),
+    websiteAccess: boolean().notNull().default(true),
     priceTier: customerPriceTier().notNull().default("particulier"),
     status: customerAccountStatus().notNull().default("pending"),
     businessName: text(),

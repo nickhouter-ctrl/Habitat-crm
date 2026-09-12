@@ -12,6 +12,7 @@ const SECRET = process.env.PORTAL_JWT_SECRET ?? "";
 const TTL_SECONDS = 30 * 24 * 60 * 60; // 30 dagen
 
 export type PortalToken = {
+  scope?: "website" | "windows";
   sub: string; // customer_account id
   email: string;
   tier: "particulier" | "aannemer";

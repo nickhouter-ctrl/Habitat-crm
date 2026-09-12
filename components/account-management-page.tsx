@@ -1,3 +1,4 @@
+import { WindowsAccountCreate } from "@/components/windows-account-create";
 import { accountList, accountStatus } from "@/lib/portal/account-list";
 import { asc, desc, eq, sql } from "drizzle-orm";
 import Link from "next/link";
@@ -30,9 +31,11 @@ import {
   createAccountManually,
   rejectAccountRequest,
   resendActivation,
+  resendWindowsActivation,
   setAccountStatus,
   setAccountTier,
   setWindowsAccess,
+  setWebsiteAccess,
 } from "@/app/(app)/accounts/actions";
 
 
@@ -49,6 +52,7 @@ export default async function AccountsPage({ searchParams, windowsPage = false }
     db
       .select({
         id: customerAccounts.id,
+        websiteAccess: customerAccounts.websiteAccess,
         createdAt: customerAccounts.createdAt,
         windowsApproved: sql<boolean>`exists (select 1 from windows.dealers d where d.portal_account_id = ${customerAccounts.id}::text and d.access_approved_at is not null)`,
         windowsAccess: sql<boolean>`exists (select 1 from windows.dealers d where d.portal_account_id = ${customerAccounts.id}::text and d.access_approved_at is not null and d.status = 'active')`,
@@ -84,7 +88,7 @@ export default async function AccountsPage({ searchParams, windowsPage = false }
   return (
     <>
       <PageHeader title={windowsPage ? "Windows-accounts" : "Website-accounts"} subtitle={windowsPage ? "Toegang en aanvragen voor het kozijnensysteem" : "Klantaccounts voor de Habitat One-website"} />
-      
+
 
       <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-3">
         <StatTile label="Openstaande aanvragen" value={String(visibleRequests.length)} tone={visibleRequests.length ? "warning" : "neutral"} />
@@ -114,6 +118,7 @@ export default async function AccountsPage({ searchParams, windowsPage = false }
         </form>
       </details></Card>}
 
+      {windowsPage && <WindowsAccountCreate />}
       {windowsPage && <p className="mb-5 text-sm text-muted">Geef een bestaande klant toegang via <Link className="underline" href="/contacts">Contacten → Online toegang</Link>.</p>}
       <Card id="account-requests" className="mb-5 overflow-hidden">
         <CardHeader>
@@ -173,7 +178,7 @@ export default async function AccountsPage({ searchParams, windowsPage = false }
       <Card className="overflow-hidden" id="account-list">
         <CardHeader><CardTitle>{windowsPage ? "Windows-accounts" : "Website-accounts"}</CardTitle><span className="text-sm text-muted">{filtered.length} van {scoped.length} accounts</span></CardHeader>
         <div className="space-y-4 px-5 pb-5">
-          
+
           <nav className="flex flex-wrap gap-2" aria-label="Accounts filteren">
             {tabs.map(t => <Link key={t.id} href={href({ tab: t.id, page: "1" })} aria-current={tab === t.id ? "page" : undefined} className={`rounded-lg border px-3 py-2 text-sm font-medium ${tab === t.id ? "border-accent bg-accent/15 text-accent" : "border-border text-muted hover:text-foreground"}`}>{t.label} <span className="ml-1 tabular-nums">{t.count}</span></Link>)}
           </nav>
@@ -194,7 +199,7 @@ export default async function AccountsPage({ searchParams, windowsPage = false }
                 <Th>E-mail / bedrijf</Th>
                 {!windowsPage && <Th>Prijsniveau website</Th>}
                 <Th>Status</Th>
-                
+
                 <Th>Laatste login</Th>
                 <Th>Acties</Th>
               </tr>
@@ -208,7 +213,7 @@ export default async function AccountsPage({ searchParams, windowsPage = false }
                     ) : (
                       a.businessName ?? a.email
                     )}
-                    <span className="block text-xs text-muted">{a.email}</span>
+                    <span className="block text-xs text-muted">{a.email}</span>{!windowsPage && a.windowsApproved && <span className="mt-1 block text-xs text-muted">Ook Windows-toegang</span>}
                   </Td>
                   {!windowsPage && <Td>
                     <AccountTierSelect accountId={a.id} tier={a.tier} onChangeAction={setAccountTier} />
@@ -217,16 +222,17 @@ export default async function AccountsPage({ searchParams, windowsPage = false }
                   <Td className="text-xs text-muted">{dt(a.lastLoginAt)}</Td>
                   <Td>
                     <div className="flex flex-wrap items-center gap-2">
-                      <form action={resendActivation.bind(null, a.id)}>
+                      <form action={(windowsPage ? resendWindowsActivation : resendActivation).bind(null, a.id)}>
                         <SubmitButton size="sm" variant="ghost" className="text-accent" pendingLabel="Versturen…">{a.status === "pending" ? "Activatiemail" : "Wachtwoordlink"}</SubmitButton>
                       </form>
+                      {!windowsPage && <form action={setWebsiteAccess.bind(null,a.id,false)}><SubmitButton size="sm" variant="ghost" className="text-danger">Website-toegang intrekken</SubmitButton></form>}
                       {windowsPage ? <form action={setWindowsAccess.bind(null,a.id,!a.windowsAccess)}><SubmitButton size="sm" variant="ghost" className={a.windowsAccess?"text-danger":"text-success"}>{a.windowsAccess?"Windows-toegang intrekken":"Windows-toegang herstellen"}</SubmitButton></form> : a.status === "suspended" ? (
                         <form action={setAccountStatus.bind(null, a.id, "active")}>
                           <SubmitButton size="sm" variant="ghost" className="text-success" pendingLabel="…">activeren</SubmitButton>
                         </form>
                       ) : (
                         <form action={setAccountStatus.bind(null, a.id, "suspended")}>
-                          <SubmitButton size="sm" variant="ghost" className="text-danger" pendingLabel="…">blokkeren</SubmitButton>
+                          <SubmitButton size="sm" variant="ghost" className="text-danger" pendingLabel="…">Beide toegangen blokkeren</SubmitButton>
                         </form>
                       )}
                     </div>

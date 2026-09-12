@@ -1,4 +1,4 @@
-import { z } from "zod";
+import { registrationSchema } from "@/lib/portal/registration-schema";
 import { NOTIFY_RECIPIENTS, NOTIFY_TO } from "@/lib/mail-bcc";
 
 import { db } from "@/lib/db";
@@ -10,22 +10,6 @@ import { crmUrl } from "@/lib/crm-url";
 
 /** Publieke endpoint: accountaanvraag vanaf habitat-one.com. */
 
-const schema = z
-  .object({
-    source: z.enum(["website", "windows"]).default("website"),
-    name: z.string().trim().min(1).max(200),
-    email: z.string().trim().email().max(200),
-    phone: z.string().trim().max(40).optional().or(z.literal("")),
-    kind: z.enum(["particulier", "zakelijk"]),
-    businessName: z.string().trim().max(200).optional().or(z.literal("")),
-    vatNumber: z.string().trim().max(60).optional().or(z.literal("")),
-    address: z.string().trim().max(400).optional().or(z.literal("")),
-    locale: z.enum(["nl", "de", "en", "es"]).optional(),
-    message: z.string().trim().max(2000).optional().or(z.literal("")),
-  })
-  .refine((v) => v.kind !== "zakelijk" || (!!v.businessName && !!v.vatNumber), {
-    message: "Bij een zakelijk account zijn bedrijfsnaam en IVA/BTW-nummer verplicht.",
-  });
 
 function escapeHtml(s: string): string {
   return s.replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c] ?? c);
@@ -47,7 +31,7 @@ export async function POST(req: Request) {
   } catch {
     return jsonCors({ ok: false, error: "invalid-json" }, 400, origin);
   }
-  const parsed = schema.safeParse(payload);
+  const parsed = registrationSchema.safeParse(payload);
   if (!parsed.success) {
     return jsonCors({ ok: false, error: "validation", issues: parsed.error.issues.map((i) => i.message) }, 400, origin);
   }

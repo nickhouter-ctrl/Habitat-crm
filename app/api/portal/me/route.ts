@@ -11,7 +11,7 @@ export async function OPTIONS(req: Request) {
 
 export async function GET(req: Request) {
   const origin = req.headers.get("origin");
-  const tok = portalAuth(req);
+  const tok = await portalAuth(req);
   if (!tok) return jsonCors({ ok: false, error: "unauthorized" }, 401, origin);
 
   const acc = await db.query.customerAccounts.findFirst({ where: eq(customerAccounts.id, tok.sub) });
