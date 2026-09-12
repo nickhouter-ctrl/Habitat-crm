@@ -2,12 +2,10 @@
 
 import { randomBytes } from "node:crypto";
 import { revalidatePath } from "next/cache";
-import { redirect } from "next/navigation";
-import { and, desc, eq, sql } from "drizzle-orm";
+import { and, desc, eq, isNull, or, sql } from "drizzle-orm";
 import { z } from "zod";
 import { requireWriteUser } from "@/lib/auth/guards";
 
-import { auth } from "@/auth";
 import { contactDisplayName } from "@/lib/contact-name";
 import { db } from "@/lib/db";
 import { accountRequests, companies, contacts, customerAccounts } from "@/lib/db/schema";
@@ -18,6 +16,12 @@ import { sendMail } from "@/lib/gmail";
 async function requireUser() {
   // Centrale guard: ingelogd én geen alleen-lezen (viewer) account.
   return requireWriteUser();
+}
+
+function refreshAccountPages() {
+  revalidatePath("/accounts");
+  revalidatePath("/windows-accounts");
+  revalidatePath("/contacts/[id]", "page");
 }
 
 const WEBSITE_URL = process.env.WEBSITE_URL || "https://www.habitat-one.com";
@@ -159,7 +163,7 @@ export async function approveAccountRequest(requestId: string, formData: FormDat
       console.warn("[accounts] activatiemail mislukt:", err);
     }
   }
-  revalidatePath("/accounts");
+  refreshAccountPages();
 }
 
 /** Interne helper: maak een account voor een e-mail (+ optioneel contact) en mail activatie. */
@@ -170,13 +174,14 @@ async function createAccount(opts: {
   contactId?: string | null;
   businessName?: string | null;
   vatNumber?: string | null;
+  windows?: boolean;
 }): Promise<{ ok: boolean; reason?: string }> {
   const email = opts.email.trim().toLowerCase();
   if (!email) return { ok: false, reason: "geen e-mail" };
   const existing = await db.query.customerAccounts.findFirst({ where: eq(customerAccounts.email, email) });
   if (existing) return { ok: false, reason: "bestaat al" };
   const token = newToken();
-  await db.insert(customerAccounts).values({
+  const [created] = await db.insert(customerAccounts).values({
     contactId: opts.contactId ?? null,
     email,
     priceTier: opts.tier,
@@ -185,9 +190,10 @@ async function createAccount(opts: {
     vatNumber: opts.vatNumber ?? null,
     activationToken: token,
     activationExpires: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
-  });
+  }).returning();
+  if (opts.windows) await grantWindowsAccess(created);
   try {
-    await sendActivationMail(email, opts.name, token, opts.tier);
+    await sendActivationMail(email, opts.name, token, opts.tier, opts.windows ? "windows" : "website");
   } catch (err) {
     console.warn("[accounts] activatiemail mislukt:", err);
   }
@@ -219,7 +225,7 @@ export async function createAccountManually(formData: FormData) {
   }
   if (!email) throw new Error("Vul een e-mail in of kies een contact met e-mail.");
   await createAccount({ email, name: name || email, tier: d.tier, contactId, businessName, vatNumber: d.vatNumber || null });
-  revalidatePath("/accounts");
+  refreshAccountPages();
 }
 
 /** Maak een account voor een bestaand contact (knop op contact-detail). */
@@ -228,15 +234,29 @@ export async function createAccountForContact(contactId: string, formData: FormD
   const tier = String(formData.get("tier") ?? "particulier") === "aannemer" ? "aannemer" : "particulier";
   const c = await db.query.contacts.findFirst({ where: eq(contacts.id, contactId) });
   if (!c?.email) throw new Error("Dit contact heeft geen e-mailadres.");
-  await createAccount({ email: c.email, name: c.name, tier, contactId, businessName: c.name });
-  revalidatePath("/accounts");
+  const windows = formData.get("system") === "windows";
+  const email = c.email.trim().toLowerCase();
+  const matches = await db.query.customerAccounts.findMany({ where: or(eq(customerAccounts.contactId, contactId), sql`lower(${customerAccounts.email}) = ${email}`), limit: 2 });
+  if (matches.length > 1) throw new Error("Er zijn meerdere mogelijke accounts. Controleer eerst de contactkoppeling bij Accounts.");
+  const existing = matches[0];
+  if (existing) {
+    if (existing.contactId && existing.contactId !== contactId) throw new Error("Dit e-mailadres hoort bij een ander contact. Controleer eerst de koppeling bij Accounts.");
+    if (!existing.contactId) {
+      const linked = await db.update(customerAccounts).set({ contactId, updatedAt: new Date() }).where(and(eq(customerAccounts.id, existing.id), isNull(customerAccounts.contactId))).returning({ id: customerAccounts.id });
+      if (!linked.length) throw new Error("De accountkoppeling is gewijzigd. Vernieuw de contactkaart.");
+    }
+    if (windows) await grantWindowsAccess(existing);
+  } else {
+    await createAccount({ email, name: c.name, tier, contactId, businessName: c.name, windows });
+  }
+  refreshAccountPages();
   revalidatePath(`/contacts/${contactId}`);
 }
 
 export async function rejectAccountRequest(requestId: string) {
   await requireUser();
   await db.update(accountRequests).set({ status: "rejected", updatedAt: new Date() }).where(eq(accountRequests.id, requestId));
-  revalidatePath("/accounts");
+  refreshAccountPages();
 }
 
 export async function setAccountTier(accountId: string, formData: FormData) {
@@ -244,13 +264,13 @@ export async function setAccountTier(accountId: string, formData: FormData) {
   const tier = String(formData.get("tier") ?? "");
   if (tier !== "particulier" && tier !== "aannemer") return;
   await db.update(customerAccounts).set({ priceTier: tier, updatedAt: new Date() }).where(eq(customerAccounts.id, accountId));
-  revalidatePath("/accounts");
+  refreshAccountPages();
 }
 
 export async function setAccountStatus(accountId: string, status: "active" | "suspended") {
   await requireUser();
   await db.update(customerAccounts).set({ status, updatedAt: new Date() }).where(eq(customerAccounts.id, accountId));
-  revalidatePath("/accounts");
+  refreshAccountPages();
 }
 
 /** Stuur (opnieuw) een activatie-/wachtwoord-reset-link. */
@@ -269,7 +289,7 @@ export async function resendActivation(accountId: string) {
   } catch (err) {
     console.warn("[accounts] activatiemail mislukt:", err);
   }
-  revalidatePath("/accounts");
+  refreshAccountPages();
 }
 
 /** Windows-toegang is afzonderlijk van de status van het website-account. */
@@ -279,5 +299,5 @@ export async function setWindowsAccess(accountId: string, enabled: boolean) {
   if (!account) throw new Error("Account niet gevonden");
   if (enabled) await grantWindowsAccess(account);
   else await db.execute(sql`update windows.dealers set access_approved_at = null, updated_at = now() where portal_account_id = ${accountId}`);
-  revalidatePath("/accounts");
+  refreshAccountPages();
 }

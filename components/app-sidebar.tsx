@@ -70,7 +70,8 @@ const NAV_GROUPS: { label: string | null; items: NavItem[] }[] = [
     label: "Klanten",
     items: [
       { href: "/contacts", label: "Contacten", icon: Users },
-      { href: "/accounts", label: "Klant-accounts", icon: UserCog },
+      { href: "/accounts", label: "Website-accounts", icon: UserCog },
+      { href: "/windows-accounts", label: "Windows-accounts", icon: UserCog },
       { href: "/aanvragen", label: "Aanvragen", icon: Inbox },
       { href: "/leads", label: "Leads", icon: Megaphone },
       { href: "/commissies", label: "Commissies", icon: Percent },

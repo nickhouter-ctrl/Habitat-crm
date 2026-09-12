@@ -62,6 +62,7 @@ export default async function SettingsPage() {
   return (
     <>
       <PageHeader title="Instellingen" subtitle="Medewerkers, integraties en account" />
+      <Card className="mb-5"><CardHeader><CardTitle>Klanttoegang</CardTitle></CardHeader><div className="flex flex-wrap gap-4 px-5 pb-5 text-sm"><a className="underline" href="/accounts">Website-accounts en aanvragen</a><a className="underline" href="/windows-accounts">Windows-accounts en aanvragen</a><a className="underline" href="/contacts">Toegang beheren via een contact</a></div></Card>
 
       {isAdmin && (
         <Card className="mb-4 overflow-hidden">

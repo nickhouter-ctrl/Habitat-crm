@@ -36,14 +36,13 @@ import { db } from "@/lib/db";
 import {
   activities,
   contacts,
-  customerAccounts,
   documents,
   holdedSyncMap,
   products,
   projects,
   sentEmails,
 } from "@/lib/db/schema";
-import { createAccountForContact } from "../../accounts/actions";
+import { ContactOnlineAccess } from "@/components/contact-online-access";
 import { cn, formatDate, formatEUR } from "@/lib/utils";
 import { normalizeDocItems } from "@/lib/documents";
 import { ConfirmSubmit } from "@/components/confirm-submit";
@@ -108,7 +107,7 @@ export default async function ContactDetailPage({
   });
   if (!contact) notFound();
 
-  const portalAccount = await db.query.customerAccounts.findFirst({ where: eq(customerAccounts.contactId, id) });
+
 
   const [relatedProjects, relatedDocs, timeline, holdedMap] = await Promise.all([
     db.query.projects.findMany({
@@ -317,21 +316,7 @@ export default async function ContactDetailPage({
             <Link href="/contacts" className="text-sm text-muted hover:underline">
               ← Contacten
             </Link>
-            {portalAccount ? (
-              <Link href="/accounts" className="inline-flex items-center gap-1 text-sm">
-                <Badge tone={portalAccount.status === "active" ? "success" : portalAccount.status === "suspended" ? "danger" : "warning"}>
-                  Site-account: {portalAccount.status === "active" ? "actief" : portalAccount.status === "suspended" ? "geblokkeerd" : "wacht op activatie"}
-                </Badge>
-              </Link>
-            ) : contact.email ? (
-              <form action={createAccountForContact.bind(null, id)} className="flex items-center gap-1">
-                <Select name="tier" defaultValue="particulier" className="h-9 py-1 text-xs">
-                  <option value="particulier">Particulier</option>
-                  <option value="aannemer">Aannemer</option>
-                </Select>
-                <SubmitButton size="sm" variant="secondary" pendingLabel="…">+ Site-account</SubmitButton>
-              </form>
-            ) : null}
+            <Link href="#online-toegang" className="text-sm underline">Online toegang</Link>
             <LinkButton href={`/contacts/${id}/edit`} variant="secondary">
               Bewerken
             </LinkButton>
@@ -346,6 +331,8 @@ export default async function ContactDetailPage({
           </>
         }
       />
+
+      <ContactOnlineAccess contactId={id} email={contact.email} />
 
       {sp.verwijderen === "facturen" && (
         <p className="mb-4 rounded-md bg-warning/10 px-3 py-2 text-sm text-warning">
