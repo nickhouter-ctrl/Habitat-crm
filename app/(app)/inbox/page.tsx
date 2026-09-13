@@ -67,7 +67,7 @@ export default async function InboxPage({ searchParams }: { searchParams: Promis
     </form>
     {status === "new" && <p className="mb-3 text-xs text-muted">Deze berichten tellen mee in de melding bij Mail-inbox.{(mailbox || q || group) ? " Je huidige filters kunnen een deel verbergen." : ""}</p>}
     {syncError && <p className="mb-3 rounded-md bg-warning/10 p-3 text-sm text-warning">Ophalen van mail is niet volledig gelukt. Probeer Mails ophalen opnieuw.</p>}
-    <div className="overflow-hidden rounded-xl border border-border bg-surface lg:grid lg:h-[calc(100dvh-12rem)] lg:min-h-[36rem] lg:grid-cols-[minmax(17rem,32%)_minmax(0,1fr)]">
+    <div className="overflow-hidden rounded-xl border border-border bg-surface lg:grid lg:h-dvh lg:min-h-[48rem] lg:grid-cols-[minmax(17rem,32%)_minmax(0,1fr)]">
       <section aria-label="Berichtenlijst" className={cn("min-w-0 border-border lg:flex lg:min-h-0 lg:flex-col lg:border-r", explicitSelection ? "hidden" : "flex flex-col")}>
         <form className="min-h-0 flex-1 overflow-y-auto" key={filters.toString()}>
           <details className="border-b border-border p-3 text-xs text-muted"><summary className="cursor-pointer">Meerdere mails selecteren</summary><BulkMailBar archiveAction={bulkArchiveMails} deleteAction={bulkDeleteMails} /></details>
