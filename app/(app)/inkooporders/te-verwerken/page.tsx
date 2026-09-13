@@ -191,7 +191,7 @@ export default async function FacturenKeurenPage() {
       ) : (
         <div className="grid gap-5">
           {[...perMail.entries()].map(([mailId, groep]) => (
-            <Card key={mailId}>
+            <Card key={mailId} id={`mail-${mailId}`} className="scroll-mt-20">
               <CardHeader>
                 <CardTitle>{groep.subject || "(geen onderwerp)"}</CardTitle>
                 <span className="text-xs text-muted">
