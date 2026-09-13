@@ -38,6 +38,7 @@ export async function MailReader({ id, reply, replyResult, backHref, mailHref }:
   return <article className="min-w-0" aria-label={mail.subject || "Mail zonder onderwerp"}>
     <div className="border-b border-border p-5 lg:p-6">
       <div className="flex flex-wrap items-start justify-between gap-3"><h2 className="min-w-0 flex-1 break-words text-xl font-semibold">{mail.subject || "Zonder onderwerp"}</h2><span className="rounded bg-background-soft px-2 py-1 text-xs text-muted">{MAIL_GROUPS[suggestion?.category as MailGroup] || "Nog te beoordelen"}</span></div>
+      {mail.status === "new" && <p className="mt-3 inline-flex rounded-md bg-accent/15 px-2.5 py-1 text-xs font-semibold text-accent">Nog te verwerken</p>}
       {suggestion && <div className="mt-4 rounded-lg border border-accent/20 bg-accent/5 p-3 text-sm"><p className="text-accent">{suggestion.source === "ai" ? "AI-samenvatting" : "Voorstel"}: {suggestion.summary}</p>{suggestion.deadline && <p className="mt-2 text-warning">Termijn uit bericht: {suggestion.deadline}</p>}</div>}
       <div className="mt-4 space-y-1 break-words text-sm"><p>Van: {mail.fromName ? `${mail.fromName} <${mail.fromEmail}>` : mail.fromEmail}</p><p>Aan: {mail.toEmail}</p>{mail.ccEmail && <p>Cc: {mail.ccEmail}</p>}<p className="text-xs text-muted">{mail.receivedAt?.toLocaleString("nl-NL", { dateStyle: "full", timeStyle: "short", timeZone: "Europe/Madrid" })}</p></div>
       <div className="mt-4 flex flex-wrap gap-2">

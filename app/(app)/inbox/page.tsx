@@ -24,7 +24,7 @@ export default async function InboxPage({ searchParams }: { searchParams: Promis
   const purchase = (process.env.GMAIL_PURCHASE_USER || "purchase@habitat-one.com").toLowerCase();
   const goesToPurchase = sql`(coalesce(${emailInbox.toEmail}, '') ilike ${`%${purchase}%`} or coalesce(${emailInbox.ccEmail}, '') ilike ${`%${purchase}%`})`;
   const mailboxClause = mailbox === "purchase" ? goesToPurchase : mailbox === "hi" ? sql`not ${goesToPurchase}` : undefined;
-  const [rows, states, counts] = await Promise.all([
+  const [rows, states, counts, [pending]] = await Promise.all([
     db.select({ id: emailInbox.id, receivedAt: emailInbox.receivedAt, fromName: emailInbox.fromName,
       fromEmail: emailInbox.fromEmail, subject: emailInbox.subject, status: emailInbox.status,
       attachments: emailInbox.attachments, preview: sql<string | null>`left(${emailInbox.bodyText}, 180)`,
@@ -37,6 +37,7 @@ export default async function InboxPage({ searchParams }: { searchParams: Promis
       .orderBy(desc(emailInbox.receivedAt), desc(emailInbox.id)).limit(51).offset((page - 1) * 50),
     db.select().from(emailSyncState),
     db.select({ status: emailInbox.status, n: sql<number>`count(*)::int` }).from(emailInbox).where(mailboxClause).groupBy(emailInbox.status),
+    db.select({ n: sql<number>`count(*)::int` }).from(emailInbox).where(eq(emailInbox.status, "new")),
   ]);
   const hasNext = rows.length > 50, visible = rows.slice(0, 50);
   const selected = z.string().uuid().safeParse(value("mail")).success ? { id: value("mail") } : visible[0];
@@ -54,7 +55,7 @@ export default async function InboxPage({ searchParams }: { searchParams: Promis
   return <>
     <PageHeader title="Mail-inbox" subtitle="Lezen, voorbereiden en afhandelen op één plek" actions={<FetchMailsButton />} />
     <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
-      <div className="flex flex-wrap gap-1">{[["active", "Inbox"], ["archived", "Archief"], ["all", "Alles"]].map(([key, label]) => <Link key={key} href={href({ status: key, page: "" })} className={cn("rounded-md px-3 py-2 text-sm", status === key ? "bg-accent/10 font-medium text-accent" : "text-muted hover:bg-background-soft")}>{label}{key === "active" ? ` (${(countMap.new ?? 0) + (countMap.linked ?? 0)})` : key === "archived" ? ` (${countMap.archived ?? 0})` : ""}</Link>)}</div>
+      <div className="flex flex-wrap gap-1">{[["active", "Inbox"], ["new", "Nog te verwerken"], ["archived", "Archief"], ["all", "Alles"]].map(([key, label]) => <Link key={key} href={key === "new" ? "/inbox?status=new" : href({ status: key, page: "" })} className={cn("rounded-md px-3 py-2 text-sm", status === key ? "bg-accent/10 font-medium text-accent" : "text-muted hover:bg-background-soft")}>{label}{key === "new" ? ` (${pending.n})` : key === "active" ? ` (${(countMap.new ?? 0) + (countMap.linked ?? 0)})` : key === "archived" ? ` (${countMap.archived ?? 0})` : ""}</Link>)}</div>
       <Link className="text-sm text-accent" href="/assistent">Assistent en automatisch opgeborgen mail →</Link>
     </div>
     <form method="get" className="mb-3 flex flex-wrap gap-2">
@@ -64,6 +65,7 @@ export default async function InboxPage({ searchParams }: { searchParams: Promis
       <select aria-label="Soort mail" name="group" defaultValue={group} className="rounded-md border border-border bg-surface px-3 py-2 text-sm"><option value="">Alle categorieën</option><option value="reply">Te beantwoorden</option>{Object.entries(MAIL_GROUPS).map(([key, label]) => <option value={key} key={key}>{label}</option>)}</select>
       <Button type="submit" variant="secondary">Zoeken</Button>
     </form>
+    {status === "new" && <p className="mb-3 text-xs text-muted">Deze berichten tellen mee in de melding bij Mail-inbox.{(mailbox || q || group) ? " Je huidige filters kunnen een deel verbergen." : ""}</p>}
     {syncError && <p className="mb-3 rounded-md bg-warning/10 p-3 text-sm text-warning">Ophalen van mail is niet volledig gelukt. Probeer Mails ophalen opnieuw.</p>}
     <div className="overflow-hidden rounded-xl border border-border bg-surface lg:grid lg:h-[calc(100dvh-19rem)] lg:min-h-[32rem] lg:grid-cols-[minmax(17rem,32%)_minmax(0,1fr)]">
       <section aria-label="Berichtenlijst" className={cn("min-w-0 border-border lg:flex lg:min-h-0 lg:flex-col lg:border-r", explicitSelection ? "hidden" : "flex flex-col")}>
@@ -75,7 +77,7 @@ export default async function InboxPage({ searchParams }: { searchParams: Promis
             <Link href={href({ mail: m.id })} scroll={false} prefetch={false} aria-current={selected?.id === m.id ? "true" : undefined} className="block min-w-0 flex-1 p-4" data-mail-link={m.id}>
               <div className="flex items-center gap-2"><span className="min-w-0 flex-1 truncate text-sm font-medium">{m.fromName || m.fromEmail || "Onbekende afzender"}</span><time className="shrink-0 text-[11px] text-muted">{m.receivedAt?.toLocaleDateString("nl-NL", { timeZone: "Europe/Madrid" }) === new Date().toLocaleDateString("nl-NL", { timeZone: "Europe/Madrid" }) ? m.receivedAt?.toLocaleTimeString("nl-NL", { timeZone: "Europe/Madrid", hour: "2-digit", minute: "2-digit" }) : m.receivedAt?.toLocaleDateString("nl-NL", { timeZone: "Europe/Madrid", day: "numeric", month: "short" })}</time></div>
               <p className="mt-1 truncate text-sm">{m.subject || "Zonder onderwerp"}</p>
-              <div className="mt-2 flex flex-wrap items-center gap-2 text-[10px] font-medium uppercase text-muted"><span className={cn("rounded bg-background-soft px-1.5 py-0.5", m.category === "urgent" && "text-warning")}>{MAIL_GROUPS[m.category as MailGroup] || (m.status === "archived" ? "Archief" : "Nog te beoordelen")}</span>{m.hasDraft && <span className="text-accent">Concept klaar</span>}{Array.isArray(m.attachments) && m.attachments.length > 0 && <span className="flex items-center gap-1"><Paperclip className="size-3" />{m.attachments.length}</span>}</div>
+              <div className="mt-2 flex flex-wrap items-center gap-2 text-[10px] font-medium uppercase text-muted">{m.status === "new" && <span className="rounded bg-accent/15 px-1.5 py-0.5 font-semibold text-accent">Nog te verwerken</span>}<span className={cn("rounded bg-background-soft px-1.5 py-0.5", m.category === "urgent" && "text-warning")}>{MAIL_GROUPS[m.category as MailGroup] || (m.status === "archived" ? "Archief" : "Nog niet ingedeeld")}</span>{m.hasDraft && <span className="text-accent">Concept klaar</span>}{Array.isArray(m.attachments) && m.attachments.length > 0 && <span className="flex items-center gap-1"><Paperclip className="size-3" />{m.attachments.length}</span>}</div>
               <p className="mt-1.5 line-clamp-2 text-xs leading-relaxed text-muted">{m.summary || m.preview || "Open om het bericht te lezen"}</p>
             </Link>
           </div>)}
