@@ -77,6 +77,7 @@ const t = (href: string, label: string, desc: string, icon: LucideIcon, groep: s
 
 export const START_TEGELS: StartTegel[] = [
   // 1 — Klantcontact: waar de werkdag begint.
+  t("/assistent", "Assistent", "Concepten, meldingen en controles", Inbox, "Klantcontact"),
   t("/inbox", "Mail-inbox", "Binnengekomen mail en bijlagen verwerken", Mail, "Klantcontact"),
   t("/aanvragen", "Aanvragen", "Offerte-aanvragen via de website", Inbox, "Klantcontact"),
   t("/agenda", "Agenda", "Afspraken en taken van het team", CalendarDays, "Klantcontact"),

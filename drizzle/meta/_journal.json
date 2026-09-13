@@ -421,6 +421,20 @@
       "when": 1789205897818,
       "tag": "0059_careful_human_torch",
       "breakpoints": true
+    },
+    {
+      "idx": 60,
+      "version": "7",
+      "when": 1789285582992,
+      "tag": "0060_dry_phantom_reporter",
+      "breakpoints": true
+    },
+    {
+      "idx": 61,
+      "version": "7",
+      "when": 1789285997275,
+      "tag": "0061_blushing_nightmare",
+      "breakpoints": true
     }
   ]
 }

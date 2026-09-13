@@ -61,6 +61,7 @@ const NAV_GROUPS: { label: string | null; items: NavItem[] }[] = [
     label: null,
     items: [
       { href: "/", label: "Start", icon: Home, exact: true },
+      { href: "/assistent", label: "Assistent", icon: FileCheck },
       { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
       { href: "/scan", label: "Scannen", icon: ScanLine },
       { href: "/agenda", label: "Agenda", icon: CalendarDays },

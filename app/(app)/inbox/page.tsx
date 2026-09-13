@@ -142,6 +142,8 @@ export default async function InboxPage({
         actions={<FetchMailsButton />}
       />
 
+      <Link href="/assistent" className="mb-4 block rounded-lg border border-accent/30 bg-accent/5 p-4 text-sm text-accent">Assistent: conceptantwoorden, belangrijke mail en automatisch opgeborgen berichten controleren →</Link>
+
       <form method="get" className="mb-4 flex max-w-lg items-center gap-2">
         {/* Zoeken door afzender, onderwerp en de tekst van de mail. */}
         {mailboxFilter !== "all" && <input type="hidden" name="mailbox" value={mailboxFilter} />}

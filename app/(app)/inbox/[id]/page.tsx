@@ -1,3 +1,5 @@
+import { saveReplyDraft } from "../../assistent/actions";
+import { MAIL_GROUPS, type MailGroup } from "@/lib/assistant/mail-rules";
 import { asc, desc, eq, ilike, or } from "drizzle-orm";
 import { ArrowLeft, Archive, Download, FileText, Link2, Mail, Paperclip, Receipt, RotateCcw } from "lucide-react";
 import Link from "next/link";
@@ -7,7 +9,7 @@ import { AiMailForm } from "@/components/ai-mail-form";
 import { Badge, Card, LinkButton, PageHeader, buttonClass } from "@/components/ui";
 import { aiReplyConfigured } from "@/lib/ai-reply";
 import { db } from "@/lib/db";
-import { emailInbox, mailAttachments, purchaseOrders, quoteRequests } from "@/lib/db/schema";
+import { emailInbox, inboxSuggestions, mailAttachments, purchaseOrders, quoteRequests } from "@/lib/db/schema";
 import { CATEGORIES } from "@/lib/email-categories";
 import { sanitizeMailHtml } from "@/lib/sanitize-mail-html";
 import { listCatalogFiles } from "@/lib/storage";
@@ -48,7 +50,7 @@ export default async function MailDetailPage({
   const mail = await db.query.emailInbox.findFirst({ where: eq(emailInbox.id, id) });
   if (!mail) notFound();
 
-  const catalogi = await listCatalogFiles();
+  const [catalogi, suggestion] = await Promise.all([listCatalogFiles(), db.query.inboxSuggestions.findFirst({ where: eq(inboxSuggestions.emailId, id) })]);
 
   // Suggesties: PO's die mogelijk bij deze mail horen (zelfde supplier-naam in subject of from)
   const fromDomain = mail.fromEmail?.split("@")[1] ?? "";
@@ -124,6 +126,13 @@ export default async function MailDetailPage({
         }
       />
 
+      {suggestion && <Card className="mb-4 space-y-2 p-4">
+        <p className="font-medium">Voorstel: {MAIL_GROUPS[suggestion.category as MailGroup] ?? "Controleren"}</p>
+        <p className="text-sm">{suggestion.summary}</p>
+        <p className="text-sm text-muted">{suggestion.reason}</p>
+        {suggestion.deadline && <p className="text-sm text-warning">Termijn uit bericht: {suggestion.deadline}</p>}
+        <Link href="/assistent" className="text-sm text-accent">Alle voorstellen bekijken →</Link>
+      </Card>}
       <div className="grid gap-4 lg:grid-cols-[2fr_1fr]">
         {/* LEFT: mail content */}
         <Card className="space-y-4 p-5">
@@ -248,13 +257,17 @@ export default async function MailDetailPage({
                 </p>
               )}
               <AiMailForm
+                key={`${mail.id}-${sp.beantwoord ?? ""}`}
+                initialBody={suggestion?.draft ?? ""}
+                initialAttachments={suggestion?.draftAttachments ?? []}
+                saveDraft={saveReplyDraft.bind(null, mail.id)}
                 verstuur={replyToMail.bind(null, mail.id)}
                 genereer={aiMailConcept.bind(null, mail.id)}
-                defaultSubject={
+                defaultSubject={suggestion?.draftSubject || (
                   (mail.subject ?? "").replace(/^(re|fwd?|aw):\s*/i, "").trim()
                     ? `Re: ${(mail.subject ?? "").replace(/^(re|fwd?|aw):\s*/i, "").trim()}`
                     : "Re: je bericht"
-                }
+                )}
                 toEmail={mail.fromEmail}
                 placeholder="Typ je antwoord, of kort wat je wilt zeggen en klik ✨…"
                 aiBeschikbaar={aiReplyConfigured()}

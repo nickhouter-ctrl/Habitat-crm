@@ -75,6 +75,10 @@
     {
       "path": "/api/jobs/facet-rebuild",
       "schedule": "15 3 * * *"
+    },
+    {
+      "path": "/api/cron/assistant",
+      "schedule": "2-57/5 * * * *"
     }
   ]
 }

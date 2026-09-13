@@ -7,13 +7,14 @@
  * weergave het getal vet kan zetten (<strong>{aantal}</strong> {tekst}).
  */
 import "server-only";
+import { loadQuoteChecks } from "@/lib/assistant/overview";
 import { loadProjectFunding } from "@/lib/project-funding";
 import { and, count, eq, inArray, isNotNull, isNull, sql } from "drizzle-orm";
 
 import { db } from "@/lib/db";
 import { aanvragenTeOpvolgen, offertesTeOpvolgen } from "@/lib/opvolging";
 import { OFFERTE_TE_FACTUREREN } from "@/lib/quote-status";
-import { documents, purchaseInvoiceReviews, purchaseOrders, quoteRequests, timeEntries } from "@/lib/db/schema";
+import { documents, inboxSuggestions, purchaseInvoiceReviews, purchaseOrders, quoteRequests, timeEntries } from "@/lib/db/schema";
 import { normalizeDocItems } from "@/lib/documents";
 import { PO_OPEN_STATUSES } from "@/lib/purchase-orders";
 import { formatEUR } from "@/lib/utils";
@@ -66,6 +67,8 @@ export async function verzamelDagtaken(): Promise<Dagtaak[]> {
     opvolgOffertes,
     opvolgAanvragen,
     funding,
+    [suggestions],
+    quoteChecks,
   ] = await Promise.all([
       // Portaal-uren die op controle wachten.
       db
@@ -128,6 +131,8 @@ export async function verzamelDagtaken(): Promise<Dagtaak[]> {
       offertesTeOpvolgen(),
       aanvragenTeOpvolgen(),
       loadProjectFunding(),
+      db.select({ n: count() }).from(inboxSuggestions).where(and(inArray(inboxSuggestions.status, ["open", "auto_archived"]), isNull(inboxSuggestions.reviewedAt), sql`exists (select 1 from email_inbox e where e.id = ${inboxSuggestions.emailId} and (e.status <> 'archived' or ${inboxSuggestions.status} = 'auto_archived'))`)),
+      loadQuoteChecks(),
     ]);
 
   const voorraadN = voorraadRows.filter((d) =>
@@ -141,6 +146,9 @@ export async function verzamelDagtaken(): Promise<Dagtaak[]> {
 
   const ev = (n: number, enkel: string, meer: string) => (n === 1 ? enkel : meer);
   const taken: Dagtaak[] = [];
+  if (suggestions.n > 0) taken.push({ key: "assistent-mail", emoji: "✉️", tekst: "mailvoorstellen of automatisch opgeborgen berichten te controleren.", href: "/assistent", tone: "accent", prioriteit: "middel", aantal: suggestions.n });
+  const quoteN = quoteChecks.filter(q => q.checks.length).length;
+  if (quoteN > 0) taken.push({ key: "assistent-offertes", emoji: "📋", tekst: "conceptoffertes met aandachtspunten in de prijscontrole.", href: "/assistent?view=quotes", tone: "warning", prioriteit: "middel", aantal: quoteN });
 
   if ((vervallen?.n ?? 0) > 0) {
     taken.push({

@@ -3245,3 +3245,22 @@ export type AdMetricsDaily = typeof adMetricsDaily.$inferSelect;
 export type FacetPerformance = typeof facetPerformance.$inferSelect;
 export type Competitor = typeof competitors.$inferSelect;
 export type CompetitorAd = typeof competitorAds.$inferSelect;
+
+/** CRM suggestions only: never executes mail actions or financial postings. */
+export const inboxSuggestions = pgTable("inbox_suggestions", {
+  id: uuid().primaryKey().default(sql`gen_random_uuid()`),
+  emailId: uuid().notNull().references(() => emailInbox.id, { onDelete: "cascade" }),
+  category: text().notNull().default("important"),
+  needsReply: boolean().notNull().default(false),
+  summary: text().notNull(),
+  reason: text().notNull(),
+  deadline: text(),
+  draft: text(),
+  draftSubject: text(),
+  draftAttachments: jsonb().$type<string[]>().notNull().default(sql`'[]'::jsonb`),
+  source: text().notNull().default("rules"),
+  status: text().notNull().default("open"),
+  reviewedBy: uuid().references(() => users.id, { onDelete: "set null" }),
+  reviewedAt: timestamp({ withTimezone: true }),
+  ...timestamps,
+}, (t) => [uniqueIndex("inbox_suggestions_email_idx").on(t.emailId), index("inbox_suggestions_status_idx").on(t.status)]);

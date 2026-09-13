@@ -10,7 +10,7 @@ import { extractInvoiceFieldsWithAI } from "@/lib/ai-invoice-extract";
 import { genereerMailAntwoord } from "@/lib/ai-reply";
 import { extractAttachmentAmount } from "@/lib/amount-extract";
 import { db } from "@/lib/db";
-import { activities, emailInbox, mailAttachments, purchaseOrders, quoteRequests, users } from "@/lib/db/schema";
+import { activities, emailInbox, inboxSuggestions, mailAttachments, purchaseOrders, quoteRequests, users } from "@/lib/db/schema";
 import { escapeHtml, persoonlijkeMail, sendEmail } from "@/lib/email";
 import { recordSentEmail } from "@/lib/sent-email";
 import { runImapPoll, type ImapPollResult } from "@/lib/imap-poll";
@@ -246,6 +246,7 @@ export async function replyToMail(emailId: string, formData: FormData) {
   }
 
   if (sent) {
+    await db.update(inboxSuggestions).set({ status: "reviewed", draft: null, draftSubject: null, draftAttachments: [], needsReply: false, reviewedBy: user.id, reviewedAt: new Date(), updatedAt: new Date() }).where(eq(inboxSuggestions.emailId, emailId));
     const archiefTekst =
       message + (bijlagePaden.length > 0 ? `\n\n📎 ${bijlagePaden.join(", ")}` : "");
     await recordSentEmail({

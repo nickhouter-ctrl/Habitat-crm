@@ -34,7 +34,13 @@ export function AiMailForm({
   aiBeschikbaar,
   bijlagen = [],
   suggestie,
+  initialBody = "",
+  saveDraft,
+  initialAttachments = [],
 }: {
+  initialBody?: string;
+  initialAttachments?: string[];
+  saveDraft?: (body: string, subject: string, attachments: string[]) => Promise<void>;
   /** Server action die de mail verstuurt (leest `subject`, `message` en `bijlage[]`). */
   verstuur: (formData: FormData) => Promise<void>;
   /** Server action die een AI-concept teruggeeft; de aanwijzing = wat er nu in het tekstvak staat. */
@@ -52,8 +58,11 @@ export function AiMailForm({
   suggestie?: { label: string; instructie: string };
 }) {
   const [subject, setSubject] = useState(defaultSubject);
-  const [message, setMessage] = useState("");
-  const [gekozen, setGekozen] = useState<Set<string>>(new Set());
+  const [message, setMessage] = useState(initialBody);
+  const [gekozen, setGekozen] = useState<Set<string>>(new Set(initialAttachments));
+  const [saved, setSaved] = useState(false);
+  const [saving, startSaving] = useTransition();
+  const [saveError, setSaveError] = useState(false);
   const [fout, setFout] = useState(false);
   const [bezig, startTransition] = useTransition();
 
@@ -63,6 +72,7 @@ export function AiMailForm({
   const teGroot = totaalBytes > 20 * 1024 * 1024;
 
   function toggle(path: string) {
+    setSaved(false);
     setGekozen((prev) => {
       const next = new Set(prev);
       if (next.has(path)) next.delete(path);
@@ -81,21 +91,30 @@ export function AiMailForm({
       }
       setSubject(concept.subject);
       setMessage(concept.body);
+      setSaved(false);
       if (concept.bijlagen.length > 0) setGekozen(new Set(concept.bijlagen));
     });
   }
 
   return (
     <form action={verstuur} className="space-y-2">
-      <Input name="subject" value={subject} onChange={(e) => setSubject(e.target.value)} />
+      <Input name="subject" value={subject} onChange={(e) => { setSubject(e.target.value); setSaved(false); }} />
       <Textarea
         name="message"
         rows={message ? 12 : 4}
         required
         value={message}
-        onChange={(e) => setMessage(e.target.value)}
+        onChange={(e) => { setMessage(e.target.value); setSaved(false); }}
         placeholder={placeholder ?? "Bijv. een extra vraag aan de klant…"}
       />
+      {saveDraft && <div className="flex flex-wrap items-center gap-3 text-xs">
+        <button type="button" disabled={saving} className="rounded-md border border-border px-3 py-2 hover:bg-background-soft disabled:opacity-50"
+          onClick={() => { setSaveError(false); startSaving(async () => { try { await saveDraft(message, subject, [...gekozen]); setSaved(true); } catch { setSaveError(true); } }); }}>
+          {saving ? "Opslaan…" : "Concept opslaan"}
+        </button>
+        {saved && <span className="text-success">Concept opgeslagen in het CRM</span>}
+        {saveError && <span className="text-warning">Opslaan mislukt; je tekst staat nog in dit veld.</span>}
+      </div>}
       {aiBeschikbaar && (
         <>
           <div className={suggestie ? "grid grid-cols-2 gap-2" : ""}>
