@@ -217,7 +217,9 @@ export async function replyToMail(emailId: string, formData: FormData) {
   const subject =
     String(formData.get("subject") ?? "").trim() || (kaal ? `Re: ${kaal}` : "Re: je bericht");
   const message = String(formData.get("message") ?? "").trim();
-  if (!message) redirect(`/inbox/${emailId}?beantwoord=leeg`);
+  const requestedReturn = String(formData.get("returnTo") ?? "");
+  const returnUrl = new URL(requestedReturn.startsWith("/inbox?") ? requestedReturn : `/inbox/${emailId}`, "https://crm.habitat-one.com");
+  if (!message) { returnUrl.searchParams.set("beantwoord", "leeg"); redirect(returnUrl.pathname + returnUrl.search); }
 
   const me = await db.query.users.findFirst({
     where: eq(users.id, user.id),
@@ -267,7 +269,9 @@ export async function replyToMail(emailId: string, formData: FormData) {
   }
 
   revalidatePath(`/inbox/${emailId}`);
-  redirect(`/inbox/${emailId}?beantwoord=${sent ? "1" : "0"}`);
+  revalidatePath("/inbox");
+  returnUrl.searchParams.set("beantwoord", sent ? "1" : "0");
+  redirect(returnUrl.pathname + returnUrl.search);
 }
 
 /**

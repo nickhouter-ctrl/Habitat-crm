@@ -54,12 +54,12 @@ export default async function AssistantPage({ searchParams }: { searchParams: Pr
       </div>
       {!visible.length && <p className="py-5 text-sm text-muted">Geen voorstellen in deze groep. Nieuwe voorstellen verschijnen na de voorbereiding.</p>}
       <div className="divide-y divide-border">{visible.map(({ suggestion: s, subject, from, received }) => <div key={s.id} className="py-4">
-        <div className="flex flex-wrap items-center justify-between gap-2"><Link className="font-medium text-accent" href={`/inbox/${s.emailId}`}>{subject || "Zonder onderwerp"}</Link><Badge tone={s.category === "urgent" ? "warning" : "neutral"}>{MAIL_GROUPS[s.category as MailGroup]}</Badge></div>
+        <div className="flex flex-wrap items-center justify-between gap-2"><Link className="font-medium text-accent" href={`/inbox?status=all&mail=${s.emailId}`}>{subject || "Zonder onderwerp"}</Link><Badge tone={s.category === "urgent" ? "warning" : "neutral"}>{MAIL_GROUPS[s.category as MailGroup]}</Badge></div>
         <p className="mt-1 text-xs text-muted">{from} · {received?.toLocaleDateString("nl-NL")} · {s.source === "ai" ? "AI-voorstel" : "Basisvoorstel — AI niet beschikbaar"}</p>
         <p className="mt-2 text-sm">{s.summary}</p><p className="mt-1 text-sm text-muted">{s.reason}</p>
         {s.deadline && <p className="mt-2 text-sm text-warning">Termijn uit het bericht: {s.deadline}</p>}
         {s.draft && <details className="mt-3 rounded-md bg-background-soft p-3"><summary className="cursor-pointer text-sm">Conceptantwoord bekijken</summary><p className="mt-3 whitespace-pre-wrap text-sm">{s.draft}</p></details>}
-        <div className="mt-3 flex flex-wrap gap-3"><LinkButton href={`/inbox/${s.emailId}`} variant="secondary">{s.draft ? "Concept controleren en bewerken" : "Mail controleren"}</LinkButton>
+        <div className="mt-3 flex flex-wrap gap-3"><LinkButton href={`/inbox?status=all&mail=${s.emailId}${s.draft ? "&reply=1" : ""}`} variant="secondary">{s.draft ? "Concept controleren en bewerken" : "Mail controleren"}</LinkButton>
           {!readOnly && !s.reviewedAt && ["open", "auto_archived"].includes(s.status) && <form action={reviewSuggestion.bind(null, s.id)}><SubmitButton variant="secondary" pendingLabel="Opslaan…">Gecontroleerd</SubmitButton></form>}
           {!readOnly && s.status === "auto_archived" && <form action={restoreSuggestedMail.bind(null, s.id)}><SubmitButton variant="secondary" pendingLabel="Terugzetten…">Terug naar inbox</SubmitButton></form>}
           {s.category === "receipt" && <LinkButton href="/inkooporders/te-verwerken" variant="ghost">Facturen keuren</LinkButton>}

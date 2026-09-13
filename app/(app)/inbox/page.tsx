@@ -1,323 +1,94 @@
-import { and, desc, eq, ilike, or, sql } from "drizzle-orm";
-import { Mail, RefreshCw, Paperclip, Search } from "lucide-react";
+import { and, desc, eq, ilike, ne, or, sql } from "drizzle-orm";
+import { z } from "zod";
+import { Suspense } from "react";
+import { Paperclip, Search } from "lucide-react";
 import Link from "next/link";
-
-import { Badge, Button, Card, EmptyState, Input, PageHeader, TBody, Table, Td, Th, THead, Tr } from "@/components/ui";
+import { Button, Input, PageHeader } from "@/components/ui";
 import { db } from "@/lib/db";
-import { emailInbox, emailSyncState } from "@/lib/db/schema";
+import { emailInbox, emailSyncState, inboxSuggestions } from "@/lib/db/schema";
+import { MAIL_GROUPS, type MailGroup } from "@/lib/assistant/mail-rules";
 import { cn } from "@/lib/utils";
-
 import { bulkArchiveMails, bulkDeleteMails } from "./actions";
 import { BulkMailBar } from "./bulk-bar";
 import { FetchMailsButton } from "./fetch-mails-button";
-
+import { MailReader } from "./mail-reader";
 export const metadata = { title: "Mail-inbox" };
 export const dynamic = "force-dynamic";
-// De "Mails ophalen"-knop draait een IMAP-poll als server-action op deze route.
 export const maxDuration = 60;
-
-function statusBadge(status: string) {
-  switch (status) {
-    case "new":
-      return <Badge tone="info">nieuw</Badge>;
-    case "linked":
-      return <Badge tone="success">gelinkt</Badge>;
-    case "archived":
-      return <Badge tone="neutral">gearchiveerd</Badge>;
-    default:
-      return <Badge tone="neutral">{status}</Badge>;
-  }
-}
-
-function formatDate(d: Date | null): string {
-  if (!d) return "—";
-  return d.toLocaleString("nl-NL", {
-    dateStyle: "short",
-    timeStyle: "short",
-    timeZone: "Europe/Amsterdam",
-  });
-}
-
-export default async function InboxPage({
-  searchParams,
-}: {
-  searchParams: Promise<Record<string, string | string[] | undefined>>;
-}) {
+export default async function InboxPage({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
   const params = await searchParams;
-  const statusFilter = typeof params.status === "string" ? params.status : "all";
-  const q = (typeof params.q === "string" ? params.q : "").trim();
-  const mailboxFilter = typeof params.mailbox === "string" ? params.mailbox : "all";
-
-  // Mailbox-filter:
-  //  - 'purchase' = mails verzonden NAAR purchase@ (inkoop-gerelateerd)
-  //  - 'hi' = mails NIET naar purchase@ (alle overige, primair hi@)
-  //  - 'all' = beide
-  const goesToPurchase = or(
-    ilike(emailInbox.toEmail, "%purchase@habitat-one.com%"),
-    ilike(emailInbox.ccEmail, "%purchase@habitat-one.com%"),
-  );
-  const mailboxClause =
-    mailboxFilter === "purchase"
-      ? goesToPurchase
-      : mailboxFilter === "hi"
-        ? sql`NOT (
-            COALESCE(${emailInbox.toEmail}, '') ILIKE '%purchase@habitat-one.com%'
-            OR COALESCE(${emailInbox.ccEmail}, '') ILIKE '%purchase@habitat-one.com%'
-          )`
-        : undefined;
-
-  const [rows, state, counts, mailboxCounts] = await Promise.all([
-    db
-      .select({
-        id: emailInbox.id,
-        receivedAt: emailInbox.receivedAt,
-        fromName: emailInbox.fromName,
-        fromEmail: emailInbox.fromEmail,
-        subject: emailInbox.subject,
-        status: emailInbox.status,
-        attachments: emailInbox.attachments,
-        // Alleen een korte preview — de volledige body_html (tot 11MB per mail!)
-        // nooit meeladen in de lijst. Dat maakte deze query >1s en blokkeerde
-        // verbindingen voor de rest van de app. Volledige body staat op /inbox/[id].
-        bodyText: sql<string | null>`left(${emailInbox.bodyText}, 200)`,
-      })
-      .from(emailInbox)
-      .where(
-        and(
-          statusFilter === "all" ? undefined : eq(emailInbox.status, statusFilter),
-          mailboxClause,
-          // Zoeken in afzender, onderwerp én de tekst van de mail. De body kan
-          // megabytes groot zijn, maar het filteren gebeurt in de database —
-          // alleen de eerste 200 tekens komen mee als preview.
-          q
-            ? or(
-                ilike(emailInbox.subject, `%${q}%`),
-                ilike(emailInbox.fromName, `%${q}%`),
-                ilike(emailInbox.fromEmail, `%${q}%`),
-                ilike(emailInbox.bodyText, `%${q}%`),
-              )
-            : undefined,
-        ),
-      )
-      .orderBy(desc(emailInbox.receivedAt))
-      .limit(200),
+  const value = (key: string) => typeof params[key] === "string" ? params[key] as string : "";
+  const status = ["new", "linked", "archived", "all"].includes(value("status")) ? value("status") : "active";
+  const mailbox = value("mailbox"), q = value("q").trim(), group = value("group");
+  const page = Math.max(1, Math.min(10000, Math.floor(Number(value("page")) || 1)));
+  const purchase = (process.env.GMAIL_PURCHASE_USER || "purchase@habitat-one.com").toLowerCase();
+  const goesToPurchase = sql`(coalesce(${emailInbox.toEmail}, '') ilike ${`%${purchase}%`} or coalesce(${emailInbox.ccEmail}, '') ilike ${`%${purchase}%`})`;
+  const mailboxClause = mailbox === "purchase" ? goesToPurchase : mailbox === "hi" ? sql`not ${goesToPurchase}` : undefined;
+  const [rows, states, counts] = await Promise.all([
+    db.select({ id: emailInbox.id, receivedAt: emailInbox.receivedAt, fromName: emailInbox.fromName,
+      fromEmail: emailInbox.fromEmail, subject: emailInbox.subject, status: emailInbox.status,
+      attachments: emailInbox.attachments, preview: sql<string | null>`left(${emailInbox.bodyText}, 180)`,
+      summary: inboxSuggestions.summary, category: inboxSuggestions.category, needsReply: inboxSuggestions.needsReply,
+      hasDraft: sql<boolean>`${inboxSuggestions.draft} is not null`,
+    }).from(emailInbox).leftJoin(inboxSuggestions, eq(inboxSuggestions.emailId, emailInbox.id))
+      .where(and(mailboxClause, status === "active" ? ne(emailInbox.status, "archived") : status === "all" ? undefined : eq(emailInbox.status, status),
+        group === "reply" ? and(eq(inboxSuggestions.needsReply, true), eq(inboxSuggestions.status, "open")) : group in MAIL_GROUPS ? eq(inboxSuggestions.category, group) : undefined,
+        q ? or(ilike(emailInbox.subject, `%${q}%`), ilike(emailInbox.fromName, `%${q}%`), ilike(emailInbox.fromEmail, `%${q}%`), ilike(emailInbox.bodyText, `%${q}%`)) : undefined))
+      .orderBy(desc(emailInbox.receivedAt), desc(emailInbox.id)).limit(51).offset((page - 1) * 50),
     db.select().from(emailSyncState),
-    db
-      .select({ status: emailInbox.status, n: sql<number>`count(*)::int` })
-      .from(emailInbox)
-      .where(mailboxClause)
-      .groupBy(emailInbox.status),
-    db.execute<{ mailbox: string; n: number }>(sql`
-      SELECT
-        CASE
-          WHEN to_email ILIKE '%purchase@habitat-one.com%' OR cc_email ILIKE '%purchase@habitat-one.com%' THEN 'purchase'
-          ELSE 'hi'
-        END AS mailbox,
-        count(*)::int AS n
-      FROM email_inbox
-      GROUP BY 1
-    `),
+    db.select({ status: emailInbox.status, n: sql<number>`count(*)::int` }).from(emailInbox).where(mailboxClause).groupBy(emailInbox.status),
   ]);
-
-  const countByStatus = Object.fromEntries(counts.map((c) => [c.status, Number(c.n)]));
-  const mailboxByName = Object.fromEntries(
-    (mailboxCounts as unknown as Array<{ mailbox: string; n: number }>).map((r) => [
-      r.mailbox,
-      Number(r.n),
-    ]),
-  );
-  // Eén sync-rij per postvak (hi@ / purchase@) — toon de laatste poll + evt. fout.
-  const lastPolled =
-    state
-      .map((s) => s.lastPolledAt)
-      .filter((d): d is Date => d != null)
-      .sort((a, b) => b.getTime() - a.getTime())[0] ?? null;
-  const lastError = state.find((s) => s.errorMessage)?.errorMessage ?? null;
-
-  return (
-    <>
-      <PageHeader
-        title="Mail-inbox"
-        subtitle={`${countByStatus.new ?? 0} nieuw · ${countByStatus.linked ?? 0} gelinkt · ${countByStatus.archived ?? 0} gearchiveerd`}
-        actions={<FetchMailsButton />}
-      />
-
-      <Link href="/assistent" className="mb-4 block rounded-lg border border-accent/30 bg-accent/5 p-4 text-sm text-accent">Assistent: conceptantwoorden, belangrijke mail en automatisch opgeborgen berichten controleren →</Link>
-
-      <form method="get" className="mb-4 flex max-w-lg items-center gap-2">
-        {/* Zoeken door afzender, onderwerp en de tekst van de mail. */}
-        {mailboxFilter !== "all" && <input type="hidden" name="mailbox" value={mailboxFilter} />}
-        {statusFilter !== "all" && <input type="hidden" name="status" value={statusFilter} />}
-        <div className="relative flex-1">
-          <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted" />
-          <Input name="q" defaultValue={q} placeholder="Zoek in afzender, onderwerp of tekst…" className="pl-9" />
-        </div>
-        <Button type="submit" variant="secondary">
-          Zoeken
-        </Button>
-        {q && (
-          <Link href="/inbox" className="text-sm text-muted hover:underline">
-            wissen
-          </Link>
-        )}
-      </form>
-
-      <Card className="mb-4 space-y-3 px-4 py-3 text-sm">
-        {/* Mailbox-tabs: hi@ / purchase@ / alle */}
-        <div className="flex items-center justify-between gap-3 border-b border-border pb-2">
-          <div className="flex gap-1.5">
-            {[
-              { key: "all", label: "Beide mailboxen", count: undefined },
-              { key: "hi", label: "hi@", count: mailboxByName.hi },
-              { key: "purchase", label: "purchase@", count: mailboxByName.purchase },
-            ].map((m) => {
-              const sp = new URLSearchParams();
-              if (m.key !== "all") sp.set("mailbox", m.key);
-              if (statusFilter !== "all") sp.set("status", statusFilter);
-              if (q) sp.set("q", q);
-              return (
-                <Link
-                  key={m.key}
-                  href={sp.toString() ? `/inbox?${sp.toString()}` : "/inbox"}
-                  className={cn(
-                    "rounded-md px-3 py-1 text-xs transition-colors",
-                    mailboxFilter === m.key
-                      ? "bg-accent/15 font-medium text-accent"
-                      : "text-muted hover:bg-background-soft",
-                  )}
-                >
-                  {m.label}
-                  {m.count != null && (
-                    <span className="ml-1.5 text-[10px] opacity-70">({m.count})</span>
-                  )}
-                </Link>
-              );
-            })}
-          </div>
-          <div className="flex items-center gap-2 text-xs text-muted">
-            <RefreshCw className="h-3 w-3" />
-            <span>
-              Poll: {lastPolled ? formatDate(lastPolled) : "—"}
-            </span>
-            {lastError && (
-              <span className="ml-2 rounded bg-danger/10 px-2 py-0.5 text-[10px] text-danger">
-                fout: {lastError.slice(0, 40)}
-              </span>
-            )}
-          </div>
-        </div>
-
-        {/* Status-tabs */}
-        <div className="flex gap-2">
-          {[
-            { key: "new", label: "Nieuw" },
-            { key: "linked", label: "Gelinkt" },
-            { key: "archived", label: "Archief" },
-            { key: "all", label: "Alles" },
-          ].map((tab) => {
-            const sp = new URLSearchParams();
-              if (q) sp.set("q", q);
-            sp.set("status", tab.key);
-            if (mailboxFilter !== "all") sp.set("mailbox", mailboxFilter);
-            return (
-              <Link
-                key={tab.key}
-                href={`/inbox?${sp.toString()}`}
-                className={cn(
-                  "rounded-md px-3 py-1 text-xs transition-colors",
-                  statusFilter === tab.key
-                    ? "bg-accent/15 font-medium text-accent"
-                    : "text-muted hover:bg-background-soft",
-                )}
-              >
-                {tab.label}
-                {tab.key !== "all" && countByStatus[tab.key] != null && (
-                  <span className="ml-1.5 text-[10px] opacity-70">
-                    {countByStatus[tab.key]}
-                  </span>
-                )}
-              </Link>
-            );
-          })}
-        </div>
-      </Card>
-
-      {rows.length === 0 ? (
-        <EmptyState
-          title="Geen mails in deze categorie"
-          description="Cron-job draait elk kwartier en haalt nieuwe mails op. Of klik rechtsboven op 'Mails ophalen'."
-        />
-      ) : (
-        <Card>
-          {/* Bulk-selectie: de checkboxes zijn formuliervelden, dus archiveren en
-              verwijderen werken ook zonder JavaScript; de balk telt alleen mee. */}
-          <form>
-            <BulkMailBar archiveAction={bulkArchiveMails} deleteAction={bulkDeleteMails} />
-            <Table>
-              <THead>
-                <tr>
-                  <Th className="w-8" />
-                  <Th>Ontvangen</Th>
-                  <Th>Van</Th>
-                  <Th>Onderwerp</Th>
-                  <Th>Bijlagen</Th>
-                  <Th>Status</Th>
-                </tr>
-              </THead>
-            <TBody>
-              {rows.map((r) => {
-                const attCount = (r.attachments as Array<unknown> | null)?.length ?? 0;
-                return (
-                  <Tr key={r.id}>
-                    <Td className="pr-0">
-                      <input
-                        type="checkbox"
-                        name="ids"
-                        value={r.id}
-                        aria-label={`Selecteer mail van ${r.fromName ?? r.fromEmail ?? "onbekend"}`}
-                        className="size-4 rounded border bg-background"
-                      />
-                    </Td>
-                    <Td className="whitespace-nowrap text-xs text-muted">
-                      {formatDate(r.receivedAt)}
-                    </Td>
-                    <Td className="max-w-[20rem] text-sm">
-                      <Link href={`/inbox/${r.id}`} className="hover:underline">
-                        <div className="font-medium">{r.fromName ?? r.fromEmail ?? "?"}</div>
-                        {r.fromName && r.fromEmail && (
-                          <div className="truncate text-xs text-muted">{r.fromEmail}</div>
-                        )}
-                      </Link>
-                    </Td>
-                    <Td className="max-w-[28rem] text-sm">
-                      <Link href={`/inbox/${r.id}`} className="hover:underline">
-                        <span className="block truncate">{r.subject ?? "(geen onderwerp)"}</span>
-                        {r.bodyText && (
-                          <span className="block truncate text-xs text-muted">
-                            {r.bodyText.slice(0, 120).replace(/\s+/g, " ")}
-                          </span>
-                        )}
-                      </Link>
-                    </Td>
-                    <Td className="text-xs text-muted">
-                      {attCount > 0 ? (
-                        <span className="inline-flex items-center gap-1">
-                          <Paperclip className="h-3 w-3" />
-                          {attCount}
-                        </span>
-                      ) : (
-                        "—"
-                      )}
-                    </Td>
-                    <Td>{statusBadge(r.status)}</Td>
-                  </Tr>
-                );
-              })}
-            </TBody>
-            </Table>
-          </form>
-        </Card>
-      )}
-    </>
-  );
+  const hasNext = rows.length > 50, visible = rows.slice(0, 50);
+  const selected = z.string().uuid().safeParse(value("mail")).success ? { id: value("mail") } : visible[0];
+  const explicitSelection = !!value("mail") && !!selected;
+  const countMap = Object.fromEntries(counts.map(c => [c.status, c.n]));
+  const filters = new URLSearchParams();
+  for (const key of ["status", "mailbox", "q", "group", "page"]) if (value(key)) filters.set(key, value(key));
+  function href(changes: Record<string, string>) {
+    const next = new URLSearchParams(filters);
+    for (const [key, val] of Object.entries(changes)) { if (val) next.set(key, val); else next.delete(key); }
+    return `/inbox?${next.toString()}`;
+  }
+  const syncError = states.find(s => s.errorMessage)?.errorMessage;
+  const lastPoll = states.flatMap(s => s.lastPolledAt ? [s.lastPolledAt] : []).sort((a, b) => b.getTime() - a.getTime())[0];
+  return <>
+    <PageHeader title="Mail-inbox" subtitle="Lezen, voorbereiden en afhandelen op één plek" actions={<FetchMailsButton />} />
+    <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+      <div className="flex flex-wrap gap-1">{[["active", "Inbox"], ["archived", "Archief"], ["all", "Alles"]].map(([key, label]) => <Link key={key} href={href({ status: key, page: "" })} className={cn("rounded-md px-3 py-2 text-sm", status === key ? "bg-accent/10 font-medium text-accent" : "text-muted hover:bg-background-soft")}>{label}{key === "active" ? ` (${(countMap.new ?? 0) + (countMap.linked ?? 0)})` : key === "archived" ? ` (${countMap.archived ?? 0})` : ""}</Link>)}</div>
+      <Link className="text-sm text-accent" href="/assistent">Assistent en automatisch opgeborgen mail →</Link>
+    </div>
+    <form method="get" className="mb-3 flex flex-wrap gap-2">
+      <input type="hidden" name="status" value={status} />
+      <div className="relative min-w-48 flex-1"><Search className="absolute left-3 top-3 size-4 text-muted" /><Input name="q" defaultValue={q} placeholder="Zoek afzender, onderwerp of inhoud…" className="pl-9" aria-label="Zoek mail" /></div>
+      <select aria-label="Mailbox" name="mailbox" defaultValue={mailbox} className="rounded-md border border-border bg-surface px-3 py-2 text-sm"><option value="">Beide mailboxen</option><option value="hi">hi@</option><option value="purchase">purchase@</option></select>
+      <select aria-label="Soort mail" name="group" defaultValue={group} className="rounded-md border border-border bg-surface px-3 py-2 text-sm"><option value="">Alle categorieën</option><option value="reply">Te beantwoorden</option>{Object.entries(MAIL_GROUPS).map(([key, label]) => <option value={key} key={key}>{label}</option>)}</select>
+      <Button type="submit" variant="secondary">Zoeken</Button>
+    </form>
+    {syncError && <p className="mb-3 rounded-md bg-warning/10 p-3 text-sm text-warning">Ophalen van mail is niet volledig gelukt. Probeer Mails ophalen opnieuw.</p>}
+    <div className="overflow-hidden rounded-xl border border-border bg-surface lg:grid lg:h-[calc(100dvh-19rem)] lg:min-h-[32rem] lg:grid-cols-[minmax(17rem,32%)_minmax(0,1fr)]">
+      <section aria-label="Berichtenlijst" className={cn("min-w-0 border-border lg:flex lg:min-h-0 lg:flex-col lg:border-r", explicitSelection ? "hidden" : "flex flex-col")}>
+        <form className="min-h-0 flex-1 overflow-y-auto" key={filters.toString()}>
+          <details className="border-b border-border p-3 text-xs text-muted"><summary className="cursor-pointer">Meerdere mails selecteren</summary><BulkMailBar archiveAction={bulkArchiveMails} deleteAction={bulkDeleteMails} /></details>
+          {!visible.length && <p className="p-6 text-sm text-muted">Geen berichten in deze selectie. Nieuwe mail wordt elke 5 minuten opgehaald.</p>}
+          {visible.map(m => <div key={m.id} className={cn("relative flex border-b border-border", selected?.id === m.id ? "bg-accent/5 before:absolute before:inset-y-0 before:left-0 before:w-1 before:bg-accent" : "hover:bg-background-soft")}>
+            <div className="pl-3 pt-5"><input type="checkbox" name="ids" value={m.id} aria-label={`Selecteer ${m.subject ?? "mail"}`} className="size-3.5 accent-[var(--accent)]" /></div>
+            <Link href={href({ mail: m.id })} scroll={false} prefetch={false} aria-current={selected?.id === m.id ? "true" : undefined} className="block min-w-0 flex-1 p-4" data-mail-link={m.id}>
+              <div className="flex items-center gap-2"><span className="min-w-0 flex-1 truncate text-sm font-medium">{m.fromName || m.fromEmail || "Onbekende afzender"}</span><time className="shrink-0 text-[11px] text-muted">{m.receivedAt?.toLocaleDateString("nl-NL", { timeZone: "Europe/Madrid" }) === new Date().toLocaleDateString("nl-NL", { timeZone: "Europe/Madrid" }) ? m.receivedAt?.toLocaleTimeString("nl-NL", { timeZone: "Europe/Madrid", hour: "2-digit", minute: "2-digit" }) : m.receivedAt?.toLocaleDateString("nl-NL", { timeZone: "Europe/Madrid", day: "numeric", month: "short" })}</time></div>
+              <p className="mt-1 truncate text-sm">{m.subject || "Zonder onderwerp"}</p>
+              <div className="mt-2 flex flex-wrap items-center gap-2 text-[10px] font-medium uppercase text-muted"><span className={cn("rounded bg-background-soft px-1.5 py-0.5", m.category === "urgent" && "text-warning")}>{MAIL_GROUPS[m.category as MailGroup] || (m.status === "archived" ? "Archief" : "Nog te beoordelen")}</span>{m.hasDraft && <span className="text-accent">Concept klaar</span>}{Array.isArray(m.attachments) && m.attachments.length > 0 && <span className="flex items-center gap-1"><Paperclip className="size-3" />{m.attachments.length}</span>}</div>
+              <p className="mt-1.5 line-clamp-2 text-xs leading-relaxed text-muted">{m.summary || m.preview || "Open om het bericht te lezen"}</p>
+            </Link>
+          </div>)}
+        </form>
+        <div className="flex items-center justify-between border-t border-border px-4 py-3 text-xs text-muted">{page > 1 ? <Link href={href({ page: String(page - 1) })}>← Vorige</Link> : <span /> }<span>Pagina {page}</span>{hasNext ? <Link href={href({ page: String(page + 1) })}>Volgende →</Link> : <span />}</div>
+      </section>
+      <section aria-label="Geopende mail" className={cn("min-w-0 overflow-y-auto lg:block", explicitSelection ? "block" : "hidden")}>
+        <Link href={href({})} className="block border-b border-border p-4 text-sm text-accent lg:hidden">← Terug naar berichten</Link>
+        {selected ? <Suspense key={`${selected.id}-${value("reply")}`} fallback={<p className="p-6 text-sm text-muted" role="status">Mail laden…</p>}>
+          <MailReader id={selected.id} reply={value("reply") === "1"} replyResult={value("beantwoord")} backHref={href({})} mailHref={href({ mail: selected.id })} />
+        </Suspense> : <p className="p-8 text-sm text-muted">Selecteer een bericht om het hier te lezen.</p>}
+      </section>
+    </div>
+    <p className="mt-2 text-xs text-muted">Laatst opgehaald: {lastPoll?.toLocaleString("nl-NL", { timeZone: "Europe/Madrid", dateStyle: "short", timeStyle: "short" }) || "nog niet"} · Alleen de mailbox in het CRM wordt aangepast.</p>
+  </>;
 }

@@ -39,7 +39,9 @@ export function BulkMailBar({
     };
     update();
     form.addEventListener("change", update);
-    return () => form.removeEventListener("change", update);
+    const observer = new MutationObserver(update);
+    observer.observe(form, { childList: true, subtree: true });
+    return () => { form.removeEventListener("change", update); observer.disconnect(); };
   }, []);
 
   const toggleAll = (checked: boolean) => {

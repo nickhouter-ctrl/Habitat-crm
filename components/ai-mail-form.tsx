@@ -37,7 +37,9 @@ export function AiMailForm({
   initialBody = "",
   saveDraft,
   initialAttachments = [],
+  returnTo,
 }: {
+  returnTo?: string;
   initialBody?: string;
   initialAttachments?: string[];
   saveDraft?: (body: string, subject: string, attachments: string[]) => Promise<void>;
@@ -98,6 +100,7 @@ export function AiMailForm({
 
   return (
     <form action={verstuur} className="space-y-2">
+      {returnTo && <input type="hidden" name="returnTo" value={returnTo} />}
       <Input name="subject" value={subject} onChange={(e) => { setSubject(e.target.value); setSaved(false); }} />
       <Textarea
         name="message"
