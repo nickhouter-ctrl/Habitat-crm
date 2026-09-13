@@ -57,7 +57,7 @@ export async function MailReader({ id, reply, replyResult, backHref, mailHref }:
     </div>}
     {attachments.length > 0 && <div className="flex flex-wrap gap-2 border-b border-border px-5 py-3">{attachments.map(a => <Link key={a.id} href={`/api/archief/${a.id}`} target="_blank" className="max-w-full break-words rounded-md border border-border px-3 py-2 text-xs hover:border-accent">📎 {a.filename}{a.sizeBytes ? ` · ${Math.ceil(a.sizeBytes / 1024)} kB` : ""}</Link>)}</div>}
     <div className="p-5 lg:p-6">
-      {mail.bodyHtml ? <iframe title="Inhoud van de mail" sandbox="allow-popups allow-popups-to-escape-sandbox" referrerPolicy="no-referrer" className="h-[60dvh] min-h-80 w-full rounded-md bg-white"
+      {mail.bodyHtml ? <iframe title="Inhoud van de mail" sandbox="allow-popups allow-popups-to-escape-sandbox" referrerPolicy="no-referrer" className="h-[72dvh] min-h-96 w-full rounded-md bg-white"
         srcDoc={`<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"><style>body{font:14px/1.6 Arial,sans-serif;margin:16px;color:#263244;overflow-wrap:anywhere}img{max-width:100%;height:auto}table{max-width:100%}pre{white-space:pre-wrap}</style></head><body>${sanitizeMailHtml(mail.bodyHtml)}</body></html>`} />
         : <p className="whitespace-pre-wrap break-words text-sm leading-relaxed">{mail.bodyText || "Dit bericht heeft geen tekstinhoud."}</p>}
     </div>
