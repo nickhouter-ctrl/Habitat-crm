@@ -261,8 +261,11 @@ export async function runImapPoll(): Promise<ImapPollResult> {
   // 5xx, timeout) — die bleven anders voorgoed op "niet gelezen" staan.
   // Best-effort en na het mailwerk, zodat het poll-budget voorgaat.
   try {
-    const { retryFailedAiReads } = await import("@/lib/auto-purchase-invoice");
-    const r = await retryFailedAiReads();
+    const { retryFailedAiReads, recoverMissingInvoiceReviews } = await import("@/lib/auto-purchase-invoice");
+    const recovered = await recoverMissingInvoiceReviews();
+    totals.reviewIds.push(...recovered);
+    totals.invoicesAutoCreated += recovered.length;
+    const r = await retryFailedAiReads(1);
     if (r.geprobeerd > 0) console.log(`AI-herkansing: ${r.hersteld}/${r.geprobeerd} alsnog gelezen`);
   } catch (e) {
     console.error("AI-herkansing mislukt:", e instanceof Error ? e.message : e);

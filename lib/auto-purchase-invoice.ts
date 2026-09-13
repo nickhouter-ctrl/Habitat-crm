@@ -6,7 +6,7 @@
  * en in `purchase_invoice_reviews` gezet. Pas na goedkeuring ontstaat er een
  * inkooporder die meetelt in de kosten en naar Holded kan.
  */
-import { and, asc, eq, lt, sql } from "drizzle-orm";
+import { and, asc, eq, lt, sql, inArray, isNull } from "drizzle-orm";
 
 import { db } from "@/lib/db";
 import { emailInbox, mailAttachments, purchaseInvoiceReviews } from "@/lib/db/schema";
@@ -22,6 +22,33 @@ import {
 
 // Blijft hier geëxporteerd: bestaande schermen importeren 'm van dit pad.
 export { buildPurchaseReference };
+
+/** A poll may stop after saving the email but before creating its review.
+ * The IMAP duplicate check then skips it forever. Recover at most one missing
+ * document per round; already decided/linked invoices are never reopened.
+ */
+export async function recoverMissingInvoiceReviews(): Promise<string[]> {
+  const purchaseUser=(process.env.GMAIL_PURCHASE_USER??"purchase@habitat-one.com").trim().toLowerCase();
+  const rows=await db.select({emailId:emailInbox.id,attachmentId:mailAttachments.id,filename:mailAttachments.filename})
+    .from(mailAttachments)
+    .innerJoin(emailInbox,eq(emailInbox.id,mailAttachments.emailId))
+    .leftJoin(purchaseInvoiceReviews,eq(purchaseInvoiceReviews.mailAttachmentId,mailAttachments.id))
+    .where(and(isNull(purchaseInvoiceReviews.id),isNull(emailInbox.linkedPurchaseOrderId),
+      inArray(mailAttachments.category,[...FINANCIAL_CATEGORIES]),
+      sql`${emailInbox.receivedAt}>now()-interval '7 days'`,
+      sql`${emailInbox.receivedAt}<now()-interval '10 minutes'`,
+      sql`position(${purchaseUser} in lower(coalesce(${emailInbox.toEmail},'')||' '||coalesce(${emailInbox.ccEmail},'')))>0`,
+      sql`${mailAttachments.filename} ~* '\\.(pdf|xlsx?|xlsm)$'`))
+    .orderBy(asc(emailInbox.receivedAt)).limit(20);
+  const candidate=rows.find(r=>!isProformaOrQuote(r.filename)&&!isSpecificationAttachment(r.filename));
+  if(!candidate)return [];
+  // Recheck because a staff member could have linked it since the selection.
+  const mail=await db.query.emailInbox.findFirst({where:eq(emailInbox.id,candidate.emailId),columns:{linkedPurchaseOrderId:true}});
+  if(!mail||mail.linkedPurchaseOrderId)return [];
+  const proposal=await buildInvoiceProposal({emailId:candidate.emailId,attachmentId:candidate.attachmentId});
+  if(!proposal)return [];
+  return [await upsertInvoiceReview(proposal,"auto")];
+}
 
 export interface AutoInvoiceResult {
   created: number;

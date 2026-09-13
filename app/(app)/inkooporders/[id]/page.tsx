@@ -34,7 +34,6 @@ import {
   PO_STATUS_META,
 } from "@/lib/purchase-orders";
 import { verdelingVanInkoop } from "@/lib/inkoop-verdeling";
-import { purchaseOrderFileUrl } from "@/lib/storage";
 import { Combobox } from "@/components/combobox";
 import { PurchaseProjectLink } from "@/components/purchase-project-link";
 import { ConfirmSubmit } from "@/components/confirm-submit";
@@ -79,7 +78,7 @@ export default async function PurchaseOrderPage({
 
   // Wie heeft deze factuur goedgekeurd? Staat op de beoordeling uit de wachtrij;
   // inkopen van vóór de goedkeuringspoort (of uit Holded) hebben die niet.
-  const [keuring] = await db
+  const keuringPromise = db
     .select({
       status: purchaseInvoiceReviews.status,
       decidedAt: purchaseInvoiceReviews.decidedAt,
@@ -95,21 +94,20 @@ export default async function PurchaseOrderPage({
 
   // Uren die via deze inkooporder op het project staan — om te tonen wat er is
   // geboekt zonder het formulier open te klappen.
-  const [urenRij] = await db
+  const urenPromise = db
     .select({ uren: sql<number>`coalesce(sum(${timeEntries.hours}), 0)::float8` })
     .from(timeEntries)
     .where(eq(timeEntries.purchaseOrderId, id));
-  const geboekteUren = urenRij?.uren ? Number(urenRij.uren) : null;
 
   // Verdeling over projecten: de uren- en kostenregels die bij het goedkeuren
   // per werf zijn geboekt. Bestaan die, dan is de vraag "bij welk project hoort
   // deze factuur?" al beantwoord en tonen we het antwoord in plaats van het
   // koppel-formulier. Dezelfde bron als de projectkolom in het overzicht
   // (lib/inkoop-verdeling.ts), zodat de twee niet uit elkaar kunnen lopen.
-  const verdeling = await verdelingVanInkoop(id);
+  const verdelingPromise = verdelingVanInkoop(id);
 
   // Projecten om deze inkoop aan te koppelen (telt dan mee als materiaalkost).
-  const projectRows = await db
+  const projectsPromise = db
     .select({ id: projects.id, name: projects.name })
     .from(projects)
     .where(eq(projects.status, "active"))
@@ -118,11 +116,13 @@ export default async function PurchaseOrderPage({
   // De ploeg, om een urenfactuur onder de juiste naam te boeken. De leverancier
   // op een werknemersfactuur ís de arbeider, dus we zoeken hem alvast op naam —
   // maar alleen als het geen gok is (precies één treffer).
-  const workerRows = await db
+  const workersPromise = db
     .select({ id: workers.id, name: workers.name, hourlyCostEur: workers.hourlyCostEur })
     .from(workers)
     .where(eq(workers.active, true))
     .orderBy(asc(workers.name));
+  const [[keuring], [urenRij], verdeling, projectRows, workerRows] = await Promise.all([keuringPromise, urenPromise, verdelingPromise, projectsPromise, workersPromise]);
+  const geboekteUren = urenRij?.uren ? Number(urenRij.uren) : null;
   const workerOptions = workerRows.map((w) => ({
     id: w.id,
     name: w.name,
@@ -163,12 +163,12 @@ export default async function PurchaseOrderPage({
     }
   }
 
-  const attachments = await Promise.all(
-    normalizePoAttachments(po.attachments).map(async (a) => ({
+  // Resolve a private download URL only when a file is opened, not on every
+  // page load and every project-link action's server rerender.
+  const attachments = normalizePoAttachments(po.attachments).map((a) => ({
       ...a,
-      url: await purchaseOrderFileUrl(a.path),
-    })),
-  );
+      url: `/api/inkooporders/${id}/bijlage?path=${encodeURIComponent(a.path)}`,
+    }));
 
   const meta = PO_STATUS_META[po.status];
   const remove = deletePurchaseOrder.bind(null, id);

@@ -334,8 +334,16 @@ const MAIL_BUCKET = "email-attachments";
 export async function copyMailAttachmentToPoBucket(args: {
   mailStoragePath: string;
   filename: string;
+  sizeBytes?: number | null;
 }): Promise<{ name: string; path: string; size: number } | null> {
   const sb = supabase();
+  const path = `${crypto.randomUUID()}-${safeName(args.filename)}`;
+  // Keep the bytes inside Storage: approving a PDF need not download and
+  // upload the entire file through the CRM server. Retain the old fallback.
+  if (args.sizeBytes != null) {
+    const copied = await sb.storage.from(MAIL_BUCKET).copy(args.mailStoragePath, path, { destinationBucket: PO_BUCKET });
+    if (!copied.error) return { name: args.filename, path, size: args.sizeBytes };
+  }
   await ensurePoBucket();
 
   const { data, error } = await sb.storage.from(MAIL_BUCKET).download(args.mailStoragePath);
@@ -344,7 +352,6 @@ export async function copyMailAttachmentToPoBucket(args: {
     return null;
   }
   const buf = Buffer.from(await data.arrayBuffer());
-  const path = `${crypto.randomUUID()}-${safeName(args.filename)}`;
   const up = await sb.storage
     .from(PO_BUCKET)
     .upload(path, buf, { contentType: data.type || "application/octet-stream", upsert: false });

@@ -51,6 +51,7 @@ export async function supplierEmailCandidates(args: {
   supplier: string | null;
   supplierTaxId: string | null;
   invoiceEmail: string | null;
+  fromEmail?: string | null;
 }): Promise<EmailCandidate[]> {
   const out: EmailCandidate[] = [];
   const add = (email: string | null | undefined, source: string) => {
@@ -62,37 +63,23 @@ export async function supplierEmailCandidates(args: {
 
   add(args.invoiceEmail, "op de factuur");
 
-  // Bekend in het CRM: op btw-nummer of op naam.
+  // These lookups are independent; keep the candidate priority below stable.
   const taxId = (args.supplierTaxId ?? "").toUpperCase().replace(/[^0-9A-Z]/g, "");
-  if (taxId) {
-    const viaBtw = await db
-      .select({ email: companies.email, name: companies.name })
-      .from(companies)
-      .where(ilike(companies.vatNumber, `%${taxId}%`))
-      .limit(1);
-    if (viaBtw[0]) add(viaBtw[0].email, `bedrijf ${viaBtw[0].name} (btw-nummer)`);
-  }
-  if (args.supplier && args.supplier.length >= 4) {
-    const viaNaam = await db
-      .select({ email: companies.email, name: companies.name })
-      .from(companies)
-      .where(and(eq(companies.type, "supplier"), ilike(companies.name, `%${args.supplier}%`)))
-      .limit(1);
-    if (viaNaam[0]) add(viaNaam[0].email, `bedrijf ${viaNaam[0].name}`);
-
-    const viaContact = await db
-      .select({ email: contacts.email, name: contacts.name })
-      .from(contacts)
-      .where(or(ilike(contacts.name, `%${args.supplier}%`), eq(contacts.taxId, args.supplierTaxId ?? "—")))
-      .limit(1);
-    if (viaContact[0]) add(viaContact[0].email, `contact ${viaContact[0].name}`);
-  }
-
-  // Laatste redmiddel: de afzender van de mail.
-  const mail = await db.query.emailInbox.findFirst({
-    where: eq(emailInbox.id, args.emailId),
-    columns: { fromEmail: true },
-  });
+  const hasName = args.supplier && args.supplier.length >= 4;
+  const [viaBtw, viaNaam, viaContact, mail] = await Promise.all([
+    taxId ? db.select({ email: companies.email, name: companies.name }).from(companies)
+      .where(ilike(companies.vatNumber, `%${taxId}%`)).limit(1) : [],
+    hasName ? db.select({ email: companies.email, name: companies.name }).from(companies)
+      .where(and(eq(companies.type, "supplier"), ilike(companies.name, `%${args.supplier}%`))).limit(1) : [],
+    hasName ? db.select({ email: contacts.email, name: contacts.name }).from(contacts)
+      .where(or(ilike(contacts.name, `%${args.supplier}%`), eq(contacts.taxId, args.supplierTaxId ?? "—"))).limit(1) : [],
+    args.fromEmail !== undefined ? { fromEmail: args.fromEmail } : db.query.emailInbox.findFirst({
+      where: eq(emailInbox.id, args.emailId), columns: { fromEmail: true },
+    }),
+  ]);
+  if (viaBtw[0]) add(viaBtw[0].email, `bedrijf ${viaBtw[0].name} (btw-nummer)`);
+  if (viaNaam[0]) add(viaNaam[0].email, `bedrijf ${viaNaam[0].name}`);
+  if (viaContact[0]) add(viaContact[0].email, `contact ${viaContact[0].name}`);
   add(mail?.fromEmail, "afzender van de mail");
 
   // Zekere adressen eerst.

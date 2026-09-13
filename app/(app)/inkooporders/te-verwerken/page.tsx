@@ -67,6 +67,7 @@ export default async function FacturenKeurenPage() {
       } | null;
       const candidates = await supplierEmailCandidates({
         emailId: v.emailId,
+        fromEmail: r.fromEmail,
         supplier: v.proposedSupplier,
         supplierTaxId: f?.supplierTaxId ?? null,
         invoiceEmail: v.supplierEmail ?? f?.supplierEmail ?? null,

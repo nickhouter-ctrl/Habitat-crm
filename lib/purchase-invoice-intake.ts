@@ -683,7 +683,7 @@ export async function approveInvoiceReview(args: {
   // sporen achter in de administratie).
   const poAttachments: { name: string; path: string; size?: number; uploadedAt?: string }[] = [];
   if (att) {
-    const copied = await copyMailAttachmentToPoBucket({ mailStoragePath: att.storagePath, filename: att.filename });
+    const copied = await copyMailAttachmentToPoBucket({ mailStoragePath: att.storagePath, filename: att.filename, sizeBytes: att.sizeBytes });
     if (copied) poAttachments.push({ ...copied, uploadedAt: new Date().toISOString() });
     if (isExcelAttachment(att.filename, att.contentType ?? "")) {
       try {
@@ -702,7 +702,7 @@ export async function approveInvoiceReview(args: {
   for (const b of bijlagen) {
     const ba = await db.query.mailAttachments.findFirst({ where: eq(mailAttachments.id, b.mailAttachmentId) });
     if (!ba) continue;
-    const copied = await copyMailAttachmentToPoBucket({ mailStoragePath: ba.storagePath, filename: ba.filename });
+    const copied = await copyMailAttachmentToPoBucket({ mailStoragePath: ba.storagePath, filename: ba.filename, sizeBytes: ba.sizeBytes });
     if (copied) poAttachments.push({ ...copied, uploadedAt: new Date().toISOString() });
   }
 
@@ -1023,7 +1023,7 @@ export async function attachReviewToSibling(args: {
   if (target.purchaseOrderId && att) {
     const po = await db.query.purchaseOrders.findFirst({ where: eq(purchaseOrders.id, target.purchaseOrderId) });
     if (po) {
-      const copied = await copyMailAttachmentToPoBucket({ mailStoragePath: att.storagePath, filename: att.filename });
+      const copied = await copyMailAttachmentToPoBucket({ mailStoragePath: att.storagePath, filename: att.filename, sizeBytes: att.sizeBytes });
       if (copied) {
         const bestaande = (po.attachments as { name: string; path: string; size?: number; uploadedAt?: string }[] | null) ?? [];
         await db
