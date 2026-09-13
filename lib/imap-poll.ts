@@ -130,18 +130,15 @@ export async function ingestMails(mails: ParsedEmail[]): Promise<IngestStats> {
         }
       }
 
-      // Auto-link aan PO + auto-aanmaak inkoopfactuur
+      // Queue invoices before shipment-reference linking: an existing PO
+      // reference must not hide a new supplier invoice from approval.
       if (row?.id) {
-        try {
-          await autoLinkEmail(row.id);
-        } catch (e: any) {
-          console.error(`Auto-link fail voor ${m.subject}:`, e?.message);
-        }
         try {
           const r = await tryAutoCreatePurchaseInvoice(row.id);
           s.invoicesAutoCreated += r.created;
           s.invoicesNeedReview += r.needsReview;
           s.reviewIds.push(...r.reviewIds);
+          if (r.created === 0 && r.needsReview === 0) await autoLinkEmail(row.id);
         } catch (e: any) {
           console.error(`Auto-invoice fail voor ${m.subject}:`, e?.message);
         }
@@ -242,6 +239,7 @@ export async function runImapPoll(): Promise<ImapPollResult> {
       totals.attachmentsStored += r.attachmentsStored;
       totals.invoicesAutoCreated += r.invoicesAutoCreated;
       totals.invoicesNeedReview += r.invoicesNeedReview;
+      totals.reviewIds.push(...r.reviewIds);
     } catch (e: any) {
       const msg = String(e?.message ?? e);
       errors.push(`${account.user}: ${msg}`);

@@ -123,6 +123,19 @@ export async function tryAutoCreatePurchaseInvoice(emailId: string): Promise<Aut
   const financial = atts.filter((a) => FINANCIAL_CATEGORIES.includes(a.category as (typeof FINANCIAL_CATEGORIES)[number]) && !isProformaOrQuote(a.filename));
   if (financial.length === 0) return result;
 
+  // Persist every card before starting slow OCR. Interrupted reads remain
+  // visible and are picked up by retryFailedAiReads instead of disappearing.
+  await db.insert(purchaseInvoiceReviews).values(financial.map((a) => ({
+    emailId,
+    mailAttachmentId: a.id,
+    source: "auto",
+    proposedReference: buildPurchaseReference(mail.subject, a.filename),
+    aiReadOk: false,
+    aiError: "Uitlezing wordt voorbereid. Bij een onderbreking wordt deze automatisch opnieuw geprobeerd.",
+    aiCheckedAt: new Date(),
+    verdict: "pending",
+  }))).onConflictDoNothing({ target: purchaseInvoiceReviews.mailAttachmentId });
+
   // Bijhouden welke kaart bij welke bijlage hoort: is er in deze mail zowel een
   // factuur als een specificatie, dan hangen we die straks aan elkaar in plaats
   // van er twee te-betalen posten van te maken.
