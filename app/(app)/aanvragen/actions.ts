@@ -248,7 +248,11 @@ export async function mailQuoteRequestCustomer(quoteRequestId: string, formData:
   let sent = false;
   try {
     const attachments = await catalogusMailBijlagen(bijlagePaden);
-    const opgemaakt = persoonlijkeMail(message);
+    const me = await db.query.users.findFirst({
+      where: eq(users.id, user.id),
+      columns: { phone: true },
+    });
+    const opgemaakt = persoonlijkeMail(message, me);
     const res = await sendEmail({
       to: req.email,
       subject,

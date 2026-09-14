@@ -852,7 +852,8 @@ function pickLang(l?: string | null): Lang {
  * mét eigen aanhef en ondertekening (die schrijft de medewerker of de AI al),
  * dus de template voegt zelf geen groet toe.
  */
-export function persoonlijkeMail(message: string): { html: string; text: string } {
+export function persoonlijkeMail(message: string, sender?: { phone?: string | null }): { html: string; text: string } {
+  const phone = sender?.phone?.trim() || COMPANY.phone;
   const paragraphs = message
     .replace(/\r\n/g, "\n")
     .trim()
@@ -875,11 +876,11 @@ export function persoonlijkeMail(message: string): { html: string; text: string 
     <div style="background:${COMPANY.cream};padding:18px 28px;border-top:1px solid ${COMPANY.sand};font-size:12px;line-height:1.7;color:${COMPANY.muted}">
       <span style="display:block;font-weight:700;color:${COMPANY.brown}">${escapeHtml(COMPANY.legalName)}</span>
       ${escapeHtml(COMPANY.addressStreet)}, ${escapeHtml(COMPANY.addressRegion)}<br/>
-      ${escapeHtml(COMPANY.phone)} · <a href="mailto:${COMPANY.email}" style="color:${COMPANY.muted};text-decoration:none">${escapeHtml(COMPANY.email)}</a> · ${escapeHtml(COMPANY.website)}${COMPANY.vatNumber ? ` · NIF ${escapeHtml(COMPANY.vatNumber)}` : ""}
+      ${escapeHtml(phone)} · <a href="mailto:${COMPANY.email}" style="color:${COMPANY.muted};text-decoration:none">${escapeHtml(COMPANY.email)}</a> · ${escapeHtml(COMPANY.website)}${COMPANY.vatNumber ? ` · NIF ${escapeHtml(COMPANY.vatNumber)}` : ""}
     </div>
   </div>
 </div>`;
-  const text = `${message.trim()}\n\n—\n${COMPANY.legalName}\n${COMPANY.address}\n${[COMPANY.phone, COMPANY.email].filter(Boolean).join(" · ")}`;
+  const text = `${message.trim()}\n\n—\n${COMPANY.legalName}\n${COMPANY.address}\n${[phone, COMPANY.email].filter(Boolean).join(" · ")}`;
   return { html, text };
 }
 

@@ -223,7 +223,7 @@ export async function replyToMail(emailId: string, formData: FormData) {
 
   const me = await db.query.users.findFirst({
     where: eq(users.id, user.id),
-    columns: { name: true },
+    columns: { name: true, phone: true },
   });
 
   const bijlagePaden = formData.getAll("bijlage").map((v) => String(v));
@@ -231,7 +231,7 @@ export async function replyToMail(emailId: string, formData: FormData) {
   let sent = false;
   try {
     const attachments = await catalogusMailBijlagen(bijlagePaden);
-    const opgemaakt = persoonlijkeMail(message);
+    const opgemaakt = persoonlijkeMail(message, me);
     const res = await sendEmail({
       to: mail.fromEmail,
       subject,
