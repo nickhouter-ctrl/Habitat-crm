@@ -1,0 +1,61 @@
+name: agent-quality
+on:
+  push:
+    branches: [main]
+  pull_request:
+  schedule:
+    - cron: '20 3 * * *'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: agent-quality-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - id: tests
+        run: npm test
+        continue-on-error: true
+      - id: typecheck
+        run: npm run build
+        continue-on-error: true
+        env:
+          NEXT_TELEMETRY_DISABLED: '1'
+          CRM_EXTERNAL_EFFECTS: disabled
+          NEXT_PUBLIC_SUPABASE_URL: https://example.supabase.co
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: test-only
+          SUPABASE_SERVICE_ROLE_KEY: test-only
+      - id: lint
+        run: npm run lint
+        continue-on-error: true
+      - id: security
+        run: npm audit --omit=dev --audit-level=high
+        continue-on-error: true
+      - name: Publish checks to Habitat agent center
+        if: always() && github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+        run: node scripts/report-agent-quality.mjs
+        env:
+          AGENT_REPORT_SECRET: ${{ secrets.AGENT_REPORT_SECRET }}
+          TEST_OUTCOME: ${{ steps.tests.outcome }}
+          TYPECHECK_OUTCOME: ${{ steps.typecheck.outcome }}
+          LINT_OUTCOME: ${{ steps.lint.outcome }}
+          SECURITY_OUTCOME: ${{ steps.security.outcome }}
+      - name: Require successful checks
+        if: always()
+        run: node -e 'for (const k of ["TEST_OUTCOME","TYPECHECK_OUTCOME","LINT_OUTCOME","SECURITY_OUTCOME"]) if(process.env[k]!=="success") process.exitCode=1'
+        env:
+          TEST_OUTCOME: ${{ steps.tests.outcome }}
+          TYPECHECK_OUTCOME: ${{ steps.typecheck.outcome }}
+          LINT_OUTCOME: ${{ steps.lint.outcome }}
+          SECURITY_OUTCOME: ${{ steps.security.outcome }}
