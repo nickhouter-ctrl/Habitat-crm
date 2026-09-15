@@ -1,0 +1,24 @@
+import Link from "next/link";
+import { ArrowUpRight, Bot, ShieldCheck, Clock3 } from "lucide-react";
+import { Card, CardContent, CardHeader, CardTitle, LinkButton, PageHeader } from "@/components/ui";
+import { getWindowsAgents, WINDOWS_AGENTS } from "@/lib/windows-agents";
+
+export const dynamic = "force-dynamic";
+export const metadata = {title:"Agents · Kozijnen"};
+const stateNames:Record<string,string>={queued:"In wachtrij",running:"Bezig",done:"Afgerond",failed:"Mislukt",superseded:"Nieuwe controle nodig",pending:"Goedkeuring nodig",sending:"Verzending bezig",sent:"Verzonden",uncertain:"Verzending controleren"};
+const center = (orderId?:string) => `/kozijnen/portaal?next=${encodeURIComponent(`/admin/agents${orderId?`?orderId=${orderId}`:""}`)}`;
+
+export default async function WindowsAgentsPage() {
+  const data = await getWindowsAgents();
+  const pending=data.proposals.filter(p=>["pending","uncertain","sending"].includes(p.state));
+  const issues=data.runs.reduce((total,r)=>total+r.findings.filter(f=>f.severity!=="info").length,0);
+  return <><PageHeader title="Agents voor kozijnen" subtitle="Ordercontroles en opvolging · dezelfde gegevens in Windows en Habitat CRM" actions={<><LinkButton href="/kozijnen" variant="secondary">Kozijnen</LinkButton>{data.canAct&&<LinkButton href={center()} prefetch={false}>Agentcentrum openen <ArrowUpRight className="size-4"/></LinkButton>}</>}/>
+    {!data.ready?<Card><CardContent>De agents worden ingericht. Het overzicht verschijnt zodra de Windows-migratie is uitgevoerd.</CardContent></Card>:<div className="space-y-6">
+      <div className="grid gap-4 sm:grid-cols-3">{[{title:"Automatisering",value:data.settings?.enabled?"Actief":"Gepauzeerd",icon:Bot},{title:"Voorstellen ter controle",value:pending.length,icon:ShieldCheck},{title:"Aandachtspunten",value:issues,icon:Clock3}].map(item=><Card key={item.title}><CardContent><div className="flex items-center justify-between text-muted"><span className="text-xs">{item.title}</span><item.icon className="size-4"/></div><p className="mt-3 text-2xl font-semibold">{item.value}</p></CardContent></Card>)}</div>
+      <p className="text-xs text-muted">Automatisch iedere 5 minuten. Laatste ronde: {data.settings?.last_sweep_at?new Date(data.settings.last_sweep_at).toLocaleString("nl-NL",{timeZone:"Europe/Amsterdam"}):"nog niet uitgevoerd"}. AI-bevindingen vragen inhoudelijke controle.</p>
+      <Card><CardHeader><CardTitle>Voorstellen en CRM-taken</CardTitle></CardHeader><CardContent className="space-y-4">{!data.proposals.length&&<p className="text-sm text-muted">Nog geen voorstellen. Start een controle in het agentcentrum.</p>}{data.proposals.map(p=><div className="flex flex-wrap items-center justify-between gap-3 border-b pb-4 last:border-0" key={p.id}><div><p className="text-sm font-medium">{p.title}</p><p className="mt-1 text-xs text-muted">{p.customer} · {p.order_number} · {stateNames[p.state]??p.state}</p></div><div className="flex gap-2">{p.crm_activity_id&&<LinkButton href="/agenda" variant="secondary" size="sm">CRM-taken</LinkButton>}{data.canAct&&<LinkButton href={center(p.order_id)} variant="secondary" size="sm" prefetch={false}>Bekijken / beoordelen</LinkButton>}</div></div>)}</CardContent></Card>
+      <div className="grid items-start gap-4 xl:grid-cols-2">{Object.entries(WINDOWS_AGENTS).map(([key,label])=><Card key={key}><CardHeader><CardTitle>{label}</CardTitle></CardHeader><CardContent className="space-y-4">{!data.runs.some(r=>r.agent===key)&&<p className="text-sm text-muted">Nog geen controle uitgevoerd.</p>}{data.runs.filter(r=>r.agent===key).map(run=><details key={run.id} className="rounded-lg border p-3"><summary className="cursor-pointer text-sm"><strong>{run.customer||run.order_number||"Platform"}</strong><span className="ml-2 text-xs text-muted">{stateNames[run.state]??run.state}</span>{run.findings.some(f=>f.severity!=="info")&&<span className="ml-2 text-xs text-amber-600">Aandacht nodig</span>}</summary><div className="mt-3 space-y-3 text-sm"><p>{run.summary}</p>{run.findings.length>0&&<ul className="space-y-2">{run.findings.map((f,i)=><li key={`${f.code}-${i}`} className={`border-l-2 pl-3 ${f.severity==="error"?"border-red-500":f.severity==="warning"?"border-amber-500":"border-muted"}`}>{f.message}</li>)}</ul>}<div className="flex flex-wrap gap-3 text-xs">{run.order_id&&data.canAct&&<Link href={center(run.order_id)} prefetch={false} className="underline">Order en bronnen</Link>}{run.contact_id&&<Link href={`/contacts/${run.contact_id}`} className="underline">Dealercontact: {run.dealer_name||"CRM"}</Link>}</div></div></details>)}</CardContent></Card>)}</div>
+      <p className="text-xs text-muted">Goedgekeurde taken komen bij het gekoppelde dealercontact in het CRM. Berichten worden pas na goedkeuring verzonden; orderprijzen en specificaties blijven onder de bestaande ordergoedkeuring.</p>
+    </div>}
+  </>;
+}
