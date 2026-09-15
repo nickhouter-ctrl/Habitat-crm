@@ -1,3 +1,5 @@
+import { auth } from "@/auth";
+import { MarkRead } from "../mark-read";
 import { saveReplyDraft } from "../../assistent/actions";
 import { MAIL_GROUPS, type MailGroup } from "@/lib/assistant/mail-rules";
 import { asc, desc, eq, ilike, or } from "drizzle-orm";
@@ -114,8 +116,10 @@ export default async function MailDetailPage({
 
   const metaAttachments = (mail.attachments as Array<{ filename: string; size: number; contentType: string }>) ?? [];
 
+  const session = await auth();
   return (
     <>
+      {!mail.readAt && session?.user?.role !== "viewer" && <MarkRead id={mail.id} />}
       <PageHeader
         title={mail.subject || "(geen onderwerp)"}
         subtitle={`${formatDate(mail.receivedAt)} · ${mail.fromName ?? mail.fromEmail ?? "?"}`}

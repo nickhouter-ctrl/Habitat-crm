@@ -248,6 +248,8 @@ export async function replyToMail(emailId: string, formData: FormData) {
   }
 
   if (sent) {
+    await db.update(emailInbox).set({ readAt: mail.readAt ?? new Date() }).where(eq(emailInbox.id, emailId));
+    revalidatePath("/", "layout");
     await db.update(inboxSuggestions).set({ status: "reviewed", draft: null, draftSubject: null, draftAttachments: [], needsReply: false, reviewedBy: user.id, reviewedAt: new Date(), updatedAt: new Date() }).where(eq(inboxSuggestions.emailId, emailId));
     const archiefTekst =
       message + (bijlagePaden.length > 0 ? `\n\n📎 ${bijlagePaden.join(", ")}` : "");

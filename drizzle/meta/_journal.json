@@ -435,6 +435,13 @@
       "when": 1789285997275,
       "tag": "0061_blushing_nightmare",
       "breakpoints": true
+    },
+    {
+      "idx": 62,
+      "version": "7",
+      "when": 1789457856889,
+      "tag": "0062_wealthy_argent",
+      "breakpoints": true
     }
   ]
 }

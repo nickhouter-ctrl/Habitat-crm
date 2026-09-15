@@ -14,7 +14,7 @@ import { emailInbox, inboxSuggestions, purchaseInvoiceReviews, quoteRequests } f
 export async function verzamelNavBadges(): Promise<Record<string, number>> {
   const [[pending], [inboxNew], [teKeuren], [suggestions]] = await Promise.all([
     db.select({ value: count() }).from(quoteRequests).where(eq(quoteRequests.status, "pending")),
-    db.select({ value: count() }).from(emailInbox).where(eq(emailInbox.status, "new")),
+    db.select({ value: count() }).from(emailInbox).where(and(sql`${emailInbox.status} <> 'archived'`, isNull(emailInbox.readAt))),
     db
       .select({ value: count() })
       .from(purchaseInvoiceReviews)

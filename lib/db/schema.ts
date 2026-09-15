@@ -2161,6 +2161,8 @@ export const emailInbox = pgTable(
       storagePath?: string;
     }>>(),
     status: text().notNull().default("new"),
+    /** Gelezen in de gedeelde CRM-mailbox, los van verdere afhandeling. */
+    readAt: timestamp({ withTimezone: true }),
     linkedPurchaseOrderId: uuid().references(() => purchaseOrders.id, { onDelete: "set null" }),
     linkedQuoteRequestId: uuid().references(() => quoteRequests.id, { onDelete: "set null" }),
     notes: text(),
