@@ -63,9 +63,16 @@ export async function ingestMails(mails: ParsedEmail[]): Promise<IngestStats> {
   // eigen adres (hi@) doorstuurt. Die override ontbrak, waardoor zulke facturen
   // stilletjes werden overgeslagen.
   const purchaseInbox = process.env.GMAIL_PURCHASE_USER?.trim().toLowerCase() || "";
+  /**
+   * Automatische rapporten die geen mens hoeft te lezen: ze komen dagelijks en
+   * zouden de inbox vullen. DMARC-rapporten zijn XML voor machines; we halen ze
+   * wel binnen (voor de historie) maar meteen als afgehandeld.
+   */
+  const STIL = /(^|[<@.])dmarcreport@microsoft\.com|noreply-dmarc-support@google\.com|dmarc[-.]?(report|rua|noreply)@/i;
 
   for (const m of mails) {
     try {
+      const stil = !!m.fromEmail && STIL.test(m.fromEmail.trim().toLowerCase());
       const toPurchase =
         !!purchaseInbox && `${m.toEmail ?? ""} ${m.ccEmail ?? ""}`.toLowerCase().includes(purchaseInbox);
       if (!toPurchase && m.fromEmail && ownAddresses.has(m.fromEmail.trim().toLowerCase())) {
@@ -92,7 +99,8 @@ export async function ingestMails(mails: ParsedEmail[]): Promise<IngestStats> {
             size: a.size,
             contentType: a.contentType,
           })),
-          status: "new",
+          status: stil ? "archived" : "new",
+          readAt: stil ? new Date() : null,
         })
         .returning({ id: emailInbox.id });
       s.inserted++;
