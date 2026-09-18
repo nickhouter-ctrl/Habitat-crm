@@ -6,34 +6,11 @@
  * `adset_schedule`-blokken voor dagdelen. Let op: Meta rekent zelf in de
  * tijdzone van het advertentie-account — de UI toont die waarschuwing erbij.
  *
- * Puur en isomorf: geen Node-API's, bruikbaar in client én server.
+ * Puur en isomorf: geen Node-API's, bruikbaar in client én server. Het rekenen
+ * met de Madrid-offset zelf staat in lib/tz-madrid.ts, omdat de verzendcron van
+ * de e-mailcampagnes het ook nodig heeft.
  */
-
-/** Minuten die Europe/Madrid op dat moment vóórloopt op UTC (60 of 120). */
-function madridUtcOffsetMinutes(at: Date): number {
-  const dtf = new Intl.DateTimeFormat("en-US", {
-    timeZone: "Europe/Madrid",
-    hour12: false,
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-    second: "2-digit",
-  });
-  const parts = Object.fromEntries(
-    dtf.formatToParts(at).map((p) => [p.type, p.value]),
-  ) as Record<string, string>;
-  const asUtc = Date.UTC(
-    Number(parts.year),
-    Number(parts.month) - 1,
-    Number(parts.day),
-    parts.hour === "24" ? 0 : Number(parts.hour),
-    Number(parts.minute),
-    Number(parts.second),
-  );
-  return Math.round((asUtc - at.getTime()) / 60_000);
-}
+import { madridUtcOffsetMinutes } from "@/lib/tz-madrid";
 
 /**
  * Parse een `datetime-local`-waarde ("2026-08-13T14:30") als Madrid-tijd naar
