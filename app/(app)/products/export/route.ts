@@ -1,10 +1,10 @@
 import ExcelJS from "exceljs";
 import { and, asc, eq, ilike, or } from "drizzle-orm";
 
-import { auth } from "@/auth";
 import { COMPANY } from "@/lib/company";
 import { db } from "@/lib/db";
 import { products, type Product } from "@/lib/db/schema";
+import { weigerRoute } from "@/lib/auth/guards";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -145,8 +145,8 @@ function buildSheet(wb: ExcelJS.Workbook, sheetName: string, titleSuffix: string
 }
 
 export async function GET(req: Request) {
-  const session = await auth();
-  if (!session?.user) return new Response("Niet ingelogd.", { status: 401 });
+  const nee = await weigerRoute("producten");
+  if (nee) return nee;
 
   const url = new URL(req.url);
   const collection = (url.searchParams.get("collection") ?? "").trim();

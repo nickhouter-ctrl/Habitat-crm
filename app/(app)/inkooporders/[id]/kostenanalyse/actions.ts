@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { eq } from "drizzle-orm";
-import { requireWriteUser } from "@/lib/auth/guards";
+import { requireModule } from "@/lib/auth/guards";
 
 import { db } from "@/lib/db";
 import { activities, mailAttachments } from "@/lib/db/schema";
@@ -11,7 +11,7 @@ import { moneyOrNull } from "@/lib/parse-money";
 
 async function requireUser() {
   // Centrale guard: ingelogd én geen alleen-lezen (viewer) account.
-  return requireWriteUser();
+  return requireModule("inkoop");
 }
 
 /** Sla het bedrag op voor één attachment (handmatig invullen). */

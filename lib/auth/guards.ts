@@ -72,17 +72,20 @@ export async function requireAdmin(): Promise<Toegang> {
 }
 
 /**
- * Voor routes zonder layout (PDF's, exports): geen uitzondering maar een
- * redirect naar de startpagina, want een `throw` in een route geeft een
- * 500-pagina in plaats van een nette omleiding.
+ * Voor routes zonder layout (PDF's, exports, doorstappen). Daar draait geen
+ * layout, dus elke route controleert zelf. Geeft `null` als het mag, en anders
+ * het antwoord dat de route moet teruggeven:
+ *
+ *     const nee = await weigerRoute("verkoop");
+ *     if (nee) return nee;
  */
-export async function guardRoute(module: ModuleKey): Promise<Toegang | Response> {
+export async function weigerRoute(module: ModuleKey): Promise<Response | null> {
   const t = await huidigeToegangOfNull();
-  if (!t) return Response.redirect(new URL("/login", process.env.APP_URL ?? "http://localhost:3000"));
+  if (!t) return new Response("Niet ingelogd.", { status: 401 });
   if (!t.magModule(module)) {
     return new Response(GEEN_TOEGANG, { status: 403, headers: { "content-type": "text/plain; charset=utf-8" } });
   }
-  return t;
+  return null;
 }
 
 /** Zodat de zijbalk en de startpagina dezelfde labels gebruiken als de guards. */

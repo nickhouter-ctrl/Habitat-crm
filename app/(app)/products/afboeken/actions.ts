@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
-import { requireWriteUser } from "@/lib/auth/guards";
+import { requireModule } from "@/lib/auth/guards";
 import { reverseStockWriteoff, writeOffStock, type WriteoffReason } from "@/lib/stock-writeoff";
 import { parseMoney } from "@/lib/parse-money";
 
@@ -13,7 +13,7 @@ function aantal(v: string): number {
 }
 
 export async function writeOffStockAction(formData: FormData) {
-  const user = await requireWriteUser();
+  const user = await requireModule("producten");
   const productId = String(formData.get("productId") ?? "").trim();
   const qty = aantal(String(formData.get("qty") ?? ""));
   const reason = String(formData.get("reason") ?? "showroom") as WriteoffReason;
@@ -49,7 +49,7 @@ export async function writeOffStockAction(formData: FormData) {
 }
 
 export async function reverseStockWriteoffAction(id: string) {
-  const user = await requireWriteUser();
+  const user = await requireModule("producten");
   await reverseStockWriteoff({ id, userId: user.id });
   revalidatePath("/products/afboeken");
   revalidatePath("/products");

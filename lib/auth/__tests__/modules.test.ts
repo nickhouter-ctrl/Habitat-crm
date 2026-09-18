@@ -1,4 +1,4 @@
-import { readdirSync, statSync } from "node:fs";
+import { readFileSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 
@@ -157,5 +157,42 @@ describe("onbekende rollen", () => {
 
   it("sturen marketing naar de startpagina", () => {
     expect(startPadVoorRol("marketing")).toBe("/");
+  });
+});
+
+/**
+ * De guards zelf: staat er nog ergens een controle die alleen "mag deze
+ * gebruiker wijzigen" vraagt, zonder te kijken bij welke module het hoort? Dat
+ * is precies het gat waar een beperkt account door glipt — een server action is
+ * met een gewone POST aan te roepen, ook als de pagina niet in het menu staat.
+ */
+describe("guards in de code", () => {
+  const bestanden = (dir: string, uit: string[] = []): string[] => {
+    for (const naam of readdirSync(dir)) {
+      const pad = join(dir, naam);
+      if (statSync(pad).isDirectory()) bestanden(pad, uit);
+      else if (/\.tsx?$/.test(naam)) uit.push(pad);
+    }
+    return uit;
+  };
+
+  it("gebruikt requireWriteUser nergens meer buiten lib/auth", () => {
+    const fout = bestanden(join(process.cwd(), "app"))
+      .concat(bestanden(join(process.cwd(), "lib", "website")))
+      .filter((f) => /requireWriteUser\(/.test(readFileSync(f, "utf8")));
+    expect(fout.map((f) => f.replace(process.cwd() + "/", ""))).toEqual([]);
+  });
+
+  it("laat elk actions-bestand een module of een sterkere eis noemen", () => {
+    const zonder = bestanden(join(process.cwd(), "app", "(app)"))
+      .filter((f) => /\/(actions|.*-actions|queue-invoice)\.ts$/.test(f))
+      .filter((f) => {
+        const src = readFileSync(f, "utf8");
+        // _start slaat de guard bewust over: eigen tegelvoorkeuren.
+        if (f.includes("/_start/")) return false;
+        // Een module, of iets strengers: beheerder of een mogelijkheid.
+        return !/require(?:Module\("|Admin|Capability)/.test(src);
+      });
+    expect(zonder.map((f) => f.replace(process.cwd() + "/", ""))).toEqual([]);
   });
 });

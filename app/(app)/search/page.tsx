@@ -3,6 +3,7 @@ import { Search } from "lucide-react";
 import Link from "next/link";
 
 import { Badge, Card, CardHeader, CardTitle, EmptyState, Input, PageHeader } from "@/components/ui";
+import { huidigeToegangOfNull } from "@/lib/auth/access";
 import { db } from "@/lib/db";
 import { contacts, documents, products, projects, properties } from "@/lib/db/schema";
 import {
@@ -71,34 +72,50 @@ export default async function SearchPage({
   }
 
   const like = `%${q}%`;
+  // Alleen zoeken waar iemand ook mag kijken — en die queries dus ook niet
+  // uitvoeren. Zoeken is anders een achterdeur om het menu heen.
+  const ik = await huidigeToegangOfNull();
+  const zoek = async <T,>(pad: string, uitvoeren: () => Promise<T[]>): Promise<T[]> =>
+    ik?.magPad(pad) ? uitvoeren() : [];
+
   const [cs, prjs, ps, prs, docs] = await Promise.all([
-    db.query.contacts.findMany({
-      where: or(ilike(contacts.name, like), ilike(contacts.email, like)),
-      orderBy: contacts.name,
-      limit: 12,
-      columns: { id: true, name: true, email: true, type: true, stage: true },
-    }),
-    db.query.projects.findMany({
-      where: or(ilike(projects.name, like), ilike(projects.code, like)),
-      limit: 12,
-      columns: { id: true, name: true, status: true, code: true },
-    }),
-    db.query.properties.findMany({
-      where: or(ilike(properties.title, like), ilike(properties.reference, like), ilike(properties.location, like)),
-      limit: 12,
-      columns: { id: true, title: true, reference: true, status: true, location: true },
-    }),
-    db.query.products.findMany({
-      where: or(ilike(products.name, like), ilike(products.sku, like), ilike(products.category, like), ilike(products.collection, like)),
-      orderBy: products.name,
-      limit: 20,
-      columns: { id: true, name: true, category: true, collection: true },
-    }),
-    db.query.documents.findMany({
-      where: or(ilike(documents.docNumber, like), ilike(documents.title, like)),
-      limit: 12,
-      columns: { id: true, kind: true, docNumber: true, title: true, status: true },
-    }),
+    zoek("/contacts", () =>
+      db.query.contacts.findMany({
+        where: or(ilike(contacts.name, like), ilike(contacts.email, like)),
+        orderBy: contacts.name,
+        limit: 12,
+        columns: { id: true, name: true, email: true, type: true, stage: true },
+      }),
+    ),
+    zoek("/projects", () =>
+      db.query.projects.findMany({
+        where: or(ilike(projects.name, like), ilike(projects.code, like)),
+        limit: 12,
+        columns: { id: true, name: true, status: true, code: true },
+      }),
+    ),
+    zoek("/properties", () =>
+      db.query.properties.findMany({
+        where: or(ilike(properties.title, like), ilike(properties.reference, like), ilike(properties.location, like)),
+        limit: 12,
+        columns: { id: true, title: true, reference: true, status: true, location: true },
+      }),
+    ),
+    zoek("/products", () =>
+      db.query.products.findMany({
+        where: or(ilike(products.name, like), ilike(products.sku, like), ilike(products.category, like), ilike(products.collection, like)),
+        orderBy: products.name,
+        limit: 20,
+        columns: { id: true, name: true, category: true, collection: true },
+      }),
+    ),
+    zoek("/quotes", () =>
+      db.query.documents.findMany({
+        where: or(ilike(documents.docNumber, like), ilike(documents.title, like)),
+        limit: 12,
+        columns: { id: true, kind: true, docNumber: true, title: true, status: true },
+      }),
+    ),
   ]);
 
   const total = cs.length + prjs.length + ps.length + prs.length + docs.length;

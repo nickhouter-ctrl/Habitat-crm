@@ -17,10 +17,10 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
-import { auth } from "@/auth";
 import { isVideoContentType } from "@/lib/marketing/video";
 
 import { emptySummary, ingestFromBytes, ingestVideoFromBytes, tally } from "../_ingest";
+import { weigerRoute } from "@/lib/auth/guards";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 120;
@@ -31,16 +31,8 @@ const fieldsSchema = z.object({
 });
 
 export async function POST(req: Request) {
-  const session = await auth();
-  if (!session?.user) {
-    return NextResponse.json({ error: "Niet ingelogd." }, { status: 401 });
-  }
-  if ((session.user as { role?: string }).role === "viewer") {
-    return NextResponse.json(
-      { error: "Alleen-lezen account: uploaden is niet toegestaan voor de rol 'viewer'." },
-      { status: 403 },
-    );
-  }
+  const nee = await weigerRoute("advertenties");
+  if (nee) return nee;
 
   const form = await req.formData().catch(() => null);
   if (!form) {

@@ -10,7 +10,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
 
-import { requireWriteUser } from "@/lib/auth/guards";
+import { requireModule } from "@/lib/auth/guards";
 import { db } from "@/lib/db";
 import { brands, products, type CatalogAttachment } from "@/lib/db/schema";
 import { deleteBrandLogoByUrl, uploadBrandLogo } from "@/lib/storage";
@@ -77,7 +77,7 @@ function toValues(v: z.infer<typeof brandSchema>, slug: string) {
 }
 
 export async function createBrand(formData: FormData) {
-  await requireWriteUser();
+  await requireModule("producten");
   const parsed = brandSchema.safeParse(Object.fromEntries(formData));
   if (!parsed.success) redirect("/merken/new?error=validation");
   const slug = await vrijeSlug(parsed.data.slug || parsed.data.name);
@@ -90,7 +90,7 @@ export async function createBrand(formData: FormData) {
 }
 
 export async function updateBrand(id: string, formData: FormData) {
-  await requireWriteUser();
+  await requireModule("producten");
   const parsed = brandSchema.safeParse(Object.fromEntries(formData));
   if (!parsed.success) redirect(`/merken/${id}?error=validation`);
   const slug = await vrijeSlug(parsed.data.slug || parsed.data.name, id);
@@ -104,7 +104,7 @@ export async function updateBrand(id: string, formData: FormData) {
 }
 
 export async function uploadBrandLogoAction(id: string, formData: FormData) {
-  await requireWriteUser();
+  await requireModule("producten");
   const file = formData.get("logo");
   if (!(file instanceof File) || file.size === 0) redirect(`/merken/${id}?error=upload`);
   const huidig = await db.query.brands.findFirst({ where: eq(brands.id, id), columns: { logoUrl: true } });
@@ -123,7 +123,7 @@ export async function uploadBrandLogoAction(id: string, formData: FormData) {
 }
 
 export async function removeBrandLogo(id: string) {
-  await requireWriteUser();
+  await requireModule("producten");
   const rij = await db.query.brands.findFirst({ where: eq(brands.id, id), columns: { logoUrl: true } });
   await db.update(brands).set({ logoUrl: null, updatedAt: new Date() }).where(eq(brands.id, id));
   if (rij?.logoUrl) await deleteBrandLogoByUrl(rij.logoUrl);
@@ -136,7 +136,7 @@ export async function removeBrandLogo(id: string) {
  * zouden die stilletjes hun merk kwijtraken (de FK staat op set null).
  */
 export async function deleteBrand(id: string) {
-  await requireWriteUser();
+  await requireModule("producten");
   const [{ n }] = await db
     .select({ n: sql<number>`count(*)::int` })
     .from(products)
@@ -149,7 +149,7 @@ export async function deleteBrand(id: string) {
 
 /** Bijlagen (brochures, prijslijsten) bij een merk registreren na een upload. */
 export async function attachBrandFiles(id: string, bestanden: CatalogAttachment[]) {
-  await requireWriteUser();
+  await requireModule("producten");
   const veilig = bestanden.filter((f) => f.path.startsWith(`brands/${id}/`));
   if (!veilig.length) return;
   const rij = await db.query.brands.findFirst({ where: eq(brands.id, id), columns: { attachments: true } });

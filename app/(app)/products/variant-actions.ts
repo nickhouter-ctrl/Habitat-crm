@@ -14,7 +14,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
 
-import { requireWriteUser } from "@/lib/auth/guards";
+import { requireModule } from "@/lib/auth/guards";
 import { db } from "@/lib/db";
 import { brands, productVariants, products } from "@/lib/db/schema";
 import { deleteBrandLogoByUrl, uploadVariantImage } from "@/lib/storage";
@@ -84,7 +84,7 @@ const dec = (v: number | null | undefined) => (v == null ? null : String(v));
  * elke kleur), dus een voorstel zonder artikelcode wordt geen uitvoering.
  */
 export async function saveVariants(productId: string, formData: FormData) {
-  await requireWriteUser();
+  await requireModule("producten");
   const terug = (q: string) => redirect(`/products/${productId}/edit?${q}#uitvoeringen`);
 
   const parsed = matrixSchema.safeParse(Object.fromEntries(formData));
@@ -192,7 +192,7 @@ export async function saveVariants(productId: string, formData: FormData) {
 
 /** Foto van één uitvoering — de reden dat kleuren een eigen rij hebben. */
 export async function uploadVariantPhoto(variantId: string, formData: FormData) {
-  await requireWriteUser();
+  await requireModule("producten");
   const variant = await db.query.productVariants.findFirst({
     where: eq(productVariants.id, variantId),
     columns: { id: true, productId: true, imageUrl: true },

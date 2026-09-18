@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 const m = vi.hoisted(() => ({ auth: vi.fn(), update: vi.fn(), set: vi.fn(), where: vi.fn(), returning: vi.fn(), refresh: vi.fn() }));
-vi.mock("@/lib/auth/guards", () => ({ requireWriteUser: m.auth }));
+vi.mock("@/lib/auth/guards", () => ({ requireModule: m.auth }));
 vi.mock("next/cache", () => ({ revalidatePath: m.refresh }));
 vi.mock("@/lib/db", () => ({ db: { update: m.update } }));
 import { markMailRead } from "../../app/(app)/inbox/read-actions";

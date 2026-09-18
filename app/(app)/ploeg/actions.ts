@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { eq } from "drizzle-orm";
 import { z } from "zod";
-import { requireWriteUser } from "@/lib/auth/guards";
+import { requireModule } from "@/lib/auth/guards";
 
 import { auth } from "@/auth";
 import { db } from "@/lib/db";
@@ -13,7 +13,7 @@ import { moneyOrNull } from "@/lib/parse-money";
 
 async function requireUser() {
   // Centrale guard: ingelogd én geen alleen-lezen (viewer) account.
-  return requireWriteUser();
+  return requireModule("projects");
 }
 
 // Zie lib/parse-money.ts: "28.000000" is 28, geen 28 miljoen.

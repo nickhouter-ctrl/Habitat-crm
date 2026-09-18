@@ -11,6 +11,7 @@ import { loadQuoteChecks } from "@/lib/assistant/overview";
 import { loadProjectFunding } from "@/lib/project-funding";
 import { and, count, eq, inArray, isNotNull, isNull, sql } from "drizzle-orm";
 
+import { magAlles } from "@/lib/auth/modules";
 import { db } from "@/lib/db";
 import { aanvragenTeOpvolgen, offertesTeOpvolgen } from "@/lib/opvolging";
 import { OFFERTE_TE_FACTUREREN } from "@/lib/quote-status";
@@ -51,7 +52,51 @@ const RANG: Record<string, number> = {
   "po-deze-week": 9,
 };
 
-export async function verzamelDagtaken(): Promise<Dagtaak[]> {
+/**
+ * Voor een rol die niet overal bij mag (marketing): alleen de signalen uit haar
+ * eigen modules, en — belangrijker — alleen die queries. De volle versie leest
+ * omzet, marges en openstaande facturen; die getallen mogen niet eens langs de
+ * server komen voor iemand die ze niet hoort te zien.
+ */
+async function dagtakenBeperkt(): Promise<Dagtaak[]> {
+  const [[aanvragen], opvolgAanvragen, [suggestions]] = await Promise.all([
+    db.select({ n: sql<number>`count(*)::int` }).from(quoteRequests).where(eq(quoteRequests.status, "pending")),
+    aanvragenTeOpvolgen(),
+    db.select({ n: sql<number>`count(*)::int` }).from(inboxSuggestions).where(openVoorstellenFilter),
+  ]);
+
+  const ev = (n: number, enkel: string, meer: string) => (n === 1 ? enkel : meer);
+  const taken: Dagtaak[] = [];
+  if ((suggestions?.n ?? 0) > 0) {
+    taken.push({ key: "assistent-mail", emoji: "✉️", tekst: "mailvoorstellen of automatisch opgeborgen berichten te controleren.", href: "/assistent", tone: "accent", prioriteit: "middel", aantal: suggestions.n });
+  }
+  if (opvolgAanvragen.length > 0) {
+    taken.push({
+      key: "aanvragen-opvolgen",
+      emoji: "⏳",
+      tekst: `aanvra${ev(opvolgAanvragen.length, "ag", "gen")} waar de klant stil is na ons antwoord — herinnering sturen?`,
+      href: "/aanvragen",
+      tone: "warning",
+      prioriteit: "middel",
+      aantal: opvolgAanvragen.length,
+    });
+  }
+  if ((aanvragen?.n ?? 0) > 0) {
+    taken.push({
+      key: "open-aanvragen",
+      emoji: "📩",
+      tekst: `open offerte-aanvra${ev(aanvragen.n, "ag", "gen")} via de website.`,
+      href: "/aanvragen?status=pending",
+      tone: "accent",
+      prioriteit: "middel",
+      aantal: aanvragen.n,
+    });
+  }
+  return taken.sort((a, b) => PRIO_VOLGORDE[a.prioriteit] - PRIO_VOLGORDE[b.prioriteit] || (RANG[a.key] ?? 99) - (RANG[b.key] ?? 99));
+}
+
+export async function verzamelDagtaken(rol?: string): Promise<Dagtaak[]> {
+  if (rol !== undefined && !magAlles(rol)) return dagtakenBeperkt();
   const now = new Date();
   const today = now.toISOString().slice(0, 10);
   const openExpr = sql`${documents.status} not in ('paid', 'void', 'draft')`;

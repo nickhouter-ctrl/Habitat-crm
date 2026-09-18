@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { and, asc, eq, ilike, isNotNull, isNull, sql } from "drizzle-orm";
 import { z } from "zod";
-import { requireWriteUser } from "@/lib/auth/guards";
+import { requireModule } from "@/lib/auth/guards";
 
 import { auth } from "@/auth";
 import { db } from "@/lib/db";
@@ -103,7 +103,7 @@ function dateOrNull(v?: string) {
 
 async function requireUser() {
   // Centrale guard: ingelogd én geen alleen-lezen (viewer) account.
-  return requireWriteUser();
+  return requireModule("inkoop");
 }
 
 export async function createPurchaseOrder(formData: FormData) {
@@ -375,7 +375,7 @@ async function koppelAlsUren(
  * portaal-uren (selfLoggedAt) blijven altijd staan.
  */
 export async function verdeelPurchaseOrder(id: string, formData: FormData) {
-  await requireWriteUser();
+  await requireModule("inkoop");
   const po = await db.query.purchaseOrders.findFirst({ where: eq(purchaseOrders.id, id) });
   if (!po) return;
 

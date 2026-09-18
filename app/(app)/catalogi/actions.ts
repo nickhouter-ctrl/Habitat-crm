@@ -1,14 +1,14 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { requireWriteUser } from "@/lib/auth/guards";
+import { requireModule } from "@/lib/auth/guards";
 
 import { auth } from "@/auth";
 import { deleteCatalogFile, uploadCatalogFile } from "@/lib/storage";
 
 async function requireUser() {
   // Centrale guard: ingelogd én geen alleen-lezen (viewer) account.
-  return requireWriteUser();
+  return requireModule("prijzen");
 }
 
 /** Upload een catalogus/brochure-PDF naar de catalogi-bibliotheek. */

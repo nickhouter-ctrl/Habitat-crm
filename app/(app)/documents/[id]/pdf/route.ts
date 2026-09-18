@@ -1,11 +1,11 @@
 import { eq } from "drizzle-orm";
 
-import { auth } from "@/auth";
 import { db } from "@/lib/db";
 import { companies, documents } from "@/lib/db/schema";
 import { renderDocumentPdf } from "@/lib/document-pdf";
 import { enrichDocItemsForPdf } from "@/lib/document-pdf-data";
 import { billingAddressLines } from "@/lib/documents";
+import { weigerRoute } from "@/lib/auth/guards";
 
 async function fetchImage(url: string): Promise<{ data: Buffer; format: "jpg" | "png" } | null> {
   try {
@@ -25,8 +25,8 @@ export async function GET(
   _req: Request,
   ctx: { params: Promise<{ id: string }> },
 ) {
-  const session = await auth();
-  if (!session?.user) return new Response("Unauthorized", { status: 401 });
+  const nee = await weigerRoute("verkoop");
+  if (nee) return nee;
 
   const { id } = await ctx.params;
   const doc = await db.query.documents.findFirst({

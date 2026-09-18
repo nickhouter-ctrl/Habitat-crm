@@ -21,12 +21,13 @@
 import { and, eq, isNotNull, or } from "drizzle-orm";
 import { NextResponse } from "next/server";
 
-import { auth } from "@/auth";
 import { requireCron } from "@/lib/auth/require-cron";
 import { db } from "@/lib/db";
 import { products } from "@/lib/db/schema";
 import { isVideoContentType } from "@/lib/marketing/video";
 import { crawlWebsiteMedia } from "@/lib/marketing/website-crawl";
+
+import { weigerRoute } from "@/lib/auth/guards";
 
 import {
   emptySummary,
@@ -145,15 +146,7 @@ export async function GET(req: Request) {
 }
 
 export async function POST() {
-  const session = await auth();
-  if (!session?.user) {
-    return NextResponse.json({ error: "Niet ingelogd." }, { status: 401 });
-  }
-  if ((session.user as { role?: string }).role === "viewer") {
-    return NextResponse.json(
-      { error: "Alleen-lezen account: synchroniseren is niet toegestaan voor de rol 'viewer'." },
-      { status: 403 },
-    );
-  }
+  const nee = await weigerRoute("advertenties");
+  if (nee) return nee;
   return runSync();
 }

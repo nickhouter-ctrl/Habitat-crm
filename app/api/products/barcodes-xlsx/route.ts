@@ -18,12 +18,12 @@ import { and, gte, isNotNull, like, sql } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import * as XLSX from "xlsx";
 
-import { auth } from "@/auth";
 import { COMPANY } from "@/lib/company";
 import { db } from "@/lib/db";
 import { products } from "@/lib/db/schema";
 import { localizeEthick } from "@/lib/ethick-i18n";
 import { resolveGpc } from "@/lib/gs1/gpc-map";
+import { weigerRoute } from "@/lib/auth/guards";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -106,8 +106,8 @@ function gs1FunctionalName(name: string, sku: string | null, used: Set<string>):
 }
 
 export async function GET(req: Request) {
-  const session = await auth();
-  if (!session?.user) return NextResponse.json({ error: "unauth" }, { status: 401 });
+  const nee = await weigerRoute("producten");
+  if (nee) return nee;
 
   const url = new URL(req.url);
   const since = url.searchParams.get("since");

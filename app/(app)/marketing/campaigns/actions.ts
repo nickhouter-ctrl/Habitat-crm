@@ -14,7 +14,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
 
-import { requireWriteUser } from "@/lib/auth/guards";
+import { requireModule } from "@/lib/auth/guards";
 import { ensureRenderForSpec } from "@/lib/creatives/export";
 import { db } from "@/lib/db";
 import { adCampaigns, adSets, assets, creativeSpecs } from "@/lib/db/schema";
@@ -50,7 +50,7 @@ export async function createCampaign(
   _prev: CampaignActionState,
   formData: FormData,
 ): Promise<CampaignActionState> {
-  await requireWriteUser();
+  await requireModule("advertenties");
   const parsed = campaignSchema.safeParse({
     name: formData.get("name"),
     objective: formData.get("objective"),
@@ -94,7 +94,7 @@ export async function saveAdSet(
   _prev: CampaignActionState,
   formData: FormData,
 ): Promise<CampaignActionState> {
-  await requireWriteUser();
+  await requireModule("advertenties");
 
   const parsed = adSetSchema.safeParse({
     campaignId: formData.get("campaignId"),
@@ -174,7 +174,7 @@ export async function saveAdSet(
  * terug. Idempotent: een campagne die al in Meta staat geeft direct succes.
  */
 export async function pushCampaignAction(campaignId: string): Promise<{ error?: string }> {
-  await requireWriteUser();
+  await requireModule("advertenties");
   const id = z.uuid().safeParse(campaignId);
   if (!id.success) return { error: "Ongeldige campagne." };
   const result = await pushCampaignToMeta(id.data);
@@ -188,7 +188,7 @@ export async function pushAdSetAction(
   adSetId: string,
   campaignId: string,
 ): Promise<{ error?: string }> {
-  await requireWriteUser();
+  await requireModule("advertenties");
   const ids = z.object({ adSetId: z.uuid(), campaignId: z.uuid() }).safeParse({ adSetId, campaignId });
   if (!ids.success) return { error: "Ongeldige advertentieset." };
   const result = await pushAdSetToMeta(ids.data.adSetId);
@@ -214,7 +214,7 @@ export async function linkMetaIdAction(
   _prev: CampaignActionState,
   formData: FormData,
 ): Promise<CampaignActionState> {
-  await requireWriteUser();
+  await requireModule("advertenties");
   const parsed = linkSchema.safeParse({
     kind: formData.get("kind"),
     localId: formData.get("localId"),
@@ -237,7 +237,7 @@ export async function linkMetaIdAction(
  * publicatie). Aangeroepen door de publicatie-flow in de UI.
  */
 export async function prepareRenderAction(specId: string): Promise<{ error?: string }> {
-  await requireWriteUser();
+  await requireModule("advertenties");
   const id = z.uuid().safeParse(specId);
   if (!id.success) return { error: "Ongeldige creative." };
   const result = await ensureRenderForSpec(id.data);
@@ -248,7 +248,7 @@ export async function prepareRenderAction(specId: string): Promise<{ error?: str
 
 /** Handmatige statussync — de cron doet dit ook, dit is de "Nu verversen"-knop. */
 export async function syncNowAction(): Promise<void> {
-  await requireWriteUser();
+  await requireModule("advertenties");
   try {
     await syncMetaStatuses();
   } catch (err) {
@@ -276,7 +276,7 @@ export async function generateAdTextAction(input: unknown): Promise<{
   name?: string;
   error?: string;
 }> {
-  await requireWriteUser();
+  await requireModule("advertenties");
   const parsed = adTextSchema.safeParse(input);
   if (!parsed.success) return { error: "Kies eerst een creative of kaartjes." };
   const req = parsed.data;

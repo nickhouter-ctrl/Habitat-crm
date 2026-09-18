@@ -57,7 +57,10 @@ export default async function SettingsPage() {
   const webhookSecretSet = Boolean(process.env.HOLDED_WEBHOOK_SECRET);
 
   const [recentEvents, teamMembers] = await Promise.all([
-    db.query.webhookEvents.findMany({ orderBy: desc(webhookEvents.receivedAt), limit: 15 }),
+    // Webhook-berichten bevatten Holded-gegevens; alleen voor beheerders.
+    isAdmin
+      ? db.query.webhookEvents.findMany({ orderBy: desc(webhookEvents.receivedAt), limit: 15 })
+      : Promise.resolve([] as (typeof webhookEvents.$inferSelect)[]),
     isAdmin
       ? db
           .select({ id: users.id, name: users.name, email: users.email, role: users.role, phone: users.phone, createdAt: users.createdAt })
@@ -69,7 +72,7 @@ export default async function SettingsPage() {
   return (
     <>
       <PageHeader title="Instellingen" subtitle="Medewerkers, integraties en account" />
-      <Card className="mb-5"><CardHeader><CardTitle>Klanttoegang</CardTitle></CardHeader><div className="flex flex-wrap gap-4 px-5 pb-5 text-sm"><a className="underline" href="/accounts">Website-accounts en aanvragen</a><a className="underline" href="/windows-accounts">Windows-accounts en aanvragen</a><a className="underline" href="/contacts">Toegang beheren via een contact</a></div></Card>
+      {ik?.magModule("klantaccounts") && <Card className="mb-5"><CardHeader><CardTitle>Klanttoegang</CardTitle></CardHeader><div className="flex flex-wrap gap-4 px-5 pb-5 text-sm"><a className="underline" href="/accounts">Website-accounts en aanvragen</a><a className="underline" href="/windows-accounts">Windows-accounts en aanvragen</a><a className="underline" href="/contacts">Toegang beheren via een contact</a></div></Card>}
 
       {isAdmin && (
         <Card className="mb-4 overflow-hidden">
@@ -187,7 +190,7 @@ export default async function SettingsPage() {
       )}
 
       <div className="grid gap-4 lg:grid-cols-2">
-        <Card>
+        {isAdmin && <Card>
           <CardHeader>
             <CardTitle>Holded</CardTitle>
             <SyncHoldedButton />
@@ -221,7 +224,7 @@ export default async function SettingsPage() {
               </p>
             )}
           </CardContent>
-        </Card>
+        </Card>}
 
         <Card>
           <CardHeader>
@@ -258,7 +261,7 @@ export default async function SettingsPage() {
         </Card>
       </div>
 
-      <Card className="mt-4 overflow-hidden">
+      {isAdmin && <Card className="mt-4 overflow-hidden">
         <CardHeader>
           <CardTitle>Recente Holded-webhooks</CardTitle>
         </CardHeader>
@@ -296,7 +299,7 @@ export default async function SettingsPage() {
             </TBody>
           </Table>
         )}
-      </Card>
+      </Card>}
     </>
   );
 }

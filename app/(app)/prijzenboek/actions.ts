@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { asc, eq, sql } from "drizzle-orm";
 
-import { requireWriteUser } from "@/lib/auth/guards";
+import { requireModule } from "@/lib/auth/guards";
 import { db } from "@/lib/db";
 import {
   activities,
@@ -40,7 +40,7 @@ import { suggestedPrice } from "@/lib/pricing";
 /* ───────────────────────────── beheer ───────────────────────────── */
 
 export async function savePriceBookItem(id: string, formData: FormData) {
-  await requireWriteUser();
+  await requireModule("prijzen");
   // Kostopbouw wint van het kostveld: staan er uren of materiaal, dan is de
   // kost daaruit afgeleid (het veld staat in de UI ook op slot). Zo kan een
   // wijziging van het ploegtarief niet stilletjes naast een oud kostbedrag
@@ -92,7 +92,7 @@ export async function savePriceBookItem(id: string, formData: FormData) {
 }
 
 export async function addPriceBookItem(chapter: string, formData: FormData) {
-  await requireWriteUser();
+  await requireModule("prijzen");
   const kost = parseMoney(String(formData.get("costEur") ?? ""));
   const marge = DEFAULT_PRIJZENBOEK_MARGE;
   await db.insert(priceBookItems).values({
@@ -111,19 +111,19 @@ export async function addPriceBookItem(chapter: string, formData: FormData) {
 
 /** Ververs de "eigen collectie"-badkamerposten uit de actuele catalogusprijzen. */
 export async function verversSanitairUitCatalogus() {
-  await requireWriteUser();
+  await requireModule("prijzen");
   await syncSanitairPrijzen();
   revalidatePath("/prijzenboek");
 }
 
 export async function togglePriceBookActive(id: string, actief: boolean) {
-  await requireWriteUser();
+  await requireModule("prijzen");
   await db.update(priceBookItems).set({ active: actief, updatedAt: new Date() }).where(eq(priceBookItems.id, id));
   revalidatePath("/prijzenboek");
 }
 
 export async function deletePriceBookItem(id: string) {
-  await requireWriteUser();
+  await requireModule("prijzen");
   await db.delete(priceBookItems).where(eq(priceBookItems.id, id));
   revalidatePath("/prijzenboek");
 }
@@ -139,7 +139,7 @@ export async function deletePriceBookItem(id: string) {
  * prijzenboek; regels zonder prijs worden overgeslagen en gemeld.
  */
 export async function createQuoteFromPriceBook(formData: FormData) {
-  const user = await requireWriteUser();
+  const user = await requireModule("prijzen");
   const contactId = uuidOrNull(formData.get("contactId"));
   let projectId = uuidOrNull(formData.get("projectId"));
 

@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 const m=vi.hoisted(()=>({guard:vi.fn(),contact:vi.fn(),matches:vi.fn(),grant:vi.fn(),insert:vi.fn(),update:vi.fn(),revalidate:vi.fn()}));
-vi.mock("@/lib/auth/guards",()=>({requireWriteUser:m.guard}));
+vi.mock("@/lib/auth/guards",()=>({requireModule:m.guard}));
 vi.mock("next/cache",()=>({revalidatePath:m.revalidate}));
 vi.mock("@/lib/portal/windows-access",()=>({grantWindowsAccess:m.grant}));
 vi.mock("@/lib/gmail",()=>({sendMail:vi.fn()}));

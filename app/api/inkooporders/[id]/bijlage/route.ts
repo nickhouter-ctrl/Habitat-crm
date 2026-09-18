@@ -1,14 +1,15 @@
 import { NextResponse } from "next/server";
 import { eq } from "drizzle-orm";
 import { z } from "zod";
-import { auth } from "@/auth";
 import { db } from "@/lib/db";
 import { purchaseOrders } from "@/lib/db/schema";
 import { normalizePoAttachments } from "@/lib/purchase-orders";
 import { purchaseOrderFileUrl } from "@/lib/storage";
+import { weigerRoute } from "@/lib/auth/guards";
 
 export async function GET(req:Request,{params}:{params:Promise<{id:string}>}) {
-  if(!(await auth())?.user?.id) return new NextResponse("Niet ingelogd",{status:401});
+  const nee = await weigerRoute("inkoop");
+  if (nee) return nee;
   const {id}=await params;
   if(!z.string().uuid().safeParse(id).success) return new NextResponse("Niet gevonden",{status:404});
   const path=new URL(req.url).searchParams.get("path");

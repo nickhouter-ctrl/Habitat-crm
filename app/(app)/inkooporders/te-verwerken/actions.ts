@@ -7,7 +7,7 @@
  */
 import { revalidatePath } from "next/cache";
 
-import { requireWriteUser } from "@/lib/auth/guards";
+import { requireModule } from "@/lib/auth/guards";
 import {
   approveInvoiceReview,
   attachReviewToSibling,
@@ -40,7 +40,7 @@ function refresh() {
 }
 
 export async function approveReviewAction(reviewId: string, formData: FormData) {
-  const user = await requireWriteUser();
+  const user = await requireModule("inkoop");
 
   // Verdeling over meerdere werven: regel-index → project + uren + bedrag.
   //
@@ -81,7 +81,7 @@ export async function approveReviewAction(reviewId: string, formData: FormData) 
 }
 
 export async function rejectReviewAction(reviewId: string, formData: FormData) {
-  const user = await requireWriteUser();
+  const user = await requireModule("inkoop");
   const reason = String(formData.get("reason") ?? "").trim();
   if (!reason) return; // zonder reden afkeuren zegt de leverancier niets
 
@@ -121,7 +121,7 @@ function escapeForHtml(s: string): string {
  * bestand van dezelfde afzender komt daarna niet meer bovenaan de wachtrij.
  */
 export async function ignoreReviewAction(reviewId: string, reden?: string) {
-  const user = await requireWriteUser();
+  const user = await requireModule("inkoop");
   await ignoreInvoiceReview({ reviewId, userId: user.id, reden: reden ?? null });
   refresh();
 }
@@ -129,7 +129,7 @@ export async function ignoreReviewAction(reviewId: string, reden?: string) {
 /** Dit is geen eigen factuur maar een specificatie (urenverantwoording, pakbon)
  *  bij een andere factuur uit dezelfde mail: koppel de PDF daaraan. */
 export async function attachToSiblingAction(reviewId: string, targetReviewId: string) {
-  const user = await requireWriteUser();
+  const user = await requireModule("inkoop");
   await attachReviewToSibling({ reviewId, targetReviewId, userId: user.id });
   refresh();
 }

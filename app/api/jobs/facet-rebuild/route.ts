@@ -6,9 +6,9 @@
  */
 import { NextResponse } from "next/server";
 
-import { auth } from "@/auth";
 import { requireCron } from "@/lib/auth/require-cron";
 import { rebuildFacetPerformance } from "@/lib/marketing/facets";
+import { weigerRoute } from "@/lib/auth/guards";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 300;
@@ -32,8 +32,8 @@ export async function GET(req: Request): Promise<NextResponse> {
   return runRebuild();
 }
 
-export async function POST(): Promise<NextResponse> {
-  const session = await auth();
-  if (!session?.user) return NextResponse.json({ error: "unauth" }, { status: 401 });
+export async function POST(): Promise<Response> {
+  const nee = await weigerRoute("producten");
+  if (nee) return nee;
   return runRebuild();
 }

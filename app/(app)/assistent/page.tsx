@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { and, count, desc, eq, ne } from "drizzle-orm";
-import { auth } from "@/auth";
+import { huidigeToegangOfNull } from "@/lib/auth/access";
 import { db } from "@/lib/db";
 import { emailInbox, inboxSuggestions, purchaseInvoiceReviews } from "@/lib/db/schema";
 import { nogRelevant } from "@/lib/assistant/achterhaald";
@@ -15,9 +15,14 @@ export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 export const metadata = { title: "Assistent — klaar ter controle" };
 export default async function AssistantPage({ searchParams }: { searchParams: Promise<Record<string, string | undefined>> }) {
-  const { group = "all", status = "open", view = "mail" } = await searchParams;
-  const session = await auth();
-  const readOnly = session?.user?.role === "viewer";
+  const { group = "all", status = "open", view: gevraagd = "mail" } = await searchParams;
+  const ik = await huidigeToegangOfNull();
+  const readOnly = !ik?.heeftCap("schrijven");
+  // De tabbladen Projecten en Offertes gaan over dekking, marges en prijzen.
+  // Wie geen bedragen mag zien, houdt het maildeel over — en dan hoeven de
+  // zware funding- en prijscontrolequeries ook niet te draaien.
+  const magBedragen = ik?.heeftCap("bedragen") ?? false;
+  const view = magBedragen ? gevraagd : "mail";
   const [mails, funding, quotes, [invoices]] = await Promise.all([
     db.select({ suggestion: inboxSuggestions, subject: emailInbox.subject, from: emailInbox.fromEmail, received: emailInbox.receivedAt })
       .from(inboxSuggestions).innerJoin(emailInbox, eq(emailInbox.id, inboxSuggestions.emailId))
@@ -25,8 +30,11 @@ export default async function AssistantPage({ searchParams }: { searchParams: Pr
       // gelezen, niet gekoppeld, geen beslissing op de factuurkaart.
       .where(and(eq(inboxSuggestions.status, ["reviewed", "auto_archived"].includes(status) ? status : "open"), status === "open" ? nogRelevant : status === "auto_archived" ? undefined : ne(emailInbox.status, "archived")))
       .orderBy(desc(emailInbox.receivedAt)).limit(200),
-    loadProjectFunding(), loadQuoteChecks(),
-    db.select({ n: count() }).from(purchaseInvoiceReviews).where(eq(purchaseInvoiceReviews.status, "pending")),
+    magBedragen ? loadProjectFunding() : new Map<string, Awaited<ReturnType<typeof loadProjectFunding>> extends Map<string, infer V> ? V : never>(),
+    magBedragen ? loadQuoteChecks() : [],
+    ik?.magPad("/inkooporders/te-verwerken")
+      ? db.select({ n: count() }).from(purchaseInvoiceReviews).where(eq(purchaseInvoiceReviews.status, "pending"))
+      : [{ n: 0 }],
   ]);
   const urgent = mails.filter(m => m.suggestion.category === "urgent");
   const replies = mails.filter(m => m.suggestion.needsReply);
@@ -40,12 +48,19 @@ export default async function AssistantPage({ searchParams }: { searchParams: Pr
       {[
         { title: "Tijdgevoelige mail", n: urgent.length, href: "/assistent?group=urgent" },
         { title: "Te beantwoorden", n: replies.length, href: "/assistent?group=reply" },
-        { title: "Facturen keuren", n: invoices.n, href: "/inkooporders/te-verwerken" },
-        { title: "Projecten met krappe dekking", n: projects.length, href: "/assistent?view=projects" },
+        ...(ik?.magPad("/inkooporders/te-verwerken")
+          ? [{ title: "Facturen keuren", n: invoices.n, href: "/inkooporders/te-verwerken" }]
+          : []),
+        ...(magBedragen
+          ? [{ title: "Projecten met krappe dekking", n: projects.length, href: "/assistent?view=projects" }]
+          : []),
       ].map(c => <Link href={c.href} key={c.title}><Card className="h-full p-4 hover:border-accent"><p className="text-sm text-muted">{c.title}</p><p className="mt-2 text-3xl font-semibold">{c.n}</p></Card></Link>)}
     </div>
     <nav className="mb-5 flex gap-2" aria-label="Assistent onderdelen">
-      {[["mail", "Mail"], ["projects", `Projecten (${projects.length})`], ["quotes", `Offertes (${quoteAlerts.length})`]].map(([key, label]) => <Link key={key} href={`/assistent?view=${key}`} className={`rounded-lg border px-4 py-2 text-sm ${view === key ? "border-accent bg-accent/10 text-accent" : "border-border"}`}>{label}</Link>)}
+      {(magBedragen
+        ? [["mail", "Mail"], ["projects", `Projecten (${projects.length})`], ["quotes", `Offertes (${quoteAlerts.length})`]]
+        : [["mail", "Mail"]]
+      ).map(([key, label]) => <Link key={key} href={`/assistent?view=${key}`} className={`rounded-lg border px-4 py-2 text-sm ${view === key ? "border-accent bg-accent/10 text-accent" : "border-border"}`}>{label}</Link>)}
     </nav>
     {!["projects", "quotes"].includes(view) && <Card className="mb-6 p-5">
       <h2 className="text-lg font-semibold">Mail — voorstellen en concepten</h2>

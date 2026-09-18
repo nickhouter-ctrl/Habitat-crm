@@ -4,7 +4,7 @@ import { z } from "zod";
 import { eq } from "drizzle-orm";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
-import { requireWriteUser } from "@/lib/auth/guards";
+import { requireModule } from "@/lib/auth/guards";
 import { calculate, calculatorSchema, money } from "@/lib/calculator";
 import { loadCalculatorData } from "@/lib/calculator-data";
 import { db } from "@/lib/db";
@@ -14,7 +14,7 @@ import { computeTotals } from "@/lib/documents";
 import { autoTermijnen, betalingsschemaTekst, quoteClauses } from "@/lib/quote-clauses";
 
 export async function createConfiguredQuote(_previous:{error:string},form:FormData):Promise<{error:string}> {
-  const user=await requireWriteUser();
+  const user=await requireModule("calculator");
   const requestId=z.string().uuid().safeParse(form.get("requestId"));
   if(!requestId.success) return {error:"Vernieuw de pagina en herstel je lokale concept."};
   const hex=createHash("sha256").update(`${user.id}:${requestId.data}`).digest("hex");

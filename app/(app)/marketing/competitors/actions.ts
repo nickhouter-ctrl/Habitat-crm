@@ -2,13 +2,13 @@
 
 /**
  * Server actions voor het concurrentendashboard: concurrenten toevoegen en
- * verwijderen. Mutaties via requireWriteUser (viewer = alleen-lezen).
+ * verwijderen. Mutaties via requireModule (viewer = alleen-lezen).
  */
 import { eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
-import { requireWriteUser } from "@/lib/auth/guards";
+import { requireModule } from "@/lib/auth/guards";
 import { db } from "@/lib/db";
 import { competitorAds, competitors } from "@/lib/db/schema";
 
@@ -24,7 +24,7 @@ const competitorSchema = z.object({
 
 /** Voeg een concurrent toe. Geeft een NL-foutzin terug of null bij succes. */
 export async function addCompetitor(formData: FormData): Promise<string | null> {
-  await requireWriteUser();
+  await requireModule("advertenties");
   const parsed = competitorSchema.safeParse({
     name: formData.get("name") ?? "",
     metaPageId: formData.get("metaPageId") ?? "",
@@ -60,7 +60,7 @@ export async function addCompetitor(formData: FormData): Promise<string | null> 
  * nieuwe concurrent bij. Eén klik, geen view_all_page_id-gedoe.
  */
 export async function followPageAction(formData: FormData): Promise<string | null> {
-  await requireWriteUser();
+  await requireModule("advertenties");
   const parsed = z
     .object({
       name: z.string().trim().min(1).max(120),
@@ -95,7 +95,7 @@ export async function followPageAction(formData: FormData): Promise<string | nul
 
 /** Koppel een gevonden page-id aan een bestaande prospect ("Zoek page-ID"). */
 export async function setPageIdAction(formData: FormData): Promise<string | null> {
-  await requireWriteUser();
+  await requireModule("advertenties");
   const parsed = z
     .object({
       id: z.uuid(),
@@ -122,7 +122,7 @@ export async function setPageIdAction(formData: FormData): Promise<string | null
 
 /** Stop met volgen; de opgehaalde advertentiehistorie wordt mee verwijderd. */
 export async function removeCompetitor(formData: FormData): Promise<void> {
-  await requireWriteUser();
+  await requireModule("advertenties");
   const id = z.uuid().safeParse(formData.get("id"));
   if (!id.success) return;
   // Soft links zonder FK-cascade: eerst de advertentiehistorie, dan de rij.

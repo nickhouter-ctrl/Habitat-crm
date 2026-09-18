@@ -3,25 +3,25 @@ import { and, eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
-import { requireWriteUser } from "@/lib/auth/guards";
+import { requireModule } from "@/lib/auth/guards";
 import { db } from "@/lib/db";
 import { emailInbox, quoteRequests } from "@/lib/db/schema";
 import { archiveMail } from "./actions";
 
 export async function archiveReaderMail(id: string, backHref: string) {
-  await requireWriteUser(); z.string().uuid().parse(id);
+  await requireModule("inbox"); z.string().uuid().parse(id);
   await archiveMail(id);
   redirect(backHref.startsWith("/inbox?") ? backHref : "/inbox");
 }
 export async function restoreReaderMail(id: string) {
-  await requireWriteUser(); z.string().uuid().parse(id);
+  await requireModule("inbox"); z.string().uuid().parse(id);
   // Preserve existing project/order/request links when restoring archived mail.
   await db.update(emailInbox).set({ status: "new", updatedAt: new Date() })
     .where(and(eq(emailInbox.id, id), eq(emailInbox.status, "archived")));
   revalidatePath("/inbox"); revalidatePath(`/inbox/${id}`);
 }
 export async function createRequestFromMail(id: string) {
-  await requireWriteUser(); z.string().uuid().parse(id);
+  await requireModule("inbox"); z.string().uuid().parse(id);
   await db.transaction(async tx => {
     const [mail] = await tx.select().from(emailInbox).where(eq(emailInbox.id, id)).for("update");
     if (!mail || mail.linkedQuoteRequestId) return;

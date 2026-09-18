@@ -1,11 +1,11 @@
 import { NextResponse } from "next/server";
 
-import { auth } from "@/auth";
 import { db } from "@/lib/db";
 import { products } from "@/lib/db/schema";
 import { rateToEur } from "@/lib/fx";
 import { anthropicConfigured, extractPurchaseOrderFromPdf } from "@/lib/pdf-extract";
 import { uploadPurchaseOrderFile } from "@/lib/storage";
+import { weigerRoute } from "@/lib/auth/guards";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -20,10 +20,8 @@ function normSku(s: unknown): string {
 }
 
 export async function POST(req: Request) {
-  const session = await auth();
-  if (!session?.user) {
-    return NextResponse.json({ error: "Niet ingelogd." }, { status: 401 });
-  }
+  const nee = await weigerRoute("inkoop");
+  if (nee) return nee;
 
   let file: File | null = null;
   try {

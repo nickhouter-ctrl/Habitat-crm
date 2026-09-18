@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 const m = vi.hoisted(() => ({ auth: vi.fn(), attachment: vi.fn(), insert: vi.fn(), existing: vi.fn(), after: vi.fn(), proposal: vi.fn(), upsert: vi.fn() }));
-vi.mock("@/lib/auth/guards", () => ({ requireWriteUser: m.auth }));
+vi.mock("@/lib/auth/guards", () => ({ requireModule: m.auth }));
 vi.mock("next/server", () => ({ after: m.after }));
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
 vi.mock("@/lib/db", () => ({ db: { query: { mailAttachments: { findFirst: m.attachment }, purchaseInvoiceReviews: { findFirst: m.existing } },

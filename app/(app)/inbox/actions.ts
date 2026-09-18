@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { and, eq, ilike, inArray, isNull, ne, sql } from "drizzle-orm";
-import { requireWriteUser } from "@/lib/auth/guards";
+import { requireModule } from "@/lib/auth/guards";
 
 import { auth } from "@/auth";
 import { extractInvoiceFieldsWithAI } from "@/lib/ai-invoice-extract";
@@ -18,7 +18,7 @@ import { catalogusMailBijlagen, copyMailAttachmentToPoBucket, listCatalogFiles }
 
 async function requireUser() {
   // Centrale guard: ingelogd én geen alleen-lezen (viewer) account.
-  return requireWriteUser();
+  return requireModule("inbox");
 }
 
 /** Link de mail aan een purchase order. Optioneel zet PO direct op "in_transit". */

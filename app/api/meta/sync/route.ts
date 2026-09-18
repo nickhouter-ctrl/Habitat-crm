@@ -8,10 +8,10 @@
  */
 import { NextResponse } from "next/server";
 
-import { auth } from "@/auth";
 import { requireCron } from "@/lib/auth/require-cron";
 import { metaErrorMessage } from "@/lib/meta/client";
 import { syncMetaStatuses } from "@/lib/meta/sync";
+import { weigerRoute } from "@/lib/auth/guards";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 120;
@@ -32,9 +32,7 @@ export async function GET(req: Request) {
 }
 
 export async function POST() {
-  const session = await auth();
-  if (!session?.user) {
-    return NextResponse.json({ error: "Niet ingelogd." }, { status: 401 });
-  }
+  const nee = await weigerRoute("advertenties");
+  if (nee) return nee;
   return runSync();
 }

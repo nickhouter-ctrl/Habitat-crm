@@ -8,17 +8,15 @@
  */
 import { NextResponse } from "next/server";
 
-import { auth } from "@/auth";
 import { searchArchivePages } from "@/lib/meta/ads-archive";
+import { weigerRoute } from "@/lib/auth/guards";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
 export async function GET(req: Request) {
-  const session = await auth();
-  if (!session?.user) {
-    return NextResponse.json({ error: "Niet ingelogd." }, { status: 401 });
-  }
+  const nee = await weigerRoute("advertenties");
+  if (nee) return nee;
   if (!process.env.META_ADS_ARCHIVE_TOKEN) {
     return NextResponse.json(
       {

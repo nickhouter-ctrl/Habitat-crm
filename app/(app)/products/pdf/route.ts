@@ -1,9 +1,9 @@
 import { sql } from "drizzle-orm";
 
-import { auth } from "@/auth";
 import { db } from "@/lib/db";
 import { renderReportPdf, type ReportTable } from "@/lib/report-pdf";
 import { formatEUR } from "@/lib/utils";
+import { weigerRoute } from "@/lib/auth/guards";
 
 export const dynamic = "force-dynamic";
 
@@ -16,8 +16,8 @@ const num = (v: unknown) => Number(v ?? 0);
 const pct = (sale: number, margin: number) => (sale > 0 ? Math.round((margin / sale) * 100) : null);
 
 export async function GET() {
-  const session = await auth();
-  if (!session?.user) return new Response("Unauthorized", { status: 401 });
+  const nee = await weigerRoute("producten");
+  if (nee) return nee;
 
   const [overallRes, byCollectionRes, topValueRes, lowStockRes] = await Promise.all([
     // Identieke definitie als de Producten-pagina: totaal = alle producten,

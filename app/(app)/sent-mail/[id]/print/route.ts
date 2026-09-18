@@ -3,6 +3,7 @@ import { eq } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { sentEmails } from "@/lib/db/schema";
 import { mailHtmlOpgeschoond } from "@/lib/mail-html";
+import { weigerRoute } from "@/lib/auth/guards";
 
 export const dynamic = "force-dynamic";
 
@@ -24,6 +25,8 @@ function escapeHtml(s: string): string {
 }
 
 export async function GET(req: Request, ctx: { params: Promise<{ id: string }> }) {
+  const nee = await weigerRoute("inbox");
+  if (nee) return nee;
   const { id } = await ctx.params;
   const mail = await db.query.sentEmails.findFirst({ where: eq(sentEmails.id, id) });
   if (!mail) return new Response("Niet gevonden", { status: 404 });

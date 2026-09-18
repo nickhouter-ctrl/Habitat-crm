@@ -4,7 +4,7 @@ import { count, eq, isNotNull } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
-import { requireWriteUser } from "@/lib/auth/guards";
+import { requireModule } from "@/lib/auth/guards";
 
 import { auth } from "@/auth";
 import { db } from "@/lib/db";
@@ -162,7 +162,7 @@ function toValues(v: z.infer<typeof productSchema>, merk: { tradeDiscountPct: st
 
 async function requireUser() {
   // Centrale guard: ingelogd én geen alleen-lezen (viewer) account.
-  return requireWriteUser();
+  return requireModule("producten");
 }
 
 /** Het merk erbij halen, want dat bepaalt of er een aannemerskorting geldt. */

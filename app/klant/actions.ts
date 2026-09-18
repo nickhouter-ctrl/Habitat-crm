@@ -226,8 +226,8 @@ export async function verwerkAanmelding(token: string, formData: FormData) {
 
 /** Interne actie (staff): maak een deelbare aanmeldlink (14 dagen geldig). */
 export async function maakAanmeldlink(): Promise<string> {
-  const { requireWriteUser } = await import("@/lib/auth/guards");
-  await requireWriteUser();
+  const { requireModule } = await import("@/lib/auth/guards");
+  await requireModule("klantaccounts");
   return `${PORTAAL_URL}/klant/aanmelden/${maakAanmeldToken()}`;
 }
 
@@ -237,8 +237,8 @@ export async function maakAanmeldlink(): Promise<string> {
  * test-banner), maar logt wél in als de klant — om te zien wat die ziet.
  */
 export async function stuurKlantportaalUitnodiging(projectId: string, testNaarMij = false) {
-  const { requireWriteUser } = await import("@/lib/auth/guards");
-  const user = await requireWriteUser();
+  const { requireModule } = await import("@/lib/auth/guards");
+  const user = await requireModule("klantaccounts");
 
   const [proj] = await db
     .select({ id: projects.id, name: projects.name, contactId: projects.contactId })

@@ -51,6 +51,7 @@ import { usePathname } from "next/navigation";
 import { useState } from "react";
 
 import { signOutAction } from "@/lib/auth/actions";
+import { magAlles, magPad } from "@/lib/auth/modules";
 import { ThemaSchakelaar } from "@/components/thema-schakelaar";
 import { GlobalSearch } from "@/components/global-search";
 import { cn, initials } from "@/lib/utils";
@@ -166,13 +167,21 @@ export function AppSidebar({
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
 
+  // Alleen netheid: de echte grens ligt in app/(app)/layout.tsx en in de guards
+  // bij de server actions. Dit voorkomt dode links in het menu.
+  const groups = magAlles(user.role)
+    ? NAV_GROUPS
+    : NAV_GROUPS.map((g) => ({ ...g, items: g.items.filter((i) => magPad(user.role, i.href)) })).filter(
+        (g) => g.items.length > 0,
+      );
+
   const isActive = (href: string, exact?: boolean) =>
     exact ? pathname === href : pathname === href || pathname.startsWith(`${href}/`);
 
   const navBody = (onNavigate?: () => void) => (
     <>
       <nav className="flex-1 space-y-4 overflow-y-auto px-2 py-3">
-        {NAV_GROUPS.map((group, gi) => (
+        {groups.map((group, gi) => (
           <div key={gi} className="space-y-0.5">
             {group.label && (
               <p className="px-2.5 pb-1 text-[10px] font-semibold uppercase tracking-wider text-muted/60">

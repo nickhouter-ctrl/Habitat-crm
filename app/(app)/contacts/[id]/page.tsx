@@ -51,6 +51,7 @@ import { ReminderButton } from "@/components/reminder-button";
 import { ReviewRequestButton } from "@/components/review-request-button";
 import { dossierConfigured } from "@/lib/contact-dossier";
 import { getWindowsReport } from "@/lib/windows-report";
+import { huidigeToegangOfNull } from "@/lib/auth/access";
 import { WindowsOverview } from "@/components/windows-overview";
 import { windowsPortalHref } from "@/lib/windows-financials";
 import { addContactNote, deleteContact, verversContactDossier } from "../actions";
@@ -99,6 +100,8 @@ export default async function ContactDetailPage({
 }) {
   const { id } = await params;
   const sp = await searchParams;
+  const ik = await huidigeToegangOfNull();
+  const magBedragen = ik?.heeftCap("bedragen") ?? false;
 
   const contact = await db.query.contacts.findFirst({
     where: eq(contacts.id, id),
@@ -213,7 +216,7 @@ export default async function ContactDetailPage({
   const klantMargePct = margeRevenue > 0 ? Math.round((klantMarge / margeRevenue) * 100) : null;
   const margeTotalLines = marginItems.length;
 
-  const TABS = [
+  const ALLE_TABS = [
     { key: "overzicht", label: "Overzicht" },
     { key: "offertes", label: "Offertes" },
     { key: "facturen", label: "Facturen" },
@@ -222,7 +225,12 @@ export default async function ContactDetailPage({
     { key: "kozijnen", label: "Kozijnen" },
     { key: "archief", label: "Archief" },
   ] as const;
-  type Tab = (typeof TABS)[number]["key"];
+  type Tab = (typeof ALLE_TABS)[number]["key"];
+  // Wie geen bedragen mag zien, houdt het overzicht: gegevens, notities en
+  // mailhistorie. De tabbladen met offertes, facturen, pakbonnen, projecten en
+  // het archief staan vol met bedragen en vallen dus weg — ook als het tabblad
+  // met de hand in de URL wordt gezet.
+  const TABS = magBedragen ? ALLE_TABS : ALLE_TABS.filter((t) => t.key === "overzicht");
   const tab: Tab = TABS.some((t) => t.key === sp.tab) ? (sp.tab as Tab) : "overzicht";
   const offertesList = relatedDocs.filter((d) => d.kind === "estimate");
   const facturenList = relatedDocs.filter((d) => d.kind === "invoice" || d.kind === "creditnote");
@@ -345,7 +353,7 @@ export default async function ContactDetailPage({
         </p>
       )}
 
-      {tab !== "kozijnen" && <div className="mb-4 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+      {magBedragen && tab !== "kozijnen" && <div className="mb-4 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
         <StatTile label="Totale omzet" value={formatEUR(omzet)} hint="gefactureerd, incl. BTW" tone="success" />
         <StatTile label="Openstaand" value={formatEUR(openstaand)} hint="te ontvangen" tone={openstaand > 0 ? "warning" : "neutral"} />
         {margeCosted > 0 && (

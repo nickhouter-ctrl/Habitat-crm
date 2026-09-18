@@ -1,9 +1,9 @@
 import { NextResponse } from "next/server";
 
-import { auth } from "@/auth";
 import { uploadBrochurePdf } from "@/lib/storage";
 import { buildWholesaleItems } from "@/lib/wholesale-brochure-data";
 import { renderWholesaleBrochure, type BrochureLocale } from "@/lib/wholesale-brochure-pdf";
+import { weigerRoute } from "@/lib/auth/guards";
 
 const LOCALES: BrochureLocale[] = ["nl", "de", "en", "es"];
 
@@ -12,8 +12,8 @@ const LOCALES: BrochureLocale[] = ["nl", "de", "en", "es"];
 export const maxDuration = 300;
 
 export async function GET(req: Request) {
-  const session = await auth();
-  if (!session?.user) return NextResponse.json({ error: "unauth" }, { status: 401 });
+  const nee = await weigerRoute("prijzen");
+  if (nee) return nee;
 
   const url = new URL(req.url);
   const category = url.searchParams.get("category") || "";

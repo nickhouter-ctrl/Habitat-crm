@@ -5,7 +5,7 @@ import { randomBytes } from "node:crypto";
 import { revalidatePath } from "next/cache";
 import { and, desc, eq, isNull, or, sql } from "drizzle-orm";
 import { z } from "zod";
-import { requireWriteUser } from "@/lib/auth/guards";
+import { requireModule } from "@/lib/auth/guards";
 
 import { contactDisplayName } from "@/lib/contact-name";
 import { db } from "@/lib/db";
@@ -16,7 +16,7 @@ import { sendMail } from "@/lib/gmail";
 
 async function requireUser() {
   // Centrale guard: ingelogd én geen alleen-lezen (viewer) account.
-  return requireWriteUser();
+  return requireModule("klantaccounts");
 }
 
 function refreshAccountPages() {

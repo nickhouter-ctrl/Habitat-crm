@@ -33,7 +33,7 @@ export default async function AppLayout({
     }
   }
 
-  const badges = await verzamelNavBadges();
+  const badges = await verzamelNavBadges(toegang.rol);
 
   return (
     <div className="flex min-h-dvh bg-background">

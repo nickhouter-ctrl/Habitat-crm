@@ -2,7 +2,7 @@
 
 import { and, asc, eq, isNotNull, sql } from "drizzle-orm";
 import { redirect } from "next/navigation";
-import { requireWriteUser } from "@/lib/auth/guards";
+import { requireModule } from "@/lib/auth/guards";
 
 import { COMPANY } from "@/lib/company";
 import { db } from "@/lib/db";
@@ -13,7 +13,7 @@ import { renderPricelistPdf, type PricelistItem, type PricelistLocale } from "@/
 const LOCALES: PricelistLocale[] = ["nl", "de", "en", "es"];
 
 export async function mailPricelist(formData: FormData) {
-  await requireWriteUser();
+  await requireModule("prijzen");
 
   const contactId = String(formData.get("contactId") ?? "");
   const subject = String(formData.get("subject") ?? "").trim() || "Prijslijst verkoop";

@@ -1,8 +1,6 @@
 import { NextResponse } from "next/server";
 import type { NextAuthConfig } from "next-auth";
 
-import { bekendeRol, magAlles, magPad, startPadVoorRol } from "@/lib/auth/modules";
-
 /**
  * Edge-safe Auth.js config — no database, no Node-only deps. Used by `proxy.ts`
  * for route protection. The full config (Drizzle adapter + Credentials provider)
@@ -10,13 +8,14 @@ import { bekendeRol, magAlles, magPad, startPadVoorRol } from "@/lib/auth/module
  *
  * Twee taken:
  *  1. niet ingelogd → naar /login (zoals altijd);
- *  2. ingelogd met een beperkte rol → eerste controle op het pad, en het pad
- *     doorgeven aan de layout via de header `x-pathname` (een layout weet zelf
- *     niet op welke URL hij staat).
+ *  2. het pad doorgeven via de header `x-pathname`, want een layout weet zelf
+ *     niet op welke URL hij staat.
  *
- * De controle hier gebruikt de rol uit de JWT. Dat cookie kan een dag oud zijn,
- * dus het is de snelle voorfilter, niet de grens: `app/(app)/layout.tsx` en de
- * guards in `lib/auth/guards.ts` lezen de rol uit de database.
+ * Bewust GEEN rolcontrole hier. De rol in de JWT kan tot een dag oud zijn
+ * (`updateAge: 24h`), en dan zou iemand die net rechten kreeg alsnog worden
+ * weggestuurd door een cookie. De grens ligt daarom op plekken die de rol uit
+ * de database lezen: `app/(app)/layout.tsx` voor pagina's, `weigerRoute()` voor
+ * routes zonder layout, en de guards in `lib/auth/guards.ts` voor acties.
  */
 export const authConfig = {
   pages: {
@@ -41,14 +40,6 @@ export const authConfig = {
         pathname.startsWith("/handleiding"); // alleen metadata/deelkaart publiek — de pagina zelf checkt de sessie
       if (isPublic) return true;
       if (!isLoggedIn) return false;
-
-      const rol = auth?.user?.role;
-      // Een rol die deze build niet kent (oud sessiecookie na een uitrol) laten
-      // we hier door; de layout beslist dan op basis van de database.
-      // Rollen met volledige toegang (admin, agent, viewer) merken hier niets.
-      if (bekendeRol(rol) && !magAlles(rol) && !magPad(rol, pathname)) {
-        return NextResponse.redirect(new URL(startPadVoorRol(rol), request.nextUrl.origin));
-      }
 
       // Het pad meegeven, zodat de layout de harde controle kan doen.
       const headers = new Headers(request.headers);

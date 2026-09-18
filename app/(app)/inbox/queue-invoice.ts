@@ -3,13 +3,13 @@ import { eq } from "drizzle-orm";
 import { after } from "next/server";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
-import { requireWriteUser } from "@/lib/auth/guards";
+import { requireModule } from "@/lib/auth/guards";
 import { db } from "@/lib/db";
 import { mailAttachments, purchaseInvoiceReviews } from "@/lib/db/schema";
 
 /** Only creates a review card. No purchase order, project cost or Holded write. */
 export async function queueMailInvoice(emailId: string, attachmentId: string) {
-  await requireWriteUser(); z.string().uuid().parse(emailId); z.string().uuid().parse(attachmentId);
+  await requireModule("inbox"); z.string().uuid().parse(emailId); z.string().uuid().parse(attachmentId);
   const att = await db.query.mailAttachments.findFirst({ where: eq(mailAttachments.id, attachmentId) });
   if (!att || att.emailId !== emailId) throw new Error("Bijlage hoort niet bij deze mail.");
   if (!/\.(pdf|jpe?g|png|webp|xlsx?|xlsm)$/i.test(att.filename)) throw new Error("Kies een PDF, afbeelding of Excel-factuur.");

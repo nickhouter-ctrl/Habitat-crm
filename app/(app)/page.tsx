@@ -7,7 +7,8 @@
 import { and, asc, eq, isNull, or, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 
-import { auth } from "@/auth";
+import { huidigeToegangOfNull } from "@/lib/auth/access";
+import { magAlles } from "@/lib/auth/modules";
 import { DagtakenLijst } from "@/components/dagtaken-lijst";
 import { LinkButton } from "@/components/ui";
 import { db } from "@/lib/db";
@@ -34,14 +35,20 @@ function begroeting(): string {
   return "Goedenavond";
 }
 
-export default async function StartPage() {
-  const session = await auth();
-  const userId = session?.user?.id ?? "";
-  const isViewer = session?.user?.role === "viewer";
+export default async function StartPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ "geen-toegang"?: string }>;
+}) {
+  const ik = await huidigeToegangOfNull();
+  const userId = ik?.id ?? "";
+  const isViewer = !ik?.heeftCap("schrijven");
+  const allesZichtbaar = magAlles(ik?.rol);
+  const geweigerd = "geen-toegang" in (await searchParams);
 
   const author = alias(users, "author");
   const [dagtaken, taakRows, teamleden, badges, [prefsRow]] = await Promise.all([
-    verzamelDagtaken(),
+    verzamelDagtaken(ik?.rol),
     db
       .select({
         id: activities.id,
@@ -68,8 +75,12 @@ export default async function StartPage() {
         sql`${activities.dueAt} asc nulls last`,
       )
       .limit(25),
-    db.select({ id: users.id, name: users.name, email: users.email }).from(users).orderBy(asc(users.name)),
-    verzamelNavBadges(),
+    // De teamledenlijst is er om taken toe te wijzen; dat is niets voor een
+    // beperkt account, en dan hoeft de lijst ook niet opgehaald te worden.
+    allesZichtbaar
+      ? db.select({ id: users.id, name: users.name, email: users.email }).from(users).orderBy(asc(users.name))
+      : Promise.resolve([] as { id: string; name: string | null; email: string }[]),
+    verzamelNavBadges(ik?.rol),
     // Naam vers uit de DB: de JWT-sessie kan een oude naam cachen (30 dagen).
     db.select({ startPrefs: users.startPrefs, name: users.name }).from(users).where(eq(users.id, userId)).limit(1),
   ]);
@@ -92,8 +103,8 @@ export default async function StartPage() {
     isVanAnder: !!t.authorId && t.authorId !== userId,
   }));
 
-  const volleNaam = prefsRow?.name?.trim() || session?.user?.name?.trim() || "";
-  const naam = volleNaam.split(" ")[0] || session?.user?.email || "";
+  const volleNaam = prefsRow?.name?.trim() || ik?.name?.trim() || "";
+  const naam = volleNaam.split(" ")[0] || ik?.email || "";
   const datum = new Date().toLocaleDateString("nl-NL", {
     timeZone: "Europe/Madrid",
     weekday: "long",
@@ -111,17 +122,26 @@ export default async function StartPage() {
           </h1>
           <p className="mt-1 text-sm capitalize text-muted">{datum}</p>
         </div>
-        <LinkButton href="/dashboard" variant="secondary">
-          Naar het dashboard →
-        </LinkButton>
+        {allesZichtbaar && (
+          <LinkButton href="/dashboard" variant="secondary">
+            Naar het dashboard →
+          </LinkButton>
+        )}
       </div>
+
+      {/* Iemand die een verboden pad intypte, hoort te weten waarom hij hier staat. */}
+      {geweigerd && (
+        <p className="mb-6 rounded-lg border border-warning/40 bg-warning/10 px-4 py-3 text-sm">
+          Dat onderdeel hoort niet bij jouw rol. Hieronder staat alles waar je wél bij kunt.
+        </p>
+      )}
 
       <div className="mb-8 grid items-start gap-5 lg:grid-cols-2">
         <DagtakenLijst taken={dagtaken} titel="Wat moet er vandaag gebeuren" className="" />
         <MijnTaken taken={mijnTaken} teamleden={teamleden} readOnly={isViewer} />
       </div>
 
-      <TegelGrid prefs={(prefsRow?.startPrefs as StartPrefs | null) ?? null} badges={tegelBadges} saveAction={saveStartPrefs} />
+      <TegelGrid prefs={(prefsRow?.startPrefs as StartPrefs | null) ?? null} badges={tegelBadges} saveAction={saveStartPrefs} rol={ik?.rol} />
     </>
   );
 }

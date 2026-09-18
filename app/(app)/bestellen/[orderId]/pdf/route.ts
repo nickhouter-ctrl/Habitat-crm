@@ -1,10 +1,10 @@
 import { NextResponse } from "next/server";
 import { asc, eq, inArray } from "drizzle-orm";
 
-import { auth } from "@/auth";
 import { db } from "@/lib/db";
 import { catalogVariants, products, supplierOrderItems, supplierOrders } from "@/lib/db/schema";
 import { renderSupplierOrderPdf } from "@/lib/supplier-order-pdf";
+import { weigerRoute } from "@/lib/auth/guards";
 
 export const maxDuration = 30;
 
@@ -12,8 +12,8 @@ export async function GET(
   _req: Request,
   { params }: { params: Promise<{ orderId: string }> },
 ) {
-  const session = await auth();
-  if (!session?.user) return NextResponse.json({ error: "unauth" }, { status: 401 });
+  const nee = await weigerRoute("inkoop");
+  if (nee) return nee;
 
   const { orderId } = await params;
   const order = await db.query.supplierOrders.findFirst({

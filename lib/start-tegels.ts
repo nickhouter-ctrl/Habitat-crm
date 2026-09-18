@@ -48,6 +48,8 @@ import {
   UserCog,
   Users,
 } from "lucide-react";
+
+import { magAlles, magPad } from "@/lib/auth/modules";
 import type { LucideIcon } from "lucide-react";
 
 export interface StartTegel {
@@ -162,17 +164,22 @@ export function normalizeStartPrefs(prefs: StartPrefs | null | undefined): Start
  * - `pinned`: vastgepinde, zichtbare tegels in pin-volgorde.
  * - `zichtbaar`: volgorde minus verborgen minus vastgepind (voor het gegroepeerde grid).
  */
-export function applyStartPrefs(prefs: StartPrefs | null | undefined): {
+export function applyStartPrefs(
+  prefs: StartPrefs | null | undefined,
+  /** Rol: tegels buiten de eigen modules vallen weg (cosmetisch, zie modules.ts). */
+  rol?: string,
+): {
   volgorde: StartTegel[];
   pinned: StartTegel[];
   zichtbaar: StartTegel[];
   hidden: Set<string>;
 } {
   const p = normalizeStartPrefs(prefs);
-  const byKey = new Map(START_TEGELS.map((x) => [x.key, x]));
+  const tegels = magAlles(rol) ? START_TEGELS : START_TEGELS.filter((x) => magPad(rol, x.href));
+  const byKey = new Map(tegels.map((x) => [x.key, x]));
   const inOrder = (p.order ?? []).map((k) => byKey.get(k)!).filter(Boolean);
   const restKeys = new Set(inOrder.map((x) => x.key));
-  const volgorde = [...inOrder, ...START_TEGELS.filter((x) => !restKeys.has(x.key))];
+  const volgorde = [...inOrder, ...tegels.filter((x) => !restKeys.has(x.key))];
   const hidden = new Set(p.hidden);
   const pinnedSet = new Set(p.pinned);
   const pinned = (p.pinned ?? []).map((k) => byKey.get(k)!).filter((x) => x && !hidden.has(x.key));

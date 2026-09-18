@@ -10,10 +10,10 @@
 import { NextResponse } from "next/server";
 import { and, eq, gte, isNotNull, isNull, or, sql } from "drizzle-orm";
 
-import { auth } from "@/auth";
 import { COMPANY } from "@/lib/company";
 import { db } from "@/lib/db";
 import { products } from "@/lib/db/schema";
+import { weigerRoute } from "@/lib/auth/guards";
 
 export const dynamic = "force-dynamic";
 
@@ -25,8 +25,8 @@ function csvEscape(v: unknown): string {
 }
 
 export async function GET(req: Request) {
-  const session = await auth();
-  if (!session?.user) return NextResponse.json({ error: "unauth" }, { status: 401 });
+  const nee = await weigerRoute("producten");
+  if (nee) return nee;
 
   const url = new URL(req.url);
   const since = url.searchParams.get("since");

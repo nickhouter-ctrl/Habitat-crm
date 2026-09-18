@@ -19,7 +19,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
 
-import { requireWriteUser } from "@/lib/auth/guards";
+import { requireModule } from "@/lib/auth/guards";
 import { creativeSpecSchema } from "@/lib/creatives/schema";
 import { validateSpecCopy } from "@/lib/creatives/validate";
 import { FORMAT_NAMES } from "@/lib/creatives/tokens";
@@ -104,7 +104,7 @@ export async function createCreativeSpec(
   _prev: EditorActionState,
   formData: FormData,
 ): Promise<EditorActionState> {
-  const user = await requireWriteUser();
+  const user = await requireModule("advertenties");
   const parsed = parsePayload(formData);
   if (!parsed.ok) return parsed.state;
   const spec = parsed.value;
@@ -144,7 +144,7 @@ export async function createCreativeSet(
   _prev: EditorActionState,
   formData: FormData,
 ): Promise<EditorActionState> {
-  const user = await requireWriteUser();
+  const user = await requireModule("advertenties");
   const parsed = parsePayload(formData);
   if (!parsed.ok) return parsed.state;
   const spec = parsed.value;
@@ -262,7 +262,7 @@ const CHECKLIST_ITEMS = ["prijs", "taal", "claim"] as const;
  * de controlelijst niet volledig is afgevinkt — geen vinkje, geen approved.
  */
 export async function approveCreative(formData: FormData): Promise<void> {
-  await requireWriteUser();
+  await requireModule("advertenties");
   const id = z.uuid().parse(formData.get("id"));
 
   const missing = CHECKLIST_ITEMS.filter((item) => formData.get(`check-${item}`) !== "on");
@@ -297,7 +297,7 @@ export async function approveCreative(formData: FormData): Promise<void> {
  * goed en wijst de melding aan welke.
  */
 export async function approveCreativeSet(formData: FormData): Promise<void> {
-  await requireWriteUser();
+  await requireModule("advertenties");
   const setId = z.uuid().parse(formData.get("setId"));
 
   const missing = CHECKLIST_ITEMS.filter((item) => formData.get(`check-${item}`) !== "on");
@@ -377,7 +377,7 @@ export async function generateAiCopyAction(input: unknown): Promise<{
   copy?: { eyebrow?: string; headline?: string; subline?: string; cta?: string; badge?: string };
   error?: string;
 }> {
-  await requireWriteUser();
+  await requireModule("advertenties");
   const parsed = aiRequestSchema.safeParse(input);
   if (!parsed.success) return { error: "Ongeldige aanvraag voor AI-copy." };
   const req = parsed.data;
@@ -432,7 +432,7 @@ export async function generateCarouselStoryAction(input: unknown): Promise<{
   };
   error?: string;
 }> {
-  await requireWriteUser();
+  await requireModule("advertenties");
   const parsed = carouselAiSchema.safeParse(input);
   if (!parsed.success) return { error: "Ongeldige aanvraag voor het carrouselverhaal." };
   const req = parsed.data;
@@ -520,7 +520,7 @@ export async function createCarouselSetAction(input: unknown): Promise<{
   setId?: string;
   error?: string;
 }> {
-  const user = await requireWriteUser();
+  const user = await requireModule("advertenties");
   const parsed = createCarouselSchema.safeParse(input);
   if (!parsed.success) return { error: "De carrousel is niet compleet — controleer de kaartteksten." };
   const req = parsed.data;
@@ -593,7 +593,7 @@ export async function createCarouselSetAction(input: unknown): Promise<{
 
 /** Archiveer een spec (concept of goedgekeurd, niet live). */
 export async function archiveCreative(formData: FormData): Promise<void> {
-  await requireWriteUser();
+  await requireModule("advertenties");
   const id = z.uuid().parse(formData.get("id"));
   const [row] = await db
     .select({ status: creativeSpecs.status })

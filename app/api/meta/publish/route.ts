@@ -8,12 +8,12 @@ import { desc, eq, inArray, isNull, and } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
-import { auth } from "@/auth";
 import { db } from "@/lib/db";
 import { ads, creativeSpecs, renders } from "@/lib/db/schema";
 import { marketingStorage } from "@/lib/marketing/storage";
 import { publishAdToMeta, publishCarouselAdToMeta } from "@/lib/meta/publish";
 import { syncSingleAd } from "@/lib/meta/sync";
+import { weigerRoute } from "@/lib/auth/guards";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 120;
@@ -38,16 +38,8 @@ const publishBody = z.object({
 });
 
 export async function POST(req: Request) {
-  const session = await auth();
-  if (!session?.user) {
-    return NextResponse.json({ error: "Niet ingelogd." }, { status: 401 });
-  }
-  if ((session.user as { role?: string }).role === "viewer") {
-    return NextResponse.json(
-      { error: "Alleen-lezen account: publiceren is niet toegestaan voor de rol 'viewer'." },
-      { status: 403 },
-    );
-  }
+  const nee = await weigerRoute("advertenties");
+  if (nee) return nee;
 
   const parsed = publishBody.safeParse(await req.json().catch(() => null));
   if (!parsed.success) {

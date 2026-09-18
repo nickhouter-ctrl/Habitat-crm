@@ -1,13 +1,13 @@
-import { auth } from "@/auth";
 import { getReportsData } from "@/lib/reports-data";
 import { renderReportPdf, type ReportTable } from "@/lib/report-pdf";
 import { formatEUR } from "@/lib/utils";
+import { weigerRoute } from "@/lib/auth/guards";
 
 export const dynamic = "force-dynamic";
 
 export async function GET() {
-  const session = await auth();
-  if (!session?.user) return new Response("Unauthorized", { status: 401 });
+  const nee = await weigerRoute("rapporten");
+  if (nee) return nee;
 
   const d = await getReportsData();
 

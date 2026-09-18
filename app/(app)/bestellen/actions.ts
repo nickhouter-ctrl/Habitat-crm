@@ -3,7 +3,7 @@
 import { and, eq, ilike, inArray, sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { requireWriteUser } from "@/lib/auth/guards";
+import { requireModule } from "@/lib/auth/guards";
 
 import { auth } from "@/auth";
 import { db } from "@/lib/db";
@@ -22,7 +22,7 @@ import { supplierForSku, supplierGroupForSku } from "@/lib/suppliers";
 
 async function requireUser() {
   // Centrale guard: ingelogd én geen alleen-lezen (viewer) account.
-  return requireWriteUser();
+  return requireModule("inkoop");
 }
 
 const UNITS = ["stuk", "doos", "m2"] as const;

@@ -1,11 +1,11 @@
 import { NextResponse } from "next/server";
 import { and, asc, eq, isNotNull, sql } from "drizzle-orm";
 
-import { auth } from "@/auth";
 import { db } from "@/lib/db";
 import { products } from "@/lib/db/schema";
 import { localizeEthick } from "@/lib/ethick-i18n";
 import { renderPricelistPdf, translateGroup, type PricelistItem, type PricelistLocale } from "@/lib/pricelist-pdf";
+import { weigerRoute } from "@/lib/auth/guards";
 
 const LOCALES: PricelistLocale[] = ["nl", "de", "en", "es"];
 
@@ -14,8 +14,8 @@ const LOCALES: PricelistLocale[] = ["nl", "de", "en", "es"];
 export const maxDuration = 60;
 
 export async function GET(req: Request) {
-  const session = await auth();
-  if (!session?.user) return NextResponse.json({ error: "unauth" }, { status: 401 });
+  const nee = await weigerRoute("prijzen");
+  if (nee) return nee;
 
   const url = new URL(req.url);
   const collection = url.searchParams.get("collection") || "";
