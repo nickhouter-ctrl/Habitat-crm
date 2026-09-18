@@ -1,4 +1,4 @@
-import { desc, isNull, sql } from "drizzle-orm";
+import { desc, inArray, isNull, sql } from "drizzle-orm";
 import Link from "next/link";
 
 import {
@@ -22,11 +22,12 @@ import {
   Tr,
 } from "@/components/ui";
 import { db } from "@/lib/db";
-import { emailCampaigns, emailSuppressions, prospects } from "@/lib/db/schema";
+import { campaignRecipients, emailCampaigns, emailSuppressions, prospects } from "@/lib/db/schema";
 import { placesConfigured } from "@/lib/leads/places";
 import { groupLabel } from "@/lib/leads/groups";
 import { createCampaign, deleteCampaign, searchAndImportProspects } from "./actions";
 import { FindEmailsButton } from "./find-emails-button";
+import { Verzendtempo } from "./verzendtempo";
 
 export const metadata = { title: "Leads" };
 
@@ -51,7 +52,7 @@ export default async function LeadsPage({
   const flashNoEmail = typeof sp.noemail === "string" ? sp.noemail : null;
   const flashMails = typeof sp.mails === "string" ? sp.mails : null;
 
-  const [prospectCount, groupRowsRaw, campaigns, suppressedCount, missingEmailCount] = await Promise.all([
+  const [prospectCount, groupRowsRaw, campaigns, suppressedCount, missingEmailCount, inWachtrijTotaal] = await Promise.all([
     db.$count(prospects),
     db.execute(sql`
       SELECT collection, count(*)::int AS n, min(image_url) AS image
@@ -62,6 +63,7 @@ export default async function LeadsPage({
     db.query.emailCampaigns.findMany({ orderBy: desc(emailCampaigns.createdAt), limit: 15 }),
     db.$count(emailSuppressions),
     db.$count(prospects, isNull(prospects.email)),
+    db.$count(campaignRecipients, inArray(campaignRecipients.status, ["queued", "sending"])),
   ]);
 
   const groupOpts = (
@@ -290,6 +292,27 @@ export default async function LeadsPage({
       {/* De lijst zelf staat op /leads/prospects: die pagina pagineert en zoekt
           server-side, want bij duizenden rijen is een tabel op deze pagina
           onwerkbaar (en loog de teller erboven). */}
+      <div className="mt-6 grid gap-4 lg:grid-cols-2">
+        <Verzendtempo teGaan={inWachtrijTotaal || prospectCount - missingEmailCount} />
+        <Card>
+          <CardHeader>
+            <CardTitle>Wachtrij</CardTitle>
+          </CardHeader>
+          <CardContent className="text-sm">
+            {inWachtrijTotaal > 0 ? (
+              <p>
+                <strong className="tabular-nums">{inWachtrijTotaal}</strong> mails staan klaar om verstuurd te worden.
+                Het systeem werkt de wachtrij zelf af binnen het verzendvenster.
+              </p>
+            ) : (
+              <p className="text-muted">
+                Niets in de wachtrij. Open een campagne en zet hem in de wachtrij om te beginnen.
+              </p>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+
       <Card className="mt-6">
         <CardHeader className="flex flex-wrap items-center justify-between gap-3">
           <CardTitle>Prospects ({prospectCount})</CardTitle>

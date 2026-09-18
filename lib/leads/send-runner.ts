@@ -27,11 +27,9 @@ import {
 import { buildCampaignEmail, unsubscribeUrl, type CampaignLang } from "@/lib/leads/campaign";
 import { groupHeroUrl, groupLabel, groupUrl, type CampaignGroup } from "@/lib/leads/groups";
 import { bulkGereed, sendBulkMail } from "@/lib/leads/transport";
-import { dagCap, inVenster, moetStoppen, opnieuwNa, pauzeMs, rondeBudget } from "@/lib/leads/warmup";
+import { dagCap, inVenster, moetStoppen, opnieuwNa, pauzeMs, rondeBudget, rondeVorm } from "@/lib/leads/warmup";
 import { madridMiddernacht } from "@/lib/tz-madrid";
 
-/** Mails per ronde. Bij 6 seconden pauze is dat ongeveer 2,5 minuut. */
-const PER_RONDE = 25;
 /** Harde stop binnen de ronde, ruim onder de maxDuration van 300s. */
 const DEADLINE_MS = 240_000;
 /** Een rij die zo lang op `sending` staat, is ergens blijven hangen. */
@@ -182,8 +180,11 @@ export async function runCampaignSend(): Promise<RondeResultaat> {
   }
 
   const cap = dagCap(inst.warmupStartedAt, nu, inst.dailyCapOverride);
+  // Rondegrootte en pauze volgen de cap: wie sneller wil, krijgt grotere rondes
+  // met minder pauze ertussen — tot wat er binnen de rondetijd past.
+  const vorm = rondeVorm(cap);
   const alUit = await vandaagVerstuurd(nu);
-  const budget = rondeBudget({ cap, vandaagVerstuurd: alUit, perRonde: PER_RONDE });
+  const budget = rondeBudget({ cap, vandaagVerstuurd: alUit, perRonde: vorm.perRonde });
   if (budget <= 0) {
     return { ok: true, verstuurd: 0, mislukt: 0, cap, vandaagVerstuurd: alUit, reden: `Dagcap bereikt (${alUit}/${cap}).` };
   }
@@ -211,7 +212,7 @@ export async function runCampaignSend(): Promise<RondeResultaat> {
   }
 
   const eigenCap = campagne.dailyCap != null ? Math.min(campagne.dailyCap, cap) : cap;
-  const eigenBudget = rondeBudget({ cap: eigenCap, vandaagVerstuurd: alUit, perRonde: PER_RONDE });
+  const eigenBudget = rondeBudget({ cap: eigenCap, vandaagVerstuurd: alUit, perRonde: rondeVorm(eigenCap).perRonde });
   if (eigenBudget <= 0) {
     return { ok: true, verstuurd: 0, mislukt: 0, cap: eigenCap, vandaagVerstuurd: alUit, reden: "Dagcap van deze campagne bereikt." };
   }
@@ -300,7 +301,9 @@ export async function runCampaignSend(): Promise<RondeResultaat> {
 
     // Druppelen, niet spuiten. De laatste van de ronde hoeft niet te wachten.
     if (i < rijen.length - 1) {
-      await new Promise((r2) => setTimeout(r2, pauzeMs(campagne.throttleSeconds)));
+      // De pauze van de campagne mag nooit groter zijn dan wat de cap toelaat,
+      // anders haalt een hoge cap zijn eigen dagtotaal niet.
+      await new Promise((r2) => setTimeout(r2, pauzeMs(Math.min(campagne.throttleSeconds, vorm.throttleSeconds))));
     }
   }
 

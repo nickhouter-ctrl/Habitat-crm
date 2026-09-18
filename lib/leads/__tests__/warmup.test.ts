@@ -10,6 +10,9 @@ import {
   opwarmDag,
   pauzeMs,
   rondeBudget,
+  rondeVorm,
+  RONDES_PER_DAG,
+  MAX_RONDE_SECONDEN,
   START_CAP,
   WARMUP_STAPPEN,
 } from "@/lib/leads/warmup";
@@ -28,28 +31,58 @@ describe("opwarmen", () => {
   });
 
   it("loopt de trap af per verzenddag", () => {
-    expect(dagCap(MAANDAG, MAANDAG)).toBe(200); // dag 1
-    expect(dagCap(MAANDAG, dagenLater(MAANDAG, 1))).toBe(200); // dag 2
-    expect(dagCap(MAANDAG, dagenLater(MAANDAG, 2))).toBe(300); // dag 3
-    expect(dagCap(MAANDAG, dagenLater(MAANDAG, 4))).toBe(500); // dag 5 (vrijdag)
+    expect(dagCap(MAANDAG, MAANDAG)).toBe(WARMUP_STAPPEN[0]); // dag 1
+    expect(dagCap(MAANDAG, dagenLater(MAANDAG, 1))).toBe(WARMUP_STAPPEN[1]); // dag 2
+    expect(dagCap(MAANDAG, dagenLater(MAANDAG, 2))).toBe(WARMUP_STAPPEN[2]); // dag 3
+    expect(dagCap(MAANDAG, dagenLater(MAANDAG, 4))).toBe(WARMUP_STAPPEN[4]); // dag 5 (vrijdag)
   });
 
   it("slaat het weekend over, zodat de trap niet doorloopt terwijl er niets uitgaat", () => {
     // Za 10-01 en zo 11-01 zijn geen verzenddagen; maandag 12-01 is werkdag 6.
     expect(opwarmDag(MAANDAG, dagenLater(MAANDAG, 5))).toBe(5); // zaterdag → nog dag 5
     expect(opwarmDag(MAANDAG, dagenLater(MAANDAG, 7))).toBe(6); // maandag erna
-    expect(dagCap(MAANDAG, dagenLater(MAANDAG, 7))).toBe(650);
+    expect(dagCap(MAANDAG, dagenLater(MAANDAG, 7))).toBe(WARMUP_STAPPEN[5]);
   });
 
-  it("blijft na de laatste trede op het maximum staan", () => {
-    expect(dagCap(MAANDAG, dagenLater(MAANDAG, 60))).toBe(HARD_MAX);
-    expect(WARMUP_STAPPEN[WARMUP_STAPPEN.length - 1]).toBe(HARD_MAX);
+  it("blijft na de laatste trede op de bovenste trede staan", () => {
+    const bovenste = WARMUP_STAPPEN[WARMUP_STAPPEN.length - 1];
+    expect(dagCap(MAANDAG, dagenLater(MAANDAG, 60))).toBe(bovenste);
+    // De trap stopt lager dan het harde maximum: die ruimte is er voor wie
+    // bewust sneller kiest, niet voor het automatische schema.
+    expect(bovenste).toBeLessThanOrEqual(HARD_MAX);
   });
 
   it("laat een handmatige cap omlaag, maar nooit boven het maximum", () => {
     expect(dagCap(MAANDAG, dagenLater(MAANDAG, 60), 50)).toBe(50);
     expect(dagCap(MAANDAG, dagenLater(MAANDAG, 60), 99_999)).toBe(HARD_MAX);
     expect(dagCap(MAANDAG, MAANDAG, 0)).toBe(0); // handmatig stilzetten
+  });
+});
+
+describe("rondeVorm", () => {
+  it("houdt een rustig tempo bij een lage cap", () => {
+    expect(rondeVorm(200)).toEqual({ perRonde: 10, throttleSeconds: 6 });
+  });
+
+  it("voert het tempo op als de cap hoger staat", () => {
+    const hoog = rondeVorm(3000);
+    expect(hoog.perRonde).toBeGreaterThan(50);
+    expect(hoog.throttleSeconds).toBeLessThan(6);
+  });
+
+  it("houdt een ronde binnen de tijd die een functie heeft", () => {
+    // Een ronde mag niet langer duren dan 240s; de functie stopt na 300.
+    for (const cap of [200, 500, 1000, 2000, 3000, 5000]) {
+      const v = rondeVorm(cap);
+      expect(v.perRonde * v.throttleSeconds).toBeLessThanOrEqual(MAX_RONDE_SECONDEN);
+    }
+  });
+
+  it("haalt de ingestelde cap ook echt binnen een dag", () => {
+    for (const cap of [1000, 2000, 3000, 5000]) {
+      const v = rondeVorm(cap);
+      expect(v.perRonde * RONDES_PER_DAG).toBeGreaterThanOrEqual(cap);
+    }
   });
 });
 

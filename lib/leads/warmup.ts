@@ -19,11 +19,21 @@
  */
 import { madridDagenTussen, madridDelen } from "@/lib/tz-madrid";
 
-/** Dagcap per verzenddag sinds de start. Daarna blijft het HARD_MAX. */
-export const WARMUP_STAPPEN = [200, 200, 300, 400, 500, 650, 800, 1000] as const;
+/**
+ * Dagcap per verzenddag sinds de start — het STANDAARD opwarmschema. Wie sneller
+ * wil, zet een eigen cap; die gaat hier dan voor.
+ */
+export const WARMUP_STAPPEN = [200, 400, 700, 1000, 1500, 2000, 2500, 3000] as const;
 
-/** Bovengrens in code: een instelling in de database kan hier nooit boven. */
-export const HARD_MAX = 1000;
+/**
+ * Bovengrens in code. Niet omdat de software het niet kan — er past ruim
+ * 10.000 per dag in het verzendvenster — maar omdat dit de grens is waar
+ * ontvangende partijen naar kijken. Boven de 5.000 per dag vanaf een domein dat
+ * nog nauwelijks bulk stuurde, is de kans groot dat Gmail en Outlook gaan
+ * vertragen of in de spammap zetten. En dit is hetzelfde domein waar de
+ * offertes en facturen vandaan komen.
+ */
+export const HARD_MAX = 5000;
 
 /** Zonder startdatum: de eerste trede, dus voorzichtig. */
 export const START_CAP = WARMUP_STAPPEN[0];
@@ -70,6 +80,26 @@ export function dagCap(
 export function rondeBudget(args: { cap: number; vandaagVerstuurd: number; perRonde: number }): number {
   const over = args.cap - args.vandaagVerstuurd;
   return Math.max(0, Math.min(over, args.perRonde));
+}
+
+/**
+ * Hoe groot moet een ronde zijn om de dagcap te halen?
+ *
+ * Er zijn ongeveer 54 rondes per dag (elke tien minuten, negen uur venster) en
+ * een ronde mag niet langer duren dan pakweg 240 seconden — de functie stopt na
+ * 300. Dus hoe hoger de cap, hoe meer mails per ronde en hoe korter de pauze
+ * ertussen. Onder de 1.350 per dag blijft het rustig druppelen met zes
+ * seconden; daarboven wordt het tempo opgevoerd.
+ */
+export const RONDES_PER_DAG = 54;
+export const MAX_RONDE_SECONDEN = 200;
+
+export function rondeVorm(cap: number): { perRonde: number; throttleSeconds: number } {
+  const nodig = Math.ceil(Math.max(0, cap) / RONDES_PER_DAG);
+  const perRonde = Math.max(10, Math.min(250, nodig));
+  // Pauze zo groot als binnen de rondetijd past, maar nooit meer dan 6s.
+  const throttleSeconds = Math.max(1, Math.min(6, Math.floor(MAX_RONDE_SECONDEN / perRonde)));
+  return { perRonde, throttleSeconds };
 }
 
 export interface Venster {

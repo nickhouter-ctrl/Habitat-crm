@@ -19,6 +19,7 @@ import { buildCampaignEmail, type CampaignLang } from "@/lib/leads/campaign";
 import { nogTeGaan, telOntvangers, vulWachtrij, vulWachtrijKlanten } from "@/lib/leads/queue";
 import { runCampaignSend } from "@/lib/leads/send-runner";
 import { bulkGereed } from "@/lib/leads/transport";
+import { HARD_MAX } from "@/lib/leads/warmup";
 import { generateCampaignCopy } from "@/lib/leads/ai-copy";
 import { groupHeroUrl, groupLabel, groupUrl, type CampaignGroup } from "@/lib/leads/groups";
 import { searchPlaces, type PlaceCategory } from "@/lib/leads/places";
@@ -352,4 +353,30 @@ export async function setBulkPaused(paused: boolean) {
       set: { paused, pausedReason: paused ? "Handmatig stilgezet." : null, updatedAt: sql`now()` },
     });
   revalidatePath("/leads");
+}
+
+/**
+ * Het verzendtempo instellen. Bewust in de database en niet in de code: zo kan
+ * dit zonder deploy omhoog of omlaag, en staat de keuze bij de mensen die de
+ * campagne draaien.
+ */
+export async function setVerzendtempo(formData: FormData) {
+  await requireUser();
+  const ruw = String(formData.get("dailyCap") ?? "").trim();
+  const cap = ruw === "" ? null : Math.max(0, Math.min(HARD_MAX, Number(ruw) || 0));
+  const opnieuwOpwarmen = formData.get("opnieuwOpwarmen") === "on";
+
+  await db
+    .insert(bulkMailSettings)
+    .values({ id: "default", dailyCapOverride: cap, warmupStartedAt: opnieuwOpwarmen ? null : undefined })
+    .onConflictDoUpdate({
+      target: bulkMailSettings.id,
+      set: {
+        dailyCapOverride: cap,
+        ...(opnieuwOpwarmen ? { warmupStartedAt: null } : {}),
+        updatedAt: sql`now()`,
+      },
+    });
+  revalidatePath("/leads");
+  revalidatePath("/leads/campaigns", "page");
 }
