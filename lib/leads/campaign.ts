@@ -34,6 +34,9 @@ interface Copy {
   defaultIntro: string;
   discover: string;
   cta: string;
+  /** Tweede knop: een afspraak in de showroom inplannen. */
+  appointment: string;
+  appointmentHint: string;
   browse: string;
   notice: (legalName: string) => string;
   unsubscribe: string;
@@ -47,6 +50,8 @@ const TXT: Record<CampaignLang, Copy> = {
       "Desde el cálido travertino y los evocadores paneles de pared hasta chimeneas que dan vida a cada espacio: en Habitat One encontrará materiales con carácter, seleccionados para los proyectos más bellos de la Costa Blanca. Hemos preparado una selección para usted.",
     discover: "Descubra la colección →",
     cta: "Ver precios — solicite una cuenta",
+    appointment: "Reservar una cita en la exposición",
+    appointmentHint: "Elija el día y la hora que le convenga — Jávea (Alicante)",
     browse: "O descubra primero la colección completa →",
     notice: (l) =>
       `Este correo contiene información comercial (publicidad) de ${l}. Lo recibe porque su empresa, según fuentes públicas, podría estar interesada en nuestra oferta (comunicación entre empresas).`,
@@ -59,6 +64,8 @@ const TXT: Record<CampaignLang, Copy> = {
       "Van warme travertijn en sfeervolle wandpanelen tot haarden die een ruimte tot leven brengen — bij Habitat One vindt u materialen met karakter, geselecteerd voor de mooiste projecten aan de Costa Blanca. We stelden een selectie voor u samen.",
     discover: "Ontdek de collectie →",
     cta: "Bekijk prijzen — vraag een account aan",
+    appointment: "Een afspraak maken in de showroom",
+    appointmentHint: "Kies zelf een dag en tijd die u past — Jávea (Alicante)",
     browse: "Of ontdek eerst de volledige collectie →",
     notice: (l) =>
       `Deze e-mail bevat commerciële informatie (publicidad) van ${l}. U ontvangt deze omdat uw bedrijf, op basis van openbare bronnen, mogelijk interesse heeft in ons aanbod (zakelijke communicatie).`,
@@ -71,6 +78,8 @@ const TXT: Record<CampaignLang, Copy> = {
       "Von warmem Travertin über stimmungsvolle Wandpaneele bis zu Kaminen, die einen Raum zum Leben erwecken – bei Habitat One finden Sie Materialien mit Charakter, ausgewählt für die schönsten Projekte an der Costa Blanca. Wir haben eine Auswahl für Sie zusammengestellt.",
     discover: "Zur Kollektion →",
     cta: "Preise ansehen — Konto anfragen",
+    appointment: "Termin im Showroom vereinbaren",
+    appointmentHint: "Wählen Sie Tag und Uhrzeit, die Ihnen passen — Jávea (Alicante)",
     browse: "Oder entdecken Sie zuerst die gesamte Kollektion →",
     notice: (l) =>
       `Diese E-Mail enthält kommerzielle Informationen (Werbung) von ${l}. Sie erhalten sie, weil Ihr Unternehmen laut öffentlichen Quellen an unserem Angebot interessiert sein könnte (Geschäftskommunikation).`,
@@ -83,6 +92,8 @@ const TXT: Record<CampaignLang, Copy> = {
       "From warm travertine and evocative wall panels to fireplaces that bring a space to life — at Habitat One you'll find materials with character, selected for the finest projects on the Costa Blanca. We've curated a selection for you.",
     discover: "Discover the collection →",
     cta: "See prices — request an account",
+    appointment: "Book a showroom visit",
+    appointmentHint: "Pick a day and time that suits you — Jávea (Alicante)",
     browse: "Or explore the full collection first →",
     notice: (l) =>
       `This email contains commercial information (advertising) from ${l}. You received it because your company, based on public sources, may be interested in our offering (business-to-business communication).`,
@@ -138,6 +149,10 @@ export function buildCampaignEmail(opts: {
   const privacyUrl = `${site}/privacy`;
   const accountUrl = `${site}/account/aanvragen`;
   const productsUrl = `${site}/products`;
+  // De afsprakenmodule staat op de website (rol kiezen, tijdslot, gegevens) en
+  // die aanvraag komt als website-aanvraag in het CRM binnen. Geen aparte
+  // boekingspagina dus: dit is dezelfde route die bezoekers van de site nemen.
+  const appointmentUrl = `${site}/showroom`;
 
   const greeting = t.greeting(opts.companyName ? escapeHtml(opts.companyName) : null);
   const intro = opts.introText?.trim() ? escapeHtml(opts.introText.trim()).replace(/\n/g, "<br/>") : escapeHtml(t.defaultIntro);
@@ -153,10 +168,19 @@ export function buildCampaignEmail(opts: {
       <p style="margin:0 0 14px;font-size:15px">${greeting}</p>
       <p style="margin:0 0 6px;font-family:Georgia,'Times New Roman',serif;font-size:17px;line-height:1.55;color:${COMPANY.brown}">${intro}</p>
       ${blocks}
-      <div style="text-align:center;margin:28px 0 6px">
-        <a href="${accountUrl}" style="background:${COMPANY.terracotta};color:#fff;padding:13px 26px;border-radius:10px;text-decoration:none;font-size:14px;letter-spacing:0.03em;display:inline-block">${escapeHtml(t.cta)}</a>
-      </div>
-      <p style="margin:6px 0 0;text-align:center;font-size:13px"><a href="${productsUrl}" style="color:${COMPANY.muted}">${escapeHtml(t.browse)}</a></p>
+      <!-- Knoppen onder elkaar, niet naast elkaar: cellen in een e-mailtabel
+           breken niet af, en twee knoppen naast elkaar passen op een telefoon
+           niet. Elk in een eigen tabel zodat Outlook de breedte respecteert. -->
+      <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:26px auto 0">
+        <tr><td align="center" style="padding:0 0 10px">
+          <a href="${accountUrl}" style="background:${COMPANY.terracotta};color:#fff;padding:13px 26px;border-radius:10px;text-decoration:none;font-size:14px;letter-spacing:0.03em;display:inline-block">${escapeHtml(t.cta)}</a>
+        </td></tr>
+        <tr><td align="center" style="padding:0">
+          <a href="${appointmentUrl}" style="background:#fff;color:${COMPANY.brown};border:1px solid ${COMPANY.terracotta};padding:12px 26px;border-radius:10px;text-decoration:none;font-size:14px;letter-spacing:0.03em;display:inline-block">${escapeHtml(t.appointment)}</a>
+        </td></tr>
+        <tr><td align="center" style="padding:8px 0 0;font-size:12px;color:${COMPANY.muted}">${escapeHtml(t.appointmentHint)}</td></tr>
+      </table>
+      <p style="margin:10px 0 0;text-align:center;font-size:13px"><a href="${productsUrl}" style="color:${COMPANY.muted}">${escapeHtml(t.browse)}</a></p>
       ${complianceFooter(unsubUrl, privacyUrl, t)}
     </div>
   </div>
@@ -169,6 +193,9 @@ ${opts.introText?.trim() || t.defaultIntro}
 ${opts.groups.map((g) => `• ${g.label}: ${g.url}`).join("\n")}
 
 ${t.cta}: ${accountUrl}
+${t.appointment}: ${appointmentUrl}
+${t.appointmentHint}
+
 ${productsUrl}
 
 —
