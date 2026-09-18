@@ -901,6 +901,8 @@ const APPT: Record<
   {
     recvSubject: string;
     recvBody: string;
+    /** Zelfde mail, maar voor een afspraak op de beursstand (website:feria-*). */
+    recvBodyFair: string;
     recvConfirm: string;
     whenLabel: string;
     confSubject: string;
@@ -911,6 +913,7 @@ const APPT: Record<
   nl: {
     recvSubject: "We hebben je afspraakverzoek ontvangen",
     recvBody: "Bedankt voor je verzoek voor een bezoek aan onze showroom.",
+    recvBodyFair: "Bedankt voor je verzoek voor een afspraak op onze stand op 360 by Cevisama, Feria Valencia (stand C109, 28 september – 1 oktober 2026).",
     recvConfirm:
       "We bevestigen je afspraak zo snel mogelijk per e-mail — of stellen een alternatieve datum voor als het gekozen moment bij ons niet uitkomt.",
     whenLabel: "Voorkeursmoment",
@@ -921,6 +924,7 @@ const APPT: Record<
   en: {
     recvSubject: "We've received your appointment request",
     recvBody: "Thank you for requesting a visit to our showroom.",
+    recvBodyFair: "Thank you for requesting a meeting at our stand at 360 by Cevisama, Feria Valencia (stand C109, 28 September – 1 October 2026).",
     recvConfirm:
       "We'll confirm your appointment by email as soon as possible — or suggest an alternative date if the chosen time doesn't suit us.",
     whenLabel: "Preferred time",
@@ -931,6 +935,7 @@ const APPT: Record<
   es: {
     recvSubject: "Hemos recibido tu solicitud de cita",
     recvBody: "Gracias por solicitar una visita a nuestro showroom.",
+    recvBodyFair: "Gracias por solicitar una cita en nuestro stand en 360 by Cevisama, Feria Valencia (stand C109, del 28 de septiembre al 1 de octubre de 2026).",
     recvConfirm:
       "Confirmaremos tu cita por correo lo antes posible, o te propondremos una fecha alternativa si la hora elegida no nos viene bien.",
     whenLabel: "Hora preferida",
@@ -941,6 +946,7 @@ const APPT: Record<
   de: {
     recvSubject: "Wir haben deine Terminanfrage erhalten",
     recvBody: "Vielen Dank für deine Anfrage für einen Besuch in unserem Showroom.",
+    recvBodyFair: "Vielen Dank für deine Anfrage für einen Termin an unserem Stand auf der 360 by Cevisama, Feria Valencia (Stand C109, 28. September – 1. Oktober 2026).",
     recvConfirm:
       "Wir bestätigen deinen Termin so schnell wie möglich per E-Mail – oder schlagen einen alternativen Termin vor, falls der gewählte Zeitpunkt nicht passt.",
     whenLabel: "Wunschtermin",
@@ -1001,10 +1007,13 @@ export function appointmentReceivedEmail(args: {
   lang?: string | null;
   contactName?: string | null;
   when?: string | null;
+  /** Afspraak op de beursstand in plaats van in de showroom. */
+  fair?: boolean;
 }): { subject: string; html: string; text: string } {
   const lang = pickLang(args.lang);
   const a = APPT[lang];
   const t = T[lang];
+  const body = args.fair ? a.recvBodyFair : a.recvBody;
   const greeting = args.contactName ? `${t.hi} ${escapeHtml(args.contactName)},` : `${t.hi},`;
   const whenBlock = args.when
     ? `<p style="margin:16px 0 4px;font-weight:600;color:${COMPANY.brown}">${a.whenLabel}</p>
@@ -1012,14 +1021,14 @@ export function appointmentReceivedEmail(args: {
     : "";
   const html = brandedEmail(`
       <p style="margin:0">${greeting}</p>
-      <p>${a.recvBody}</p>
+      <p>${body}</p>
       ${whenBlock}
       <p>${a.recvConfirm}</p>
       <hr style="border:none;border-top:1px solid ${COMPANY.sand};margin:24px 0 16px" />
       <p style="margin:0 0 4px">${t.regards}</p>
       <div style="font-size:13px;color:#888;line-height:1.7">${signatureHtml()}</div>`);
   const text =
-    `${greeting}\n\n${a.recvBody}\n` +
+    `${greeting}\n\n${body}\n` +
     (args.when ? `\n${a.whenLabel}: ${args.when}\n` : "") +
     `\n${a.recvConfirm}\n\n${t.regards}\n${COMPANY.legalName}`;
   return { subject: a.recvSubject, html, text };

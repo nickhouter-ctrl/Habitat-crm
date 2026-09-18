@@ -150,7 +150,9 @@ export async function POST(req: Request) {
     try {
       const firstLine = (v.message ?? "").split("\n")[0].trim();
       const when = firstLine.includes(": ") ? firstLine.split(": ").slice(1).join(": ").trim() : "";
-      const ack = appointmentReceivedEmail({ lang: v.locale, contactName: v.name, when: when || null });
+      // Beursafspraak (website:feria-…) krijgt de standtekst i.p.v. de showroomtekst.
+      const fair = (v.source ?? "").startsWith("website:feria");
+      const ack = appointmentReceivedEmail({ lang: v.locale, contactName: v.name, when: when || null, fair });
       await sendMail({ to: v.email, subject: ack.subject, html: ack.html, text: ack.text });
       confirmStatus = "sent";
     } catch (err) {
