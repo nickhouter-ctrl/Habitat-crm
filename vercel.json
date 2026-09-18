@@ -2,19 +2,34 @@
   "redirects": [
     {
       "source": "/",
-      "has": [{ "type": "host", "value": "mijn.habitat-one.com" }],
+      "has": [
+        {
+          "type": "host",
+          "value": "mijn.habitat-one.com"
+        }
+      ],
       "destination": "/klant",
       "permanent": false
     },
     {
       "source": "/klant/:pad*",
-      "has": [{ "type": "host", "value": "crm.habitat-one.com" }],
+      "has": [
+        {
+          "type": "host",
+          "value": "crm.habitat-one.com"
+        }
+      ],
       "destination": "https://mijn.habitat-one.com/klant/:pad*",
       "permanent": false
     },
     {
       "source": "/login",
-      "has": [{ "type": "host", "value": "mijn.habitat-one.com" }],
+      "has": [
+        {
+          "type": "host",
+          "value": "mijn.habitat-one.com"
+        }
+      ],
       "destination": "/klant",
       "permanent": false
     }
@@ -23,6 +38,14 @@
     {
       "path": "/api/cron/imap-poll",
       "schedule": "*/5 * * * *"
+    },
+    {
+      "path": "/api/cron/campaign-send",
+      "schedule": "*/10 7-18 * * 1-5"
+    },
+    {
+      "path": "/api/cron/campaign-maintenance",
+      "schedule": "0 3 * * *"
     },
     {
       "path": "/api/cron/data-health",

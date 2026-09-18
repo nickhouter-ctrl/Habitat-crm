@@ -3,19 +3,31 @@
 import { useState, useTransition } from "react";
 
 import { Button, Input } from "@/components/ui";
-import { generateCopyForCampaign, sendCampaign, sendTestEmail } from "../../actions";
+import { generateCopyForCampaign, queueCampaign, runSendRoundNow, sendTestEmail } from "../../actions";
 
-/** AI-tekst genereren, testmail sturen en verzenden — met expliciete JA-bevestiging. */
+/**
+ * AI-tekst opstellen, testmail sturen en de campagne in de wachtrij zetten.
+ *
+ * "Verzenden" betekent hier: in de wachtrij zetten. De cron stuurt daarna in
+ * porties, binnen het verzendvenster en onder de dagcap. Dat is het verschil
+ * met vroeger, toen één klik 60 mails de deur uit deed en je bij 7.000 adressen
+ * 117 keer moest klikken.
+ */
 export function CampaignActions({
   campaignId,
   recipientCount,
   hasCopy,
   aiAvailable,
+  inWachtrij = 0,
+  bulkGereed = true,
 }: {
   campaignId: string;
   recipientCount: number;
   hasCopy: boolean;
   aiAvailable: boolean;
+  /** Hoeveel er nu nog in de wachtrij van deze campagne staan. */
+  inWachtrij?: number;
+  bulkGereed?: boolean;
 }) {
   const [pending, start] = useTransition();
   const [angle, setAngle] = useState("");
@@ -68,28 +80,56 @@ export function CampaignActions({
         <Button
           type="button"
           variant="primary"
-          disabled={pending || recipientCount === 0 || !hasCopy}
+          disabled={pending || recipientCount === 0 || !hasCopy || !bulkGereed}
           onClick={() => {
             if (
               !window.confirm(
-                `Deze campagne nu versturen naar ${recipientCount} bedrijf(ven)? Dit verstuurt echte e-mails. Klik OK om te bevestigen.`,
+                `${recipientCount} bedrijven in de wachtrij zetten? Er gaat niets in één keer uit: het systeem verstuurt ze verspreid over de dagen, binnen de dagcap.`,
               )
             )
               return;
             start(async () => {
               setMsg(null);
-              const r = await sendCampaign(campaignId);
+              const r = await queueCampaign(campaignId);
               setMsg(
                 r.ok
-                  ? { ok: true, text: `${r.sent} verstuurd${r.remaining ? `, nog ${r.remaining} te gaan — klik nogmaals` : ""}.` }
+                  ? { ok: true, text: `${r.totaal} in de wachtrij. Het versturen begint automatisch binnen tien minuten.` }
                   : { ok: false, text: r.error ?? "mislukt" },
               );
             });
           }}
         >
-          {pending ? "Bezig…" : `Verzenden naar ${recipientCount}`}
+          {pending ? "Bezig…" : inWachtrij > 0 ? `Wachtrij aanvullen (${recipientCount})` : `In de wachtrij zetten (${recipientCount})`}
         </Button>
+
+        {inWachtrij > 0 && (
+          <Button
+            type="button"
+            variant="secondary"
+            disabled={pending}
+            onClick={() =>
+              start(async () => {
+                setMsg(null);
+                const r = await runSendRoundNow(campaignId);
+                setMsg({
+                  ok: r.ok,
+                  text: r.verstuurd > 0
+                    ? `${r.verstuurd} verstuurd${r.mislukt ? `, ${r.mislukt} mislukt` : ""}.`
+                    : r.reden ?? "Niets te doen.",
+                });
+              })
+            }
+          >
+            {pending ? "Bezig…" : "Nu een ronde draaien"}
+          </Button>
+        )}
       </div>
+
+      {!bulkGereed && (
+        <p className="rounded-md bg-warning/10 px-3 py-2 text-sm text-warning">
+          Het verzendkanaal is niet ingesteld (RESEND_API_KEY). Er kan niets verstuurd worden.
+        </p>
+      )}
 
       {msg && <p className={`text-sm ${msg.ok ? "text-success" : "text-danger"}`}>{msg.text}</p>}
     </div>

@@ -1,7 +1,7 @@
 "use server";
 
 import { randomBytes } from "node:crypto";
-import { and, eq, inArray, isNotNull, isNull, sql } from "drizzle-orm";
+import { and, eq, isNotNull, isNull, sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
@@ -9,23 +9,20 @@ import { requireModule } from "@/lib/auth/guards";
 
 import { db } from "@/lib/db";
 import {
-  campaignRecipients,
-  contacts,
+  bulkMailSettings,
   emailCampaigns,
-  emailSuppressions,
   products,
   prospects,
 } from "@/lib/db/schema";
 import { sendMail } from "@/lib/gmail";
-import { buildCampaignEmail, unsubscribeUrl, type CampaignLang } from "@/lib/leads/campaign";
+import { buildCampaignEmail, type CampaignLang } from "@/lib/leads/campaign";
+import { nogTeGaan, telOntvangers, vulWachtrij, vulWachtrijKlanten } from "@/lib/leads/queue";
+import { runCampaignSend } from "@/lib/leads/send-runner";
+import { bulkGereed } from "@/lib/leads/transport";
 import { generateCampaignCopy } from "@/lib/leads/ai-copy";
 import { groupHeroUrl, groupLabel, groupUrl, type CampaignGroup } from "@/lib/leads/groups";
-import { signEmailToken } from "@/lib/leads/unsub-token";
 import { searchPlaces, type PlaceCategory } from "@/lib/leads/places";
 import { searchOverpass } from "@/lib/leads/overpass";
-
-/** Max. aantal mails per verzendactie — deliverability + serverless-timeout. */
-const SEND_CAP = 60;
 
 async function requireUser() {
   // Centrale guard: ingelogd én geen alleen-lezen (viewer) account.
@@ -199,61 +196,15 @@ async function loadCampaignGroups(collections: string[], lang: string): Promise<
   return out;
 }
 
-type Recipient = { prospectId: string | null; email: string; companyName: string; unsubToken: string };
-
-/** Ontvangers: prospects in de gekozen categorieën + optioneel bestaande klanten, met e-mail, niet afgemeld en niet op de suppressielijst. */
-async function resolveRecipients(campaignId: string) {
-  const c = await db.query.emailCampaigns.findFirst({ where: eq(emailCampaigns.id, campaignId) });
-  if (!c) return { campaign: null, recipients: [] as Recipient[] };
-  const cats = (c.audience?.categories ?? []) as string[];
-
-  // Suppressielijst.
-  const suppressed = new Set(
-    (await db.select({ email: emailSuppressions.email }).from(emailSuppressions)).map((s) => s.email.toLowerCase()),
-  );
-  const seen = new Set<string>();
-  const recipients: Recipient[] = [];
-
-  // 1) Prospects.
-  const rows = await db.query.prospects.findMany({
-    where: and(
-      isNotNull(prospects.email),
-      cats.length ? inArray(prospects.category, cats as never) : undefined,
-      inArray(prospects.status, ["new", "emailed"]),
-    ),
-    columns: { id: true, email: true, companyName: true, unsubscribeToken: true },
-  });
-  for (const r of rows) {
-    const email = r.email!;
-    const low = email.toLowerCase();
-    if (suppressed.has(low) || seen.has(low)) continue;
-    seen.add(low);
-    recipients.push({ prospectId: r.id, email, companyName: r.companyName, unsubToken: r.unsubscribeToken });
-  }
-
-  // 2) Bestaande klanten (contacten met type customer) — soft opt-in, mét afmeldlink.
-  if (c.audience?.includeCustomers) {
-    const custs = await db.query.contacts.findMany({
-      where: and(isNotNull(contacts.email), eq(contacts.type, "customer")),
-      columns: { email: true, name: true },
-    });
-    for (const cu of custs) {
-      const email = cu.email!;
-      const low = email.toLowerCase();
-      if (suppressed.has(low) || seen.has(low)) continue;
-      seen.add(low);
-      recipients.push({ prospectId: null, email, companyName: cu.name, unsubToken: signEmailToken(email) });
-    }
-  }
-
-  return { campaign: c, recipients };
-}
-
-/** Aantal ontvangers (voor de reviewpagina). */
+/**
+ * Hoeveel ontvangers krijgt deze campagne? Geteld in de database met dezelfde
+ * voorwaarde die de wachtrij straks gebruikt, dus het getal op het scherm is
+ * precies wat er verstuurd gaat worden.
+ */
 export async function countRecipients(campaignId: string): Promise<number> {
   await requireUser();
-  const { recipients } = await resolveRecipients(campaignId);
-  return recipients.length;
+  const c = await db.query.emailCampaigns.findFirst({ where: eq(emailCampaigns.id, campaignId) });
+  return c ? telOntvangers(c) : 0;
 }
 
 /** Stel met AI een onderwerp + introtekst op en sla die op de campagne op. */
@@ -331,66 +282,74 @@ export async function sendTestEmail(campaignId: string): Promise<{ ok: boolean; 
   }
 }
 
-/** Verstuur de campagne echt naar de prospects (na bevestiging in de UI). */
-export async function sendCampaign(campaignId: string): Promise<{ ok: boolean; sent?: number; remaining?: number; error?: string }> {
+/**
+ * De campagne in de wachtrij zetten. Dit is wat "verzenden" nu betekent.
+ *
+ * Voorheen stuurde één klik 60 mails via Gmail en moest je opnieuw klikken voor
+ * de volgende 60. Bij 7.000 adressen is dat 117 keer klikken, op hetzelfde
+ * postvak waar offertes en facturen uit gaan, en met een harde Gmail-grens rond
+ * de 500 per dag. Nu gaan alle ontvangers als `queued` in
+ * `campaign_recipients` en verstuurt de cron ze in porties via Resend, binnen
+ * het verzendvenster en onder de dagcap.
+ *
+ * Twee keer in de wachtrij zetten is veilig: op (campaign_id, email) ligt een
+ * unieke index. Nieuwe prospects sinds het vullen kun je er dus zo bij zetten.
+ */
+export async function queueCampaign(
+  campaignId: string,
+): Promise<{ ok: boolean; toegevoegd?: number; totaal?: number; error?: string }> {
   await requireUser();
-  const { campaign, recipients } = await resolveRecipients(campaignId);
-  if (!campaign) return { ok: false, error: "Campagne niet gevonden." };
-  if (recipients.length === 0) return { ok: false, error: "Geen ontvangers (met e-mail, niet afgemeld)." };
-  if (!campaign.subject.trim()) return { ok: false, error: "Nog geen onderwerp — genereer of vul die eerst in." };
+  const c = await db.query.emailCampaigns.findFirst({ where: eq(emailCampaigns.id, campaignId) });
+  if (!c) return { ok: false, error: "Campagne niet gevonden." };
+  if (!c.subject.trim()) return { ok: false, error: "Nog geen onderwerp — vul die eerst in of laat AI hem opstellen." };
+  if (!bulkGereed()) return { ok: false, error: "Verzendkanaal niet ingesteld (RESEND_API_KEY ontbreekt)." };
 
-  const batch = recipients.slice(0, SEND_CAP);
-  const groupsForMail = await loadCampaignGroups(campaign.groups, campaign.language);
-  await db.update(emailCampaigns).set({ status: "sending", updatedAt: sql`now()` }).where(eq(emailCampaigns.id, campaignId));
-
-  let sent = 0;
-  for (const r of batch) {
-    const { html, text } = buildCampaignEmail({
-      lang: campaign.language as CampaignLang,
-      subject: campaign.subject,
-      introText: campaign.introText,
-      groups: groupsForMail,
-      unsubToken: r.unsubToken,
-      companyName: r.companyName,
-    });
-    try {
-      const info = await sendMail({
-        to: r.email,
-        subject: campaign.subject,
-        html,
-        text,
-        headers: {
-          "List-Unsubscribe": `<${unsubscribeUrl(r.unsubToken)}>`,
-          "List-Unsubscribe-Post": "List-Unsubscribe=One-Click",
-        },
-      });
-      await db
-        .insert(campaignRecipients)
-        .values({ campaignId, prospectId: r.prospectId, email: r.email, status: "sent", messageId: info.messageId })
-        .onConflictDoNothing({ target: [campaignRecipients.campaignId, campaignRecipients.email] });
-      if (r.prospectId) {
-        await db.update(prospects).set({ status: "emailed", lastEmailedAt: sql`now()`, updatedAt: sql`now()` }).where(eq(prospects.id, r.prospectId));
-      }
-      sent++;
-    } catch (err) {
-      await db
-        .insert(campaignRecipients)
-        .values({ campaignId, prospectId: r.prospectId, email: r.email, status: "failed", error: err instanceof Error ? err.message : "fout" })
-        .onConflictDoNothing({ target: [campaignRecipients.campaignId, campaignRecipients.email] });
-    }
+  const prospectRijen = await vulWachtrij(c);
+  const klantRijen = await vulWachtrijKlanten(c);
+  const totaal = await nogTeGaan(campaignId);
+  if (totaal === 0) {
+    return { ok: false, error: "Geen ontvangers: alles is al gemaild, afgemeld, of valt buiten de frequentiecap." };
   }
 
-  const remaining = recipients.length - batch.length;
   await db
     .update(emailCampaigns)
-    .set({
-      status: remaining > 0 ? "sending" : "sent",
-      sentCount: sql`${emailCampaigns.sentCount} + ${sent}`,
-      sentAt: sql`now()`,
-      updatedAt: sql`now()`,
-    })
+    .set({ status: "queued", queuedCount: totaal, updatedAt: sql`now()` })
     .where(eq(emailCampaigns.id, campaignId));
   revalidatePath(`/leads/campaigns/${campaignId}`);
   revalidatePath("/leads");
-  return { ok: true, sent, remaining };
+  return { ok: true, toegevoegd: prospectRijen + klantRijen, totaal };
+}
+
+/** Nu een ronde draaien in plaats van op de cron wachten. */
+export async function runSendRoundNow(campaignId: string) {
+  await requireUser();
+  const r = await runCampaignSend();
+  revalidatePath(`/leads/campaigns/${campaignId}`);
+  return r;
+}
+
+/** Campagne pauzeren of weer starten. */
+export async function setCampaignPaused(campaignId: string, paused: boolean) {
+  await requireUser();
+  await db
+    .update(emailCampaigns)
+    .set({ status: paused ? "paused" : "queued", updatedAt: sql`now()` })
+    .where(eq(emailCampaigns.id, campaignId));
+  revalidatePath(`/leads/campaigns/${campaignId}`);
+}
+
+/**
+ * De noodstop: zet ál het campagneverzenden stil, ook lopende campagnes. Dit is
+ * de knop voor "er gaat iets mis en ik wil dat het nú ophoudt".
+ */
+export async function setBulkPaused(paused: boolean) {
+  await requireUser();
+  await db
+    .insert(bulkMailSettings)
+    .values({ id: "default", paused, pausedReason: paused ? "Handmatig stilgezet." : null })
+    .onConflictDoUpdate({
+      target: bulkMailSettings.id,
+      set: { paused, pausedReason: paused ? "Handmatig stilgezet." : null, updatedAt: sql`now()` },
+    });
+  revalidatePath("/leads");
 }

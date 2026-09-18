@@ -470,6 +470,20 @@
       "when": 1789754644779,
       "tag": "0066_new_alice",
       "breakpoints": true
+    },
+    {
+      "idx": 67,
+      "version": "7",
+      "when": 1789756185667,
+      "tag": "0067_complete_tinkerer",
+      "breakpoints": true
+    },
+    {
+      "idx": 68,
+      "version": "7",
+      "when": 1789756222216,
+      "tag": "0068_cooing_smasher",
+      "breakpoints": true
     }
   ]
 }

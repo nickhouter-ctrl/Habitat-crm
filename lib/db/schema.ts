@@ -2643,6 +2643,11 @@ export const prospects = pgTable(
     contactPersonName: text(),
     /** Uit welke upload deze rij komt — maakt "deze lijst terugdraaien" mogelijk. */
     importId: uuid().references((): AnyPgColumn => prospectImports.id, { onDelete: "set null" }),
+    /** Hoe vaak dit adres al is gemaild, over campagnes heen (frequentiecap). */
+    emailCount: integer().notNull().default(0),
+    /** Niet mailen tot dit moment — handmatig of na een zachte bounce. */
+    suppressUntil: timestamp({ withTimezone: true }),
+    lastRepliedAt: timestamp({ withTimezone: true }),
     ...timestamps,
   },
   (t) => [
@@ -2714,7 +2719,7 @@ export const prospectImports = pgTable(
   (t) => [index("prospect_imports_status_idx").on(t.status)],
 );
 
-export const campaignStatus = pgEnum("campaign_status", ["draft", "sending", "sent"]);
+export const campaignStatus = pgEnum("campaign_status", ["draft", "queued", "sending", "paused", "sent"]);
 
 export const emailCampaigns = pgTable(
   "email_campaigns",
@@ -2740,15 +2745,53 @@ export const emailCampaigns = pgTable(
     testSentAt: timestamp({ withTimezone: true }),
     sentAt: timestamp({ withTimezone: true }),
     createdById: uuid().references(() => users.id, { onDelete: "set null" }),
+    /** Niet eerder beginnen dan dit moment. */
+    scheduledAt: timestamp({ withTimezone: true }),
+    /** Eigen dagcap; leeg = de algemene cap uit `bulk_mail_settings`. */
+    dailyCap: integer(),
+    /** Pauze tussen twee mails. Gelijkmatig druppelen is bij koude mail het punt. */
+    throttleSeconds: integer().notNull().default(6),
+    /** Verzendvenster in Madrid-tijd. */
+    sendFromHour: integer().notNull().default(9),
+    sendToHour: integer().notNull().default(18),
+    weekdaysOnly: boolean().notNull().default(true),
+    queuedCount: integer().notNull().default(0),
+    failedCount: integer().notNull().default(0),
+    /** Frequentiecap: niet naar wie binnen zoveel dagen al mail kreeg. */
+    minDaysSinceLastEmail: integer().notNull().default(30),
+    /** En nooit meer dan dit aantal mails per prospect, over campagnes heen. */
+    maxEmailsPerProspect: integer().notNull().default(3),
     ...timestamps,
   },
   (t) => [index("email_campaigns_status_idx").on(t.status)],
 );
 
+/**
+ * Eén rij met de instellingen voor het verzenden. In de database en niet in de
+ * omgeving, zodat Teresa de cap kan verlagen en Nick in één klik alles kan
+ * stilzetten zonder dat er iemand hoeft te deployen.
+ */
+export const bulkMailSettings = pgTable("bulk_mail_settings", {
+  id: text().primaryKey().default("default"),
+  /** Noodstop. Zet al het campagneverzenden stil, ook lopende campagnes. */
+  paused: boolean().notNull().default(false),
+  /** Waarom er gestopt is — door de noodrem gevuld. */
+  pausedReason: text(),
+  /** Eerste verzenddag; hieraan hangt het opwarmschema. */
+  warmupStartedAt: timestamp({ withTimezone: true }),
+  /** Handmatig plafond; mag omlaag en tot HARD_MAX omhoog. */
+  dailyCapOverride: integer(),
+  ...timestamps,
+});
+
 export const campaignSendStatus = pgEnum("campaign_send_status", [
+  "queued", // staat in de wachtrij
+  "sending", // door een ronde opgepakt
   "sent",
   "failed",
   "suppressed",
+  "bounced",
+  "complained",
 ]);
 
 export const campaignRecipients = pgTable(
@@ -2762,14 +2805,38 @@ export const campaignRecipients = pgTable(
       .references(() => emailCampaigns.id, { onDelete: "cascade" }),
     prospectId: uuid().references(() => prospects.id, { onDelete: "set null" }),
     email: text().notNull(),
-    status: campaignSendStatus().notNull().default("sent"),
+    status: campaignSendStatus().notNull().default("queued"),
     error: text(),
     messageId: text(),
-    sentAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
+    /** Null zolang de mail nog in de wachtrij staat. */
+    sentAt: timestamp({ withTimezone: true }),
+    queuedAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
+    attempts: integer().notNull().default(0),
+    nextAttemptAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
+    /** Wanneer een ronde deze rij oppakte — een rij die blijft hangen wordt na
+     *  een kwartier door de onderhoudscron teruggezet. */
+    lockedAt: timestamp({ withTimezone: true }),
+    lastError: text(),
+    /** Taal en naam waarmee de mail is opgemaakt, voor reproduceerbaarheid. */
+    lang: text(),
+    companyNameSnapshot: text(),
+    /** Het token waarmee deze ontvanger zich kan afmelden. */
+    unsubToken: text(),
+    deliveredAt: timestamp({ withTimezone: true }),
+    bouncedAt: timestamp({ withTimezone: true }),
+    /** hard | soft | blocked — bepaalt of we het nog eens proberen. */
+    bounceType: text(),
+    complainedAt: timestamp({ withTimezone: true }),
   },
   (t) => [
     index("campaign_recipients_campaign_idx").on(t.campaignId),
     uniqueIndex("campaign_recipients_campaign_email_uidx").on(t.campaignId, t.email),
+    // Voor het oppakken van de volgende portie.
+    index("campaign_recipients_claim_idx").on(t.status, t.nextAttemptAt),
+    // Voor de dagteller: hoeveel is er vandaag over alle campagnes heen uit?
+    index("campaign_recipients_sent_at_idx").on(t.sentAt),
+    // Voor de webhook, die op het provider-id terugzoekt.
+    index("campaign_recipients_message_idx").on(t.messageId),
   ],
 );
 

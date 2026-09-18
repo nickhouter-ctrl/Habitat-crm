@@ -6,7 +6,7 @@
  * pagina werd loodzwaar. Hier: server-side zoeken, filteren en paginering, met
  * het echte totaal apart geteld.
  */
-import { and, asc, desc, eq, ilike, isNotNull, isNull, or, sql } from "drizzle-orm";
+import { and, asc, desc, eq, ilike, isNotNull, isNull, or } from "drizzle-orm";
 import Link from "next/link";
 
 import { Badge, Button, Card, CardContent, CardHeader, CardTitle, Input, PageHeader, Select, StatTile, TBody, Table, Td, Th, THead, Tr } from "@/components/ui";

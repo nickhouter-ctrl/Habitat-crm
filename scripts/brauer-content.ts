@@ -4,8 +4,9 @@
  *   npx tsx --env-file=.env.local scripts/brauer-content.ts [stappen] [--toepassen]
  *
  * Stappen (zonder stap-vlag draaien ze allemaal):
- *   --prijzen   adviesprijs ex btw als verkoopprijs, inkoop = 50% (marge 50%),
- *               EAN als barcode, leverstatus als beschikbaarheid
+ *   --prijzen   adviesprijs ex btw als lijstprijs; verkoopprijs zó dat de prijs
+ *               incl. btw een mooi rond bedrag is (naar boven); inkoop = 50%
+ *               van de adviesprijs; EAN als barcode, leverstatus als beschikbaarheid
  *   --nieuw     codes uit de prijslijst die het CRM nog niet kent: bij een
  *               bestaand product (zelfde nummer, andere kleur) of als nieuw
  *               product via de gewone import
@@ -67,7 +68,7 @@ const BUCKET = process.env.SUPABASE_PRODUCT_BUCKET ?? "product-images";
    Invoer
 ---------------------------------------------------------------------------- */
 type Lijstregel = {
-  bron: "kranen" | "glas" | "beide";
+  bron: "kranen" | "glas" | "beide" | "meubel" | "core";
   naam?: string | null;
   prijs?: number | string | null;
   kleur?: string | null;
@@ -88,6 +89,19 @@ const bedrag = (v: number | string | null | undefined): number | null => {
   return Number.isFinite(n) && n > 0 ? Math.round(n * 100) / 100 : null;
 };
 const inkoop = (advies: number) => Math.round(advies * (1 - INKOOP_KORTING_PCT / 100) * 100) / 100;
+const BTW = 21;
+/**
+ * Verkoopprijs ex btw zó kiezen dat de consumentenprijs (incl. btw) een mooi
+ * rond bedrag is, naar boven afgerond: tot € 100 op hele euro's, tot € 1.000
+ * op € 5, daarboven op € 10. De adviesprijs zelf blijft als lijstprijs bewaard;
+ * de inkoop blijft de helft van die adviesprijs.
+ */
+const nettePrijs = (adviesEx: number): number => {
+  const incl = adviesEx * (1 + BTW / 100);
+  const stap = incl < 100 ? 1 : incl < 1000 ? 5 : 10;
+  const inclNet = Math.ceil(incl / stap - 1e-9) * stap;
+  return Math.round((inclNet / (1 + BTW / 100)) * 100) / 100;
+};
 const beschikbaar = (status: string | null | undefined): "stock" | "order_only" =>
   /^uit voorraad leverbaar$/i.test((status ?? "").trim()) ? "stock" : "order_only";
 
@@ -291,7 +305,7 @@ async function main() {
       updates.push({
         id: v.id,
         set: {
-          priceEur: String(advies),
+          priceEur: String(nettePrijs(advies)),
           listPriceEur: String(advies),
           discountPct: String(INKOOP_KORTING_PCT),
           purchaseCostEur: String(inkoop(advies)),
@@ -520,7 +534,13 @@ async function main() {
         if (as.key !== "kleur") continue;
         for (const w of as.values) {
           if (w.imageUrl && !FORCE) continue;
-          const kandidaat = vs.find((v) => v.options?.kleur === w.value && modelA(v)) ?? vs.find((v) => v.options?.kleur === w.value);
+          // liefst dezelfde overige keuzes als de productfoto (zelfde uitloop, set, maat …),
+          // zodat het kleurplaatje hetzelfde product in een andere kleur toont
+          const rest = (v: (typeof vs)[number]) => JSON.stringify(Object.entries(v.options ?? {}).filter(([k]) => k !== "kleur").sort());
+          const kandidaat =
+            vs.find((v) => v.options?.kleur === w.value && rest(v) === rest(rep)) ??
+            vs.find((v) => v.options?.kleur === w.value && modelA(v)) ??
+            vs.find((v) => v.options?.kleur === w.value);
           if (kandidaat?.imageUrl) {
             w.imageUrl = kandidaat.imageUrl;
             gewijzigd = true;
