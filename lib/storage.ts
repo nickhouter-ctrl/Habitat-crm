@@ -311,6 +311,53 @@ export async function signDocumentUpload(
   return { path, token: data.token, signedUrl: data.signedUrl, contentType: contentType || "application/octet-stream" };
 }
 
+/**
+ * Signed upload-URL voor een prospectlijst (xlsx/xls/csv).
+ *
+ * Waarom niet via een server action: `next.config.ts` staat 25 MB toe, maar
+ * Vercel kapt de body van een functie af rond 4,5 MB. Een xlsx met 7.000 rijen
+ * is meestal 1–2 MB, maar met ingebedde opmaak loopt dat er makkelijk over —
+ * en dan faalt het pas in productie. Dezelfde route als de documentbijlagen:
+ * de browser PUT't rechtstreeks naar Supabase.
+ *
+ * Het bestand blijft in Storage staan, en dat is geen restafval: de droogloop
+ * en het wegschrijven lezen het opnieuw, en daardoor kan een import die op een
+ * time-out stuitte gewoon verdergaan.
+ */
+const LIJST_TYPES = new Set([
+  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  "application/vnd.ms-excel",
+  "application/vnd.ms-excel.sheet.macroenabled.12",
+  "text/csv",
+  "text/plain",
+  "text/tab-separated-values",
+  "application/csv",
+  "application/octet-stream", // sommige browsers sturen dit voor .csv
+]);
+
+export async function signProspectListUpload(
+  filename: string,
+  contentType?: string,
+): Promise<{ path: string; token: string; signedUrl: string; contentType: string }> {
+  if (!/\.(xlsx|xlsm|xls|csv|tsv|txt)$/i.test(filename)) {
+    throw new Error("Alleen Excel (.xlsx, .xls) of CSV-bestanden.");
+  }
+  if (contentType && !LIJST_TYPES.has(contentType)) {
+    throw new Error(`Bestandstype ${contentType} wordt niet ondersteund.`);
+  }
+  await ensurePoBucket();
+  const path = `lead-imports/${crypto.randomUUID()}-${safeName(filename)}`;
+  const { data, error } = await supabase().storage.from(PO_BUCKET).createSignedUploadUrl(path);
+  if (error || !data) throw new Error(`Kon upload-URL niet aanmaken: ${error?.message ?? "onbekend"}`);
+  return { path, token: data.token, signedUrl: data.signedUrl, contentType: contentType || "application/octet-stream" };
+}
+
+/** De bytes van een geüploade prospectlijst teruglezen. */
+export async function fetchProspectListBytes(path: string): Promise<Uint8Array | null> {
+  const uit = await fetchDocumentFileBytes(path);
+  return uit?.bytes ?? null;
+}
+
 /** Download de bytes van een documentbijlage (voor de mail-bijlage). */
 export async function fetchDocumentFileBytes(
   path: string,

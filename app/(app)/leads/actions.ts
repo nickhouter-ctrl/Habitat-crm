@@ -1,13 +1,12 @@
 "use server";
 
 import { randomBytes } from "node:crypto";
-import { and, desc, eq, inArray, isNotNull, isNull, sql } from "drizzle-orm";
+import { and, eq, inArray, isNotNull, isNull, sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
 import { requireModule } from "@/lib/auth/guards";
 
-import { auth } from "@/auth";
 import { db } from "@/lib/db";
 import {
   campaignRecipients,
@@ -143,37 +142,10 @@ export async function findMissingEmails(): Promise<{ ok: boolean; found: number;
   return { ok: true, found, checked: targets.length };
 }
 
-// ─── CSV-import (naam,email,website,telefoon,plaats) ──────────────────────────
-export async function importCsv(formData: FormData) {
-  await requireUser();
-  const category = String(formData.get("category") ?? "overig") as PlaceCategory;
-  const raw = String(formData.get("csv") ?? "").trim();
-  if (!raw) redirect("/leads?error=leeg");
-  let added = 0;
-  for (const line of raw.split("\n")) {
-    const [name, email, website, phone, city] = line.split(/[,;\t]/).map((s) => s?.trim());
-    if (!name) continue;
-    const [row] = await db
-      .insert(prospects)
-      .values({
-        companyName: name,
-        category,
-        email: email || null,
-        website: website || null,
-        phone: phone || null,
-        city: city || null,
-        source: "import",
-        status: "new",
-        lawfulBasisNote: `B2B gerechtvaardigd belang — geïmporteerde lijst op ${new Date().toISOString().slice(0, 10)}`,
-        unsubscribeToken: token(),
-      })
-      .onConflictDoNothing({ target: prospects.email })
-      .returning({ id: prospects.id });
-    if (row) added++;
-  }
-  revalidatePath("/leads");
-  redirect(`/leads?added=${added}`);
-}
+// De oude plak-CSV-import is weg. Die deed geen dedupe tegen contacten of de
+// afmeldlijst, legde niet vast waar een lijst vandaan kwam, en schreef rij voor
+// rij weg — bij 7.000 regels dus 7.000 losse queries. Het echte importpad staat
+// in app/(app)/leads/import/.
 
 export async function deleteProspect(id: string) {
   await requireUser();

@@ -338,6 +338,8 @@ export const contacts = pgTable(
   (t) => [
     index("contacts_name_idx").on(t.name),
     index("contacts_email_idx").on(t.email),
+    // Voor de dedupe bij de prospect-import, die hoofdletterongevoelig vergelijkt.
+    index("contacts_email_lower_idx").on(sql`lower(${t.email})`),
     index("contacts_owner_idx").on(t.ownerId),
     index("contacts_company_idx").on(t.companyId),
     index("contacts_source_idx").on(t.source),
@@ -2620,14 +2622,84 @@ export const prospects = pgTable(
     contactId: uuid().references((): AnyPgColumn => contacts.id, { onDelete: "set null" }),
     lastEmailedAt: timestamp({ withTimezone: true }),
     notes: text(),
+    postalCode: text(),
+    /** Vrije branchetekst uit het bestand — naast de vaste `category`. */
+    sector: text(),
+    /** Kolommen uit het bestand die geen eigen veld hebben ("50-100 medewerkers"). */
+    tags: text().array(),
+    /** Ingelezen maar bewust NIET als aanhef gebruikt: minder persoonsgegevens. */
+    contactPersonName: text(),
+    /** Uit welke upload deze rij komt — maakt "deze lijst terugdraaien" mogelijk. */
+    importId: uuid().references((): AnyPgColumn => prospectImports.id, { onDelete: "set null" }),
     ...timestamps,
   },
   (t) => [
-    uniqueIndex("prospects_email_uidx").on(t.email),
+    // Hoofdletterongevoelig: Info@X.es en info@x.es zijn hetzelfde postvak.
+    uniqueIndex("prospects_email_lower_uidx").on(sql`lower(${t.email})`),
     uniqueIndex("prospects_source_ref_uidx").on(t.sourceRef),
     index("prospects_status_idx").on(t.status),
     index("prospects_category_idx").on(t.category),
+    index("prospects_city_idx").on(t.city),
+    index("prospects_import_idx").on(t.importId),
+    index("prospects_last_emailed_idx").on(t.lastEmailedAt),
   ],
+);
+
+export const prospectImportStatus = pgEnum("prospect_import_status", [
+  "uploaded", // bestand staat in storage, kolommen nog niet gekozen
+  "analyzed", // droogloop gedaan, wacht op bevestiging
+  "applying", // wordt weggeschreven (kan meerdere rondes duren)
+  "done",
+  "failed",
+]);
+
+/**
+ * Eén rij per upload. Twee redenen waarom dit een eigen tabel is en geen
+ * tekstveld op de prospect:
+ *
+ *  - **Verantwoording.** Bij een gekochte of gescrapete lijst moet je kunnen
+ *    laten zien waar die vandaan komt (AVG art. 5.2 / 30). `provenance`,
+ *    `vendor` en `acquiredAt` zijn daarom verplicht in te vullen bij de upload.
+ *  - **Terugdraaien.** `prospects.importId` wijst hierheen, dus een verkeerd
+ *    ingelezen lijst is met één query weer weg.
+ *
+ * `processedRows` is tegelijk de hervat-cursor: 7.000 rijen wegschrijven kan
+ * langer duren dan één serverless-verzoek mag, en dan gaat de volgende ronde
+ * verder waar deze stopte.
+ */
+export const prospectImports = pgTable(
+  "prospect_imports",
+  {
+    id: uuid()
+      .primaryKey()
+      .default(sql`gen_random_uuid()`),
+    label: text().notNull(),
+    filename: text().notNull(),
+    storagePath: text().notNull(),
+    sheetName: text(),
+    /** 1-gebaseerd, want dat is het rijnummer dat je in Excel ziet. */
+    headerRow: integer().notNull().default(1),
+    /** Per kolomindex het gekozen veld, zoals in lib/leads/prospect-columns.ts. */
+    mapping: jsonb().$type<(string | null)[]>().notNull().default([]),
+    defaultCategory: prospectCategory().notNull().default("overig"),
+    language: text().notNull().default("es"),
+    /** Waar komt deze lijst vandaan — verplicht, in gewone taal. */
+    provenance: text().notNull(),
+    vendor: text(),
+    acquiredAt: timestamp({ withTimezone: true }),
+    vendorRef: text(),
+    totalRows: integer().notNull().default(0),
+    processedRows: integer().notNull().default(0),
+    insertedCount: integer().notNull().default(0),
+    duplicateCount: integer().notNull().default(0),
+    invalidCount: integer().notNull().default(0),
+    skippedContactCount: integer().notNull().default(0),
+    status: prospectImportStatus().notNull().default("uploaded"),
+    error: text(),
+    createdById: uuid().references(() => users.id, { onDelete: "set null" }),
+    ...timestamps,
+  },
+  (t) => [index("prospect_imports_status_idx").on(t.status)],
 );
 
 export const campaignStatus = pgEnum("campaign_status", ["draft", "sending", "sent"]);

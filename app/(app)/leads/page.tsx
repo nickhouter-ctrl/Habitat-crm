@@ -1,4 +1,4 @@
-import { and, desc, eq, isNotNull, isNull, sql } from "drizzle-orm";
+import { desc, isNull, sql } from "drizzle-orm";
 import Link from "next/link";
 
 import {
@@ -10,6 +10,7 @@ import {
   CardTitle,
   Field,
   Input,
+  LinkButton,
   PageHeader,
   Select,
   StatTile,
@@ -18,15 +19,13 @@ import {
   Td,
   Th,
   THead,
-  Textarea,
   Tr,
 } from "@/components/ui";
 import { db } from "@/lib/db";
 import { emailCampaigns, emailSuppressions, prospects } from "@/lib/db/schema";
-import type { BadgeTone } from "@/components/ui";
 import { placesConfigured } from "@/lib/leads/places";
 import { groupLabel } from "@/lib/leads/groups";
-import { createCampaign, deleteCampaign, deleteProspect, importCsv, searchAndImportProspects } from "./actions";
+import { createCampaign, deleteCampaign, searchAndImportProspects } from "./actions";
 import { FindEmailsButton } from "./find-emails-button";
 
 export const metadata = { title: "Leads" };
@@ -40,16 +39,6 @@ const CATEGORY_LABEL: Record<string, string> = {
   hovenier: "Hovenier",
   overig: "Overig",
 };
-const STATUS: Record<string, { label: string; tone: BadgeTone }> = {
-  new: { label: "Nieuw", tone: "info" },
-  emailed: { label: "Gemaild", tone: "accent" },
-  replied: { label: "Gereageerd", tone: "success" },
-  bounced: { label: "Bounce", tone: "warning" },
-  unsubscribed: { label: "Afgemeld", tone: "danger" },
-  converted: { label: "Klant", tone: "success" },
-  skipped: { label: "Overgeslagen", tone: "neutral" },
-};
-
 export default async function LeadsPage({
   searchParams,
 }: {
@@ -62,16 +51,8 @@ export default async function LeadsPage({
   const flashNoEmail = typeof sp.noemail === "string" ? sp.noemail : null;
   const flashMails = typeof sp.mails === "string" ? sp.mails : null;
 
-  // Filters op de prospect-lijst.
-  const ef = typeof sp.ef === "string" ? sp.ef : "alle"; // e-mailfilter: alle | met | geen
-  const st = typeof sp.st === "string" ? sp.st : "alle"; // statusfilter
-  const prospectWhere = and(
-    ef === "met" ? isNotNull(prospects.email) : ef === "geen" ? isNull(prospects.email) : undefined,
-    st !== "alle" ? eq(prospects.status, st as never) : undefined,
-  );
-
-  const [rows, groupRowsRaw, campaigns, suppressedCount, missingEmailCount] = await Promise.all([
-    db.query.prospects.findMany({ where: prospectWhere, orderBy: desc(prospects.createdAt), limit: 300 }),
+  const [prospectCount, groupRowsRaw, campaigns, suppressedCount, missingEmailCount] = await Promise.all([
+    db.$count(prospects),
     db.execute(sql`
       SELECT collection, count(*)::int AS n, min(image_url) AS image
       FROM products
@@ -87,8 +68,6 @@ export default async function LeadsPage({
     (groupRowsRaw as unknown as { rows?: Array<{ collection: string; n: number; image: string | null }> }).rows ??
     (groupRowsRaw as unknown as Array<{ collection: string; n: number; image: string | null }>)
   ).map((r) => ({ collection: r.collection, n: Number(r.n), image: r.image }));
-
-  const withEmail = rows.filter((r) => r.email).length;
 
   return (
     <>
@@ -110,7 +89,7 @@ export default async function LeadsPage({
       )}
 
       <div className="mb-6 grid gap-3 sm:grid-cols-3">
-        <StatTile label="Prospects" value={String(rows.length)} hint={`${withEmail} met e-mail`} tone="neutral" />
+        <StatTile label="Prospects" value={String(prospectCount)} hint={`${prospectCount - missingEmailCount} met e-mail`} tone="neutral" />
         <StatTile label="Afgemeld / suppressie" value={String(suppressedCount)} hint="worden nooit gemaild" tone="neutral" />
         <StatTile label="Campagnes" value={String(campaigns.length)} tone="neutral" />
       </div>
@@ -167,29 +146,24 @@ export default async function LeadsPage({
           </CardContent>
         </Card>
 
-        {/* CSV / lijst importeren */}
+        {/* Lijst importeren — het echte werk gebeurt op /leads/import */}
         <Card>
           <CardHeader>
             <CardTitle>Lijst importeren</CardTitle>
           </CardHeader>
-          <CardContent>
-            <form action={importCsv} className="space-y-3">
-              <Field label="Categorie" htmlFor="csvCategory">
-                <Select id="csvCategory" name="category" defaultValue="overig">
-                  {Object.entries(CATEGORY_LABEL).map(([v, l]) => (
-                    <option key={v} value={v}>
-                      {l}
-                    </option>
-                  ))}
-                </Select>
-              </Field>
-              <Field label="Plak regels" htmlFor="csv" hint="per regel: naam, e-mail, website, telefoon, plaats">
-                <Textarea id="csv" name="csv" rows={6} placeholder={"Studio X, info@studiox.es, studiox.es, +34..., Jávea\n..."} />
-              </Field>
-              <Button type="submit" variant="secondary">
-                Importeren
-              </Button>
-            </form>
+          <CardContent className="space-y-3 text-sm">
+            <p>
+              Een Excel- of CSV-bestand met bedrijven uploaden. Je kiest zelf welke kolom wat is, en je krijgt eerst te
+              zien wat er gaat gebeuren: hoeveel nieuw, hoeveel dubbel, hoeveel al klant en hoeveel afgemeld. Pas daarna
+              wordt er iets weggeschreven.
+            </p>
+            <p className="text-muted">
+              Ze komen als <strong>prospect</strong> in het systeem, niet in je contactenlijst. Wordt er iemand klant,
+              dan zet je die met één klik over.
+            </p>
+            <LinkButton href="/leads/import" variant="primary">
+              Bestand importeren
+            </LinkButton>
           </CardContent>
         </Card>
       </div>
@@ -313,88 +287,37 @@ export default async function LeadsPage({
         </Card>
       )}
 
-      {/* Prospect-lijst */}
+      {/* De lijst zelf staat op /leads/prospects: die pagina pagineert en zoekt
+          server-side, want bij duizenden rijen is een tabel op deze pagina
+          onwerkbaar (en loog de teller erboven). */}
       <Card className="mt-6">
         <CardHeader className="flex flex-wrap items-center justify-between gap-3">
-          <CardTitle>Prospects ({rows.length})</CardTitle>
+          <CardTitle>Prospects ({prospectCount})</CardTitle>
           <div className="flex flex-wrap items-center gap-2">
             <FindEmailsButton missingCount={missingEmailCount} />
-            <form method="get" className="flex items-center gap-2">
-              <Select name="ef" defaultValue={ef} className="text-sm">
-                <option value="alle">Alle</option>
-                <option value="met">Met e-mail</option>
-                <option value="geen">Zonder e-mail</option>
-              </Select>
-              <Select name="st" defaultValue={st} className="text-sm">
-                <option value="alle">Alle statussen</option>
-                {Object.entries(STATUS).map(([v, s]) => (
-                  <option key={v} value={v}>
-                    {s.label}
-                  </option>
-                ))}
-              </Select>
-              <Button type="submit" variant="secondary" size="sm">
-                Filter
-              </Button>
-            </form>
+            <LinkButton href="/leads/prospects" variant="secondary" size="sm">
+              Lijst openen
+            </LinkButton>
           </div>
         </CardHeader>
-        <CardContent className="p-0">
-          {rows.length === 0 ? (
-            <p className="px-6 py-10 text-center text-sm text-muted">
-              Nog geen prospects. Zoek bedrijven of importeer een lijst hierboven.
-            </p>
+        <CardContent className="text-sm">
+          {prospectCount === 0 ? (
+            <p className="text-muted">Nog geen prospects. Zoek bedrijven hierboven of importeer een lijst.</p>
           ) : (
-            <Table>
-              <THead>
-                <tr>
-                  <Th>Bedrijf</Th>
-                  <Th>Categorie</Th>
-                  <Th>E-mail</Th>
-                  <Th>Plaats</Th>
-                  <Th>Status</Th>
-                  <Th />
-                </tr>
-              </THead>
-              <TBody>
-                {rows.map((r) => {
-                  const del = deleteProspect.bind(null, r.id);
-                  return (
-                    <Tr key={r.id}>
-                      <Td>
-                        <span className="font-medium">{r.companyName}</span>
-                        {r.website && (
-                          <a
-                            href={r.website}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="block text-xs text-accent hover:underline"
-                          >
-                            {r.website.replace(/^https?:\/\/(www\.)?/, "").replace(/\/$/, "")}
-                          </a>
-                        )}
-                      </Td>
-                      <Td>{CATEGORY_LABEL[r.category] ?? r.category}</Td>
-                      <Td>{r.email ?? <span className="text-xs text-muted">geen e-mail</span>}</Td>
-                      <Td>{r.city ?? "—"}</Td>
-                      <Td>
-                        <Badge tone={STATUS[r.status]?.tone ?? "neutral"}>{STATUS[r.status]?.label ?? r.status}</Badge>
-                      </Td>
-                      <Td>
-                        <form action={del}>
-                          <button type="submit" className="text-xs text-danger hover:underline">
-                            Verwijderen
-                          </button>
-                        </form>
-                      </Td>
-                    </Tr>
-                  );
-                })}
-              </TBody>
-            </Table>
+            <p className="text-muted">
+              {prospectCount} bedrijven in de lijst, {prospectCount - missingEmailCount} met e-mailadres.{" "}
+              <Link href="/leads/prospects" className="underline">
+                Zoeken, filteren en beheren
+              </Link>{" "}
+              ·{" "}
+              <Link href="/leads/import" className="underline">
+                lijst importeren
+              </Link>
+            </p>
           )}
         </CardContent>
       </Card>
+
     </>
   );
 }
