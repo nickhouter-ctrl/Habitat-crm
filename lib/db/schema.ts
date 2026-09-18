@@ -2172,6 +2172,15 @@ export const emailInbox = pgTable(
     linkedPurchaseOrderId: uuid().references(() => purchaseOrders.id, { onDelete: "set null" }),
     linkedQuoteRequestId: uuid().references(() => quoteRequests.id, { onDelete: "set null" }),
     notes: text(),
+    /**
+     * In welk postvak deze mail is binnengekomen (hi@, purchase@, teresa@).
+     * Eerder werd dat geraden door het inkoopadres in To/Cc te zoeken, en dat
+     * is fragiel: bij een BCC of een antwoord op een Reply-To staat het adres
+     * er niet in. Nu legt het ophalen zelf vast waar de mail vandaan komt —
+     * en dat is ook de basis voor een postvak dat maar één persoon ziet.
+     * Leeg bij rijen van vóór deze kolom: die blijven voor iedereen zichtbaar.
+     */
+    mailboxUser: text(),
     ...timestamps,
   },
   (t) => [
@@ -2180,6 +2189,7 @@ export const emailInbox = pgTable(
     index("email_inbox_received_at_idx").on(t.receivedAt),
     // FK zonder index — de kostenanalyse joint hierop (lib/landed-cost.ts).
     index("email_inbox_linked_po_idx").on(t.linkedPurchaseOrderId),
+    index("email_inbox_mailbox_idx").on(t.mailboxUser),
   ],
 );
 

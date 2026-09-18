@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { and, count, desc, eq, ne } from "drizzle-orm";
 import { huidigeToegangOfNull } from "@/lib/auth/access";
+import { mailZichtbaarVoor } from "@/lib/mail-visibility";
 import { db } from "@/lib/db";
 import { emailInbox, inboxSuggestions, purchaseInvoiceReviews } from "@/lib/db/schema";
 import { nogRelevant } from "@/lib/assistant/achterhaald";
@@ -28,7 +29,9 @@ export default async function AssistantPage({ searchParams }: { searchParams: Pr
       .from(inboxSuggestions).innerJoin(emailInbox, eq(emailInbox.id, inboxSuggestions.emailId))
       // Openstaande voorstellen: alleen mail waar nog niets met is gedaan — niet
       // gelezen, niet gekoppeld, geen beslissing op de factuurkaart.
-      .where(and(eq(inboxSuggestions.status, ["reviewed", "auto_archived"].includes(status) ? status : "open"), status === "open" ? nogRelevant : status === "auto_archived" ? undefined : ne(emailInbox.status, "archived")))
+      // Het marketingpostvak is privé: haar voorstellen horen niet in de lijst
+      // van iemand anders.
+      .where(and(eq(inboxSuggestions.status, ["reviewed", "auto_archived"].includes(status) ? status : "open"), status === "open" ? nogRelevant : status === "auto_archived" ? undefined : ne(emailInbox.status, "archived"), mailZichtbaarVoor(ik?.email)))
       .orderBy(desc(emailInbox.receivedAt)).limit(200),
     magBedragen ? loadProjectFunding() : new Map<string, Awaited<ReturnType<typeof loadProjectFunding>> extends Map<string, infer V> ? V : never>(),
     magBedragen ? loadQuoteChecks() : [],

@@ -25,8 +25,10 @@ export type MailAccount = { user: string; pass: string };
 
 /**
  * Alle Gmail-postvakken die het CRM moet pollen: hi@ (hoofdaccount) en —
- * indien geconfigureerd — purchase@ (apart account). Wachtwoorden zijn
- * Gmail app-wachtwoorden.
+ * indien geconfigureerd — purchase@ (inkoop) en teresa@ (marketing en
+ * klantcontact). Wachtwoorden zijn Gmail app-wachtwoorden; die worden per
+ * postvak aangemaakt, want een app-wachtwoord geeft alleen toegang tot het
+ * account waar het gemaakt is.
  */
 export function getMailAccounts(): MailAccount[] {
   const accounts: MailAccount[] = [];
@@ -37,10 +39,24 @@ export function getMailAccounts(): MailAccount[] {
   const pUser = process.env.GMAIL_PURCHASE_USER?.trim();
   const pPass = process.env.GMAIL_PURCHASE_APP_PASSWORD?.replace(/\s/g, "");
   if (pUser && pPass) accounts.push({ user: pUser, pass: pPass });
+  const mAccount = getMarketingAccount();
+  if (mAccount) accounts.push(mAccount);
   if (accounts.length === 0) {
     throw new Error("Geen Gmail-account geconfigureerd (GMAIL_USER / GMAIL_APP_PASSWORD).");
   }
   return accounts;
+}
+
+/**
+ * Het marketingpostvak (teresa@), als dat is geconfigureerd. Nodig om haar
+ * klantmail op te halen en om antwoorden écht vanaf háár adres te versturen:
+ * Gmail weigert een From-adres dat niet het ingelogde account is, dus alleen de
+ * From-header omzetten werkt niet.
+ */
+export function getMarketingAccount(): MailAccount | null {
+  const user = process.env.GMAIL_MARKETING_USER?.trim();
+  const pass = process.env.GMAIL_MARKETING_APP_PASSWORD?.replace(/\s/g, "");
+  return user && pass ? { user, pass } : null;
 }
 
 /** Maak een IMAP-client. Caller moet zelf connect() + logout() doen. */

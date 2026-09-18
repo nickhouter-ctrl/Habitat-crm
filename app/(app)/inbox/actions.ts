@@ -14,6 +14,7 @@ import { activities, emailInbox, inboxSuggestions, mailAttachments, purchaseOrde
 import { escapeHtml, persoonlijkeMail, sendEmail } from "@/lib/email";
 import { recordSentEmail } from "@/lib/sent-email";
 import { runImapPoll, type ImapPollResult } from "@/lib/imap-poll";
+import { marketingMailbox } from "@/lib/mail-visibility";
 import { catalogusMailBijlagen, copyMailAttachmentToPoBucket, listCatalogFiles } from "@/lib/storage";
 
 async function requireUser() {
@@ -228,6 +229,11 @@ export async function replyToMail(emailId: string, formData: FormData) {
 
   const bijlagePaden = formData.getAll("bijlage").map((v) => String(v));
 
+  // Antwoorden vanaf het postvak waar de mail binnenkwam. Op een mail aan
+  // teresa@ antwoorden vanaf hi@ breekt de thread bij de ontvanger en zet het
+  // gesprek op een adres dat zij niet beheert.
+  const postvak = mail.mailboxUser === marketingMailbox() && mail.mailboxUser ? "marketing" : "main";
+
   let sent = false;
   try {
     const attachments = await catalogusMailBijlagen(bijlagePaden);
@@ -239,6 +245,10 @@ export async function replyToMail(emailId: string, formData: FormData) {
       text: opgemaakt.text,
       attachments: attachments.length > 0 ? attachments : undefined,
       fromUser: { name: me?.name ?? user.name },
+      fromMailbox: postvak,
+      // Uit een persoonlijk postvak gaat geen kopie naar het team: dat is
+      // haar klantcontact, en meelezen is hier niet het doel.
+      noCompanyBcc: postvak === "marketing",
       inReplyTo: mail.messageId ?? undefined,
       references: mail.messageId ?? undefined,
     });
@@ -528,7 +538,8 @@ async function maakInkoopfactuurUitMail(
 /** Handmatig mails ophalen — handig om niet op de kwartier-cron te wachten. */
 export async function fetchMails(): Promise<ImapPollResult> {
   await requireUser();
-  const result = await runImapPoll();
+  // Deze pagina heeft maxDuration 60; blijf daar ruim onder.
+  const result = await runImapPoll(45_000);
   revalidatePath("/inbox");
   return result;
 }

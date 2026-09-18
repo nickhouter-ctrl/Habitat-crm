@@ -48,7 +48,7 @@ export default async function StartPage({
 
   const author = alias(users, "author");
   const [dagtaken, taakRows, teamleden, badges, [prefsRow]] = await Promise.all([
-    verzamelDagtaken(ik?.rol),
+    verzamelDagtaken(ik?.rol, ik?.email),
     db
       .select({
         id: activities.id,
@@ -80,7 +80,7 @@ export default async function StartPage({
     allesZichtbaar
       ? db.select({ id: users.id, name: users.name, email: users.email }).from(users).orderBy(asc(users.name))
       : Promise.resolve([] as { id: string; name: string | null; email: string }[]),
-    verzamelNavBadges(ik?.rol),
+    verzamelNavBadges(ik?.rol, ik?.email),
     // Naam vers uit de DB: de JWT-sessie kan een oude naam cachen (30 dagen).
     db.select({ startPrefs: users.startPrefs, name: users.name }).from(users).where(eq(users.id, userId)).limit(1),
   ]);

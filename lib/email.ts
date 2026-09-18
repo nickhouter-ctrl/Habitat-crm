@@ -25,6 +25,13 @@ export async function sendEmail(input: {
   /** Verstuur vanaf het inkoop-postvak i.p.v. hi@ (bv. een afgekeurde factuur). */
   fromPurchase?: boolean;
   /**
+   * Vanaf welk postvak dit uitgaat. `"marketing"` is teresa@: haar antwoord op
+   * een klant moet écht van haar adres komen, anders valt de thread bij de
+   * ontvanger uiteen en klopt het Reply-To niet meer. `fromPurchase` blijft
+   * bestaan als kortere schrijfwijze voor `"purchase"`.
+   */
+  fromMailbox?: "main" | "purchase" | "marketing";
+  /**
    * Naam van de persoon namens wie dit uitgaat. Komt in de From-header te staan
    * ("Nick · Habitat One"), terwijl het ADRES het gedeelde postvak blijft — zo
    * ziet de ontvanger wie hem schreef en blijft de hele thread op één plek.
@@ -63,15 +70,20 @@ export async function sendEmail(input: {
   // altijd in het CRM blijft staan.
   if (process.env.GMAIL_USER && process.env.GMAIL_APP_PASSWORD) {
     try {
-      const { sendMail, getPurchaseAccount } = await import("@/lib/gmail");
+      const { sendMail, getPurchaseAccount, getMarketingAccount } = await import("@/lib/gmail");
+      const postvak = input.fromMailbox ?? (input.fromPurchase ? "purchase" : "main");
       // Vanaf purchase@ versturen vereist dat dat postvak is geconfigureerd —
       // stil terugvallen op hi@ zou de leverancier op het verkeerde adres laten
       // antwoorden, dus dan liever een duidelijke fout.
       let account;
       let fromName: string | undefined;
-      if (input.fromPurchase) {
+      if (postvak === "purchase") {
         account = getPurchaseAccount() ?? undefined;
         if (!account) return { sent: false, reason: "purchase-postvak-niet-geconfigureerd" };
+        if (input.fromUser?.name) fromName = `${input.fromUser.name.trim()} · Habitat One`;
+      } else if (postvak === "marketing") {
+        account = getMarketingAccount() ?? undefined;
+        if (!account) return { sent: false, reason: "marketing-postvak-niet-geconfigureerd" };
         if (input.fromUser?.name) fromName = `${input.fromUser.name.trim()} · Habitat One`;
       }
       const res = await sendMail({

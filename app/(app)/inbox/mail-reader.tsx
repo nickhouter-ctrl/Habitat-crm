@@ -3,6 +3,7 @@ import { QueueInvoiceButton } from "./queue-invoice-button";
 import { asc, eq } from "drizzle-orm";
 
 import { huidigeToegangOfNull } from "@/lib/auth/access";
+import { isMarketingGebruiker, marketingMailbox } from "@/lib/mail-visibility";
 import Link from "next/link";
 import { Suspense } from "react";
 import { Archive, ArrowLeft, FilePlus2, Reply } from "lucide-react";
@@ -37,6 +38,11 @@ export async function MailReader({ opened, id, reply, replyResult, backHref, mai
     huidigeToegangOfNull(),
   ]);
   if (!mail) return <p className="p-6 text-sm text-muted">Dit bericht is niet meer beschikbaar.</p>;
+  // De mail-id staat in de URL, dus de lijst filteren is niet genoeg: hier ligt
+  // de grens voor het privépostvak.
+  if (mail.mailboxUser && !isMarketingGebruiker(ik?.email) && mail.mailboxUser === marketingMailbox()) {
+    return <p className="p-6 text-sm text-muted">Dit bericht hoort bij een persoonlijk postvak.</p>;
+  }
   const readOnly = !ik?.heeftCap("schrijven");
   // Een bijlage als inkoopfactuur klaarzetten hoort bij inkoop, niet bij mail.
   const magFactuurKlaarzetten = ik?.magModule("inkoop") ?? false;

@@ -9,11 +9,12 @@ import "server-only";
 import { and, count, eq, inArray, isNull, sql } from "drizzle-orm";
 
 import { magPad } from "@/lib/auth/modules";
+import { voorstelZichtbaarVoor, mailZichtbaarVoor } from "@/lib/mail-visibility";
 import { db } from "@/lib/db";
 import { emailInbox, inboxSuggestions, purchaseInvoiceReviews, quoteRequests } from "@/lib/db/schema";
 import { openVoorstellenFilter } from "@/lib/assistant/achterhaald";
 
-export async function verzamelNavBadges(rol?: string): Promise<Record<string, number>> {
+export async function verzamelNavBadges(rol?: string, userEmail?: string | null): Promise<Record<string, number>> {
   // Een teller op een menu-item dat iemand niet mag zien, hoeft niet geteld te
   // worden. Voor de bestaande rollen verandert er niets.
   const mag = (pad: string) => rol === undefined || magPad(rol, pad);
@@ -24,12 +25,22 @@ export async function verzamelNavBadges(rol?: string): Promise<Record<string, nu
       ? db.select({ value: count() }).from(quoteRequests).where(eq(quoteRequests.status, "pending"))
       : nul,
     mag("/inbox")
-      ? db.select({ value: count() }).from(emailInbox).where(and(sql`${emailInbox.status} <> 'archived'`, isNull(emailInbox.readAt)))
+      ? db
+          .select({ value: count() })
+          .from(emailInbox)
+          // Het marketingpostvak is privé: die ongelezen mail hoort niet in de
+          // teller van iemand anders.
+          .where(and(sql`${emailInbox.status} <> 'archived'`, isNull(emailInbox.readAt), mailZichtbaarVoor(userEmail)))
       : nul,
     mag("/inkooporders/te-verwerken")
       ? db.select({ value: count() }).from(purchaseInvoiceReviews).where(eq(purchaseInvoiceReviews.status, "pending"))
       : nul,
-    mag("/assistent") ? db.select({ value: count() }).from(inboxSuggestions).where(openVoorstellenFilter) : nul,
+    mag("/assistent")
+      ? db
+          .select({ value: count() })
+          .from(inboxSuggestions)
+          .where(and(openVoorstellenFilter, voorstelZichtbaarVoor(userEmail)))
+      : nul,
   ]);
   return {
     "/assistent": suggestions?.value ?? 0,

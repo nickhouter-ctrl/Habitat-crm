@@ -4,7 +4,9 @@ import { Suspense } from "react";
 import { Paperclip, Search } from "lucide-react";
 import Link from "next/link";
 import { Button, Input, PageHeader } from "@/components/ui";
+import { huidigeToegangOfNull } from "@/lib/auth/access";
 import { db } from "@/lib/db";
+import { isMarketingGebruiker, mailZichtbaarVoor, marketingMailbox } from "@/lib/mail-visibility";
 import { emailInbox, emailSyncState, inboxSuggestions } from "@/lib/db/schema";
 import { MAIL_GROUPS, type MailGroup } from "@/lib/assistant/mail-rules";
 import { cn } from "@/lib/utils";
@@ -21,9 +23,25 @@ export default async function InboxPage({ searchParams }: { searchParams: Promis
   const status = ["unread", "new", "linked", "archived", "all"].includes(value("status")) ? value("status") : "active";
   const mailbox = value("mailbox"), q = value("q").trim(), group = value("group");
   const page = Math.max(1, Math.min(10000, Math.floor(Number(value("page")) || 1)));
+  const ik = await huidigeToegangOfNull();
   const purchase = (process.env.GMAIL_PURCHASE_USER || "purchase@habitat-one.com").toLowerCase();
-  const goesToPurchase = sql`(coalesce(${emailInbox.toEmail}, '') ilike ${`%${purchase}%`} or coalesce(${emailInbox.ccEmail}, '') ilike ${`%${purchase}%`})`;
-  const mailboxClause = mailbox === "purchase" ? goesToPurchase : mailbox === "hi" ? sql`not ${goesToPurchase}` : undefined;
+  const marketing = marketingMailbox();
+  const magMarketing = isMarketingGebruiker(ik?.email);
+  // Oudere mail heeft geen mailbox_user; die hoort nog steeds bij hi@/purchase@,
+  // dus daar blijft de oude To/Cc-regel het vangnet.
+  const naarInkoop = sql`(${emailInbox.mailboxUser} = ${purchase} or (${emailInbox.mailboxUser} is null and (coalesce(${emailInbox.toEmail}, '') ilike ${`%${purchase}%`} or coalesce(${emailInbox.ccEmail}, '') ilike ${`%${purchase}%`})))`;
+  const inMarketing = marketing ? sql`${emailInbox.mailboxUser} = ${marketing}` : sql`false`;
+  const gekozenPostvak =
+    mailbox === "purchase"
+      ? naarInkoop
+      : mailbox === "marketing" && magMarketing
+        ? inMarketing
+        : mailbox === "hi"
+          ? sql`not ${naarInkoop} and not ${inMarketing}`
+          : undefined;
+  // Het marketingpostvak is niet gedeeld: alleen zij ziet die mail. Echte
+  // aanvragen komen in hi@ binnen, dus de rest van het team mist niets.
+  const mailboxClause = and(gekozenPostvak, mailZichtbaarVoor(ik?.email));
   const [rows, states, counts, [pending]] = await Promise.all([
     db.select({ id: emailInbox.id, receivedAt: emailInbox.receivedAt, fromName: emailInbox.fromName,
       fromEmail: emailInbox.fromEmail, subject: emailInbox.subject, status: emailInbox.status, readAt: emailInbox.readAt,
@@ -37,7 +55,7 @@ export default async function InboxPage({ searchParams }: { searchParams: Promis
       .orderBy(desc(emailInbox.receivedAt), desc(emailInbox.id)).limit(51).offset((page - 1) * 50),
     db.select().from(emailSyncState),
     db.select({ status: emailInbox.status, n: sql<number>`count(*)::int` }).from(emailInbox).where(mailboxClause).groupBy(emailInbox.status),
-    db.select({ n: sql<number>`count(*)::int` }).from(emailInbox).where(and(ne(emailInbox.status, "archived"), isNull(emailInbox.readAt))),
+    db.select({ n: sql<number>`count(*)::int` }).from(emailInbox).where(and(ne(emailInbox.status, "archived"), isNull(emailInbox.readAt), mailZichtbaarVoor(ik?.email))),
   ]);
   const hasNext = rows.length > 50, visible = rows.slice(0, 50);
   const selected = z.string().uuid().safeParse(value("mail")).success ? { id: value("mail") } : visible[0];
@@ -61,7 +79,7 @@ export default async function InboxPage({ searchParams }: { searchParams: Promis
     <form method="get" className="mb-3 flex flex-wrap gap-2">
       <input type="hidden" name="status" value={status} />
       <div className="relative min-w-48 flex-1"><Search className="absolute left-3 top-3 size-4 text-muted" /><Input name="q" defaultValue={q} placeholder="Zoek afzender, onderwerp of inhoud…" className="pl-9" aria-label="Zoek mail" /></div>
-      <select aria-label="Mailbox" name="mailbox" defaultValue={mailbox} className="rounded-md border border-border bg-surface px-3 py-2 text-sm"><option value="">Beide mailboxen</option><option value="hi">hi@</option><option value="purchase">purchase@</option></select>
+      <select aria-label="Mailbox" name="mailbox" defaultValue={mailbox} className="rounded-md border border-border bg-surface px-3 py-2 text-sm"><option value="">{magMarketing ? "Alle mailboxen" : "Beide mailboxen"}</option><option value="hi">hi@</option><option value="purchase">purchase@</option>{magMarketing && marketing && <option value="marketing">{marketing}</option>}</select>
       <select aria-label="Soort mail" name="group" defaultValue={group} className="rounded-md border border-border bg-surface px-3 py-2 text-sm"><option value="">Alle categorieën</option><option value="reply">Te beantwoorden</option>{Object.entries(MAIL_GROUPS).map(([key, label]) => <option value={key} key={key}>{label}</option>)}</select>
       <Button type="submit" variant="secondary">Zoeken</Button>
     </form>

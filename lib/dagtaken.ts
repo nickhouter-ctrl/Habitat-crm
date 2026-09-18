@@ -12,6 +12,7 @@ import { loadProjectFunding } from "@/lib/project-funding";
 import { and, count, eq, inArray, isNotNull, isNull, sql } from "drizzle-orm";
 
 import { magAlles } from "@/lib/auth/modules";
+import { voorstelZichtbaarVoor } from "@/lib/mail-visibility";
 import { db } from "@/lib/db";
 import { aanvragenTeOpvolgen, offertesTeOpvolgen } from "@/lib/opvolging";
 import { OFFERTE_TE_FACTUREREN } from "@/lib/quote-status";
@@ -58,11 +59,14 @@ const RANG: Record<string, number> = {
  * omzet, marges en openstaande facturen; die getallen mogen niet eens langs de
  * server komen voor iemand die ze niet hoort te zien.
  */
-async function dagtakenBeperkt(): Promise<Dagtaak[]> {
+async function dagtakenBeperkt(userEmail?: string | null): Promise<Dagtaak[]> {
   const [[aanvragen], opvolgAanvragen, [suggestions]] = await Promise.all([
     db.select({ n: sql<number>`count(*)::int` }).from(quoteRequests).where(eq(quoteRequests.status, "pending")),
     aanvragenTeOpvolgen(),
-    db.select({ n: sql<number>`count(*)::int` }).from(inboxSuggestions).where(openVoorstellenFilter),
+    db
+      .select({ n: sql<number>`count(*)::int` })
+      .from(inboxSuggestions)
+      .where(and(openVoorstellenFilter, voorstelZichtbaarVoor(userEmail))),
   ]);
 
   const ev = (n: number, enkel: string, meer: string) => (n === 1 ? enkel : meer);
@@ -95,8 +99,8 @@ async function dagtakenBeperkt(): Promise<Dagtaak[]> {
   return taken.sort((a, b) => PRIO_VOLGORDE[a.prioriteit] - PRIO_VOLGORDE[b.prioriteit] || (RANG[a.key] ?? 99) - (RANG[b.key] ?? 99));
 }
 
-export async function verzamelDagtaken(rol?: string): Promise<Dagtaak[]> {
-  if (rol !== undefined && !magAlles(rol)) return dagtakenBeperkt();
+export async function verzamelDagtaken(rol?: string, userEmail?: string | null): Promise<Dagtaak[]> {
+  if (rol !== undefined && !magAlles(rol)) return dagtakenBeperkt(userEmail);
   const now = new Date();
   const today = now.toISOString().slice(0, 10);
   const openExpr = sql`${documents.status} not in ('paid', 'void', 'draft')`;
@@ -177,7 +181,10 @@ export async function verzamelDagtaken(rol?: string): Promise<Dagtaak[]> {
       offertesTeOpvolgen(),
       aanvragenTeOpvolgen(),
       loadProjectFunding(),
-      db.select({ n: count() }).from(inboxSuggestions).where(openVoorstellenFilter),
+      db
+        .select({ n: count() })
+        .from(inboxSuggestions)
+        .where(and(openVoorstellenFilter, voorstelZichtbaarVoor(userEmail))),
       loadQuoteChecks(),
     ]);
 

@@ -25,6 +25,8 @@ export async function GET(req: Request) {
   const denied = requireCron(req);
   if (denied) return denied;
 
-  const result = await runImapPoll();
+  // Deze route mag 300s; geef de postvakken samen 210s, zodat drie postvakken
+  // elk 70s hebben in plaats van 16s.
+  const result = await runImapPoll(Number(process.env.IMAP_POLL_BUDGET_MS ?? 210_000));
   return NextResponse.json(result, { status: result.ok ? 200 : 500 });
 }

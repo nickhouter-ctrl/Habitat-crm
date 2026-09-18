@@ -42,8 +42,13 @@ type IngestStats = {
   firstFailedUid: number | null;
 };
 
-/** Verwerk geparseerde mails: opslaan, bijlagen, bedrag-extractie, auto-link, auto-factuur. */
-export async function ingestMails(mails: ParsedEmail[]): Promise<IngestStats> {
+/**
+ * Verwerk geparseerde mails: opslaan, bijlagen, bedrag-extractie, auto-link,
+ * auto-factuur. `mailboxUser` is het postvak waar ze zijn opgehaald — dat wordt
+ * bij de mail vastgelegd, zodat de inbox er later op kan filteren in plaats van
+ * het uit To/Cc te moeten raden.
+ */
+export async function ingestMails(mails: ParsedEmail[], mailboxUser?: string): Promise<IngestStats> {
   const s: IngestStats = {
     inserted: 0, duplicates: 0, failed: 0,
     attachmentsStored: 0, invoicesAutoCreated: 0, invoicesNeedReview: 0, reviewIds: [] as string[],
@@ -54,7 +59,7 @@ export async function ingestMails(mails: ParsedEmail[]): Promise<IngestStats> {
   // inbox-verwerking (anders klutter + risico op auto-inkoopfacturen uit onze
   // eigen offerte-/factuur-PDF's).
   const ownAddresses = new Set(
-    [process.env.GMAIL_USER, process.env.GMAIL_PURCHASE_USER, ...ALWAYS_BCC]
+    [process.env.GMAIL_USER, process.env.GMAIL_PURCHASE_USER, process.env.GMAIL_MARKETING_USER, ...ALWAYS_BCC]
       .map((a) => a?.trim().toLowerCase())
       .filter(Boolean) as string[],
   );
@@ -101,6 +106,7 @@ export async function ingestMails(mails: ParsedEmail[]): Promise<IngestStats> {
           })),
           status: stil ? "archived" : "new",
           readAt: stil ? new Date() : null,
+          mailboxUser: mailboxUser?.trim().toLowerCase() ?? null,
         })
         .returning({ id: emailInbox.id });
       s.inserted++;
@@ -182,7 +188,7 @@ async function pollOneMailbox(account: MailAccount): Promise<IngestStats & { fet
   const sinceUid = stateRows[0]?.lastImapUid ?? 0;
 
   const { mails, maxUid } = await fetchNewMails(sinceUid, 100, account);
-  const stats = await ingestMails(mails);
+  const stats = await ingestMails(mails, account.user);
 
   // Schuif de cursor niet voorbij een mislukte mail, anders gaat die voorgoed
   // verloren. Reeds-verwerkte mails ervoor komen als duplicaat terug (geen schade).
@@ -218,8 +224,17 @@ function withDeadline<T>(p: Promise<T>, ms: number, label: string): Promise<T> {
   });
 }
 
-/** Poll alle geconfigureerde postvakken. Een fout in één postvak stopt de andere niet. */
-export async function runImapPoll(): Promise<ImapPollResult> {
+/**
+ * Poll alle geconfigureerde postvakken. Een fout in één postvak stopt de andere
+ * niet.
+ *
+ * `budgetMs` is het totaalbudget dat over de postvakken wordt verdeeld. De cron
+ * mag ruim (die route staat op maxDuration 300); de knop op /inbox krap, want
+ * die pagina heeft 60 seconden. Met een vast budget van 48s zou het derde
+ * postvak nog maar 16s krijgen, en dat is te weinig voor een inhaalslag met
+ * bijlagen.
+ */
+export async function runImapPoll(budgetTotaalMs = 48_000): Promise<ImapPollResult> {
   const totals = {
     fetched: 0, inserted: 0, duplicates: 0, failed: 0,
     attachmentsStored: 0, invoicesAutoCreated: 0, invoicesNeedReview: 0, reviewIds: [] as string[],
@@ -233,9 +248,7 @@ export async function runImapPoll(): Promise<ImapPollResult> {
     return { ok: false, error: String(e?.message ?? e) };
   }
 
-  // Verdeel een totaalbudget van 48s over de postvakken — ruim binnen de 60s
-  // serverless-limiet, ook als een postvak vastloopt.
-  const budgetMs = Math.floor(48_000 / accounts.length);
+  const budgetMs = Math.floor(budgetTotaalMs / accounts.length);
 
   for (const account of accounts) {
     try {
