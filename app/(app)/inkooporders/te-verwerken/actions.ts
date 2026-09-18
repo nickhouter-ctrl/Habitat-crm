@@ -116,9 +116,13 @@ function escapeForHtml(s: string): string {
   return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
 
-export async function ignoreReviewAction(reviewId: string) {
+/**
+ * Negeren met een korte reden. De reden is een leersignaal: hetzelfde soort
+ * bestand van dezelfde afzender komt daarna niet meer bovenaan de wachtrij.
+ */
+export async function ignoreReviewAction(reviewId: string, reden?: string) {
   const user = await requireWriteUser();
-  await ignoreInvoiceReview({ reviewId, userId: user.id });
+  await ignoreInvoiceReview({ reviewId, userId: user.id, reden: reden ?? null });
   refresh();
 }
 

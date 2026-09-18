@@ -3,6 +3,7 @@ import { and, count, desc, eq, ne } from "drizzle-orm";
 import { auth } from "@/auth";
 import { db } from "@/lib/db";
 import { emailInbox, inboxSuggestions, purchaseInvoiceReviews } from "@/lib/db/schema";
+import { nogRelevant } from "@/lib/assistant/achterhaald";
 import { Card, PageHeader, LinkButton, Badge } from "@/components/ui";
 import { SubmitButton } from "@/components/submit-button";
 import { MAIL_GROUPS, type MailGroup } from "@/lib/assistant/mail-rules";
@@ -20,7 +21,9 @@ export default async function AssistantPage({ searchParams }: { searchParams: Pr
   const [mails, funding, quotes, [invoices]] = await Promise.all([
     db.select({ suggestion: inboxSuggestions, subject: emailInbox.subject, from: emailInbox.fromEmail, received: emailInbox.receivedAt })
       .from(inboxSuggestions).innerJoin(emailInbox, eq(emailInbox.id, inboxSuggestions.emailId))
-      .where(and(eq(inboxSuggestions.status, ["reviewed", "auto_archived"].includes(status) ? status : "open"), status === "auto_archived" ? undefined : ne(emailInbox.status, "archived")))
+      // Openstaande voorstellen: alleen mail waar nog niets met is gedaan — niet
+      // gelezen, niet gekoppeld, geen beslissing op de factuurkaart.
+      .where(and(eq(inboxSuggestions.status, ["reviewed", "auto_archived"].includes(status) ? status : "open"), status === "open" ? nogRelevant : status === "auto_archived" ? undefined : ne(emailInbox.status, "archived")))
       .orderBy(desc(emailInbox.receivedAt)).limit(200),
     loadProjectFunding(), loadQuoteChecks(),
     db.select({ n: count() }).from(purchaseInvoiceReviews).where(eq(purchaseInvoiceReviews.status, "pending")),

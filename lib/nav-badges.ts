@@ -10,6 +10,7 @@ import { and, count, eq, inArray, isNull, sql } from "drizzle-orm";
 
 import { db } from "@/lib/db";
 import { emailInbox, inboxSuggestions, purchaseInvoiceReviews, quoteRequests } from "@/lib/db/schema";
+import { openVoorstellenFilter } from "@/lib/assistant/achterhaald";
 
 export async function verzamelNavBadges(): Promise<Record<string, number>> {
   const [[pending], [inboxNew], [teKeuren], [suggestions]] = await Promise.all([
@@ -19,8 +20,7 @@ export async function verzamelNavBadges(): Promise<Record<string, number>> {
       .select({ value: count() })
       .from(purchaseInvoiceReviews)
       .where(eq(purchaseInvoiceReviews.status, "pending")),
-    db.select({ value: count() }).from(inboxSuggestions)
-      .where(and(inArray(inboxSuggestions.status, ["open", "auto_archived"]), isNull(inboxSuggestions.reviewedAt), sql`exists (select 1 from email_inbox e where e.id = ${inboxSuggestions.emailId} and (e.status <> 'archived' or ${inboxSuggestions.status} = 'auto_archived'))`)),
+    db.select({ value: count() }).from(inboxSuggestions).where(openVoorstellenFilter),
   ]);
   return {
     "/assistent": suggestions?.value ?? 0,

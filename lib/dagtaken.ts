@@ -15,6 +15,7 @@ import { db } from "@/lib/db";
 import { aanvragenTeOpvolgen, offertesTeOpvolgen } from "@/lib/opvolging";
 import { OFFERTE_TE_FACTUREREN } from "@/lib/quote-status";
 import { documents, inboxSuggestions, purchaseInvoiceReviews, purchaseOrders, quoteRequests, timeEntries } from "@/lib/db/schema";
+import { openVoorstellenFilter } from "@/lib/assistant/achterhaald";
 import { normalizeDocItems } from "@/lib/documents";
 import { PO_OPEN_STATUSES } from "@/lib/purchase-orders";
 import { formatEUR } from "@/lib/utils";
@@ -131,7 +132,7 @@ export async function verzamelDagtaken(): Promise<Dagtaak[]> {
       offertesTeOpvolgen(),
       aanvragenTeOpvolgen(),
       loadProjectFunding(),
-      db.select({ n: count() }).from(inboxSuggestions).where(and(inArray(inboxSuggestions.status, ["open", "auto_archived"]), isNull(inboxSuggestions.reviewedAt), sql`exists (select 1 from email_inbox e where e.id = ${inboxSuggestions.emailId} and (e.status <> 'archived' or ${inboxSuggestions.status} = 'auto_archived'))`)),
+      db.select({ n: count() }).from(inboxSuggestions).where(openVoorstellenFilter),
       loadQuoteChecks(),
     ]);
 

@@ -277,6 +277,16 @@ export async function runImapPoll(): Promise<ImapPollResult> {
     console.error("AI-herkansing mislukt:", e instanceof Error ? e.message : e);
   }
 
+  // Assistent opruimen: voorstellen bij mail waar al mee gehandeld is (gelezen,
+  // gekoppeld, factuur gekeurd) hoeven niet meer op de lijst te staan.
+  try {
+    const { sluitAchterhaaldeVoorstellen } = await import("@/lib/assistant/achterhaald");
+    const gesloten = await sluitAchterhaaldeVoorstellen();
+    if (gesloten > 0) console.log(`assistent: ${gesloten} achterhaalde voorstellen gesloten`);
+  } catch (e) {
+    console.error("assistent opruimen mislukt:", e instanceof Error ? e.message : e);
+  }
+
   // Eén melding per ronde over de nieuwe facturen — niet één per factuur, anders
   // levert een inhaalslag van twintig facturen twintig mails op.
   if (totals.reviewIds.length > 0) {

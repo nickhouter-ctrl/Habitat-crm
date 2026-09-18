@@ -291,7 +291,10 @@ export function isAutomatischeBeeldnaam(filename: string): boolean {
     /^@images\//i.test(n) || // nieuwsbrief-sjablonen
     /^Outlook-[\w.-]*\.(gif|png|jpe?g)$/i.test(n) || // Outlook-handtekening
     /^[A-Za-z0-9_-]{12,24}\.(png|jpe?g|gif)$/i.test(n) || // willekeurige hash
-    /^noname$/i.test(n)
+    /^noname$/i.test(n) ||
+    /^attachment(-\d+)?\.(png|jpe?g|gif|bmp|heic)$/i.test(n) || // Apple Mail/webmail: inline beeld zonder naam
+    /^(unknown|untitled|imagen|afbeelding|foto)[\s_-]*\d*\.(png|jpe?g|gif|bmp|heic)$/i.test(n) ||
+    /^(pasted|screenshot|schermafbeelding|captura)[\s_-]/i.test(n) // plakplaatje of schermfoto
   );
 }
 

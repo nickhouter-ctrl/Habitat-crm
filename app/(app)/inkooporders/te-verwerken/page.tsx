@@ -17,6 +17,7 @@ import {
   projects,
   purchaseInvoiceReviews,
 } from "@/lib/db/schema";
+import { beoordeelKandidaat } from "@/lib/invoice-learning";
 import { buildInvoiceRejectEmail, supplierEmailCandidates, type EmailCandidate } from "@/lib/invoice-reject";
 import { formatEUR } from "@/lib/utils";
 import { ReviewCard, type ReviewCardData, type ReviewCheck, type ReviewLine } from "./review-card";
@@ -36,6 +37,8 @@ export default async function FacturenKeurenPage() {
       .select({
         review: purchaseInvoiceReviews,
         attachmentName: mailAttachments.filename,
+        attachmentType: mailAttachments.contentType,
+        attachmentSize: mailAttachments.sizeBytes,
         mailId: emailInbox.id,
         subject: emailInbox.subject,
         fromEmail: emailInbox.fromEmail,
@@ -53,6 +56,24 @@ export default async function FacturenKeurenPage() {
       .where(ne(projects.status, "archived"))
       .orderBy(asc(projects.name)),
   ]);
+
+  // Wat leert de wachtrij van eerdere keuringen? Items die sterk lijken op wat
+  // eerder is weggezet (een logo uit een mail, een urenstaat) krijgen een
+  // waarschuwing en zakken naar onderen — ze verdwijnen nooit.
+  const beoordelingen = new Map<string, { kans: number; redenen: string[] }>();
+  await Promise.all(
+    rows.map(async (r) => {
+      const b = await beoordeelKandidaat({
+        fromEmail: r.fromEmail,
+        filename: r.attachmentName,
+        contentType: r.attachmentType,
+        sizeBytes: r.attachmentSize,
+        verdict: r.review.verdict,
+        heeftBedrag: r.review.proposedTotal != null,
+      });
+      if (b.slaOver || b.twijfel) beoordelingen.set(r.review.id, { kans: b.kansGeenFactuur, redenen: b.redenen });
+    }),
+  );
 
   // Adressen en conceptmail per factuur voorbereiden. Dit gebeurt hier op de
   // server, zodat het scherm de tekst direct kan tonen zonder extra ronde.
@@ -138,6 +159,7 @@ export default async function FacturenKeurenPage() {
       emailCandidates: extras.get(v.id)?.candidates ?? [],
       draft: extras.get(v.id)?.draft ?? null,
       wachtDagen: dagenSinds(r.receivedAt),
+      twijfel: beoordelingen.get(v.id) ?? null,
       siblings: [],
     });
     perMail.set(r.mailId, groep);
@@ -190,7 +212,11 @@ export default async function FacturenKeurenPage() {
         />
       ) : (
         <div className="grid gap-5">
-          {[...perMail.entries()].map(([mailId, groep]) => (
+          {[...perMail.entries()]
+            // Mails waarvan élk item "waarschijnlijk geen factuur" is, zakken naar
+            // onderen. Ze blijven staan: het model mag zich vergissen.
+            .sort(([, a], [, b]) => Number(a.items.every((x) => x.twijfel)) - Number(b.items.every((x) => x.twijfel)))
+            .map(([mailId, groep]) => (
             <Card key={mailId} id={`mail-${mailId}`} className="scroll-mt-20">
               <CardHeader>
                 <CardTitle>{groep.subject || "(geen onderwerp)"}</CardTitle>

@@ -1059,10 +1059,15 @@ async function bijlageReviewsVoor(review: { id: string; emailId: string }) {
     );
 }
 
-export async function ignoreInvoiceReview(args: { reviewId: string; userId: string | null }): Promise<void> {
+/**
+ * Negeren. De reden wordt meegeschreven in `decisionNote` (leeg mag): daar
+ * leert de wachtrij van, zodat hetzelfde soort bestand van dezelfde afzender
+ * de volgende keer niet meer bovenaan staat.
+ */
+export async function ignoreInvoiceReview(args: { reviewId: string; userId: string | null; reden?: string | null }): Promise<void> {
   const claimed = await db
     .update(purchaseInvoiceReviews)
-    .set({ status: "ignored", decidedBy: args.userId, decidedAt: new Date(), decidedVia: "app", updatedAt: new Date() })
+    .set({ status: "ignored", decidedBy: args.userId, decidedAt: new Date(), decidedVia: "app", decisionNote: args.reden?.trim() || null, updatedAt: new Date() })
     .where(and(eq(purchaseInvoiceReviews.id, args.reviewId), eq(purchaseInvoiceReviews.status, "pending")))
     .returning();
   const review = claimed[0];
@@ -1071,6 +1076,10 @@ export async function ignoreInvoiceReview(args: { reviewId: string; userId: stri
     .update(emailInbox)
     .set({ status: "archived", updatedAt: new Date() })
     .where(eq(emailInbox.id, review.emailId));
+  const { sluitVoorstellenVoorMail } = await import("@/lib/assistant/achterhaald");
+  await sluitVoorstellenVoorMail(review.emailId);
+  const { vergeetCache } = await import("@/lib/invoice-learning");
+  vergeetCache();
 }
 
 /** Het opgeslagen oordeel terug als lijst met controles. */

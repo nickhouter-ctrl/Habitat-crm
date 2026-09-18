@@ -61,6 +61,8 @@ export type ReviewCardData = {
   /** Voorgeschreven concept: onderwerp en tekst. */
   draft: { subject: string; text: string } | null;
   wachtDagen: number;
+  /** Geleerd uit eerdere keuringen: kans dat dit geen te-betalen factuur is, met uitleg. */
+  twijfel?: { kans: number; redenen: string[] } | null;
   /** Andere facturen uit dezelfde mail — deze kaart kan daar een bijlage
    *  (urenverantwoording, pakbon) bij zijn. */
   siblings: { id: string; label: string }[];
@@ -106,6 +108,11 @@ export function ReviewCard({
             {data.supplier ?? <span className="text-warning">(leverancier onbekend)</span>}
             <Badge tone={verdict.tone}>{verdict.label}</Badge>
             {data.wachtDagen >= 7 && <Badge tone="danger">wacht {data.wachtDagen} dagen</Badge>}
+            {data.twijfel && (
+              <span title={data.twijfel.redenen.join(" · ")}>
+                <Badge tone="neutral">waarschijnlijk geen factuur</Badge>
+              </span>
+            )}
           </p>
           <p className="text-xs text-muted">
             {data.reference ?? "geen referentie"}
@@ -461,18 +468,39 @@ export function ReviewCard({
   );
 }
 
+/**
+ * Negeren met reden. De reden kost één klik extra en is wat de wachtrij slimmer
+ * maakt: "geen factuur" bij een logo uit een mail zorgt ervoor dat zulke
+ * bijlagen van die afzender daarna onderaan belanden.
+ */
+const NEGEER_REDENEN = [
+  ["Geen factuur", "geen factuur"],
+  ["Dubbel", "dubbel"],
+  ["Hoort bij andere factuur", "specificatie of bijlage"],
+  ["Niet voor ons", "niet voor ons"],
+] as const;
+
 function IgnoreButton({ reviewId }: { reviewId: string }) {
   return (
-    <SubmitButton
-      variant="ghost"
-      size="sm"
-      className="text-muted"
-      pendingLabel="…"
-      formAction={ignoreReviewAction.bind(null, reviewId)}
-      title="Geen te-betalen post (bv. een reclamemail die als factuur is aangemerkt)"
-    >
-      Negeren
-    </SubmitButton>
+    <details className="relative">
+      <summary className="cursor-pointer list-none rounded-md px-2 py-1 text-sm text-muted hover:text-foreground" title="Geen te-betalen post">
+        Negeren…
+      </summary>
+      <div className="absolute right-0 z-20 mt-1 w-56 rounded-md border border-border bg-surface p-1 shadow-lg">
+        {NEGEER_REDENEN.map(([label, reden]) => (
+          <SubmitButton
+            key={reden}
+            variant="ghost"
+            size="sm"
+            className="w-full justify-start text-left"
+            pendingLabel="…"
+            formAction={ignoreReviewAction.bind(null, reviewId, reden)}
+          >
+            {label}
+          </SubmitButton>
+        ))}
+      </div>
+    </details>
   );
 }
 
