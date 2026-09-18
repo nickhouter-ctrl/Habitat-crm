@@ -4,18 +4,16 @@ import { revalidatePath } from "next/cache";
 import { eq } from "drizzle-orm";
 import { z } from "zod";
 
-import { auth } from "@/auth";
-import { hashPassword } from "@/lib/auth/password";
+import { requireAdmin as requireBeheerder, requireToegang } from "@/lib/auth/guards";
+import { ROLES } from "@/lib/auth/modules";
+import { hashPassword, verifyPassword } from "@/lib/auth/password";
 import { db } from "@/lib/db";
 import { activities, users } from "@/lib/db/schema";
 
-const ROLES = ["admin", "agent", "viewer"] as const;
-
+/** Beheerderscontrole leest de rol uit de database — niet uit het sessiecookie. */
 async function requireAdmin() {
-  const session = await auth();
-  if (!session?.user) throw new Error("Niet ingelogd.");
-  if (session.user.role !== "admin") throw new Error("Alleen beheerders mogen medewerkers beheren.");
-  return session.user as { id: string };
+  const t = await requireBeheerder();
+  return { id: t.id };
 }
 
 const createSchema = z.object({
@@ -94,5 +92,42 @@ export async function setTeamMemberPhone(id: string, formData: FormData) {
   await requireAdmin();
   const phone = String(formData.get("phone") ?? "").trim();
   await db.update(users).set({ phone: phone || null }).where(eq(users.id, id));
+  revalidatePath("/settings");
+}
+
+/**
+ * Eigen wachtwoord wijzigen. Tot nu toe kon dat niemand: een wachtwoord zetten
+ * was alleen iets van een beheerder. Wie een account krijgt via een inloglink
+ * hoort zelf een wachtwoord te kunnen kiezen zonder daarvoor langs iemand te
+ * moeten. Het huidige wachtwoord is verplicht, zodat een openstaande sessie op
+ * een onbeheerde computer niet meteen het account kan overnemen.
+ */
+export async function changeOwnPassword(formData: FormData) {
+  const ik = await requireToegang();
+  const huidig = String(formData.get("huidig") ?? "");
+  const nieuw = z
+    .string()
+    .min(8, "Nieuw wachtwoord moet minstens 8 tekens zijn")
+    .parse(String(formData.get("nieuw") ?? ""));
+  if (nieuw !== String(formData.get("herhaal") ?? "")) throw new Error("De twee nieuwe wachtwoorden zijn niet gelijk.");
+
+  const rij = await db.query.users.findFirst({
+    where: eq(users.id, ik.id),
+    columns: { id: true, email: true, name: true, passwordHash: true },
+  });
+  if (!rij) throw new Error("Account niet gevonden.");
+  // Een account dat via een inloglink is gemaakt heeft nog geen wachtwoord;
+  // dan is er ook niets te controleren.
+  if (rij.passwordHash && !(await verifyPassword(huidig, rij.passwordHash))) {
+    throw new Error("Het huidige wachtwoord klopt niet.");
+  }
+
+  await db.update(users).set({ passwordHash: await hashPassword(nieuw) }).where(eq(users.id, ik.id));
+  await db.insert(activities).values({
+    type: "note",
+    subject: `Wachtwoord gewijzigd: ${rij.name ?? rij.email}`,
+    body: "Door de medewerker zelf gewijzigd.",
+    authorId: ik.id,
+  });
   revalidatePath("/settings");
 }

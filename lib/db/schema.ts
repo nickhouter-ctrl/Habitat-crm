@@ -36,7 +36,11 @@ const timestamps = {
 
 /* -------------------------------------------------------------------- enums */
 
-export const userRole = pgEnum("user_role", ["admin", "agent", "viewer"]);
+/**
+ * Rollen. `marketing` is het beperkte account (e-mailmarketing en klantcontact);
+ * wat elke rol mag staat in `lib/auth/modules.ts`.
+ */
+export const userRole = pgEnum("user_role", ["admin", "agent", "marketing", "viewer"]);
 
 export const contactType = pgEnum("contact_type", [
   "lead",

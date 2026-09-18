@@ -22,7 +22,9 @@ export default defineConfig({
   out: "./drizzle",
   dialect: "postgresql",
   casing: "snake_case",
-  dbCredentials: { url },
+  // Supabase dwingt TLS af en postgres.js zet dat niet zelf aan — zonder deze
+  // regel valt de verbinding stil weg en meldt drizzle-kit niets.
+  dbCredentials: { url, ssl: "require" },
   verbose: true,
   strict: true,
 });

@@ -5,8 +5,8 @@ import { inboxSuggestions } from "@/lib/db/schema";
 import { nogRelevant, openVoorstellenFilter } from "@/lib/assistant/achterhaald";
 
 /** De SQL wordt alleen opgebouwd, niet uitgevoerd — geen database nodig. */
-const sqlVan = (filter: Parameters<typeof db.select>[0] extends never ? never : Parameters<ReturnType<typeof db.select>["where"]>[0]) =>
-  db.select().from(inboxSuggestions).where(filter).toSQL().sql;
+type Filter = Parameters<ReturnType<ReturnType<typeof db.select>["from"]>["where"]>[0];
+const sqlVan = (filter: Filter) => db.select().from(inboxSuggestions).where(filter).toSQL().sql;
 
 describe("assistent: welke voorstellen blijven staan", () => {
   it("laat een voorstel vallen zodra de mail gelezen, gekoppeld of niet meer nieuw is", () => {

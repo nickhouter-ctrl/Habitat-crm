@@ -1,6 +1,7 @@
 import { asc, desc } from "drizzle-orm";
 
-import { auth } from "@/auth";
+import { huidigeToegangOfNull } from "@/lib/auth/access";
+import { ROLE_LABEL, ROLES } from "@/lib/auth/modules";
 import { ConfirmSubmit } from "@/components/confirm-submit";
 import {
   Badge,
@@ -28,6 +29,7 @@ import { users, webhookEvents } from "@/lib/db/schema";
 import { formatDate } from "@/lib/utils";
 import { SubmitButton } from "@/components/submit-button";
 import {
+  changeOwnPassword,
   createTeamMember,
   deleteTeamMember,
   setTeamMemberPassword,
@@ -37,15 +39,20 @@ import {
 
 export const metadata = { title: "Instellingen" };
 
-const ROLE_META: Record<string, { label: string; tone: "accent" | "info" | "neutral" }> = {
-  admin: { label: "Beheerder", tone: "accent" },
-  agent: { label: "Medewerker", tone: "info" },
-  viewer: { label: "Alleen lezen", tone: "neutral" },
+/** Labels komen uit de moduletabel, zodat een nieuwe rol hier niet vergeten wordt. */
+const ROLE_TONE: Record<string, "accent" | "info" | "success" | "neutral"> = {
+  admin: "accent",
+  agent: "info",
+  marketing: "success",
+  viewer: "neutral",
 };
+const ROLE_META: Record<string, { label: string; tone: "accent" | "info" | "success" | "neutral" }> =
+  Object.fromEntries(ROLES.map((r) => [r, { label: ROLE_LABEL[r], tone: ROLE_TONE[r] ?? "neutral" }]));
 
 export default async function SettingsPage() {
-  const session = await auth();
-  const isAdmin = session?.user?.role === "admin";
+  // Rol uit de database: het sessiecookie leeft 30 dagen en kan achterlopen.
+  const ik = await huidigeToegangOfNull();
+  const isAdmin = ik?.heeftCap("teambeheer") ?? false;
   const holdedConfigured = Boolean(process.env.HOLDED_API_KEY);
   const webhookSecretSet = Boolean(process.env.HOLDED_WEBHOOK_SECRET);
 
@@ -84,7 +91,7 @@ export default async function SettingsPage() {
             <TBody>
               {teamMembers.map((u) => {
                 const meta = ROLE_META[u.role] ?? { label: u.role, tone: "neutral" as const };
-                const isSelf = u.id === session!.user!.id;
+                const isSelf = u.id === ik!.id;
                 return (
                   <Tr key={u.id}>
                     <Td className="font-medium">{u.name ?? "—"}{isSelf && <span className="ml-1 text-xs text-muted">(jij)</span>}</Td>
@@ -171,8 +178,9 @@ export default async function SettingsPage() {
             </form>
             <p className="mt-2 text-xs text-muted">
               Rollen: <strong>Beheerder</strong> mag alles, incl. medewerkers beheren · <strong>Medewerker</strong> is
-              dagelijks gebruik · <strong>Alleen lezen</strong> kan niets wijzigen. Een vergeten wachtwoord is nergens
-              op te zoeken — zet er hierboven een nieuw.
+              dagelijks gebruik · <strong>Marketing en klantcontact</strong> ziet alleen mail, contacten, aanvragen,
+              leads, agenda en de assistent — geen projecten, financiën, inkoop of prijzen · <strong>Alleen lezen</strong>{" "}
+              kan niets wijzigen. Een vergeten wachtwoord is nergens op te zoeken — zet er hierboven een nieuw.
             </p>
           </CardContent>
         </Card>
@@ -219,15 +227,33 @@ export default async function SettingsPage() {
           <CardHeader>
             <CardTitle>Account</CardTitle>
           </CardHeader>
-          <CardContent className="text-sm">
+          <CardContent className="space-y-4 text-sm">
             <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1.5">
               <dt className="text-muted">Naam</dt>
-              <dd>{session?.user?.name ?? "—"}</dd>
+              <dd>{ik?.name ?? "—"}</dd>
               <dt className="text-muted">E-mail</dt>
-              <dd>{session?.user?.email ?? "—"}</dd>
+              <dd>{ik?.email ?? "—"}</dd>
               <dt className="text-muted">Rol</dt>
-              <dd>{ROLE_META[session?.user?.role ?? ""]?.label ?? session?.user?.role ?? "—"}</dd>
+              <dd>{ROLE_META[ik?.rol ?? ""]?.label ?? ik?.rol ?? "—"}</dd>
             </dl>
+            {/* Zelf je wachtwoord wijzigen — hoefde eerst langs een beheerder. */}
+            <form action={changeOwnPassword} className="space-y-2 border-t pt-4">
+              <p className="text-xs text-muted">Wachtwoord wijzigen</p>
+              <div className="grid gap-2 sm:grid-cols-3">
+                <Field label="Huidig" htmlFor="pw-huidig">
+                  <Input id="pw-huidig" name="huidig" type="password" autoComplete="current-password" />
+                </Field>
+                <Field label="Nieuw" htmlFor="pw-nieuw">
+                  <Input id="pw-nieuw" name="nieuw" type="password" required minLength={8} autoComplete="new-password" />
+                </Field>
+                <Field label="Nogmaals" htmlFor="pw-herhaal">
+                  <Input id="pw-herhaal" name="herhaal" type="password" required minLength={8} autoComplete="new-password" />
+                </Field>
+              </div>
+              <SubmitButton size="sm" variant="secondary" pendingLabel="Bezig…">
+                Wachtwoord wijzigen
+              </SubmitButton>
+            </form>
           </CardContent>
         </Card>
       </div>
