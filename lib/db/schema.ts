@@ -227,6 +227,8 @@ export const users = pgTable("users", {
   /** Persoonlijke indeling van de startpagina-tegels (pin/verberg/volgorde);
    *  overlay op de standaardlijst in lib/start-tegels.ts, keys = hrefs. */
   startPrefs: jsonb().$type<{ pinned?: string[]; hidden?: string[]; order?: string[] }>(),
+  /** Taal van het CRM voor deze medewerker. Nederlands is de brontaal. */
+  locale: text().notNull().default("nl"),
   ...timestamps,
 });
 

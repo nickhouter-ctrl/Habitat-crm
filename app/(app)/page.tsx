@@ -8,6 +8,7 @@ import { and, asc, eq, isNull, or, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 
 import { huidigeToegangOfNull } from "@/lib/auth/access";
+import { datumTaal, tekst } from "@/lib/i18n/server";
 import { magAlles } from "@/lib/auth/modules";
 import { DagtakenLijst } from "@/components/dagtaken-lijst";
 import { LinkButton } from "@/components/ui";
@@ -23,6 +24,7 @@ import { TegelGrid } from "./_start/tegel-grid";
 
 export const metadata = { title: "Start" };
 
+/** Sleutel voor de begroeting; de vertaling gebeurt met t(). */
 function begroeting(): string {
   const uur = Number(
     new Intl.DateTimeFormat("nl-NL", { timeZone: "Europe/Madrid", hour: "numeric", hourCycle: "h23" }).format(
@@ -40,6 +42,7 @@ export default async function StartPage({
 }: {
   searchParams: Promise<{ "geen-toegang"?: string }>;
 }) {
+  const t = await tekst();
   const ik = await huidigeToegangOfNull();
   const userId = ik?.id ?? "";
   const isViewer = !ik?.heeftCap("schrijven");
@@ -105,7 +108,7 @@ export default async function StartPage({
 
   const volleNaam = prefsRow?.name?.trim() || ik?.name?.trim() || "";
   const naam = volleNaam.split(" ")[0] || ik?.email || "";
-  const datum = new Date().toLocaleDateString("nl-NL", {
+  const datum = new Date().toLocaleDateString(await datumTaal(), {
     timeZone: "Europe/Madrid",
     weekday: "long",
     day: "numeric",
@@ -118,13 +121,13 @@ export default async function StartPage({
       <div className="mb-6 flex flex-wrap items-end justify-between gap-3">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">
-            {begroeting()}, {naam} 👋
+            {t(begroeting())}, {naam} 👋
           </h1>
           <p className="mt-1 text-sm capitalize text-muted">{datum}</p>
         </div>
         {allesZichtbaar && (
           <LinkButton href="/dashboard" variant="secondary">
-            Naar het dashboard →
+            {t("Naar het dashboard")} →
           </LinkButton>
         )}
       </div>
@@ -132,12 +135,12 @@ export default async function StartPage({
       {/* Iemand die een verboden pad intypte, hoort te weten waarom hij hier staat. */}
       {geweigerd && (
         <p className="mb-6 rounded-lg border border-warning/40 bg-warning/10 px-4 py-3 text-sm">
-          Dat onderdeel hoort niet bij jouw rol. Hieronder staat alles waar je wél bij kunt.
+          {t("Dat onderdeel hoort niet bij jouw rol. Hieronder staat alles waar je wél bij kunt.")}
         </p>
       )}
 
       <div className="mb-8 grid items-start gap-5 lg:grid-cols-2">
-        <DagtakenLijst taken={dagtaken} titel="Wat moet er vandaag gebeuren" className="" />
+        <DagtakenLijst taken={dagtaken} titel={t("Wat moet er vandaag gebeuren")} className="" />
         <MijnTaken taken={mijnTaken} teamleden={teamleden} readOnly={isViewer} />
       </div>
 

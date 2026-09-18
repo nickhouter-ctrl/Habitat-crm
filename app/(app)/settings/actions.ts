@@ -6,6 +6,7 @@ import { z } from "zod";
 
 import { requireAdmin as requireBeheerder, requireToegang } from "@/lib/auth/guards";
 import { ROLES } from "@/lib/auth/modules";
+import { LOCALES } from "@/lib/i18n";
 import { hashPassword, verifyPassword } from "@/lib/auth/password";
 import { db } from "@/lib/db";
 import { activities, users } from "@/lib/db/schema";
@@ -130,4 +131,17 @@ export async function changeOwnPassword(formData: FormData) {
     authorId: ik.id,
   });
   revalidatePath("/settings");
+}
+
+/**
+ * Eigen taal kiezen. De brontaal van het CRM is Nederlands; Engels en Spaans
+ * komen uit de woordenboeken in lib/i18n. Een tekst die nog niet vertaald is
+ * blijft Nederlands staan — dat is beter dan een sleutelnaam op het scherm.
+ */
+export async function changeOwnLocale(formData: FormData) {
+  const ik = await requireToegang();
+  const locale = z.enum(LOCALES).parse(String(formData.get("locale") ?? "nl"));
+  await db.update(users).set({ locale }).where(eq(users.id, ik.id));
+  // De hele app hangt aan de taal: layout, menu en elke pagina.
+  revalidatePath("/", "layout");
 }

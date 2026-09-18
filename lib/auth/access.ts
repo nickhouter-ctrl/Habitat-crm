@@ -23,6 +23,8 @@ export interface Toegang {
   name: string | null;
   /** De rol zoals die nu in de database staat. */
   rol: Role;
+  /** Taal van het CRM voor deze medewerker ("nl" | "en" | "es"). */
+  locale: string;
   magModule: (key: ModuleKey) => boolean;
   magPad: (pathname: string) => boolean;
   heeftCap: (cap: Capability) => boolean;
@@ -39,7 +41,7 @@ export const huidigeToegangOfNull = cache(async (): Promise<Toegang | null> => {
 
   const rij = await db.query.users.findFirst({
     where: eq(users.id, id),
-    columns: { id: true, email: true, name: true, role: true },
+    columns: { id: true, email: true, name: true, role: true, locale: true },
   });
   if (!rij) return null;
 
@@ -49,6 +51,7 @@ export const huidigeToegangOfNull = cache(async (): Promise<Toegang | null> => {
     email: rij.email,
     name: rij.name,
     rol,
+    locale: rij.locale ?? "nl",
     magModule: (key) => magModule(rol, key),
     magPad: (pathname) => magPad(rol, pathname),
     heeftCap: (cap) => heeftCap(rol, cap),

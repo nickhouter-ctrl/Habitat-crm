@@ -13,11 +13,13 @@ import {
   type StartTegel,
 } from "@/lib/start-tegels";
 import { Button, buttonClass } from "@/components/ui";
+import { useT } from "@/components/taal-provider";
 import { cn } from "@/lib/utils";
 
 /** Eén grote knop. `groot` = de hoofdknoppen-rij bovenaan. */
 function Tegel({ tegel, badge, groot = false }: { tegel: StartTegel; badge?: number; groot?: boolean }) {
   const Icon = tegel.icon;
+  const t = useT();
   return (
     <Link
       href={tegel.href}
@@ -37,8 +39,8 @@ function Tegel({ tegel, badge, groot = false }: { tegel: StartTegel; badge?: num
         <Icon className={groot ? "size-6" : "size-5"} />
       </span>
       <span className="min-w-0">
-        <span className={cn("block truncate font-semibold", groot ? "text-base" : "text-sm")}>{tegel.label}</span>
-        <span className="block truncate text-xs text-muted">{tegel.desc}</span>
+        <span className={cn("block truncate font-semibold", groot ? "text-base" : "text-sm")}>{t(tegel.label)}</span>
+        <span className="block truncate text-xs text-muted">{t(tegel.desc)}</span>
       </span>
       {(badge ?? 0) > 0 && (
         <span className="absolute right-3 top-3 flex h-5 min-w-5 items-center justify-center rounded-full bg-red-500 px-1.5 text-[11px] font-semibold text-white">
@@ -62,6 +64,7 @@ export function TegelGrid({
   badges?: Record<string, number>;
   saveAction: (prefs: StartPrefs | null) => Promise<void>;
 }) {
+  const t = useT();
   const [prefs, setPrefs] = useState<StartPrefs>(() => normalizeStartPrefs(initialPrefs));
   const [bewerken, setBewerken] = useState(false);
   const [pending, start] = useTransition();
@@ -93,19 +96,19 @@ export function TegelGrid({
     return (
       <div>
         <div className="mb-3 flex flex-wrap items-center gap-2">
-          <h2 className="text-sm font-semibold">Indeling aanpassen</h2>
+          <h2 className="text-sm font-semibold">{t("Indeling aanpassen")}</h2>
           <span className="text-xs text-muted">
-            pin ⭢ wordt hoofdknop (vervangt de standaardrij) · oog ⭢ verbergen · pijltjes ⭢ volgorde
+            {t("pin ⭢ wordt hoofdknop (vervangt de standaardrij) · oog ⭢ verbergen · pijltjes ⭢ volgorde")}
           </span>
           <span className="ml-auto flex gap-2">
             <Button variant="ghost" size="sm" onClick={herstel} disabled={pending}>
-              Standaard herstellen
+              {t("Standaard herstellen")}
             </Button>
             <Button variant="secondary" size="sm" onClick={() => { setPrefs(normalizeStartPrefs(initialPrefs)); setBewerken(false); }}>
-              Annuleren
+              {t("Annuleren")}
             </Button>
             <Button size="sm" onClick={opslaan} disabled={pending}>
-              {pending ? "Opslaan…" : "Opslaan"}
+              {pending ? t("Opslaan…") : t("Opslaan")}
             </Button>
           </span>
         </div>
@@ -126,20 +129,20 @@ export function TegelGrid({
                   <Icon className="size-4" />
                 </span>
                 <span className="min-w-0 flex-1">
-                  <span className="block truncate text-sm font-medium">{tegel.label}</span>
-                  <span className="block truncate text-[11px] text-muted">{tegel.groep}</span>
+                  <span className="block truncate text-sm font-medium">{t(tegel.label)}</span>
+                  <span className="block truncate text-[11px] text-muted">{t(tegel.groep)}</span>
                 </span>
                 <span className="flex shrink-0 items-center gap-0.5">
-                  <button type="button" onClick={() => toggle("pinned", tegel.key)} title={isPinned ? "Losmaken" : "Vastpinnen"} className={cn("rounded-md p-1.5 hover:bg-background", isPinned ? "text-accent" : "text-muted")}>
+                  <button type="button" onClick={() => toggle("pinned", tegel.key)} title={isPinned ? t("Losmaken") : t("Vastpinnen")} className={cn("rounded-md p-1.5 hover:bg-background", isPinned ? "text-accent" : "text-muted")}>
                     {isPinned ? <Pin className="size-4" /> : <PinOff className="size-4" />}
                   </button>
-                  <button type="button" onClick={() => toggle("hidden", tegel.key)} title={isHidden ? "Tonen" : "Verbergen"} className="rounded-md p-1.5 text-muted hover:bg-background">
+                  <button type="button" onClick={() => toggle("hidden", tegel.key)} title={isHidden ? t("Tonen") : t("Verbergen")} className="rounded-md p-1.5 text-muted hover:bg-background">
                     {isHidden ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
                   </button>
-                  <button type="button" onClick={() => move(tegel.key, -1)} title="Omhoog" className="rounded-md p-1.5 text-muted hover:bg-background">
+                  <button type="button" onClick={() => move(tegel.key, -1)} title={t("Omhoog")} className="rounded-md p-1.5 text-muted hover:bg-background">
                     <ArrowUp className="size-4" />
                   </button>
-                  <button type="button" onClick={() => move(tegel.key, 1)} title="Omlaag" className="rounded-md p-1.5 text-muted hover:bg-background">
+                  <button type="button" onClick={() => move(tegel.key, 1)} title={t("Omlaag")} className="rounded-md p-1.5 text-muted hover:bg-background">
                     <ArrowDown className="size-4" />
                   </button>
                 </span>
@@ -180,7 +183,7 @@ export function TegelGrid({
       <details className="group">
         <summary className="flex cursor-pointer select-none items-center gap-2 text-sm font-medium text-muted transition-colors hover:text-foreground [&::-webkit-details-marker]:hidden">
           <span className="transition-transform group-open:rotate-90">▸</span>
-          Alle functies ({overige.length})
+          {t("Alle functies ({n})", { n: overige.length })}
         </summary>
         <div className="mt-4 space-y-6">
           {START_GROEPEN.map((groep) => {
@@ -188,7 +191,7 @@ export function TegelGrid({
             if (tegels.length === 0) return null;
             return (
               <section key={groep}>
-                <h2 className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted">{groep}</h2>
+                <h2 className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted">{t(groep)}</h2>
                 <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
                   {tegels.map((tegel) => (
                     <Tegel key={tegel.key} tegel={tegel} badge={badges[tegel.href]} />
@@ -205,7 +208,7 @@ export function TegelGrid({
         onClick={() => setBewerken(true)}
         className={cn(buttonClass({ variant: "ghost", size: "sm" }), "text-muted")}
       >
-        <SlidersHorizontal className="size-4" /> Indeling aanpassen
+        <SlidersHorizontal className="size-4" /> {t("Indeling aanpassen")}
       </button>
     </div>
   );

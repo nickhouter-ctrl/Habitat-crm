@@ -6,6 +6,7 @@ import Link from "next/link";
 
 import type { Dagtaak, DagtaakTone } from "@/lib/dagtaken";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui";
+import { tekst } from "@/lib/i18n/server";
 
 const TONE_TEXT: Record<DagtaakTone, string> = {
   danger: "text-danger",
@@ -31,26 +32,27 @@ export function DagtaakRow({ taak }: { taak: Dagtaak }) {
 }
 
 /** De volledige kaart, incl. de "alles is bij"-variant bij een lege lijst. */
-export function DagtakenLijst({
+export async function DagtakenLijst({
   taken,
-  titel = "Wat moet er gebeuren",
+  titel,
   className = "mb-6",
 }: {
   taken: Dagtaak[];
   titel?: string;
   className?: string;
 }) {
+  const t = await tekst();
   if (taken.length === 0) {
     return (
       <div className={`rounded-lg border border-success/30 bg-success/5 px-4 py-3 text-sm font-medium text-success ${className}`}>
-        ✓ Niets dringends — alles is bij.
+        ✓ {t("Niets dringends — alles is bij.")}
       </div>
     );
   }
   return (
     <Card className={`border-accent/30 ${className}`}>
       <CardHeader>
-        <CardTitle>{titel}</CardTitle>
+        <CardTitle>{titel ?? t("Wat moet er gebeuren")}</CardTitle>
       </CardHeader>
       <CardContent className="divide-y divide-border/70">
         {taken.map((t) => (

@@ -12,6 +12,7 @@ import { loadProjectFunding } from "@/lib/project-funding";
 import { and, count, eq, inArray, isNotNull, isNull, sql } from "drizzle-orm";
 
 import { magAlles } from "@/lib/auth/modules";
+import { tekst } from "@/lib/i18n/server";
 import { voorstelZichtbaarVoor } from "@/lib/mail-visibility";
 import { db } from "@/lib/db";
 import { aanvragenTeOpvolgen, offertesTeOpvolgen } from "@/lib/opvolging";
@@ -60,6 +61,7 @@ const RANG: Record<string, number> = {
  * server komen voor iemand die ze niet hoort te zien.
  */
 async function dagtakenBeperkt(userEmail?: string | null): Promise<Dagtaak[]> {
+  const t = await tekst();
   const [[aanvragen], opvolgAanvragen, [suggestions]] = await Promise.all([
     db.select({ n: sql<number>`count(*)::int` }).from(quoteRequests).where(eq(quoteRequests.status, "pending")),
     aanvragenTeOpvolgen(),
@@ -69,16 +71,15 @@ async function dagtakenBeperkt(userEmail?: string | null): Promise<Dagtaak[]> {
       .where(and(openVoorstellenFilter, voorstelZichtbaarVoor(userEmail))),
   ]);
 
-  const ev = (n: number, enkel: string, meer: string) => (n === 1 ? enkel : meer);
   const taken: Dagtaak[] = [];
   if ((suggestions?.n ?? 0) > 0) {
-    taken.push({ key: "assistent-mail", emoji: "✉️", tekst: "mailvoorstellen of automatisch opgeborgen berichten te controleren.", href: "/assistent", tone: "accent", prioriteit: "middel", aantal: suggestions.n });
+    taken.push({ key: "assistent-mail", emoji: "✉️", tekst: t("mailvoorstellen of automatisch opgeborgen berichten te controleren."), href: "/assistent", tone: "accent", prioriteit: "middel", aantal: suggestions.n });
   }
   if (opvolgAanvragen.length > 0) {
     taken.push({
       key: "aanvragen-opvolgen",
       emoji: "⏳",
-      tekst: `aanvra${ev(opvolgAanvragen.length, "ag", "gen")} waar de klant stil is na ons antwoord — herinnering sturen?`,
+      tekst: t(opvolgAanvragen.length === 1 ? "aanvraag waar de klant stil is na ons antwoord — herinnering sturen?" : "aanvragen waar de klant stil is na ons antwoord — herinnering sturen?"),
       href: "/aanvragen",
       tone: "warning",
       prioriteit: "middel",
@@ -89,7 +90,7 @@ async function dagtakenBeperkt(userEmail?: string | null): Promise<Dagtaak[]> {
     taken.push({
       key: "open-aanvragen",
       emoji: "📩",
-      tekst: `open offerte-aanvra${ev(aanvragen.n, "ag", "gen")} via de website.`,
+      tekst: t(aanvragen.n === 1 ? "open offerte-aanvraag via de website." : "open offerte-aanvragen via de website."),
       href: "/aanvragen?status=pending",
       tone: "accent",
       prioriteit: "middel",
@@ -101,6 +102,7 @@ async function dagtakenBeperkt(userEmail?: string | null): Promise<Dagtaak[]> {
 
 export async function verzamelDagtaken(rol?: string, userEmail?: string | null): Promise<Dagtaak[]> {
   if (rol !== undefined && !magAlles(rol)) return dagtakenBeperkt(userEmail);
+  const t = await tekst();
   const now = new Date();
   const today = now.toISOString().slice(0, 10);
   const openExpr = sql`${documents.status} not in ('paid', 'void', 'draft')`;
@@ -197,17 +199,16 @@ export async function verzamelDagtaken(rol?: string, userEmail?: string | null):
     return diff <= 7 && diff >= -1;
   }).length;
 
-  const ev = (n: number, enkel: string, meer: string) => (n === 1 ? enkel : meer);
   const taken: Dagtaak[] = [];
-  if (suggestions.n > 0) taken.push({ key: "assistent-mail", emoji: "✉️", tekst: "mailvoorstellen of automatisch opgeborgen berichten te controleren.", href: "/assistent", tone: "accent", prioriteit: "middel", aantal: suggestions.n });
+  if (suggestions.n > 0) taken.push({ key: "assistent-mail", emoji: "✉️", tekst: t("mailvoorstellen of automatisch opgeborgen berichten te controleren."), href: "/assistent", tone: "accent", prioriteit: "middel", aantal: suggestions.n });
   const quoteN = quoteChecks.filter(q => q.checks.length).length;
-  if (quoteN > 0) taken.push({ key: "assistent-offertes", emoji: "📋", tekst: "conceptoffertes met aandachtspunten in de prijscontrole.", href: "/assistent?view=quotes", tone: "warning", prioriteit: "middel", aantal: quoteN });
+  if (quoteN > 0) taken.push({ key: "assistent-offertes", emoji: "📋", tekst: t("conceptoffertes met aandachtspunten in de prijscontrole."), href: "/assistent?view=quotes", tone: "warning", prioriteit: "middel", aantal: quoteN });
 
   if ((vervallen?.n ?? 0) > 0) {
     taken.push({
       key: "vervallen-facturen",
       emoji: "⏰",
-      tekst: `vervallen factu${ev(vervallen.n, "ur", "ren")} (${formatEUR(vervallen.v)}) — verstuur herinnering.`,
+      tekst: t(vervallen.n === 1 ? "vervallen factuur ({bedrag}) — verstuur herinnering." : "vervallen facturen ({bedrag}) — verstuur herinnering.", { bedrag: formatEUR(vervallen.v) }),
       href: "/invoices",
       tone: "danger",
       prioriteit: "hoog",
@@ -220,10 +221,10 @@ export async function verzamelDagtaken(rol?: string, userEmail?: string | null):
       key: "inkoopfacturen-keuren",
       emoji: "🧾",
       tekst:
-        `inkoopfactu${ev(reviews.n, "ur", "ren")} wacht${ev(reviews.n, "", "en")} op goedkeuring` +
-        ((reviews.afkeuren ?? 0) > 0 ? ` · ${reviews.afkeuren} incompleet` : "") +
-        ((reviews.onleesbaar ?? 0) > 0 ? ` · ${reviews.onleesbaar} niet gelezen` : "") +
-        (oud ? ` · oudste wacht ${reviews.oudsteDagen} dagen` : "") +
+        t(reviews.n === 1 ? "inkoopfactuur wacht op goedkeuring" : "inkoopfacturen wachten op goedkeuring") +
+        ((reviews.afkeuren ?? 0) > 0 ? ` · ${t("{n} incompleet", { n: reviews.afkeuren })}` : "") +
+        ((reviews.onleesbaar ?? 0) > 0 ? ` · ${t("{n} niet gelezen", { n: reviews.onleesbaar })}` : "") +
+        (oud ? ` · ${t("oudste wacht {dagen} dagen", { dagen: reviews.oudsteDagen })}` : "") +
         ".",
       href: "/inkooporders/te-verwerken",
       tone: oud ? "danger" : "warning",
@@ -235,7 +236,7 @@ export async function verzamelDagtaken(rol?: string, userEmail?: string | null):
     taken.push({
       key: "portaal-uren",
       emoji: "⏱",
-      tekst: `portaal-urenregel${ev(uren.n, "", "s")} (${Number(uren.hours).toLocaleString("nl-NL")} uur, ${uren.projects} project${Number(uren.projects) === 1 ? "" : "en"}) te controleren.`,
+      tekst: t(uren.n === 1 ? "portaal-urenregel ({uur} uur, {projecten}) te controleren." : "portaal-urenregels ({uur} uur, {projecten}) te controleren.", { uur: Number(uren.hours).toLocaleString("nl-NL"), projecten: t(Number(uren.projects) === 1 ? "{n} project" : "{n} projecten", { n: uren.projects }) }),
       href: "/projects",
       tone: "warning",
       prioriteit: "middel",
@@ -247,7 +248,7 @@ export async function verzamelDagtaken(rol?: string, userEmail?: string | null):
     taken.push({
       key: "offertes-opvolgen",
       emoji: "📬",
-      tekst: `offerte${ev(opvolgOffertes.length, "", "s")} zonder reactie van de klant (langste ${oudste} dagen stil) — opvolgen?`,
+      tekst: t(opvolgOffertes.length === 1 ? "offerte zonder reactie van de klant (al {dagen} dagen stil) — opvolgen?" : "offertes zonder reactie van de klant (langste {dagen} dagen stil) — opvolgen?", { dagen: oudste }),
       href: "/quotes",
       tone: "warning",
       prioriteit: "middel",
@@ -258,7 +259,7 @@ export async function verzamelDagtaken(rol?: string, userEmail?: string | null):
     taken.push({
       key: "aanvragen-opvolgen",
       emoji: "⏳",
-      tekst: `aanvra${ev(opvolgAanvragen.length, "ag", "gen")} waar de klant stil is na ons antwoord — herinnering sturen?`,
+      tekst: t(opvolgAanvragen.length === 1 ? "aanvraag waar de klant stil is na ons antwoord — herinnering sturen?" : "aanvragen waar de klant stil is na ons antwoord — herinnering sturen?"),
       href: "/aanvragen",
       tone: "warning",
       prioriteit: "middel",
@@ -269,7 +270,7 @@ export async function verzamelDagtaken(rol?: string, userEmail?: string | null):
     taken.push({
       key: "offertes-factureren",
       emoji: "✅",
-      tekst: `geaccepteerde offerte${ev(accepted.n, "", "s")} — klaar om te factureren.`,
+      tekst: t(accepted.n === 1 ? "geaccepteerde offerte — klaar om te factureren." : "geaccepteerde offertes — klaar om te factureren."),
       href: "/quotes",
       tone: "success",
       prioriteit: "middel",
@@ -280,7 +281,7 @@ export async function verzamelDagtaken(rol?: string, userEmail?: string | null):
     taken.push({
       key: "open-aanvragen",
       emoji: "📩",
-      tekst: `open offerte-aanvra${ev(aanvragen.n, "ag", "gen")} via de website.`,
+      tekst: t(aanvragen.n === 1 ? "open offerte-aanvraag via de website." : "open offerte-aanvragen via de website."),
       href: "/aanvragen?status=pending",
       tone: "accent",
       prioriteit: "middel",
@@ -291,7 +292,7 @@ export async function verzamelDagtaken(rol?: string, userEmail?: string | null):
     taken.push({
       key: "voorraad-afboeken",
       emoji: "📦",
-      tekst: `verstuurde/betaalde factu${ev(voorraadN, "ur", "ren")} met productregels — voorraad nog niet afgeboekt.`,
+      tekst: t(voorraadN === 1 ? "verstuurde/betaalde factuur met productregels — voorraad nog niet afgeboekt." : "verstuurde/betaalde facturen met productregels — voorraad nog niet afgeboekt."),
       href: "/invoices",
       tone: "warning",
       prioriteit: "middel",
@@ -302,7 +303,7 @@ export async function verzamelDagtaken(rol?: string, userEmail?: string | null):
     taken.push({
       key: "proformas",
       emoji: "🗂️",
-      tekst: `proforma${ev(proformaAgg.n, "", "'s")} wacht${ev(proformaAgg.n, "", "en")} op goedkeuring.`,
+      tekst: t(proformaAgg.n === 1 ? "proforma wacht op goedkeuring." : "proforma's wachten op goedkeuring."),
       href: "/inkooporders",
       tone: "accent",
       prioriteit: "laag",
@@ -313,7 +314,7 @@ export async function verzamelDagtaken(rol?: string, userEmail?: string | null):
     taken.push({
       key: "po-deze-week",
       emoji: "📦",
-      tekst: `inkooporder${ev(poSoon, "", "s")} kom${ev(poSoon, "t", "en")} deze week binnen.`,
+      tekst: t(poSoon === 1 ? "inkooporder komt deze week binnen." : "inkooporders komen deze week binnen."),
       href: "/inkooporders",
       tone: "accent",
       prioriteit: "laag",
@@ -322,7 +323,7 @@ export async function verzamelDagtaken(rol?: string, userEmail?: string | null):
   }
 
   const attention=[...funding.values()].filter(p=>p.cover.requiredRevenue>0&&p.cover.status!=="gedekt");
-  if(attention.length) taken.push({key:"project-voorschot",emoji:"💶",tekst:"projecten met bijna verbruikt of onvoldoende voorschot, inclusief opslag — nieuw voorschot voorbereiden.",href:"/projects?funding=attention",tone:attention.some(p=>p.cover.saldo<0)?"danger":"warning",prioriteit:"hoog",aantal:attention.length});
+  if(attention.length) taken.push({key:"project-voorschot",emoji:"💶",tekst:t("projecten met bijna verbruikt of onvoldoende voorschot, inclusief opslag — nieuw voorschot voorbereiden."),href:"/projects?funding=attention",tone:attention.some(p=>p.cover.saldo<0)?"danger":"warning",prioriteit:"hoog",aantal:attention.length});
   return taken.sort(
     (a, b) =>
       PRIO_VOLGORDE[a.prioriteit] - PRIO_VOLGORDE[b.prioriteit] ||

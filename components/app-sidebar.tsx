@@ -51,7 +51,8 @@ import { usePathname } from "next/navigation";
 import { useState } from "react";
 
 import { signOutAction } from "@/lib/auth/actions";
-import { magAlles, magPad } from "@/lib/auth/modules";
+import { useT } from "@/components/taal-provider";
+import { magAlles, magPad, ROLE_LABEL, type Role } from "@/lib/auth/modules";
 import { ThemaSchakelaar } from "@/components/thema-schakelaar";
 import { GlobalSearch } from "@/components/global-search";
 import { cn, initials } from "@/lib/utils";
@@ -166,6 +167,7 @@ export function AppSidebar({
 }) {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
+  const t = useT();
 
   // Alleen netheid: de echte grens ligt in app/(app)/layout.tsx en in de guards
   // bij de server actions. Dit voorkomt dode links in het menu.
@@ -185,7 +187,7 @@ export function AppSidebar({
           <div key={gi} className="space-y-0.5">
             {group.label && (
               <p className="px-2.5 pb-1 text-[10px] font-semibold uppercase tracking-wider text-muted/60">
-                {group.label}
+                {t(group.label)}
               </p>
             )}
             {group.items.map((item) => {
@@ -201,7 +203,7 @@ export function AppSidebar({
                   )}
                 >
                   <item.icon className={cn("size-4 shrink-0", active ? "text-accent" : "text-muted")} />
-                  <span className="truncate">{item.label}</span>
+                  <span className="truncate">{t(item.label)}</span>
                   {(badges[item.href] ?? 0) > 0 && (
                     <span className="ml-auto grid h-5 min-w-5 shrink-0 place-items-center rounded-full bg-red-500 px-1.5 text-xs font-semibold text-white">
                       {badges[item.href] > 99 ? "99+" : badges[item.href]}
@@ -226,7 +228,7 @@ export function AppSidebar({
           )}
         >
           <Settings className="size-4 shrink-0" />
-          Instellingen
+          {t("Instellingen")}
         </Link>
         <ThemaSchakelaar className="ml-auto" />
       </div>
@@ -237,12 +239,12 @@ export function AppSidebar({
         </span>
         <div className="min-w-0 flex-1 leading-tight">
           <p className="truncate text-sm font-medium">{user.name ?? user.email}</p>
-          <p className="truncate text-xs text-muted">{user.role ?? "agent"}</p>
+          <p className="truncate text-xs text-muted">{t(ROLE_LABEL[user.role as Role] ?? "Medewerker")}</p>
         </div>
         <form action={signOutAction}>
           <button
             type="submit"
-            title="Uitloggen"
+            title={t("Uitloggen")}
             className="rounded-md p-1.5 text-muted transition-colors hover:bg-background hover:text-foreground"
           >
             <LogOut className="size-4" />
@@ -285,7 +287,7 @@ export function AppSidebar({
         <button
           type="button"
           onClick={() => setOpen(true)}
-          aria-label="Menu openen"
+          aria-label={t("Menu openen")}
           className="rounded-md p-2 text-muted transition-colors hover:bg-background hover:text-foreground"
         >
           <Menu className="size-5" />
@@ -308,7 +310,7 @@ export function AppSidebar({
               <button
                 type="button"
                 onClick={() => setOpen(false)}
-                aria-label="Sluiten"
+                aria-label={t("Sluiten")}
                 className="rounded-md p-1.5 text-muted transition-colors hover:bg-background"
               >
                 <X className="size-5" />

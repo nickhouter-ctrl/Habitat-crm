@@ -2,6 +2,8 @@ import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 
 import { huidigeToegangOfNull } from "@/lib/auth/access";
+import { isLocale } from "@/lib/i18n";
+import { TaalProvider } from "@/components/taal-provider";
 import { magAlles, startPadVoorRol } from "@/lib/auth/modules";
 import { verzamelNavBadges } from "@/lib/nav-badges";
 import { AppSidebar } from "@/components/app-sidebar";
@@ -34,8 +36,10 @@ export default async function AppLayout({
   }
 
   const badges = await verzamelNavBadges(toegang.rol, toegang.email);
+  const locale = isLocale(toegang.locale) ? toegang.locale : "nl";
 
   return (
+    <TaalProvider locale={locale}>
     <div className="flex min-h-dvh bg-background">
       {/* Alleen platte velden: de zijbalk is een client-component. */}
       <AppSidebar user={{ name: toegang.name, email: toegang.email, role: toegang.rol }} badges={badges} />
@@ -47,5 +51,6 @@ export default async function AppLayout({
         <main className="mx-auto max-w-[96rem] px-4 pb-10 pt-20 sm:px-6 lg:pt-6">{children}</main>
       </div>
     </div>
+    </TaalProvider>
   );
 }

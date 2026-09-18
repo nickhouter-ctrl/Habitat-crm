@@ -2,6 +2,7 @@ import { asc, desc } from "drizzle-orm";
 
 import { huidigeToegangOfNull } from "@/lib/auth/access";
 import { ROLE_LABEL, ROLES } from "@/lib/auth/modules";
+import { LOCALE_LABEL, LOCALES } from "@/lib/i18n";
 import { ConfirmSubmit } from "@/components/confirm-submit";
 import {
   Badge,
@@ -29,6 +30,7 @@ import { users, webhookEvents } from "@/lib/db/schema";
 import { formatDate } from "@/lib/utils";
 import { SubmitButton } from "@/components/submit-button";
 import {
+  changeOwnLocale,
   changeOwnPassword,
   createTeamMember,
   deleteTeamMember,
@@ -239,6 +241,27 @@ export default async function SettingsPage() {
               <dt className="text-muted">Rol</dt>
               <dd>{ROLE_META[ik?.rol ?? ""]?.label ?? ik?.rol ?? "—"}</dd>
             </dl>
+            {/* Taal van het CRM. Nederlands is de brontaal; Engels en Spaans komen
+                uit de woordenboeken in lib/i18n. */}
+            <form action={changeOwnLocale} className="space-y-2 border-t pt-4">
+              <p className="text-xs text-muted">Taal van het systeem</p>
+              <div className="flex flex-wrap items-end gap-2">
+                <Select name="locale" defaultValue={ik?.locale ?? "nl"} className="w-48">
+                  {LOCALES.map((l) => (
+                    <option key={l} value={l}>
+                      {LOCALE_LABEL[l]}
+                    </option>
+                  ))}
+                </Select>
+                <SubmitButton size="sm" variant="secondary" pendingLabel="Bezig…">
+                  Taal wijzigen
+                </SubmitButton>
+              </div>
+              <p className="text-xs text-muted">
+                Nederlands is de oorspronkelijke taal. Wat nog niet vertaald is, blijft in het Nederlands staan.
+              </p>
+            </form>
+
             {/* Zelf je wachtwoord wijzigen — hoefde eerst langs een beheerder. */}
             <form action={changeOwnPassword} className="space-y-2 border-t pt-4">
               <p className="text-xs text-muted">Wachtwoord wijzigen</p>

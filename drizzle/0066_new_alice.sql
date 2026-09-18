@@ -1,0 +1,1 @@
+ALTER TABLE "users" ADD COLUMN "locale" text DEFAULT 'nl' NOT NULL;
