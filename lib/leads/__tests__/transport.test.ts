@@ -5,6 +5,11 @@ import { ALWAYS_BCC } from "@/lib/mail-bcc";
 const oudeKey = process.env.RESEND_API_KEY;
 
 beforeEach(() => {
+  // process.env wordt door alle testbestanden in dezelfde worker gedeeld, dus
+  // hier elke keer opnieuw zetten in plaats van aannemen wat er staat. Zonder
+  // deze regel viel de bcc-test af en toe om doordat het domeinslot uit een
+  // andere test bleef hangen en het verzoek dus geblokkeerd werd.
+  delete process.env.CAMPAIGN_ALLOWED_DOMAINS;
   process.env.RESEND_API_KEY = "re_test";
   process.env.CAMPAIGN_FROM = "Teresa · Habitat One <teresa@habitat-one.com>";
   process.env.CAMPAIGN_REPLY_TO = "teresa@habitat-one.com";
@@ -44,6 +49,7 @@ async function verstuurMetNep(antwoord: { ok?: boolean; status?: number; body?: 
 
 describe("campagneverzending", () => {
   it("zet NOOIT een interne kopie op de mail", async () => {
+    expect(process.env.CAMPAIGN_ALLOWED_DOMAINS).toBeUndefined();
     // 7.000 adressen × 3 interne bcc's = 21.000 kopieën naar hi@, en de
     // mail-poll zou ze daarna weer proberen in te lezen.
     const { payload } = await verstuurMetNep({});

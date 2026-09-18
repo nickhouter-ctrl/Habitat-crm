@@ -3,7 +3,7 @@
 import { useState, useTransition } from "react";
 
 import { Button, Input } from "@/components/ui";
-import { generateCopyForCampaign, queueCampaign, runSendRoundNow, sendTestEmail } from "../../actions";
+import { generateCopyForCampaign, queueCampaign, runSendRoundNow, sendTestEmail } from "../actions";
 
 /**
  * AI-tekst opstellen, testmail sturen en de campagne in de wachtrij zetten.

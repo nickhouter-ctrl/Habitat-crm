@@ -33,6 +33,7 @@ export type ModuleKey =
   | "contacts"
   | "aanvragen"
   | "leads"
+  | "broadcast"
   | "assistent"
   | "agenda"
   | "advertenties"
@@ -82,7 +83,8 @@ export const MODULES: ModuleDef[] = [
   { key: "inbox", label: "Mail", paths: ["/inbox", "/sent-mail"] },
   { key: "contacts", label: "Contacten", paths: ["/contacts"] },
   { key: "aanvragen", label: "Website-aanvragen", paths: ["/aanvragen"] },
-  { key: "leads", label: "Leads en campagnes", paths: ["/leads"] },
+  { key: "leads", label: "Leads", paths: ["/leads"] },
+  { key: "broadcast", label: "Broadcast", paths: ["/broadcast"] },
   { key: "assistent", label: "Assistent", paths: ["/assistent"] },
   { key: "agenda", label: "Agenda", paths: ["/agenda"] },
   { key: "advertenties", label: "Advertenties", paths: ["/marketing"] },
@@ -138,6 +140,7 @@ export const ROLE_MODULES: Record<Role, readonly ModuleKey[] | "*"> = {
     "contacts",
     "aanvragen",
     "leads",
+    "broadcast",
     "assistent",
     "agenda",
   ],

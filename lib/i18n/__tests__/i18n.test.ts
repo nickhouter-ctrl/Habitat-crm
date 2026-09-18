@@ -71,6 +71,10 @@ describe("woordenboeken", () => {
     const gelijk = new Set([
       "Leads", "Marketing", "SEO", "Analytics", "Dashboard", "Samples", "Shipments", "Creatives", "Account", "Rol",
       "{n} project", // in het Engels toevallig gelijk
+      // Productnamen blijven in elke taal hetzelfde: Teresa en Nick zoeken
+      // hetzelfde menu-item, en een vertaald kopje maakt overleg lastiger.
+      "Broadcast",
+      "Prospects",
     ]);
     for (const [naam, dict] of [["en", en], ["es", es]] as const) {
       const verdacht = Object.entries(dict).filter(([k, v]) => k === v && !gelijk.has(k));

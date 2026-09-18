@@ -12,7 +12,7 @@ import { wachtrijStand } from "@/lib/leads/queue";
 import { bulkGereed } from "@/lib/leads/transport";
 import { dagCap } from "@/lib/leads/warmup";
 import { madridMiddernacht } from "@/lib/tz-madrid";
-import { countRecipients, setBulkPaused, setCampaignAudience, updateCampaignCopy } from "../../actions";
+import { countRecipients, setBulkPaused, setCampaignAudience, updateCampaignCopy } from "../actions";
 import { NoodstopKnop } from "./noodstop";
 import { CampaignActions } from "./campaign-actions";
 

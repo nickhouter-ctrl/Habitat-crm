@@ -77,6 +77,7 @@ const NAV_GROUPS: { label: string | null; items: NavItem[] }[] = [
       { href: "/windows-accounts", label: "Windows-accounts", icon: UserCog },
       { href: "/aanvragen", label: "Aanvragen", icon: Inbox },
       { href: "/leads", label: "Leads", icon: Megaphone },
+      { href: "/broadcast", label: "Broadcast", icon: Send },
       { href: "/commissies", label: "Commissies", icon: Percent },
     ],
   },

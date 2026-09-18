@@ -84,7 +84,8 @@ export const START_TEGELS: StartTegel[] = [
   t("/aanvragen", "Aanvragen", "Offerte-aanvragen via de website", Inbox, "Klantcontact"),
   t("/agenda", "Agenda", "Afspraken en taken van het team", CalendarDays, "Klantcontact"),
   t("/contacts", "Contacten", "Alle klanten en relaties", Users, "Klantcontact"),
-  t("/leads", "Leads", "Campagnes en op te volgen leads", Megaphone, "Klantcontact"),
+  t("/leads", "Leads", "Bedrijven vinden en de prospectlijst beheren", Megaphone, "Klantcontact"),
+  t("/broadcast", "Broadcast", "E-mailcampagnes naar bedrijven versturen", Send, "Klantcontact"),
   t("/accounts", "Klant-accounts", "Portaal-toegang voor klanten", UserCog, "Klantcontact"),
   // 2 — Offerte maken & versturen.
   t("/quotes", "Offertes", "Offertes opstellen en versturen", FileText, "Offerte & verkoop"),
