@@ -1463,6 +1463,47 @@ export const projectExtras = pgTable(
 
 export type ProjectExtra = typeof projectExtras.$inferSelect;
 
+/**
+ * Hoe anderen een werf noemen.
+ *
+ * Leveranciers gebruiken hun eigen woorden. Op de urenlijst van Pieter
+ * Hoogendijk staan kolommen als "CHARLES IV", "cap. Negre" en "cata Gorg" —
+ * dat zijn bij ons Villa Hans van Dalen, Finca Lisa en Pand gata de gorgos.
+ * Wie een weekfactuur over de werven verdeelt, moet die vertaling uit zijn
+ * hoofd doen, en daar is het één keer misgegaan: 28 uur (€ 630) kwam op de
+ * showroom terecht en 6 uur op de verkeerde werf.
+ *
+ * Daarom staat de vertaling hier. `supplier` leeg = geldt voor iedereen; met
+ * een leverancier erbij geldt de naam alleen voor diens facturen, want "cata
+ * Gorg" van de een hoeft niet hetzelfde te zijn als van de ander.
+ */
+export const projectAliases = pgTable(
+  "project_aliases",
+  {
+    id: uuid()
+      .primaryKey()
+      .default(sql`gen_random_uuid()`),
+    projectId: uuid()
+      .notNull()
+      .references(() => projects.id, { onDelete: "cascade" }),
+    /** De naam zoals de ander hem schrijft, ongewijzigd bewaard. */
+    label: text().notNull(),
+    /** Leeg = voor elke leverancier. */
+    supplier: text(),
+    note: text(),
+    ...timestamps,
+  },
+  (t) => [
+    index("project_aliases_project_idx").on(t.projectId),
+    // Eén betekenis per naam per leverancier: anders weet niemand welke werf
+    // bedoeld is. Genormaliseerd, zodat "cata Gorg" en "Cata gorg" botsen.
+    uniqueIndex("project_aliases_label_uidx").on(
+      sql`lower(regexp_replace(${t.label}, '[^a-zA-Z0-9]', '', 'g'))`,
+      sql`lower(coalesce(${t.supplier}, ''))`,
+    ),
+  ],
+);
+
 export const projectCosts = pgTable(
   "project_costs",
   {

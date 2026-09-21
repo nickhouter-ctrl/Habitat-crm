@@ -36,6 +36,7 @@ import {
 import { verdelingVanInkoop } from "@/lib/inkoop-verdeling";
 import { Combobox } from "@/components/combobox";
 import { PurchaseProjectLink } from "@/components/purchase-project-link";
+import { alleAliassen, zoektermenPerProject } from "@/lib/project-aliases";
 import { ConfirmSubmit } from "@/components/confirm-submit";
 import { SubmitButton } from "@/components/submit-button";
 import {
@@ -121,7 +122,16 @@ export default async function PurchaseOrderPage({
     .from(workers)
     .where(eq(workers.active, true))
     .orderBy(asc(workers.name));
-  const [[keuring], [urenRij], verdeling, projectRows, workerRows] = await Promise.all([keuringPromise, urenPromise, verdelingPromise, projectsPromise, workersPromise]);
+  const [[keuring], [urenRij], verdeling, projectRijen, workerRows, aliassen] = await Promise.all([
+    keuringPromise, urenPromise, verdelingPromise, projectsPromise, workersPromise, alleAliassen(),
+  ]);
+
+  // De namen die leveranciers zelf gebruiken meegeven aan de keuzelijst, met de
+  // aliassen van déze leverancier eerst — die zijn hier het meest relevant.
+  const termen = zoektermenPerProject(
+    [...aliassen].sort((a, b) => Number(b.supplier === po.supplier) - Number(a.supplier === po.supplier)),
+  );
+  const projectRows = projectRijen.map((p) => ({ ...p, aliassen: termen.get(p.id) }));
   const geboekteUren = urenRij?.uren ? Number(urenRij.uren) : null;
   const workerOptions = workerRows.map((w) => ({
     id: w.id,

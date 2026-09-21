@@ -80,6 +80,8 @@ import {
   setProjectStatus,
   unlinkPurchaseOrder,
   updateProject,
+  addProjectAlias,
+  deleteProjectAlias,
 } from "../actions";
 import { AdvanceRequestCard } from "./advance-request-card";
 import { ProjectDeliveriesCard } from "./deliveries-card";
@@ -92,6 +94,7 @@ import {
   toggleReserveEstimate,
 } from "../../documents/actions";
 import { stuurKlantportaalUitnodiging } from "@/app/klant/actions";
+import { aliassenVanProject } from "@/lib/project-aliases";
 
 export const metadata = { title: "Project" };
 
@@ -118,7 +121,7 @@ export default async function ProjectDetailPage({
   const project = await db.query.projects.findFirst({ where: eq(projects.id, id) });
   if (!project) notFound();
 
-  const [contactOpts, ownerOpts, propertyOpts, linkedDocs, unlinkedDocs] = await Promise.all([
+  const [contactOpts, ownerOpts, propertyOpts, linkedDocs, unlinkedDocs, aliassen] = await Promise.all([
     db.select({ id: contacts.id, name: contacts.name }).from(contacts).orderBy(asc(contacts.name)),
     db.select({ id: users.id, name: users.name, email: users.email }).from(users).orderBy(asc(users.email)),
     db.select({ id: properties.id, title: properties.title }).from(properties).orderBy(asc(properties.title)),
@@ -154,6 +157,7 @@ export default async function ProjectDetailPage({
       .where(and(isNull(documents.projectId), inArray(documents.kind, ["invoice", "estimate", "creditnote"])))
       .orderBy(desc(documents.issueDate), desc(documents.createdAt))
       .limit(500),
+    aliassenVanProject(id),
   ]);
 
   // Marge per project (intern): omzet − kostprijs van regels. We halen ook de
@@ -1887,6 +1891,54 @@ export default async function ProjectDetailPage({
                   <span className="font-medium">{project.code}</span>
                 </div>
               )}
+            </CardContent>
+          </Card>
+
+          {/* Hoe leveranciers deze werf noemen. Op de urenlijst van Pieter
+              Hoogendijk heet Pand gata de gorgos "cata Gorg" en Villa Hans van
+              Dalen "CHARLES IV"; wie zo'n weekfactuur verdeelt, moet die
+              vertaling anders uit zijn hoofd doen. Eén keer misgegaan: 28 uur
+              (€ 630) kwam op de verkeerde werf. Wat hier staat is zoekbaar in
+              de verdeelvelden bij inkoop. */}
+          <Card className="mt-5">
+            <CardHeader>
+              <CardTitle>Ook bekend als</CardTitle>
+              <span className="text-xs text-muted">{aliassen.length}</span>
+            </CardHeader>
+            <CardContent className="space-y-3 text-sm">
+              {aliassen.length === 0 ? (
+                <p className="text-muted">
+                  Nog geen andere namen. Noemt een leverancier deze werf anders op zijn factuur of urenlijst, zet die
+                  naam hier — dan vind je de werf bij het verdelen door te typen wat er op zijn lijst staat.
+                </p>
+              ) : (
+                <ul className="divide-y divide-border/70">
+                  {aliassen.map((a) => (
+                    <li key={a.id} className="flex items-center justify-between gap-3 py-1.5">
+                      <span>
+                        <span className="font-medium">{a.label}</span>
+                        {a.supplier && <span className="ml-2 text-xs text-muted">bij {a.supplier}</span>}
+                      </span>
+                      <form action={deleteProjectAlias.bind(null, id, a.id)}>
+                        <button type="submit" className="text-xs text-muted hover:text-danger hover:underline">
+                          verwijderen
+                        </button>
+                      </form>
+                    </li>
+                  ))}
+                </ul>
+              )}
+              <form action={addProjectAlias.bind(null, id)} className="flex flex-wrap items-end gap-2">
+                <Field label="Naam bij de ander" htmlFor="alias-label">
+                  <Input id="alias-label" name="label" required placeholder="cata Gorg" className="w-40" />
+                </Field>
+                <Field label="Leverancier" htmlFor="alias-sup" hint="leeg = voor iedereen">
+                  <Input id="alias-sup" name="supplier" placeholder="Pieter Hoogendijk" className="w-44" />
+                </Field>
+                <SubmitButton variant="secondary" size="sm" pendingLabel="Bezig…">
+                  Toevoegen
+                </SubmitButton>
+              </form>
             </CardContent>
           </Card>
 

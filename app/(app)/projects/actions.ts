@@ -13,6 +13,7 @@ import {
   contacts,
   documents,
   projectBudgetLines,
+  projectAliases,
   projectCosts,
   projectExtras,
   projectPayments,
@@ -1082,4 +1083,30 @@ export async function deleteProjectExtra(projectId: string, extraId: string) {
   await requireUser();
   await db.delete(projectExtras).where(eq(projectExtras.id, extraId));
   revalidatePath(`/projects/${projectId}`);
+}
+
+/**
+ * Hoe anderen deze werf noemen. De kolom op de urenlijst van een leverancier
+ * heet zelden zoals de werf bij ons heet; die vertaling hoort in het systeem en
+ * niet in iemands hoofd. Zie lib/project-aliases.ts.
+ */
+export async function addProjectAlias(projectId: string, formData: FormData) {
+  await requireUser();
+  const label = String(formData.get("label") ?? "").trim();
+  const supplier = String(formData.get("supplier") ?? "").trim() || null;
+  if (!label) return;
+
+  await db
+    .insert(projectAliases)
+    .values({ projectId, label, supplier })
+    .onConflictDoNothing();
+  revalidatePath(`/projects/${projectId}`);
+  revalidatePath("/inkooporders");
+}
+
+export async function deleteProjectAlias(projectId: string, aliasId: string) {
+  await requireUser();
+  await db.delete(projectAliases).where(eq(projectAliases.id, aliasId));
+  revalidatePath(`/projects/${projectId}`);
+  revalidatePath("/inkooporders");
 }

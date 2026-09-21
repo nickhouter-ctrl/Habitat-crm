@@ -484,6 +484,13 @@
       "when": 1789756222216,
       "tag": "0068_cooing_smasher",
       "breakpoints": true
+    },
+    {
+      "idx": 69,
+      "version": "7",
+      "when": 1789977527733,
+      "tag": "0069_productive_cloak",
+      "breakpoints": true
     }
   ]
 }

@@ -10,7 +10,39 @@ export type ComboOption = {
   label: string;
   group?: string;
   hint?: string;
+  /**
+   * Extra woorden waarop deze optie gevonden mag worden, zonder dat ze in de
+   * naam staan. Gebruikt voor de namen die anderen aan onze werven geven: op
+   * de urenlijst van een leverancier heet Pand gata de gorgos "cata Gorg", en
+   * wie die lijst overtypt hoort dat te kunnen zoeken.
+   */
+  terms?: string[];
 };
+
+/**
+ * Welke opties passen bij wat er getypt is.
+ *
+ * Los van de component omdat dit het stukje is dat goed moet zijn en zich laat
+ * testen: hier wordt bepaald of iemand die "cata Gorg" van een urenlijst
+ * overtypt de werf Pand gata de gorgos vindt. Gezocht wordt op de naam, de
+ * groep, de toelichting én de extra termen.
+ *
+ * De al geselecteerde optie blijft staan ook als de tekst er niet in voorkomt,
+ * anders verdwijnt je eigen keuze uit de lijst zodra je hem net hebt gemaakt.
+ */
+export function filterOptions(options: ComboOption[], query: string, value = ""): ComboOption[] {
+  const q = query.trim().toLowerCase();
+  if (!q) return options;
+  const bevat = (s: string | undefined) => (s ?? "").toLowerCase().includes(q);
+  return options.filter(
+    (o) =>
+      (o.value === value && o.label.toLowerCase() === q) ||
+      bevat(o.label) ||
+      bevat(o.group) ||
+      bevat(o.hint) ||
+      (o.terms ?? []).some((t) => bevat(t)),
+  );
+}
 
 /**
  * Type-to-filter picker. Renders a visible search box plus a hidden `<input name>`
@@ -63,17 +95,7 @@ export function Combobox({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [query, value]);
 
-  const filtered = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    const matchSel = (o: ComboOption) => o.value === value && o.label.toLowerCase() === q;
-    if (!q) return options;
-    return options.filter(
-      (o) =>
-        matchSel(o) ||
-        o.label.toLowerCase().includes(q) ||
-        (o.group ?? "").toLowerCase().includes(q),
-    );
-  }, [query, options, value]);
+  const filtered = useMemo(() => filterOptions(options, query, value), [query, options, value]);
 
   function pick(o: ComboOption) {
     onSelect?.(o.value, o);

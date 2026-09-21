@@ -81,7 +81,8 @@ export function ReviewCard({
   projects,
 }: {
   data: ReviewCardData;
-  projects: { id: string; name: string }[];
+  /** `aliassen` = de namen die leveranciers zelf voor deze werf gebruiken. */
+  projects: { id: string; name: string; aliassen?: string[] }[];
 }) {
   const [kind, setKind] = useState<"labor" | "material" | "">(data.kind ?? "");
   const [split, setSplit] = useState(data.lines.length > 1);
@@ -98,6 +99,13 @@ export function ReviewCard({
   const gefaald = data.checks.filter((c) => !c.ok && !c.skipped && c.key !== "hours_derived");
   const gelezen = data.checks.filter((c) => c.ok && !c.skipped);
   const teMelden = gefaald.filter((c) => !c.internal && c.es);
+  // De namen die leveranciers zelf gebruiken zijn zoekbaar én staan erbij.
+  const projectOpties = projects.map((p) => ({
+    value: p.id,
+    label: p.name,
+    terms: p.aliassen,
+    hint: p.aliassen?.length ? `ook: ${p.aliassen.join(" · ")}` : undefined,
+  }));
 
   return (
     <div className="rounded-lg border bg-background p-4">
@@ -236,7 +244,7 @@ export function ReviewCard({
                     defaultValue={data.projectId ?? ""}
                     clearable
                     placeholder="Zoek een werf…"
-                    options={projects.map((p) => ({ value: p.id, label: p.name }))}
+                    options={projectOpties}
                     menuClassName="w-72"
                   />
                   {/* Vaste lasten horen bij geen enkele werf. Eén keer aanvinken
@@ -285,14 +293,19 @@ export function ReviewCard({
                   ...Array.from({ length: extraRegels }, () => emptyLine()),
                 ].map((l, i) => (
                   <div key={i} className="grid gap-2 sm:grid-cols-[1fr_6rem_8rem]">
-                    <Select name={`split_${i}_projectId`} defaultValue={l.projectId ?? ""}>
-                      <option value="">— kies project —</option>
-                      {projects.map((p) => (
-                        <option key={p.id} value={p.id}>
-                          {p.name}
-                        </option>
-                      ))}
-                    </Select>
+                    {/* Een zoekveld en geen dropdown: op de urenlijst van een
+                        leverancier heet een werf anders dan bij ons ("cata Gorg"
+                        voor Pand gata de gorgos). In een lijst van twintig
+                        werven grijp je dan mis — hier typ je wat er op de lijst
+                        staat en de juiste werf komt boven. */}
+                    <Combobox
+                      name={`split_${i}_projectId`}
+                      defaultValue={l.projectId ?? ""}
+                      clearable
+                      placeholder="Zoek een werf…"
+                      options={projectOpties}
+                      menuClassName="w-72"
+                    />
                     <Input
                       name={`split_${i}_hours`}
                       inputMode="decimal"

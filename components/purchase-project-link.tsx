@@ -23,7 +23,12 @@ import { SubmitButton } from "@/components/submit-button";
 import { Badge, Input } from "@/components/ui";
 import { cn } from "@/lib/utils";
 
-export type ProjectOption = { id: string; name: string };
+export type ProjectOption = {
+  id: string;
+  name: string;
+  /** Namen die anderen voor deze werf gebruiken, bv. de kolom op een urenlijst. */
+  aliassen?: string[];
+};
 export type WorkerOption = { id: string; name: string; hourlyCostEur: number | null };
 /** Voorinvulling van de verdeel-regels, bv. uit een bestaande verdeling. */
 export type SplitRow = { projectId: string | null; hours: number | null; amount: number | null };
@@ -59,7 +64,15 @@ export function PurchaseProjectLink({
 }) {
   const [kind, setKind] = useState<"material" | "labor">(current.countAsLabor ? "labor" : "material");
   const [wijzigen, setWijzigen] = useState(!current.projectId);
-  const opties = projects.map((p) => ({ value: p.id, label: p.name }));
+  // De namen die anderen gebruiken zijn zoekbaar én zichtbaar: wie een
+  // urenlijst overtypt zoekt op "cata Gorg" en moet dan Pand gata de gorgos
+  // vinden — precies de vertaling waar het een keer op misging.
+  const opties = projects.map((p) => ({
+    value: p.id,
+    label: p.name,
+    terms: p.aliassen,
+    hint: p.aliassen?.length ? `ook: ${p.aliassen.join(" · ")}` : undefined,
+  }));
   const werkerOpties = workers.map((w) => ({
     value: w.id,
     label: w.name,

@@ -21,6 +21,7 @@ import { beoordeelKandidaat } from "@/lib/invoice-learning";
 import { buildInvoiceRejectEmail, supplierEmailCandidates, type EmailCandidate } from "@/lib/invoice-reject";
 import { formatEUR } from "@/lib/utils";
 import { ReviewCard, type ReviewCardData, type ReviewCheck, type ReviewLine } from "./review-card";
+import { alleAliassen, zoektermenPerProject } from "@/lib/project-aliases";
 
 export const metadata = { title: "Facturen keuren — inkoop" };
 export const dynamic = "force-dynamic";
@@ -32,7 +33,7 @@ const dagenSinds = (d: Date | string | null) =>
   d ? Math.floor((Date.now() - new Date(d).getTime()) / 86_400_000) : 0;
 
 export default async function FacturenKeurenPage() {
-  const [rows, projectRows] = await Promise.all([
+  const [rows, projectRijen, aliassen] = await Promise.all([
     db
       .select({
         review: purchaseInvoiceReviews,
@@ -55,7 +56,13 @@ export default async function FacturenKeurenPage() {
       .from(projects)
       .where(ne(projects.status, "archived"))
       .orderBy(asc(projects.name)),
+    alleAliassen(),
   ]);
+
+  // De namen die leveranciers zelf voor een werf gebruiken, zodat je in het
+  // verdeelveld kunt typen wat er op hun urenlijst staat.
+  const aliasTermen = zoektermenPerProject(aliassen);
+  const projectRows = projectRijen.map((p) => ({ ...p, aliassen: aliasTermen.get(p.id) }));
 
   // Wat leert de wachtrij van eerdere keuringen? Items die sterk lijken op wat
   // eerder is weggezet (een logo uit een mail, een urenstaat) krijgen een
