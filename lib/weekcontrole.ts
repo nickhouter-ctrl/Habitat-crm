@@ -91,22 +91,36 @@ export async function verzamelWeekcontrole(): Promise<Weekcontrole> {
     });
   }
 
-  /* ── D · Urenregels die afwijken van hun factuur ── */
-  const drift = await db.execute<{ ref: string | null; geboekt: number; sub: number; tot: number }>(sql`
+  /* ── D · Urenregels die afwijken van hun factuur ──
+   *
+   * Niet alleen de uren: ook de losse projectkosten die aan dezelfde
+   * inkoopfactuur hangen tellen mee. Een arbeidsfactuur bevat vaak een
+   * vervoer- of materiaalregel, en die hoort niet bij de uren maar wél bij de
+   * factuur. Zonder die telling meldde deze controle elke week hetzelfde
+   * verschil, terwijl het bedrag netjes als projectkost geboekt stond. */
+  const drift = await db.execute<{ ref: string | null; uren: number; kosten: number; geboekt: number; sub: number; tot: number }>(sql`
     with x as (
-      select po.id, po.reference ref, sum(t.hours * t.hourly_cost_eur)::float8 geboekt,
+      select po.id, po.reference ref,
+             sum(t.hours * t.hourly_cost_eur)::float8 uren,
              coalesce(nullif(po.subtotal,0),0)::float8 sub, coalesce(po.total,0)::float8 tot
       from time_entries t join purchase_orders po on po.id = t.purchase_order_id
       where po.count_as_labor group by po.id
+    ), y as (
+      select x.*,
+             coalesce((select sum(c.amount_eur) from project_costs c where c.purchase_order_id = x.id), 0)::float8 kosten
+      from x
     )
-    select * from x
-    where abs(geboekt - case when sub > 0 then sub else tot end) > 0.05
-      and abs(geboekt - tot / 1.21) > 0.05`);
+    select ref, uren, kosten, (uren + kosten)::float8 geboekt, sub, tot from y
+    where abs(uren + kosten - case when sub > 0 then sub else tot end) > 0.05
+      and abs(uren + kosten - tot / 1.21) > 0.05`);
   if (drift.length > 0) {
     signalen.push({
       ernst: "hoog",
       titel: `${drift.length} urenboeking${drift.length === 1 ? "" : "en"} wijk${drift.length === 1 ? "t" : "en"} af van de factuur`,
-      regels: drift.map((r) => `${r.ref ?? "?"} · geboekt ${eur(r.geboekt)} · factuur ${eur(r.sub > 0 ? r.sub : r.tot)}`),
+      regels: drift.map(
+        (r) =>
+          `${r.ref ?? "?"} · geboekt ${eur(r.geboekt)}${r.kosten > 0 ? ` (${eur(r.uren)} uren + ${eur(r.kosten)} kosten)` : ""} · factuur ${eur(r.sub > 0 ? r.sub : r.tot)}`,
+      ),
     });
   }
 
