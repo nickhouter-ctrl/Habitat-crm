@@ -27,7 +27,7 @@ export const TAXONOMY: TaxonomyGroup[] = [
     group: "Surfaces & Walls",
     subcategories: ["Flexible Stone", "Acrylic panels", "XPS Backer Boards"],
   },
-  { group: "Flooring", subcategories: ["PVC Flooring"] },
+  { group: "Flooring", subcategories: ["SPC Flooring"] },
   { group: "Bathroom", subcategories: ["Bathroom", "Accessories"] },
   {
     group: "Heating & Lighting",
@@ -74,7 +74,7 @@ export const FAMILY_TO_SUBCATEGORY: Record<string, string> = {
   // Haarden
   Waterdamphaard: "Fireplaces",
   // Vloeren
-  "PVC Vloeren": "PVC Flooring",
+  "SPC Vloeren": "SPC Flooring",
   // Platen
   "XPS montageplaten": "XPS Backer Boards",
   "Solid surface platen": "Acrylic panels",

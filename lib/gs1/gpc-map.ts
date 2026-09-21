@@ -40,8 +40,8 @@ const BY_COLLECTION_CATEGORY: Record<string, GpcMapping> = {
   // Railingen / balustrades (Taka) — sistemas de balaustrada/rieles (no de madera)
   "Railingen|*": { gpc: "10003961", uom: "Unidad", netContent: 1 },
 
-  // PVC / vinyl vloeren — revestimiento para suelo (vinilo/goma/linóleo), per m²
-  "PVC Vloeren|*": { gpc: "10002448", uom: "Metro cuadrado", netContent: 1 },
+  // SPC-vloeren — revestimiento para suelo (vinilo/goma/linóleo), per m²
+  "SPC Vloeren|*": { gpc: "10002448", uom: "Metro cuadrado", netContent: 1 },
 
   // Deuren
   "Binnen en buiten deuren|Binnendeuren": { gpc: "10002567", uom: "Unidad", netContent: 1 },

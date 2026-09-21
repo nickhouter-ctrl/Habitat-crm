@@ -47,7 +47,7 @@ describe("TAXONOMY-integriteit", () => {
 describe("subcategoryForFamily", () => {
   it("mapt expliciete families", () => {
     expect(subcategoryForFamily("Seating")).toBe("Furniture");
-    expect(subcategoryForFamily("PVC Vloeren")).toBe("PVC Flooring");
+    expect(subcategoryForFamily("SPC Vloeren")).toBe("SPC Flooring");
     expect(subcategoryForFamily("Schakelaars, stopcontacten & dimmers")).toBe(
       "Switches & sockets",
     );
