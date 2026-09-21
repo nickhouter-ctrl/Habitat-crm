@@ -56,3 +56,8 @@ tmp-*.ts
 /*.mp4
 /*.mov
 /visuals-proef/
+
+# Tijdelijke scripts en werkmappen: die horen niet in de repo. Reports bevat
+# ook e-mailadressen van bedrijven — die horen al helemaal niet in git.
+scripts/_tmp-*
+reports/
