@@ -11,6 +11,12 @@
  *  - Wie de mail doorstuurt, geeft toegang tot dat account weg. Dat is de
  *    bekende keerzijde van elke inloglink; daarom staat er in de mail bij dat
  *    de link persoonlijk is.
+ *
+ * Er is één soort link waarvoor het omgekeerde geldt: de link die iemand ZELF
+ * aanvraagt op het inlogscherm (`ZELF_AANGEVRAAGD`). Die is een
+ * wachtwoordherstel en dus de enige sleutel op dat moment — hij leeft 30
+ * minuten en werkt één keer. Hergebruik zou betekenen dat een half jaar later
+ * iemand die de mail nog in zijn postvak heeft staan alsnog binnenkomt.
  */
 import "server-only";
 
@@ -22,6 +28,30 @@ import { db } from "@/lib/db";
 import { loginTokens, users } from "@/lib/db/schema";
 
 const GELDIG_DAGEN = 7;
+
+/** Purpose van een link die iemand zelf aanvroeg op het inlogscherm. */
+export const ZELF_AANGEVRAAGD = "zelf-aangevraagd";
+/** Kort geldig: dit is wachtwoordherstel, geen gemak in een ochtendmail. */
+export const ZELF_GELDIG_MINUTEN = 30;
+
+/**
+ * Verse, eenmalige inloglink voor wie er zelf om vraagt.
+ *
+ * Bewust NIET via `getLoginToken()`: die hergebruikt een bestaande token en
+ * geeft 7 dagen, wat voor een meldingsmail prima is en voor wachtwoordherstel
+ * niet. Elke aanvraag krijgt hier dus een eigen token; de vorige blijft geldig
+ * tot zijn eigen einddatum, zodat twee keer klikken geen dode link oplevert.
+ */
+export async function maakZelfAangevraagdeLink(userId: string): Promise<string> {
+  const token = randomBytes(24).toString("base64url");
+  await db.insert(loginTokens).values({
+    userId,
+    token,
+    purpose: ZELF_AANGEVRAAGD,
+    expiresAt: new Date(Date.now() + ZELF_GELDIG_MINUTEN * 60_000),
+  });
+  return token;
+}
 
 /**
  * Geeft een geldige inloglink voor deze gebruiker: hergebruikt een bestaande
@@ -63,6 +93,8 @@ export async function resolveLoginToken(token: string): Promise<LoginTokenUser |
       email: users.email,
       role: users.role,
       expiresAt: loginTokens.expiresAt,
+      purpose: loginTokens.purpose,
+      lastUsedAt: loginTokens.lastUsedAt,
     })
     .from(loginTokens)
     .innerJoin(users, eq(users.id, loginTokens.userId))
@@ -71,6 +103,9 @@ export async function resolveLoginToken(token: string): Promise<LoginTokenUser |
   const u = rij[0];
   if (!u) return null;
   if (u.expiresAt.getTime() < Date.now()) return null;
+  // Een zelf aangevraagde link is eenmalig; de links uit meldingsmail blijven
+  // bewust herbruikbaar (anders staat de ochtendmail vol dode links).
+  if (u.purpose === ZELF_AANGEVRAAGD && u.lastUsedAt) return null;
   return { id: u.id, name: u.name, email: u.email, role: u.role };
 }
 

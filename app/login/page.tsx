@@ -4,6 +4,8 @@ import { redirect } from "next/navigation";
 import { auth, signIn } from "@/auth";
 import { TaalKeuze } from "@/components/taal-keuze";
 import { zetTaal } from "@/lib/i18n/actions";
+import { ZELF_GELDIG_MINUTEN } from "@/lib/login-links";
+import { vraagInloglink } from "./actions";
 import { huidigeTaal, tekst } from "@/lib/i18n/server";
 
 export const metadata = {
@@ -24,6 +26,7 @@ export default async function LoginPage({
   const errorKey = typeof params?.error === "string" ? params.error : undefined;
   const code = typeof params?.code === "string" ? params.code : undefined;
   const callbackUrl = typeof params?.callbackUrl === "string" ? params.callbackUrl : "/";
+  const linkStand = typeof params?.link === "string" ? params.link : undefined;
 
   /**
    * De melding. "Te veel pogingen" is bewust een ander bericht dan "wachtwoord
@@ -42,6 +45,21 @@ export default async function LoginPage({
       ? t("Onjuist e-mailadres of wachtwoord.")
       : errorKey
         ? t("Inloggen mislukt. Probeer het opnieuw.")
+        : null;
+
+  /**
+   * Melding na "stuur mij een inloglink". Bij `verstuurd` staat er bewust niet
+   * óf dat adres bestaat: anders is deze knop een manier om te achterhalen wie
+   * hier een account heeft.
+   */
+  const linkMelding =
+    linkStand === "verstuurd"
+      ? t(
+          "Als dat e-mailadres een account heeft, staat er nu een inloglink in de mailbox. Die is {minuten} minuten geldig en werkt één keer. Kijk ook in de map ongewenste mail.",
+          { minuten: ZELF_GELDIG_MINUTEN },
+        )
+      : linkStand === "leeg"
+        ? t("Vul eerst je e-mailadres in, dan sturen we de inloglink daarheen.")
         : null;
 
   async function authenticate(formData: FormData) {
@@ -87,6 +105,17 @@ export default async function LoginPage({
               {melding}
             </p>
           )}
+          {linkMelding && (
+            <p
+              className={
+                linkStand === "verstuurd"
+                  ? "rounded-md bg-accent/10 px-3 py-2 text-sm text-accent"
+                  : "rounded-md bg-warning/10 px-3 py-2 text-sm text-warning"
+              }
+            >
+              {linkMelding}
+            </p>
+          )}
           <div className="space-y-1.5">
             <label htmlFor="email" className="text-sm font-medium">
               {t("E-mailadres")}
@@ -119,6 +148,23 @@ export default async function LoginPage({
           >
             {t("Inloggen")}
           </button>
+
+          {/* Wachtwoord kwijt? Dan de link naar het eigen postvak. Zelfde
+              e-mailveld, andere actie — en `formNoValidate`, want het
+              wachtwoordveld is verplicht voor inloggen maar niet hiervoor. */}
+          <div className="border-t pt-4 text-center">
+            <button
+              type="submit"
+              formAction={vraagInloglink}
+              formNoValidate
+              className="text-sm text-accent hover:underline"
+            >
+              {t("Wachtwoord vergeten? Stuur mij een inloglink")}
+            </button>
+            <p className="mt-1 text-xs text-muted">
+              {t("Je ontvangt dan een mail waarmee je zonder wachtwoord binnenkomt.")}
+            </p>
+          </div>
         </form>
 
         {/* Taal kiezen vóór het inloggen: wie het scherm niet kan lezen, komt

@@ -234,4 +234,16 @@ export const en: Dictionary = {
   "Onjuist e-mailadres of wachtwoord.": "Incorrect email address or password.",
   "Inloggen mislukt. Probeer het opnieuw.": "Sign-in failed. Please try again.",
   "Te veel inlogpogingen. Wacht {minuten} minuten en probeer het dan opnieuw — je wachtwoord hoef je niet te veranderen.": "Too many sign-in attempts. Wait {minuten} minutes and try again — there is no need to change your password.",
+
+  // ── inloglink op het inlogscherm ──
+  "Wachtwoord vergeten? Stuur mij een inloglink": "Forgotten your password? Email me a sign-in link",
+  "Je ontvangt dan een mail waarmee je zonder wachtwoord binnenkomt.": "You will get an email that signs you in without a password.",
+  "Als dat e-mailadres een account heeft, staat er nu een inloglink in de mailbox. Die is {minuten} minuten geldig en werkt één keer. Kijk ook in de map ongewenste mail.": "If that email address has an account, a sign-in link is now in the mailbox. It is valid for {minuten} minutes and works once. Do check the junk folder as well.",
+  "Vul eerst je e-mailadres in, dan sturen we de inloglink daarheen.": "Enter your email address first and we will send the sign-in link there.",
+  "Je inloglink voor het CRM": "Your sign-in link for the CRM",
+  "Hallo {naam},": "Hello {naam},",
+  "Hallo,": "Hello,",
+  "Klik op de knop om in te loggen. De link is {minuten} minuten geldig en werkt één keer.": "Use the button below to sign in. The link is valid for {minuten} minutes and works once.",
+  "Deze link is persoonlijk — stuur hem niet door.": "This link is personal — please do not forward it.",
+  "Heb je dit niet aangevraagd? Dan hoef je niets te doen; er is niets veranderd en je wachtwoord werkt nog.": "Did you not request this? Then there is nothing to do: nothing has changed and your password still works.",
 };

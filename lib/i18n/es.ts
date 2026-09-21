@@ -235,4 +235,16 @@ export const es: Dictionary = {
   "Onjuist e-mailadres of wachtwoord.": "El correo electrónico o la contraseña no son correctos.",
   "Inloggen mislukt. Probeer het opnieuw.": "No se pudo iniciar sesión. Inténtalo de nuevo.",
   "Te veel inlogpogingen. Wacht {minuten} minuten en probeer het dan opnieuw — je wachtwoord hoef je niet te veranderen.": "Demasiados intentos de inicio de sesión. Espera {minuten} minutos y vuelve a intentarlo; no hace falta cambiar tu contraseña.",
+
+  // ── enlace de acceso en la pantalla de inicio de sesión ──
+  "Wachtwoord vergeten? Stuur mij een inloglink": "¿Olvidaste tu contraseña? Envíame un enlace de acceso",
+  "Je ontvangt dan een mail waarmee je zonder wachtwoord binnenkomt.": "Recibirás un correo con el que entras sin contraseña.",
+  "Als dat e-mailadres een account heeft, staat er nu een inloglink in de mailbox. Die is {minuten} minuten geldig en werkt één keer. Kijk ook in de map ongewenste mail.": "Si ese correo electrónico tiene una cuenta, ya hay un enlace de acceso en el buzón. Es válido {minuten} minutos y funciona una sola vez. Mira también en la carpeta de correo no deseado.",
+  "Vul eerst je e-mailadres in, dan sturen we de inloglink daarheen.": "Escribe primero tu correo electrónico y enviaremos el enlace de acceso a esa dirección.",
+  "Je inloglink voor het CRM": "Tu enlace de acceso al CRM",
+  "Hallo {naam},": "Hola {naam}:",
+  "Hallo,": "Hola:",
+  "Klik op de knop om in te loggen. De link is {minuten} minuten geldig en werkt één keer.": "Pulsa el botón para iniciar sesión. El enlace es válido {minuten} minutos y funciona una sola vez.",
+  "Deze link is persoonlijk — stuur hem niet door.": "Este enlace es personal: no lo reenvíes.",
+  "Heb je dit niet aangevraagd? Dan hoef je niets te doen; er is niets veranderd en je wachtwoord werkt nog.": "¿No lo has solicitado? No tienes que hacer nada: no ha cambiado nada y tu contraseña sigue funcionando.",
 };
