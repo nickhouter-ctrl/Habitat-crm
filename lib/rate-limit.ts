@@ -21,6 +21,30 @@ import { db } from "@/lib/db";
  * buitensluit.
  */
 export async function rateLimit(key: string, max: number, windowSec: number, opties: { strikt?: boolean } = {}): Promise<boolean> {
+  return (await rateLimitDetail(key, max, windowSec, opties)).ok;
+}
+
+export interface RateLimitStand {
+  ok: boolean;
+  /** Hoeveel seconden nog te gaan tot het venster opnieuw begint (0 = vrij). */
+  wachtSec: number;
+}
+
+/**
+ * Zelfde teller, maar met de wachttijd erbij.
+ *
+ * Nodig omdat "te veel pogingen" en "verkeerd wachtwoord" voor de gebruiker
+ * twee verschillende dingen zijn. Het inlogscherm meldde bij een geblokkeerde
+ * teller "onjuist e-mailadres of wachtwoord", en dan blijft iemand het met een
+ * goed wachtwoord proberen — wat de teller alleen verder oploopt. Teresa zat er
+ * vandaag op 11 pogingen mee vast.
+ */
+export async function rateLimitDetail(
+  key: string,
+  max: number,
+  windowSec: number,
+  opties: { strikt?: boolean } = {},
+): Promise<RateLimitStand> {
   try {
     const rows = (await db.execute(sql`
       insert into rate_limits ("key", window_start, "count")
@@ -36,13 +60,14 @@ export async function rateLimit(key: string, max: number, windowSec: number, opt
             then now()
           else rate_limits.window_start
         end
-      returning "count"
-    `)) as unknown as Array<{ count: number }>;
+      returning "count", greatest(0, ceil(extract(epoch from (window_start + make_interval(secs => ${windowSec})) - now())))::int as wacht
+    `)) as unknown as Array<{ count: number; wacht: number }>;
     const count = Number(rows?.[0]?.count ?? 0);
-    return count <= max;
+    const ok = count <= max;
+    return { ok, wachtSec: ok ? 0 : Number(rows?.[0]?.wacht ?? windowSec) };
   } catch (err) {
     console.warn(`[rate-limit] check mislukt (${opties.strikt ? "fail-closed" : "fail-open"}):`, err);
-    return !opties.strikt;
+    return { ok: !opties.strikt, wachtSec: opties.strikt ? windowSec : 0 };
   }
 }
 

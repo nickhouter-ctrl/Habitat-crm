@@ -4,13 +4,21 @@
  */
 import "server-only";
 import { cache } from "react";
+import { cookies } from "next/headers";
 
 import { huidigeToegangOfNull } from "@/lib/auth/access";
-import { isLocale, maakT, woordenboek, type Dictionary, type Locale, type T } from "@/lib/i18n";
+import { isLocale, maakT, TAAL_COOKIE, woordenboek, type Dictionary, type Locale, type T } from "@/lib/i18n";
 
+/**
+ * De taal van dit verzoek: de instelling van de ingelogde medewerker, en als
+ * er niemand is ingelogd het cookie. Dat laatste is er voor het inlogscherm —
+ * wie de taal daar kiest, moet de knoppen ook in die taal zien.
+ */
 export const huidigeTaal = cache(async (): Promise<Locale> => {
   const t = await huidigeToegangOfNull();
-  return isLocale(t?.locale) ? t.locale : "nl";
+  if (isLocale(t?.locale)) return t.locale;
+  const uitCookie = (await cookies()).get(TAAL_COOKIE)?.value;
+  return isLocale(uitCookie) ? uitCookie : "nl";
 });
 
 /** `const t = await tekst();` en daarna `t("Mail-inbox")`. */

@@ -25,6 +25,9 @@
 import { en } from "@/lib/i18n/en";
 import { es } from "@/lib/i18n/es";
 
+/** Naam van het cookie met de taalkeuze — ook leesbaar vóór het inloggen. */
+export const TAAL_COOKIE = "habitat-taal";
+
 export const LOCALES = ["nl", "en", "es"] as const;
 export type Locale = (typeof LOCALES)[number];
 

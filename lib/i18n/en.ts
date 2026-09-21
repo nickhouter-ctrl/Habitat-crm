@@ -225,4 +225,13 @@ export const en: Dictionary = {
   "Verzendtempo": "Sending pace",
   "Versturen": "Sending",
   "campagnes maken en verzenden": "create and send campaigns",
+
+  // ── login ──
+  "Log in om verder te gaan": "Sign in to continue",
+  "E-mailadres": "Email address",
+  "Wachtwoord": "Password",
+  "Inloggen": "Sign in",
+  "Onjuist e-mailadres of wachtwoord.": "Incorrect email address or password.",
+  "Inloggen mislukt. Probeer het opnieuw.": "Sign-in failed. Please try again.",
+  "Te veel inlogpogingen. Wacht {minuten} minuten en probeer het dan opnieuw — je wachtwoord hoef je niet te veranderen.": "Too many sign-in attempts. Wait {minuten} minutes and try again — there is no need to change your password.",
 };

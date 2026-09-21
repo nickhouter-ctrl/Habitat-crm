@@ -1,6 +1,6 @@
 import { DrizzleAdapter } from "@auth/drizzle-adapter";
 import { eq } from "drizzle-orm";
-import NextAuth from "next-auth";
+import NextAuth, { CredentialsSignin } from "next-auth";
 import Credentials from "next-auth/providers/credentials";
 import { z } from "zod";
 
@@ -9,12 +9,26 @@ import { db } from "./lib/db";
 import { accounts, sessions, users, verificationTokens } from "./lib/db/schema";
 import { verifyPassword } from "./lib/auth/password";
 import { markLoginTokenUsed, resolveLoginToken } from "./lib/login-links";
-import { clientIp, rateLimit } from "./lib/rate-limit";
+import { clientIp, rateLimit, rateLimitDetail } from "./lib/rate-limit";
 
 const credentialsSchema = z.object({
   email: z.string().email(),
   password: z.string().min(1),
 });
+
+/**
+ * Te veel inlogpogingen. Een eigen fout, zodat het inlogscherm onderscheid kan
+ * maken tussen "wachtwoord klopt niet" en "je zit even op slot" — dat zijn voor
+ * de gebruiker twee heel verschillende berichten.
+ */
+export class TeVeelPogingen extends CredentialsSignin {
+  code = "te_veel_pogingen";
+  /** Minuten tot het weer mag; komt in de melding terecht. */
+  constructor(public minuten: number) {
+    super();
+    this.code = `te_veel_pogingen:${Math.max(1, minuten)}`;
+  }
+}
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
   ...authConfig,
@@ -42,12 +56,20 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
 
         // Brute-force-rem, zelfde opzet als de portal-login: per IP én per
         // e-mailadres, vóór de wachtwoordcheck.
+        //
+        // Bij een blokkade gooien we een eigen fout in plaats van `null` terug
+        // te geven. `null` wordt op het inlogscherm "onjuist e-mailadres of
+        // wachtwoord", en dan blijft iemand met een góed wachtwoord proberen —
+        // waarmee de teller verder oploopt. Nu staat er hoe lang het duurt.
         const ip = clientIp(request);
-        const [ipOk, emailOk] = await Promise.all([
-          rateLimit(`crm-login:ip:${ip}`, 10, 5 * 60, { strikt: true }),
-          rateLimit(`crm-login:email:${email.toLowerCase()}`, 5, 15 * 60, { strikt: true }),
+        const [ipStand, emailStand] = await Promise.all([
+          rateLimitDetail(`crm-login:ip:${ip}`, 10, 5 * 60, { strikt: true }),
+          rateLimitDetail(`crm-login:email:${email.toLowerCase()}`, 5, 15 * 60, { strikt: true }),
         ]);
-        if (!ipOk || !emailOk) return null;
+        if (!ipStand.ok || !emailStand.ok) {
+          const wacht = Math.max(ipStand.wachtSec, emailStand.wachtSec);
+          throw new TeVeelPogingen(Math.ceil(wacht / 60));
+        }
 
         const user = await db.query.users.findFirst({
           where: eq(users.email, email.toLowerCase()),

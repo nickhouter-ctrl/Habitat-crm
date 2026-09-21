@@ -1,0 +1,7 @@
+for (const f of ['.env','.env.local']) { try { process.loadEnvFile(f); } catch {} }
+const postgres = require('postgres');
+const ids=['dd20f266-20ae-46ad-881a-399d0d3f2413','cc23fb51-ec67-42a9-a3e1-ec64eff0e190'];
+const db=postgres(process.env.DATABASE_URL,{max:1,prepare:false,ssl:'require'});
+async function status(){const rows=await db`select c.name,c.status,r.status as recipient_status,count(r.id)::int as count from email_campaigns c left join campaign_recipients r on r.campaign_id=c.id where c.id in ${db(ids)} group by c.id,c.name,c.status,r.status order by c.name,r.status`;console.log(JSON.stringify(rows));return rows;}
+async function main(){for(let n=0;n<20;n++){const rows=await status();if(!process.argv.includes('--send')||!rows.some(r=>['queued','sending'].includes(r.recipient_status)))break;if(rows.some(r=>r.recipient_status==='sending')){console.log('Active batch: wait for completion');await new Promise(resolve=>setTimeout(resolve,45000));continue;}if(!process.env.CRON_SECRET)throw Error('Missing cron credential');const res=await fetch('https://crm.habitat-one.com/api/cron/campaign-send',{headers:{authorization:'Bearer '+process.env.CRON_SECRET}});const result=await res.json();console.log(JSON.stringify({http:res.status,...result}));if(!result.ok||(!result.verstuurd&&!result.mislukt))break;}await status();}
+main().catch(e=>{console.error(e.message);process.exitCode=1}).finally(()=>db.end());

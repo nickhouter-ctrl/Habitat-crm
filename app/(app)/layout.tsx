@@ -4,6 +4,8 @@ import { redirect } from "next/navigation";
 import { huidigeToegangOfNull } from "@/lib/auth/access";
 import { isLocale } from "@/lib/i18n";
 import { TaalProvider } from "@/components/taal-provider";
+import { TaalKeuze } from "@/components/taal-keuze";
+import { zetTaal } from "@/lib/i18n/actions";
 import { magAlles, startPadVoorRol } from "@/lib/auth/modules";
 import { verzamelNavBadges } from "@/lib/nav-badges";
 import { AppSidebar } from "@/components/app-sidebar";
@@ -45,8 +47,11 @@ export default async function AppLayout({
       <AppSidebar user={{ name: toegang.name, email: toegang.email, role: toegang.rol }} badges={badges} />
       <div className="min-w-0 flex-1">
         {/* Desktop top-bar met globale zoekbalk (mobiel zit zoeken in de bovenbalk). */}
-        <header className="sticky top-0 z-20 hidden h-14 items-center border-b bg-surface/95 px-6 backdrop-blur lg:flex">
+        <header className="sticky top-0 z-20 hidden h-14 items-center gap-4 border-b bg-surface/95 px-6 backdrop-blur lg:flex">
           <GlobalSearch className="w-full max-w-xl" />
+          {/* Taal bovenaan, niet weggestopt in Instellingen: wie het systeem
+              niet in zijn eigen taal ziet, vindt dat menu juist niet. */}
+          <TaalKeuze huidig={locale} zet={zetTaal} compact className="ml-auto" />
         </header>
         <main className="mx-auto max-w-[96rem] px-4 pb-10 pt-20 sm:px-6 lg:pt-6">{children}</main>
       </div>

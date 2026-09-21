@@ -226,4 +226,13 @@ export const es: Dictionary = {
   "Verzendtempo": "Ritmo de envío",
   "Versturen": "Envío",
   "campagnes maken en verzenden": "crear y enviar campañas",
+
+  // ── inicio de sesión ──
+  "Log in om verder te gaan": "Inicia sesión para continuar",
+  "E-mailadres": "Correo electrónico",
+  "Wachtwoord": "Contraseña",
+  "Inloggen": "Iniciar sesión",
+  "Onjuist e-mailadres of wachtwoord.": "El correo electrónico o la contraseña no son correctos.",
+  "Inloggen mislukt. Probeer het opnieuw.": "No se pudo iniciar sesión. Inténtalo de nuevo.",
+  "Te veel inlogpogingen. Wacht {minuten} minuten en probeer het dan opnieuw — je wachtwoord hoef je niet te veranderen.": "Demasiados intentos de inicio de sesión. Espera {minuten} minutos y vuelve a intentarlo; no hace falta cambiar tu contraseña.",
 };
