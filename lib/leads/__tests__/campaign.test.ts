@@ -64,3 +64,16 @@ describe("campagnemail", () => {
     expect(html).toContain("&amp;");
   });
 });
+
+it("preserves approved bilingual copy with recipient unsubscribe and strips scripts", () => {
+  const result = buildCampaignEmail({ ...basis, lang: "es", approvedMail: {
+    html: '<section lang="es"><h2>Ventanas de aluminio</h2><p>App de medición</p></section><section lang="en">Aluminium windows</section><script>alert(1)</script>',
+    text: 'ESPAÑOL\nVentanas de aluminio\nENGLISH\nAluminium windows',
+  } });
+  expect(result.html).toContain('lang="es"');
+  expect(result.html).toContain('Aluminium windows');
+  expect(result.html).not.toContain('<script');
+  expect(result.html).toContain(unsubscribeUrl(basis.unsubToken));
+  expect(result.text).toContain(unsubscribeUrl(basis.unsubToken));
+  expect(result.html).not.toContain('/account/aanvragen');
+});

@@ -2778,7 +2778,7 @@ export const emailCampaigns = pgTable(
     /** Legacy: losse product-id's (niet meer gebruikt; groepen zijn de norm). */
     productIds: jsonb().$type<string[]>().notNull().default([]),
     audience: jsonb()
-      .$type<{ categories: string[]; includeCustomers?: boolean }>()
+      .$type<{ categories: string[]; includeCustomers?: boolean; approvedMail?: { html: string; text: string }; explicitEmails?: string[] }>()
       .notNull()
       .default({ categories: [] }),
     status: campaignStatus().notNull().default("draft"),

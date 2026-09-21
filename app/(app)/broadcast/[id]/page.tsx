@@ -80,6 +80,7 @@ export default async function CampaignPage({ params }: { params: Promise<{ id: s
     lang: campaign.language as CampaignLang,
     subject: campaign.subject,
     introText: campaign.introText,
+    approvedMail: campaign.audience?.approvedMail,
     groups,
     unsubToken: "TEST",
     companyName: "Empresa Ejemplo S.L.",

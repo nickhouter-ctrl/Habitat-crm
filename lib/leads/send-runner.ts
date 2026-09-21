@@ -245,6 +245,7 @@ export async function runCampaignSend(): Promise<RondeResultaat> {
       lang: (r.lang ?? campagne.language) as CampaignLang,
       subject: campagne.subject,
       introText: campagne.introText,
+    approvedMail: campagne.audience?.approvedMail,
       groups: groepen,
       unsubToken: token,
       companyName: r.company_name_snapshot,

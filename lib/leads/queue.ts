@@ -34,6 +34,8 @@ type Campagne = typeof emailCampaigns.$inferSelect;
  * Categorieën gaan als gebonden array mee, niet als samengestelde SQL.
  */
 function prospectFilter(c: Campagne) {
+  const explicit = c.audience?.explicitEmails;
+  const explicitClause = explicit ? (explicit.length ? sql`and lower(p.email) in ${explicit}` : sql`and false`) : sql``;
   const cats = (c.audience?.categories ?? []) as string[];
   // Geen categorieën gekozen = alle categorieën. De clausule wordt dan helemaal
   // niet meegebouwd: `in ()` is geen geldige SQL, en een lege lijst als "alles"
@@ -43,6 +45,7 @@ function prospectFilter(c: Campagne) {
     p.email is not null
     and p.status in ('new', 'emailed')
     ${catClausule}
+    ${explicitClause}
     and (p.suppress_until is null or p.suppress_until < now())
     and coalesce(p.email_count, 0) < ${c.maxEmailsPerProspect}
     and (p.last_emailed_at is null or p.last_emailed_at < now() - make_interval(days => ${c.minDaysSinceLastEmail}))
@@ -84,7 +87,7 @@ export async function vulWachtrij(c: Campagne): Promise<number> {
  * is een HMAC over het adres — die hebben ze niet in de database staan.
  */
 export async function vulWachtrijKlanten(c: Campagne): Promise<number> {
-  if (!c.audience?.includeCustomers) return 0;
+  if (c.audience?.explicitEmails || !c.audience?.includeCustomers) return 0;
   const klanten = (await db.execute(sql`
     select ct.email, ct.name from contacts ct
     where ct.email is not null and ct.type = 'customer'

@@ -4,6 +4,7 @@
  * gegevens, privacylink en een werkende afmeldlink. Bewust GEEN prijzen in een
  * koude B2B-mail; we drijven naar de site + accountaanvraag.
  */
+import sanitizeHtml from "sanitize-html";
 import { COMPANY } from "@/lib/company";
 import type { CampaignGroup } from "@/lib/leads/groups";
 import { crmUrl } from "@/lib/crm-url";
@@ -141,12 +142,25 @@ export function buildCampaignEmail(opts: {
   groups: CampaignGroup[];
   unsubToken: string;
   companyName?: string | null;
+  approvedMail?: { html: string; text: string };
 }): { html: string; text: string } {
   const lang = opts.lang ?? "es";
   const t = TXT[lang];
   const site = WEBSITE + localePrefix(lang);
   const unsubUrl = unsubscribeUrl(opts.unsubToken);
   const privacyUrl = `${site}/privacy`;
+  if (opts.approvedMail) {
+    // Stored only by trusted campaign imports; still strip executable content.
+    const approved = sanitizeHtml(opts.approvedMail.html, {
+      allowedTags: [...sanitizeHtml.defaults.allowedTags, "img"],
+      allowedAttributes: { "*": ["style", "lang", "width", "height", "role", "cellpadding", "cellspacing"], a: ["href"], img: ["src", "alt", "width", "height", "style"] },
+      allowedSchemes: ["https", "http", "mailto", "tel"],
+    });
+    return {
+      html: approved + complianceFooter(unsubUrl, privacyUrl, t),
+      text: opts.approvedMail.text + "\n\n—\n" + t.notice(COMPANY.legalName) + "\n" + COMPANY.legalName + " · " + COMPANY.address + "\n" + t.unsubscribe + ": " + unsubUrl + "\n" + t.privacy + ": " + privacyUrl,
+    };
+  }
   const accountUrl = `${site}/account/aanvragen`;
   const productsUrl = `${site}/products`;
   // De afsprakenmodule staat op de website (rol kiezen, tijdslot, gegevens) en

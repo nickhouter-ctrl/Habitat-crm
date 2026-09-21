@@ -119,7 +119,7 @@ export async function setCampaignAudience(campaignId: string, formData: FormData
   const categories = (c.audience?.categories ?? []) as string[];
   await db
     .update(emailCampaigns)
-    .set({ audience: { categories, includeCustomers }, updatedAt: sql`now()` })
+    .set({ audience: { ...c.audience, categories, includeCustomers: c.audience?.explicitEmails ? false : includeCustomers }, updatedAt: sql`now()` })
     .where(eq(emailCampaigns.id, campaignId));
   revalidatePath(`/broadcast/${campaignId}`);
 }
@@ -148,6 +148,7 @@ export async function sendTestEmail(campaignId: string): Promise<{ ok: boolean; 
     lang: c.language as CampaignLang,
     subject: c.subject,
     introText: c.introText,
+    approvedMail: c.audience?.approvedMail,
     groups: groupsForMail,
     unsubToken: "TEST",
     companyName: "Empresa Ejemplo S.L.",
