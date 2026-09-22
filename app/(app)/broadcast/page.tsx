@@ -13,7 +13,7 @@
  */
 import { desc, eq, gte, sql } from "drizzle-orm";
 import Link from "next/link";
-import { AlertTriangle, Mail, Megaphone, Pause, Users } from "lucide-react";
+import { AlertTriangle, Mail, Megaphone, Pause, Phone, Users } from "lucide-react";
 
 import {
   Badge,
@@ -115,9 +115,9 @@ export default async function MailingPage({
         subtitle="Campagnes naar bedrijven — met een dagcap, een afmeldlink en een noodrem"
         actions={
           <div className="flex flex-wrap items-center gap-3 text-sm">
-            <Link href="/broadcast/nabellen" className="underline">
-              Nabellen
-            </Link>
+            <LinkButton href="/broadcast/nabellen" variant="primary" size="sm">
+              <Phone className="size-4" /> Nabellen{teBellen > 0 ? ` (${teBellen})` : ""}
+            </LinkButton>
             <Link href="/leads/prospects" className="underline">
               Prospects
             </Link>

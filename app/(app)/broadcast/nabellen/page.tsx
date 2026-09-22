@@ -238,7 +238,7 @@ export default async function NabellenPage({
                     )}
                   </Td>
                   <Td>
-                    <BelFormulier prospectId={r.id} action={legBelpogingVast} />
+                    <BelFormulier prospectId={r.id} bedrijf={r.company_name} action={legBelpogingVast} />
                   </Td>
                 </Tr>
               ))}
