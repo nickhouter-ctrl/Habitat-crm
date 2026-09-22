@@ -15,6 +15,7 @@ import { sql } from "drizzle-orm";
 
 import { Badge, Card, CardContent, CardHeader, CardTitle, Input, LinkButton, PageHeader, Select, StatTile, TBody, Table, Td, Th, THead, Tr } from "@/components/ui";
 import { requireModule } from "@/lib/auth/guards";
+import { tekst } from "@/lib/i18n/server";
 import { db } from "@/lib/db";
 import { formatDate } from "@/lib/utils";
 
@@ -26,6 +27,7 @@ export const metadata = { title: "Nabellen" };
 
 const PER_PAGINA = 40;
 
+/** Uitkomst → Nederlandse brontekst (de vertaalsleutel) en de kleur van het label. */
 const UITKOMST: Record<string, { label: string; tone: "neutral" | "accent" | "info" | "success" | "warning" | "danger" }> = {
   "geen-antwoord": { label: "Geen antwoord", tone: "neutral" },
   terugbellen: { label: "Terugbellen", tone: "warning" },
@@ -61,6 +63,7 @@ export default async function NabellenPage({
   searchParams: Promise<Record<string, string | undefined>>;
 }) {
   await requireModule("broadcast");
+  const t = await tekst();
   const sp = await searchParams;
   const q = (sp.q ?? "").trim();
   const tel = sp.tel ?? "met"; // met | alle
@@ -128,6 +131,30 @@ export default async function NabellenPage({
     where p.sector is not null order by 1
   `)) as unknown as { sector: string }[];
 
+  /** Het belformulier is een client-component: labels gaan als tekst mee. */
+  const labels = {
+    uitkomst: t("Uitkomst…"),
+    notitie: t("Notitie"),
+    opslaan: t("Opslaan"),
+    inplannen: t("Afspraak inplannen"),
+    datumTijd: t("Datum en tijd"),
+    duur: t("Duur"),
+    plaats: t("Plaats"),
+    plaatsVoorstel: t("Showroom Jávea"),
+    agendaHint: t("komt in de agenda, contact wordt aangemaakt"),
+    contactOpenen: t("Contact openen"),
+    nogEenPoging: t("nog een poging"),
+    duren: { "30": t("30 min"), "60": t("1 uur"), "90": t("1,5 uur"), "120": t("2 uur") },
+    uitkomsten: {
+      "geen-antwoord": t("Geen antwoord"),
+      terugbellen: t("Terugbellen"),
+      interesse: t("Interesse"),
+      afspraak: t("Afspraak"),
+      "geen-interesse": t("Geen interesse"),
+      "verkeerd-nummer": t("Verkeerd nummer"),
+    },
+  };
+
   const laatste = Math.max(1, Math.ceil(totaal / PER_PAGINA));
   const href = (anders: Record<string, string | number | undefined>) => {
     const u = new URLSearchParams();
@@ -139,29 +166,29 @@ export default async function NabellenPage({
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Nabellen"
-        subtitle="Bedrijven die de campagnemail hebben gekregen — met telefoonnummer, op volgorde van langst geleden"
+        title={t("Nabellen")}
+        subtitle={t("Bedrijven die de campagnemail hebben gekregen — met telefoonnummer, op volgorde van langst geleden")}
         actions={
           <LinkButton href="/broadcast" variant="secondary" size="sm">
-            Naar campagnes
+            {t("Naar campagnes")}
           </LinkButton>
         }
       />
 
       <div className="grid gap-3 sm:grid-cols-4">
-        <StatTile label="Gemaild" value={`${tellers.gemaild}`} hint="bedrijven met een verstuurde mail" />
-        <StatTile label="Met telefoonnummer" value={`${tellers.met_tel}`} hint="direct te bellen" />
-        <StatTile label="Gebeld" value={`${tellers.gebeld}`} hint="minstens één poging" />
-        <StatTile label="Reageerde" value={`${tellers.reacties}`} hint="interesse of afspraak" />
+        <StatTile label={t("Gemaild")} value={`${tellers.gemaild}`} hint={t("bedrijven met een verstuurde mail")} />
+        <StatTile label={t("Met telefoonnummer")} value={`${tellers.met_tel}`} hint={t("direct te bellen")} />
+        <StatTile label={t("Gebeld")} value={`${tellers.gebeld}`} hint={t("minstens één poging")} />
+        <StatTile label={t("Reageerde")} value={`${tellers.reacties}`} hint={t("interesse of afspraak")} />
       </div>
 
       <Card className="overflow-hidden">
         <CardHeader className="flex flex-wrap items-center justify-between gap-3">
-          <CardTitle>{totaal} te bellen</CardTitle>
+          <CardTitle>{totaal} {t("te bellen")}</CardTitle>
           <form method="get" className="flex flex-wrap items-center gap-2">
-            <Input name="q" defaultValue={q} placeholder="Zoek op bedrijf, naam, e-mail of plaats" className="h-8 w-60 text-sm" />
+            <Input name="q" defaultValue={q} placeholder={t("Zoek op bedrijf, naam, e-mail of plaats")} className="h-8 w-60 text-sm" />
             <Select name="sector" defaultValue={sector} className="h-8 text-sm">
-              <option value="alle">Alle branches</option>
+              <option value="alle">{t("Alle branches")}</option>
               {sectoren.map((s) => (
                 <option key={s.sector} value={s.sector}>
                   {s.sector}
@@ -169,16 +196,16 @@ export default async function NabellenPage({
               ))}
             </Select>
             <Select name="tel" defaultValue={tel} className="h-8 text-sm">
-              <option value="met">Alleen met nummer</option>
-              <option value="alle">Ook zonder nummer</option>
+              <option value="met">{t("Alleen met nummer")}</option>
+              <option value="alle">{t("Ook zonder nummer")}</option>
             </Select>
             <Select name="gebeld" defaultValue={gebeld} className="h-8 text-sm">
-              <option value="open">Nog niet gebeld</option>
-              <option value="gebeld">Al gebeld</option>
-              <option value="alle">Alles</option>
+              <option value="open">{t("Nog niet gebeld")}</option>
+              <option value="gebeld">{t("Al gebeld")}</option>
+              <option value="alle">{t("Alles")}</option>
             </Select>
             <button type="submit" className="h-8 rounded-md border px-3 text-sm hover:border-accent">
-              Filter
+              {t("Filter")}
             </button>
           </form>
         </CardHeader>
@@ -186,12 +213,12 @@ export default async function NabellenPage({
           <Table>
             <THead>
               <tr>
-                <Th>Bedrijf</Th>
-                <Th>Telefoon</Th>
-                <Th>Plaats</Th>
-                <Th>Gemaild</Th>
-                <Th>Laatste belpoging</Th>
-                <Th>Vastleggen</Th>
+                <Th>{t("Bedrijf")}</Th>
+                <Th>{t("Telefoon")}</Th>
+                <Th>{t("Plaats")}</Th>
+                <Th>{t("Gemaild")}</Th>
+                <Th>{t("Laatste belpoging")}</Th>
+                <Th>{t("Vastleggen")}</Th>
               </tr>
             </THead>
             <TBody>
@@ -213,7 +240,7 @@ export default async function NabellenPage({
                         {r.phone}
                       </a>
                     ) : (
-                      <span className="text-xs text-muted">geen nummer</span>
+                      <span className="text-xs text-muted">{t("geen nummer")}</span>
                     )}
                   </Td>
                   <Td className="text-muted">{[r.city, r.province].filter(Boolean).join(" · ") || "—"}</Td>
@@ -225,27 +252,27 @@ export default async function NabellenPage({
                     {r.laatste_uitkomst ? (
                       <>
                         <Badge tone={UITKOMST[r.laatste_uitkomst]?.tone ?? "neutral"}>
-                          {UITKOMST[r.laatste_uitkomst]?.label ?? r.laatste_uitkomst}
+                          {t(UITKOMST[r.laatste_uitkomst]?.label ?? r.laatste_uitkomst)}
                         </Badge>
                         <span className="block text-xs text-muted">
                           {r.laatste_belpoging ? formatDate(new Date(r.laatste_belpoging)) : ""}
-                          {r.pogingen > 1 ? ` · ${r.pogingen} pogingen` : ""}
+                          {r.pogingen > 1 ? ` · ${r.pogingen} ${t("pogingen")}` : ""}
                         </span>
                         {r.laatste_notitie && <span className="block max-w-[16rem] truncate text-xs">{r.laatste_notitie}</span>}
                       </>
                     ) : (
-                      <span className="text-xs text-muted">nog niet gebeld</span>
+                      <span className="text-xs text-muted">{t("nog niet gebeld")}</span>
                     )}
                   </Td>
                   <Td>
-                    <BelFormulier prospectId={r.id} bedrijf={r.company_name} action={legBelpogingVast} />
+                    <BelFormulier prospectId={r.id} bedrijf={r.company_name} action={legBelpogingVast} labels={labels} />
                   </Td>
                 </Tr>
               ))}
               {rijen.length === 0 && (
                 <Tr>
                   <Td colSpan={6} className="py-8 text-center text-sm text-muted">
-                    Niets te bellen met deze filters. Zet "Ook zonder nummer" aan of kies een andere branche.
+                    {t('Niets te bellen met deze filters. Zet "Ook zonder nummer" aan of kies een andere branche.')}
                   </Td>
                 </Tr>
               )}
@@ -255,17 +282,17 @@ export default async function NabellenPage({
         {laatste > 1 && (
           <div className="flex items-center justify-between border-t px-4 py-3 text-sm">
             <span className="text-muted">
-              Pagina {pagina} van {laatste}
+              {t("Pagina {pagina} van {laatste}", { pagina, laatste })}
             </span>
             <div className="flex gap-2">
               {pagina > 1 && (
                 <Link href={href({ p: pagina - 1 })} className="rounded-md border px-3 py-1.5 hover:border-accent">
-                  Vorige
+                  {t("Vorige")}
                 </Link>
               )}
               {pagina < laatste && (
                 <Link href={href({ p: pagina + 1 })} className="rounded-md border px-3 py-1.5 hover:border-accent">
-                  Volgende
+                  {t("Volgende")}
                 </Link>
               )}
             </div>

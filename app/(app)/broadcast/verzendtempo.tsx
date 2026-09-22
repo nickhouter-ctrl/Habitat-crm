@@ -4,6 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle, Field, Select } from "@/compo
 import { SubmitButton } from "@/components/submit-button";
 import { db } from "@/lib/db";
 import { bulkMailSettings } from "@/lib/db/schema";
+import { tekst } from "@/lib/i18n/server";
 import { dagCap, HARD_MAX, rondeVorm, WARMUP_STAPPEN } from "@/lib/leads/warmup";
 
 import { setVerzendtempo } from "./actions";
@@ -22,13 +23,14 @@ export async function Verzendtempo({ teGaan }: { teGaan: number }) {
   const nu = new Date();
   const huidig = dagCap(inst?.warmupStartedAt ?? null, nu, inst?.dailyCapOverride ?? null);
   const vorm = rondeVorm(huidig);
+  const t = await tekst();
   const dagen = (cap: number) => (cap > 0 ? Math.ceil(Math.max(teGaan, 1) / cap) : "—");
 
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Verzendtempo</CardTitle>
-        <span className="text-xs text-muted">nu {huidig} per dag</span>
+        <CardTitle>{t("Verzendtempo")}</CardTitle>
+        <span className="text-xs text-muted">{t("nu {n} per dag", { n: huidig })}</span>
       </CardHeader>
       <CardContent className="space-y-3 text-sm">
         <p className="text-muted">
@@ -40,40 +42,40 @@ export async function Verzendtempo({ teGaan }: { teGaan: number }) {
 
         <form action={setVerzendtempo} className="space-y-3 rounded-lg border bg-background/50 p-3">
           <Field
-            label="Eigen dagcap"
+            label={t("Eigen dagcap")}
             htmlFor="cap"
-            hint={`Leeg = het opwarmschema volgen. Maximaal ${HARD_MAX} per dag.`}
+            hint={t("Leeg = het opwarmschema volgen. Maximaal {max} per dag.", { max: HARD_MAX })}
           >
             <Select id="cap" name="dailyCap" defaultValue={inst?.dailyCapOverride?.toString() ?? ""}>
-              <option value="">Opwarmschema volgen (aanbevolen)</option>
+              <option value="">{t("Opwarmschema volgen (aanbevolen)")}</option>
               {[200, 500, 1000, 2000, 3000, 5000].map((c) => (
                 <option key={c} value={c}>
-                  {c} per dag — klaar in {dagen(c)} verzenddagen
+                  {t("{c} per dag — klaar in {d} verzenddagen", { c, d: dagen(c) })}
                 </option>
               ))}
             </Select>
           </Field>
           <label className="flex items-center gap-2 text-xs text-muted">
             <input type="checkbox" name="opnieuwOpwarmen" />
-            Opwarmschema opnieuw beginnen (na een lange pauze of een slechte ronde)
+            {t("Opwarmschema opnieuw beginnen (na een lange pauze of een slechte ronde)")}
           </label>
           <SubmitButton size="sm" variant="secondary" pendingLabel="Bezig…">
-            Tempo instellen
+            {t("Tempo instellen")}
           </SubmitButton>
         </form>
 
         <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-xs text-muted">
-          <dt>Nu per dag</dt>
+          <dt>{t("Nu per dag")}</dt>
           <dd className="tabular-nums">{huidig}</dd>
-          <dt>Per ronde</dt>
+          <dt>{t("Per ronde")}</dt>
           <dd className="tabular-nums">
-            {vorm.perRonde} mails, {vorm.throttleSeconds}s ertussen (elke tien minuten een ronde)
+            {t("{n} mails, {s}s ertussen (elke tien minuten een ronde)", { n: vorm.perRonde, s: vorm.throttleSeconds })}
           </dd>
-          <dt>Nog te versturen</dt>
+          <dt>{t("Nog te versturen")}</dt>
           <dd className="tabular-nums">
             {teGaan} — ongeveer {dagen(huidig)} verzenddagen
           </dd>
-          <dt>Opwarmen begon</dt>
+          <dt>{t("Opwarmen begon")}</dt>
           <dd>{inst?.warmupStartedAt ? inst.warmupStartedAt.toLocaleDateString("nl-NL") : "nog niet verstuurd"}</dd>
         </dl>
       </CardContent>

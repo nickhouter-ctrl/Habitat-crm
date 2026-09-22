@@ -75,6 +75,10 @@ describe("woordenboeken", () => {
       // hetzelfde menu-item, en een vertaald kopje maakt overleg lastiger.
       "Broadcast",
       "Prospects",
+      // Tijd- en plaatsnamen zijn in alle drie de talen gelijk.
+      "Filter",
+      "30 min",
+      "Showroom Jávea",
     ]);
     for (const [naam, dict] of [["en", en], ["es", es]] as const) {
       const verdacht = Object.entries(dict).filter(([k, v]) => k === v && !gelijk.has(k));

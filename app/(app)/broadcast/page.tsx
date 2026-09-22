@@ -28,6 +28,7 @@ import {
 } from "@/components/ui";
 import { db } from "@/lib/db";
 import { bulkMailSettings, campaignRecipients, emailCampaigns, emailSuppressions, prospects } from "@/lib/db/schema";
+import { tekst } from "@/lib/i18n/server";
 import { bulkGereed } from "@/lib/leads/transport";
 import { dagCap } from "@/lib/leads/warmup";
 import { madridMiddernacht } from "@/lib/tz-madrid";
@@ -52,6 +53,7 @@ export default async function MailingPage({
 }: {
   searchParams: Promise<{ error?: string }>;
 }) {
+  const t = await tekst();
   const sp = await searchParams;
   const nu = new Date();
 
@@ -111,21 +113,21 @@ export default async function MailingPage({
   return (
     <>
       <PageHeader
-        title="E-mailmarketing"
-        subtitle="Campagnes naar bedrijven — met een dagcap, een afmeldlink en een noodrem"
+        title={t("E-mailmarketing")}
+        subtitle={t("Campagnes naar bedrijven — met een dagcap, een afmeldlink en een noodrem")}
         actions={
           <div className="flex flex-wrap items-center gap-3 text-sm">
             <LinkButton href="/broadcast/nabellen" variant="primary" size="sm">
-              <Phone className="size-4" /> Nabellen{teBellen > 0 ? ` (${teBellen})` : ""}
+              <Phone className="size-4" /> {t("Nabellen")}{teBellen > 0 ? ` (${teBellen})` : ""}
             </LinkButton>
             <Link href="/leads/prospects" className="underline">
-              Prospects
+              {t("Prospects")}
             </Link>
             <Link href="/leads/import" className="underline">
-              Lijst importeren
+              {t("Lijst importeren")}
             </Link>
             <Link href="/leads" className="underline">
-              Bedrijven zoeken
+              {t("Bedrijven zoeken")}
             </Link>
           </div>
         }
@@ -136,31 +138,31 @@ export default async function MailingPage({
       {/* Wat je moet weten vóór je verstuurt. */}
       <div className="mb-5 grid grid-cols-2 gap-3 lg:grid-cols-4">
         <StatTile
-          label="In de wachtrij"
+          label={t("In de wachtrij")}
           value={String(totaalWachtrij)}
-          hint={totaalWachtrij > 0 ? "wordt automatisch verstuurd" : "niets te versturen"}
+          hint={totaalWachtrij > 0 ? t("wordt automatisch verstuurd") : t("niets te versturen")}
           tone={totaalWachtrij > 0 ? "accent" : "neutral"}
           icon={<Mail className="size-4" />}
         />
         <StatTile
-          label="Vandaag verstuurd"
+          label={t("Vandaag verstuurd")}
           value={`${vandaag} / ${cap}`}
-          hint="dagcap over alle campagnes"
+          hint={t("dagcap over alle campagnes")}
           tone={vandaag >= cap && cap > 0 ? "warning" : "neutral"}
         />
         <StatTile
-          label="Bedrijven bereikbaar"
+          label={t("Bedrijven bereikbaar")}
           value={String(mailbaar)}
-          hint="prospects met e-mailadres"
+          hint={t("prospects met e-mailadres")}
           tone="info"
           icon={<Users className="size-4" />}
           href="/leads/prospects?ef=met"
         />
-        <StatTile label="Afgemeld" value={String(afgemeld)} hint="worden nooit gemaild" />
+        <StatTile label={t("Afgemeld")} value={String(afgemeld)} hint={t("worden nooit gemaild")} />
         <StatTile
-          label="Te bellen"
+          label={t("Te bellen")}
           value={String(teBellen)}
-          hint="gemaild, met nummer, nog niet gebeld"
+          hint={t("gemaild, met nummer, nog niet gebeld")}
           tone={teBellen > 0 ? "accent" : "neutral"}
           href="/broadcast/nabellen"
         />
@@ -180,8 +182,8 @@ export default async function MailingPage({
         <p className="mb-4 flex items-start gap-2 rounded-lg border border-danger/40 bg-danger/10 px-4 py-3 text-sm">
           <Pause className="mt-0.5 size-4 shrink-0 text-danger" />
           <span>
-            <strong>Het verzenden staat stil.</strong> {inst.pausedReason ?? ""} Aanzetten doe je op de pagina van een
-            campagne.
+            <strong>{t("Het verzenden staat stil.")}</strong> {inst.pausedReason ?? ""}{" "}
+            {t("Aanzetten doe je op de pagina van een campagne.")}
           </span>
         </p>
       )}
@@ -192,8 +194,8 @@ export default async function MailingPage({
           {lopend.length > 0 && (
             <Card>
               <CardHeader>
-                <CardTitle>Nu bezig</CardTitle>
-                <span className="text-xs text-muted">{lopend.length} {lopend.length === 1 ? "campagne" : "campagnes"}</span>
+                <CardTitle>{t("Nu bezig")}</CardTitle>
+                <span className="text-xs text-muted">{lopend.length} {lopend.length === 1 ? t("campagne") : t("campagnes")}</span>
               </CardHeader>
               <CardContent className="space-y-4">
                 {lopend.map((c) => {
@@ -210,18 +212,18 @@ export default async function MailingPage({
                           {c.name}
                         </Link>
                         <span className="text-xs text-muted tabular-nums">
-                          {klaar} van {wachtrij + klaar} verstuurd
-                          {dagen ? ` · nog ± ${dagen} verzenddagen` : ""}
+                          {t("{klaar} van {totaal} verstuurd", { klaar, totaal: wachtrij + klaar })}
+                          {dagen ? ` · ${t("nog ± {dagen} verzenddagen", { dagen })}` : ""}
                         </span>
                       </div>
                       <div className="h-2 overflow-hidden rounded-full bg-background-soft">
                         <div className="h-full rounded-full bg-accent transition-all" style={{ width: `${pct}%` }} />
                       </div>
                       <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted">
-                        <span>{wachtrij} in wachtrij</span>
-                        {(s.failed ?? 0) > 0 && <span className="text-danger">{s.failed} mislukt</span>}
-                        {(s.bounced ?? 0) > 0 && <span className="text-warning">{s.bounced} bounce</span>}
-                        {(s.complained ?? 0) > 0 && <span className="text-danger">{s.complained} klacht</span>}
+                        <span>{t("{n} in wachtrij", { n: wachtrij })}</span>
+                        {(s.failed ?? 0) > 0 && <span className="text-danger">{t("{n} mislukt", { n: s.failed ?? 0 })}</span>}
+                        {(s.bounced ?? 0) > 0 && <span className="text-warning">{t("{n} bounce", { n: s.bounced ?? 0 })}</span>}
+                        {(s.complained ?? 0) > 0 && <span className="text-danger">{t("{n} klacht", { n: s.complained ?? 0 })}</span>}
                       </div>
                     </div>
                   );
@@ -233,13 +235,13 @@ export default async function MailingPage({
           {/* Alle campagnes. */}
           <Card>
             <CardHeader>
-              <CardTitle>Campagnes</CardTitle>
-              <span className="text-xs text-muted">{campagnes.length} in totaal</span>
+              <CardTitle>{t("Campagnes")}</CardTitle>
+              <span className="text-xs text-muted">{t("{n} in totaal", { n: campagnes.length })}</span>
             </CardHeader>
             {rest.length === 0 && lopend.length === 0 ? (
               <CardContent>
                 <EmptyState
-                  title="Nog geen campagne"
+                  title={t("Nog geen campagne")}
                   description="Maak er hieronder een. Je kiest voor wie hij is en welke producten erin komen; onderwerp en tekst volgen daarna."
                 />
               </CardContent>
@@ -280,7 +282,7 @@ export default async function MailingPage({
 
           <Card>
             <CardHeader>
-              <CardTitle>De lijst</CardTitle>
+              <CardTitle>{t("De lijst")}</CardTitle>
             </CardHeader>
             <CardContent className="space-y-3 text-sm">
               <p className="text-muted">
@@ -288,17 +290,17 @@ export default async function MailingPage({
                 klant wordt, zet je over naar contacten.
               </p>
               <dl className="grid grid-cols-[1fr_auto] gap-y-1 text-xs">
-                <dt className="text-muted">Met e-mailadres</dt>
+                <dt className="text-muted">{t("Met e-mailadres")}</dt>
                 <dd className="tabular-nums">{mailbaar}</dd>
-                <dt className="text-muted">Afgemeld</dt>
+                <dt className="text-muted">{t("Afgemeld")}</dt>
                 <dd className="tabular-nums">{afgemeld}</dd>
               </dl>
               <div className="flex flex-wrap gap-2">
                 <LinkButton href="/leads/import" variant="secondary" size="sm">
-                  <Megaphone className="size-4" /> Lijst importeren
+                  <Megaphone className="size-4" /> {t("Lijst importeren")}
                 </LinkButton>
                 <LinkButton href="/leads/prospects" variant="ghost" size="sm">
-                  Prospects openen
+                  {t("Prospects openen")}
                 </LinkButton>
               </div>
             </CardContent>
@@ -306,7 +308,7 @@ export default async function MailingPage({
 
           <Card>
             <CardHeader>
-              <CardTitle>Zo werkt het</CardTitle>
+              <CardTitle>{t("Zo werkt het")}</CardTitle>
             </CardHeader>
             <CardContent className="space-y-2 text-xs text-muted">
               <p>

@@ -13,6 +13,7 @@ import { eq, sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 
 import { requireModule } from "@/lib/auth/guards";
+import { tekst } from "@/lib/i18n/server";
 import { db } from "@/lib/db";
 import { activities, appointments, contacts, prospectCalls, prospects } from "@/lib/db/schema";
 import { contactDisplayName } from "@/lib/contact-name";
@@ -85,6 +86,7 @@ async function zorgVoorContact(prospectId: string, userId: string): Promise<stri
 
 export async function legBelpogingVast(formData: FormData): Promise<BelResultaat> {
   const user = await requireModule("broadcast");
+  const t = await tekst();
   const prospectId = String(formData.get("prospectId") ?? "");
   const uitkomst = String(formData.get("outcome") ?? "") as Uitkomst;
   const note = String(formData.get("note") ?? "").trim();
@@ -92,13 +94,13 @@ export async function legBelpogingVast(formData: FormData): Promise<BelResultaat
   const duurMin = Number(formData.get("duurMin") ?? 60) || 60;
   const plaats = String(formData.get("location") ?? "").trim();
 
-  if (!prospectId || !UITKOMSTEN.includes(uitkomst)) return { ok: false, melding: "Kies eerst een uitkomst." };
+  if (!prospectId || !UITKOMSTEN.includes(uitkomst)) return { ok: false, melding: t("Kies eerst een uitkomst.") };
 
   const p = await db.query.prospects.findFirst({ where: eq(prospects.id, prospectId) });
-  if (!p) return { ok: false, melding: "Deze prospect bestaat niet meer." };
+  if (!p) return { ok: false, melding: t("Deze prospect bestaat niet meer.") };
 
   // Een afspraak zonder moment is geen afspraak.
-  if (uitkomst === "afspraak" && !wanneer) return { ok: false, melding: "Vul datum en tijd van de afspraak in." };
+  if (uitkomst === "afspraak" && !wanneer) return { ok: false, melding: t("Vul datum en tijd van de afspraak in.") };
 
   await db.insert(prospectCalls).values({
     prospectId,
@@ -108,16 +110,16 @@ export async function legBelpogingVast(formData: FormData): Promise<BelResultaat
   });
 
   let contactId: string | null = null;
-  let melding = `${LABEL[uitkomst]} vastgelegd.`;
+  let melding = t("{wat} vastgelegd.", { wat: t(LABEL[uitkomst]) });
 
   if (uitkomst === "afspraak" || uitkomst === "interesse") {
     contactId = await zorgVoorContact(prospectId, user.id);
-    melding = contactId ? `${LABEL[uitkomst]} vastgelegd, contact aangemaakt.` : melding;
+    melding = contactId ? t("{wat} vastgelegd, contact aangemaakt.", { wat: t(LABEL[uitkomst]) }) : melding;
   }
 
   if (uitkomst === "afspraak" && contactId) {
     const start = new Date(wanneer);
-    if (Number.isNaN(start.getTime())) return { ok: false, melding: "Die datum begreep ik niet." };
+    if (Number.isNaN(start.getTime())) return { ok: false, melding: t("Die datum begreep ik niet.") };
     await db.insert(appointments).values({
       title: `Gesprek ${p.companyName}`,
       contactId,
@@ -138,7 +140,7 @@ export async function legBelpogingVast(formData: FormData): Promise<BelResultaat
         .filter(Boolean)
         .join("\n"),
     });
-    melding = "Afspraak staat in de agenda en het contact is aangemaakt.";
+    melding = t("Afspraak staat in de agenda en het contact is aangemaakt.");
   } else if (contactId) {
     await db.insert(activities).values({
       type: "call",

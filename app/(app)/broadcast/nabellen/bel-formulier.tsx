@@ -15,14 +15,23 @@ import { Button, Input, Select } from "@/components/ui";
 
 import type { BelResultaat } from "./actions";
 
-const UITKOMSTEN: [string, string][] = [
-  ["geen-antwoord", "Geen antwoord"],
-  ["terugbellen", "Terugbellen"],
-  ["interesse", "Interesse"],
-  ["afspraak", "Afspraak"],
-  ["geen-interesse", "Geen interesse"],
-  ["verkeerd-nummer", "Verkeerd nummer"],
-];
+const SLEUTELS = ["geen-antwoord", "terugbellen", "interesse", "afspraak", "geen-interesse", "verkeerd-nummer"] as const;
+
+export type BelLabels = {
+  uitkomst: string;
+  notitie: string;
+  opslaan: string;
+  inplannen: string;
+  datumTijd: string;
+  duur: string;
+  plaats: string;
+  plaatsVoorstel: string;
+  agendaHint: string;
+  contactOpenen: string;
+  nogEenPoging: string;
+  duren: Record<string, string>;
+  uitkomsten: Record<string, string>;
+};
 
 /** Voorstel: morgen 10:00 in Madrid-tijd, in het formaat van datetime-local. */
 function morgenTien(): string {
@@ -37,17 +46,19 @@ export function BelFormulier({
   prospectId,
   bedrijf,
   action,
+  labels,
 }: {
   prospectId: string;
   bedrijf: string;
   action: (formData: FormData) => Promise<BelResultaat>;
+  labels: BelLabels;
 }) {
   const [bezig, start] = useTransition();
   const [uitkomst, setUitkomst] = useState("");
   const [note, setNote] = useState("");
   const [wanneer, setWanneer] = useState(morgenTien);
   const [duur, setDuur] = useState("60");
-  const [plaats, setPlaats] = useState("Showroom Jávea");
+  const [plaats, setPlaats] = useState(labels.plaatsVoorstel);
   const [klaar, setKlaar] = useState<BelResultaat | null>(null);
   const afspraak = uitkomst === "afspraak";
 
@@ -57,11 +68,11 @@ export function BelFormulier({
         <span className="text-success">{klaar.melding}</span>
         {klaar.contactId && (
           <Link href={`/contacts/${klaar.contactId}`} className="ml-2 text-accent hover:underline">
-            Contact openen
+            {labels.contactOpenen}
           </Link>
         )}
         <button type="button" onClick={() => setKlaar(null)} className="ml-2 text-muted underline">
-          nog een poging
+          {labels.nogEenPoging}
         </button>
       </div>
     );
@@ -99,22 +110,22 @@ export function BelFormulier({
           className="h-8 w-36 text-sm"
           aria-label={`Uitkomst gesprek ${bedrijf}`}
         >
-          <option value="">Uitkomst…</option>
-          {UITKOMSTEN.map(([v, l]) => (
+          <option value="">{labels.uitkomst}</option>
+          {SLEUTELS.map((v) => (
             <option key={v} value={v}>
-              {l}
+              {labels.uitkomsten[v] ?? v}
             </option>
           ))}
         </Select>
         <Input
           value={note}
           onChange={(e) => setNote(e.target.value)}
-          placeholder="Notitie"
+          placeholder={labels.notitie}
           className="h-8 w-40 text-sm"
-          aria-label="Notitie"
+          aria-label={labels.notitie}
         />
         <Button type="submit" size="sm" variant={afspraak ? "primary" : "secondary"} disabled={!uitkomst || bezig}>
-          {bezig ? "…" : afspraak ? "Afspraak inplannen" : "Opslaan"}
+          {bezig ? "…" : afspraak ? labels.inplannen : labels.opslaan}
         </Button>
       </div>
 
@@ -125,22 +136,23 @@ export function BelFormulier({
             value={wanneer}
             onChange={(e) => setWanneer(e.target.value)}
             className="h-8 w-52 text-sm"
-            aria-label="Datum en tijd"
+            aria-label={labels.datumTijd}
           />
-          <Select value={duur} onChange={(e) => setDuur(e.target.value)} className="h-8 w-28 text-sm" aria-label="Duur">
-            <option value="30">30 min</option>
-            <option value="60">1 uur</option>
-            <option value="90">1,5 uur</option>
-            <option value="120">2 uur</option>
+          <Select value={duur} onChange={(e) => setDuur(e.target.value)} className="h-8 w-28 text-sm" aria-label={labels.duur}>
+            {["30", "60", "90", "120"].map((m) => (
+              <option key={m} value={m}>
+                {labels.duren[m] ?? `${m} min`}
+              </option>
+            ))}
           </Select>
           <Input
             value={plaats}
             onChange={(e) => setPlaats(e.target.value)}
-            placeholder="Plaats"
+            placeholder={labels.plaats}
             className="h-8 w-40 text-sm"
-            aria-label="Plaats"
+            aria-label={labels.plaats}
           />
-          <span className="text-xs text-muted">komt in de agenda, contact wordt aangemaakt</span>
+          <span className="text-xs text-muted">{labels.agendaHint}</span>
         </div>
       )}
 
