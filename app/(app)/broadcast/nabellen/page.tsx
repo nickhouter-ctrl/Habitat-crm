@@ -131,6 +131,17 @@ export default async function NabellenPage({
     where p.sector is not null order by 1
   `)) as unknown as { sector: string }[];
 
+  /**
+   * Wat voor bedrijf is dit? De branche is leidend; staat die er niet, dan de
+   * categorie. "Overig" zegt niets, dus daar valt de categorie voor.
+   */
+  const branche = (r: Rij): string => {
+    const s = (r.sector ?? "").trim();
+    if (s && s.toLowerCase() !== "overig" && s.toLowerCase() !== "overige") return t(s);
+    const c = (r.category ?? "").trim();
+    return c ? t(c) : t("Overig bedrijf");
+  };
+
   /** Het belformulier is een client-component: labels gaan als tekst mee. */
   const labels = {
     uitkomst: t("Uitkomst…"),
@@ -191,7 +202,7 @@ export default async function NabellenPage({
               <option value="alle">{t("Alle branches")}</option>
               {sectoren.map((s) => (
                 <option key={s.sector} value={s.sector}>
-                  {s.sector}
+                  {t(s.sector)}
                 </option>
               ))}
             </Select>
@@ -229,10 +240,7 @@ export default async function NabellenPage({
                     {r.contact_person_name && r.contact_person_name !== r.company_name && (
                       <span className="block text-xs text-muted">{r.contact_person_name}</span>
                     )}
-                    <span className="block text-xs text-muted">
-                      {r.email}
-                      {r.sector ? ` · ${r.sector}` : ""}
-                    </span>
+                    <span className="block text-xs text-muted">{r.email}</span>
                   </Td>
                   <Td className="whitespace-nowrap">
                     {r.phone ? (
@@ -246,7 +254,9 @@ export default async function NabellenPage({
                   <Td className="text-muted">{[r.city, r.province].filter(Boolean).join(" · ") || "—"}</Td>
                   <Td className="whitespace-nowrap text-muted">
                     {formatDate(new Date(r.sent_at))}
-                    {r.campagne && <span className="block max-w-[14rem] truncate text-xs">{r.campagne}</span>}
+                    {/* De campagnenaam is vrije tekst van ons zelf en staat altijd in het Nederlands;
+                        wat de beller wil weten is wat voor bedrijf hij aan de lijn krijgt. */}
+                    <span className="block text-xs">{branche(r)}</span>
                   </Td>
                   <Td>
                     {r.laatste_uitkomst ? (
