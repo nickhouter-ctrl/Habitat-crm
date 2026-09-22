@@ -55,7 +55,7 @@ export default async function MailingPage({
   const sp = await searchParams;
   const nu = new Date();
 
-  const [campagnes, standRijen, groepRijen, [inst], mailbaar, afgemeld, vandaag] = await Promise.all([
+  const [campagnes, standRijen, groepRijen, [inst], mailbaar, afgemeld, vandaag, teBellenRijen] = await Promise.all([
     db.query.emailCampaigns.findMany({ orderBy: desc(emailCampaigns.createdAt), limit: 25 }),
     // Per campagne de tellers in één query, in plaats van per campagne één.
     db
@@ -78,6 +78,13 @@ export default async function MailingPage({
     // gte() en niet een Date in een sql-template: postgres.js kan een Date
     // alleen binden via het kolomtype dat drizzle meegeeft.
     db.$count(campaignRecipients, gte(campaignRecipients.sentAt, madridMiddernacht(nu))),
+    // Gemaild, telefoonnummer bekend, nog nooit gebeld — de nabelstapel.
+    db.execute(sql`
+      select count(*)::int n from prospects p
+      where p.phone is not null and p.phone <> '' and p.status <> 'unsubscribed'
+        and exists (select 1 from campaign_recipients r where r.prospect_id = p.id and r.status = 'sent' and r.bounced_at is null)
+        and not exists (select 1 from prospect_calls c where c.prospect_id = p.id)
+    `),
   ]);
 
   const perCampagne = new Map<string, Record<string, number>>();
@@ -95,6 +102,7 @@ export default async function MailingPage({
     (groepRijen as unknown as Array<{ collection: string; n: number; image: string | null }>)
   ).map((r) => ({ collection: r.collection, n: Number(r.n), image: r.image }));
 
+  const teBellen = Number((teBellenRijen as unknown as { n: number }[])[0]?.n ?? 0);
   const cap = dagCap(inst?.warmupStartedAt ?? null, nu, inst?.dailyCapOverride ?? null);
   const gereed = bulkGereed();
   const lopend = campagnes.filter((c) => c.status === "queued" || c.status === "sending");
@@ -107,6 +115,9 @@ export default async function MailingPage({
         subtitle="Campagnes naar bedrijven — met een dagcap, een afmeldlink en een noodrem"
         actions={
           <div className="flex flex-wrap items-center gap-3 text-sm">
+            <Link href="/broadcast/nabellen" className="underline">
+              Nabellen
+            </Link>
             <Link href="/leads/prospects" className="underline">
               Prospects
             </Link>
@@ -146,6 +157,13 @@ export default async function MailingPage({
           href="/leads/prospects?ef=met"
         />
         <StatTile label="Afgemeld" value={String(afgemeld)} hint="worden nooit gemaild" />
+        <StatTile
+          label="Te bellen"
+          value={String(teBellen)}
+          hint="gemaild, met nummer, nog niet gebeld"
+          tone={teBellen > 0 ? "accent" : "neutral"}
+          href="/broadcast/nabellen"
+        />
       </div>
 
       {/* Alleen tonen als er iets in de weg staat — geen vaste banner. */}

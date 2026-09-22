@@ -3462,3 +3462,38 @@ export const inboxSuggestions = pgTable("inbox_suggestions", {
   reviewedAt: timestamp({ withTimezone: true }),
   ...timestamps,
 }, (t) => [uniqueIndex("inbox_suggestions_email_idx").on(t.emailId), index("inbox_suggestions_status_idx").on(t.status)]);
+
+/* ---------------------------------------------------------------------------
+   Nabellen na een campagne
+--------------------------------------------------------------------------- */
+
+export const prospectCallOutcome = pgEnum("prospect_call_outcome", [
+  "geen-antwoord",
+  "terugbellen",
+  "interesse",
+  "afspraak",
+  "geen-interesse",
+  "verkeerd-nummer",
+]);
+
+/**
+ * Eén belpoging bij een prospect. Een eigen tabel en geen kolom op `prospects`,
+ * omdat nabellen vaak twee of drie pogingen kost en je bij de tweede wil zien
+ * wat er de eerste keer is gezegd.
+ */
+export const prospectCalls = pgTable(
+  "prospect_calls",
+  {
+    id: uuid().primaryKey().default(sql`gen_random_uuid()`),
+    prospectId: uuid()
+      .notNull()
+      .references(() => prospects.id, { onDelete: "cascade" }),
+    calledAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
+    outcome: prospectCallOutcome().notNull(),
+    note: text(),
+    /** Wie er gebeld heeft — voor de terugkoppeling in het team. */
+    userId: uuid().references(() => users.id, { onDelete: "set null" }),
+    ...timestamps,
+  },
+  (t) => [index("prospect_calls_prospect_idx").on(t.prospectId, t.calledAt)],
+);
