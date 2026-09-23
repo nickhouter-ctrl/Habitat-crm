@@ -14,7 +14,7 @@ import { asStringArray } from "@/lib/documents";
 import { appointmentProposalEmail, persoonlijkeMail, sendEmail } from "@/lib/email";
 import { recordSentEmail } from "@/lib/sent-email";
 import { catalogusMailBijlagen, listCatalogFiles } from "@/lib/storage";
-import { confirmAppointment } from "@/lib/appointments";
+import { confirmAppointment, isBeursAanvraag } from "@/lib/appointments";
 
 async function requireUser() {
   // Centrale guard: ingelogd én geen alleen-lezen (viewer) account.
@@ -169,7 +169,14 @@ export async function proposeSlots(quoteRequestId: string, formData: FormData) {
 
   const url = `${await baseUrl()}/book/${token}`;
   try {
-    const mail = appointmentProposalEmail({ lang: req.locale, contactName: req.name, url });
+    const mail = appointmentProposalEmail({
+      lang: req.locale,
+      contactName: req.name,
+      url,
+      // Beursaanvraag → de mail spreekt over de stand in Valencia, niet over de
+      // showroom in Jávea. Anders sturen we iemand naar de verkeerde stad.
+      fair: isBeursAanvraag(req.source),
+    });
     await sendEmail({ to: req.email, subject: mail.subject, html: mail.html, text: mail.text });
   } catch (err) {
     console.warn("[aanvragen] voorstel-mail mislukt:", err);

@@ -3,6 +3,7 @@ import { eq } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { quoteRequests } from "@/lib/db/schema";
 import { BookSlotPicker } from "@/components/book-slot-picker";
+import { isBeursAanvraag } from "@/lib/appointments";
 
 export const dynamic = "force-dynamic";
 
@@ -37,7 +38,7 @@ export default async function BookPage({ params }: { params: Promise<{ token: st
             <p className="mt-3 text-stone-500">{DONE[locale].body}</p>
           </div>
         ) : (
-          <BookSlotPicker token={token} slots={slots} locale={locale} />
+          <BookSlotPicker token={token} slots={slots} locale={locale} fair={isBeursAanvraag(req.source)} />
         )}
       </div>
     </main>

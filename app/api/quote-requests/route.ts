@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
+import { isBeursAanvraag } from "@/lib/appointments";
 import { clientIp, rateLimit, RATE_LIMITED } from "@/lib/rate-limit";
 import { NOTIFY_RECIPIENTS, NOTIFY_TO } from "@/lib/mail-bcc";
 
@@ -150,8 +151,10 @@ export async function POST(req: Request) {
     try {
       const firstLine = (v.message ?? "").split("\n")[0].trim();
       const when = firstLine.includes(": ") ? firstLine.split(": ").slice(1).join(": ").trim() : "";
-      // Beursafspraak (website:feria-…) krijgt de standtekst i.p.v. de showroomtekst.
-      const fair = (v.source ?? "").startsWith("website:feria");
+      // Beursafspraak (website:feria-…) krijgt de standtekst i.p.v. de
+      // showroomtekst. Diezelfde regel bepaalt verderop de locatie, de
+      // agenda-titel en de voorstelmail — daarom staat hij op één plek.
+      const fair = isBeursAanvraag(v.source);
       const ack = appointmentReceivedEmail({ lang: v.locale, contactName: v.name, when: when || null, fair });
       await sendMail({ to: v.email, subject: ack.subject, html: ack.html, text: ack.text });
       confirmStatus = "sent";

@@ -919,6 +919,8 @@ const APPT: Record<
     whenLabel: string;
     confSubject: string;
     confBody: string;
+    /** Zelfde bevestiging, maar voor de beursstand i.p.v. de showroom. */
+    confBodyFair: string;
     locationLabel: string;
   }
 > = {
@@ -931,6 +933,7 @@ const APPT: Record<
     whenLabel: "Voorkeursmoment",
     confSubject: "Je afspraak is bevestigd",
     confBody: "We kijken ernaar uit je te ontvangen in onze showroom:",
+    confBodyFair: "We kijken ernaar uit je te ontmoeten op onze stand op 360 by Cevisama, Feria Valencia (stand C109):",
     locationLabel: "Locatie",
   },
   en: {
@@ -942,6 +945,7 @@ const APPT: Record<
     whenLabel: "Preferred time",
     confSubject: "Your appointment is confirmed",
     confBody: "We look forward to welcoming you to our showroom:",
+    confBodyFair: "We look forward to meeting you at our stand at 360 by Cevisama, Feria Valencia (stand C109):",
     locationLabel: "Location",
   },
   es: {
@@ -953,6 +957,7 @@ const APPT: Record<
     whenLabel: "Hora preferida",
     confSubject: "Tu cita está confirmada",
     confBody: "Estaremos encantados de recibirte en nuestro showroom:",
+    confBodyFair: "Estaremos encantados de recibirte en nuestro stand en 360 by Cevisama, Feria Valencia (stand C109):",
     locationLabel: "Ubicación",
   },
   de: {
@@ -964,31 +969,50 @@ const APPT: Record<
     whenLabel: "Wunschtermin",
     confSubject: "Dein Termin ist bestätigt",
     confBody: "Wir freuen uns, dich in unserem Showroom begrüßen zu dürfen:",
+    confBodyFair: "Wir freuen uns, dich an unserem Stand auf der 360 by Cevisama, Feria Valencia (Stand C109) zu treffen:",
     locationLabel: "Standort",
   },
 };
 
 // Voorstel-mail: meerdere alternatieve momenten waaruit de klant kiest.
-const APPT_PROPOSE: Record<Lang, { subject: string; body: string; cta: string }> = {
+const APPT_PROPOSE: Record<
+  Lang,
+  {
+    subject: string;
+    body: string;
+    cta: string;
+    /** Beursvariant: de klant koos een beursdag, wij stellen tijden voor. */
+    subjectFair: string;
+    bodyFair: string;
+  }
+> = {
   nl: {
     subject: "Een nieuw moment voor je showroombezoek",
     body: "Bedankt voor je verzoek om onze showroom in Jávea te bezoeken. Het door jou aangegeven moment komt bij ons helaas net niet uit. Daarom hebben we alvast een aantal dagen en tijden doorgestuurd die ons wél goed uitkomen. Kies hieronder het moment dat jóú het beste past, dan bevestigen we je afspraak meteen en zien we je graag.",
     cta: "Kies een moment",
+    subjectFair: "Een tijd voor je afspraak op de beurs",
+    bodyFair: "Bedankt voor je verzoek om ons te ontmoeten op onze stand op 360 by Cevisama in Feria Valencia (stand C109). Om het voor jou zo soepel mogelijk te laten verlopen, hebben we een aantal momenten klaargezet. Kies hieronder het moment dat jóú het beste past, dan bevestigen we je afspraak meteen en zien we je graag op de beurs.",
   },
   en: {
     subject: "A new time for your showroom visit",
     body: "Thank you for your request to visit our showroom in Jávea. Unfortunately the time you indicated doesn't quite work on our side. We've therefore put forward a few days and times that do suit us. Simply choose the moment that works best for you below, and we'll confirm your appointment right away — we look forward to welcoming you.",
     cta: "Choose a time",
+    subjectFair: "A time for your appointment at the fair",
+    bodyFair: "Thank you for your request to meet us at our stand at 360 by Cevisama in Feria Valencia (stand C109). To make it run as smoothly as possible for you, we have set out a few times. Simply choose the one that works best for you below, and we\u2019ll confirm your appointment right away \u2014 we look forward to seeing you at the fair.",
   },
   es: {
     subject: "Un nuevo momento para tu visita al showroom",
     body: "Gracias por tu solicitud para visitar nuestro showroom en Jávea. Lamentablemente el momento que indicaste no nos viene del todo bien. Por eso te proponemos varios días y horas que sí nos convienen. Elige a continuación el que mejor te venga y confirmaremos tu cita de inmediato. ¡Te esperamos!",
     cta: "Elegir un momento",
+    subjectFair: "Una hora para tu cita en la feria",
+    bodyFair: "Gracias por tu solicitud para vernos en nuestro stand en 360 by Cevisama, Feria Valencia (stand C109). Para que te resulte lo m\u00e1s c\u00f3modo posible, hemos reservado varias horas. Elige a continuaci\u00f3n la que mejor te venga y confirmaremos tu cita de inmediato. \u00a1Te esperamos en la feria!",
   },
   de: {
     subject: "Ein neuer Termin für deinen Showroom-Besuch",
     body: "Vielen Dank für deine Anfrage, unseren Showroom in Jávea zu besuchen. Der von dir angegebene Zeitpunkt passt bei uns leider nicht ganz. Deshalb haben wir dir einige Tage und Uhrzeiten vorgeschlagen, die uns gut passen. Wähle unten einfach den Moment, der dir am besten passt, und wir bestätigen deinen Termin sofort — wir freuen uns auf deinen Besuch.",
     cta: "Moment wählen",
+    subjectFair: "Eine Uhrzeit f\u00fcr deinen Termin auf der Messe",
+    bodyFair: "Vielen Dank f\u00fcr deine Anfrage, uns an unserem Stand auf der 360 by Cevisama in Feria Valencia (Stand C109) zu treffen. Damit es f\u00fcr dich so reibungslos wie m\u00f6glich l\u00e4uft, haben wir einige Uhrzeiten vorbereitet. W\u00e4hle unten einfach die, die dir am besten passt, und wir best\u00e4tigen deinen Termin sofort \u2014 wir freuen uns auf dich auf der Messe.",
   },
 };
 
@@ -997,21 +1021,25 @@ export function appointmentProposalEmail(args: {
   lang?: string | null;
   contactName?: string | null;
   url: string;
+  /** Afspraak op de beursstand in plaats van in de showroom. */
+  fair?: boolean;
 }): { subject: string; html: string; text: string } {
   const lang = pickLang(args.lang);
   const a = APPT_PROPOSE[lang];
   const t = T[lang];
+  const subject = args.fair ? a.subjectFair : a.subject;
+  const body = args.fair ? a.bodyFair : a.body;
   const greeting = args.contactName ? `${t.hi} ${escapeHtml(args.contactName)},` : `${t.hi},`;
   const html = brandedEmail(`
       <p style="margin:0">${greeting}</p>
-      <p>${a.body}</p>
+      <p>${body}</p>
       <p style="margin:26px 0">
         <a href="${args.url}" style="display:inline-block;background:${COMPANY.brown};color:#fff;text-decoration:none;padding:13px 26px;border-radius:10px;font-weight:600;font-size:15px">${a.cta}</a>
       </p>
       <hr style="border:none;border-top:1px solid ${COMPANY.sand};margin:24px 0 16px" />
   `);
-  const text = `${greeting}\n\n${a.body}\n\n${a.cta}: ${args.url}`;
-  return { subject: a.subject, html, text };
+  const text = `${greeting}\n\n${body}\n\n${a.cta}: ${args.url}`;
+  return { subject, html, text };
 }
 
 /** Ontvangstbevestiging van een showroom-afspraakverzoek (de afspraak is nog niet vast). */
@@ -1053,14 +1081,17 @@ export function appointmentConfirmedEmail(args: {
   when: string;
   location: string;
   note?: string | null;
+  /** Afspraak op de beursstand in plaats van in de showroom. */
+  fair?: boolean;
 }): { subject: string; html: string; text: string } {
   const lang = pickLang(args.lang);
   const a = APPT[lang];
   const t = T[lang];
+  const body = args.fair ? a.confBodyFair : a.confBody;
   const greeting = args.contactName ? `${t.hi} ${escapeHtml(args.contactName)},` : `${t.hi},`;
   const html = brandedEmail(`
       <p style="margin:0">${greeting}</p>
-      <p>${a.confBody}</p>
+      <p>${body}</p>
       <div style="margin:16px 0;padding:14px 18px;background:${COMPANY.cream};border-radius:10px">
         <div style="font-size:17px;font-weight:600;color:${COMPANY.brown}">${escapeHtml(args.when)}</div>
         <div style="font-size:14px;color:#555;margin-top:3px">${escapeHtml(args.location)}</div>
@@ -1070,7 +1101,7 @@ export function appointmentConfirmedEmail(args: {
       <p style="margin:0 0 4px">${t.regards}</p>
       <div style="font-size:13px;color:#888;line-height:1.7">${signatureHtml()}</div>`);
   const text =
-    `${greeting}\n\n${a.confBody}\n\n${args.when}\n${args.location}` +
+    `${greeting}\n\n${body}\n\n${args.when}\n${args.location}` +
     (args.note ? `\n\n${args.note}` : "") +
     `\n\n${t.regards}\n${COMPANY.legalName}`;
   return { subject: a.confSubject, html, text };

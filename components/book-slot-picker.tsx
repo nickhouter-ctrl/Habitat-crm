@@ -5,14 +5,45 @@ import { confirmProposedSlot } from "@/app/book/actions";
 
 type Slot = { date: string; time: string };
 
-const T: Record<string, { title: string; intro: string; confirm: string; confirming: string; doneTitle: string; doneBody: string; alreadyTitle: string; alreadyBody: string; error: string }> = {
-  nl: { title: "Kies een moment", intro: "Kies hieronder het moment dat jou het beste uitkomt voor je showroombezoek.", confirm: "Bevestig dit moment", confirming: "Bezig met bevestigen…", doneTitle: "Afspraak bevestigd!", doneBody: "We hebben je een bevestiging gestuurd. Tot snel in onze showroom.", alreadyTitle: "Al bevestigd", alreadyBody: "Deze afspraak is al ingepland. Heb je een vraag? Mail ons gerust.", error: "Er ging iets mis. Probeer het opnieuw of mail ons." },
-  en: { title: "Pick a time", intro: "Choose the time below that works best for your showroom visit.", confirm: "Confirm this time", confirming: "Confirming…", doneTitle: "Appointment confirmed!", doneBody: "We've sent you a confirmation. See you soon at our showroom.", alreadyTitle: "Already confirmed", alreadyBody: "This appointment has already been scheduled. Any questions? Just email us.", error: "Something went wrong. Please try again or email us." },
-  es: { title: "Elige un momento", intro: "Elige a continuación el momento que mejor te convenga para tu visita al showroom.", confirm: "Confirmar este momento", confirming: "Confirmando…", doneTitle: "¡Cita confirmada!", doneBody: "Te hemos enviado una confirmación. Nos vemos pronto en el showroom.", alreadyTitle: "Ya confirmada", alreadyBody: "Esta cita ya está programada. ¿Alguna pregunta? Escríbenos.", error: "Algo salió mal. Inténtalo de nuevo o escríbenos." },
-  de: { title: "Wähle einen Termin", intro: "Wähle unten den Moment, der dir für deinen Showroom-Besuch am besten passt.", confirm: "Diesen Termin bestätigen", confirming: "Wird bestätigt…", doneTitle: "Termin bestätigt!", doneBody: "Wir haben dir eine Bestätigung geschickt. Bis bald in unserem Showroom.", alreadyTitle: "Bereits bestätigt", alreadyBody: "Dieser Termin ist bereits geplant. Fragen? Schreib uns einfach.", error: "Etwas ist schiefgelaufen. Bitte erneut versuchen oder uns schreiben." },
+/**
+ * Twee soorten afspraak, twee teksten. `introFair`/`doneBodyFair` gelden voor
+ * een afspraak op de beursstand: die klant komt niet naar de showroom in Jávea
+ * maar naar Feria Valencia, en dan moet deze pagina dat ook zeggen.
+ */
+const T: Record<
+  string,
+  {
+    title: string;
+    intro: string;
+    introFair: string;
+    confirm: string;
+    confirming: string;
+    doneTitle: string;
+    doneBody: string;
+    doneBodyFair: string;
+    alreadyTitle: string;
+    alreadyBody: string;
+    error: string;
+  }
+> = {
+  nl: { title: "Kies een moment", intro: "Kies hieronder het moment dat jou het beste uitkomt voor je showroombezoek.", introFair: "Kies hieronder het moment dat jou het beste uitkomt voor je afspraak op onze stand op 360 by Cevisama, Feria Valencia (stand C109).", confirm: "Bevestig dit moment", confirming: "Bezig met bevestigen…", doneTitle: "Afspraak bevestigd!", doneBody: "We hebben je een bevestiging gestuurd. Tot snel in onze showroom.", doneBodyFair: "We hebben je een bevestiging gestuurd. Tot snel op onze stand in Valencia.", alreadyTitle: "Al bevestigd", alreadyBody: "Deze afspraak is al ingepland. Heb je een vraag? Mail ons gerust.", error: "Er ging iets mis. Probeer het opnieuw of mail ons." },
+  en: { title: "Pick a time", intro: "Choose the time below that works best for your showroom visit.", introFair: "Choose the time below that works best for your appointment at our stand at 360 by Cevisama, Feria Valencia (stand C109).", confirm: "Confirm this time", confirming: "Confirming…", doneTitle: "Appointment confirmed!", doneBody: "We've sent you a confirmation. See you soon at our showroom.", doneBodyFair: "We've sent you a confirmation. See you soon at our stand in Valencia.", alreadyTitle: "Already confirmed", alreadyBody: "This appointment has already been scheduled. Any questions? Just email us.", error: "Something went wrong. Please try again or email us." },
+  es: { title: "Elige un momento", intro: "Elige a continuación el momento que mejor te convenga para tu visita al showroom.", introFair: "Elige a continuación el momento que mejor te convenga para tu cita en nuestro stand en 360 by Cevisama, Feria Valencia (stand C109).", confirm: "Confirmar este momento", confirming: "Confirmando…", doneTitle: "¡Cita confirmada!", doneBody: "Te hemos enviado una confirmación. Nos vemos pronto en el showroom.", doneBodyFair: "Te hemos enviado una confirmación. Nos vemos pronto en nuestro stand en Valencia.", alreadyTitle: "Ya confirmada", alreadyBody: "Esta cita ya está programada. ¿Alguna pregunta? Escríbenos.", error: "Algo salió mal. Inténtalo de nuevo o escríbenos." },
+  de: { title: "Wähle einen Termin", intro: "Wähle unten den Moment, der dir für deinen Showroom-Besuch am besten passt.", introFair: "Wähle unten den Moment, der dir für deinen Termin an unserem Stand auf der 360 by Cevisama, Feria Valencia (Stand C109) am besten passt.", confirm: "Diesen Termin bestätigen", confirming: "Wird bestätigt…", doneTitle: "Termin bestätigt!", doneBody: "Wir haben dir eine Bestätigung geschickt. Bis bald in unserem Showroom.", doneBodyFair: "Wir haben dir eine Bestätigung geschickt. Bis bald an unserem Stand in Valencia.", alreadyTitle: "Bereits bestätigt", alreadyBody: "Dieser Termin ist bereits geplant. Fragen? Schreib uns einfach.", error: "Etwas ist schiefgelaufen. Bitte erneut versuchen oder uns schreiben." },
 };
 
-export function BookSlotPicker({ token, slots, locale }: { token: string; slots: Slot[]; locale: string }) {
+export function BookSlotPicker({
+  token,
+  slots,
+  locale,
+  fair = false,
+}: {
+  token: string;
+  slots: Slot[];
+  locale: string;
+  /** Afspraak op de beursstand in plaats van in de showroom. */
+  fair?: boolean;
+}) {
   const t = T[locale] ?? T.nl;
   const lc = locale === "en" ? "en-GB" : locale;
   const [selected, setSelected] = useState<number | null>(null);
@@ -49,7 +80,7 @@ export function BookSlotPicker({ token, slots, locale }: { token: string; slots:
         <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-emerald-100 text-2xl">✓</div>
         <h1 className="mt-5 text-2xl font-semibold text-stone-800">{t.doneTitle}</h1>
         {when && <p className="mt-2 text-lg font-medium text-stone-700">{when.charAt(0).toUpperCase() + when.slice(1)}</p>}
-        <p className="mt-3 text-stone-500">{t.doneBody}</p>
+        <p className="mt-3 text-stone-500">{fair ? t.doneBodyFair : t.doneBody}</p>
       </div>
     );
   }
@@ -65,7 +96,7 @@ export function BookSlotPicker({ token, slots, locale }: { token: string; slots:
   return (
     <div>
       <h1 className="text-2xl font-semibold text-stone-800">{t.title}</h1>
-      <p className="mt-2 text-stone-500">{t.intro}</p>
+      <p className="mt-2 text-stone-500">{fair ? t.introFair : t.intro}</p>
       <div className="mt-7 space-y-2.5">
         {slots.map((s, i) => {
           const f = fmt(s);

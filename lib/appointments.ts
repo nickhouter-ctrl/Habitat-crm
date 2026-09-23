@@ -5,6 +5,28 @@ import { activities, appointments, contacts, quoteRequests } from "@/lib/db/sche
 import { appointmentConfirmedEmail, sendEmail } from "@/lib/email";
 
 export const SHOWROOM = "Showroom — Camí de la Fontana 3, Jávea";
+/**
+ * De beursstand. Een afspraak die via de beurspagina op de website binnenkomt
+ * is géén showroombezoek: de klant staat over twee weken in Valencia, niet in
+ * Jávea. Alles wat "showroom" zegt — de locatie, de agenda-titel, de mails en
+ * de kies-pagina — moet dan meebewegen, anders stuur je iemand naar de
+ * verkeerde stad.
+ */
+export const BEURSSTAND = "360 by Cevisama — Feria Valencia, stand C109";
+
+/**
+ * Hoort deze aanvraag bij de beurs? De website zet dat in de bron
+ * (`website:feria-360-cevisama-2026`); dat is het enige veld waar het
+ * betrouwbaar in staat — de berichttekst is vrije tekst van de klant.
+ */
+export function isBeursAanvraag(source: string | null | undefined): boolean {
+  return (source ?? "").toLowerCase().startsWith("website:feria");
+}
+
+/** De standaardlocatie voor een afspraak uit deze aanvraag. */
+export function standaardLocatie(source: string | null | undefined): string {
+  return isBeursAanvraag(source) ? BEURSSTAND : SHOWROOM;
+}
 
 export type AppointmentReq = {
   id: string;
@@ -15,6 +37,8 @@ export type AppointmentReq = {
   contactId: string | null;
   locale: string | null;
   acceptedAt: Date | null;
+  /** Bron van de website — bepaalt of dit een beurs- of showroomafspraak is. */
+  source?: string | null;
 };
 
 /** Zorg dat er een contact bij de aanvraag hoort (maak aan indien nodig). */
@@ -46,12 +70,13 @@ export async function confirmAppointment(
   req: AppointmentReq,
   opts: { startsAt: Date; location?: string | null; note?: string | null; createdBy?: string | null },
 ): Promise<{ when: string; contactId: string }> {
-  const location = (opts.location ?? "").trim() || SHOWROOM;
+  const beurs = isBeursAanvraag(req.source);
+  const location = (opts.location ?? "").trim() || standaardLocatie(req.source);
   const note = (opts.note ?? "").trim() || null;
   const contactId = await ensureContactForRequest(req);
 
   await db.insert(appointments).values({
-    title: `Showroombezoek — ${req.name}`,
+    title: `${beurs ? "Beursafspraak" : "Showroombezoek"} — ${req.name}`,
     contactId,
     quoteRequestId: req.id,
     startsAt: opts.startsAt,
@@ -74,7 +99,7 @@ export async function confirmAppointment(
     minute: "2-digit",
   });
   try {
-    const mail = appointmentConfirmedEmail({ lang: req.locale, contactName: req.name, when, location, note });
+    const mail = appointmentConfirmedEmail({ lang: req.locale, contactName: req.name, when, location, note, fair: beurs });
     await sendEmail({ to: req.email, subject: mail.subject, html: mail.html, text: mail.text });
   } catch (err) {
     console.warn("[appointments] bevestigingsmail mislukt:", err);

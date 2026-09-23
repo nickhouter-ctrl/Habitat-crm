@@ -6,6 +6,7 @@ import { AiMailForm } from "@/components/ai-mail-form";
 import { ConfirmSubmit } from "@/components/confirm-submit";
 import { SubmitButton } from "@/components/submit-button";
 import { aiReplyConfigured } from "@/lib/ai-reply";
+import { isBeursAanvraag, standaardLocatie } from "@/lib/appointments";
 import { asStringArray } from "@/lib/documents";
 import { aanvraagStilSinds } from "@/lib/opvolging";
 import { listCatalogFiles } from "@/lib/storage";
@@ -118,6 +119,9 @@ export default async function QuoteRequestDetailPage({
   const meta = STATUS_META[req.status] ?? STATUS_META.pending;
   const kindMeta = KIND_META[req.kind] ?? KIND_META.quote;
   const isAppointment = req.kind === "appointment";
+  // Beursafspraak? Dan is de locatie de stand in Valencia en niet de showroom,
+  // en heeft de klant meestal alleen een DAG gekozen — de tijd stellen wij voor.
+  const beurs = isBeursAanvraag(req.source);
   const products = asStringArray(req.productNames);
   const skus = asStringArray(req.productSkus);
 
@@ -303,12 +307,15 @@ export default async function QuoteRequestDetailPage({
           {isAppointment && (
             <Card>
               <CardHeader>
-                <CardTitle>📅 Afspraak inplannen</CardTitle>
+                <CardTitle>{beurs ? "📅 Beursafspraak inplannen" : "📅 Afspraak inplannen"}</CardTitle>
               </CardHeader>
               <CardContent>
                 {(req.appointmentDate || req.appointmentTime) && (
                   <p className="mb-2 rounded-md bg-accent/10 px-3 py-2 text-xs text-accent">
-                    Voorkeur van de klant: <strong>{[req.appointmentDate, req.appointmentTime].filter(Boolean).join(" · ")}</strong> — al ingevuld hieronder.
+                    Voorkeur van de klant: <strong>{[req.appointmentDate, req.appointmentTime].filter(Boolean).join(" · ")}</strong>
+                    {req.appointmentDate && !req.appointmentTime
+                      ? " — alleen een dag gekozen, dus vul zelf een tijd in of stel hieronder een paar tijden voor."
+                      : " — al ingevuld hieronder."}
                   </p>
                 )}
                 <form action={schedule} className="space-y-2">
@@ -321,7 +328,7 @@ export default async function QuoteRequestDetailPage({
                     </Field>
                   </div>
                   <Field label="Locatie" htmlFor="location">
-                    <Input name="location" defaultValue="Showroom — Camí de la Fontana 3, Jávea" />
+                    <Input name="location" defaultValue={standaardLocatie(req.source)} />
                   </Field>
                   <Textarea name="note" rows={2} placeholder="Opmerking voor de klant (optioneel)…" />
                   <SubmitButton variant="primary" className="w-full" pendingLabel="Inplannen…">
@@ -335,8 +342,9 @@ export default async function QuoteRequestDetailPage({
                 <div className="mt-5 border-t pt-4">
                   <p className="text-sm font-medium">Of: stel andere tijden voor</p>
                   <p className="mb-2 text-xs text-muted">
-                    Komt het gevraagde moment niet uit? Geef een paar opties — de klant kiest er zelf één via een
-                    link. Bij de keuze wordt de afspraak automatisch bevestigd en in de agenda gezet.
+                    {beurs && req.appointmentDate
+                      ? "De klant koos een beursdag. Vul hieronder een paar tijden op die dag in — de datum staat al klaar — en hij kiest er zelf één via een link. Bij de keuze wordt de afspraak automatisch bevestigd en in de agenda gezet."
+                      : "Komt het gevraagde moment niet uit? Geef een paar opties — de klant kiest er zelf één via een link. Bij de keuze wordt de afspraak automatisch bevestigd en in de agenda gezet."}
                   </p>
                   {sp.proposed === "1" && (
                     <p className="mb-2 rounded-md bg-success/10 px-3 py-2 text-xs text-success">
@@ -351,7 +359,13 @@ export default async function QuoteRequestDetailPage({
                   <form action={propose} className="space-y-2">
                     {[0, 1, 2, 3].map((i) => (
                       <div key={i} className="grid grid-cols-2 gap-2">
-                        <Input type="date" name={`date_${i}`} defaultValue={i === 0 ? req.appointmentDate ?? "" : ""} />
+                        {/* Bij een beursdag staat de datum op élke regel klaar: dan
+                            hoeven er alleen tijden ingevuld te worden. */}
+                        <Input
+                          type="date"
+                          name={`date_${i}`}
+                          defaultValue={beurs || i === 0 ? req.appointmentDate ?? "" : ""}
+                        />
                         <Input type="time" name={`time_${i}`} defaultValue={i === 0 ? req.appointmentTime ?? "" : ""} />
                       </div>
                     ))}
