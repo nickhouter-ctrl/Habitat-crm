@@ -115,10 +115,19 @@ export async function sendEmail(input: {
     return { sent: false, reason: "not-configured" };
   }
   try {
+    // Resend wil de bcc als ADRES of als LIJST, niet als één string met
+    // komma's erin — dat laatste geeft 422 validation_error en dus geen mail.
+    // Onze bcc is intern altijd een komma-string (zo wil nodemailer het), dus
+    // hier splitsen we die. Kwam boven water toen het Gmail-pad wegviel en
+    // alles via Resend ging: elke mail mét bcc werd geweigerd.
+    const bccLijst = bcc
+      ?.split(",")
+      .map((a) => a.trim())
+      .filter(Boolean);
     const payload: Record<string, unknown> = {
       from,
       to: input.to,
-      ...(bcc ? { bcc } : {}),
+      ...(bccLijst?.length ? { bcc: bccLijst } : {}),
       subject: input.subject,
       html: input.html,
       text: input.text,
