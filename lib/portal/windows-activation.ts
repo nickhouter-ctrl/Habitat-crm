@@ -21,12 +21,13 @@ export function windowsActivationMail(name: string, token: string, locale: strin
 
 export function windowsAccessReadyMail(locale: string | null) {
   const language = pickLang(locale);
-  const m: Record<Lang, { subject: string; eyebrow: string; title: string; body: string; button: string }> = {
+  const messages: Record<Lang, { subject: string; eyebrow: string; title: string; body: string; button: string }> = {
     nl: { subject: "Habitat One Windows — je toegang is goedgekeurd", eyebrow: "Welkom als dealer", title: "Je hebt nu toegang tot Habitat One Windows", body: "Log in met het e-mailadres en wachtwoord van je bestaande Habitat One-account.", button: "Inloggen" },
     en: { subject: "Habitat One Windows — your access has been approved", eyebrow: "Welcome as a dealer", title: "You now have access to Habitat One Windows", body: "Sign in with the email address and password of your existing Habitat One account.", button: "Sign in" },
     es: { subject: "Habitat One Windows — tu acceso ha sido aprobado", eyebrow: "Bienvenido como distribuidor", title: "Ya tienes acceso a Habitat One Windows", body: "Inicia sesión con el correo y la contraseña de tu cuenta Habitat One existente.", button: "Iniciar sesión" },
     de: { subject: "Habitat One Windows — dein Zugang wurde freigegeben", eyebrow: "Willkommen als Händler", title: "Du hast jetzt Zugang zu Habitat One Windows", body: "Melde dich mit der E-Mail-Adresse und dem Passwort deines bestehenden Habitat One-Kontos an.", button: "Anmelden" },
-  }[language];
+  };
+  const m = messages[language];
   const link = "https://windows.habitat-one.com/login";
   return { subject: m.subject, text: `${m.body}\n\n${link}`, html: windowsMailLayout(m.title, `<p>${m.body}</p>${windowsMailButton(link, m.button)}`, { eyebrow: m.eyebrow }) };
 }
