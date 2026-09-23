@@ -125,7 +125,7 @@ export default async function AccountsPage({ searchParams, windowsPage = false }
       <Card id="account-requests" className="mb-5 overflow-hidden">
         <CardHeader>
           <CardTitle>{source === "windows" ? "Windows-accountaanvragen" : "Website-aanvragen"}</CardTitle>
-          <span className="text-xs text-muted">{source === "windows" ? "Goedkeuren geeft toegang tot Habitat Windows. Kies het prijsniveau voor het gekoppelde account." : "Goedkeuren maakt een website-account aan. Windows-toegang blijft een aparte keuze."}</span>
+          <span className="text-xs text-muted">{source === "windows" ? "Goedkeuren maakt het dealeraccount aan en stuurt de activatiemail. Dealers werken met de Habitat-dealerprijs uit het kozijnensysteem; het prijsniveau van de website speelt hier geen rol." : "Goedkeuren maakt een website-account aan. Windows-toegang blijft een aparte keuze."}</span>
         </CardHeader>
         {visibleRequests.length === 0 ? (
           <div className="px-5 pb-5 text-sm text-muted">Geen openstaande {source === "windows" ? "Windows-accountaanvragen" : "website-aanvragen"}.</div>
@@ -158,10 +158,18 @@ export default async function AccountsPage({ searchParams, windowsPage = false }
                   <Td className="text-xs">{r.vatNumber ?? "—"}</Td>
                   <Td>
                     <form action={approveAccountRequest.bind(null, r.id)} className="flex items-center gap-2">
-                      <Select name="tier" defaultValue={r.kind === "zakelijk" ? "aannemer" : "particulier"} className="h-8 py-1 text-xs">
-                        <option value="particulier">Particulier (normale prijs)</option>
-                        <option value="aannemer">Aannemer (−20%)</option>
-                      </Select>
+                      {/* Het websiteprijsniveau (aannemer −20%) geldt alleen voor de webshop; een kozijnendealer krijgt de dealerprijs uit Habitat Windows. */}
+                      {r.source === "windows" ? (
+                        <>
+                          <input type="hidden" name="tier" value="particulier" />
+                          <span className="text-xs text-muted">Dealerprijs kozijnensysteem</span>
+                        </>
+                      ) : (
+                        <Select name="tier" defaultValue={r.kind === "zakelijk" ? "aannemer" : "particulier"} className="h-8 py-1 text-xs">
+                          <option value="particulier">Particulier (normale prijs)</option>
+                          <option value="aannemer">Aannemer (−20%)</option>
+                        </Select>
+                      )}
                       <SubmitButton size="sm" variant="primary" pendingLabel="…">Goedkeuren</SubmitButton>
                     </form>
                   </Td>
