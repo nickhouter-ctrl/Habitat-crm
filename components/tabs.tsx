@@ -15,6 +15,12 @@
  *
  * De actieve tab wordt in de URL-hash bijgehouden (deep-links + server-actions die
  * met #tab terugkeren blijven op de juiste tab).
+ *
+ * Genest gebruik: geef de BINNENSTE tabs een `param` mee. Ze schrijven hun keuze
+ * dan in een zoekparameter (`?lijst=kosten`) in plaats van in de hash, zodat de
+ * buitenste tabs eigenaar van de hash blijven — anders overschrijft de binnenste
+ * de hash en valt de buitenste na een herlaad terug op zijn standaardtab.
+ * Schakelen blijft client-side (alleen `replaceState`), dus zonder serverronde.
  */
 import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from "react";
 
@@ -28,28 +34,41 @@ export function TabsRoot({
   ids,
   children,
   className,
+  param,
 }: {
   defaultTab: string;
   /** Geldige tab-id's — nodig om de URL-hash te valideren. */
   ids?: string[];
   children: ReactNode;
   className?: string;
+  /** Zoekparameter i.p.v. de hash (voor geneste tabs), bv. "lijst". */
+  param?: string;
 }) {
   const [active, setActive] = useState(defaultTab);
 
   // Bij binnenkomst met een #hash (deep-link of terugkeer van een server-action)
   // de bijbehorende tab openen.
   useEffect(() => {
-    const h = decodeURIComponent(window.location.hash.replace(/^#/, ""));
-    if (h && (!ids || ids.includes(h))) setActive(h);
-  }, [ids]);
+    const gevraagd = param
+      ? new URLSearchParams(window.location.search).get(param)
+      : decodeURIComponent(window.location.hash.replace(/^#/, ""));
+    if (gevraagd && (!ids || ids.includes(gevraagd))) setActive(gevraagd);
+  }, [ids, param]);
 
-  const change = useCallback((id: string) => {
-    setActive(id);
-    if (typeof window !== "undefined") {
-      history.replaceState(null, "", `#${id}`);
-    }
-  }, []);
+  const change = useCallback(
+    (id: string) => {
+      setActive(id);
+      if (typeof window === "undefined") return;
+      if (param) {
+        const url = new URL(window.location.href);
+        url.searchParams.set(param, id);
+        history.replaceState(null, "", `${url.pathname}${url.search}${url.hash}`);
+      } else {
+        history.replaceState(null, "", `#${id}`);
+      }
+    },
+    [param],
+  );
 
   return <div className={className}><Ctx.Provider value={{ active, setActive: change }}>{children}</Ctx.Provider></div>;
 }

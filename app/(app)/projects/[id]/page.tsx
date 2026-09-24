@@ -138,6 +138,8 @@ export default async function ProjectDetailPage({
       q.set(welke === "uren" ? "kosten" : "uren", welke === "uren" ? kostenFilter : urenFilter);
     }
     if (waarde) q.set(welke, waarde);
+    // Terugkomen in dezelfde sub-lijst, niet bovenaan bij de uren.
+    q.set("lijst", welke);
     const qs = q.toString();
     // Altijd #uren: beide lijsten staan in die tab, en de tab-component opent
     // alleen een tab waarvan de hash een geldige tab-id is ("kosten" is een
@@ -1692,13 +1694,32 @@ export default async function ProjectDetailPage({
 
         {/* ── Tab: Uren & kosten ── */}
         <TabPanel id="uren" className="order-3">
-        <div className="grid gap-5">
-          <ProjectDeliveriesCard
-            projectId={id}
-            voorschottenEx={voorschottenOnverrekendEx}
-            fout={voorschotParams.lev}
+        {/* Vier lijsten onder één tab werd één rol van honderden regels. Sub-tabs
+            houden ze uit elkaar; ze staan allemaal server-side gerenderd, dus
+            wisselen kost geen nieuwe serverronde. De keuze staat in ?lijst=…
+            zodat een link (bijvoorbeeld een betaalfilter) op de juiste lijst
+            terugkomt — de hash blijft van de buitenste tabs. */}
+        <TabsRoot defaultTab="uren" param="lijst" ids={["uren", "kosten", "producten", "meerwerk"]}>
+          <TabsBar
+            className="mb-4"
+            tabs={[
+              { id: "uren", label: "Uren — arbeid", badge: timeRows.length },
+              { id: "kosten", label: "Kosten & inkoop", badge: costRows.length + linkedPOs.length },
+              { id: "producten", label: "Eigen producten" },
+              { id: "meerwerk", label: "Meerwerk" },
+            ]}
           />
-          <ProjectExtrasCard projectId={id} />
+          <TabPanel id="producten">
+            <ProjectDeliveriesCard
+              projectId={id}
+              voorschottenEx={voorschottenOnverrekendEx}
+              fout={voorschotParams.lev}
+            />
+          </TabPanel>
+          <TabPanel id="meerwerk">
+            <ProjectExtrasCard projectId={id} />
+          </TabPanel>
+          <TabPanel id="uren">
           {/* Uren */}
           <Card id="uren" className="scroll-mt-24">
             <CardHeader>
@@ -1740,8 +1761,11 @@ export default async function ProjectDetailPage({
                 <p className="text-sm text-muted">Geen urenregels die {urenFilter === "contant" ? "contant" : "per factuur"} betaald zijn.</p>
               )}
               {zichtbareTimeRows.length > 0 && (
-                <Table>
-                  <THead>
+                /* Lange lijsten schuiven in zichzelf i.p.v. de hele pagina uit te
+                   rekken; de kolomkoppen blijven staan zodat je blijft zien wat
+                   je leest. */
+                <Table wrapperClassName="max-h-[30rem] overflow-y-auto rounded-lg border">
+                  <THead className="sticky top-0 z-10 bg-surface">
                     <tr>
                       <Th>Datum</Th>
                       <Th>Arbeider</Th>
@@ -1901,6 +1925,8 @@ export default async function ProjectDetailPage({
             </CardContent>
           </Card>
 
+          </TabPanel>
+          <TabPanel id="kosten">
           {/* Kosten & inkoop */}
           <Card id="kosten" className="scroll-mt-24">
             <CardHeader>
@@ -1944,7 +1970,7 @@ export default async function ProjectDetailPage({
               {linkedPOs.length > 0 && (
                 <div>
                   <p className="mb-1 text-xs font-medium uppercase tracking-wide text-muted">Gekoppelde inkooporders</p>
-                  <Table>
+                  <Table wrapperClassName="max-h-[22rem] overflow-y-auto rounded-lg border">
                     <TBody>
                       {linkedPOs.map((p) => {
                         // Uren-PO's worden als arbeid geboekt MET de 21%-aanname als de btw
@@ -2023,8 +2049,8 @@ export default async function ProjectDetailPage({
                 </p>
               )}
               {zichtbareCostRows.length > 0 && (
-                <Table>
-                  <THead>
+                <Table wrapperClassName="max-h-[30rem] overflow-y-auto rounded-lg border">
+                  <THead className="sticky top-0 z-10 bg-surface">
                     <tr>
                       <Th>Datum</Th>
                       <Th>Categorie</Th>
@@ -2106,7 +2132,8 @@ export default async function ProjectDetailPage({
               )}
             </CardContent>
           </Card>
-        </div>
+          </TabPanel>
+        </TabsRoot>
         </TabPanel>
 
         {/* ── Gegevens-tab (vervolg): metadata ── */}
