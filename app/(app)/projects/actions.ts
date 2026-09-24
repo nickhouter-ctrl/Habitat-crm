@@ -27,6 +27,7 @@ import {
   type DocumentPhase,
 } from "@/lib/db/schema";
 import { poExVatAssumingSpanishVat } from "@/lib/purchase-orders";
+import { timeEntrySchema, timeEntryUpdateSchema } from "@/lib/uren-invoer";
 import { contractLang } from "@/lib/contract-terms";
 import { computeTotals } from "@/lib/documents";
 import { insertNumberedDocument } from "@/lib/doc-number";
@@ -175,14 +176,6 @@ export async function attachDocumentToProject(projectId: string, formData: FormD
 
 /* ----------------------------------------------------------- uren (arbeid) */
 
-const timeEntrySchema = z.object({
-  workerId: z.string().trim().optional(),
-  date: z.string().trim().min(1, "Datum is verplicht"),
-  hours: z.string().trim().min(1, "Uren zijn verplicht"),
-  hourlyCostEur: z.string().trim().optional(),
-  paymentMethod: z.enum(["cash", "invoice"]).default("invoice"),
-  note: z.string().trim().optional(),
-});
 
 export async function addTimeEntry(projectId: string, formData: FormData) {
   await requireUser();
@@ -215,13 +208,6 @@ export async function addTimeEntry(projectId: string, formData: FormData) {
   revalidatePath(`/projects/${projectId}`);
 }
 
-const timeEntryUpdateSchema = z.object({
-  date: z.string().trim().optional(),
-  hours: z.string().trim().min(1, "Uren zijn verplicht"),
-  hourlyCostEur: z.string().trim().min(1, "Tarief is verplicht"),
-  paymentMethod: z.enum(["cash", "invoice"]).default("cash"),
-  note: z.string().trim().optional(),
-});
 
 /** Pas een bestaande urenregel aan (uren/tarief → kosten = uren × tarief). */
 export async function updateTimeEntry(projectId: string, entryId: string, formData: FormData) {
@@ -269,7 +255,7 @@ export async function updateTimeEntry(projectId: string, entryId: string, formDa
       date: dateOrNull(d.date) ?? undefined,
       hours: String(uren),
       hourlyCostEur: tarief,
-      paymentMethod: d.paymentMethod,
+      paymentMethod: d.paymentMethod ?? undefined,
       note: d.note?.trim() ? d.note : null,
       updatedAt: new Date(),
     })

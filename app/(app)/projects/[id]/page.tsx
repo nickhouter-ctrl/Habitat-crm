@@ -114,10 +114,36 @@ export default async function ProjectDetailPage({
     vstand?: string;
     vrestant?: string;
     lev?: string;
+    /** Filter op betaalwijze in de urenlijst: "contant" | "bank". */
+    uren?: string;
+    /** Idem voor de lijst met losse kosten. */
+    kosten?: string;
   }>;
 }) {
   const { id } = await params;
-  const { edit: editEntryId, ...voorschotParams } = await searchParams;
+  const { edit: editEntryId, uren: urenFilterRaw, kosten: kostenFilterRaw, ...voorschotParams } = await searchParams;
+  /**
+   * Filteren op betaalwijze. Bewust alleen een kijkfilter op de LIJST: de
+   * kaarten bovenaan blijven het hele project tonen, want een overzicht dat
+   * meebeweegt met een filter is geen overzicht meer.
+   */
+  const betaalFilter = (v: string | undefined): "contant" | "bank" | "" =>
+    v === "contant" || v === "bank" ? v : "";
+  const urenFilter = betaalFilter(urenFilterRaw);
+  const kostenFilter = betaalFilter(kostenFilterRaw);
+  /** Link naar dezelfde pagina met één filter aan/uit, en spring naar de lijst. */
+  const filterHref = (welke: "uren" | "kosten", waarde: "" | "contant" | "bank") => {
+    const q = new URLSearchParams();
+    if (welke === "uren" ? kostenFilter : urenFilter) {
+      q.set(welke === "uren" ? "kosten" : "uren", welke === "uren" ? kostenFilter : urenFilter);
+    }
+    if (waarde) q.set(welke, waarde);
+    const qs = q.toString();
+    // Altijd #uren: beide lijsten staan in die tab, en de tab-component opent
+    // alleen een tab waarvan de hash een geldige tab-id is ("kosten" is een
+    // anker binnen die tab, geen tab).
+    return `/projects/${id}${qs ? `?${qs}` : ""}#uren`;
+  };
   const project = await db.query.projects.findFirst({ where: eq(projects.id, id) });
   if (!project) notFound();
 
@@ -464,6 +490,113 @@ export default async function ProjectDetailPage({
   // Als uren gekoppelde inkooporders tellen NIET als materiaal (ze zitten al als
   // arbeidskost in de uren via een uren-regel) — anders dubbel.
   const materialPOs = linkedPOs.filter((p) => !p.countAsLabor);
+  // Welke gekoppelde inkooporders zijn écht al als uren- of kostenregel geboekt?
+  // Een arbeidsfactuur wordt hierboven uit de inkoop gelaten omdat hij via een
+  // urenregel binnenkomt. Ontbreekt die regel, dan telt de factuur NERGENS mee —
+  // dat is op deze pagina niet te zien, en zo bleef € 1.095 van Hoogendijk 260055
+  // buiten drie werven. Daarom halen we hier op wat er echt geboekt is.
+  const poIds = linkedPOs.map((p) => p.id);
+  const [urenBronnen, kostenBronnen] = poIds.length
+    ? await Promise.all([
+        db
+          .select({ poId: timeEntries.purchaseOrderId })
+          .from(timeEntries)
+          .where(inArray(timeEntries.purchaseOrderId, poIds)),
+        db
+          .select({ poId: projectCosts.purchaseOrderId })
+          .from(projectCosts)
+          .where(inArray(projectCosts.purchaseOrderId, poIds)),
+      ])
+    : [[], []];
+  const poGeboekt = new Set(
+    [...urenBronnen, ...kostenBronnen].map((r) => r.poId).filter((v): v is string => !!v),
+  );
+  const arbeidPOs = linkedPOs.filter((p) => p.countAsLabor);
+  /** Arbeidsfacturen die als urenregel in `laborCost` zitten. */
+  const arbeidPoCost = arbeidPOs
+    .filter((p) => poGeboekt.has(p.id))
+    .reduce((sum, p) => sum + poExVatAssumingSpanishVat(p).amount, 0);
+  /** Arbeidsfacturen zonder urenregel: die tellen nergens mee. */
+  const arbeidZonderUren = arbeidPOs.filter((p) => !poGeboekt.has(p.id));
+  const arbeidZonderUrenCost = arbeidZonderUren.reduce(
+    (sum, p) => sum + poExVatAssumingSpanishVat(p).amount,
+    0,
+  );
+
+  /**
+   * Contant versus per factuur. De bedragen komen van de regels die ÉCHT
+   * meetellen (portaal-uren pas na goedkeuring), zodat "samen" gelijk is aan de
+   * kostprijs in de kaart hierboven. Het filter hieronder verbergt alleen
+   * regels; aan deze totalen verandert het niets.
+   */
+  const urenPer = (wijze: "cash" | "invoice") => {
+    const rijen = approvedTimeRows.filter((t) => t.paymentMethod === wijze);
+    return {
+      uren: rijen.reduce((sum, t) => sum + Number(t.hours ?? 0), 0),
+      kost: rijen.reduce((sum, t) => sum + Number(t.hours ?? 0) * Number(t.hourlyCostEur ?? 0), 0),
+    };
+  };
+  const urenContant = urenPer("cash");
+  const urenFactuur = urenPer("invoice");
+  const zichtbareTimeRows = urenFilter
+    ? timeRows.filter((t) => (t.paymentMethod === "cash") === (urenFilter === "contant"))
+    : timeRows;
+
+  const kostenPer = (wijze: "cash" | "invoice") =>
+    costRows.filter((c) => c.paymentMethod === wijze).reduce((sum, c) => sum + Number(c.amountEur ?? 0), 0);
+  const kostenContant = kostenPer("cash");
+  const kostenFactuur = kostenPer("invoice");
+  const zichtbareCostRows = kostenFilter
+    ? costRows.filter((c) => (c.paymentMethod === "cash") === (kostenFilter === "contant"))
+    : costRows;
+  /** Wat er in de getoonde selectie staat — de regel onder de lijst. */
+  const zichtbareUrenKost = zichtbareTimeRows
+    .filter((t) => !isPendingEntry(t))
+    .reduce((sum, t) => sum + Number(t.hours ?? 0) * Number(t.hourlyCostEur ?? 0), 0);
+  const zichtbareKostenSom = zichtbareCostRows.reduce((sum, c) => sum + Number(c.amountEur ?? 0), 0);
+
+  /** Filterknopjes + de totalen per betaalwijze, gedeeld door beide lijsten. */
+  const BetaalFilter = ({
+    welke,
+    actief,
+    contant,
+    factuur,
+    contantExtra,
+    factuurExtra,
+  }: {
+    welke: "uren" | "kosten";
+    actief: "" | "contant" | "bank";
+    contant: number;
+    factuur: number;
+    contantExtra?: string;
+    factuurExtra?: string;
+  }) => (
+    <div className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-lg border bg-background px-3 py-2 text-xs">
+      <span className="font-medium">Betaald</span>
+      {([
+        ["", "Alles", contant + factuur, undefined],
+        ["contant", "Contant", contant, contantExtra],
+        ["bank", "Per factuur", factuur, factuurExtra],
+      ] as const).map(([waarde, label, bedrag, extra]) => (
+        <Link
+          key={waarde}
+          href={filterHref(welke, waarde)}
+          className={`rounded-md border px-2.5 py-1 tabular-nums transition-colors ${
+            actief === waarde
+              ? "border-accent bg-accent/10 font-medium text-accent"
+              : "border-transparent text-muted hover:bg-background-soft"
+          }`}
+        >
+          {label} {formatEUR(bedrag)}
+          {extra ? <span className="ml-1 opacity-70">{extra}</span> : null}
+        </Link>
+      ))}
+      {actief ? (
+        <span className="text-muted">— je ziet nu alleen {actief === "contant" ? "contante" : "per factuur betaalde"} regels; de kaarten bovenaan blijven het hele project tonen.</span>
+      ) : null}
+    </div>
+  );
+
   const poCost = materialPOs.reduce((s, p) => s + poExVatAmount(p), 0); // ex. btw, EUR
   const looseCost = costRows.reduce((s, c) => s + Number(c.amountEur ?? 0), 0);
   const materialCost = poCost + looseCost;
@@ -579,6 +712,9 @@ export default async function ProjectDetailPage({
   // Resultaat TOT NU TOE = doel − werkelijke (gerealiseerde) kosten tot nu toe.
   // Norm: minimaal 15% marge → kosten mogen max. 85% van het doel zijn (kostenplafond).
   const MIN_MARGIN_PCT = 100 * 15 / 115;
+  /** Leesbaar op het scherm: 13,0% i.p.v. 13.043478260869565%. */
+  const pct1 = (v: number) => v.toFixed(1).replace(".", ",");
+  const MIN_MARGIN_LABEL = pct1(MIN_MARGIN_PCT);
   const resultToDate = targetRevenue - realizedCost;
   const resultMarginPct = targetRevenue > 0 ? Math.round((resultToDate / targetRevenue) * 100) : null;
   const costRatio = targetRevenue > 0 ? realizedCost / targetRevenue : null;
@@ -967,7 +1103,7 @@ export default async function ProjectDetailPage({
         <CardHeader>
           <CardTitle>Resultaat — zitten we goed?</CardTitle>
           <span className="text-xs text-muted">
-            norm: minimaal {MIN_MARGIN_PCT}% marge van de verkoopprijs (= kostprijs ÷ {(1 - MIN_MARGIN_PCT / 100).toFixed(2).replace(".", ",")}) · alle bedragen ex. BTW
+            norm: minimaal {MIN_MARGIN_LABEL}% marge van de verkoopprijs (= kostprijs ÷ {(1 - MIN_MARGIN_PCT / 100).toFixed(2).replace(".", ",")}) · alle bedragen ex. BTW
           </span>
         </CardHeader>
         <CardContent className="space-y-3">
@@ -977,7 +1113,7 @@ export default async function ProjectDetailPage({
               <p className="text-lg font-semibold tabular-nums">{formatEUR(targetRevenue)}</p>
             </div>
             <div className="rounded-lg border bg-background p-3">
-              <p className="text-xs text-muted">Max. kosten ({MIN_MARGIN_PCT}% marge)</p>
+              <p className="text-xs text-muted">Max. kosten ({MIN_MARGIN_LABEL}% marge)</p>
               <p className="text-lg font-semibold tabular-nums">{formatEUR(maxCost)}</p>
               <p className="text-xs text-muted">kostenplafond</p>
             </div>
@@ -1007,13 +1143,13 @@ export default async function ProjectDetailPage({
               {resultTone === "danger"
                 ? "⚠ Let op — verlies"
                 : resultTone === "warning"
-                  ? `⚠ Onder de norm — minder dan ${MIN_MARGIN_PCT}% marge`
+                  ? `⚠ Onder de norm — minder dan ${MIN_MARGIN_LABEL}% marge`
                   : resultTone === "neutral"
                     ? "Nog geen doel ingesteld"
-                    : `✓ Op koers — ${MIN_MARGIN_PCT}%+ marge`}
+                    : `✓ Op koers — ${MIN_MARGIN_LABEL}%+ marge`}
             </span>{" "}
             Resultaat tot nu toe {formatEUR(resultToDate)}
-            {resultMarginPct != null ? ` (${resultMarginPct}% marge)` : ""} ·{" "}
+            {resultMarginPct != null ? ` (${pct1(resultMarginPct)}% marge)` : ""} ·{" "}
             kosten zijn {costRatio != null ? `${Math.round(costRatio * 100)}%` : "—"} van het doel
             {costHeadroom < 0 ? ` · ${formatEUR(Math.abs(costHeadroom))} boven het ${MIN_MARGIN_PCT}%-plafond` : ` · nog ${formatEUR(costHeadroom)} ruimte tot het plafond`}.
           </div>
@@ -1042,7 +1178,12 @@ export default async function ProjectDetailPage({
                   </dd>
                 </div>
               </dl>
-              <p className="mt-2 text-xs text-muted">{laborHours.toLocaleString("nl-NL")} uur gewerkt</p>
+              <p className="mt-2 text-xs text-muted">
+                {laborHours.toLocaleString("nl-NL")} uur gewerkt
+                {arbeidPoCost > 0
+                  ? ` · inclusief ${formatEUR(arbeidPoCost)} aan arbeidsfacturen van derden`
+                  : ""}
+              </p>
             </div>
 
             <div className="rounded-lg border bg-background p-3">
@@ -1115,6 +1256,12 @@ export default async function ProjectDetailPage({
               </dl>
               <p className="mt-2 text-xs text-muted">
                 inkooporders {formatEUR(poCost)} + losse kosten {formatEUR(looseCost)}
+                {/* Dezelfde euro's mogen niet twee keer meetellen: een factuur van
+                    een bouwer zit als uren in de kaart hiernaast. Dat hier benoemen
+                    scheelt het vermoeden dat het dubbel staat. */}
+                {arbeidPoCost > 0
+                  ? ` · ${formatEUR(arbeidPoCost)} aan arbeidsfacturen telt bij Uren — arbeid, niet hier`
+                  : ""}
               </p>
             </div>
           </div>
@@ -1558,6 +1705,7 @@ export default async function ProjectDetailPage({
               <CardTitle>Uren — arbeid</CardTitle>
               <span className="text-xs text-muted">
                 {laborHours.toLocaleString("nl-NL")} uur · {formatEUR(laborCost)} kosten
+                {arbeidPoCost > 0 ? ` (waarvan ${formatEUR(arbeidPoCost)} uit arbeidsfacturen)` : ""}
                 {project.budgetHours ? ` · begroot ${Number(project.budgetHours).toLocaleString("nl-NL")} u` : ""}
                 {laborCost > 0
                   ? ` · door te belasten ${formatEUR(margins.laborRevenue)} — ${margins.laborMarginPct}% opslag op kostprijs = ${formatEUR(margins.laborMargin)}`
@@ -1579,6 +1727,19 @@ export default async function ProjectDetailPage({
                 </div>
               )}
               {timeRows.length > 0 && (
+                <BetaalFilter
+                  welke="uren"
+                  actief={urenFilter}
+                  contant={urenContant.kost}
+                  factuur={urenFactuur.kost}
+                  contantExtra={`(${urenContant.uren.toLocaleString("nl-NL")} u)`}
+                  factuurExtra={`(${urenFactuur.uren.toLocaleString("nl-NL")} u)`}
+                />
+              )}
+              {timeRows.length > 0 && zichtbareTimeRows.length === 0 && (
+                <p className="text-sm text-muted">Geen urenregels die {urenFilter === "contant" ? "contant" : "per factuur"} betaald zijn.</p>
+              )}
+              {zichtbareTimeRows.length > 0 && (
                 <Table>
                   <THead>
                     <tr>
@@ -1591,7 +1752,7 @@ export default async function ProjectDetailPage({
                     </tr>
                   </THead>
                   <TBody>
-                    {timeRows.map((t) => {
+                    {zichtbareTimeRows.map((t) => {
                       if (t.id === editEntryId) {
                         // Bewerk-modus: hele regel als één formulier (datum/uren/tarief).
                         return (
@@ -1614,6 +1775,14 @@ export default async function ProjectDetailPage({
                                       werd bij opslaan 3,8 miljard. Zie lib/parse-money.ts. */}
                                   <Input name="hourlyCostEur" defaultValue={moneyForInput(t.hourlyCostEur)} inputMode="decimal" className="w-24 text-right tabular-nums" />
                                 </Field>
+                                {/* Betaalwijze hoort hier te staan: zonder dit veld kon je
+                                    een regel niet van contant naar per factuur zetten. */}
+                                <Field label="Betaald">
+                                  <Select name="paymentMethod" defaultValue={t.paymentMethod}>
+                                    <option value="cash">Contant</option>
+                                    <option value="invoice">Per factuur</option>
+                                  </Select>
+                                </Field>
                                 <SubmitButton size="sm" variant="secondary" pendingLabel="…">Opslaan</SubmitButton>
                                 <Link href={`/projects/${id}#uren`} className="px-2 py-2 text-xs text-muted hover:underline">
                                   Annuleer
@@ -1630,6 +1799,11 @@ export default async function ProjectDetailPage({
                           <Td className="whitespace-nowrap">{new Date(t.date).toLocaleDateString("nl-NL", { day: "numeric", month: "short" })}</Td>
                           <Td>
                             {t.workerName ?? "—"}
+                            {/* Zelfde badge als in de kostenlijst: zo zie je per regel
+                                hoe er betaald is, niet alleen in het filter. */}
+                            <Badge tone={t.paymentMethod === "cash" ? "warning" : "neutral"} className="ml-2">
+                              {PAY_LABEL[t.paymentMethod]}
+                            </Badge>
                             {pending && <Badge tone="warning" className="ml-2">te controleren</Badge>}
                             {t.note ? <span className="block text-xs text-muted">{t.note}</span> : null}
                           </Td>
@@ -1658,6 +1832,13 @@ export default async function ProjectDetailPage({
                     })}
                   </TBody>
                 </Table>
+              )}
+              {zichtbareTimeRows.length > 0 && (
+                <p className="text-right text-xs text-muted">
+                  {urenFilter
+                    ? `${urenFilter === "contant" ? "Contant" : "Per factuur"} in deze lijst: ${formatEUR(zichtbareUrenKost)}`
+                    : `Samen: ${formatEUR(laborCost)}`}
+                </p>
               )}
               {workerRows.length === 0 ? (
                 <p className="text-sm text-muted">
@@ -1728,9 +1909,38 @@ export default async function ProjectDetailPage({
                 gekoppelde inkoop {formatEUR(poCost)} + losse kosten {formatEUR(looseCost)} = {formatEUR(materialCost)}
                 {" · alle bedragen ex. btw"}
                 {` · door te belasten ${formatEUR(margins.purchaseRevenue)} — ${margins.purchaseMarginPct}% opslag op kostprijs = ${formatEUR(margins.purchaseMargin)}`}
+                {arbeidPoCost > 0
+                  ? ` · ${formatEUR(arbeidPoCost)} aan arbeidsfacturen telt hier NIET in mee — die staat bij Uren — arbeid`
+                  : ""}
               </span>
             </CardHeader>
             <CardContent className="space-y-4">
+              {/* Een factuur op "telt als uren" wordt hier NIET meegeteld omdat hij
+                  via een urenregel hoort binnen te komen. Ontbreekt die regel, dan
+                  telt hij nergens mee — en dat mag niet stil gebeuren. */}
+              {arbeidZonderUren.length > 0 && (
+                <div className="rounded-lg border border-amber-300 bg-amber-50/60 px-3 py-2 text-sm">
+                  <p>
+                    ⚠ <strong>{arbeidZonderUren.length}</strong> arbeidsfactu
+                    {arbeidZonderUren.length === 1 ? "ur" : "ren"} van samen{" "}
+                    <strong>{formatEUR(arbeidZonderUrenCost)}</strong> staat op &quot;telt als uren&quot;, maar er is
+                    geen urenregel bij gemaakt. Dat bedrag telt nu nergens mee in de projectkosten.
+                  </p>
+                  <ul className="mt-1 space-y-0.5">
+                    {arbeidZonderUren.map((p) => (
+                      <li key={p.id}>
+                        <Link href={`/inkooporders/${p.id}`} className="text-accent hover:underline">
+                          {p.supplier}
+                          {p.reference ? ` · ${p.reference}` : ""}
+                        </Link>{" "}
+                        <span className="tabular-nums text-muted">
+                          {formatEUR(poExVatAssumingSpanishVat(p).amount)}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
               {linkedPOs.length > 0 && (
                 <div>
                   <p className="mb-1 text-xs font-medium uppercase tracking-wide text-muted">Gekoppelde inkooporders</p>
@@ -1750,9 +1960,24 @@ export default async function ProjectDetailPage({
                           <Td>
                             <Link href={`/inkooporders/${p.id}`} className="text-accent hover:underline">{p.supplier}</Link>
                             {p.reference ? <span className="ml-1 text-xs text-muted">{p.reference}</span> : null}
-                            {p.countAsLabor ? <span className="ml-1 text-xs text-muted">· telt als uren</span> : null}
+                            {p.countAsLabor ? (
+                              poGeboekt.has(p.id) ? (
+                                <span className="ml-1 text-xs text-muted">· telt mee bij Uren — arbeid</span>
+                              ) : (
+                                <span className="ml-1 text-xs font-medium text-warning">
+                                  · geen urenregel — telt nergens mee
+                                </span>
+                              )
+                            ) : null}
                           </Td>
-                          <Td className="text-right tabular-nums">
+                          <Td
+                            className={`text-right tabular-nums${p.countAsLabor ? " text-muted" : ""}`}
+                            title={
+                              p.countAsLabor
+                                ? "Dit bedrag telt mee in Uren — arbeid en NIET in de inkoop hierboven; anders zou dezelfde factuur twee keer in de projectkosten staan."
+                                : undefined
+                            }
+                          >
                             {formatEUR(ex.amount)}
                             {ex.vatUnknown ? (
                               <Link
@@ -1785,6 +2010,19 @@ export default async function ProjectDetailPage({
                 </div>
               )}
               {costRows.length > 0 && (
+                <BetaalFilter
+                  welke="kosten"
+                  actief={kostenFilter}
+                  contant={kostenContant}
+                  factuur={kostenFactuur}
+                />
+              )}
+              {costRows.length > 0 && zichtbareCostRows.length === 0 && (
+                <p className="text-sm text-muted">
+                  Geen losse kosten die {kostenFilter === "contant" ? "contant" : "per factuur"} betaald zijn.
+                </p>
+              )}
+              {zichtbareCostRows.length > 0 && (
                 <Table>
                   <THead>
                     <tr>
@@ -1797,7 +2035,7 @@ export default async function ProjectDetailPage({
                     </tr>
                   </THead>
                   <TBody>
-                    {costRows.map((c) => (
+                    {zichtbareCostRows.map((c) => (
                       <Tr key={c.id}>
                         <Td className="whitespace-nowrap">{new Date(c.date).toLocaleDateString("nl-NL", { day: "numeric", month: "short" })}</Td>
                         <Td>{BUDGET_CAT_LABEL[c.category] ?? c.category}</Td>
@@ -1813,6 +2051,13 @@ export default async function ProjectDetailPage({
                     ))}
                   </TBody>
                 </Table>
+              )}
+              {zichtbareCostRows.length > 0 && (
+                <p className="text-right text-xs text-muted">
+                  {kostenFilter
+                    ? `${kostenFilter === "contant" ? "Contant" : "Per factuur"} in deze lijst: ${formatEUR(zichtbareKostenSom)}`
+                    : `Samen: ${formatEUR(looseCost)}`}
+                </p>
               )}
               <form action={addProjectCost.bind(null, id)} className="grid gap-3 sm:grid-cols-2 lg:grid-cols-[0.9fr_1fr_1.6fr_0.9fr_0.9fr_0.9fr_auto] lg:items-end">
                 <Field label="Datum">
