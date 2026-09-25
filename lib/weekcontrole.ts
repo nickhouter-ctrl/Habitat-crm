@@ -12,6 +12,7 @@
 import { sql } from "drizzle-orm";
 
 import { db } from "@/lib/db";
+import { zoekDubbeleFacturen } from "@/lib/dubbele-facturen";
 import { lineMaterialCostEur, normalizeDocItems } from "@/lib/documents";
 import type { DocumentLineItem } from "@/lib/db/schema";
 import { alGedekt } from "@/lib/project-receipts";
@@ -120,6 +121,39 @@ export async function verzamelWeekcontrole(): Promise<Weekcontrole> {
       regels: drift.map(
         (r) =>
           `${r.ref ?? "?"} · geboekt ${eur(r.geboekt)}${r.kosten > 0 ? ` (${eur(r.uren)} uren + ${eur(r.kosten)} kosten)` : ""} · factuur ${eur(r.sub > 0 ? r.sub : r.tot)}`,
+      ),
+    });
+  }
+
+  /* ── D2 · Dezelfde factuur twee keer op één werf ──
+   * De handmatig ingetypte regel naast de regel die uit de inkoopmail kwam.
+   * Niets koppelt die twee, dus geen enkele andere controle ziet het; op
+   * Silvestre en Finca Lisa liep het op tot € 19.421,56 aan kosten die er niet
+   * waren. Zie lib/dubbele-facturen.ts voor de regel en de tests. */
+  const kostenRegels = await db.execute<{
+    id: string; soort: "uren" | "kosten"; werf: string; datum: string; bedrag: number; tekst: string; gekoppeld: boolean;
+  }>(sql`
+    select te.id, 'uren' soort, p.name werf, te.date::text datum,
+           (te.hours * te.hourly_cost_eur)::float8 bedrag,
+           concat_ws(' ', coalesce(te.note, ''), coalesce(po.reference, '')) tekst,
+           (te.purchase_order_id is not null) gekoppeld
+      from time_entries te join projects p on p.id = te.project_id
+      left join purchase_orders po on po.id = te.purchase_order_id
+    union all
+    select pc.id, 'kosten', p.name, pc.date::text,
+           pc.amount_eur::float8,
+           concat_ws(' ', coalesce(pc.description, ''), coalesce(po.reference, '')),
+           (pc.purchase_order_id is not null)
+      from project_costs pc join projects p on p.id = pc.project_id
+      left join purchase_orders po on po.id = pc.purchase_order_id`);
+  const dubbel = zoekDubbeleFacturen(kostenRegels);
+  if (dubbel.length > 0) {
+    signalen.push({
+      ernst: "hoog",
+      titel: `${dubbel.length} factu${dubbel.length === 1 ? "ur staat" : "ren staan"} twee keer in de projectkosten · ${eur(dubbel.reduce((s, d) => s + d.bedrag, 0))} te veel`,
+      regels: dubbel.map(
+        (d) =>
+          `${d.werf} · factuur ${d.nummer} · ${eur(d.bedrag)} · handmatige regel ${d.handmatigeRegel.datum} naast de regel uit de inkoopfactuur`,
       ),
     });
   }
