@@ -10,6 +10,9 @@ import { computeTotals, lineNet, lineUnitPrice } from "@/lib/documents";
 import { LINE_CATEGORIES, vatForCategory } from "@/lib/products";
 import { cn, formatEUR } from "@/lib/utils";
 
+/** Eén uitvoering/maat van een product, zoals de kiezer die krijgt. */
+type ProductMaat = NonNullable<ProductOption["additionalSizes"]>[number];
+
 /** Below this margin a line is flagged amber; below 0 it's flagged red. */
 const LOW_MARGIN_PCT = 15;
 
@@ -183,6 +186,16 @@ export function LineItemsEditor({
   const [pickerQuery, setPickerQuery] = useState("");
   const [pickerCol, setPickerCol] = useState("all");
   const [addedIds, setAddedIds] = useState<Set<string>>(new Set());
+  /** Welke productregels hun uitvoeringen laten zien. Een merkassortiment heeft
+   *  er tot 112 per product; die allemaal uitklappen maakt de lijst onleesbaar. */
+  const [openMaten, setOpenMaten] = useState<Set<string>>(new Set());
+  const toggleMaten = (id: string) =>
+    setOpenMaten((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
   const productCollections = Array.from(
     new Set(products.map((p) => p.collection?.trim() || "Overig")),
   ).sort((a, b) => {
@@ -198,8 +211,32 @@ export function LineItemsEditor({
     if (pickerCol !== "all" && col !== pickerCol) return false;
     const q = pickerQuery.trim().toLowerCase();
     if (!q) return true;
-    return `${p.name} ${p.sku ?? ""} ${p.category ?? ""} ${col}`.toLowerCase().includes(q);
+    if (`${p.name} ${p.sku ?? ""} ${p.category ?? ""} ${col}`.toLowerCase().includes(q)) return true;
+    // Ook op de uitvoering zoeken. Een merkassortiment heeft de prijs per
+    // uitvoering ("Mat zwart", "BRA-5-S-159"); wie daarop zoekt vond eerder
+    // niets, want alleen de productnaam werd doorzocht.
+    return (p.additionalSizes ?? []).some((m) =>
+      `${m.label ?? ""} ${m.sku ?? ""}`.toLowerCase().includes(q),
+    );
   });
+  /** De uitvoeringen van dit product, met de zoekterm erop toegepast. */
+  const matenVoor = (p: ProductOption) => {
+    const alle = (p.additionalSizes ?? []).filter((m) => m.label);
+    const q = pickerQuery.trim().toLowerCase();
+    if (!q) return { zichtbaar: alle, totaal: alle.length, gefilterd: false };
+    const raak = alle.filter((m) => `${m.label} ${m.sku ?? ""}`.toLowerCase().includes(q));
+    return raak.length
+      ? { zichtbaar: raak, totaal: alle.length, gefilterd: raak.length < alle.length }
+      : { zichtbaar: alle, totaal: alle.length, gefilterd: false };
+  };
+  /** Laagste uitvoeringsprijs — zodat een product met alleen uitvoeringen geen
+   *  streepje toont maar "vanaf € …". */
+  const vanafPrijs = (p: ProductOption) => {
+    const prijzen = (p.additionalSizes ?? [])
+      .map((m) => (m.priceEur != null ? Number(m.priceEur) : null))
+      .filter((v): v is number => v != null && v > 0);
+    return prijzen.length ? Math.min(...prijzen) : null;
+  };
   // Binnen de resultaten groeperen op categorie (producten staan al op categorie gesorteerd).
   const pickerGroups: { cat: string; items: typeof pickerProducts }[] = [];
   for (const p of pickerProducts) {
@@ -221,11 +258,9 @@ export function LineItemsEditor({
   const removeRow = (i: number) =>
     setRows((rs) => (rs.length > 1 ? rs.filter((_, idx) => idx !== i) : rs));
 
-  const addFromProduct = (productId: string, sizeIndex?: number) => {
+  const addFromProduct = (productId: string, size?: ProductMaat) => {
     const p = products.find((x) => x.id === productId);
     if (!p) return;
-    const size =
-      sizeIndex != null ? (p.additionalSizes ?? [])[sizeIndex] : undefined;
     // Maat-prijs heeft voorrang; anders de productprijs.
     const basePrice = priceFor(p);
     const sizePrice =
@@ -236,7 +271,15 @@ export function LineItemsEditor({
           : null;
     const row: Row = {
       name: size ? `${p.name} — ${size.label}` : p.name,
-      description: size ? size.label : p.category ? p.category : "",
+      // De uitvoeringscode erbij: dát is wat er straks op de bestelling naar de
+      // leverancier moet, en zonder die code is "Mat zwart" niet te bestellen.
+      description: size
+        ? size.sku
+          ? `${size.label} · ${size.sku}`
+          : size.label
+        : p.category
+          ? p.category
+          : "",
       units: "1",
       price: sizePrice != null ? String(round2(sizePrice)) : "",
       discount: "0",
@@ -963,28 +1006,43 @@ export function LineItemsEditor({
                         {g.items.map((p) => {
                           const price = priceFor(p);
                           const added = addedIds.has(p.id);
-                          // Producten met maten: kies verplicht een maat (voorkomt maatloze regels).
-                          const hasSizes = (p.additionalSizes ?? []).filter((s) => s.label).length > 0;
+                          // Producten met maten/uitvoeringen: kies er verplicht één
+                          // (voorkomt regels zonder maat en zonder prijs).
+                          const maten = matenVoor(p);
+                          const hasSizes = maten.totaal > 0;
+                          // Korte lijsten staan gewoon open; een merkassortiment met
+                          // tientallen uitvoeringen pas na een klik of een zoekterm.
+                          const toonMaten =
+                            hasSizes && (maten.totaal <= 6 || maten.gefilterd || openMaten.has(p.id));
+                          const vanaf = price ? null : vanafPrijs(p);
                           return (
                             <li key={p.id}>
                               <button
                                 type="button"
                                 onClick={() => {
-                                  if (hasSizes) return;
+                                  if (hasSizes) {
+                                    toggleMaten(p.id);
+                                    return;
+                                  }
                                   addFromProduct(p.id);
                                   setAddedIds((prev) => new Set(prev).add(p.id));
                                 }}
-                                className={cn(
-                                  "flex w-full items-center justify-between gap-3 px-5 py-2.5 text-left",
-                                  hasSizes ? "cursor-default" : "hover:bg-background",
-                                )}
+                                className="flex w-full items-center justify-between gap-3 px-5 py-2.5 text-left hover:bg-background"
                               >
                                 <span className="min-w-0">
                                   <span className="font-medium">{p.name}</span>
                                   {p.sku && <span className="ml-2 text-xs text-muted">{p.sku}</span>}
                                 </span>
                                 <span className="flex shrink-0 items-center gap-3">
-                                  <span className="tabular-nums">{price ? formatEUR(price) : "—"}</span>
+                                  <span className="tabular-nums">
+                                    {price ? (
+                                      formatEUR(price)
+                                    ) : vanaf != null ? (
+                                      <span className="text-muted">vanaf {formatEUR(vanaf)}</span>
+                                    ) : (
+                                      "—"
+                                    )}
+                                  </span>
                                   <span
                                     className={cn(
                                       "rounded px-2 py-0.5 text-xs font-medium",
@@ -995,19 +1053,31 @@ export function LineItemsEditor({
                                           : "bg-accent/10 text-accent",
                                     )}
                                   >
-                                    {hasSizes ? "kies maat ↓" : added ? "✓ toegevoegd" : "+ toevoegen"}
+                                    {hasSizes
+                                      ? toonMaten
+                                        ? `${maten.totaal} uitvoeringen ↑`
+                                        : `${maten.totaal} uitvoeringen ↓`
+                                      : added
+                                        ? "✓ toegevoegd"
+                                        : "+ toevoegen"}
                                   </span>
                                 </span>
                               </button>
-                              {(p.additionalSizes ?? []).filter((s) => s.label).length > 0 && (
-                                <ul className="border-t bg-background/40 pl-8">
-                                  {(p.additionalSizes ?? []).map((s, si) =>
+                              {toonMaten && (
+                                <ul className="max-h-72 overflow-y-auto border-t bg-background/40 pl-8">
+                                  {maten.gefilterd && (
+                                    <li className="px-5 py-1 text-xs text-muted">
+                                      {maten.zichtbaar.length} van {maten.totaal} uitvoeringen passen bij
+                                      &quot;{pickerQuery.trim()}&quot;
+                                    </li>
+                                  )}
+                                  {maten.zichtbaar.map((s) =>
                                     s.label ? (
-                                      <li key={s.sku || si}>
+                                      <li key={s.sku || s.label}>
                                         <button
                                           type="button"
                                           onClick={() => {
-                                            addFromProduct(p.id, si);
+                                            addFromProduct(p.id, s);
                                             setAddedIds((prev) => new Set(prev).add(p.id));
                                           }}
                                           className="flex w-full items-center justify-between gap-3 px-5 py-1.5 text-left text-sm hover:bg-background"
@@ -1042,7 +1112,7 @@ export function LineItemsEditor({
                                               {s.priceEur != null ? formatEUR(s.priceEur) : "—"}
                                             </span>
                                             <span className="rounded bg-accent/10 px-2 py-0.5 font-medium text-accent">
-                                              + maat
+                                              + toevoegen
                                             </span>
                                           </span>
                                         </button>
