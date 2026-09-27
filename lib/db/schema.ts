@@ -435,6 +435,15 @@ export const brands = pgTable(
      */
     tradeDiscountPct: numeric({ precision: 6, scale: 2 }),
     defaultVatRate: integer().notNull().default(21),
+    /**
+     * Dit merk houden we niet op voorraad: elke verkoop wordt besteld bij de
+     * leverancier. Brauer is zo'n assortiment — 10.860 uitvoeringen, daar ligt
+     * niets van in het magazijn. Zonder dit kenmerk schreeuwt elke offerte
+     * "9 producten (bijna) niet op voorraad", terwijl dat de normale gang is;
+     * mét dit kenmerk komt de melding pas als de offerte akkoord is, en dan als
+     * wat het is: deze artikelen moeten nog besteld worden.
+     */
+    orderOnDemand: boolean().notNull().default(false),
     /** Brochures, prijslijsten en algemene documentatie van het merk. */
     attachments: jsonb().$type<CatalogAttachment[]>().notNull().default(sql`'[]'::jsonb`),
     notes: text(),

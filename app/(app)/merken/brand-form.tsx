@@ -71,6 +71,17 @@ export function BrandForm({
         <Textarea name="notes" defaultValue={brand?.notes ?? ""} maxLength={2000} rows={3} />
       </Field>
 
+      <Field
+        label="Voorraad"
+        className="sm:col-span-2"
+        hint="Bepaalt of een offerte om voorraad zeurt of om een bestelling vraagt"
+      >
+        <Select name="orderOnDemand" defaultValue={brand ? String(brand.orderOnDemand) : "false"}>
+          <option value="false">Wij houden dit merk op voorraad</option>
+          <option value="true">Wordt per order besteld — geen voorraad</option>
+        </Select>
+      </Field>
+
       <Field label="Actief" className="sm:col-span-2">
         <Select name="isActive" defaultValue={brand ? String(brand.isActive) : "true"}>
           <option value="true">Ja — kiesbaar bij producten</option>

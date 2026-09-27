@@ -22,7 +22,7 @@ import {
   Tr,
 } from "@/components/ui";
 import { db } from "@/lib/db";
-import { companies, deliveries, documents, holdedSyncMap, products } from "@/lib/db/schema";
+import { brands, companies, deliveries, documents, holdedSyncMap, products } from "@/lib/db/schema";
 import { SubmitButton } from "@/components/submit-button";
 import { lineCostEur, lineNet, lineTax, normalizeDocItems } from "@/lib/documents";
 import { missingBillingFields } from "@/lib/invoice-validation";
@@ -266,15 +266,26 @@ export default async function DocumentDetailPage({
             itemProductIds.length ? inArray(products.id, itemProductIds) : undefined,
             itemSkus.length ? inArray(products.sku, itemSkus) : undefined,
           ),
-          columns: { id: true, sku: true, name: true, costEur: true, stockQty: true, stockMin: true },
+          columns: { id: true, sku: true, name: true, costEur: true, stockQty: true, stockMin: true, brandId: true },
         })
       : [];
+  // Merken die we niet op voorraad houden (Brauer): daar is "niet op voorraad"
+  // de normale toestand, geen waarschuwing. Ze horen besteld te worden zodra de
+  // klant akkoord is.
+  const merkIds = [...new Set(costRows.map((p) => p.brandId).filter((v): v is string => !!v))];
+  const bestelMerken = merkIds.length
+    ? await db.query.brands.findMany({
+        where: and(inArray(brands.id, merkIds), eq(brands.orderOnDemand, true)),
+        columns: { id: true, name: true },
+      })
+    : [];
+  const bestelMerkNaam = new Map(bestelMerken.map((b) => [b.id, b.name]));
   const costById = new Map(costRows.map((p) => [p.id, Number(p.costEur ?? 0)]));
   const costBySku = new Map(
     costRows.filter((p) => p.sku).map((p) => [p.sku as string, Number(p.costEur ?? 0)]),
   );
   // Voorraad per product (op id én sku) — voor de tekort-waarschuwing.
-  type StockInfo = { sku: string | null; name: string; stock: number; min: number };
+  type StockInfo = { sku: string | null; name: string; stock: number; min: number; merk: string | null };
   const stockByKey = new Map<string, StockInfo>();
   for (const p of costRows) {
     const info: StockInfo = {
@@ -282,6 +293,7 @@ export default async function DocumentDetailPage({
       name: p.name,
       stock: Number(p.stockQty ?? 0),
       min: Number(p.stockMin ?? 0),
+      merk: p.brandId ? (bestelMerkNaam.get(p.brandId) ?? null) : null,
     };
     stockByKey.set(p.id, info);
     if (p.sku) stockByKey.set(p.sku, info);
@@ -304,11 +316,22 @@ export default async function DocumentDetailPage({
       // Alleen melden als deze regel de voorraad onder 0 zou brengen.
       if (info.stock - units >= 0) return null;
       const toOrder = Math.round((units - info.stock) * 100) / 100; // tot terug op 0
-      return { name: (it.name || info.name).trim(), sku: info.sku, stock: info.stock, units, toOrder };
+      return { name: (it.name || info.name).trim(), sku: info.sku, stock: info.stock, units, toOrder, merk: info.merk };
     })
     .filter(
-      (x): x is { name: string; sku: string; stock: number; units: number; toOrder: number } => !!x,
+      (x): x is { name: string; sku: string; stock: number; units: number; toOrder: number; merk: string | null } => !!x,
     );
+  // Wat van een besteld-op-order merk komt is géén tekort: dat hóórt besteld te
+  // worden. Pas als de klant akkoord is, is het een taak.
+  const bestelRegels = lowStock.filter((p) => p.merk);
+  const echtTekort = lowStock.filter((p) => !p.merk);
+  const klantAkkoord =
+    doc.acceptedAt != null ||
+    doc.status === "accepted" ||
+    doc.status === "paid" ||
+    doc.kind === "invoice" ||
+    doc.kind === "proforma";
+  const bestelMerkenInDoc = [...new Set(bestelRegels.map((p) => p.merk).filter((v): v is string => !!v))];
   // Marge alleen berekenen over regels waarvoor we een kostprijs kennen — anders
   // telt een regel zonder kostprijs als 100% marge en wordt het percentage te hoog.
   let docCost = 0;
@@ -444,14 +467,55 @@ export default async function DocumentDetailPage({
         </div>
       )}
 
-      {lowStock.length > 0 && (
+      {/* Besteld-op-order merken: zolang de offerte nog loopt is dit niets om te
+          melden — pas bij akkoord wordt het een taak. */}
+      {bestelRegels.length > 0 && (
+        <div
+          className={`mb-4 rounded-lg border p-4 ${
+            klantAkkoord ? "border-amber-200 bg-amber-50" : "border-border bg-background"
+          }`}
+        >
+          <div className="mb-2 flex items-center justify-between gap-3">
+            <p className={`text-sm font-medium ${klantAkkoord ? "text-amber-900" : "text-muted"}`}>
+              {klantAkkoord
+                ? `📦 ${bestelRegels.length} artikel${bestelRegels.length === 1 ? "" : "en"} nog te bestellen bij ${bestelMerkenInDoc.join(" en ")}`
+                : `${bestelRegels.length} artikel${bestelRegels.length === 1 ? "" : "en"} van ${bestelMerkenInDoc.join(" en ")} — wordt op bestelling geleverd`}
+            </p>
+            {klantAkkoord && (
+              <LinkButton
+                href={`/bestellen?q=${encodeURIComponent(bestelRegels[0].sku)}`}
+                variant="primary"
+                className="text-xs"
+              >
+                → Bestellen
+              </LinkButton>
+            )}
+          </div>
+          <ul className={`space-y-1 text-xs ${klantAkkoord ? "text-amber-900" : "text-muted"}`}>
+            {bestelRegels.map((p) => (
+              <li key={p.sku} className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
+                <span className="font-medium">{p.name}</span>
+                <span className="font-mono opacity-70">{p.sku}</span>
+                <span className="opacity-80">· {p.units} stuks</span>
+              </li>
+            ))}
+          </ul>
+          {!klantAkkoord && (
+            <p className="mt-2 text-xs text-muted">
+              Zodra de klant akkoord is, staat hier de bestelopdracht.
+            </p>
+          )}
+        </div>
+      )}
+
+      {echtTekort.length > 0 && (
         <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 p-4">
           <div className="mb-2 flex items-center justify-between gap-3">
             <p className="text-sm font-medium text-amber-900">
-              ⚠️ {lowStock.length} product{lowStock.length === 1 ? "" : "en"} (bijna) niet op voorraad
+              ⚠️ {echtTekort.length} product{echtTekort.length === 1 ? "" : "en"} (bijna) niet op voorraad
             </p>
             <LinkButton
-              href={`/bestellen?q=${encodeURIComponent(lowStock[0].sku)}`}
+              href={`/bestellen?q=${encodeURIComponent(echtTekort[0].sku)}`}
               variant="primary"
               className="text-xs"
             >
@@ -459,7 +523,7 @@ export default async function DocumentDetailPage({
             </LinkButton>
           </div>
           <ul className="space-y-1 text-xs text-amber-900">
-            {lowStock.map((p) => (
+            {echtTekort.map((p) => (
               <li key={p.sku} className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
                 <span className="font-medium">{p.name}</span>
                 <span className="font-mono text-amber-700">{p.sku}</span>

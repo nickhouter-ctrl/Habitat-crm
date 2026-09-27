@@ -34,6 +34,8 @@ const brandSchema = z.object({
   ),
   notes: z.string().trim().max(2000).optional().or(z.literal("")),
   isActive: z.preprocess((v) => v === "on" || v === "true" || v === true, z.boolean()),
+  /** Geen voorraad: elke verkoop gaat als bestelling naar de leverancier. */
+  orderOnDemand: z.preprocess((v) => v === "on" || v === "true" || v === true, z.boolean()),
 });
 
 /** "BRAUER" → "brauer"; botsende slugs krijgen een volgnummer. */
@@ -73,6 +75,7 @@ function toValues(v: z.infer<typeof brandSchema>, slug: string) {
     defaultVatRate: v.defaultVatRate ?? 21,
     notes: v.notes || null,
     isActive: v.isActive,
+    orderOnDemand: v.orderOnDemand,
   };
 }
 
