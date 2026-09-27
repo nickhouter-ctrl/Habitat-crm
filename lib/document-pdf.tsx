@@ -145,6 +145,10 @@ type Dict = {
   vat: string;
   net: string;
   discount: string;
+  /** Kop van de kortingskolom — kort, het is een smalle kolom. */
+  discountCol: string;
+  /** Totaalregel: het bedrag vóór korting. */
+  beforeDiscount: string;
   noLines: string;
   subtotal: string;
   vatTotal: string;
@@ -172,6 +176,8 @@ const DICT: Record<Locale, Dict> = {
     vat: "BTW",
     net: "NETTO",
     discount: "Korting",
+    discountCol: "KORT.",
+    beforeDiscount: "Voor korting",
     noLines: "Geen regels.",
     subtotal: "Subtotaal",
     vatTotal: "BTW (IVA)",
@@ -197,6 +203,8 @@ const DICT: Record<Locale, Dict> = {
     vat: "MwSt",
     net: "NETTO",
     discount: "Rabatt",
+    discountCol: "RAB.",
+    beforeDiscount: "Vor Rabatt",
     noLines: "Keine Positionen.",
     subtotal: "Zwischensumme",
     vatTotal: "MwSt (IVA)",
@@ -222,6 +230,8 @@ const DICT: Record<Locale, Dict> = {
     vat: "VAT",
     net: "NET",
     discount: "Discount",
+    discountCol: "DISC.",
+    beforeDiscount: "Before discount",
     noLines: "No items.",
     subtotal: "Subtotal",
     vatTotal: "VAT (IVA)",
@@ -247,6 +257,8 @@ const DICT: Record<Locale, Dict> = {
     vat: "IVA",
     net: "NETO",
     discount: "Descuento",
+    discountCol: "DTO.",
+    beforeDiscount: "Antes de descuento",
     noLines: "Sin líneas.",
     subtotal: "Subtotal",
     vatTotal: "IVA",
@@ -378,6 +390,9 @@ const s = StyleSheet.create({
   // (anders leest "1" + "19.687,71" als "119.687,71").
   cQty: { flex: 0.7, textAlign: "right", paddingRight: 12 },
   cVat: { flex: 0.8, textAlign: "right" },
+  // Kortingskolom: de korting stond alleen als grijs regeltje onder de
+  // omschrijving en was in de pdf niet terug te vinden.
+  cDisc: { flex: 0.8, textAlign: "right" },
   cAmt: { flex: 1.3, textAlign: "right" },
   itemName: { fontFamily: "Sora", fontWeight: 700, color: C.charcoal },
   itemSku: { fontFamily: "Sora", fontWeight: 500, fontSize: 7, color: C.brown, marginTop: 1 },
@@ -622,6 +637,16 @@ function DocumentPdf({ doc }: { doc: PdfDoc }) {
   // Provisión de fondos: factuur-layout maar géén factuur — nergens BTW tonen
   // (geen kolom, geen totaalregel, geen ISP-vermelding), wél betaalgegevens.
   const isFondos = doc.kind === "fondos";
+  // Korting: alleen een kolom als er op minstens één regel korting staat —
+  // anders een lege kolom op elke offerte. Het totaal komt onderaan terug,
+  // want een klant wil zien wát de korting hem oplevert, niet alleen dat er
+  // ergens 10% is afgegaan.
+  const heeftKorting = !isDelivery && items.some((it) => Number(it.discount ?? 0) > 0);
+  const brutoSubtotaal = items.reduce(
+    (som, it) => som + (Number(it.units) || 0) * (Number(it.price) || 0),
+    0,
+  );
+  const kortingTotaal = Math.round((brutoSubtotaal - Number(doc.subtotalEur ?? 0)) * 100) / 100;
 
   // Voor-/eindblad met Magic Stone-sfeerimpressie (niet op pakbonnen).
   // [ext, ext] op het voorblad, [int, int] op het eindblad.
@@ -746,6 +771,7 @@ function DocumentPdf({ doc }: { doc: PdfDoc }) {
             {!isDelivery && (
               <>
                 <Text style={[s.thText, s.cNum]}>{t.price}</Text>
+                {heeftKorting && <Text style={[s.thText, s.cDisc]}>{t.discountCol}</Text>}
                 {!isFondos && <Text style={[s.thText, s.cVat]}>{t.vat}</Text>}
                 <Text style={[s.thText, s.cAmt]}>{t.net}</Text>
               </>
@@ -780,17 +806,16 @@ function DocumentPdf({ doc }: { doc: PdfDoc }) {
                       <Text style={s.itemSku}>{[it.sku, it.dim].filter(Boolean).join("  ·  ")}</Text>
                     ) : null}
                     {it.description ? <Text style={s.itemDesc}>{it.description}</Text> : null}
-                    {!isDelivery && it.discount ? (
-                      <Text style={s.itemDesc}>
-                        {t.discount} {it.discount}%
-                      </Text>
-                    ) : null}
+
                   </View>
                   <Text style={s.cCat}>{catLabel(it.category, locale)}</Text>
                   <Text style={isDelivery ? s.cAmt : s.cQty}>{it.unit ? `${it.units} ${it.unit}` : it.units}</Text>
                   {!isDelivery && (
                     <>
                       <Text style={s.cNum}>{eur(it.price)}</Text>
+                      {heeftKorting && (
+                        <Text style={s.cDisc}>{it.discount ? `−${it.discount}%` : ""}</Text>
+                      )}
                       {!isFondos && <Text style={s.cVat}>{it.taxRate ?? 0}%</Text>}
                       <Text style={s.cAmt}>{eur(lineNet(it))}</Text>
                     </>
@@ -817,6 +842,18 @@ function DocumentPdf({ doc }: { doc: PdfDoc }) {
                 ) : null}
               </View>
               <View style={s.totals}>
+                {!isFondos && heeftKorting && kortingTotaal > 0.005 && (
+                  <>
+                    <View style={s.totalRow}>
+                      <Text style={s.muted}>{t.beforeDiscount}</Text>
+                      <Text>{eur(brutoSubtotaal)}</Text>
+                    </View>
+                    <View style={s.totalRow}>
+                      <Text style={s.muted}>{t.discount}</Text>
+                      <Text>−{eur(kortingTotaal)}</Text>
+                    </View>
+                  </>
+                )}
                 {!isFondos && (
                   <View style={s.totalRow}>
                     <Text style={s.muted}>{t.subtotal}</Text>
