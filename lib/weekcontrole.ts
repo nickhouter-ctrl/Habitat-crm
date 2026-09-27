@@ -158,6 +158,30 @@ export async function verzamelWeekcontrole(): Promise<Weekcontrole> {
     });
   }
 
+  /* ── D3 · Factuur aan purchase@ die nooit in de wachtrij kwam ──
+   * De instroom pakt alleen bijlagen met een financiële categorie op. Wordt een
+   * factuur als "other" ingedeeld, dan gebeurt er niets: geen kaart, geen
+   * melding, niets — tien facturen van CSABAHOME verdwenen zo tussen juli en
+   * augustus. Deze controle kijkt niet naar de categorie maar naar de
+   * bestandsnaam, juist omdat de categorie het probleem wás. */
+  const gemist = await db.execute<{ datum: string; van: string; bestand: string }>(sql`
+    select e.received_at::date::text datum, coalesce(e.from_email, '?') van, a.filename bestand
+    from mail_attachments a join email_inbox e on e.id = a.email_id
+    where e.received_at > now() - interval '120 days'
+      and lower(concat_ws(' ', e.to_email, e.cc_email)) like '%purchase@%'
+      and a.filename ~* '(^|[ _[(-])(invoice|factura|factuur|facture|rechnung|fattura)[ _#.-]*[a-z]?[0-9]'
+      and a.filename !~* '(fac|off|cn|pak|pro)-20[0-9]{2}-[0-9]{3,}'
+      and not exists (select 1 from purchase_invoice_reviews r where r.mail_attachment_id = a.id)
+      and e.linked_purchase_order_id is null
+    order by e.received_at desc`);
+  if (gemist.length > 0) {
+    signalen.push({
+      ernst: "hoog",
+      titel: `${gemist.length} factuurbijlage${gemist.length === 1 ? "" : "n"} aan purchase@ ${gemist.length === 1 ? "kwam" : "kwamen"} nooit in de keurwachtrij`,
+      regels: gemist.slice(0, 12).map((r) => `${r.datum} · ${r.van} · ${r.bestand}`),
+    });
+  }
+
   /* ── E · Inkoop op een project zonder btw-uitsplitsing ── */
   const btwOnbekend = await db.execute<{ s: string; ref: string | null; t: number; project: string }>(sql`
     select po.supplier s, po.reference ref, po.total::float8 t, p.name project

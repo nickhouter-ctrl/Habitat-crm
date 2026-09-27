@@ -230,6 +230,21 @@ const CATEGORY_RULES: Array<{ cat: AttachmentCategory; test: (ctx: CategorizeCtx
        /发票.*invoice/i.test(c.filename) ||
        /cornelius.*invoice|inkoop\s*order\s*cornelius/i.test(c.allText)) &&
       !/handling\s*costs?/i.test(c.allText) },
+
+  // Vangnet, als laatste: een bestand dat zichzelf "INVOICE A214" of
+  // "FACTURA 0017/2026" noemt ÍS een factuur, ook als geen enkele
+  // leveranciersregel hierboven hem kent.
+  //
+  // Nodig omdat de instroom alleen bijlagen met een financiële categorie
+  // oppakt: wat op "other" blijft staan komt nooit in de keurwachtrij. Tien
+  // facturen van CSABAHOME (A196 t/m A216, juli–augustus 2026) verdwenen zo,
+  // terwijl ze netjes aan purchase@ waren gestuurd. Onze eigen uitgaande
+  // documenten (FAC-2026-…, OFF-…) vallen er bewust buiten.
+  { cat: "supplier-invoice", test: (c) =>
+      /\.(pdf|xlsx?|jpe?g|png)$/i.test(c.filename) &&
+      /(^|[\s_\-[(])(invoice|factura|factuur|facture|rechnung|fattura)[\s_\-#.]*[a-z]?\d/i.test(c.filename) &&
+      !/\b(fac|off|cn|pak|pro)-20\d{2}-\d{3,}/i.test(c.filename) &&
+      !/habitat-one\.com/i.test(c.fromEmail) },
 ];
 
 interface CategorizeCtx {

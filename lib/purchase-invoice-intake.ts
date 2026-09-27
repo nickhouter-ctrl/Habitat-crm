@@ -16,6 +16,7 @@ import { and, desc, eq, isNotNull, ne, sql } from "drizzle-orm";
 
 import { readInvoiceWithAI, type AiInvoiceFields } from "@/lib/ai-invoice-extract";
 import { db } from "@/lib/db";
+import { zelfdeFactuurbedrag } from "@/lib/dubbele-facturen";
 import {
   activities,
   emailInbox,
@@ -128,12 +129,21 @@ export async function findExistingPurchaseOrder(args: {
 }): Promise<{ id: string; reference: string | null; reason: string } | null> {
   const norm = (v: string | null | undefined) => (v ?? "").replace(/[^0-9a-z]/gi, "").toLowerCase();
 
+  // Zelfde nummer én zelfde bedrag is dezelfde factuur; zelfde nummer met een
+  // ánder bedrag is een tweede document van dezelfde leverancier (Allpack
+  // factureert handling apart onder hetzelfde nummer). Dat laatste mag nooit
+  // stilzwijgend verdwijnen.
+  const zelfdeFactuur = (kandidaatTotal: string | number | null | undefined) =>
+    zelfdeFactuurbedrag(kandidaatTotal != null ? Number(kandidaatTotal) : null, args.total);
+
   if (args.reference) {
     const exact = await db.query.purchaseOrders.findFirst({
       where: eq(purchaseOrders.reference, args.reference),
-      columns: { id: true, reference: true },
+      columns: { id: true, reference: true, total: true },
     });
-    if (exact) return { ...exact, reason: "zelfde referentie" };
+    if (exact && zelfdeFactuur(exact.total)) {
+      return { id: exact.id, reference: exact.reference, reason: "zelfde referentie" };
+    }
   }
 
   const leverancier = norm(args.supplier);
@@ -164,7 +174,7 @@ export async function findExistingPurchaseOrder(args: {
     for (const k of kandidaten) {
       const ref = (k.reference ?? "").trim().toLowerCase();
       const woorden = ref.split(/[\s,;]+/).map((w) => w.replace(/[.,;:]+$/, ""));
-      if (ref === woord || woorden.includes(woord)) {
+      if ((ref === woord || woorden.includes(woord)) && zelfdeFactuur(k.total)) {
         return { id: k.id, reference: k.reference, reason: `zelfde factuurnummer (${args.invoiceNumber})` };
       }
     }
@@ -172,7 +182,7 @@ export async function findExistingPurchaseOrder(args: {
   if (nummer.length >= 4) {
     for (const k of kandidaten) {
       const ref = norm(k.reference);
-      if (ref && (ref.includes(nummer) || nummer.includes(ref))) {
+      if (ref && (ref.includes(nummer) || nummer.includes(ref)) && zelfdeFactuur(k.total)) {
         return { id: k.id, reference: k.reference, reason: `zelfde factuurnummer (${args.invoiceNumber})` };
       }
     }
@@ -576,7 +586,14 @@ async function supersedePendingDuplicate(reviewId: string): Promise<void> {
     (r) =>
       norm(r.proposedSupplier) === leverancier &&
       norm((r.aiFields as AiInvoiceFields | null)?.invoiceNumber) === norm(nummer) &&
-      r.createdAt <= nieuw.createdAt,
+      r.createdAt <= nieuw.createdAt &&
+      // Zelfde nummer is niet genoeg: Allpack stuurt de handling-nota onder
+      // hetzelfde factuurnummer als de goederen. Verschilt het bedrag, dan zijn
+      // het twee documenten en moeten ze allebei blijven staan.
+      zelfdeFactuurbedrag(
+        r.proposedTotal != null ? Number(r.proposedTotal) : null,
+        nieuw.proposedTotal != null ? Number(nieuw.proposedTotal) : null,
+      ),
   );
   if (!tweeling) return;
 
@@ -679,6 +696,13 @@ export async function approveInvoiceReview(args: {
   const att = await db.query.mailAttachments.findFirst({ where: eq(mailAttachments.id, review.mailAttachmentId) });
   const mail = await db.query.emailInbox.findFirst({ where: eq(emailInbox.id, review.emailId) });
 
+  // Twee documenten onder één factuurnummer (goederen + handling) krijgen
+  // anders twee regels met exact dezelfde naam op de werf. De leverancier zegt
+  // zelf welke het is: zijn bestandsnaam bevat "handling costs".
+  const isHandling = /handling/i.test(att?.filename ?? "");
+  const referenceMetSoort =
+    reference && isHandling && !/handling/i.test(reference) ? `${reference} — handling` : reference;
+
   // Bijlagen naar de inkoop-bucket (pas nu — een afgekeurde factuur laat geen
   // sporen achter in de administratie).
   const poAttachments: { name: string; path: string; size?: number; uploadedAt?: string }[] = [];
@@ -740,7 +764,7 @@ export async function approveInvoiceReview(args: {
     .insert(purchaseOrders)
     .values({
       supplier,
-      reference,
+      reference: referenceMetSoort,
       kind: "invoice",
       status: "received",
       currency: "EUR",

@@ -7,7 +7,12 @@
  */
 import { describe, expect, it } from "vitest";
 
-import { type KostenRegel, factuurNummers, zoekDubbeleFacturen } from "@/lib/dubbele-facturen";
+import {
+  type KostenRegel,
+  factuurNummers,
+  zelfdeFactuurbedrag,
+  zoekDubbeleFacturen,
+} from "@/lib/dubbele-facturen";
 
 const regel = (r: Partial<KostenRegel> & { id: string; tekst: string; bedrag: number }): KostenRegel => ({
   soort: "uren",
@@ -91,5 +96,31 @@ describe("dubbele facturen vinden", () => {
       regel({ id: "hand", tekst: "Factuur A0010 / A0013 — Silvestre", bedrag: 3600 }),
     ]);
     expect(gevonden).toHaveLength(1);
+  });
+});
+
+describe("zelfde factuurnummer, zelfde document?", () => {
+  it("noemt twee gelijke bedragen dezelfde factuur", () => {
+    // De twee échte dubbelen uit de wachtrij, allebei terecht weggehaald.
+    expect(zelfdeFactuurbedrag(1349.15, 1349.15)).toBe(true);
+    expect(zelfdeFactuurbedrag(1030.96, 1030.96)).toBe(true);
+  });
+
+  it("laat een afwijkend bedrag met rust", () => {
+    // Allpack HANH00260817001: ramen € 4.009,65 naast handling € 601,45.
+    expect(zelfdeFactuurbedrag(4009.65, 601.45)).toBe(false);
+    expect(zelfdeFactuurbedrag(9742.52, 1461.38)).toBe(false);
+  });
+
+  it("geeft afronding en koersverschil wat ruimte", () => {
+    expect(zelfdeFactuurbedrag(1000, 1000.01)).toBe(true);
+    expect(zelfdeFactuurbedrag(1000, 1004)).toBe(true);
+    expect(zelfdeFactuurbedrag(1000, 1010)).toBe(false);
+  });
+
+  it("houdt bij een onbekend bedrag het oude, voorzichtige gedrag", () => {
+    expect(zelfdeFactuurbedrag(null, 500)).toBe(true);
+    expect(zelfdeFactuurbedrag(500, 0)).toBe(true);
+    expect(zelfdeFactuurbedrag(undefined, undefined)).toBe(true);
   });
 });

@@ -80,3 +80,26 @@ export function zoekDubbeleFacturen(regels: KostenRegel[], marge = 0.1): Dubbele
   }
   return uit.sort((x, y) => y.bedrag - x.bedrag);
 }
+
+/**
+ * Beschrijven deze twee bedragen hetzelfde document?
+ *
+ * Nodig omdat "zelfde leverancier én zelfde factuurnummer" géén betrouwbaar
+ * bewijs van een dubbele is: Allpack factureert de handling apart ónder
+ * hetzelfde nummer als de goederen. Zo werd de ramenfactuur van € 4.009,65
+ * weggegooid als dubbele van de handling-nota van € 601,45 — het geld verdween
+ * geruisloos uit het project.
+ *
+ * Onbekend bedrag (null of 0) telt als "gelijk": dan is het oude gedrag veiliger
+ * dan twee kaarten voor dezelfde factuur. De marge (2 cent + 0,5%) vangt
+ * afrondingen en koersverschillen op zonder een écht ander document te dekken.
+ */
+export function zelfdeFactuurbedrag(
+  a: number | null | undefined,
+  b: number | null | undefined,
+): boolean {
+  const x = a == null ? 0 : Math.abs(Number(a));
+  const y = b == null ? 0 : Math.abs(Number(b));
+  if (!x || !y) return true;
+  return Math.abs(x - y) <= 0.02 + 0.005 * Math.max(x, y);
+}
