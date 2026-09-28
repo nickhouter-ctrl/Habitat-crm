@@ -426,4 +426,7 @@ export const en: Dictionary = {
   "Prijzen": "Prices",
   "Beeld en documentatie": "Images and documentation",
   "Bezoek showroom Jávea": "Visit our showroom in Jávea",
+  "Verwijderen": "Delete",
+  "{naam} en alles wat we op de beurs van hem vastlegden verwijderen?":
+    "Delete {naam} and everything we logged about them at the fair?",
 };

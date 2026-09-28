@@ -26,6 +26,8 @@ import {
 } from "@/lib/beurs-lijst";
 import { datumTaal, huidigeTaal, tekst } from "@/lib/i18n/server";
 import { cn } from "@/lib/utils";
+import { verwijderBeursInvoer } from "./actions";
+import { VerwijderKnop } from "./verwijder-knop";
 
 export const metadata = { title: "Beurscontacten" };
 export const dynamic = "force-dynamic";
@@ -209,6 +211,7 @@ export default async function BeursContactenPage({
               <Th>{t("Contact")}</Th>
               <Th>{t("Vroeg om")}</Th>
               <Th>{t("Waar het over ging")}</Th>
+              <Th className="w-px" aria-label={t("Verwijderen")} />
             </tr>
           </THead>
           <TBody>
@@ -261,6 +264,14 @@ export default async function BeursContactenPage({
                 </Td>
                 <Td className="max-w-md text-muted">
                   <span className="line-clamp-2 whitespace-pre-line text-xs">{r.wens || "—"}</span>
+                </Td>
+                <Td className="text-right">
+                  <VerwijderKnop
+                    contactId={r.contactId}
+                    email={r.email}
+                    naam={r.naam}
+                    verwijder={verwijderBeursInvoer}
+                  />
                 </Td>
               </Tr>
             ))}
