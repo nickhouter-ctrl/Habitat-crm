@@ -18,6 +18,7 @@ import {
   Tr,
 } from "@/components/ui";
 import { db } from "@/lib/db";
+import { rolLabel } from "@/lib/beurs";
 import { contacts } from "@/lib/db/schema";
 import { cn, formatDate } from "@/lib/utils";
 import { SyncHoldedButton } from "@/components/sync-holded-button";
@@ -55,6 +56,8 @@ export default async function ContactsPage({
     | "";
   const soortParam = typeof params.soort === "string" ? params.soort : "";
   const soortFilter = SOORT_TABS.some((t) => t.key === soortParam) ? soortParam : "";
+  // Van de beurs? Die wil je als groep kunnen opvolgen, dus een eigen filter.
+  const vanBeurs = params.bron === "beurs";
 
   const rows = await db.query.contacts.findMany({
     where: and(
@@ -68,6 +71,7 @@ export default async function ContactsPage({
         : soortFilter === "particulier"
           ? isNull(contacts.companyId)
           : undefined,
+      vanBeurs ? ilike(contacts.source, "beurs:%") : undefined,
     ),
     orderBy: desc(contacts.updatedAt),
     limit: 200,
@@ -89,13 +93,15 @@ export default async function ContactsPage({
     })
     .from(contacts);
 
-  const filterHref = (next: { type?: string; soort?: string }) => {
+  const filterHref = (next: { type?: string; soort?: string; bron?: boolean }) => {
     const sp = new URLSearchParams();
     if (q) sp.set("q", q);
     const t = next.type ?? typeFilter;
     const s = next.soort ?? soortFilter;
+    const b = next.bron ?? vanBeurs;
     if (t) sp.set("type", t);
     if (s) sp.set("soort", s);
+    if (b) sp.set("bron", "beurs");
     const qs = sp.toString();
     return qs ? `/contacts?${qs}` : "/contacts";
   };
@@ -157,11 +163,25 @@ export default async function ContactsPage({
                 {t.label}
               </Link>
             ))}
+            {/* Wie we op een beurs hebben gesproken wil je als groep kunnen
+                opvolgen — architecten anders dan wederverkopers. */}
+            <Link
+              href={filterHref({ bron: !vanBeurs })}
+              className={cn(
+                "rounded-md px-3 py-1.5 text-sm transition-colors",
+                vanBeurs
+                  ? "bg-accent/10 font-medium text-accent"
+                  : "text-muted hover:bg-surface hover:text-foreground",
+              )}
+            >
+              Van de beurs
+            </Link>
           </div>
         </div>
         <form className="relative" action="/contacts">
           {typeFilter && <input type="hidden" name="type" value={typeFilter} />}
           {soortFilter && <input type="hidden" name="soort" value={soortFilter} />}
+          {vanBeurs && <input type="hidden" name="bron" value="beurs" />}
           <Search className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted" />
           <Input
             name="q"
@@ -207,6 +227,15 @@ export default async function ContactsPage({
                     </Link>
                     {c.jobTitle && (
                       <span className="block text-xs text-muted">{c.jobTitle}</span>
+                    )}
+                    {c.source?.startsWith("beurs:") && (
+                      <Badge tone="accent" className="mt-1">
+                        Beurs
+                        {(() => {
+                          const rol = (c.tags ?? []).find((t) => t.startsWith("rol:"));
+                          return rol ? ` · ${rolLabel(rol.slice(4))}` : "";
+                        })()}
+                      </Badge>
                     )}
                   </Td>
                   <Td>

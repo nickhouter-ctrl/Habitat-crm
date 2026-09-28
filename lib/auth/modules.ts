@@ -82,7 +82,7 @@ export const MODULES: ModuleDef[] = [
 
   { key: "inbox", label: "Mail", paths: ["/inbox", "/sent-mail"] },
   { key: "contacts", label: "Contacten", paths: ["/contacts"] },
-  { key: "aanvragen", label: "Website-aanvragen", paths: ["/aanvragen"] },
+  { key: "aanvragen", label: "Website-aanvragen", paths: ["/aanvragen", "/beurs"] },
   { key: "leads", label: "Leads", paths: ["/leads"] },
   { key: "broadcast", label: "Broadcast", paths: ["/broadcast"] },
   { key: "assistent", label: "Assistent", paths: ["/assistent"] },

@@ -237,7 +237,7 @@ const T: Record<
   },
 };
 
-function signatureHtml(): string {
+export function signatureHtml(): string {
   // Zelfde meerregelige opmaak als op de PDF: straat, dan postcode + plaats,
   // daarna telefoon en e-mail onder elkaar.
   const strong = `<span style="display:block;font-weight:600;color:#555">${escapeHtml(COMPANY.legalName)}</span>`;

@@ -43,6 +43,7 @@ import {
   TrendingUp,
   Radar,
   AppWindow,
+  QrCode,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import Image from "next/image";
@@ -76,6 +77,7 @@ const NAV_GROUPS: { label: string | null; items: NavItem[] }[] = [
       { href: "/accounts", label: "Website-accounts", icon: UserCog },
       { href: "/windows-accounts", label: "Windows-accounts", icon: UserCog },
       { href: "/aanvragen", label: "Aanvragen", icon: Inbox },
+      { href: "/beurs", label: "Beursstand", icon: QrCode },
       { href: "/leads", label: "Leads", icon: Megaphone },
       { href: "/broadcast", label: "Broadcast", icon: Send },
       { href: "/commissies", label: "Commissies", icon: Percent },

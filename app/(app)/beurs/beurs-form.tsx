@@ -1,0 +1,282 @@
+"use client";
+
+/**
+ * Invoerscherm op de stand — bedoeld voor een iPad die de hele dag aan staat.
+ *
+ * Twee dingen bepalen het ontwerp:
+ *
+ * 1. **Niemand mag verloren gaan.** Het wifi op een beursvloer valt weg. Elke
+ *    invoer gaat daarom eerst in de localStorage van dit apparaat en pas daarna
+ *    naar de server; lukt dat niet, dan blijft hij in de wachtrij staan, zichtbaar
+ *    in beeld, en probeert het scherm het vanzelf opnieuw zodra er weer
+ *    verbinding is. Pas na een bevestiging van de server gaat hij uit de wachtrij.
+ * 2. **Snel achter elkaar.** Na het opslaan staat de cursor weer in het naamveld
+ *    en is het formulier leeg; de vorige naam blijft een seconde of vijf in beeld
+ *    als bevestiging.
+ */
+import { useCallback, useEffect, useRef, useState } from "react";
+
+import { Button, Field, Input, Select, Textarea } from "@/components/ui";
+import { ROLLEN } from "@/lib/beurs";
+import type { BeursResultaat } from "./actions";
+
+type Invoer = {
+  /** Eigen id zodat een wachtende invoer herkenbaar blijft. */
+  id: string;
+  naam: string;
+  email: string;
+  telefoon: string;
+  bedrijf: string;
+  rol: string;
+  taal: string;
+  wens: string;
+};
+
+const WACHTRIJ_SLEUTEL = "habitat-beurs-wachtrij";
+
+function leesWachtrij(): Invoer[] {
+  try {
+    const rauw = localStorage.getItem(WACHTRIJ_SLEUTEL);
+    return rauw ? (JSON.parse(rauw) as Invoer[]) : [];
+  } catch {
+    return [];
+  }
+}
+
+function schrijfWachtrij(rijen: Invoer[]) {
+  try {
+    localStorage.setItem(WACHTRIJ_SLEUTEL, JSON.stringify(rijen));
+  } catch {
+    /* privémodus of vol geheugen: dan valt alleen de extra zekerheid weg */
+  }
+}
+
+const leeg = (): Invoer => ({
+  id: crypto.randomUUID(),
+  naam: "",
+  email: "",
+  telefoon: "",
+  bedrijf: "",
+  rol: "architect",
+  taal: "es",
+  wens: "",
+});
+
+export function BeursForm({
+  opslaan,
+}: {
+  opslaan: (formData: FormData) => Promise<BeursResultaat>;
+}) {
+  const [waarden, setWaarden] = useState<Invoer>(leeg);
+  const [bezig, setBezig] = useState(false);
+  const [melding, setMelding] = useState<{ soort: "ok" | "fout" | "wacht"; tekst: string } | null>(null);
+  const [wachtrij, setWachtrij] = useState<Invoer[]>([]);
+  const naamRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => setWachtrij(leesWachtrij()), []);
+
+  /** Eén invoer naar de server. Geeft terug of hij binnen is. */
+  const verstuur = useCallback(
+    async (inv: Invoer): Promise<BeursResultaat | null> => {
+      const fd = new FormData();
+      fd.set("naam", inv.naam);
+      fd.set("email", inv.email);
+      fd.set("telefoon", inv.telefoon);
+      fd.set("bedrijf", inv.bedrijf);
+      fd.set("rol", inv.rol);
+      fd.set("taal", inv.taal);
+      fd.set("wens", inv.wens);
+      try {
+        return await opslaan(fd);
+      } catch {
+        return null; // verbinding weg — blijft in de wachtrij
+      }
+    },
+    [opslaan],
+  );
+
+  /** Alles wat nog wacht opnieuw proberen. */
+  const leegWachtrij = useCallback(async () => {
+    const rijen = leesWachtrij();
+    if (rijen.length === 0) return;
+    const over: Invoer[] = [];
+    for (const inv of rijen) {
+      const res = await verstuur(inv);
+      // Geen verbinding → bewaren. Een inhoudelijke fout (bv. ongeldig adres)
+      // ook bewaren, anders verdwijnt hij stilletjes; die zie je in beeld.
+      if (!res || !res.ok) over.push(inv);
+    }
+    schrijfWachtrij(over);
+    setWachtrij(over);
+    if (over.length === 0 && rijen.length > 0) {
+      setMelding({ soort: "ok", tekst: `${rijen.length} wachtende invoer(en) alsnog verstuurd.` });
+    }
+  }, [verstuur]);
+
+  // Bij terugkerende verbinding automatisch opnieuw proberen.
+  useEffect(() => {
+    const opWeerOnline = () => void leegWachtrij();
+    window.addEventListener("online", opWeerOnline);
+    const timer = setInterval(() => {
+      if (navigator.onLine && leesWachtrij().length > 0) void leegWachtrij();
+    }, 30_000);
+    return () => {
+      window.removeEventListener("online", opWeerOnline);
+      clearInterval(timer);
+    };
+  }, [leegWachtrij]);
+
+  async function opsturen(e: React.FormEvent) {
+    e.preventDefault();
+    if (bezig) return;
+    setBezig(true);
+    setMelding(null);
+    const inv = { ...waarden };
+
+    // Eerst vastleggen op dit apparaat, dan pas versturen.
+    const metWachtrij = [...leesWachtrij(), inv];
+    schrijfWachtrij(metWachtrij);
+    setWachtrij(metWachtrij);
+
+    const res = await verstuur(inv);
+    if (res?.ok) {
+      const over = leesWachtrij().filter((r) => r.id !== inv.id);
+      schrijfWachtrij(over);
+      setWachtrij(over);
+      setMelding({
+        soort: "ok",
+        tekst:
+          res.mail === "verstuurd"
+            ? `${res.naam} opgeslagen — bevestigingsmail verstuurd.`
+            : `${res.naam} opgeslagen. Let op: de bevestigingsmail is niet verstuurd.`,
+      });
+      setWaarden(leeg());
+      naamRef.current?.focus();
+    } else if (res && !res.ok) {
+      // Inhoudelijke fout: uit de wachtrij halen, de velden blijven staan.
+      const over = leesWachtrij().filter((r) => r.id !== inv.id);
+      schrijfWachtrij(over);
+      setWachtrij(over);
+      setMelding({ soort: "fout", tekst: res.fout });
+    } else {
+      setMelding({
+        soort: "wacht",
+        tekst: "Geen verbinding — de invoer staat veilig op deze iPad en gaat automatisch weg zodra er weer wifi is.",
+      });
+      setWaarden(leeg());
+      naamRef.current?.focus();
+    }
+    setBezig(false);
+  }
+
+  const zet = (veld: keyof Invoer) => (e: { target: { value: string } }) =>
+    setWaarden((w) => ({ ...w, [veld]: e.target.value }));
+
+  return (
+    <form onSubmit={opsturen} className="space-y-4">
+      {melding && (
+        <p
+          className={`rounded-lg px-4 py-3 text-base ${
+            melding.soort === "ok"
+              ? "bg-success/10 text-success"
+              : melding.soort === "wacht"
+                ? "bg-warning/10 text-warning"
+                : "bg-danger/10 text-danger"
+          }`}
+        >
+          {melding.tekst}
+        </p>
+      )}
+
+      {wachtrij.length > 0 && (
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-amber-300 bg-amber-50/70 px-4 py-3 text-sm text-amber-900">
+          <span>
+            <strong>{wachtrij.length}</strong> invoer{wachtrij.length === 1 ? "" : "en"} wacht
+            {wachtrij.length === 1 ? "" : "en"} op verbinding — {wachtrij.map((r) => r.naam).join(", ")}
+          </span>
+          <Button type="button" variant="secondary" size="sm" onClick={() => void leegWachtrij()}>
+            Nu opnieuw proberen
+          </Button>
+        </div>
+      )}
+
+      <div className="grid gap-4 sm:grid-cols-2">
+        <Field label="Naam">
+          <Input
+            ref={naamRef}
+            value={waarden.naam}
+            onChange={zet("naam")}
+            required
+            autoFocus
+            autoComplete="off"
+            className="h-12 text-base"
+            placeholder="Voor- en achternaam"
+          />
+        </Field>
+        <Field label="E-mail">
+          <Input
+            type="email"
+            inputMode="email"
+            value={waarden.email}
+            onChange={zet("email")}
+            required
+            autoComplete="off"
+            autoCapitalize="none"
+            className="h-12 text-base"
+            placeholder="naam@bedrijf.com"
+          />
+        </Field>
+        <Field label="Telefoon">
+          <Input
+            type="tel"
+            inputMode="tel"
+            value={waarden.telefoon}
+            onChange={zet("telefoon")}
+            autoComplete="off"
+            className="h-12 text-base"
+            placeholder="+34 …"
+          />
+        </Field>
+        <Field label="Bedrijf">
+          <Input
+            value={waarden.bedrijf}
+            onChange={zet("bedrijf")}
+            autoComplete="off"
+            className="h-12 text-base"
+            placeholder="Bureau of winkel"
+          />
+        </Field>
+        <Field label="Wat voor klant">
+          <Select value={waarden.rol} onChange={zet("rol")} className="h-12 text-base">
+            {ROLLEN.map((r) => (
+              <option key={r.key} value={r.key}>
+                {r.nl}
+              </option>
+            ))}
+          </Select>
+        </Field>
+        <Field label="Taal van de bevestigingsmail">
+          <Select value={waarden.taal} onChange={zet("taal")} className="h-12 text-base">
+            <option value="es">Español</option>
+            <option value="en">English</option>
+            <option value="nl">Nederlands</option>
+          </Select>
+        </Field>
+      </div>
+
+      <Field label="Waar gaat het over" hint="Wat wil deze bezoeker? Dit staat straks bij de opvolging.">
+        <Textarea
+          value={waarden.wens}
+          onChange={zet("wens")}
+          rows={3}
+          className="text-base"
+          placeholder="bijv. zoekt SPC-vloeren voor een villa in Moraira, wil prijzen en stalen"
+        />
+      </Field>
+
+      <Button type="submit" variant="primary" className="h-14 w-full text-base" disabled={bezig}>
+        {bezig ? "Bezig met opslaan…" : "Opslaan en bevestigingsmail sturen"}
+      </Button>
+    </form>
+  );
+}
