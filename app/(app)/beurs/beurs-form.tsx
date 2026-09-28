@@ -16,8 +16,9 @@
  */
 import { useCallback, useEffect, useRef, useState } from "react";
 
+import { useLocale, useT } from "@/components/taal-provider";
 import { Button, Field, Input, Select, Textarea } from "@/components/ui";
-import { ROLLEN } from "@/lib/beurs";
+import { INTERESSES, ROLLEN } from "@/lib/beurs";
 import type { BeursResultaat } from "./actions";
 
 type Invoer = {
@@ -29,6 +30,7 @@ type Invoer = {
   bedrijf: string;
   rol: string;
   rolAnders: string;
+  interesses: string[];
   taal: string;
   wens: string;
 };
@@ -60,6 +62,7 @@ const leeg = (): Invoer => ({
   bedrijf: "",
   rol: "architect",
   rolAnders: "",
+  interesses: [],
   taal: "es",
   wens: "",
 });
@@ -69,6 +72,8 @@ export function BeursForm({
 }: {
   opslaan: (formData: FormData) => Promise<BeursResultaat>;
 }) {
+  const t = useT();
+  const taal = useLocale();
   const [waarden, setWaarden] = useState<Invoer>(leeg);
   const [bezig, setBezig] = useState(false);
   const [melding, setMelding] = useState<{ soort: "ok" | "fout" | "wacht"; tekst: string } | null>(null);
@@ -87,6 +92,7 @@ export function BeursForm({
       fd.set("bedrijf", inv.bedrijf);
       fd.set("rol", inv.rol);
       fd.set("rolAnders", inv.rolAnders);
+      for (const k of inv.interesses) fd.append("interesses", k);
       fd.set("taal", inv.taal);
       fd.set("wens", inv.wens);
       try {
@@ -112,9 +118,9 @@ export function BeursForm({
     schrijfWachtrij(over);
     setWachtrij(over);
     if (over.length === 0 && rijen.length > 0) {
-      setMelding({ soort: "ok", tekst: `${rijen.length} wachtende invoer(en) alsnog verstuurd.` });
+      setMelding({ soort: "ok", tekst: t("{n} wachtende invoer(en) alsnog verstuurd.", { n: rijen.length }) });
     }
-  }, [verstuur]);
+  }, [verstuur, t]);
 
   // Bij terugkerende verbinding automatisch opnieuw proberen.
   useEffect(() => {
@@ -150,8 +156,11 @@ export function BeursForm({
         soort: "ok",
         tekst:
           res.mail === "verstuurd"
-            ? `${res.naam} opgeslagen — bevestigingsmail verstuurd.`
-            : `${res.naam} opgeslagen. Let op: de bevestigingsmail is niet verstuurd.`,
+            ? t("{naam} opgeslagen — bevestigingsmail verstuurd.", { naam: res.naam }) +
+              (res.account === "aannemer" || res.account === "particulier"
+                ? ` ${t("Website-account klaargezet.")}`
+                : "")
+            : t("{naam} opgeslagen. Let op: de bevestigingsmail is niet verstuurd.", { naam: res.naam }),
       });
       setWaarden(leeg());
       naamRef.current?.focus();
@@ -160,11 +169,12 @@ export function BeursForm({
       const over = leesWachtrij().filter((r) => r.id !== inv.id);
       schrijfWachtrij(over);
       setWachtrij(over);
-      setMelding({ soort: "fout", tekst: res.fout });
+      // De server geeft Nederlandse meldingen terug; vertalen gebeurt hier.
+      setMelding({ soort: "fout", tekst: res.fout.split(" · ").map((f) => t(f)).join(" · ") });
     } else {
       setMelding({
         soort: "wacht",
-        tekst: "Geen verbinding — de invoer staat veilig op deze iPad en gaat automatisch weg zodra er weer wifi is.",
+        tekst: t("Geen verbinding — de invoer staat veilig op deze iPad en gaat automatisch weg zodra er weer wifi is."),
       });
       setWaarden(leeg());
       naamRef.current?.focus();
@@ -194,17 +204,19 @@ export function BeursForm({
       {wachtrij.length > 0 && (
         <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-amber-300 bg-amber-50/70 px-4 py-3 text-sm text-amber-900">
           <span>
-            <strong>{wachtrij.length}</strong> invoer{wachtrij.length === 1 ? "" : "en"} wacht
-            {wachtrij.length === 1 ? "" : "en"} op verbinding — {wachtrij.map((r) => r.naam).join(", ")}
+            {wachtrij.length === 1
+              ? t("1 invoer wacht op verbinding")
+              : t("{n} invoeren wachten op verbinding", { n: wachtrij.length })}{" "}
+            — {wachtrij.map((r) => r.naam).join(", ")}
           </span>
           <Button type="button" variant="secondary" size="sm" onClick={() => void leegWachtrij()}>
-            Nu opnieuw proberen
+            {t("Nu opnieuw proberen")}
           </Button>
         </div>
       )}
 
       <div className="grid gap-4 sm:grid-cols-2">
-        <Field label="Naam">
+        <Field label={t("Naam")}>
           <Input
             ref={naamRef}
             value={waarden.naam}
@@ -213,10 +225,10 @@ export function BeursForm({
             autoFocus
             autoComplete="off"
             className="h-12 text-base"
-            placeholder="Voor- en achternaam"
+            placeholder={t("Voor- en achternaam")}
           />
         </Field>
-        <Field label="E-mail">
+        <Field label={t("E-mail")}>
           <Input
             type="email"
             inputMode="email"
@@ -229,7 +241,7 @@ export function BeursForm({
             placeholder="naam@bedrijf.com"
           />
         </Field>
-        <Field label="Telefoon">
+        <Field label={t("Telefoon")}>
           <Input
             type="tel"
             inputMode="tel"
@@ -240,36 +252,36 @@ export function BeursForm({
             placeholder="+34 …"
           />
         </Field>
-        <Field label="Bedrijf">
+        <Field label={t("Bedrijf")}>
           <Input
             value={waarden.bedrijf}
             onChange={zet("bedrijf")}
             autoComplete="off"
             className="h-12 text-base"
-            placeholder="Bureau of winkel"
+            placeholder={t("Bureau of winkel")}
           />
         </Field>
-        <Field label="Wat voor klant">
+        <Field label={t("Wat voor klant")}>
           <Select value={waarden.rol} onChange={zet("rol")} className="h-12 text-base">
             {ROLLEN.map((r) => (
               <option key={r.key} value={r.key}>
-                {r.nl}
+                {r[taal]}
               </option>
             ))}
           </Select>
         </Field>
         {waarden.rol === "anders" && (
-          <Field label="Wat dan wel?" hint="Zonder deze toelichting zegt “anders” bij het opvolgen niets.">
+          <Field label={t("Wat dan wel?")} hint={t("Zonder deze toelichting zegt “anders” bij het opvolgen niets.")}>
             <Input
               value={waarden.rolAnders}
               onChange={zet("rolAnders")}
               autoComplete="off"
               className="h-12 text-base"
-              placeholder="bijv. fotograaf, projectontwikkelaar, pers"
+              placeholder={t("bijv. fotograaf, projectontwikkelaar, pers")}
             />
           </Field>
         )}
-        <Field label="Taal van de bevestigingsmail">
+        <Field label={t("Taal van de bevestigingsmail")}>
           <Select value={waarden.taal} onChange={zet("taal")} className="h-12 text-base">
             <option value="es">Español</option>
             <option value="en">English</option>
@@ -278,18 +290,45 @@ export function BeursForm({
         </Field>
       </div>
 
-      <Field label="Waar gaat het over" hint="Wat wil deze bezoeker? Dit staat straks bij de opvolging.">
+      <fieldset className="space-y-2">
+        <legend className="mb-1 text-sm font-medium">{t("Waar vraagt hij om?")}</legend>
+        <div className="grid gap-2 sm:grid-cols-2">
+          {INTERESSES.map((i) => (
+            <label
+              key={i.key}
+              className="flex items-center gap-3 rounded-lg border px-4 py-3 text-base has-[:checked]:border-accent has-[:checked]:bg-accent/5"
+            >
+              <input
+                type="checkbox"
+                className="size-5"
+                checked={waarden.interesses.includes(i.key)}
+                onChange={(e) =>
+                  setWaarden((w) => ({
+                    ...w,
+                    interesses: e.target.checked
+                      ? [...w.interesses, i.key]
+                      : w.interesses.filter((k) => k !== i.key),
+                  }))
+                }
+              />
+              {i[taal]}
+            </label>
+          ))}
+        </div>
+      </fieldset>
+
+      <Field label={t("Waar gaat het over")} hint={t("Wat wil deze bezoeker? Dit staat straks bij de opvolging.")}>
         <Textarea
           value={waarden.wens}
           onChange={zet("wens")}
           rows={3}
           className="text-base"
-          placeholder="bijv. zoekt SPC-vloeren voor een villa in Moraira, wil prijzen en stalen"
+          placeholder={t("bijv. zoekt SPC-vloeren voor een villa in Moraira, wil prijzen en stalen")}
         />
       </Field>
 
       <Button type="submit" variant="primary" className="h-14 w-full text-base" disabled={bezig}>
-        {bezig ? "Bezig met opslaan…" : "Opslaan en bevestigingsmail sturen"}
+        {bezig ? t("Bezig met opslaan…") : t("Opslaan en bevestigingsmail sturen")}
       </Button>
     </form>
   );

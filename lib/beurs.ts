@@ -46,6 +46,31 @@ export const ROLLEN = [
   { key: "anders", nl: "Anders", en: "Other", es: "Otro" },
 ] as const;
 
+/**
+ * Waar de bezoeker om vraagt. Bijna iedereen wil hetzelfde — stalen, prijzen,
+ * beeldmateriaal — en dat stond tot nu toe ergens in de vrije tekst, waar je
+ * het bij het opvolgen niet uit kon filteren. Aanvinken dus; de sleutel komt
+ * als tag op het contact.
+ */
+export const INTERESSES = [
+  { key: "stalen", nl: "Stalen / monsters", en: "Samples", es: "Muestras" },
+  { key: "prijzen", nl: "Prijzen", en: "Prices", es: "Precios" },
+  { key: "content", nl: "Beeld en documentatie", en: "Images and documentation", es: "Imágenes y documentación" },
+  { key: "showroom", nl: "Bezoek showroom Jávea", en: "Visit our showroom in Jávea", es: "Visitar el showroom en Jávea" },
+] as const;
+
+export type InteresseKey = (typeof INTERESSES)[number]["key"];
+
+export function interesseLabel(key: string, taal: BeursTaal = "nl"): string {
+  const i = INTERESSES.find((x) => x.key === key);
+  return i ? i[taal] : key;
+}
+
+/** Alleen de vinkjes die we kennen, in de vaste volgorde. */
+export function schoonInteresses(keuzes: readonly string[] | null | undefined): string[] {
+  return INTERESSES.filter((i) => keuzes?.includes(i.key)).map((i) => i.key);
+}
+
 export type RolKey = (typeof ROLLEN)[number]["key"];
 export type BeursTaal = "nl" | "en" | "es";
 
@@ -69,9 +94,22 @@ export function contactSoort(rol: string): "reseller" | "lead" {
  * ("Anders (fotograaf)") — dat veld staat er juist omdat de zes keuzes niet
  * alles vangen, en zonder de toelichting is het antwoord waardeloos.
  */
-export function rolOmschrijving(rol: string, anders?: string | null): string {
+export function rolOmschrijving(rol: string, anders?: string | null, taal: BeursTaal = "nl"): string {
   const extra = anders?.trim();
-  return extra ? `${rolLabel(rol)} (${extra})` : rolLabel(rol);
+  return extra ? `${rolLabel(rol, taal)} (${extra})` : rolLabel(rol, taal);
+}
+
+/** Rollen die zakelijk inkopen of doorverkopen. */
+const ZAKELIJK = new Set(["architect", "ontwerper", "aannemer", "wederverkoper"]);
+
+export function bepaalTier(args: {
+  rol: string;
+  bedrijf?: string | null;
+  zelfIngevuld?: boolean;
+}): "particulier" | "aannemer" {
+  if (!ZAKELIJK.has(args.rol)) return "particulier";
+  if (!args.zelfIngevuld) return "aannemer"; // wij hebben hem gesproken en ingevoerd
+  return args.bedrijf?.trim() ? "aannemer" : "particulier";
 }
 
 /** Notitie op het contact: rol, beurs en wat de bezoeker wil. */
@@ -80,11 +118,14 @@ export function contactNotitie(args: {
   bedrijf?: string | null;
   wens?: string | null;
   rolAnders?: string | null;
+  interesses?: readonly string[] | null;
 }): string {
   const regels = [
     `${rolOmschrijving(args.rol, args.rolAnders)} · ontmoet op ${BEURS.naam} (${BEURS.plaats}, stand ${BEURS.stand})`,
   ];
   if (args.bedrijf?.trim()) regels.push(`Bedrijf: ${args.bedrijf.trim()}`);
+  const gevraagd = schoonInteresses(args.interesses);
+  if (gevraagd.length) regels.push(`Wil: ${gevraagd.map((k) => interesseLabel(k)).join(", ")}`);
   if (args.wens?.trim()) regels.push("", args.wens.trim());
   return regels.join("\n");
 }
@@ -94,6 +135,11 @@ type MailTekst = {
   hallo: (naam: string) => string;
   dank: string;
   vervolg: string;
+  /** Wat de bezoeker aanvinkte, zodat hij ziet dat we het genoteerd hebben. */
+  gevraagd: (lijst: string) => string;
+  /** Uitnodiging om meteen een account op de website te maken. */
+  account: string;
+  accountKnop: string;
   groet: string;
 };
 
@@ -104,6 +150,10 @@ const MAIL: Record<BeursTaal, MailTekst> = {
     dank: `Bedankt voor je bezoek aan onze stand (${BEURS.stand}) op ${BEURS.naam} in ${BEURS.plaats}. Goed om je te spreken.`,
     vervolg:
       "We nemen na de beurs contact met je op om er rustig op terug te komen. Heb je eerder een vraag, antwoord dan gerust op deze mail.",
+    gevraagd: (lijst) => `Je vroeg om ${lijst}. Dat staat genoteerd.`,
+    account:
+      "Wil je nu alvast rondkijken? Je account op onze website staat klaar — stel je wachtwoord in en je ziet meteen het volledige assortiment, met prijzen.",
+    accountKnop: "Wachtwoord instellen",
     groet: "Tot snel,",
   },
   en: {
@@ -112,6 +162,10 @@ const MAIL: Record<BeursTaal, MailTekst> = {
     dank: `Thank you for visiting our stand (${BEURS.stand}) at ${BEURS.naam} in ${BEURS.plaats}. It was good to speak with you.`,
     vervolg:
       "We will get in touch after the fair to follow up properly. If anything comes up before then, simply reply to this email.",
+    gevraagd: (lijst) => `You asked about ${lijst}. We have noted it.`,
+    account:
+      "Would you like to look around already? Your account on our website is ready — set your password and you will see the full range, prices included.",
+    accountKnop: "Set your password",
     groet: "Talk soon,",
   },
   es: {
@@ -120,6 +174,10 @@ const MAIL: Record<BeursTaal, MailTekst> = {
     dank: `Gracias por visitar nuestro stand (${BEURS.stand}) en ${BEURS.naam}, ${BEURS.plaats}. Ha sido un placer hablar contigo.`,
     vervolg:
       "Nos pondremos en contacto contigo después de la feria para retomarlo con calma. Si surge algo antes, responde a este correo.",
+    gevraagd: (lijst) => `Nos pediste ${lijst}. Queda anotado.`,
+    account:
+      "¿Quieres ir echando un vistazo? Tu cuenta en nuestra web está lista: crea tu contraseña y verás todo el catálogo, con precios.",
+    accountKnop: "Crear contraseña",
     groet: "Hasta pronto,",
   },
 };
@@ -128,12 +186,31 @@ const MAIL: Record<BeursTaal, MailTekst> = {
  * De bevestigingsmail. Kort en persoonlijk: één alinea over de ontmoeting, één
  * over wat er gaat gebeuren. Geen verkooppraat — die komt na de beurs.
  */
-export function beursMail(args: { naam: string; taal: BeursTaal; wens?: string | null }): {
+export function beursMail(args: {
+  naam: string;
+  taal: BeursTaal;
+  wens?: string | null;
+  interesses?: readonly string[] | null;
+  /** Link om een wachtwoord in te stellen voor het website-account. */
+  accountLink?: string | null;
+}): {
   subject: string;
   alineas: string[];
+  account: { tekst: string; knop: string; link: string } | null;
   groet: string;
 } {
   const t = MAIL[args.taal] ?? MAIL.nl;
-  const alineas = [t.hallo(args.naam.trim().split(/\s+/)[0] || args.naam.trim()), t.dank, t.vervolg];
-  return { subject: t.onderwerp, alineas, groet: t.groet };
+  const alineas = [t.hallo(args.naam.trim().split(/\s+/)[0] || args.naam.trim()), t.dank];
+  const gevraagd = schoonInteresses(args.interesses);
+  if (gevraagd.length) {
+    const lijst = gevraagd.map((k) => interesseLabel(k, args.taal).toLowerCase());
+    alineas.push(t.gevraagd(lijst.join(", ")));
+  }
+  alineas.push(t.vervolg);
+  return {
+    subject: t.onderwerp,
+    alineas,
+    account: args.accountLink ? { tekst: t.account, knop: t.accountKnop, link: args.accountLink } : null,
+    groet: t.groet,
+  };
 }

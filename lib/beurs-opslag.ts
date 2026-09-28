@@ -14,7 +14,17 @@ import "server-only";
  */
 import { eq, ilike, sql } from "drizzle-orm";
 
-import { BEURS, beursMail, contactNotitie, contactSoort, rolOmschrijving } from "@/lib/beurs";
+import {
+  BEURS,
+  bepaalTier,
+  beursMail,
+  contactNotitie,
+  contactSoort,
+  interesseLabel,
+  rolOmschrijving,
+  schoonInteresses,
+} from "@/lib/beurs";
+import { zetBeursAccountKlaar } from "@/lib/beurs-account";
 import type { BeursTaal } from "@/lib/beurs";
 import { COMPANY } from "@/lib/company";
 import { db } from "@/lib/db";
@@ -29,6 +39,8 @@ export interface BeursBezoeker {
   rol: string;
   /** Bij rol "anders": wat het dan wél is. */
   rolAnders?: string | null;
+  /** Aangevinkt: stalen, prijzen, beeld, showroombezoek. */
+  interesses?: readonly string[] | null;
   taal: BeursTaal;
   wens?: string | null;
   /** Heeft de bezoeker het zelf ingevuld (QR-code) of wij op de iPad? */
@@ -39,6 +51,8 @@ export interface BeursOpslagResultaat {
   contactId: string;
   aanvraagId: string;
   mail: "verstuurd" | "mislukt";
+  /** Kreeg de bezoeker een uitnodiging voor een website-account, en zo ja welke? */
+  account: "particulier" | "aannemer" | "bestond al" | "mislukt";
 }
 
 export async function slaBeursbezoekerOp(d: BeursBezoeker): Promise<BeursOpslagResultaat> {
@@ -66,12 +80,13 @@ export async function slaBeursbezoekerOp(d: BeursBezoeker): Promise<BeursOpslagR
   }
 
   const rolAnders = d.rol === "anders" ? d.rolAnders?.trim() || null : null;
-  const tags = [BEURS.bron, `rol:${d.rol}`];
+  const interesses = schoonInteresses(d.interesses);
+  const tags = [BEURS.bron, `rol:${d.rol}`, ...interesses.map((k) => `wil:${k}`)];
   if (d.zelfIngevuld) tags.push("beurs:qr");
   // Wat "anders" precies is hoort bij de rol, niet in de vrije tekst: zo staat
   // het ook in de lijst en in de download, en niet alleen in de notitie.
   if (rolAnders) tags.push(`rol-anders:${rolAnders}`);
-  const notitie = contactNotitie({ rol: d.rol, bedrijf, wens, rolAnders });
+  const notitie = contactNotitie({ rol: d.rol, bedrijf, wens, rolAnders, interesses });
 
   // Kennen we dit e-mailadres al? Dan de bestaande kaart bijwerken in plaats van
   // een tweede aanmaken — op een beurs staat er zomaar een bekende klant voor je.
@@ -126,6 +141,7 @@ export async function slaBeursbezoekerOp(d: BeursBezoeker): Promise<BeursOpslagR
       contactId,
       message: [
         `${rolOmschrijving(d.rol, rolAnders)} — ${d.zelfIngevuld ? "zelf ingevuld via de QR-code op" : "gesproken op"} ${BEURS.naam}, stand ${BEURS.stand}`,
+        interesses.length ? `\nWil: ${interesses.map((k) => interesseLabel(k)).join(", ")}` : "",
         wens ? `\n${wens}` : "",
       ]
         .join("")
@@ -133,25 +149,52 @@ export async function slaBeursbezoekerOp(d: BeursBezoeker): Promise<BeursOpslagR
     })
     .returning({ id: quoteRequests.id });
 
+  // Account op de website. De goedkeuring is al gebeurd — aan de stand, in een
+  // gesprek — dus krijgt de bezoeker de wachtwoordlink meteen mee. Mislukt het,
+  // dan gaat de bevestigingsmail zonder knop de deur uit.
+  let account: BeursOpslagResultaat["account"] = "mislukt";
+  let activatieLink: string | null = null;
+  try {
+    const tier = bepaalTier({ rol: d.rol, bedrijf, zelfIngevuld: d.zelfIngevuld });
+    const res = await zetBeursAccountKlaar({
+      email,
+      naam: d.naam,
+      contactId,
+      bedrijf,
+      taal: d.taal,
+      tier,
+    });
+    activatieLink = res.activatieLink;
+    account = res.activatieLink ? res.tier : "bestond al";
+  } catch (err) {
+    console.warn("[beurs] account klaarzetten mislukt:", err);
+  }
+
   // Bevestiging naar de bezoeker.
   let mail: "verstuurd" | "mislukt" = "mislukt";
   try {
-    const tekst = beursMail({ naam: d.naam, taal: d.taal, wens });
+    const tekst = beursMail({ naam: d.naam, taal: d.taal, wens, interesses, accountLink: activatieLink });
     const res = await sendEmail({
       to: email,
       subject: tekst.subject,
       html: brandedEmail(
         tekst.alineas.map((p) => `<p>${escapeHtml(p)}</p>`).join("\n") +
+          (tekst.account
+            ? `<p>${escapeHtml(tekst.account.tekst)}</p>
+               <p style="margin:22px 0"><a href="${tekst.account.link}" style="background:#b5532b;color:#fff;padding:12px 22px;border-radius:8px;text-decoration:none;font-size:14px">${escapeHtml(tekst.account.knop)}</a></p>`
+            : "") +
           `<hr style="border:none;border-top:1px solid #e7e2d8;margin:24px 0 16px" />
            <p style="margin:0 0 4px">${escapeHtml(tekst.groet)}</p>
            <div style="font-size:13px;color:#888;line-height:1.7">${signatureHtml()}</div>`,
       ),
-      text: `${tekst.alineas.join("\n\n")}\n\n${tekst.groet}\n${COMPANY.legalName}`,
+      text: `${tekst.alineas.join("\n\n")}${
+        tekst.account ? `\n\n${tekst.account.tekst}\n${tekst.account.link}` : ""
+      }\n\n${tekst.groet}\n${COMPANY.legalName}`,
     });
     if (res.sent) mail = "verstuurd";
   } catch {
     mail = "mislukt";
   }
 
-  return { contactId, aanvraagId: aanvraag.id, mail };
+  return { contactId, aanvraagId: aanvraag.id, mail, account };
 }

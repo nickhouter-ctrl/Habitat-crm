@@ -15,7 +15,7 @@ import {
   THead,
   Tr,
 } from "@/components/ui";
-import { BEURS, ROLLEN, rolOmschrijving } from "@/lib/beurs";
+import { BEURS, INTERESSES, ROLLEN, interesseLabel, rolOmschrijving } from "@/lib/beurs";
 import { haalBeursGesprekken } from "@/lib/beurs-data";
 import {
   type BeursRichting,
@@ -24,6 +24,7 @@ import {
   sorteerBeursContacten,
   verdichtTotContacten,
 } from "@/lib/beurs-lijst";
+import { datumTaal, huidigeTaal, tekst } from "@/lib/i18n/server";
 import { cn } from "@/lib/utils";
 
 export const metadata = { title: "Beurscontacten" };
@@ -47,12 +48,14 @@ export default async function BeursContactenPage({
 }: {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
-  const params = await searchParams;
+  const [params, t, taal, datumLocale] = await Promise.all([searchParams, tekst(), huidigeTaal(), datumTaal()]);
   const q = typeof params.q === "string" ? params.q.trim() : "";
   const rolParam = typeof params.rol === "string" ? params.rol : "";
   const rol = ROLLEN.some((r) => r.key === rolParam) ? rolParam : "";
   const invoerParam = typeof params.invoer === "string" ? params.invoer : "";
-  const invoer = (INVOER_TABS.some((t) => t.key === invoerParam) ? invoerParam : "") as "" | "zelf" | "wij";
+  const invoer = (INVOER_TABS.some((tab) => tab.key === invoerParam) ? invoerParam : "") as "" | "zelf" | "wij";
+  const wilParam = typeof params.wil === "string" ? params.wil : "";
+  const wil = INTERESSES.some((i) => i.key === wilParam) ? wilParam : "";
   const sortParam = typeof params.sort === "string" ? params.sort : "";
   const sort = (SORTEERBAAR.some((s) => s.key === sortParam) ? sortParam : "wanneer") as BeursSortering;
   const dir = (params.dir === "asc" ? "asc" : "desc") as BeursRichting;
@@ -60,8 +63,15 @@ export default async function BeursContactenPage({
   const alles = verdichtTotContacten(await haalBeursGesprekken());
   // Tellingen per soort horen bij wat je nu ziet, dus zonder het rolfilter maar
   // mét het zoekwoord: anders klik je op "Architect (4)" en zie je er twee.
-  const zonderRol = filterBeursContacten(alles, { q, invoer });
-  const rijen = sorteerBeursContacten(filterBeursContacten(alles, { q, invoer, rol }), sort, dir);
+  const zonderRol = filterBeursContacten(alles, { q, invoer, wil });
+  const rijen = sorteerBeursContacten(filterBeursContacten(alles, { q, invoer, rol, wil }), sort, dir);
+
+  // Hoeveel mensen vroegen om stalen, om prijzen…? Dat is ná de beurs de lijst
+  // waar je mee aan de slag gaat.
+  const perWens = new Map<string, number>();
+  for (const r of filterBeursContacten(alles, { q, invoer, rol })) {
+    for (const k of r.interesses) perWens.set(k, (perWens.get(k) ?? 0) + 1);
+  }
 
   const perRol = new Map<string, number>();
   for (const r of zonderRol) {
@@ -77,12 +87,13 @@ export default async function BeursContactenPage({
     zelf: alles.filter((r) => r.zelfIngevuld).length,
   };
 
-  const href = (next: Partial<{ rol: string; invoer: string; sort: string; dir: string; q: string }>) => {
+  const href = (next: Partial<{ rol: string; invoer: string; sort: string; dir: string; q: string; wil: string }>) => {
     const sp = new URLSearchParams();
-    const waarden = { q, rol, invoer, sort, dir, ...next };
+    const waarden = { q, rol, invoer, sort, dir, wil, ...next };
     if (waarden.q) sp.set("q", waarden.q);
     if (waarden.rol) sp.set("rol", waarden.rol);
     if (waarden.invoer) sp.set("invoer", waarden.invoer);
+    if (waarden.wil) sp.set("wil", waarden.wil);
     if (waarden.sort && waarden.sort !== "wanneer") sp.set("sort", waarden.sort);
     if (waarden.dir === "asc") sp.set("dir", "asc");
     const qs = sp.toString();
@@ -102,45 +113,45 @@ export default async function BeursContactenPage({
   return (
     <>
       <PageHeader
-        title="Beurscontacten"
-        subtitle={`${BEURS.naam} · ${BEURS.plaats} · stand ${BEURS.stand}`}
+        title={t("Beurscontacten")}
+        subtitle={`${BEURS.naam} · ${BEURS.plaats} · ${t("stand {nr}|standnummer", { nr: BEURS.stand })}`}
         actions={
           <>
             <LinkButton href="/beurs" variant="secondary">
-              Naar de stand
+              {t("Naar de stand")}
             </LinkButton>
             <LinkButton href={`/beurs/contacten/csv${href({}).replace("/beurs/contacten", "")}`}>
               <Download className="size-4" />
-              Download lijst
+              {t("Download lijst")}
             </LinkButton>
           </>
         }
       />
 
       <div className="mb-5 grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <StatTile label="Gesproken" value={kengetallen.totaal} hint="hele beurs" />
-        <StatTile label="Vandaag" value={kengetallen.vandaag} />
-        <StatTile label="Met bedrijf" value={kengetallen.metBedrijf} hint="architect, winkel, aannemer" />
-        <StatTile label="Zelf ingevuld" value={kengetallen.zelf} hint="via de QR-code" />
+        <StatTile label={t("Gesproken")} value={kengetallen.totaal} hint={t("hele beurs")} />
+        <StatTile label={t("Vandaag")} value={kengetallen.vandaag} />
+        <StatTile label={t("Met bedrijf")} value={kengetallen.metBedrijf} hint={t("architect, winkel, aannemer")} />
+        <StatTile label={t("Zelf ingevuld")} value={kengetallen.zelf} hint={t("via de QR-code")} />
       </div>
 
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <div className="flex flex-wrap items-center gap-3">
           <div className="flex flex-wrap gap-1">
             <Link href={href({ rol: "" })} className={tabClass(!rol)}>
-              Alle soorten <span className="tabular-nums opacity-60">{zonderRol.length}</span>
+              {t("Alle soorten")} <span className="tabular-nums opacity-60">{zonderRol.length}</span>
             </Link>
             {ROLLEN.filter((r) => perRol.get(r.key)).map((r) => (
               <Link key={r.key} href={href({ rol: r.key })} className={tabClass(rol === r.key)}>
-                {r.nl} <span className="tabular-nums opacity-60">{perRol.get(r.key)}</span>
+                {r[taal]} <span className="tabular-nums opacity-60">{perRol.get(r.key)}</span>
               </Link>
             ))}
           </div>
           <span className="hidden h-5 w-px bg-border sm:block" aria-hidden />
           <div className="flex flex-wrap gap-1">
-            {INVOER_TABS.map((t) => (
-              <Link key={t.key || "alle"} href={href({ invoer: t.key })} className={tabClass(invoer === t.key)}>
-                {t.label}
+            {INVOER_TABS.map((tab) => (
+              <Link key={tab.key || "alle"} href={href({ invoer: tab.key })} className={tabClass(invoer === tab.key)}>
+                {t(tab.label)}
               </Link>
             ))}
           </div>
@@ -148,20 +159,37 @@ export default async function BeursContactenPage({
         <form className="relative" action="/beurs/contacten">
           {rol && <input type="hidden" name="rol" value={rol} />}
           {invoer && <input type="hidden" name="invoer" value={invoer} />}
+          {wil && <input type="hidden" name="wil" value={wil} />}
           {sort !== "wanneer" && <input type="hidden" name="sort" value={sort} />}
           {dir === "asc" && <input type="hidden" name="dir" value="asc" />}
           <Search className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted" />
-          <Input name="q" defaultValue={q} placeholder="Zoek op naam, bedrijf of wens…" className="w-72 pl-8" />
+          <Input name="q" defaultValue={q} placeholder={t("Zoek op naam, bedrijf of wens…")} className="w-72 pl-8" />
         </form>
       </div>
 
+      {/* Na de beurs werk je per wens: eerst iedereen die stalen wilde, dan de
+          prijsaanvragen. Vandaar een eigen rij knoppen met de aantallen erbij. */}
+      {perWens.size > 0 && (
+        <div className="mb-4 flex flex-wrap items-center gap-2 text-sm">
+          <span className="text-muted">{t("Vroeg om")}:</span>
+          <Link href={href({ wil: "" })} className={tabClass(!wil)}>
+            {t("Alles")}
+          </Link>
+          {INTERESSES.filter((i) => perWens.get(i.key)).map((i) => (
+            <Link key={i.key} href={href({ wil: i.key })} className={tabClass(wil === i.key)}>
+              {interesseLabel(i.key, taal)} <span className="tabular-nums opacity-60">{perWens.get(i.key)}</span>
+            </Link>
+          ))}
+        </div>
+      )}
+
       {rijen.length === 0 ? (
         <EmptyState
-          title={q || rol || invoer ? "Niemand gevonden" : "Nog niemand vastgelegd"}
+          title={q || rol || invoer ? t("Niemand gevonden") : t("Nog niemand vastgelegd")}
           description={
             q || rol || invoer
-              ? "Pas je zoekopdracht of filter aan."
-              : "Zodra er iemand op de stand wordt ingevoerd of de QR-code invult, staat hij hier."
+              ? t("Pas je zoekopdracht of filter aan.")
+              : t("Zodra er iemand op de stand wordt ingevoerd of de QR-code invult, staat hij hier.")
           }
         />
       ) : (
@@ -171,15 +199,16 @@ export default async function BeursContactenPage({
               {SORTEERBAAR.map((s) => (
                 <Th key={s.key}>
                   <Link href={sortHref(s.key)} className="inline-flex items-center gap-1 hover:text-foreground">
-                    {s.label}
+                    {t(s.label)}
                     <span className={cn("text-[0.7em]", sort === s.key ? "opacity-100" : "opacity-0")} aria-hidden>
                       {dir === "asc" ? "▲" : "▼"}
                     </span>
                   </Link>
                 </Th>
               ))}
-              <Th>Contact</Th>
-              <Th>Waar het over ging</Th>
+              <Th>{t("Contact")}</Th>
+              <Th>{t("Vroeg om")}</Th>
+              <Th>{t("Waar het over ging")}</Th>
             </tr>
           </THead>
           <TBody>
@@ -194,16 +223,16 @@ export default async function BeursContactenPage({
                     <span className="font-medium">{r.naam}</span>
                   )}
                   {r.gesprekken > 1 && (
-                    <span className="ml-2 text-xs text-muted">{r.gesprekken}× gesproken</span>
+                    <span className="ml-2 text-xs text-muted">{t("{n}× gesproken", { n: r.gesprekken })}</span>
                   )}
                 </Td>
                 <Td className="text-muted">{r.bedrijf || "—"}</Td>
                 <Td className="space-x-1 whitespace-nowrap">
-                  <Badge tone="neutral">{rolOmschrijving(r.rol ?? "anders", r.rolAnders)}</Badge>
+                  <Badge tone="neutral">{rolOmschrijving(r.rol ?? "anders", r.rolAnders, taal)}</Badge>
                   {r.zelfIngevuld && <Badge tone="accent">QR</Badge>}
                 </Td>
                 <Td className="whitespace-nowrap text-muted">
-                  {r.wanneer?.toLocaleString("nl-NL", {
+                  {r.wanneer?.toLocaleString(datumLocale, {
                     timeZone: "Europe/Madrid",
                     day: "numeric",
                     month: "short",
@@ -220,6 +249,15 @@ export default async function BeursContactenPage({
                       {r.telefoon}
                     </a>
                   ) : null}
+                </Td>
+                <Td className="space-y-1 whitespace-nowrap">
+                  {r.interesses.length === 0
+                    ? "—"
+                    : r.interesses.map((k) => (
+                        <Badge key={k} tone="neutral">
+                          {interesseLabel(k, taal)}
+                        </Badge>
+                      ))}
                 </Td>
                 <Td className="max-w-md text-muted">
                   <span className="line-clamp-2 whitespace-pre-line text-xs">{r.wens || "—"}</span>

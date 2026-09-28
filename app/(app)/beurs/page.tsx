@@ -13,6 +13,7 @@ import { Badge, Card, CardContent, CardHeader, CardTitle, LinkButton, PageHeader
 import { db } from "@/lib/db";
 import { contacts, quoteRequests } from "@/lib/db/schema";
 import { BEURS, ROLLEN, rolOmschrijving } from "@/lib/beurs";
+import { datumTaal, huidigeTaal, tekst } from "@/lib/i18n/server";
 import { legBezoekerVast } from "./actions";
 import { BeursForm } from "./beurs-form";
 
@@ -26,6 +27,7 @@ function rolUitTags(tags: string[] | null): string | null {
 }
 
 export default async function BeursPage() {
+  const [t, taal, datumLocale] = await Promise.all([tekst(), huidigeTaal(), datumTaal()]);
   const [rijen, qr] = await Promise.all([
     db
       .select({
@@ -60,18 +62,17 @@ export default async function BeursPage() {
   return (
     <>
       <PageHeader
-        title="Beursstand"
-        subtitle={`${BEURS.naam} · ${BEURS.plaats} · stand ${BEURS.stand}`}
-        actions={<LinkButton href="/beurs/contacten">Alle beurscontacten</LinkButton>}
+        title={t("Beursstand")}
+        subtitle={`${BEURS.naam} · ${BEURS.plaats} · ${t("stand {nr}|standnummer", { nr: BEURS.stand })}`}
+        actions={<LinkButton href="/beurs/contacten">{t("Alle beurscontacten")}</LinkButton>}
       />
 
       <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_20rem]">
         <Card>
           <CardHeader>
-            <CardTitle>Bezoeker vastleggen</CardTitle>
+            <CardTitle>{t("Bezoeker vastleggen")}</CardTitle>
             <span className="text-xs text-muted">
-              De bezoeker krijgt meteen een bevestigingsmail; de gegevens staan bij Contacten en in
-              de opvolglijst op Aanvragen.
+              {t("De bezoeker krijgt meteen een bevestigingsmail; de gegevens staan bij Contacten en in de opvolglijst op Aanvragen.")}
             </span>
           </CardHeader>
           <CardContent>
@@ -82,7 +83,7 @@ export default async function BeursPage() {
         <div className="space-y-5">
           <Card>
             <CardHeader>
-              <CardTitle>Laat de bezoeker zelf invullen</CardTitle>
+              <CardTitle>{t("Laat de bezoeker zelf invullen")}</CardTitle>
             </CardHeader>
             <CardContent className="space-y-3">
               <div
@@ -91,42 +92,40 @@ export default async function BeursPage() {
                 dangerouslySetInnerHTML={{ __html: qr }}
               />
               <p className="text-center text-xs text-muted">
-                Scan met de telefoon —{" "}
+                {t("Scan met de telefoon")} —{" "}
                 <span className="font-medium text-foreground">{BEURS.formulierLabel}</span>
               </p>
               <p className="text-xs text-muted">
-                Deze pagina staat op onze eigen website, los van het CRM. De bezoeker ziet alleen
-                het formulier; zijn gegevens komen hier binnen.
+                {t("Deze pagina staat op onze eigen website, los van het CRM. De bezoeker ziet alleen het formulier; zijn gegevens komen hier binnen.")}
               </p>
               <p className="border-t pt-3 text-xs text-muted">
-                <span className="font-medium text-foreground">Op de iPad op de balie</span> gebruik je
-                hetzelfde formulier — groot, zonder menu, en na het opslaan meteen leeg voor de
-                volgende:{" "}
+                <span className="font-medium text-foreground">{t("Op de iPad op de balie")}</span>{" "}
+                {t("gebruik je hetzelfde formulier — groot, zonder menu, en na het opslaan meteen leeg voor de volgende:")}{" "}
                 <a href={BEURS.standUrl} target="_blank" rel="noreferrer" className="text-accent hover:underline">
                   {BEURS.standUrl.replace("https://www.", "")}
                 </a>
-                . Dan hoeft dit scherm daar niet open te staan.
+                . {t("Dan hoeft dit scherm daar niet open te staan.")}
               </p>
             </CardContent>
           </Card>
 
           <Card>
             <CardHeader>
-              <CardTitle>Geteld</CardTitle>
+              <CardTitle>{t("Geteld")}</CardTitle>
             </CardHeader>
             <CardContent className="space-y-2 text-sm">
               <div className="flex items-baseline justify-between">
-                <span className="text-muted">Vandaag</span>
+                <span className="text-muted">{t("Vandaag")}</span>
                 <span className="text-2xl font-semibold tabular-nums">{vandaagAantal}</span>
               </div>
               <div className="flex items-baseline justify-between border-t pt-2">
-                <span className="text-muted">Hele beurs</span>
+                <span className="text-muted">{t("Hele beurs")}</span>
                 <span className="font-semibold tabular-nums">{rijen.length}</span>
               </div>
               <ul className="space-y-1 border-t pt-2 text-xs text-muted">
                 {ROLLEN.filter((r) => perRol.get(r.key)).map((r) => (
                   <li key={r.key} className="flex justify-between">
-                    <span>{r.nl}</span>
+                    <span>{r[taal]}</span>
                     <span className="tabular-nums">{perRol.get(r.key)}</span>
                   </li>
                 ))}
@@ -138,27 +137,27 @@ export default async function BeursPage() {
 
       <Card className="mt-5">
         <CardHeader>
-          <CardTitle>Laatst gesproken</CardTitle>
+          <CardTitle>{t("Laatst gesproken")}</CardTitle>
           <span className="text-xs text-muted">
-            De hele beurs, met zoeken en sorteren, staat bij{" "}
-            <Link href="/beurs/contacten" className="text-accent hover:underline">Beurscontacten</Link>. Ook terug te
-            vinden bij <Link href="/contacts?bron=beurs" className="text-accent hover:underline">Contacten</Link> en{" "}
-            <Link href="/aanvragen" className="text-accent hover:underline">Aanvragen</Link>.
+            {t("De hele beurs, met zoeken en sorteren, staat bij")}{" "}
+            <Link href="/beurs/contacten" className="text-accent hover:underline">{t("Beurscontacten")}</Link>. {t("Ook terug te vinden bij")}{" "}
+            <Link href="/contacts?bron=beurs" className="text-accent hover:underline">{t("Contacten")}</Link> {t("en|voegwoord")}{" "}
+            <Link href="/aanvragen" className="text-accent hover:underline">{t("Aanvragen")}</Link>.
           </span>
         </CardHeader>
         <CardContent>
           {rijen.length === 0 ? (
-            <p className="text-sm text-muted">Nog niemand vastgelegd.</p>
+            <p className="text-sm text-muted">{t("Nog niemand vastgelegd.")}</p>
           ) : (
             <Table wrapperClassName="rounded-lg border">
               <THead className="sticky top-0 z-10 bg-surface">
                 <tr>
-                  <Th>Naam</Th>
-                  <Th>Bedrijf</Th>
-                  <Th>Soort</Th>
-                  <Th>Contact</Th>
-                  <Th>Waar het over ging</Th>
-                  <Th>Wanneer</Th>
+                  <Th>{t("Naam")}</Th>
+                  <Th>{t("Bedrijf")}</Th>
+                  <Th>{t("Soort")}</Th>
+                  <Th>{t("Contact")}</Th>
+                  <Th>{t("Waar het over ging")}</Th>
+                  <Th>{t("Wanneer")}</Th>
                 </tr>
               </THead>
               <TBody>
@@ -179,13 +178,13 @@ export default async function BeursPage() {
                       <Td className="space-x-1 whitespace-nowrap">
                         {rol ? (
                           <Badge tone="neutral">
-                            {rolOmschrijving(rol, (r.tags ?? []).find((x) => x.startsWith("rol-anders:"))?.slice(11) ?? null)}
+                            {rolOmschrijving(rol, (r.tags ?? []).find((x) => x.startsWith("rol-anders:"))?.slice(11) ?? null, taal)}
                           </Badge>
                         ) : (
                           "—"
                         )}
                         {(r.tags ?? []).includes("beurs:qr") ? (
-                          <Badge tone="accent">Zelf ingevuld</Badge>
+                          <Badge tone="accent">{t("Zelf ingevuld")}</Badge>
                         ) : null}
                       </Td>
                       <Td className="text-muted">
@@ -198,7 +197,7 @@ export default async function BeursPage() {
                         </span>
                       </Td>
                       <Td className="whitespace-nowrap text-muted">
-                        {r.wanneer?.toLocaleString("nl-NL", {
+                        {r.wanneer?.toLocaleString(datumLocale, {
                           timeZone: "Europe/Madrid",
                           day: "numeric",
                           month: "short",

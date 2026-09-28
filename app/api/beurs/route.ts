@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
-import { ROLLEN } from "@/lib/beurs";
+import { INTERESSES, ROLLEN } from "@/lib/beurs";
 import { slaBeursbezoekerOp } from "@/lib/beurs-opslag";
 import { clientIp, rateLimit } from "@/lib/rate-limit";
 
@@ -26,6 +26,7 @@ const schema = z.object({
   bedrijf: z.string().trim().max(160).optional().or(z.literal("")),
   rol: z.enum(ROLLEN.map((r) => r.key) as [string, ...string[]]),
   rolAnders: z.string().trim().max(120).optional().or(z.literal("")),
+  interesses: z.array(z.enum(INTERESSES.map((i) => i.key) as [string, ...string[]])).max(10).optional(),
   taal: z.enum(["nl", "en", "es"]),
   wens: z.string().trim().max(2000).optional().or(z.literal("")),
   /** Verborgen veld; alleen een bot vult dit in. */
@@ -90,6 +91,7 @@ export async function POST(req: Request) {
       bedrijf: d.bedrijf,
       rol: d.rol,
       rolAnders: d.rolAnders,
+      interesses: d.interesses,
       taal: d.taal,
       wens: d.wens,
       zelfIngevuld: true,

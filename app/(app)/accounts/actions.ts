@@ -12,6 +12,7 @@ import { db } from "@/lib/db";
 import { accountRequests, companies, contacts, customerAccounts } from "@/lib/db/schema";
 import { grantWindowsAccess } from "@/lib/portal/windows-access";
 import { windowsActivationMail, windowsAccessReadyMail } from "@/lib/portal/windows-activation";
+import { websiteActivationMail } from "@/lib/portal/website-activation";
 import { sendMail } from "@/lib/gmail";
 
 async function requireUser() {
@@ -36,20 +37,8 @@ async function sendActivationMail(email: string, name: string, token: string, ti
     await sendMail({ to: email, ...windowsActivationMail(name, token, locale) });
     return;
   }
-  const link = `${WEBSITE_URL}/account/activeren?token=${token}`;
-  const tierText = tier === "aannemer" ? "zakelijk account" : "account";
-  await sendMail({
-    to: email,
-    subject: "Je Habitat One-account is klaar — stel je wachtwoord in",
-    html: `<div style="font-family:Arial,Helvetica,sans-serif;color:#2a2620;max-width:560px">
-  <h2 style="color:#402419;margin:0 0 12px">Welkom bij Habitat One</h2>
-  <p>Beste ${name || "klant"},</p>
-  <p>Je ${tierText} is aangemaakt. Stel hieronder je wachtwoord in om in te loggen en de prijzen te bekijken.</p>
-  <p style="margin:22px 0"><a href="${link}" style="background:#b5532b;color:#fff;padding:12px 22px;border-radius:8px;text-decoration:none;font-size:14px">Wachtwoord instellen</a></p>
-  <p style="font-size:12px;color:#7a6a58">Deze link is 7 dagen geldig. Werkt de knop niet? Kopieer: ${link}</p>
-</div>`,
-    text: `Beste ${name || "klant"},\n\nJe account is aangemaakt. Stel je wachtwoord in via:\n${link}\n\n(7 dagen geldig)`,
-  });
+  // Taal van de aanvraag (of voorkeurstaal van het contact); onbekend → Engels.
+  await sendMail({ to: email, ...websiteActivationMail({ name, token, tier, locale, baseUrl: WEBSITE_URL }) });
 }
 
 /** Keur een accountaanvraag goed: maak/koppel contact + account, mail activatie. */
@@ -169,7 +158,8 @@ export async function approveAccountRequest(requestId: string, formData: FormDat
   // Activatiemail alleen sturen als er een verse (niet-actieve) link is.
   if (!existingAccount || existingAccount.status !== "active") {
     try {
-      await sendActivationMail(req.email, req.name, token, tier, req.source, req.locale);
+      const contact = !req.locale && contactId ? await db.query.contacts.findFirst({ where: eq(contacts.id, contactId), columns: { preferredLanguage: true } }) : null;
+      await sendActivationMail(req.email, req.name, token, tier, req.source, req.locale ?? contact?.preferredLanguage ?? null);
     } catch (err) {
       console.warn("[accounts] activatiemail mislukt:", err);
     }
@@ -186,6 +176,8 @@ async function createAccount(opts: {
   businessName?: string | null;
   vatNumber?: string | null;
   windows?: boolean;
+  /** Taal van de activatiemail (voorkeurstaal van het contact). */
+  locale?: string | null;
 }): Promise<{ ok: boolean; reason?: string }> {
   if (opts.windows && (!opts.businessName?.trim() || !opts.vatNumber?.trim())) throw new Error("Bedrijfsnaam en btw-nummer zijn verplicht.");
   const email = opts.email.trim().toLowerCase();
@@ -206,7 +198,7 @@ async function createAccount(opts: {
   }).returning();
   if (opts.windows) await grantWindowsAccess(created);
   try {
-    await sendActivationMail(email, opts.name, token, opts.tier, opts.windows ? "windows" : "website");
+    await sendActivationMail(email, opts.name, token, opts.tier, opts.windows ? "windows" : "website", opts.locale ?? null);
   } catch (err) {
     console.warn("[accounts] activatiemail mislukt:", err);
   }
@@ -228,16 +220,18 @@ export async function createAccountManually(formData: FormData) {
   let email = d.email?.trim() || "";
   let name = "";
   let businessName = d.businessName || null;
+  let locale: string | null = null;
   if (contactId) {
     const c = await db.query.contacts.findFirst({ where: eq(contacts.id, contactId) });
     if (c) {
       email = email || c.email || "";
       name = c.name;
       businessName = businessName || c.name;
+      locale = c.preferredLanguage;
     }
   }
   if (!email) throw new Error("Vul een e-mail in of kies een contact met e-mail.");
-  await createAccount({ email, name: name || email, tier: d.tier, contactId, businessName, vatNumber: d.vatNumber || null });
+  await createAccount({ email, name: name || email, tier: d.tier, contactId, businessName, vatNumber: d.vatNumber || null, locale });
   refreshAccountPages();
 }
 
@@ -267,7 +261,7 @@ export async function createAccountForContact(contactId: string, formData: FormD
     }
     else await db.update(customerAccounts).set({websiteAccess:true,updatedAt:new Date()}).where(eq(customerAccounts.id,existing.id));
   } else {
-    await createAccount({ email, name: c.name, tier: windows ? "aannemer" : tier, contactId, businessName: windows ? String(formData.get("businessName") || "") : c.name, vatNumber: windows ? String(formData.get("vatNumber") || "") : null, windows });
+    await createAccount({ email, name: c.name, tier: windows ? "aannemer" : tier, contactId, businessName: windows ? String(formData.get("businessName") || "") : c.name, vatNumber: windows ? String(formData.get("vatNumber") || "") : null, windows, locale: c.preferredLanguage });
   }
   refreshAccountPages();
   revalidatePath(`/contacts/${contactId}`);
@@ -305,7 +299,8 @@ async function sendAccountActivation(accountId: string, scope?: "website" | "win
     .where(eq(customerAccounts.id, accountId));
   try {
     const request = await db.query.accountRequests.findFirst({ where: and(eq(accountRequests.email, acc.email), eq(accountRequests.status, "approved")), orderBy: desc(accountRequests.updatedAt) });
-    await sendActivationMail(acc.email, acc.businessName ?? acc.email, token, acc.priceTier, scope ?? (acc.websiteAccess ? "website" : "windows"), request?.locale);
+    const contact = acc.contactId ? await db.query.contacts.findFirst({ where: eq(contacts.id, acc.contactId), columns: { preferredLanguage: true } }) : null;
+    await sendActivationMail(acc.email, acc.businessName ?? acc.email, token, acc.priceTier, scope ?? (acc.websiteAccess ? "website" : "windows"), request?.locale ?? contact?.preferredLanguage ?? null);
   } catch (err) {
     console.warn("[accounts] activatiemail mislukt:", err);
   }
