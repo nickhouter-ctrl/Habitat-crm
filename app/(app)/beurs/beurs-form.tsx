@@ -28,6 +28,7 @@ type Invoer = {
   telefoon: string;
   bedrijf: string;
   rol: string;
+  rolAnders: string;
   taal: string;
   wens: string;
 };
@@ -58,6 +59,7 @@ const leeg = (): Invoer => ({
   telefoon: "",
   bedrijf: "",
   rol: "architect",
+  rolAnders: "",
   taal: "es",
   wens: "",
 });
@@ -84,6 +86,7 @@ export function BeursForm({
       fd.set("telefoon", inv.telefoon);
       fd.set("bedrijf", inv.bedrijf);
       fd.set("rol", inv.rol);
+      fd.set("rolAnders", inv.rolAnders);
       fd.set("taal", inv.taal);
       fd.set("wens", inv.wens);
       try {
@@ -255,6 +258,17 @@ export function BeursForm({
             ))}
           </Select>
         </Field>
+        {waarden.rol === "anders" && (
+          <Field label="Wat dan wel?" hint="Zonder deze toelichting zegt “anders” bij het opvolgen niets.">
+            <Input
+              value={waarden.rolAnders}
+              onChange={zet("rolAnders")}
+              autoComplete="off"
+              className="h-12 text-base"
+              placeholder="bijv. fotograaf, projectontwikkelaar, pers"
+            />
+          </Field>
+        )}
         <Field label="Taal van de bevestigingsmail">
           <Select value={waarden.taal} onChange={zet("taal")} className="h-12 text-base">
             <option value="es">Español</option>

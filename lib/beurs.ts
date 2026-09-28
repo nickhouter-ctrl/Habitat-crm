@@ -64,10 +64,25 @@ export function contactSoort(rol: string): "reseller" | "lead" {
   return rol === "wederverkoper" ? "reseller" : "lead";
 }
 
+/**
+ * Hoe de bezoeker op het scherm heet. Bij "Anders" staat er wat hij dan wél is
+ * ("Anders (fotograaf)") — dat veld staat er juist omdat de zes keuzes niet
+ * alles vangen, en zonder de toelichting is het antwoord waardeloos.
+ */
+export function rolOmschrijving(rol: string, anders?: string | null): string {
+  const extra = anders?.trim();
+  return extra ? `${rolLabel(rol)} (${extra})` : rolLabel(rol);
+}
+
 /** Notitie op het contact: rol, beurs en wat de bezoeker wil. */
-export function contactNotitie(args: { rol: string; bedrijf?: string | null; wens?: string | null }): string {
+export function contactNotitie(args: {
+  rol: string;
+  bedrijf?: string | null;
+  wens?: string | null;
+  rolAnders?: string | null;
+}): string {
   const regels = [
-    `${rolLabel(args.rol)} · ontmoet op ${BEURS.naam} (${BEURS.plaats}, stand ${BEURS.stand})`,
+    `${rolOmschrijving(args.rol, args.rolAnders)} · ontmoet op ${BEURS.naam} (${BEURS.plaats}, stand ${BEURS.stand})`,
   ];
   if (args.bedrijf?.trim()) regels.push(`Bedrijf: ${args.bedrijf.trim()}`);
   if (args.wens?.trim()) regels.push("", args.wens.trim());

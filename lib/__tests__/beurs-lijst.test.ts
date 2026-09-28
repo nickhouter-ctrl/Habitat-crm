@@ -117,3 +117,14 @@ describe("download", () => {
     expect(csv).toContain('"Zegt: ""mooi"""');
   });
 });
+
+describe("anders", () => {
+  it("laat zien wat 'anders' dan wél was — anders zegt het antwoord niets", () => {
+    const [r] = verdichtTotContacten([
+      gesprek({ naam: "Marta", tags: ["rol:anders", "rol-anders:fotograaf"] }),
+    ]);
+    expect(r.rol).toBe("anders");
+    expect(r.rolAnders).toBe("fotograaf");
+    expect(beursCsv([r])).toContain("Anders (fotograaf)");
+  });
+});

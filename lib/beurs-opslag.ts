@@ -14,7 +14,7 @@ import "server-only";
  */
 import { eq, ilike, sql } from "drizzle-orm";
 
-import { BEURS, beursMail, contactNotitie, contactSoort, rolLabel } from "@/lib/beurs";
+import { BEURS, beursMail, contactNotitie, contactSoort, rolOmschrijving } from "@/lib/beurs";
 import type { BeursTaal } from "@/lib/beurs";
 import { COMPANY } from "@/lib/company";
 import { db } from "@/lib/db";
@@ -27,6 +27,8 @@ export interface BeursBezoeker {
   telefoon?: string | null;
   bedrijf?: string | null;
   rol: string;
+  /** Bij rol "anders": wat het dan wél is. */
+  rolAnders?: string | null;
   taal: BeursTaal;
   wens?: string | null;
   /** Heeft de bezoeker het zelf ingevuld (QR-code) of wij op de iPad? */
@@ -63,9 +65,13 @@ export async function slaBeursbezoekerOp(d: BeursBezoeker): Promise<BeursOpslagR
     }
   }
 
+  const rolAnders = d.rol === "anders" ? d.rolAnders?.trim() || null : null;
   const tags = [BEURS.bron, `rol:${d.rol}`];
   if (d.zelfIngevuld) tags.push("beurs:qr");
-  const notitie = contactNotitie({ rol: d.rol, bedrijf, wens });
+  // Wat "anders" precies is hoort bij de rol, niet in de vrije tekst: zo staat
+  // het ook in de lijst en in de download, en niet alleen in de notitie.
+  if (rolAnders) tags.push(`rol-anders:${rolAnders}`);
+  const notitie = contactNotitie({ rol: d.rol, bedrijf, wens, rolAnders });
 
   // Kennen we dit e-mailadres al? Dan de bestaande kaart bijwerken in plaats van
   // een tweede aanmaken — op een beurs staat er zomaar een bekende klant voor je.
@@ -119,7 +125,7 @@ export async function slaBeursbezoekerOp(d: BeursBezoeker): Promise<BeursOpslagR
       locale: d.taal,
       contactId,
       message: [
-        `${rolLabel(d.rol)} — ${d.zelfIngevuld ? "zelf ingevuld via de QR-code op" : "gesproken op"} ${BEURS.naam}, stand ${BEURS.stand}`,
+        `${rolOmschrijving(d.rol, rolAnders)} — ${d.zelfIngevuld ? "zelf ingevuld via de QR-code op" : "gesproken op"} ${BEURS.naam}, stand ${BEURS.stand}`,
         wens ? `\n${wens}` : "",
       ]
         .join("")

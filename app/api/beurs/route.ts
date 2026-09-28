@@ -25,6 +25,7 @@ const schema = z.object({
   telefoon: z.string().trim().max(60).optional().or(z.literal("")),
   bedrijf: z.string().trim().max(160).optional().or(z.literal("")),
   rol: z.enum(ROLLEN.map((r) => r.key) as [string, ...string[]]),
+  rolAnders: z.string().trim().max(120).optional().or(z.literal("")),
   taal: z.enum(["nl", "en", "es"]),
   wens: z.string().trim().max(2000).optional().or(z.literal("")),
   /** Verborgen veld; alleen een bot vult dit in. */
@@ -88,6 +89,7 @@ export async function POST(req: Request) {
       telefoon: d.telefoon,
       bedrijf: d.bedrijf,
       rol: d.rol,
+      rolAnders: d.rolAnders,
       taal: d.taal,
       wens: d.wens,
       zelfIngevuld: true,

@@ -9,7 +9,7 @@
  */
 import { describe, expect, it } from "vitest";
 
-import { BEURS, ROLLEN, beursMail, contactNotitie, contactSoort, rolLabel } from "@/lib/beurs";
+import { BEURS, ROLLEN, beursMail, contactNotitie, contactSoort, rolLabel, rolOmschrijving } from "@/lib/beurs";
 
 describe("rollen", () => {
   it("heeft de groepen die op de stand langskomen", () => {
@@ -25,6 +25,19 @@ describe("rollen", () => {
     expect(rolLabel("wederverkoper", "es")).toBe("Quiere vender nuestros productos");
     // Onbekende sleutel valt terug op zichzelf in plaats van leeg te zijn.
     expect(rolLabel("bestaat-niet")).toBe("bestaat-niet");
+  });
+});
+
+describe("wat 'anders' dan wel is", () => {
+  it("zet de toelichting achter de rol", () => {
+    expect(rolOmschrijving("anders", "fotograaf")).toBe("Anders (fotograaf)");
+    expect(rolOmschrijving("anders", "   ")).toBe("Anders");
+    expect(rolOmschrijving("architect")).toBe("Architect");
+  });
+
+  it("zet hem ook in de notitie op het contact", () => {
+    const n = contactNotitie({ rol: "anders", rolAnders: "pers" });
+    expect(n).toContain("Anders (pers)");
   });
 });
 

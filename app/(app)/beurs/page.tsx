@@ -12,7 +12,7 @@ import QRCode from "qrcode";
 import { Badge, Card, CardContent, CardHeader, CardTitle, LinkButton, PageHeader, Table, TBody, Td, Th, THead, Tr } from "@/components/ui";
 import { db } from "@/lib/db";
 import { contacts, quoteRequests } from "@/lib/db/schema";
-import { BEURS, ROLLEN, rolLabel } from "@/lib/beurs";
+import { BEURS, ROLLEN, rolOmschrijving } from "@/lib/beurs";
 import { legBezoekerVast } from "./actions";
 import { BeursForm } from "./beurs-form";
 
@@ -177,7 +177,13 @@ export default async function BeursPage() {
                       </Td>
                       <Td className="text-muted">{r.bedrijf || "—"}</Td>
                       <Td className="space-x-1 whitespace-nowrap">
-                        {rol ? <Badge tone="neutral">{rolLabel(rol)}</Badge> : "—"}
+                        {rol ? (
+                          <Badge tone="neutral">
+                            {rolOmschrijving(rol, (r.tags ?? []).find((x) => x.startsWith("rol-anders:"))?.slice(11) ?? null)}
+                          </Badge>
+                        ) : (
+                          "—"
+                        )}
                         {(r.tags ?? []).includes("beurs:qr") ? (
                           <Badge tone="accent">Zelf ingevuld</Badge>
                         ) : null}

@@ -15,7 +15,7 @@ import {
   THead,
   Tr,
 } from "@/components/ui";
-import { BEURS, ROLLEN, rolLabel } from "@/lib/beurs";
+import { BEURS, ROLLEN, rolOmschrijving } from "@/lib/beurs";
 import { haalBeursGesprekken } from "@/lib/beurs-data";
 import {
   type BeursRichting,
@@ -199,7 +199,7 @@ export default async function BeursContactenPage({
                 </Td>
                 <Td className="text-muted">{r.bedrijf || "—"}</Td>
                 <Td className="space-x-1 whitespace-nowrap">
-                  <Badge tone="neutral">{rolLabel(r.rol ?? "anders")}</Badge>
+                  <Badge tone="neutral">{rolOmschrijving(r.rol ?? "anders", r.rolAnders)}</Badge>
                   {r.zelfIngevuld && <Badge tone="accent">QR</Badge>}
                 </Td>
                 <Td className="whitespace-nowrap text-muted">

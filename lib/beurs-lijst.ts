@@ -7,7 +7,7 @@
  * en filteren losse, pure functies: dat is de hele logica van het scherm en zo
  * is hij zonder database te testen.
  */
-import { BEURS, rolLabel } from "@/lib/beurs";
+import { BEURS, rolOmschrijving } from "@/lib/beurs";
 
 export interface BeursGesprek {
   aanvraagId: string;
@@ -25,6 +25,8 @@ export interface BeursGesprek {
 export interface BeursContact extends BeursGesprek {
   /** Rol uit de tags van het contact ("rol:architect"), of null. */
   rol: string | null;
+  /** Bij "anders": wat het dan wél is. */
+  rolAnders: string | null;
   /** Heeft de bezoeker het zelf ingevuld via de QR-code? */
   zelfIngevuld: boolean;
   /** Wat de bezoeker wil — de eerste regel is de standregel en valt weg. */
@@ -42,6 +44,12 @@ export type BeursRichting = "asc" | "desc";
 export function rolUitTags(tags: string[] | null): string | null {
   const t = (tags ?? []).find((x) => x.startsWith("rol:"));
   return t ? t.slice(4) : null;
+}
+
+/** Wat "anders" precies was ("rol-anders:fotograaf"). */
+export function rolAndersUitTags(tags: string[] | null): string | null {
+  const t = (tags ?? []).find((x) => x.startsWith("rol-anders:"));
+  return t ? t.slice("rol-anders:".length) : null;
 }
 
 /** De eerste regel van het bericht is de standregel; daaronder staat de wens. */
@@ -67,6 +75,7 @@ export function verdichtTotContacten(gesprekken: BeursGesprek[]): BeursContact[]
       perPersoon.set(sleutel, {
         ...g,
         rol: rolUitTags(g.tags),
+        rolAnders: rolAndersUitTags(g.tags),
         zelfIngevuld: (g.tags ?? []).includes("beurs:qr"),
         wens,
         gesprekken: 1,
@@ -124,7 +133,7 @@ export function sorteerBeursContacten(
         if (!b.bedrijf) return -1;
         return keer * tekst(a.bedrijf, b.bedrijf);
       case "soort":
-        return keer * tekst(rolLabel(a.rol ?? "anders"), rolLabel(b.rol ?? "anders"));
+        return keer * tekst(rolOmschrijving(a.rol ?? "anders", a.rolAnders), rolOmschrijving(b.rol ?? "anders", b.rolAnders));
       default:
         return keer * (tijd(a.wanneer) - tijd(b.wanneer));
     }
@@ -141,7 +150,7 @@ export function beursCsv(rijen: BeursContact[]): string {
     [
       r.naam,
       r.bedrijf ?? "",
-      rolLabel(r.rol ?? "anders"),
+      rolOmschrijving(r.rol ?? "anders", r.rolAnders),
       r.email,
       r.telefoon ?? "",
       r.taal ?? "",
