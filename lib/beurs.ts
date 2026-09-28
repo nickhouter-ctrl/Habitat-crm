@@ -24,7 +24,16 @@ export const BEURS = {
    * het CRM. Een bezoeker scant en ziet habitat-one.com — de gegevens gaan via
    * de bestaande website→CRM-koppeling naar binnen, het CRM zelf blijft dicht.
    */
-  formulierUrl: "https://habitat-one.com/beurs",
+  formulierUrl: "https://www.habitat-one.com/beurs",
+  /** Wat er onder de QR-code staat — korter leest prettiger dan de volle URL. */
+  formulierLabel: "habitat-one.com/beurs",
+  /**
+   * Hetzelfde formulier, maar zoals wij het op de iPad op de balie gebruiken:
+   * groot, zonder menu, en na het opslaan meteen leeg voor de volgende. Zo
+   * hoeft het CRM niet open te staan op een apparaat dat de hele dag onbeheerd
+   * op een beursvloer ligt — die pagina kan alleen gegevens ópsturen.
+   */
+  standUrl: "https://www.habitat-one.com/nl/beurs?stand=1",
 } as const;
 
 /** Wat voor bezoeker het is. De sleutel komt als tag op het contact te staan. */

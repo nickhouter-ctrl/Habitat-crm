@@ -9,7 +9,7 @@ import { desc, eq } from "drizzle-orm";
 import Link from "next/link";
 import QRCode from "qrcode";
 
-import { Badge, Card, CardContent, CardHeader, CardTitle, PageHeader, Table, TBody, Td, Th, THead, Tr } from "@/components/ui";
+import { Badge, Card, CardContent, CardHeader, CardTitle, LinkButton, PageHeader, Table, TBody, Td, Th, THead, Tr } from "@/components/ui";
 import { db } from "@/lib/db";
 import { contacts, quoteRequests } from "@/lib/db/schema";
 import { BEURS, ROLLEN, rolLabel } from "@/lib/beurs";
@@ -62,6 +62,7 @@ export default async function BeursPage() {
       <PageHeader
         title="Beursstand"
         subtitle={`${BEURS.naam} · ${BEURS.plaats} · stand ${BEURS.stand}`}
+        actions={<LinkButton href="/beurs/contacten">Alle beurscontacten</LinkButton>}
       />
 
       <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_20rem]">
@@ -91,11 +92,20 @@ export default async function BeursPage() {
               />
               <p className="text-center text-xs text-muted">
                 Scan met de telefoon —{" "}
-                <span className="font-medium text-foreground">{BEURS.formulierUrl.replace("https://", "")}</span>
+                <span className="font-medium text-foreground">{BEURS.formulierLabel}</span>
               </p>
               <p className="text-xs text-muted">
                 Deze pagina staat op onze eigen website, los van het CRM. De bezoeker ziet alleen
                 het formulier; zijn gegevens komen hier binnen.
+              </p>
+              <p className="border-t pt-3 text-xs text-muted">
+                <span className="font-medium text-foreground">Op de iPad op de balie</span> gebruik je
+                hetzelfde formulier — groot, zonder menu, en na het opslaan meteen leeg voor de
+                volgende:{" "}
+                <a href={BEURS.standUrl} target="_blank" rel="noreferrer" className="text-accent hover:underline">
+                  {BEURS.standUrl.replace("https://www.", "")}
+                </a>
+                . Dan hoeft dit scherm daar niet open te staan.
               </p>
             </CardContent>
           </Card>
@@ -128,17 +138,19 @@ export default async function BeursPage() {
 
       <Card className="mt-5">
         <CardHeader>
-          <CardTitle>Wie we gesproken hebben</CardTitle>
+          <CardTitle>Laatst gesproken</CardTitle>
           <span className="text-xs text-muted">
-            Ook terug te vinden bij <Link href="/contacts?bron=beurs" className="text-accent hover:underline">Contacten</Link> en{" "}
-            <Link href="/aanvragen" className="text-accent hover:underline">Aanvragen</Link>
+            De hele beurs, met zoeken en sorteren, staat bij{" "}
+            <Link href="/beurs/contacten" className="text-accent hover:underline">Beurscontacten</Link>. Ook terug te
+            vinden bij <Link href="/contacts?bron=beurs" className="text-accent hover:underline">Contacten</Link> en{" "}
+            <Link href="/aanvragen" className="text-accent hover:underline">Aanvragen</Link>.
           </span>
         </CardHeader>
         <CardContent>
           {rijen.length === 0 ? (
             <p className="text-sm text-muted">Nog niemand vastgelegd.</p>
           ) : (
-            <Table wrapperClassName="max-h-[32rem] overflow-y-auto rounded-lg border">
+            <Table wrapperClassName="rounded-lg border">
               <THead className="sticky top-0 z-10 bg-surface">
                 <tr>
                   <Th>Naam</Th>
@@ -150,7 +162,7 @@ export default async function BeursPage() {
                 </tr>
               </THead>
               <TBody>
-                {rijen.map((r) => {
+                {rijen.slice(0, 10).map((r) => {
                   const rol = rolUitTags(r.tags);
                   return (
                     <Tr key={r.id}>
@@ -164,7 +176,12 @@ export default async function BeursPage() {
                         )}
                       </Td>
                       <Td className="text-muted">{r.bedrijf || "—"}</Td>
-                      <Td>{rol ? <Badge tone="neutral">{rolLabel(rol)}</Badge> : "—"}</Td>
+                      <Td className="space-x-1 whitespace-nowrap">
+                        {rol ? <Badge tone="neutral">{rolLabel(rol)}</Badge> : "—"}
+                        {(r.tags ?? []).includes("beurs:qr") ? (
+                          <Badge tone="accent">Zelf ingevuld</Badge>
+                        ) : null}
+                      </Td>
                       <Td className="text-muted">
                         <span className="block">{r.email}</span>
                         {r.telefoon ? <span className="block text-xs">{r.telefoon}</span> : null}

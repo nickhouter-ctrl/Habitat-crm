@@ -1,0 +1,151 @@
+import "server-only";
+
+/**
+ * Een beursbezoeker wegschrijven — het stuk dat twee kanten delen.
+ *
+ * Op de stand tikt iemand van ons de gegevens in (`/beurs`, achter de login);
+ * scant een bezoeker de QR-code, dan vult hij ze zelf in op onze eigen website
+ * en komt het via `/api/beurs` binnen. Wat er daarna gebeurt moet in beide
+ * gevallen precies hetzelfde zijn: één contact, één aanvraag in de opvolglijst
+ * en één bevestigingsmail. Daarom staat dat hier, en niet twee keer.
+ *
+ * De mail is bewust geen harde eis: gaat er iets mis met de verbinding naar de
+ * mailserver, dan is de bezoeker nog steeds vastgelegd.
+ */
+import { eq, ilike, sql } from "drizzle-orm";
+
+import { BEURS, beursMail, contactNotitie, contactSoort, rolLabel } from "@/lib/beurs";
+import type { BeursTaal } from "@/lib/beurs";
+import { COMPANY } from "@/lib/company";
+import { db } from "@/lib/db";
+import { companies, contacts, quoteRequests } from "@/lib/db/schema";
+import { brandedEmail, escapeHtml, sendEmail, signatureHtml } from "@/lib/email";
+
+export interface BeursBezoeker {
+  naam: string;
+  email: string;
+  telefoon?: string | null;
+  bedrijf?: string | null;
+  rol: string;
+  taal: BeursTaal;
+  wens?: string | null;
+  /** Heeft de bezoeker het zelf ingevuld (QR-code) of wij op de iPad? */
+  zelfIngevuld?: boolean;
+}
+
+export interface BeursOpslagResultaat {
+  contactId: string;
+  aanvraagId: string;
+  mail: "verstuurd" | "mislukt";
+}
+
+export async function slaBeursbezoekerOp(d: BeursBezoeker): Promise<BeursOpslagResultaat> {
+  const email = d.email.trim().toLowerCase();
+  const bedrijf = d.bedrijf?.trim() || null;
+  const telefoon = d.telefoon?.trim() || null;
+  const wens = d.wens?.trim() || null;
+
+  // Bedrijf: bestaande naam hergebruiken, anders aanmaken. Een architectenbureau
+  // is een bedrijf, ook als we er nog niets mee gedaan hebben.
+  let companyId: string | null = null;
+  if (bedrijf) {
+    const bestaand = await db.query.companies.findFirst({
+      where: ilike(companies.name, bedrijf),
+      columns: { id: true },
+    });
+    if (bestaand) companyId = bestaand.id;
+    else {
+      const [nieuw] = await db
+        .insert(companies)
+        .values({ name: bedrijf, type: "client" })
+        .returning({ id: companies.id });
+      companyId = nieuw.id;
+    }
+  }
+
+  const tags = [BEURS.bron, `rol:${d.rol}`];
+  if (d.zelfIngevuld) tags.push("beurs:qr");
+  const notitie = contactNotitie({ rol: d.rol, bedrijf, wens });
+
+  // Kennen we dit e-mailadres al? Dan de bestaande kaart bijwerken in plaats van
+  // een tweede aanmaken — op een beurs staat er zomaar een bekende klant voor je.
+  const bestaandContact = await db.query.contacts.findFirst({
+    where: sql`lower(${contacts.email}) = ${email}`,
+    columns: { id: true, tags: true, notes: true, type: true },
+  });
+
+  let contactId: string;
+  if (bestaandContact) {
+    const samen = [...new Set([...(bestaandContact.tags ?? []), ...tags])];
+    await db
+      .update(contacts)
+      .set({
+        phone: telefoon ?? undefined,
+        companyId: companyId ?? undefined,
+        tags: samen,
+        notes: [bestaandContact.notes, notitie].filter(Boolean).join("\n\n"),
+        preferredLanguage: d.taal,
+        updatedAt: new Date(),
+      })
+      .where(eq(contacts.id, bestaandContact.id));
+    contactId = bestaandContact.id;
+  } else {
+    const [nieuw] = await db
+      .insert(contacts)
+      .values({
+        name: d.naam.trim(),
+        email,
+        phone: telefoon,
+        companyId,
+        type: contactSoort(d.rol),
+        source: BEURS.bron,
+        tags,
+        notes: notitie,
+        preferredLanguage: d.taal,
+      })
+      .returning({ id: contacts.id });
+    contactId = nieuw.id;
+  }
+
+  const [aanvraag] = await db
+    .insert(quoteRequests)
+    .values({
+      name: d.naam.trim(),
+      email,
+      phone: telefoon,
+      company: bedrijf,
+      kind: "contact",
+      source: BEURS.bron,
+      locale: d.taal,
+      contactId,
+      message: [
+        `${rolLabel(d.rol)} — ${d.zelfIngevuld ? "zelf ingevuld via de QR-code op" : "gesproken op"} ${BEURS.naam}, stand ${BEURS.stand}`,
+        wens ? `\n${wens}` : "",
+      ]
+        .join("")
+        .trim(),
+    })
+    .returning({ id: quoteRequests.id });
+
+  // Bevestiging naar de bezoeker.
+  let mail: "verstuurd" | "mislukt" = "mislukt";
+  try {
+    const tekst = beursMail({ naam: d.naam, taal: d.taal, wens });
+    const res = await sendEmail({
+      to: email,
+      subject: tekst.subject,
+      html: brandedEmail(
+        tekst.alineas.map((p) => `<p>${escapeHtml(p)}</p>`).join("\n") +
+          `<hr style="border:none;border-top:1px solid #e7e2d8;margin:24px 0 16px" />
+           <p style="margin:0 0 4px">${escapeHtml(tekst.groet)}</p>
+           <div style="font-size:13px;color:#888;line-height:1.7">${signatureHtml()}</div>`,
+      ),
+      text: `${tekst.alineas.join("\n\n")}\n\n${tekst.groet}\n${COMPANY.legalName}`,
+    });
+    if (res.sent) mail = "verstuurd";
+  } catch {
+    mail = "mislukt";
+  }
+
+  return { contactId, aanvraagId: aanvraag.id, mail };
+}
