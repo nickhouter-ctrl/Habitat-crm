@@ -1,11 +1,15 @@
 /**
  * De speldjes voor de beurskaart.
  *
- * Het rekenwerk staat los van het tekenen: welke bezoekers hebben coördinaten,
- * hoeveel zitten er op dezelfde plek (die willen we als één speldje met een
- * aantal), en welk stuk van de wereld moet er in beeld. Dat laatste is het
- * verschil tussen een bruikbare kaart en een wereldkaart met alle punten op
- * één postzegel: staan ze allemaal in Spanje, dan zoomen we in op Spanje.
+ * Het rekenwerk staat los van het tekenen: wie heeft er coördinaten, welk
+ * bedrijf krijgt welke kleur, en welk stuk van de wereld moet er in beeld. Dat
+ * laatste is het verschil tussen een bruikbare kaart en een wereldkaart met
+ * alle punten op één postzegel: staan ze allemaal in Spanje, dan zoomen we in
+ * op Spanje.
+ *
+ * Eén speldje per bedrijf per plek. Twee bureaus in dezelfde stad zijn twee
+ * speldjes met een eigen kleur — anders zie je op de kaart alleen "Valencia"
+ * en niet dat daar drie verschillende bedrijven zitten.
  */
 import type { BeursContact } from "@/lib/beurs-lijst";
 import { landNaam } from "@/lib/landen";
@@ -15,8 +19,32 @@ export interface Speld {
   lon: number;
   /** Stad (en land) zoals we het tonen. */
   plaats: string;
-  /** Wie er op deze plek zitten — voor het label bij aanwijzen. */
+  /** Het bedrijf, of de naam van de bezoeker als hij er geen opgaf. */
+  label: string;
+  /** Vaste kleur bij dat bedrijf — ook in de legenda. */
+  kleur: string;
+  /** Wie er van dit bedrijf op deze plek waren. */
   namen: string[];
+}
+
+/**
+ * Kleuren voor op de kaart: onderling goed te onderscheiden en alle donker
+ * genoeg voor het lichte kaartvlak. De eerste is onze eigen terracotta.
+ */
+const KLEUREN = [
+  "#b6552d", "#2f6f6b", "#7d5ba6", "#3a6ea5", "#8a8f2b",
+  "#c2185b", "#4a7c2f", "#a8642a", "#2b5d8a", "#6b4c9a",
+  "#b03a3a", "#3f7a6d",
+];
+
+/**
+ * Altijd dezelfde kleur bij hetzelfde bedrijf, ook na herladen of filteren:
+ * uit de naam zelf, niet uit de volgorde van de lijst.
+ */
+export function kleurVoor(label: string): string {
+  let som = 0;
+  for (let i = 0; i < label.length; i += 1) som = (som * 31 + label.charCodeAt(i)) % 100_000;
+  return KLEUREN[som % KLEUREN.length];
 }
 
 /** Bereik van de kaart: hoek linksonder en rechtsboven, met wat lucht eromheen. */
@@ -33,25 +61,44 @@ const getal = (v: string | null): number | null => {
   return Number.isFinite(n) ? n : null;
 };
 
-/** Eén speldje per plek; wie op dezelfde stad zit komt bij elkaar te staan. */
+/** Eén speldje per bedrijf per plek; collega's van hetzelfde bureau samen. */
 export function speldjes(rijen: BeursContact[], taal = "nl"): Speld[] {
-  const perPlek = new Map<string, Speld>();
+  const perSpeld = new Map<string, Speld>();
   for (const r of rijen) {
     const lat = getal(r.lat);
     const lon = getal(r.lon);
     if (lat === null || lon === null) continue;
+    const label = r.bedrijf?.trim() || r.naam.trim();
     // Afronden op ~100 meter: dezelfde stad levert exact dezelfde coördinaten,
     // maar zo vallen ook twee net iets andere metingen samen.
-    const sleutel = `${lat.toFixed(3)},${lon.toFixed(3)}`;
+    const sleutel = `${lat.toFixed(3)},${lon.toFixed(3)}|${label.toLowerCase()}`;
     const plaats = [r.plaats, r.land ? landNaam(r.land, taal) : null].filter(Boolean).join(" · ");
-    const bestaand = perPlek.get(sleutel);
+    const bestaand = perSpeld.get(sleutel);
     if (bestaand) {
       if (!bestaand.namen.includes(r.naam)) bestaand.namen.push(r.naam);
     } else {
-      perPlek.set(sleutel, { lat, lon, plaats: plaats || r.naam, namen: [r.naam] });
+      perSpeld.set(sleutel, {
+        lat,
+        lon,
+        plaats: plaats || label,
+        label,
+        kleur: kleurVoor(label),
+        namen: [r.naam],
+      });
     }
   }
-  return [...perPlek.values()];
+  return [...perSpeld.values()];
+}
+
+/** De legenda naast de kaart: elk bedrijf één keer, op alfabet. */
+export function legenda(spelden: Speld[]): { label: string; kleur: string; plaats: string; aantal: number }[] {
+  const perLabel = new Map<string, { label: string; kleur: string; plaats: string; aantal: number }>();
+  for (const s of spelden) {
+    const bestaand = perLabel.get(s.label.toLowerCase());
+    if (bestaand) bestaand.aantal += s.namen.length;
+    else perLabel.set(s.label.toLowerCase(), { label: s.label, kleur: s.kleur, plaats: s.plaats, aantal: s.namen.length });
+  }
+  return [...perLabel.values()].sort((a, b) => a.label.localeCompare(b.label, "nl", { sensitivity: "base" }));
 }
 
 /**

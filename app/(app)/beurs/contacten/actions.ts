@@ -14,10 +14,12 @@
  *     hangt — een offerte, project, pand of afspraak houdt het tegen;
  *  3. het account alleen zolang er nog nooit mee is ingelogd (geen wachtwoord).
  */
-import { and, eq, isNull, like, or, sql } from "drizzle-orm";
+import { and, eq, inArray, isNull, like, or, sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 
 import { requireModule } from "@/lib/auth/guards";
+import { haalBeursGesprekken } from "@/lib/beurs-data";
+import { vindDubbeleInvoeren } from "@/lib/beurs-lijst";
 import { db } from "@/lib/db";
 import {
   appointments,
@@ -128,4 +130,62 @@ export async function verwijderBeursInvoer(formData: FormData): Promise<Verwijde
   revalidatePath("/contacts");
   revalidatePath("/aanvragen");
   return { ok: true, melding: delen.join(" · ") };
+}
+
+/**
+ * Dubbele invoeren opruimen.
+ *
+ * Twee tikken die door elkaar heen liepen leverden twee identieke regels op.
+ * Dat kan niet meer gebeuren, maar wat er al staat moet eruit kunnen zonder in
+ * de database te duiken. Strenge regels (zelfde adres, zelfde bericht, binnen
+ * twee minuten) staan in `vindDubbeleInvoeren`; hier alleen het opruimen, en
+ * we houden altijd de oudste.
+ */
+export async function ruimDubbeleInvoerenOp(): Promise<VerwijderResultaat> {
+  await requireModule("aanvragen");
+  const groepen = vindDubbeleInvoeren(await haalBeursGesprekken());
+  const weg = groepen.flatMap((g) => g.weg);
+  if (weg.length === 0) return { ok: true, melding: "Geen dubbele invoeren gevonden." };
+
+  // Welke contacten hingen eraan? Een dubbele invoer maakte soms ook een tweede
+  // contactkaart aan; die moet mee, maar alleen als er verder niets aan hangt.
+  const rijen = await db
+    .select({ id: quoteRequests.id, contactId: quoteRequests.contactId })
+    .from(quoteRequests)
+    .where(inArray(quoteRequests.id, weg));
+
+  await db.delete(quoteRequests).where(inArray(quoteRequests.id, weg));
+
+  let contactenWeg = 0;
+  for (const contactId of new Set(rijen.map((r) => r.contactId).filter((x): x is string => !!x))) {
+    const c = await db.query.contacts.findFirst({
+      where: eq(contacts.id, contactId),
+      columns: { id: true, source: true },
+    });
+    if (!c?.source?.startsWith("beurs:")) continue;
+    // Nog een aanvraag aan deze kaart? Dan is het de kaart die we houden.
+    const restAanvragen = await db.query.quoteRequests.findFirst({
+      where: eq(quoteRequests.contactId, contactId),
+      columns: { id: true },
+    });
+    if (restAanvragen) continue;
+    if ((await watHangtEraan(contactId)).length) continue;
+    await db.delete(contacts).where(eq(contacts.id, contactId));
+    contactenWeg += 1;
+  }
+
+  revalidatePath("/beurs");
+  revalidatePath("/beurs/contacten");
+  revalidatePath("/contacts");
+  revalidatePath("/aanvragen");
+  return {
+    ok: true,
+    melding: [
+      `${weg.length} dubbele ${weg.length === 1 ? "invoer" : "invoeren"} opgeruimd`,
+      contactenWeg ? `${contactenWeg} dubbele contactkaart${contactenWeg === 1 ? "" : "en"} verwijderd` : "",
+      `(${groepen.map((g) => g.naam).join(", ")})`,
+    ]
+      .filter(Boolean)
+      .join(" · "),
+  };
 }

@@ -8,7 +8,7 @@
  */
 import { describe, expect, it } from "vitest";
 
-import { bereikVoor, perPlaats, speldjes } from "@/lib/beurs-kaart";
+import { bereikVoor, kleurVoor, legenda, perPlaats, speldjes } from "@/lib/beurs-kaart";
 import type { BeursContact } from "@/lib/beurs-lijst";
 import { leesPlaats, plaatsLabel, splitsPlaats } from "@/lib/plaats";
 
@@ -86,14 +86,35 @@ const contact = (o: Partial<BeursContact> & { naam: string }): BeursContact =>
   }) as BeursContact;
 
 describe("speldjes op de kaart", () => {
-  it("zet wie in dezelfde stad zit op één speldje", () => {
+  it("zet collega's van hetzelfde bureau op één speldje", () => {
     const s = speldjes([
-      contact({ naam: "Ana", plaats: "Valencia", land: "ES", lat: "39.470000", lon: "-0.376800" }),
-      contact({ naam: "Bea", plaats: "Valencia", land: "ES", lat: "39.470000", lon: "-0.376800" }),
+      contact({ naam: "Ana", bedrijf: "Estudio Bonet", plaats: "Valencia", land: "ES", lat: "39.470000", lon: "-0.376800" }),
+      contact({ naam: "Bea", bedrijf: "Estudio Bonet", plaats: "Valencia", land: "ES", lat: "39.470000", lon: "-0.376800" }),
       contact({ naam: "Cees", plaats: "Rotterdam", land: "NL", lat: "51.922500", lon: "4.479200" }),
     ]);
     expect(s).toHaveLength(2);
-    expect(s.find((p) => p.plaats.startsWith("Valencia"))?.namen).toEqual(["Ana", "Bea"]);
+    expect(s.find((p) => p.label === "Estudio Bonet")?.namen).toEqual(["Ana", "Bea"]);
+  });
+
+  it("geeft twee bedrijven in dezelfde stad een eigen speldje en een eigen kleur", () => {
+    const s = speldjes([
+      contact({ naam: "Ana", bedrijf: "Estudio Bonet", plaats: "Valencia", land: "ES", lat: "39.470000", lon: "-0.376800" }),
+      contact({ naam: "Bea", bedrijf: "Taller Vera", plaats: "Valencia", land: "ES", lat: "39.470000", lon: "-0.376800" }),
+    ]);
+    expect(s).toHaveLength(2);
+    expect(s[0].kleur).not.toBe(s[1].kleur);
+  });
+
+  it("houdt dezelfde kleur bij hetzelfde bedrijf, ook na herladen", () => {
+    expect(kleurVoor("Estudio Bonet")).toBe(kleurVoor("Estudio Bonet"));
+  });
+
+  it("zet iedereen in de legenda, op alfabet", () => {
+    const s = speldjes([
+      contact({ naam: "Bea", bedrijf: "Taller Vera", plaats: "Valencia", land: "ES", lat: "39.47", lon: "-0.3768" }),
+      contact({ naam: "Ana", bedrijf: "Estudio Bonet", plaats: "Valencia", land: "ES", lat: "39.47", lon: "-0.3768" }),
+    ]);
+    expect(legenda(s).map((m) => m.label)).toEqual(["Estudio Bonet", "Taller Vera"]);
   });
 
   it("slaat bezoekers zonder coördinaten over — die horen niet op 0,0", () => {

@@ -29,6 +29,34 @@ const MAX = 40;
 type Blik = { k: number; x: number; y: number };
 const BEGIN: Blik = { k: 1, x: 0, y: 0 };
 
+type Punt = { x: number; y: number; kleur: string; groot: number; tekst: string };
+
+/**
+ * Bedrijven uit dezelfde stad krijgen exact dezelfde coördinaten en zouden dus
+ * op elkaar liggen. Die zetten we in een kringetje om het middelpunt heen, zodat
+ * je ziet dat er drie bureaus zitten en niet één.
+ */
+function verdeel(punten: Punt[]): Punt[] {
+  const perPlek = new Map<string, Punt[]>();
+  for (const p of punten) {
+    const sleutel = `${p.x.toFixed(1)},${p.y.toFixed(1)}`;
+    perPlek.set(sleutel, [...(perPlek.get(sleutel) ?? []), p]);
+  }
+  const uit: Punt[] = [];
+  for (const groep of perPlek.values()) {
+    if (groep.length === 1) {
+      uit.push(groep[0]);
+      continue;
+    }
+    const straal = 5 + groep.length;
+    groep.forEach((p, i) => {
+      const hoek = (i / groep.length) * Math.PI * 2 - Math.PI / 2;
+      uit.push({ ...p, x: p.x + Math.cos(hoek) * straal, y: p.y + Math.sin(hoek) * straal });
+    });
+  }
+  return uit;
+}
+
 export function BeursKaart({ spelden, bereik }: { spelden: Speld[]; bereik: Bereik }) {
   const [hover, setHover] = useState<{ tekst: string; x: number; y: number } | null>(null);
   const [blik, setBlik] = useState<Blik>(BEGIN);
@@ -53,15 +81,18 @@ export function BeursKaart({ spelden, bereik }: { spelden: Speld[]; bereik: Bere
     const pad = geoPath(projectie);
     return {
       landen: fc.features.map((f) => ({ d: pad(f) ?? "", naam: f.properties.name })),
-      punten: spelden.map((s) => {
-        const xy = projectie([s.lon, s.lat]);
-        return {
-          x: xy?.[0] ?? -999,
-          y: xy?.[1] ?? -999,
-          groot: Math.min(6, s.namen.length - 1),
-          tekst: `${s.plaats} — ${s.namen.slice(0, 6).join(", ")}${s.namen.length > 6 ? ` +${s.namen.length - 6}` : ""}`,
-        };
-      }),
+      punten: verdeel(
+        spelden.map((s) => {
+          const xy = projectie([s.lon, s.lat]);
+          return {
+            x: xy?.[0] ?? -999,
+            y: xy?.[1] ?? -999,
+            kleur: s.kleur,
+            groot: Math.min(4, s.namen.length - 1),
+            tekst: `${s.label} — ${s.plaats}${s.namen.length ? ` · ${s.namen.slice(0, 5).join(", ")}` : ""}`,
+          };
+        }),
+      ),
     };
   }, [spelden, bereik]);
 
@@ -151,8 +182,8 @@ export function BeursKaart({ spelden, bereik }: { spelden: Speld[]; bereik: Bere
               // Het speldje moet even groot blijven als je inzoomt, anders wordt
               // het een vlek over de halve provincie.
               r={(4 + p.groot * 1.5) / blik.k}
-              fill="#b6552d"
-              fillOpacity={0.75}
+              fill={p.kleur}
+              fillOpacity={0.85}
               stroke="#fff"
               strokeWidth={1.5}
               vectorEffect="non-scaling-stroke"

@@ -46,6 +46,40 @@ export interface BeursContact extends BeursGesprek {
   eersteKeer: Date | null;
 }
 
+/**
+ * Dubbele invoeren: dezelfde bezoeker, hetzelfde verhaal, vlak achter elkaar.
+ *
+ * Dat ontstond doordat twee tikken op de knop door elkaar heen liepen. Dat kan
+ * niet meer gebeuren, maar wat er al staat moet eruit kunnen. De regels zijn
+ * streng, want een verkeerde opruiming kost een echte bezoeker: hetzelfde
+ * e-mailadres, exact hetzelfde bericht, en binnen twee minuten van elkaar. Wie
+ * 's middags terugkomt met een ander verhaal blijft dus staan.
+ *
+ * Geeft per groep terug welke we houden (de oudste) en welke weg mogen.
+ */
+export function vindDubbeleInvoeren(
+  gesprekken: BeursGesprek[],
+): { houden: string; weg: string[]; naam: string }[] {
+  const perSleutel = new Map<string, BeursGesprek[]>();
+  for (const g of gesprekken) {
+    const sleutel = `${g.email.trim().toLowerCase()}|${(g.bericht ?? "").trim()}`;
+    perSleutel.set(sleutel, [...(perSleutel.get(sleutel) ?? []), g]);
+  }
+
+  const uit: { houden: string; weg: string[]; naam: string }[] = [];
+  for (const groep of perSleutel.values()) {
+    if (groep.length < 2) continue;
+    const opTijd = [...groep].sort((a, b) => tijd(a.wanneer) - tijd(b.wanneer));
+    const eerste = opTijd[0];
+    const weg = opTijd
+      .slice(1)
+      .filter((g) => Math.abs(tijd(g.wanneer) - tijd(eerste.wanneer)) <= 2 * 60_000)
+      .map((g) => g.aanvraagId);
+    if (weg.length) uit.push({ houden: eerste.aanvraagId, weg, naam: eerste.naam });
+  }
+  return uit;
+}
+
 export type BeursSortering = "wanneer" | "naam" | "bedrijf" | "soort";
 export type BeursRichting = "asc" | "desc";
 

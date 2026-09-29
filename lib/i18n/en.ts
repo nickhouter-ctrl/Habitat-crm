@@ -429,6 +429,9 @@ export const en: Dictionary = {
   "Beeld en documentatie": "Images and documentation",
   "Bezoek showroom Jávea": "Visit our showroom in Jávea",
   "Verwijderen": "Delete",
+  "{n} dubbele invoer(en) opruimen": "Clean up {n} duplicate entries",
+  "{n} dubbele invoer(en) opruimen? De oudste blijft staan.":
+    "Clean up {n} duplicate entries? The oldest one stays.",
   "Stad": "City",
   "Land": "Country",
   "Niet gevraagd": "Not asked",

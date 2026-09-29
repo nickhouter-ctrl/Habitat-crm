@@ -27,13 +27,15 @@ import {
   filterBeursContacten,
   sorteerBeursContacten,
   verdichtTotContacten,
+  vindDubbeleInvoeren,
 } from "@/lib/beurs-lijst";
 import { datumTaal, huidigeTaal, tekst } from "@/lib/i18n/server";
 import { cn } from "@/lib/utils";
-import { bereikVoor, perPlaats, speldjes } from "@/lib/beurs-kaart";
+import { bereikVoor, legenda, speldjes } from "@/lib/beurs-kaart";
 import { plaatsLabel } from "@/lib/plaats";
-import { verwijderBeursInvoer } from "./actions";
+import { ruimDubbeleInvoerenOp, verwijderBeursInvoer } from "./actions";
 import { BeursKaart } from "./kaart";
+import { OpruimKnop } from "./opruim-knop";
 import { VerwijderKnop } from "./verwijder-knop";
 
 export const metadata = { title: "Beurscontacten" };
@@ -69,7 +71,10 @@ export default async function BeursContactenPage({
   const sort = (SORTEERBAAR.some((s) => s.key === sortParam) ? sortParam : "wanneer") as BeursSortering;
   const dir = (params.dir === "asc" ? "asc" : "desc") as BeursRichting;
 
-  const alles = verdichtTotContacten(await haalBeursGesprekken());
+  const gesprekken = await haalBeursGesprekken();
+  const alles = verdichtTotContacten(gesprekken);
+  // Dubbelen van vóór het slot in de database; opruimen mag, maar met de hand.
+  const dubbelen = vindDubbeleInvoeren(gesprekken).reduce((n, g) => n + g.weg.length, 0);
   // Tellingen per soort horen bij wat je nu ziet, dus zonder het rolfilter maar
   // mét het zoekwoord: anders klik je op "Architect (4)" en zie je er twee.
   const zonderRol = filterBeursContacten(alles, { q, invoer, wil });
@@ -92,7 +97,7 @@ export default async function BeursContactenPage({
   // architecten, dan zie je waar de architecten zitten.
   const spelden = speldjes(rijen, taal);
   const bereik = bereikVoor(spelden);
-  const steden = perPlaats(rijen, taal).slice(0, 8);
+  const merken = legenda(spelden);
   const zonderPlaats = rijen.filter((r) => !r.plaats?.trim()).length;
 
   const vandaag = new Date().toISOString().slice(0, 10);
@@ -150,6 +155,12 @@ export default async function BeursContactenPage({
         <StatTile label={t("Met bedrijf")} value={kengetallen.metBedrijf} hint={t("architect, winkel, aannemer")} />
         <StatTile label={t("Zelf ingevuld")} value={kengetallen.zelf} hint={t("via de QR-code")} />
       </div>
+
+      {dubbelen > 0 && (
+        <div className="mb-4">
+          <OpruimKnop aantal={dubbelen} opruimen={ruimDubbeleInvoerenOp} />
+        </div>
+      )}
 
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <div className="flex flex-wrap items-center gap-3">
@@ -210,13 +221,22 @@ export default async function BeursContactenPage({
               {zonderPlaats > 0 ? ` · ${t("{n} zonder", { n: zonderPlaats })}` : ""}
             </span>
           </CardHeader>
-          <CardContent className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_14rem]">
+          <CardContent className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_16rem]">
             <BeursKaart spelden={spelden} bereik={bereik} />
-            <ul className="space-y-1 text-sm lg:border-l lg:pl-5">
-              {steden.map((s) => (
-                <li key={s.plaats} className="flex items-baseline justify-between gap-3">
-                  <span className="truncate text-muted">{s.plaats}</span>
-                  <span className="tabular-nums font-medium">{s.aantal}</span>
+            {/* Legenda: elk bedrijf zijn eigen kleur, met de plaats erbij. */}
+            <ul className="max-h-[26rem] space-y-1.5 overflow-y-auto text-sm lg:border-l lg:pl-5">
+              {merken.map((m) => (
+                <li key={m.label} className="flex items-baseline gap-2">
+                  <span
+                    className="mt-1 size-2.5 shrink-0 rounded-full"
+                    style={{ backgroundColor: m.kleur }}
+                    aria-hidden
+                  />
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate font-medium">{m.label}</span>
+                    <span className="block truncate text-xs text-muted">{m.plaats}</span>
+                  </span>
+                  {m.aantal > 1 && <span className="tabular-nums text-xs text-muted">{m.aantal}</span>}
                 </li>
               ))}
             </ul>

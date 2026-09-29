@@ -14,6 +14,7 @@ import {
   filterBeursContacten,
   sorteerBeursContacten,
   verdichtTotContacten,
+  vindDubbeleInvoeren,
   wensUitBericht,
 } from "@/lib/beurs-lijst";
 
@@ -130,5 +131,47 @@ describe("anders", () => {
     expect(r.rol).toBe("anders");
     expect(r.rolAnders).toBe("fotograaf");
     expect(beursCsv([r])).toContain("Anders (fotograaf)");
+  });
+});
+
+describe("dubbele invoeren opsporen", () => {
+  const rij = (naam: string, id: string, bericht: string, min: number): BeursGesprek => ({
+    ...gesprek({ naam, wanneer: new Date(`2026-09-29T09:${String(min).padStart(2, "0")}:00Z`) }),
+    aanvraagId: id,
+    email: `${naam.toLowerCase()}@bureau.es`,
+    bericht,
+  });
+
+  it("vindt twee identieke invoeren vlak na elkaar en houdt de oudste", () => {
+    const groepen = vindDubbeleInvoeren([
+      rij("Marta", "a1", "Architect — gesproken op…", 38),
+      rij("Marta", "a2", "Architect — gesproken op…", 38),
+    ]);
+    expect(groepen).toHaveLength(1);
+    expect(groepen[0].houden).toBe("a1");
+    expect(groepen[0].weg).toEqual(["a2"]);
+  });
+
+  it("laat een tweede gesprek later op de dag met rust", () => {
+    // Zelfde persoon, zelfde tekst, maar een uur later: dat is een echt bezoek.
+    const groepen = vindDubbeleInvoeren([
+      rij("Marta", "a1", "Architect — gesproken op…", 10),
+      { ...rij("Marta", "a2", "Architect — gesproken op…", 10), wanneer: new Date("2026-09-29T11:10:00Z") },
+    ]);
+    expect(groepen).toHaveLength(0);
+  });
+
+  it("laat twee bezoekers met een ander verhaal met rust", () => {
+    const groepen = vindDubbeleInvoeren([
+      rij("Marta", "a1", "Architect — wil stalen", 38),
+      rij("Marta", "a2", "Architect — wil prijzen", 38),
+    ]);
+    expect(groepen).toHaveLength(0);
+  });
+
+  it("raakt verschillende mensen nooit aan", () => {
+    expect(
+      vindDubbeleInvoeren([rij("Marta", "a1", "zelfde tekst", 38), rij("Alvaro", "a2", "zelfde tekst", 38)]),
+    ).toHaveLength(0);
   });
 });
