@@ -33,6 +33,7 @@ import {
   poLineTotal,
   PO_STATUS_META,
 } from "@/lib/purchase-orders";
+import { BTW_KEUZES } from "@/lib/inkoop-btw";
 import { verdelingVanInkoop } from "@/lib/inkoop-verdeling";
 import { Combobox } from "@/components/combobox";
 import { PurchaseProjectLink } from "@/components/purchase-project-link";
@@ -47,6 +48,7 @@ import {
   setPurchaseOrderProject,
   setPurchaseOrderStatus,
   verdeelPurchaseOrder,
+  zetInkoopBtw,
 } from "../actions";
 
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }) {
@@ -182,6 +184,7 @@ export default async function PurchaseOrderPage({
 
   const meta = PO_STATUS_META[po.status];
   const remove = deletePurchaseOrder.bind(null, id);
+  const btwActie = zetInkoopBtw.bind(null, id);
 
   // Betaalstatus houden we hier bewust niet bij — die leeft in Holded
   // (keuze Nick 24-08-2026); inkoop is voor het project-overzicht.
@@ -310,11 +313,27 @@ export default async function PurchaseOrderPage({
               })}
               <Tr>
                 <Td className="text-muted" colSpan={4}>
-                  Ex. btw{" "}
+                  Ex. btw
+                  {/* Staat de btw niet op de bon, dan is het hier in één keuze te
+                      zeggen. Eerder wees deze regel naar Bewerken, maar daar
+                      moest je het subtotaal zelf uitrekenen — en de al geboekte
+                      werfregels bleven op het oude bedrag staan. */}
                   {exVat.vatUnknown && (
-                    <span className="text-xs text-warning">
-                      btw onbekend — vul het subtotaal in via Bewerken › Factuur / bon
-                    </span>
+                    <form action={btwActie} className="mt-1.5 flex flex-wrap items-center gap-2">
+                      <span className="text-xs text-warning">
+                        btw staat niet op de bon — kies wat erop zit:
+                      </span>
+                      <Select name="btw" defaultValue="geen" className="h-8 w-auto py-0 text-xs">
+                        {BTW_KEUZES.map((k) => (
+                          <option key={k.key} value={k.key}>
+                            {k.label}
+                          </option>
+                        ))}
+                      </Select>
+                      <SubmitButton size="sm" variant="secondary" pendingLabel="Bezig…">
+                        Vastleggen
+                      </SubmitButton>
+                    </form>
                   )}
                 </Td>
                 <Td className="text-right tabular-nums text-muted">
@@ -324,7 +343,16 @@ export default async function PurchaseOrderPage({
               </Tr>
               <Tr>
                 <Td className="font-semibold" colSpan={4}>
-                  Totaal <span className="text-xs font-normal text-muted">incl. btw</span>
+                  Totaal{" "}
+                  <span className="text-xs font-normal text-muted">
+                    {/* "incl. btw" beweren terwijl er 0 btw op staat is gewoon
+                        onwaar; dan liever zeggen dat er geen btw op zit. */}
+                    {Number(po.tax) > 0
+                      ? `incl. ${formatMoney(po.tax, po.currency)} btw`
+                      : po.subtotal != null
+                        ? "geen btw"
+                        : "incl. btw"}
+                  </span>
                 </Td>
                 <Td className="text-right font-semibold tabular-nums">
                   {formatMoney(po.total, po.currency)}

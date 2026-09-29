@@ -10,6 +10,7 @@ import { auth } from "@/auth";
 import { db } from "@/lib/db";
 import { activities, emailInbox, mailAttachments, products, projectCosts, purchaseOrders, timeEntries, workers } from "@/lib/db/schema";
 import type { PurchaseOrderAttachment } from "@/lib/db/schema";
+import { isBtwKeuze, schaalVerdeling, splitsBtw } from "@/lib/inkoop-btw";
 import { urenUitTarief } from "@/lib/labor-hours";
 import { verdeelBedragen } from "@/lib/verdeel-bedragen";
 import { nextSequentialSku } from "@/lib/products";
@@ -946,4 +947,72 @@ export async function dismissEmailFromQueue(emailId: string) {
   await requireUser();
   await db.update(emailInbox).set({ status: "archived", updatedAt: new Date() }).where(eq(emailInbox.id, emailId));
   revalidatePath("/inkooporders/te-verwerken");
+}
+
+/**
+ * De btw van een inkoopfactuur of bon vastleggen — en de werfregels meenemen.
+ *
+ * Waarom dit nodig is: staat er geen btw-uitsplitsing op een bon, dan neemt het
+ * CRM bij arbeid 21% aan. Dat is voor een weekfactuur van een ploeg juister dan
+ * het totaal als kost boeken, maar een contant betaalde bon van een
+ * zelfstandige draagt vaak géén btw. Dan staat de kost 21% te laag op de werf,
+ * en elke correctie werd bij de volgende herberekening teruggedraaid: "ik pas
+ * het bedrag aan en het verandert meteen".
+ *
+ * Eén keuze zet het recht. De al geboekte werfregels schalen mee, zodat de
+ * verdeling exact het nieuwe bedrag ex. btw blijft.
+ */
+export async function zetInkoopBtw(id: string, formData: FormData) {
+  await requireModule("inkoop");
+  const keuze = String(formData.get("btw") ?? "").trim();
+  if (!isBtwKeuze(keuze)) throw new Error("Onbekend btw-tarief.");
+
+  const po = await db.query.purchaseOrders.findFirst({ where: eq(purchaseOrders.id, id) });
+  if (!po) throw new Error("Inkooporder niet gevonden.");
+
+  const { subtotal, tax } = splitsBtw(po.total, keuze);
+  await db
+    .update(purchaseOrders)
+    .set({ subtotal: String(subtotal), tax: String(tax), updatedAt: new Date() })
+    .where(eq(purchaseOrders.id, id));
+
+  // De verdeling over werven is op het oude bedrag gemaakt; die moet mee.
+  const kosten = await db.query.projectCosts.findMany({
+    where: eq(projectCosts.purchaseOrderId, id),
+    columns: { id: true, amountEur: true, projectId: true },
+  });
+  if (kosten.length) {
+    const nieuw = schaalVerdeling(kosten.map((k) => Number(k.amountEur) || 0), subtotal);
+    for (const [i, k] of kosten.entries()) {
+      await db
+        .update(projectCosts)
+        .set({ amountEur: nieuw[i].toFixed(2), updatedAt: new Date() })
+        .where(eq(projectCosts.id, k.id));
+      revalidatePath(`/projects/${k.projectId}`);
+    }
+  }
+
+  // Uren-regels dragen het bedrag in hun tarief; uren blijven staan, het tarief
+  // volgt het nieuwe bedrag. Portaal-uren laten we met rust: die komen van de
+  // arbeiders zelf.
+  const uren = await db.query.timeEntries.findMany({
+    where: and(eq(timeEntries.purchaseOrderId, id), isNull(timeEntries.selfLoggedAt)),
+    columns: { id: true, hours: true, hourlyCostEur: true, projectId: true },
+  });
+  if (uren.length) {
+    const huidig = uren.map((u) => (Number(u.hours) || 0) * (Number(u.hourlyCostEur) || 0));
+    const nieuw = schaalVerdeling(huidig, subtotal);
+    for (const [i, u] of uren.entries()) {
+      const h = Number(u.hours) || 0;
+      if (h <= 0) continue;
+      await db
+        .update(timeEntries)
+        .set({ hourlyCostEur: (nieuw[i] / h).toFixed(6), updatedAt: new Date() })
+        .where(eq(timeEntries.id, u.id));
+      revalidatePath(`/projects/${u.projectId}`);
+    }
+  }
+
+  revalidatePath(`/inkooporders/${id}`);
+  revalidatePath("/inkooporders");
 }
