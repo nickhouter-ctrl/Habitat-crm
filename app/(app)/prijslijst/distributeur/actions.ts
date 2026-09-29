@@ -56,7 +56,8 @@ function escapeHtml(s: string) {
   return s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "'": "&#39;" })[c] ?? c);
 }
 
-const terug = (params: string) => redirect(`/prijslijst/distributeur?${params}`);
+// Met #document terug, zodat je na het versturen op het juiste tabblad landt.
+const terug = (params: string) => redirect(`/prijslijst/distributeur?${params}#document`);
 
 export async function mailDistributeurPrijslijst(formData: FormData) {
   await requireModule("prijzen");
