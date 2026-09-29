@@ -33,8 +33,9 @@ import { datumTaal, huidigeTaal, tekst } from "@/lib/i18n/server";
 import { cn } from "@/lib/utils";
 import { bereikVoor, legenda, speldjes } from "@/lib/beurs-kaart";
 import { plaatsLabel } from "@/lib/plaats";
-import { ruimDubbeleInvoerenOp, verwijderBeursInvoer } from "./actions";
+import { ruimDubbeleInvoerenOp, stuurBeursVervolgmail, verwijderBeursInvoer } from "./actions";
 import { BeursKaart } from "./kaart";
+import { FilmmailKnop } from "./filmmail-knop";
 import { OpruimKnop } from "./opruim-knop";
 import { VerwijderKnop } from "./verwijder-knop";
 
@@ -100,6 +101,12 @@ export default async function BeursContactenPage({
   const merken = legenda(spelden, taal);
   const zonderPlaats = rijen.filter((r) => !r.plaats?.trim()).length;
 
+  // Wie heeft de opvolgmail met de films nog niet gehad? Eén regel per persoon,
+  // dus tellen we op het verdichte overzicht.
+  const filmmailOpen = alles.filter(
+    (r) => r.email && !(r.tags ?? []).includes("beurs:film-mail"),
+  ).length;
+
   const vandaag = new Date().toISOString().slice(0, 10);
   const kengetallen = {
     totaal: alles.length,
@@ -156,11 +163,11 @@ export default async function BeursContactenPage({
         <StatTile label={t("Zelf ingevuld")} value={kengetallen.zelf} hint={t("via de QR-code")} />
       </div>
 
-      {dubbelen > 0 && (
-        <div className="mb-4">
-          <OpruimKnop aantal={dubbelen} opruimen={ruimDubbeleInvoerenOp} />
-        </div>
-      )}
+      {/* Opvolgen: de films nasturen, en wat er nog aan dubbelen ligt. */}
+      <div className="mb-5 flex flex-wrap items-center gap-4">
+        <FilmmailKnop open={filmmailOpen} versturen={stuurBeursVervolgmail} />
+        {dubbelen > 0 && <OpruimKnop aantal={dubbelen} opruimen={ruimDubbeleInvoerenOp} />}
+      </div>
 
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <div className="flex flex-wrap items-center gap-3">

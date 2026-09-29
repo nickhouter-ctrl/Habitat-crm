@@ -429,6 +429,10 @@ export const en: Dictionary = {
   "Beeld en documentatie": "Images and documentation",
   "Bezoek showroom Jávea": "Visit our showroom in Jávea",
   "Verwijderen": "Delete",
+  "Versturen…": "Sending…",
+  "Films mailen ({n})": "Email the films ({n})",
+  "Iedereen heeft de films gehad": "Everyone has had the films",
+  "De films naar {n} klant(en) mailen?": "Email the films to {n} customers?",
   "{n} dubbele invoer(en) opruimen": "Clean up {n} duplicate entries",
   "{n} dubbele invoer(en) opruimen? De oudste blijft staan.":
     "Clean up {n} duplicate entries? The oldest one stays.",

@@ -14,12 +14,14 @@
  *     hangt — een offerte, project, pand of afspraak houdt het tegen;
  *  3. het account alleen zolang er nog nooit mee is ingelogd (geen wachtwoord).
  */
-import { and, eq, inArray, isNull, like, or, sql } from "drizzle-orm";
+import { and, eq, inArray, isNotNull, isNull, like, or, sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 
 import { requireModule } from "@/lib/auth/guards";
 import { haalBeursGesprekken } from "@/lib/beurs-data";
 import { vindDubbeleInvoeren } from "@/lib/beurs-lijst";
+import { beursVervolgmail } from "@/lib/beurs-vervolgmail";
+import { brandedEmail, escapeHtml, sendEmail, signatureHtml } from "@/lib/email";
 import { db } from "@/lib/db";
 import {
   appointments,
@@ -34,6 +36,9 @@ import {
   referrals,
   sampleMovements,
 } from "@/lib/db/schema";
+
+/** Tag op het contact zodra de filmmail eruit is; zo krijgt niemand hem twee keer. */
+const FILM_MAIL_TAG = "beurs:film-mail";
 
 /** Telt wat er nog aan een contact hangt; alles op 0 = veilig te verwijderen. */
 async function watHangtEraan(contactId: string): Promise<string[]> {
@@ -184,6 +189,89 @@ export async function ruimDubbeleInvoerenOp(): Promise<VerwijderResultaat> {
       `${weg.length} dubbele ${weg.length === 1 ? "invoer" : "invoeren"} opgeruimd`,
       contactenWeg ? `${contactenWeg} dubbele contactkaart${contactenWeg === 1 ? "" : "en"} verwijderd` : "",
       `(${groepen.map((g) => g.naam).join(", ")})`,
+    ]
+      .filter(Boolean)
+      .join(" · "),
+  };
+}
+
+/**
+ * De opvolgmail met de films versturen.
+ *
+ * Twee dingen moeten hier kloppen. Niemand mag hem twee keer krijgen — de
+ * bevestigingsmail is vandaag al een keer dubbel verstuurd, dat hoeft niet nog
+ * eens — dus wie hem heeft gehad krijgt de tag `beurs:film-mail` en wordt
+ * daarna overgeslagen. En het moet in porties: bij tientallen ontvangers loopt
+ * één verzoek anders tegen de tijdgrens aan. Blijft er iets over, dan zegt de
+ * melding hoeveel; nog een keer klikken pakt de rest.
+ */
+const PORTIE = 25;
+
+export async function stuurBeursVervolgmail(): Promise<VerwijderResultaat> {
+  await requireModule("aanvragen");
+
+  const ontvangers = await db
+    .selectDistinctOn([contacts.id], {
+      id: contacts.id,
+      naam: contacts.name,
+      email: contacts.email,
+      tags: contacts.tags,
+    })
+    .from(quoteRequests)
+    .innerJoin(contacts, eq(contacts.id, quoteRequests.contactId))
+    .where(and(like(quoteRequests.source, "beurs:%"), isNotNull(contacts.email)));
+
+  const teDoen = ontvangers.filter((c) => !(c.tags ?? []).includes(FILM_MAIL_TAG));
+  if (teDoen.length === 0) {
+    return { ok: true, melding: "Iedereen heeft de films al gehad." };
+  }
+
+  let verstuurd = 0;
+  let mislukt = 0;
+  for (const c of teDoen.slice(0, PORTIE)) {
+    const tekst = beursVervolgmail(c.naam ?? "");
+    try {
+      const res = await sendEmail({
+        to: c.email!,
+        subject: tekst.subject,
+        html: brandedEmail(
+          tekst.blokken
+            .map(
+              (b, i) => `
+              ${i > 0 ? '<hr style="border:none;border-top:1px solid #e7e2d8;margin:28px 0 22px" />' : ""}
+              <p>${escapeHtml(b.hallo(c.naam ?? ""))}</p>
+              ${b.alineas.map((p) => `<p>${escapeHtml(p)}</p>`).join("\n")}
+              <p style="margin:22px 0"><a href="${b.link}" style="background:#b5532b;color:#fff;padding:12px 22px;border-radius:8px;text-decoration:none;font-size:14px">${escapeHtml(b.knop)}</a></p>
+              <p style="margin:0">${escapeHtml(b.groet)}</p>`,
+            )
+            .join("\n") +
+            `<div style="font-size:13px;color:#888;line-height:1.7;margin-top:18px">${signatureHtml()}</div>`,
+        ),
+        text: tekst.blokken
+          .map((b) => `${b.hallo(c.naam ?? "")}\n\n${b.alineas.join("\n\n")}\n\n${b.knop}: ${b.link}\n\n${b.groet}`)
+          .join("\n\n— — —\n\n"),
+      });
+      if (!res.sent) throw new Error(res.reason ?? "niet verstuurd");
+      // Pas tággen als hij écht weg is; anders slaan we iemand over die niets kreeg.
+      await db
+        .update(contacts)
+        .set({ tags: [...new Set([...(c.tags ?? []), FILM_MAIL_TAG])], updatedAt: new Date() })
+        .where(eq(contacts.id, c.id));
+      verstuurd += 1;
+    } catch (err) {
+      console.warn(`[beurs] filmmail mislukt voor ${c.email}:`, err);
+      mislukt += 1;
+    }
+  }
+
+  const rest = teDoen.length - verstuurd - mislukt;
+  revalidatePath("/beurs/contacten");
+  return {
+    ok: true,
+    melding: [
+      `${verstuurd} ${verstuurd === 1 ? "mail" : "mails"} verstuurd`,
+      mislukt ? `${mislukt} mislukt (staat nog open)` : "",
+      rest > 0 ? `${rest} nog te gaan — klik nog een keer` : "klaar",
     ]
       .filter(Boolean)
       .join(" · "),
