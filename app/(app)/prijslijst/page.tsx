@@ -1,4 +1,5 @@
 import { sql } from "drizzle-orm";
+import Link from "next/link";
 import {
   Button,
   Card,
@@ -111,6 +112,22 @@ export default async function PrijslijstPage({
           </CardContent>
         </Card>
       </div>
+
+      <Card className="mt-5 max-w-5xl border-[#e8dfd0] bg-[#fdfaf5]">
+        <CardHeader>
+          <CardTitle>🏬 Flexibel Stone — prijzen voor verkooppunten</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <p className="mb-4 max-w-2xl text-sm text-muted">
+            Voor winkels en showrooms die doorverkopen: 50% onder de vaste adviesprijs, en 70% korting
+            op materiaal voor hun eigen showroom. Een ander niveau dan de B2B-prijs hierboven, die voor
+            architecten en bouwbedrijven is.
+          </p>
+          <Link href="/prijslijst/distributeur" className="text-sm font-medium text-accent hover:underline">
+            Bekijk en verstuur de lijst →
+          </Link>
+        </CardContent>
+      </Card>
 
       <Card className="mt-5 max-w-5xl border-[#e8dfd0] bg-[#fdfaf5]">
         <CardHeader>

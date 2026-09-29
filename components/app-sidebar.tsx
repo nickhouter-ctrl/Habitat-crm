@@ -102,6 +102,7 @@ const NAV_GROUPS: { label: string | null; items: NavItem[] }[] = [
       { href: "/voorschotten", label: "Voorschotten", icon: HandCoins },
       { href: "/prijzenboek", label: "Prijzenboek", icon: Euro },
       { href: "/prijslijst", label: "Prijslijst", icon: Tag },
+      { href: "/prijslijst/distributeur", label: "Verkooppunten", icon: Store },
       { href: "/catalogi", label: "Catalogi", icon: BookOpen },
     ],
   },
