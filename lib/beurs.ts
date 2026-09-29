@@ -138,6 +138,8 @@ export function contactNotitie(args: {
 
 type MailTekst = {
   onderwerp: string;
+  /** Link naar de films van de stand, in dezelfde taal als de mail. */
+  films: { tekst: string; knop: string; link: string };
   hallo: (naam: string) => string;
   dank: string;
   vervolg: string;
@@ -156,6 +158,11 @@ const MAIL: Record<BeursTaal, MailTekst> = {
     dank: `Bedankt voor je bezoek aan onze stand (${BEURS.stand}) op ${BEURS.naam} in ${BEURS.plaats}. Goed om je te spreken.`,
     vervolg:
       "We nemen na de beurs contact met je op om er rustig op terug te komen. Heb je eerder een vraag, antwoord dan gerust op deze mail.",
+    films: {
+      tekst: "De films die bij ons op het scherm liepen kun je hier bekijken — stil, met de tekst in beeld.",
+      knop: "Bekijk de films",
+      link: "https://www.habitat-one.com/nl/beurs/films",
+    },
     gevraagd: (lijst) => `Je vroeg om ${lijst}. Dat staat genoteerd.`,
     account:
       "Wil je nu alvast rondkijken? Je account op onze website staat klaar — stel je wachtwoord in en je ziet meteen het volledige assortiment, met prijzen.",
@@ -168,6 +175,11 @@ const MAIL: Record<BeursTaal, MailTekst> = {
     dank: `Thank you for visiting our stand (${BEURS.stand}) at ${BEURS.naam} in ${BEURS.plaats}. It was good to speak with you.`,
     vervolg:
       "We will get in touch after the fair to follow up properly. If anything comes up before then, simply reply to this email.",
+    films: {
+      tekst: "The films that were playing on our screen are here — no sound, the text is on screen.",
+      knop: "Watch the films",
+      link: "https://www.habitat-one.com/beurs/films",
+    },
     gevraagd: (lijst) => `You asked about ${lijst}. We have noted it.`,
     account:
       "Would you like to look around already? Your account on our website is ready — set your password and you will see the full range, prices included.",
@@ -180,6 +192,11 @@ const MAIL: Record<BeursTaal, MailTekst> = {
     dank: `Gracias por visitar nuestro stand (${BEURS.stand}) en ${BEURS.naam}, ${BEURS.plaats}. Ha sido un placer hablar contigo.`,
     vervolg:
       "Nos pondremos en contacto contigo después de la feria para retomarlo con calma. Si surge algo antes, responde a este correo.",
+    films: {
+      tekst: "Aquí tienes los vídeos que se veían en nuestra pantalla: sin sonido, con el texto en imagen.",
+      knop: "Ver los vídeos",
+      link: "https://www.habitat-one.com/es/beurs/films",
+    },
     gevraagd: (lijst) => `Nos pediste ${lijst}. Queda anotado.`,
     account:
       "¿Quieres ir echando un vistazo? Tu cuenta en nuestra web está lista: crea tu contraseña y verás todo el catálogo, con precios.",
@@ -202,6 +219,8 @@ export function beursMail(args: {
 }): {
   subject: string;
   alineas: string[];
+  /** De films van de stand — daar vroeg iedereen om, dus ze gaan meteen mee. */
+  films: { tekst: string; knop: string; link: string };
   account: { tekst: string; knop: string; link: string } | null;
   groet: string;
 } {
@@ -216,6 +235,7 @@ export function beursMail(args: {
   return {
     subject: t.onderwerp,
     alineas,
+    films: t.films,
     account: args.accountLink ? { tekst: t.account, knop: t.accountKnop, link: args.accountLink } : null,
     groet: t.groet,
   };

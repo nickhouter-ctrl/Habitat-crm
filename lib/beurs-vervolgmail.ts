@@ -69,3 +69,37 @@ export function beursVervolgmail(naam: string): VervolgmailTekst {
     ],
   };
 }
+
+/**
+ * De mail zoals hij eruitgaat: beide talen onder elkaar, met in elke taal een
+ * knop naar de filmpagina. De opmaak stond eerst in de server-actie; hier is
+ * hij te lezen én te testen zonder iets te versturen — en dat bleek nodig, want
+ * "ik zie de link niet in de mail" is niet te onderzoeken in een verzonden mail.
+ */
+export function vervolgmailHtml(naam: string, signature = ""): string {
+  const tekst = beursVervolgmail(naam);
+  return (
+    tekst.blokken
+      .map(
+        (b, i) => `
+        ${i > 0 ? '<hr style="border:none;border-top:1px solid #e7e2d8;margin:28px 0 22px" />' : ""}
+        <p>${escape(b.hallo(naam))}</p>
+        ${b.alineas.map((p) => `<p>${escape(p)}</p>`).join("\n")}
+        <p style="margin:22px 0"><a href="${b.link}" style="background:#b5532b;color:#fff;padding:12px 22px;border-radius:8px;text-decoration:none;font-size:14px">${escape(b.knop)}</a></p>
+        <p style="margin:0 0 4px;font-size:13px;color:#888">${escape(b.link)}</p>
+        <p style="margin:0">${escape(b.groet)}</p>`,
+      )
+      .join("\n") + (signature ? `<div style="font-size:13px;color:#888;line-height:1.7;margin-top:18px">${signature}</div>` : "")
+  );
+}
+
+/** Platte tekstversie, voor postvakken die geen HTML tonen. */
+export function vervolgmailTekst(naam: string): string {
+  return beursVervolgmail(naam)
+    .blokken.map((b) => `${b.hallo(naam)}\n\n${b.alineas.join("\n\n")}\n\n${b.knop}: ${b.link}\n\n${b.groet}`)
+    .join("\n\n— — —\n\n");
+}
+
+function escape(s: string): string {
+  return s.replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c] ?? c);
+}

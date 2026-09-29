@@ -265,6 +265,8 @@ export async function slaBeursbezoekerOp(d: BeursBezoeker): Promise<BeursOpslagR
       subject: tekst.subject,
       html: brandedEmail(
         tekst.alineas.map((p) => `<p>${escapeHtml(p)}</p>`).join("\n") +
+          `<p>${escapeHtml(tekst.films.tekst)}</p>
+           <p style="margin:18px 0"><a href="${tekst.films.link}" style="background:#3a2a20;color:#fff;padding:11px 20px;border-radius:8px;text-decoration:none;font-size:14px">${escapeHtml(tekst.films.knop)}</a></p>` +
           (tekst.account
             ? `<p>${escapeHtml(tekst.account.tekst)}</p>
                <p style="margin:22px 0"><a href="${tekst.account.link}" style="background:#b5532b;color:#fff;padding:12px 22px;border-radius:8px;text-decoration:none;font-size:14px">${escapeHtml(tekst.account.knop)}</a></p>`
@@ -273,7 +275,7 @@ export async function slaBeursbezoekerOp(d: BeursBezoeker): Promise<BeursOpslagR
            <p style="margin:0 0 4px">${escapeHtml(tekst.groet)}</p>
            <div style="font-size:13px;color:#888;line-height:1.7">${signatureHtml()}</div>`,
       ),
-      text: `${tekst.alineas.join("\n\n")}${
+      text: `${tekst.alineas.join("\n\n")}\n\n${tekst.films.tekst}\n${tekst.films.link}${
         tekst.account ? `\n\n${tekst.account.tekst}\n${tekst.account.link}` : ""
       }\n\n${tekst.groet}\n${COMPANY.legalName}`,
     });

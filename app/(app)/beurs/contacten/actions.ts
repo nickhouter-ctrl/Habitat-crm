@@ -20,7 +20,7 @@ import { revalidatePath } from "next/cache";
 import { requireModule } from "@/lib/auth/guards";
 import { haalBeursGesprekken } from "@/lib/beurs-data";
 import { vindDubbeleInvoeren } from "@/lib/beurs-lijst";
-import { beursVervolgmail } from "@/lib/beurs-vervolgmail";
+import { beursVervolgmail, vervolgmailHtml, vervolgmailTekst } from "@/lib/beurs-vervolgmail";
 import { brandedEmail, escapeHtml, sendEmail, signatureHtml } from "@/lib/email";
 import { db } from "@/lib/db";
 import {
@@ -234,22 +234,8 @@ export async function stuurBeursVervolgmail(): Promise<VerwijderResultaat> {
       const res = await sendEmail({
         to: c.email!,
         subject: tekst.subject,
-        html: brandedEmail(
-          tekst.blokken
-            .map(
-              (b, i) => `
-              ${i > 0 ? '<hr style="border:none;border-top:1px solid #e7e2d8;margin:28px 0 22px" />' : ""}
-              <p>${escapeHtml(b.hallo(c.naam ?? ""))}</p>
-              ${b.alineas.map((p) => `<p>${escapeHtml(p)}</p>`).join("\n")}
-              <p style="margin:22px 0"><a href="${b.link}" style="background:#b5532b;color:#fff;padding:12px 22px;border-radius:8px;text-decoration:none;font-size:14px">${escapeHtml(b.knop)}</a></p>
-              <p style="margin:0">${escapeHtml(b.groet)}</p>`,
-            )
-            .join("\n") +
-            `<div style="font-size:13px;color:#888;line-height:1.7;margin-top:18px">${signatureHtml()}</div>`,
-        ),
-        text: tekst.blokken
-          .map((b) => `${b.hallo(c.naam ?? "")}\n\n${b.alineas.join("\n\n")}\n\n${b.knop}: ${b.link}\n\n${b.groet}`)
-          .join("\n\n— — —\n\n"),
+        html: brandedEmail(vervolgmailHtml(c.naam ?? "", signatureHtml())),
+        text: vervolgmailTekst(c.naam ?? ""),
       });
       if (!res.sent) throw new Error(res.reason ?? "niet verstuurd");
       // Pas tággen als hij écht weg is; anders slaan we iemand over die niets kreeg.
