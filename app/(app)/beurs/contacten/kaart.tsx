@@ -89,7 +89,9 @@ export function BeursKaart({ spelden, bereik }: { spelden: Speld[]; bereik: Bere
             y: xy?.[1] ?? -999,
             kleur: s.kleur,
             groot: Math.min(4, s.namen.length - 1),
-            tekst: `${s.label} — ${s.plaats}${s.namen.length ? ` · ${s.namen.slice(0, 5).join(", ")}` : ""}`,
+            tekst: [s.plaats, s.bedrijven.slice(0, 3).join(", ") || null, s.namen.slice(0, 5).join(", ")]
+              .filter(Boolean)
+              .join(" — "),
           };
         }),
       ),

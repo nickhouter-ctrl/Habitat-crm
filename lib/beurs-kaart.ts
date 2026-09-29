@@ -7,10 +7,14 @@
  * alle punten op één postzegel: staan ze allemaal in Spanje, dan zoomen we in
  * op Spanje.
  *
- * Eén speldje per bedrijf per plek. Twee bureaus in dezelfde stad zijn twee
- * speldjes met een eigen kleur — anders zie je op de kaart alleen "Valencia"
- * en niet dat daar drie verschillende bedrijven zitten.
+ * De kleur zegt wat voor bezoeker het is: architecten in één kleur, aannemers
+ * in een andere, enzovoort. Zo zie je in één oogopslag waar welk soort klant
+ * zit — en dat is wat de opvolging bepaalt.
+ *
+ * Eén speldje per soort per plek: drie architecten uit Valencia zijn één
+ * speldje, een aannemer uit dezelfde stad een tweede ernaast.
  */
+import { ROLLEN, rolLabel } from "@/lib/beurs";
 import type { BeursContact } from "@/lib/beurs-lijst";
 import { landNaam } from "@/lib/landen";
 
@@ -19,32 +23,33 @@ export interface Speld {
   lon: number;
   /** Stad (en land) zoals we het tonen. */
   plaats: string;
-  /** Het bedrijf, of de naam van de bezoeker als hij er geen opgaf. */
-  label: string;
-  /** Vaste kleur bij dat bedrijf — ook in de legenda. */
+  /** Soort bezoeker ("architect"); bepaalt de kleur. */
+  rol: string;
+  /** Kleur bij dat soort — dezelfde als in de legenda. */
   kleur: string;
-  /** Wie er van dit bedrijf op deze plek waren. */
+  /** Wie er van dit soort op deze plek zaten. */
   namen: string[];
+  /** En van welke bedrijven, voor het label bij aanwijzen. */
+  bedrijven: string[];
 }
 
 /**
- * Kleuren voor op de kaart: onderling goed te onderscheiden en alle donker
- * genoeg voor het lichte kaartvlak. De eerste is onze eigen terracotta.
+ * Eén vaste kleur per soort bezoeker. Onderling goed te onderscheiden en alle
+ * donker genoeg voor het lichte kaartvlak; onze eigen terracotta gaat naar de
+ * architecten, de grootste groep op de stand.
  */
-const KLEUREN = [
-  "#b6552d", "#2f6f6b", "#7d5ba6", "#3a6ea5", "#8a8f2b",
-  "#c2185b", "#4a7c2f", "#a8642a", "#2b5d8a", "#6b4c9a",
-  "#b03a3a", "#3f7a6d",
-];
+const ROLKLEUREN: Record<string, string> = {
+  architect: "#b6552d",
+  ontwerper: "#7d5ba6",
+  aannemer: "#2f6f6b",
+  wederverkoper: "#8a8f2b",
+  particulier: "#3a6ea5",
+  anders: "#8a7f72",
+};
 
-/**
- * Altijd dezelfde kleur bij hetzelfde bedrijf, ook na herladen of filteren:
- * uit de naam zelf, niet uit de volgorde van de lijst.
- */
-export function kleurVoor(label: string): string {
-  let som = 0;
-  for (let i = 0; i < label.length; i += 1) som = (som * 31 + label.charCodeAt(i)) % 100_000;
-  return KLEUREN[som % KLEUREN.length];
+/** De kleur bij een soort bezoeker; onbekend valt terug op "anders". */
+export function kleurVoor(rol: string | null | undefined): string {
+  return ROLKLEUREN[rol ?? "anders"] ?? ROLKLEUREN.anders;
 }
 
 /** Bereik van de kaart: hoek linksonder en rechtsboven, met wat lucht eromheen. */
@@ -61,44 +66,55 @@ const getal = (v: string | null): number | null => {
   return Number.isFinite(n) ? n : null;
 };
 
-/** Eén speldje per bedrijf per plek; collega's van hetzelfde bureau samen. */
+/** Eén speldje per soort bezoeker per plek. */
 export function speldjes(rijen: BeursContact[], taal = "nl"): Speld[] {
   const perSpeld = new Map<string, Speld>();
   for (const r of rijen) {
     const lat = getal(r.lat);
     const lon = getal(r.lon);
     if (lat === null || lon === null) continue;
-    const label = r.bedrijf?.trim() || r.naam.trim();
+    const rol = r.rol ?? "anders";
     // Afronden op ~100 meter: dezelfde stad levert exact dezelfde coördinaten,
     // maar zo vallen ook twee net iets andere metingen samen.
-    const sleutel = `${lat.toFixed(3)},${lon.toFixed(3)}|${label.toLowerCase()}`;
+    const sleutel = `${lat.toFixed(3)},${lon.toFixed(3)}|${rol}`;
     const plaats = [r.plaats, r.land ? landNaam(r.land, taal) : null].filter(Boolean).join(" · ");
+    const bedrijf = r.bedrijf?.trim() || null;
     const bestaand = perSpeld.get(sleutel);
     if (bestaand) {
       if (!bestaand.namen.includes(r.naam)) bestaand.namen.push(r.naam);
+      if (bedrijf && !bestaand.bedrijven.includes(bedrijf)) bestaand.bedrijven.push(bedrijf);
     } else {
       perSpeld.set(sleutel, {
         lat,
         lon,
-        plaats: plaats || label,
-        label,
-        kleur: kleurVoor(label),
+        plaats: plaats || r.naam,
+        rol,
+        kleur: kleurVoor(rol),
         namen: [r.naam],
+        bedrijven: bedrijf ? [bedrijf] : [],
       });
     }
   }
   return [...perSpeld.values()];
 }
 
-/** De legenda naast de kaart: elk bedrijf één keer, op alfabet. */
-export function legenda(spelden: Speld[]): { label: string; kleur: string; plaats: string; aantal: number }[] {
-  const perLabel = new Map<string, { label: string; kleur: string; plaats: string; aantal: number }>();
-  for (const s of spelden) {
-    const bestaand = perLabel.get(s.label.toLowerCase());
-    if (bestaand) bestaand.aantal += s.namen.length;
-    else perLabel.set(s.label.toLowerCase(), { label: s.label, kleur: s.kleur, plaats: s.plaats, aantal: s.namen.length });
-  }
-  return [...perLabel.values()].sort((a, b) => a.label.localeCompare(b.label, "nl", { sensitivity: "base" }));
+/**
+ * De legenda naast de kaart: elk soort bezoeker één keer, met hoeveel er zijn.
+ * In de vaste volgorde van ROLLEN, zodat de legenda niet danst als er iemand
+ * bijkomt.
+ */
+export function legenda(
+  spelden: Speld[],
+  taal: "nl" | "en" | "es" = "nl",
+): { rol: string; label: string; kleur: string; aantal: number }[] {
+  const telling = new Map<string, number>();
+  for (const s of spelden) telling.set(s.rol, (telling.get(s.rol) ?? 0) + s.namen.length);
+  return ROLLEN.filter((r) => telling.get(r.key)).map((r) => ({
+    rol: r.key,
+    label: rolLabel(r.key, taal),
+    kleur: kleurVoor(r.key),
+    aantal: telling.get(r.key) ?? 0,
+  }));
 }
 
 /**

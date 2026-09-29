@@ -97,7 +97,7 @@ export default async function BeursContactenPage({
   // architecten, dan zie je waar de architecten zitten.
   const spelden = speldjes(rijen, taal);
   const bereik = bereikVoor(spelden);
-  const merken = legenda(spelden);
+  const merken = legenda(spelden, taal);
   const zonderPlaats = rijen.filter((r) => !r.plaats?.trim()).length;
 
   const vandaag = new Date().toISOString().slice(0, 10);
@@ -223,20 +223,17 @@ export default async function BeursContactenPage({
           </CardHeader>
           <CardContent className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_16rem]">
             <BeursKaart spelden={spelden} bereik={bereik} />
-            {/* Legenda: elk bedrijf zijn eigen kleur, met de plaats erbij. */}
-            <ul className="max-h-[26rem] space-y-1.5 overflow-y-auto text-sm lg:border-l lg:pl-5">
+            {/* Legenda: elk soort bezoeker zijn eigen kleur, met het aantal. */}
+            <ul className="space-y-2 text-sm lg:border-l lg:pl-5">
               {merken.map((m) => (
-                <li key={m.label} className="flex items-baseline gap-2">
+                <li key={m.rol} className="flex items-center gap-2.5">
                   <span
-                    className="mt-1 size-2.5 shrink-0 rounded-full"
+                    className="size-3 shrink-0 rounded-full"
                     style={{ backgroundColor: m.kleur }}
                     aria-hidden
                   />
-                  <span className="min-w-0 flex-1">
-                    <span className="block truncate font-medium">{m.label}</span>
-                    <span className="block truncate text-xs text-muted">{m.plaats}</span>
-                  </span>
-                  {m.aantal > 1 && <span className="tabular-nums text-xs text-muted">{m.aantal}</span>}
+                  <span className="min-w-0 flex-1 truncate">{m.label}</span>
+                  <span className="tabular-nums font-medium">{m.aantal}</span>
                 </li>
               ))}
             </ul>

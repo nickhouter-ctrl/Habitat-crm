@@ -86,35 +86,42 @@ const contact = (o: Partial<BeursContact> & { naam: string }): BeursContact =>
   }) as BeursContact;
 
 describe("speldjes op de kaart", () => {
-  it("zet collega's van hetzelfde bureau op één speldje", () => {
-    const s = speldjes([
-      contact({ naam: "Ana", bedrijf: "Estudio Bonet", plaats: "Valencia", land: "ES", lat: "39.470000", lon: "-0.376800" }),
-      contact({ naam: "Bea", bedrijf: "Estudio Bonet", plaats: "Valencia", land: "ES", lat: "39.470000", lon: "-0.376800" }),
-      contact({ naam: "Cees", plaats: "Rotterdam", land: "NL", lat: "51.922500", lon: "4.479200" }),
-    ]);
-    expect(s).toHaveLength(2);
-    expect(s.find((p) => p.label === "Estudio Bonet")?.namen).toEqual(["Ana", "Bea"]);
-  });
-
-  it("geeft twee bedrijven in dezelfde stad een eigen speldje en een eigen kleur", () => {
+  it("zet twee architecten uit dezelfde stad op één speldje", () => {
     const s = speldjes([
       contact({ naam: "Ana", bedrijf: "Estudio Bonet", plaats: "Valencia", land: "ES", lat: "39.470000", lon: "-0.376800" }),
       contact({ naam: "Bea", bedrijf: "Taller Vera", plaats: "Valencia", land: "ES", lat: "39.470000", lon: "-0.376800" }),
+      contact({ naam: "Cees", plaats: "Rotterdam", land: "NL", lat: "51.922500", lon: "4.479200" }),
+    ]);
+    expect(s).toHaveLength(2);
+    const valencia = s.find((p) => p.plaats.startsWith("Valencia"))!;
+    expect(valencia.namen).toEqual(["Ana", "Bea"]);
+    expect(valencia.bedrijven).toEqual(["Estudio Bonet", "Taller Vera"]);
+  });
+
+  it("geeft een aannemer in dezelfde stad een eigen speldje in een andere kleur", () => {
+    const s = speldjes([
+      contact({ naam: "Ana", rol: "architect", plaats: "Valencia", land: "ES", lat: "39.470000", lon: "-0.376800" }),
+      contact({ naam: "Bea", rol: "aannemer", plaats: "Valencia", land: "ES", lat: "39.470000", lon: "-0.376800" }),
     ]);
     expect(s).toHaveLength(2);
     expect(s[0].kleur).not.toBe(s[1].kleur);
   });
 
-  it("houdt dezelfde kleur bij hetzelfde bedrijf, ook na herladen", () => {
-    expect(kleurVoor("Estudio Bonet")).toBe(kleurVoor("Estudio Bonet"));
+  it("houdt dezelfde kleur bij hetzelfde soort bezoeker", () => {
+    expect(kleurVoor("architect")).toBe(kleurVoor("architect"));
+    expect(kleurVoor("bestaat-niet")).toBe(kleurVoor("anders"));
   });
 
-  it("zet iedereen in de legenda, op alfabet", () => {
+  it("zet in de legenda elk soort één keer, met het aantal mensen", () => {
     const s = speldjes([
-      contact({ naam: "Bea", bedrijf: "Taller Vera", plaats: "Valencia", land: "ES", lat: "39.47", lon: "-0.3768" }),
-      contact({ naam: "Ana", bedrijf: "Estudio Bonet", plaats: "Valencia", land: "ES", lat: "39.47", lon: "-0.3768" }),
+      contact({ naam: "Bea", rol: "aannemer", plaats: "Valencia", land: "ES", lat: "39.47", lon: "-0.3768" }),
+      contact({ naam: "Ana", rol: "architect", plaats: "Valencia", land: "ES", lat: "39.47", lon: "-0.3768" }),
+      contact({ naam: "Cees", rol: "architect", plaats: "Rotterdam", land: "NL", lat: "51.92", lon: "4.47" }),
     ]);
-    expect(legenda(s).map((m) => m.label)).toEqual(["Estudio Bonet", "Taller Vera"]);
+    expect(legenda(s)).toEqual([
+      { rol: "architect", label: "Architect", kleur: kleurVoor("architect"), aantal: 2 },
+      { rol: "aannemer", label: "Aannemer / bouwer", kleur: kleurVoor("aannemer"), aantal: 1 },
+    ]);
   });
 
   it("slaat bezoekers zonder coördinaten over — die horen niet op 0,0", () => {
