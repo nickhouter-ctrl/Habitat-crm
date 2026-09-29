@@ -251,7 +251,9 @@ export default async function BeursContactenPage({
               <Th>{t("Waar")}</Th>
               <Th>{t("Vroeg om")}</Th>
               <Th>{t("Waar het over ging")}</Th>
-              <Th className="w-px" aria-label={t("Verwijderen")} />
+              {/* De tabel is breder dan het scherm; deze kolom moet altijd in
+                  beeld blijven, anders scroll je naar een knop die je niet ziet. */}
+              <Th className="sticky right-0 z-20 w-px bg-surface" aria-label={t("Verwijderen")} />
             </tr>
           </THead>
           <TBody>
@@ -308,7 +310,7 @@ export default async function BeursContactenPage({
                 <Td className="max-w-md text-muted">
                   <span className="line-clamp-2 whitespace-pre-line text-xs">{r.wens || "—"}</span>
                 </Td>
-                <Td className="text-right">
+                <Td className="sticky right-0 z-10 bg-surface text-right shadow-[-8px_0_8px_-8px_rgba(0,0,0,0.12)]">
                   <VerwijderKnop
                     contactId={r.contactId}
                     email={r.email}
