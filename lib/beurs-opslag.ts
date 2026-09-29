@@ -101,6 +101,54 @@ export async function slaBeursbezoekerOp(d: BeursBezoeker): Promise<BeursOpslagR
     };
   }
 
+  const rolAnders = d.rol === "anders" ? d.rolAnders?.trim() || null : null;
+  const interesses = schoonInteresses(d.interesses);
+
+  /**
+   * De aanvraag gaat als eerste naar binnen, met een sleutel waar een unieke
+   * index op staat. Twee tikken tegelijk leverden twee regels op omdat beide
+   * verzoeken keken vóór de ander had opgeslagen; een controle vooraf kan dat
+   * niet oplossen, alleen de database kan twee gelijktijdige schrijvers tegen
+   * elkaar beschermen. Verliest dit verzoek, dan stoppen we hier — vóór er een
+   * contact, een account of een bevestigingsmail is.
+   */
+  const dedupeKey = `${BEURS.bron}:${email}:${new Date().toISOString().slice(0, 16)}`;
+  const [aanvraag] = await db
+    .insert(quoteRequests)
+    .values({
+      name: d.naam.trim(),
+      email,
+      phone: telefoon,
+      company: bedrijf,
+      kind: "contact",
+      source: BEURS.bron,
+      locale: d.taal,
+      dedupeKey,
+      message: [
+        `${rolOmschrijving(d.rol, rolAnders)} — ${d.zelfIngevuld ? "zelf ingevuld via de QR-code op" : "gesproken op"} ${BEURS.naam}, stand ${BEURS.stand}`,
+        interesses.length ? `\nWil: ${interesses.map((k) => interesseLabel(k)).join(", ")}` : "",
+        wens ? `\n${wens}` : "",
+      ]
+        .join("")
+        .trim(),
+    })
+    .onConflictDoNothing({ target: quoteRequests.dedupeKey })
+    .returning({ id: quoteRequests.id });
+
+  if (!aanvraag) {
+    const eerder = await db.query.quoteRequests.findFirst({
+      where: eq(quoteRequests.dedupeKey, dedupeKey),
+      columns: { id: true, contactId: true },
+    });
+    return {
+      contactId: eerder?.contactId ?? "",
+      aanvraagId: eerder?.id ?? "",
+      mail: "verstuurd",
+      account: "bestond al",
+      dubbel: true,
+    };
+  }
+
   // Bedrijf: bestaande naam hergebruiken, anders aanmaken. Een architectenbureau
   // is een bedrijf, ook als we er nog niets mee gedaan hebben.
   let companyId: string | null = null;
@@ -126,8 +174,6 @@ export async function slaBeursbezoekerOp(d: BeursBezoeker): Promise<BeursOpslagR
   const plaats = leesPlaats(d.plaats, d.land);
   const punt = plaats?.plaats ? await zoekCoordinaten(plaats.plaats, plaats.land) : null;
 
-  const rolAnders = d.rol === "anders" ? d.rolAnders?.trim() || null : null;
-  const interesses = schoonInteresses(d.interesses);
   const tags = [BEURS.bron, `rol:${d.rol}`, ...interesses.map((k) => `wil:${k}`)];
   if (d.zelfIngevuld) tags.push("beurs:qr");
   // Wat "anders" precies is hoort bij de rol, niet in de vrije tekst: zo staat
@@ -185,26 +231,9 @@ export async function slaBeursbezoekerOp(d: BeursBezoeker): Promise<BeursOpslagR
     contactId = nieuw.id;
   }
 
-  const [aanvraag] = await db
-    .insert(quoteRequests)
-    .values({
-      name: d.naam.trim(),
-      email,
-      phone: telefoon,
-      company: bedrijf,
-      kind: "contact",
-      source: BEURS.bron,
-      locale: d.taal,
-      contactId,
-      message: [
-        `${rolOmschrijving(d.rol, rolAnders)} — ${d.zelfIngevuld ? "zelf ingevuld via de QR-code op" : "gesproken op"} ${BEURS.naam}, stand ${BEURS.stand}`,
-        interesses.length ? `\nWil: ${interesses.map((k) => interesseLabel(k)).join(", ")}` : "",
-        wens ? `\n${wens}` : "",
-      ]
-        .join("")
-        .trim(),
-    })
-    .returning({ id: quoteRequests.id });
+
+  // De aanvraag aan het contact hangen; hij stond er al vóór het contact bestond.
+  await db.update(quoteRequests).set({ contactId }).where(eq(quoteRequests.id, aanvraag.id));
 
   // Account op de website. De goedkeuring is al gebeurd — aan de stand, in een
   // gesprek — dus krijgt de bezoeker de wachtwoordlink meteen mee. Mislukt het,

@@ -1765,6 +1765,17 @@ export const quoteRequests = pgTable(
     /** Gekoppeld offerte-document (optioneel). */
     documentId: uuid().references((): AnyPgColumn => documents.id, { onDelete: "set null" }),
     notes: text(), // interne notitie
+    /**
+     * Sleutel tegen dubbel opslaan, met een unieke index erop. Twee tikken op
+     * de knop leverden twee regels op: beide verzoeken keken of de bezoeker al
+     * bestond vóór de ander had opgeslagen, en zagen dus allebei niets. Een
+     * controle vooraf kan dat niet oplossen — alleen de database kan twee
+     * gelijktijdige schrijvers tegen elkaar beschermen.
+     *
+     * Gevuld voor beursinvoeren ("beurs:<e-mail>:<minuut>"); leeg voor al het
+     * andere, en lege waarden botsen niet met elkaar.
+     */
+    dedupeKey: text(),
     acceptedAt: timestamp({ withTimezone: true }),
     rejectedAt: timestamp({ withTimezone: true }),
     ...timestamps,
@@ -1773,6 +1784,7 @@ export const quoteRequests = pgTable(
     index("quote_requests_status_idx").on(t.status),
     index("quote_requests_email_idx").on(t.email),
     index("quote_requests_created_idx").on(t.createdAt),
+    uniqueIndex("quote_requests_dedupe_key_idx").on(t.dedupeKey),
   ],
 );
 
