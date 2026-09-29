@@ -428,6 +428,13 @@ export const es: Dictionary = {
   "Beeld en documentatie": "Imágenes y documentación",
   "Bezoek showroom Jávea": "Visitar el showroom en Jávea",
   "Verwijderen": "Eliminar",
+  "Stad en land": "Ciudad y país",
+  "Zo zie je na de beurs op de kaart waar iedereen zit.": "Así, después de la feria, ves en el mapa dónde está cada uno.",
+  "bijv. Valencia, España": "p. ej. Valencia, España",
+  "Waar": "Dónde",
+  "Waar ze zitten": "Dónde están",
+  "{n} met een plaats": "{n} con ubicación",
+  "{n} zonder": "{n} sin",
   "{naam} en alles wat we op de beurs van hem vastlegden verwijderen?":
     "¿Eliminar a {naam} y todo lo que anotamos en la feria?",
 };

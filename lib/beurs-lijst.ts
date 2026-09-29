@@ -20,6 +20,12 @@ export interface BeursGesprek {
   taal: string | null;
   tags: string[] | null;
   wanneer: Date | null;
+  /** Waar de bezoeker zit — stad en land van het contact. */
+  plaats: string | null;
+  land: string | null;
+  /** Coördinaten van die stad, voor de kaart; numeric komt als string binnen. */
+  lat: string | null;
+  lon: string | null;
 }
 
 export interface BeursContact extends BeursGesprek {
@@ -96,6 +102,7 @@ export function verdichtTotContacten(gesprekken: BeursGesprek[]): BeursContact[]
     // Ontbrekende gegevens uit een eerder gesprek alsnog overnemen.
     bestaand.telefoon ??= g.telefoon;
     bestaand.bedrijf ??= g.bedrijf;
+    bestaand.plaats ??= g.plaats;
     if (wens && !bestaand.wens.includes(wens)) {
       bestaand.wens = [bestaand.wens, wens].filter(Boolean).join("\n");
     }
@@ -116,7 +123,7 @@ export function filterBeursContacten(
     if (opties.invoer === "wij" && r.zelfIngevuld) return false;
     if (opties.wil && !r.interesses.includes(opties.wil)) return false;
     if (!q) return true;
-    return [r.naam, r.email, r.bedrijf ?? "", r.telefoon ?? "", r.wens]
+    return [r.naam, r.email, r.bedrijf ?? "", r.telefoon ?? "", r.plaats ?? "", r.land ?? "", r.wens]
       .join(" ")
       .toLowerCase()
       .includes(q);
@@ -151,7 +158,7 @@ export function sorteerBeursContacten(
 
 /** Regels voor het CSV-bestand — dezelfde kolommen als op het scherm. */
 export function beursCsv(rijen: BeursContact[]): string {
-  const kop = ["Naam", "Bedrijf", "Soort", "E-mail", "Telefoon", "Taal", "Wil", "Waar het over ging", "Zelf ingevuld", "Gesprekken", "Wanneer"];
+  const kop = ["Naam", "Bedrijf", "Soort", "E-mail", "Telefoon", "Plaats", "Land", "Taal", "Wil", "Waar het over ging", "Zelf ingevuld", "Gesprekken", "Wanneer"];
   const veld = (v: string) => `"${v.replace(/"/g, '""')}"`;
   const datum = (d: Date | null) =>
     d ? d.toLocaleString("nl-NL", { timeZone: "Europe/Madrid", day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" }) : "";
@@ -162,6 +169,8 @@ export function beursCsv(rijen: BeursContact[]): string {
       rolOmschrijving(r.rol ?? "anders", r.rolAnders),
       r.email,
       r.telefoon ?? "",
+      r.plaats ?? "",
+      r.land ?? "",
       r.taal ?? "",
       r.interesses.map((k) => interesseLabel(k)).join(", "),
       r.wens.replace(/\n/g, " · "),

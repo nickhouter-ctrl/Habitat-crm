@@ -27,6 +27,10 @@ const gesprek = (o: Partial<BeursGesprek> & { naam: string }): BeursGesprek => (
   taal: "es",
   tags: ["beurs:360-cevisama-2026", "rol:architect"],
   wanneer: new Date("2026-09-28T10:00:00Z"),
+  plaats: null,
+  land: null,
+  lat: null,
+  lon: null,
   ...o,
 });
 

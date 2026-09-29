@@ -505,6 +505,13 @@
       "when": 1790516544095,
       "tag": "0071_cloudy_loa",
       "breakpoints": true
+    },
+    {
+      "idx": 72,
+      "version": "7",
+      "when": 1790667265417,
+      "tag": "0072_new_stryfe",
+      "breakpoints": true
     }
   ]
 }

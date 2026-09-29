@@ -3,6 +3,10 @@ import Link from "next/link";
 
 import {
   Badge,
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
   EmptyState,
   Input,
   LinkButton,
@@ -26,7 +30,10 @@ import {
 } from "@/lib/beurs-lijst";
 import { datumTaal, huidigeTaal, tekst } from "@/lib/i18n/server";
 import { cn } from "@/lib/utils";
+import { bereikVoor, perPlaats, speldjes } from "@/lib/beurs-kaart";
+import { plaatsLabel } from "@/lib/plaats";
 import { verwijderBeursInvoer } from "./actions";
+import { BeursKaart } from "./kaart";
 import { VerwijderKnop } from "./verwijder-knop";
 
 export const metadata = { title: "Beurscontacten" };
@@ -80,6 +87,13 @@ export default async function BeursContactenPage({
     const k = r.rol ?? "anders";
     perRol.set(k, (perRol.get(k) ?? 0) + 1);
   }
+
+  // De kaart hoort bij wat je op het scherm hebt staan: filter je op
+  // architecten, dan zie je waar de architecten zitten.
+  const spelden = speldjes(rijen);
+  const bereik = bereikVoor(spelden);
+  const steden = perPlaats(rijen).slice(0, 8);
+  const zonderPlaats = rijen.filter((r) => !r.plaats?.trim()).length;
 
   const vandaag = new Date().toISOString().slice(0, 10);
   const kengetallen = {
@@ -185,6 +199,31 @@ export default async function BeursContactenPage({
         </div>
       )}
 
+      {/* Waar ze zitten. Na de beurs bepaalt dat de route: drie architecten in
+          Alicante is een middag, één in Hamburg een telefoontje. */}
+      {bereik && (
+        <Card className="mb-5">
+          <CardHeader>
+            <CardTitle>{t("Waar ze zitten")}</CardTitle>
+            <span className="text-xs text-muted">
+              {t("{n} met een plaats", { n: rijen.length - zonderPlaats })}
+              {zonderPlaats > 0 ? ` · ${t("{n} zonder", { n: zonderPlaats })}` : ""}
+            </span>
+          </CardHeader>
+          <CardContent className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_14rem]">
+            <BeursKaart spelden={spelden} bereik={bereik} />
+            <ul className="space-y-1 text-sm lg:border-l lg:pl-5">
+              {steden.map((s) => (
+                <li key={s.plaats} className="flex items-baseline justify-between gap-3">
+                  <span className="truncate text-muted">{s.plaats}</span>
+                  <span className="tabular-nums font-medium">{s.aantal}</span>
+                </li>
+              ))}
+            </ul>
+          </CardContent>
+        </Card>
+      )}
+
       {rijen.length === 0 ? (
         <EmptyState
           title={q || rol || invoer ? t("Niemand gevonden") : t("Nog niemand vastgelegd")}
@@ -209,6 +248,7 @@ export default async function BeursContactenPage({
                 </Th>
               ))}
               <Th>{t("Contact")}</Th>
+              <Th>{t("Waar")}</Th>
               <Th>{t("Vroeg om")}</Th>
               <Th>{t("Waar het over ging")}</Th>
               <Th className="w-px" aria-label={t("Verwijderen")} />
@@ -252,6 +292,9 @@ export default async function BeursContactenPage({
                       {r.telefoon}
                     </a>
                   ) : null}
+                </Td>
+                <Td className="whitespace-nowrap text-muted">
+                  {plaatsLabel(r.plaats, r.land) || "—"}
                 </Td>
                 <Td className="space-y-1 whitespace-nowrap">
                   {r.interesses.length === 0

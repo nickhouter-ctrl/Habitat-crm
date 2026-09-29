@@ -28,6 +28,7 @@ type Invoer = {
   email: string;
   telefoon: string;
   bedrijf: string;
+  plaats: string;
   rol: string;
   rolAnders: string;
   interesses: string[];
@@ -60,6 +61,7 @@ const leeg = (): Invoer => ({
   email: "",
   telefoon: "",
   bedrijf: "",
+  plaats: "",
   rol: "architect",
   rolAnders: "",
   interesses: [],
@@ -90,6 +92,7 @@ export function BeursForm({
       fd.set("email", inv.email);
       fd.set("telefoon", inv.telefoon);
       fd.set("bedrijf", inv.bedrijf);
+      fd.set("plaats", inv.plaats);
       fd.set("rol", inv.rol);
       fd.set("rolAnders", inv.rolAnders);
       for (const k of inv.interesses) fd.append("interesses", k);
@@ -259,6 +262,15 @@ export function BeursForm({
             autoComplete="off"
             className="h-12 text-base"
             placeholder={t("Bureau of winkel")}
+          />
+        </Field>
+        <Field label={t("Stad en land")} hint={t("Zo zie je na de beurs op de kaart waar iedereen zit.")}>
+          <Input
+            value={waarden.plaats}
+            onChange={zet("plaats")}
+            autoComplete="off"
+            className="h-12 text-base"
+            placeholder={t("bijv. Valencia, España")}
           />
         </Field>
         <Field label={t("Wat voor klant")}>

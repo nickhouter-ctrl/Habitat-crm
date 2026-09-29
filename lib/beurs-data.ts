@@ -27,6 +27,10 @@ export async function haalBeursGesprekken(limiet = 2000): Promise<BeursGesprek[]
       taal: quoteRequests.locale,
       tags: contacts.tags,
       wanneer: quoteRequests.createdAt,
+      plaats: contacts.city,
+      land: contacts.country,
+      lat: contacts.latitude,
+      lon: contacts.longitude,
     })
     .from(quoteRequests)
     .leftJoin(contacts, eq(contacts.id, quoteRequests.contactId))

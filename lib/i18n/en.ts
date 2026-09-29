@@ -427,6 +427,13 @@ export const en: Dictionary = {
   "Beeld en documentatie": "Images and documentation",
   "Bezoek showroom Jávea": "Visit our showroom in Jávea",
   "Verwijderen": "Delete",
+  "Stad en land": "City and country",
+  "Zo zie je na de beurs op de kaart waar iedereen zit.": "So after the fair you can see on the map where everyone is.",
+  "bijv. Valencia, España": "e.g. Valencia, España",
+  "Waar": "Where",
+  "Waar ze zitten": "Where they are",
+  "{n} met een plaats": "{n} with a location",
+  "{n} zonder": "{n} without",
   "{naam} en alles wat we op de beurs van hem vastlegden verwijderen?":
     "Delete {naam} and everything we logged about them at the fair?",
 };

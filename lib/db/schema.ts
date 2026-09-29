@@ -328,6 +328,12 @@ export const contacts = pgTable(
     postalCode: text(),
     province: text(),
     country: text().default("ES"),
+    /** Coördinaten van de plaats, opgezocht bij het invoeren (OpenStreetMap).
+     *  Alleen om contacten op een kaart te kunnen zetten — beursbezoekers
+     *  bleken vooral interessant door wáár ze zitten. Leeg als het adres niet
+     *  gevonden is; dat is geen fout, alleen geen speldje op de kaart. */
+    latitude: numeric({ precision: 9, scale: 6 }),
+    longitude: numeric({ precision: 9, scale: 6 }),
     tags: text().array(),
     notes: text(),
     lastContactedAt: timestamp({ withTimezone: true }),
