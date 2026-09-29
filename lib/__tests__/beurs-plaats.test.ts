@@ -105,8 +105,10 @@ describe("speldjes op de kaart", () => {
 describe("wat er in beeld komt", () => {
   it("zoomt niet oneindig in op één bezoeker", () => {
     const b = bereikVoor(speldjes([contact({ naam: "Ana", lat: "39.47", lon: "-0.3768" })]))!;
-    expect(b.east - b.west).toBeGreaterThanOrEqual(8);
-    expect(b.north - b.south).toBeGreaterThanOrEqual(8);
+    // Een graad of vijf met wat lucht eromheen: je ziet waar de stad ligt, en
+    // verder inzoomen doe je op de kaart zelf.
+    expect(b.east - b.west).toBeGreaterThanOrEqual(5);
+    expect(b.north - b.south).toBeGreaterThanOrEqual(5);
   });
 
   it("past zich aan als er iemand ver weg zit", () => {

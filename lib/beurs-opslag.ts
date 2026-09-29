@@ -12,7 +12,14 @@ import "server-only";
  * De mail is bewust geen harde eis: gaat er iets mis met de verbinding naar de
  * mailserver, dan is de bezoeker nog steeds vastgelegd.
  */
-import { eq, ilike, sql } from "drizzle-orm";
+import { and, desc, eq, gt, ilike, like, sql } from "drizzle-orm";
+
+/**
+ * Hoe lang na een invoer we dezelfde bezoeker als "die hebben we net gehad"
+ * beschouwen. Lang genoeg voor een dubbele tik en een mislukte verbinding,
+ * kort genoeg om iemand die 's middags terugkomt gewoon opnieuw vast te leggen.
+ */
+export const DUBBEL_VENSTER_MIN = 5;
 
 import {
   BEURS,
@@ -59,6 +66,9 @@ export interface BeursOpslagResultaat {
   mail: "verstuurd" | "mislukt";
   /** Kreeg de bezoeker een uitnodiging voor een website-account, en zo ja welke? */
   account: "particulier" | "aannemer" | "bestond al" | "mislukt";
+  /** Was dit een tweede keer opslaan van dezelfde bezoeker? Dan is er niets
+   *  nieuws weggeschreven en is er geen tweede mail de deur uit. */
+  dubbel: boolean;
 }
 
 export async function slaBeursbezoekerOp(d: BeursBezoeker): Promise<BeursOpslagResultaat> {
@@ -66,6 +76,30 @@ export async function slaBeursbezoekerOp(d: BeursBezoeker): Promise<BeursOpslagR
   const bedrijf = d.bedrijf?.trim() || null;
   const telefoon = d.telefoon?.trim() || null;
   const wens = d.wens?.trim() || null;
+
+  // Twee keer op opslaan drukken mag geen tweede regel en geen tweede mail
+  // opleveren. Het scherm houdt de knop al tegen, maar dat is niet genoeg: een
+  // tweede tik komt soms als een apart verzoek binnen, en een invoer uit de
+  // wachtrij kan opnieuw langskomen als het antwoord onderweg verdween. Dus ook
+  // hier: hebben we dit adres net vastgelegd, dan is dit dezelfde bezoeker.
+  const netAl = await db.query.quoteRequests.findFirst({
+    where: and(
+      like(quoteRequests.source, "beurs:%"),
+      sql`lower(${quoteRequests.email}) = ${email}`,
+      gt(quoteRequests.createdAt, new Date(Date.now() - DUBBEL_VENSTER_MIN * 60_000)),
+    ),
+    columns: { id: true, contactId: true },
+    orderBy: desc(quoteRequests.createdAt),
+  });
+  if (netAl) {
+    return {
+      contactId: netAl.contactId ?? "",
+      aanvraagId: netAl.id,
+      mail: "verstuurd",
+      account: "bestond al",
+      dubbel: true,
+    };
+  }
 
   // Bedrijf: bestaande naam hergebruiken, anders aanmaken. Een architectenbureau
   // is een bedrijf, ook als we er nog niets mee gedaan hebben.
@@ -219,5 +253,5 @@ export async function slaBeursbezoekerOp(d: BeursBezoeker): Promise<BeursOpslagR
     mail = "mislukt";
   }
 
-  return { contactId, aanvraagId: aanvraag.id, mail, account };
+  return { contactId, aanvraagId: aanvraag.id, mail, account, dubbel: false };
 }

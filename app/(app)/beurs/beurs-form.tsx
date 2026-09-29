@@ -82,6 +82,10 @@ export function BeursForm({
   const landen = useMemo(() => landenVoorKeuze(taal), [taal]);
   const [waarden, setWaarden] = useState<Invoer>(leeg);
   const [bezig, setBezig] = useState(false);
+  // Een tweede tik komt sneller dan React de knop uitschakelt; een ref is
+  // meteen bijgewerkt en houdt hem wél tegen.
+  const bezigRef = useRef(false);
+  const inhaalRef = useRef(false);
   const [melding, setMelding] = useState<{ soort: "ok" | "fout" | "wacht"; tekst: string } | null>(null);
   const [wachtrij, setWachtrij] = useState<Invoer[]>([]);
   const naamRef = useRef<HTMLInputElement>(null);
@@ -114,8 +118,10 @@ export function BeursForm({
 
   /** Alles wat nog wacht opnieuw proberen. */
   const leegWachtrij = useCallback(async () => {
+    if (inhaalRef.current) return; // al bezig; anders gaat de wachtrij dubbel
     const rijen = leesWachtrij();
     if (rijen.length === 0) return;
+    inhaalRef.current = true;
     const over: Invoer[] = [];
     for (const inv of rijen) {
       const res = await verstuur(inv);
@@ -125,6 +131,7 @@ export function BeursForm({
     }
     schrijfWachtrij(over);
     setWachtrij(over);
+    inhaalRef.current = false;
     if (over.length === 0 && rijen.length > 0) {
       setMelding({ soort: "ok", tekst: t("{n} wachtende invoer(en) alsnog verstuurd.", { n: rijen.length }) });
     }
@@ -145,7 +152,8 @@ export function BeursForm({
 
   async function opsturen(e: React.FormEvent) {
     e.preventDefault();
-    if (bezig) return;
+    if (bezigRef.current) return;
+    bezigRef.current = true;
     setBezig(true);
     setMelding(null);
     const inv = { ...waarden };
@@ -162,8 +170,9 @@ export function BeursForm({
       setWachtrij(over);
       setMelding({
         soort: "ok",
-        tekst:
-          res.mail === "verstuurd"
+        tekst: res.dubbel
+          ? t("{naam} stond er al — niets dubbel opgeslagen, geen tweede mail.", { naam: res.naam })
+          : res.mail === "verstuurd"
             ? t("{naam} opgeslagen — bevestigingsmail verstuurd.", { naam: res.naam }) +
               (res.account === "aannemer" || res.account === "particulier"
                 ? ` ${t("Website-account klaargezet.")}`
@@ -187,6 +196,7 @@ export function BeursForm({
       setWaarden(leeg());
       naamRef.current?.focus();
     }
+    bezigRef.current = false;
     setBezig(false);
   }
 

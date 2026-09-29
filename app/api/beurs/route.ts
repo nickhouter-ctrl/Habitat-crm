@@ -101,7 +101,7 @@ export async function POST(req: Request) {
       zelfIngevuld: true,
     });
     // Geen id's terug: de bezoeker hoeft niets van het CRM te weten.
-    return NextResponse.json({ ok: true, mail: res.mail }, { status: 201, headers: cors });
+    return NextResponse.json({ ok: true, mail: res.mail, dubbel: res.dubbel }, { status: 201, headers: cors });
   } catch (err) {
     console.error("[beurs] opslaan mislukt:", err);
     return NextResponse.json({ ok: false, error: "server" }, { status: 500, headers: cors });

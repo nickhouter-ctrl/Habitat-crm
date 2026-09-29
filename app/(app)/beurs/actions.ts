@@ -33,7 +33,14 @@ const schema = z.object({
 });
 
 export type BeursResultaat =
-  | { ok: true; naam: string; mail: "verstuurd" | "mislukt"; account: "particulier" | "aannemer" | "bestond al" | "mislukt" }
+  | {
+      ok: true;
+      naam: string;
+      mail: "verstuurd" | "mislukt";
+      account: "particulier" | "aannemer" | "bestond al" | "mislukt";
+      /** Al vastgelegd; er is niets dubbel opgeslagen en geen tweede mail gestuurd. */
+      dubbel: boolean;
+    }
   | { ok: false; fout: string };
 
 export async function legBezoekerVast(formData: FormData): Promise<BeursResultaat> {
@@ -65,5 +72,5 @@ export async function legBezoekerVast(formData: FormData): Promise<BeursResultaa
   revalidatePath("/beurs");
   revalidatePath("/aanvragen");
   revalidatePath("/contacts");
-  return { ok: true, naam: d.naam, mail: res.mail, account: res.account };
+  return { ok: true, naam: d.naam, mail: res.mail, account: res.account, dubbel: res.dubbel };
 }

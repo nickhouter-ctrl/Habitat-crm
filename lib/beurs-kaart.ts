@@ -71,11 +71,13 @@ export function bereikVoor(spelden: Speld[]): Bereik | null {
     south = Math.min(south, s.lat);
     north = Math.max(north, s.lat);
   }
-  // Minimaal een graad of acht in beeld, plus een tiende rand eromheen.
+  // Minimaal een graad of vijf in beeld, plus een tiende rand eromheen: dichter
+  // erop en je ziet een stad zonder te weten waar hij ligt. Verder inzoomen kan
+  // op de kaart zelf.
   const midLon = (west + east) / 2;
   const midLat = (south + north) / 2;
-  const breed = Math.max(east - west, 8) * 1.2;
-  const hoog = Math.max(north - south, 8) * 1.2;
+  const breed = Math.max(east - west, 5) * 1.2;
+  const hoog = Math.max(north - south, 5) * 1.2;
   return {
     west: Math.max(-180, midLon - breed / 2),
     east: Math.min(180, midLon + breed / 2),

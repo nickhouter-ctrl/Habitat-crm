@@ -422,6 +422,8 @@ export const es: Dictionary = {
   "Geen geldig e-mailadres": "Correo electrónico no válido",
   "Waar vraagt hij om?": "¿Qué pide?",
   "Website-account klaargezet.": "Cuenta web preparada.",
+  "{naam} stond er al — niets dubbel opgeslagen, geen tweede mail.":
+    "{naam} ya estaba registrado: no se ha guardado nada dos veces ni se ha enviado un segundo correo.",
   "Vroeg om": "Pidió",
   "Stalen / monsters": "Muestras",
   "Prijzen": "Precios",

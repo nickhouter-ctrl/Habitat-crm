@@ -421,6 +421,8 @@ export const en: Dictionary = {
   "Geen geldig e-mailadres": "Not a valid email address",
   "Waar vraagt hij om?": "What are they asking for?",
   "Website-account klaargezet.": "Website account prepared.",
+  "{naam} stond er al — niets dubbel opgeslagen, geen tweede mail.":
+    "{naam} was already logged — nothing saved twice, no second email.",
   "Vroeg om": "Asked for",
   "Stalen / monsters": "Samples",
   "Prijzen": "Prices",
