@@ -8,6 +8,7 @@
  * één postzegel: staan ze allemaal in Spanje, dan zoomen we in op Spanje.
  */
 import type { BeursContact } from "@/lib/beurs-lijst";
+import { landNaam } from "@/lib/landen";
 
 export interface Speld {
   lat: number;
@@ -33,7 +34,7 @@ const getal = (v: string | null): number | null => {
 };
 
 /** Eén speldje per plek; wie op dezelfde stad zit komt bij elkaar te staan. */
-export function speldjes(rijen: BeursContact[]): Speld[] {
+export function speldjes(rijen: BeursContact[], taal = "nl"): Speld[] {
   const perPlek = new Map<string, Speld>();
   for (const r of rijen) {
     const lat = getal(r.lat);
@@ -42,7 +43,7 @@ export function speldjes(rijen: BeursContact[]): Speld[] {
     // Afronden op ~100 meter: dezelfde stad levert exact dezelfde coördinaten,
     // maar zo vallen ook twee net iets andere metingen samen.
     const sleutel = `${lat.toFixed(3)},${lon.toFixed(3)}`;
-    const plaats = [r.plaats, r.land].filter(Boolean).join(" · ");
+    const plaats = [r.plaats, r.land ? landNaam(r.land, taal) : null].filter(Boolean).join(" · ");
     const bestaand = perPlek.get(sleutel);
     if (bestaand) {
       if (!bestaand.namen.includes(r.naam)) bestaand.namen.push(r.naam);
@@ -84,12 +85,12 @@ export function bereikVoor(spelden: Speld[]): Bereik | null {
 }
 
 /** Hoeveel bezoekers per land — de lijst naast de kaart. */
-export function perLand(rijen: BeursContact[]): { land: string; aantal: number }[] {
+export function perLand(rijen: BeursContact[], taal = "nl"): { land: string; aantal: number }[] {
   const telling = new Map<string, number>();
   for (const r of rijen) {
     const land = r.land?.trim();
     if (!land) continue;
-    telling.set(land, (telling.get(land) ?? 0) + 1);
+    telling.set(landNaam(land, taal), (telling.get(landNaam(land, taal)) ?? 0) + 1);
   }
   return [...telling.entries()]
     .map(([land, aantal]) => ({ land, aantal }))
@@ -97,12 +98,12 @@ export function perLand(rijen: BeursContact[]): { land: string; aantal: number }
 }
 
 /** Hoeveel bezoekers per stad — daar begin je de opvolging mee. */
-export function perPlaats(rijen: BeursContact[]): { plaats: string; aantal: number }[] {
+export function perPlaats(rijen: BeursContact[], taal = "nl"): { plaats: string; aantal: number }[] {
   const telling = new Map<string, number>();
   for (const r of rijen) {
     const plaats = r.plaats?.trim();
     if (!plaats) continue;
-    const sleutel = [plaats, r.land?.trim()].filter(Boolean).join(" · ");
+    const sleutel = [plaats, r.land?.trim() ? landNaam(r.land, taal) : null].filter(Boolean).join(" · ");
     telling.set(sleutel, (telling.get(sleutel) ?? 0) + 1);
   }
   return [...telling.entries()]

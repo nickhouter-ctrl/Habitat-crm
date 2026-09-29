@@ -90,9 +90,9 @@ export default async function BeursContactenPage({
 
   // De kaart hoort bij wat je op het scherm hebt staan: filter je op
   // architecten, dan zie je waar de architecten zitten.
-  const spelden = speldjes(rijen);
+  const spelden = speldjes(rijen, taal);
   const bereik = bereikVoor(spelden);
-  const steden = perPlaats(rijen).slice(0, 8);
+  const steden = perPlaats(rijen, taal).slice(0, 8);
   const zonderPlaats = rijen.filter((r) => !r.plaats?.trim()).length;
 
   const vandaag = new Date().toISOString().slice(0, 10);
@@ -294,7 +294,7 @@ export default async function BeursContactenPage({
                   ) : null}
                 </Td>
                 <Td className="whitespace-nowrap text-muted">
-                  {plaatsLabel(r.plaats, r.land) || "—"}
+                  {plaatsLabel(r.plaats, r.land, taal) || "—"}
                 </Td>
                 <Td className="space-y-1 whitespace-nowrap">
                   {r.interesses.length === 0

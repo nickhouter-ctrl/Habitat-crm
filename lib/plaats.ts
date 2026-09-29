@@ -1,11 +1,16 @@
 /**
- * Eén tekstveld "waar zit je?" uit elkaar trekken.
+ * Stad en land van een bezoeker.
  *
- * Op een beursvloer typt niemand een adresformulier in. Eén regel dus —
- * "Valencia", "Valencia, España", "Rotterdam, Nederland" — en hier halen we er
- * de plaats en (als het kan) het land uit. Puur, zodat de rariteiten te testen
- * zijn zonder database of internet.
+ * Het formulier vraagt ze apart: een veld voor de stad en een keuzelijst voor
+ * het land. Dat is betrouwbaarder dan één regel raden — "Praag, Tsjechië" gaf
+ * geen landcode, en dan staat er niets op de kaart.
+ *
+ * `splitsPlaats` blijft bestaan als vangnet: iemand tikt in het stadveld toch
+ * "Valencia, España", en dan halen we het land er alsnog uit. Puur, zodat de
+ * rariteiten te testen zijn zonder database of internet.
  */
+
+import { isLandcode, landNaam } from "@/lib/landen";
 
 /** Landnamen zoals bezoekers ze typen → ISO-landcode, zoals `contacts.country`. */
 const LANDEN: Record<string, string> = {
@@ -97,9 +102,23 @@ export function splitsPlaats(tekst: string | null | undefined): Plaats | null {
 }
 
 /**
- * Wat er onder de naam van de bezoeker komt te staan: "Valencia · ES".
- * Zonder land alleen de plaats — dat staat netter dan een leeg streepje.
+ * Stad en land zoals we het tonen: "Valencia · Spanje", in de taal van het
+ * scherm. Zonder land alleen de stad — dat staat netter dan een leeg streepje.
  */
-export function plaatsLabel(plaats: string | null, land: string | null): string {
-  return [plaats?.trim() || null, land?.trim() || null].filter(Boolean).join(" · ");
+export function plaatsLabel(plaats: string | null, land: string | null, taal = "nl"): string {
+  return [plaats?.trim() || null, land?.trim() ? landNaam(land, taal) : null].filter(Boolean).join(" · ");
+}
+
+/**
+ * Stad en land samen, zoals de bezoeker ze invulde: het stadveld met de
+ * landkeuze erachter als vangnet uit de tekst ("Valencia, España").
+ */
+export function leesPlaats(stad: string | null | undefined, landcode: string | null | undefined): Plaats | null {
+  const uitTekst = splitsPlaats(stad);
+  const gekozen = isLandcode(landcode) ? landcode!.toUpperCase() : null;
+  if (!uitTekst) return gekozen ? { plaats: "", land: gekozen, zoekterm: "" } : null;
+  // Een gekozen land wint van wat er in het stadveld staat: dat is een keuze,
+  // geen gok.
+  const land = gekozen ?? uitTekst.land;
+  return { plaats: uitTekst.plaats, land, zoekterm: uitTekst.plaats };
 }

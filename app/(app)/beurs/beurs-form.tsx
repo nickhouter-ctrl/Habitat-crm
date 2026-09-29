@@ -14,11 +14,12 @@
  *    en is het formulier leeg; de vorige naam blijft een seconde of vijf in beeld
  *    als bevestiging.
  */
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { useLocale, useT } from "@/components/taal-provider";
 import { Button, Field, Input, Select, Textarea } from "@/components/ui";
 import { INTERESSES, ROLLEN } from "@/lib/beurs";
+import { landenVoorKeuze } from "@/lib/landen";
 import type { BeursResultaat } from "./actions";
 
 type Invoer = {
@@ -29,6 +30,7 @@ type Invoer = {
   telefoon: string;
   bedrijf: string;
   plaats: string;
+  land: string;
   rol: string;
   rolAnders: string;
   interesses: string[];
@@ -62,6 +64,7 @@ const leeg = (): Invoer => ({
   telefoon: "",
   bedrijf: "",
   plaats: "",
+  land: "ES",
   rol: "architect",
   rolAnders: "",
   interesses: [],
@@ -76,6 +79,7 @@ export function BeursForm({
 }) {
   const t = useT();
   const taal = useLocale();
+  const landen = useMemo(() => landenVoorKeuze(taal), [taal]);
   const [waarden, setWaarden] = useState<Invoer>(leeg);
   const [bezig, setBezig] = useState(false);
   const [melding, setMelding] = useState<{ soort: "ok" | "fout" | "wacht"; tekst: string } | null>(null);
@@ -93,6 +97,7 @@ export function BeursForm({
       fd.set("telefoon", inv.telefoon);
       fd.set("bedrijf", inv.bedrijf);
       fd.set("plaats", inv.plaats);
+      fd.set("land", inv.land);
       fd.set("rol", inv.rol);
       fd.set("rolAnders", inv.rolAnders);
       for (const k of inv.interesses) fd.append("interesses", k);
@@ -264,14 +269,24 @@ export function BeursForm({
             placeholder={t("Bureau of winkel")}
           />
         </Field>
-        <Field label={t("Stad en land")} hint={t("Zo zie je na de beurs op de kaart waar iedereen zit.")}>
+        <Field label={t("Stad")} hint={t("Zo zie je na de beurs op de kaart waar iedereen zit.")}>
           <Input
             value={waarden.plaats}
             onChange={zet("plaats")}
             autoComplete="off"
             className="h-12 text-base"
-            placeholder={t("bijv. Valencia, España")}
+            placeholder={t("bijv. Valencia")}
           />
+        </Field>
+        <Field label={t("Land")}>
+          <Select value={waarden.land} onChange={zet("land")} className="h-12 text-base">
+            <option value="">{t("Niet gevraagd")}</option>
+            {landen.map((l) => (
+              <option key={l.code} value={l.code}>
+                {l.naam}
+              </option>
+            ))}
+          </Select>
         </Field>
         <Field label={t("Wat voor klant")}>
           <Select value={waarden.rol} onChange={zet("rol")} className="h-12 text-base">

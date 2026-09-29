@@ -18,13 +18,17 @@ export interface Coordinaat {
   lon: number;
 }
 
-export async function zoekCoordinaten(zoekterm: string): Promise<Coordinaat | null> {
-  const q = zoekterm.trim();
+export async function zoekCoordinaten(stad: string, landcode?: string | null): Promise<Coordinaat | null> {
+  const q = stad.trim();
   if (q.length < 2) return null;
+  // Gestructureerd zoeken: stad én land apart. Daarmee weet Nominatim dat
+  // "Valencia" in Spanje bedoeld is en niet in Venezuela.
+  const params = new URLSearchParams({ city: q, format: "json", limit: "1" });
+  if (landcode) params.set("countrycodes", landcode.toLowerCase());
   try {
     // Kort wachten hoort bij een invoerscherm op een stand: liever geen speldje
     // dan een formulier dat blijft hangen.
-    const res = await fetch(`${NOMINATIM}?q=${encodeURIComponent(q)}&format=json&limit=1`, {
+    const res = await fetch(`${NOMINATIM}?${params}`, {
       headers: { "user-agent": UA },
       cache: "no-store",
       signal: AbortSignal.timeout(4000),

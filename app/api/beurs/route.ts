@@ -28,6 +28,7 @@ const schema = z.object({
   rolAnders: z.string().trim().max(120).optional().or(z.literal("")),
   interesses: z.array(z.enum(INTERESSES.map((i) => i.key) as [string, ...string[]])).max(10).optional(),
   plaats: z.string().trim().max(160).optional().or(z.literal("")),
+  land: z.string().trim().max(2).optional().or(z.literal("")),
   taal: z.enum(["nl", "en", "es"]),
   wens: z.string().trim().max(2000).optional().or(z.literal("")),
   /** Verborgen veld; alleen een bot vult dit in. */
@@ -94,6 +95,7 @@ export async function POST(req: Request) {
       rolAnders: d.rolAnders,
       interesses: d.interesses,
       plaats: d.plaats,
+      land: d.land,
       taal: d.taal,
       wens: d.wens,
       zelfIngevuld: true,

@@ -8,6 +8,7 @@
  * is hij zonder database te testen.
  */
 import { BEURS, interesseLabel, rolOmschrijving } from "@/lib/beurs";
+import { landNaam } from "@/lib/landen";
 
 export interface BeursGesprek {
   aanvraagId: string;
@@ -170,7 +171,7 @@ export function beursCsv(rijen: BeursContact[]): string {
       r.email,
       r.telefoon ?? "",
       r.plaats ?? "",
-      r.land ?? "",
+      r.land ? landNaam(r.land) : "",
       r.taal ?? "",
       r.interesses.map((k) => interesseLabel(k)).join(", "),
       r.wens.replace(/\n/g, " · "),

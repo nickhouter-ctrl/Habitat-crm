@@ -10,7 +10,7 @@ import { describe, expect, it } from "vitest";
 
 import { bereikVoor, perPlaats, speldjes } from "@/lib/beurs-kaart";
 import type { BeursContact } from "@/lib/beurs-lijst";
-import { plaatsLabel, splitsPlaats } from "@/lib/plaats";
+import { leesPlaats, plaatsLabel, splitsPlaats } from "@/lib/plaats";
 
 describe("stad en land uit één regel", () => {
   it("haalt het land eraf, in de taal waarin het getypt is", () => {
@@ -31,10 +31,32 @@ describe("stad en land uit één regel", () => {
     expect(splitsPlaats(" x ")).toBeNull();
   });
 
-  it("schrijft het netjes op het scherm", () => {
-    expect(plaatsLabel("Valencia", "ES")).toBe("Valencia · ES");
+  it("schrijft het netjes op het scherm, in de taal van de kijker", () => {
+    expect(plaatsLabel("Valencia", "ES")).toBe("Valencia · Spanje");
+    expect(plaatsLabel("Valencia", "ES", "es")).toBe("Valencia · España");
     expect(plaatsLabel("Valencia", null)).toBe("Valencia");
     expect(plaatsLabel(null, null)).toBe("");
+  });
+});
+
+describe("stad uit het veld, land uit de keuzelijst", () => {
+  it("laat de keuzelijst winnen van wat er in het stadveld staat", () => {
+    // Iemand kiest Nederland maar typt "Valencia, España" — de keuze telt.
+    expect(leesPlaats("Valencia, España", "NL")).toMatchObject({ plaats: "Valencia", land: "NL" });
+  });
+
+  it("valt terug op de tekst als er geen land gekozen is", () => {
+    expect(leesPlaats("Rotterdam, Nederland", "")).toMatchObject({ plaats: "Rotterdam", land: "NL" });
+    expect(leesPlaats("Xàbia", null)).toMatchObject({ plaats: "Xàbia", land: null });
+  });
+
+  it("negeert een landcode die niet bestaat", () => {
+    expect(leesPlaats("Valencia", "XX")).toMatchObject({ plaats: "Valencia", land: null });
+  });
+
+  it("houdt alleen een land over als er geen stad is ingevuld", () => {
+    expect(leesPlaats("", "ES")).toMatchObject({ plaats: "", land: "ES" });
+    expect(leesPlaats("", "")).toBeNull();
   });
 });
 
@@ -42,7 +64,6 @@ const contact = (o: Partial<BeursContact> & { naam: string }): BeursContact =>
   ({
     aanvraagId: `a-${o.naam}`,
     contactId: `c-${o.naam}`,
-    naam: o.naam,
     email: `${o.naam}@voorbeeld.es`,
     telefoon: null,
     bedrijf: null,
@@ -114,8 +135,8 @@ describe("lijstje per stad", () => {
       contact({ naam: "Dirk" }),
     ];
     expect(perPlaats(rijen)).toEqual([
-      { plaats: "Valencia · ES", aantal: 2 },
-      { plaats: "Rotterdam · NL", aantal: 1 },
+      { plaats: "Valencia · Spanje", aantal: 2 },
+      { plaats: "Rotterdam · Nederland", aantal: 1 },
     ]);
   });
 });

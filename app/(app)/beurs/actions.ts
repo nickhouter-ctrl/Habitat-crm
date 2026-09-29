@@ -29,6 +29,7 @@ const schema = z.object({
   wens: z.string().trim().max(2000).optional().or(z.literal("")),
   interesses: z.array(z.enum(INTERESSES.map((i) => i.key) as [string, ...string[]])).max(10).optional(),
   plaats: z.string().trim().max(160).optional().or(z.literal("")),
+  land: z.string().trim().max(2).optional().or(z.literal("")),
 });
 
 export type BeursResultaat =
@@ -56,6 +57,7 @@ export async function legBezoekerVast(formData: FormData): Promise<BeursResultaa
     rolAnders: d.rolAnders,
     interesses: d.interesses,
     plaats: d.plaats,
+    land: d.land,
     taal: d.taal,
     wens: d.wens,
   });

@@ -26,7 +26,7 @@ import {
 } from "@/lib/beurs";
 import { zetBeursAccountKlaar } from "@/lib/beurs-account";
 import { zoekCoordinaten } from "@/lib/geocode-plaats";
-import { splitsPlaats } from "@/lib/plaats";
+import { leesPlaats } from "@/lib/plaats";
 import type { BeursTaal } from "@/lib/beurs";
 import { COMPANY } from "@/lib/company";
 import { db } from "@/lib/db";
@@ -43,8 +43,10 @@ export interface BeursBezoeker {
   rolAnders?: string | null;
   /** Aangevinkt: stalen, prijzen, beeld, showroombezoek. */
   interesses?: readonly string[] | null;
-  /** Waar de bezoeker zit, zoals hij het typte: "Valencia, España". */
+  /** Stad van de bezoeker ("Valencia"). */
   plaats?: string | null;
+  /** Landcode uit de keuzelijst ("ES"). */
+  land?: string | null;
   taal: BeursTaal;
   wens?: string | null;
   /** Heeft de bezoeker het zelf ingevuld (QR-code) of wij op de iPad? */
@@ -83,12 +85,12 @@ export async function slaBeursbezoekerOp(d: BeursBezoeker): Promise<BeursOpslagR
     }
   }
 
-  // Waar de bezoeker zit. Eén regel op het formulier ("Valencia, España"), hier
-  // uit elkaar getrokken en meteen opgezocht: dan hoeft de kaart later niets
-  // meer op te zoeken. Wordt de plaats niet gevonden, dan staat hij gewoon
-  // zonder speldje in de lijst — dat mag het invoeren niet ophouden.
-  const plaats = splitsPlaats(d.plaats);
-  const punt = plaats ? await zoekCoordinaten(plaats.zoekterm) : null;
+  // Waar de bezoeker zit: stad uit het tekstveld, land uit de keuzelijst. De
+  // coördinaten zoeken we hier één keer op, dan hoeft de kaart later niets meer
+  // te doen. Wordt de stad niet gevonden, dan staat de bezoeker gewoon zonder
+  // speldje in de lijst — dat mag het invoeren niet ophouden.
+  const plaats = leesPlaats(d.plaats, d.land);
+  const punt = plaats?.plaats ? await zoekCoordinaten(plaats.plaats, plaats.land) : null;
 
   const rolAnders = d.rol === "anders" ? d.rolAnders?.trim() || null : null;
   const interesses = schoonInteresses(d.interesses);
@@ -116,7 +118,7 @@ export async function slaBeursbezoekerOp(d: BeursBezoeker): Promise<BeursOpslagR
         companyId: companyId ?? undefined,
         // Een bekende klant heeft vaak al een adres — dat is beter dan wat er
         // op een beursvloer wordt ingetikt, dus alleen invullen wat leeg is.
-        city: bestaandContact.city?.trim() ? undefined : plaats?.plaats ?? undefined,
+        city: bestaandContact.city?.trim() ? undefined : plaats?.plaats || undefined,
         country: bestaandContact.city?.trim() ? undefined : plaats?.land ?? undefined,
         latitude: !bestaandContact.city?.trim() && punt ? String(punt.lat) : undefined,
         longitude: !bestaandContact.city?.trim() && punt ? String(punt.lon) : undefined,
@@ -137,7 +139,7 @@ export async function slaBeursbezoekerOp(d: BeursBezoeker): Promise<BeursOpslagR
         companyId,
         type: contactSoort(d.rol),
         source: BEURS.bron,
-        city: plaats?.plaats ?? null,
+        city: plaats?.plaats || null,
         country: plaats?.land ?? undefined,
         latitude: punt ? String(punt.lat) : null,
         longitude: punt ? String(punt.lon) : null,
