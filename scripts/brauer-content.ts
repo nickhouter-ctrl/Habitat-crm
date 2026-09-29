@@ -104,6 +104,18 @@ const nettePrijs = (adviesEx: number): number => {
 };
 const beschikbaar = (status: string | null | undefined): "stock" | "order_only" =>
   /^uit voorraad leverbaar$/i.test((status ?? "").trim()) ? "stock" : "order_only";
+/** "Per 1-2-2027 uit voorraad leverbaar" → "2027-02-01"; anders null. Gaat mee in specs.leverbaarVanaf. */
+const leverbaarVanaf = (status: string | null | undefined): string | null => {
+  const m = (status ?? "").match(/per\s+(\d{1,2})-(\d{1,2})-(\d{4})/i);
+  return m ? `${m[3]}-${m[2].padStart(2, "0")}-${m[1].padStart(2, "0")}` : null;
+};
+/** specs met de leverdatum bijgewerkt (of verwijderd als die er niet meer is). */
+const specsMetLeverdatum = (specs: Record<string, unknown> | null | undefined, status: string | null | undefined) => {
+  const s: Record<string, unknown> = { ...(specs ?? {}) };
+  const d = leverbaarVanaf(status);
+  if (d) s.leverbaarVanaf = d; else delete s.leverbaarVanaf;
+  return s;
+};
 
 /* ----------------------------------------------------------------------------
    Kleuren — de prijslijst schrijft ze anders dan het CRM
@@ -312,6 +324,7 @@ async function main() {
           costEur: String(inkoop(advies)),
           barcode: regel.ean ? String(regel.ean) : v.barcode,
           availability: beschikbaar(regel.status),
+          specs: specsMetLeverdatum(v.specs as Record<string, unknown> | null, regel.status),
           sourceRef: `prijslijst ${regel.bron}`,
           lastImportedAt: new Date(),
           updatedAt: new Date(),
@@ -467,7 +480,7 @@ async function main() {
         const regel = lijst[code];
         await db
           .update(productVariants)
-          .set({ availability: beschikbaar(regel.status), barcode: regel.ean ? String(regel.ean) : null })
+          .set({ availability: beschikbaar(regel.status), barcode: regel.ean ? String(regel.ean) : null, specs: specsMetLeverdatum(null, regel.status) })
           .where(and(eq(productVariants.brandId, merk.id), eq(productVariants.code, code)));
       }
     }

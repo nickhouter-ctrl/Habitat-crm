@@ -84,7 +84,9 @@ async function main() {
         })),
         combinations: v
           .filter((x) => x.isActive && x.sku)
-          .map((x) => ({ sku: x.sku, options: x.options ?? {}, image: x.imageUrl ?? null, images: x.images?.length ? x.images : null, drawing: typeof x.specs?.tekening === "string" ? x.specs.tekening : null, drawingImage: typeof x.specs?.tekeningAfbeelding === "string" ? x.specs.tekeningAfbeelding : null })),
+          .map((x) => ({ sku: x.sku, options: x.options ?? {}, image: x.imageUrl ?? null, images: x.images?.length ? x.images : null, drawing: typeof x.specs?.tekening === "string" ? x.specs.tekening : null, drawingImage: typeof x.specs?.tekeningAfbeelding === "string" ? x.specs.tekeningAfbeelding : null,
+            // Leverbaarheid per uitvoering: "stock" = uit voorraad; leverbaarVanaf = datum vanaf wanneer (prijslijst: "Per 1-2-2027 uit voorraad leverbaar").
+            availability: x.availability ?? null, availableFrom: typeof x.specs?.leverbaarVanaf === "string" ? x.specs.leverbaarVanaf : null })),
       });
     }
   }
