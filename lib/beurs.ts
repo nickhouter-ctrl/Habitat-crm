@@ -232,6 +232,11 @@ export function beursMail(args: {
     alineas.push(t.gevraagd(lijst.join(", ")));
   }
   alineas.push(t.vervolg);
+  alineas.push(args.taal === "es"
+    ? "Adjuntamos la ficha técnica de Flexible Stone en español e inglés."
+    : args.taal === "en"
+      ? "Attached is the Flexible Stone technical data sheet in English and Spanish."
+      : "In de bijlage vind je de technische datasheet van Flexible Stone in het Engels en Spaans.");
   return {
     subject: t.onderwerp,
     alineas,

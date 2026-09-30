@@ -20,6 +20,7 @@ import { revalidatePath } from "next/cache";
 import { requireModule } from "@/lib/auth/guards";
 import { haalBeursGesprekken } from "@/lib/beurs-data";
 import { vindDubbeleInvoeren } from "@/lib/beurs-lijst";
+import { beursBijlagen } from "@/lib/beurs-bijlagen";
 import { beursVervolgmail, vervolgmailHtml, vervolgmailTekst } from "@/lib/beurs-vervolgmail";
 import { brandedEmail, escapeHtml, sendEmail, signatureHtml } from "@/lib/email";
 import { db } from "@/lib/db";
@@ -234,6 +235,7 @@ export async function stuurBeursVervolgmail(): Promise<VerwijderResultaat> {
       const res = await sendEmail({
         to: c.email!,
         subject: tekst.subject,
+        attachments: await beursBijlagen(),
         html: brandedEmail(vervolgmailHtml(c.naam ?? "", signatureHtml())),
         text: vervolgmailTekst(c.naam ?? ""),
       });

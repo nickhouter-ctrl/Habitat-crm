@@ -18,7 +18,7 @@ const nextConfig: NextConfig = {
   serverExternalPackages: ["@react-pdf/renderer"],
   // PDF fonts are read from public/fonts at runtime — trace them into the bundle.
   outputFileTracingIncludes: {
-    "/**/*": ["./public/fonts/**/*"],
+    "/**/*": ["./public/fonts/**/*", "./public/docs/flexible-stone-technical-data-sheet*.pdf"],
   },
   // De handtekening-generator is één los HTML-bestand in public/. Zo houdt het
   // personeel een korte link en blijft het bestand gewoon te openen en te

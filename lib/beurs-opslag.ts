@@ -1,3 +1,4 @@
+import { beursBijlagen } from "@/lib/beurs-bijlagen";
 import "server-only";
 
 /**
@@ -263,6 +264,7 @@ export async function slaBeursbezoekerOp(d: BeursBezoeker): Promise<BeursOpslagR
     const res = await sendEmail({
       to: email,
       subject: tekst.subject,
+      attachments: await beursBijlagen(),
       html: brandedEmail(
         tekst.alineas.map((p) => `<p>${escapeHtml(p)}</p>`).join("\n") +
           `<p>${escapeHtml(tekst.films.tekst)}</p>
