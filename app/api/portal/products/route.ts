@@ -52,9 +52,9 @@ export async function GET(req: Request) {
     // niet op het product zelf — die horen er dus ook bij.
     .where(and(eq(products.isActive, true), or(isNotNull(products.priceEur), isNotNull(products.additionalSizes))));
 
-  const out: Record<string, { price: number; vat: number }> = {};
+  const out: Record<string, { price: number; retailPrice: number | null; vat: number }> = {};
   // Per grondnaam: verzamel prijzen → kies de meest voorkomende (tie: hoogste).
-  const nameLists = new Map<string, { prices: number[]; vat: number }>();
+  const nameLists = new Map<string, { prices: { price: number; retailPrice: number | null }[]; vat: number }>();
 
   for (const p of rows) {
     const vat = p.vatRate ?? 21;
@@ -62,11 +62,11 @@ export async function GET(req: Request) {
     const effTier = p.collection && NO_TRADE_DISCOUNT.has(p.collection) ? "particulier" : tier;
     const price = tierPrice(effTier, p.priceEur, p.tradePriceEur);
     if (price != null) {
-      if (p.sku) out[p.sku] = { price, vat };
+      if (p.sku) out[p.sku] = { price, retailPrice: tierPrice("particulier", p.priceEur, null), vat };
       const bn = baseName(p.name);
       if (bn) {
         const entry = nameLists.get(bn) ?? { prices: [], vat };
-        entry.prices.push(price);
+        entry.prices.push({ price, retailPrice: tierPrice("particulier", p.priceEur, null) });
         nameLists.set(bn, entry);
       }
     }
@@ -84,19 +84,19 @@ export async function GET(req: Request) {
             : 0.8;
     for (const s of p.additionalSizes ?? []) {
       if (s.sku && s.priceEur != null) {
-        out[s.sku] = { price: Math.round(Number(s.priceEur) * factor * 100) / 100, vat };
+        out[s.sku] = { price: Math.round(Number(s.priceEur) * factor * 100) / 100, retailPrice: tierPrice("particulier", s.priceEur, null), vat };
       }
     }
   }
 
-  const byName: Record<string, { price: number; vat: number }> = {};
+  const byName: Record<string, { price: number; retailPrice: number | null; vat: number }> = {};
   for (const [bn, { prices, vat }] of nameLists) {
     const counts = new Map<number, number>();
-    for (const v of prices) counts.set(v, (counts.get(v) ?? 0) + 1);
-    let best = prices[0];
+    for (const v of prices) counts.set(v.price, (counts.get(v.price) ?? 0) + 1);
+    let best = prices[0].price;
     let bestC = 0;
     for (const [v, c] of counts) if (c > bestC || (c === bestC && v > best)) ((best = v), (bestC = c));
-    byName[bn] = { price: best, vat };
+    byName[bn] = { price: best, retailPrice: prices.find(p => p.price === best)?.retailPrice ?? null, vat };
   }
 
   return jsonCors({ ok: true, tier, prices: out, byName }, 200, origin);

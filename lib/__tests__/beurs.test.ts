@@ -88,9 +88,10 @@ describe("bevestigingsmail", () => {
     expect(m.alineas.join(" ")).toContain(BEURS.stand);
   });
 
-  it("belooft opvolging na de beurs en verkoopt niets", () => {
+  it("legt zakelijke prijzen en de mogelijkheid tot winkelverkoop uit", () => {
     const m = beursMail({ naam: "Ana", taal: "nl" });
     expect(m.alineas.join(" ")).toContain("na de beurs");
-    expect(m.alineas.join(" ").toLowerCase()).not.toContain("korting");
+    expect(m.alineas.join(" ")).toContain("20% korting op de retailprijs");
+    expect(m.alineas.join(" ")).toContain("betere inkoopprijzen");
   });
 });

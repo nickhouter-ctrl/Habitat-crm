@@ -11,6 +11,7 @@
  * lezen en testen zonder iets te versturen.
  */
 import { BEURS } from "@/lib/beurs";
+import { BEURS_PRIJSUITLEG, BEURS_VERKOOPPUNT } from "@/lib/beurs-prijsuitleg";
 
 /** Waar de films staan: de pagina op onze eigen website. */
 export const FILMPAGINA = {
@@ -49,6 +50,8 @@ export function beursVervolgmail(naam: string): VervolgmailTekst {
           `Thank you again for stopping by our stand (${BEURS.stand}) at ${BEURS.naam}. As promised, here are the films that were playing on the screen — what Flexible Stone is made of, how it is produced and what the technical testing shows.`,
           "They have no sound; the text is on screen. Watch them whenever it suits you.",
           "Attached is the Flexible Stone technical data sheet in English and Spanish.",
+          BEURS_PRIJSUITLEG.en,
+          BEURS_VERKOOPPUNT.en,
           "If you would like prices, samples or documentation for a project, simply reply to this email.",
         ],
         knop: "Watch the films",
@@ -62,6 +65,8 @@ export function beursVervolgmail(naam: string): VervolgmailTekst {
           `Gracias de nuevo por pasar por nuestro stand (${BEURS.stand}) en ${BEURS.naam}. Como te prometimos, aquí tienes los vídeos que se veían en la pantalla: de qué está hecho Flexible Stone, cómo se produce y qué resultados dan los ensayos técnicos.`,
           "No tienen sonido; el texto aparece en imagen. Puedes verlos cuando te venga bien.",
           "Adjuntamos la ficha técnica de Flexible Stone en español e inglés.",
+          BEURS_PRIJSUITLEG.es,
+          BEURS_VERKOOPPUNT.es,
           "Si quieres precios, muestras o documentación para un proyecto, responde a este correo.",
         ],
         knop: "Ver los vídeos",

@@ -1,3 +1,5 @@
+import { BEURS_PRIJSUITLEG, BEURS_VERKOOPPUNT } from "@/lib/beurs-prijsuitleg";
+
 /**
  * Beursstand: bezoekers vastleggen.
  *
@@ -207,7 +209,7 @@ const MAIL: Record<BeursTaal, MailTekst> = {
 
 /**
  * De bevestigingsmail. Kort en persoonlijk: één alinea over de ontmoeting, één
- * over wat er gaat gebeuren. Geen verkooppraat — die komt na de beurs.
+ * over wat er gaat gebeuren, met uitleg over zakelijke en verkooppuntprijzen.
  */
 export function beursMail(args: {
   naam: string;
@@ -232,6 +234,7 @@ export function beursMail(args: {
     alineas.push(t.gevraagd(lijst.join(", ")));
   }
   alineas.push(t.vervolg);
+  alineas.push(BEURS_PRIJSUITLEG[args.taal], BEURS_VERKOOPPUNT[args.taal]);
   alineas.push(args.taal === "es"
     ? "Adjuntamos la ficha técnica de Flexible Stone en español e inglés."
     : args.taal === "en"
