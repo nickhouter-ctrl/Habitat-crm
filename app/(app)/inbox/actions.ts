@@ -12,9 +12,10 @@ import { extractAttachmentAmount } from "@/lib/amount-extract";
 import { db } from "@/lib/db";
 import { activities, emailInbox, inboxSuggestions, mailAttachments, purchaseOrders, quoteRequests, users } from "@/lib/db/schema";
 import { escapeHtml, persoonlijkeMail, sendEmail } from "@/lib/email";
+import { partnerContext } from "@/lib/partner-context";
 import { recordSentEmail } from "@/lib/sent-email";
 import { runImapPoll, type ImapPollResult } from "@/lib/imap-poll";
-import { marketingMailbox } from "@/lib/mail-visibility";
+import { mailZichtbaarVoor, marketingMailbox } from "@/lib/mail-visibility";
 import { catalogusMailBijlagen, copyMailAttachmentToPoBucket, listCatalogFiles } from "@/lib/storage";
 
 async function requireUser() {
@@ -183,7 +184,7 @@ export async function aiMailConcept(
   instructie: string,
 ): Promise<{ subject: string; body: string; bijlagen: string[] } | null> {
   const user = await requireUser();
-  const mail = await db.query.emailInbox.findFirst({ where: eq(emailInbox.id, emailId) });
+  const mail = await db.query.emailInbox.findFirst({ where: and(eq(emailInbox.id, emailId), mailZichtbaarVoor(user.email)) });
   if (!mail) throw new Error("Mail niet gevonden");
 
   // Naam vers uit de DB — de JWT-sessie kan een oude naam cachen.
@@ -195,6 +196,7 @@ export async function aiMailConcept(
   const kaal = (mail.subject ?? "").replace(/^(re|fwd?|aw):\s*/i, "").trim();
   return genereerMailAntwoord({
     soort: "mail",
+    crmContext: await partnerContext(mail.fromEmail, user.email),
     klantNaam: mail.fromName,
     klantEmail: mail.fromEmail,
     onderwerp: mail.subject,
@@ -210,7 +212,7 @@ export async function aiMailConcept(
  *  In-Reply-To zodat het antwoord in dezelfde conversatie belandt. */
 export async function replyToMail(emailId: string, formData: FormData) {
   const user = await requireUser();
-  const mail = await db.query.emailInbox.findFirst({ where: eq(emailInbox.id, emailId) });
+  const mail = await db.query.emailInbox.findFirst({ where: and(eq(emailInbox.id, emailId), mailZichtbaarVoor(user.email)) });
   if (!mail) throw new Error("Mail niet gevonden");
   if (!mail.fromEmail) throw new Error("Mail heeft geen afzenderadres");
 

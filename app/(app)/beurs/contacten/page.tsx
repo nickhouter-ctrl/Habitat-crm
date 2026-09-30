@@ -145,6 +145,7 @@ export default async function BeursContactenPage({
         subtitle={`${BEURS.naam} · ${BEURS.plaats} · ${t("stand {nr}|standnummer", { nr: BEURS.stand })}`}
         actions={
           <>
+            <LinkButton href="/beurs/opvolging">Opvolging & verkooppunten</LinkButton>
             <LinkButton href="/beurs" variant="secondary">
               {t("Naar de stand")}
             </LinkButton>

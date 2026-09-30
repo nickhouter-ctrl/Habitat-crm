@@ -102,6 +102,10 @@
     {
       "path": "/api/cron/assistant",
       "schedule": "2-57/5 * * * *"
+    },
+    {
+      "path": "/api/cron/partner-sent",
+      "schedule": "4-59/10 * * * *"
     }
   ]
 }

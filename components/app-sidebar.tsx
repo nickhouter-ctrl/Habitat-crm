@@ -137,7 +137,8 @@ const NAV_GROUPS: { id: string; label: string | null; items: NavItem[] }[] = [
     items: [
       { href: "/contacts", label: "Contacten", icon: Users },
       { href: "/aanvragen", label: "Aanvragen", icon: Inbox },
-      { href: "/beurs", label: "Beursstand", icon: QrCode },
+      { href: "/beurs", label: "Beursstand", icon: QrCode, exact: true },
+      { href: "/beurs/opvolging", label: "Beursopvolging", icon: Send },
       { href: "/wederverkopers", label: "Wederverkopers", icon: Store },
       { href: "/accounts", label: "Website-accounts", icon: UserCog },
     ],

@@ -3524,3 +3524,106 @@ export const prospectCalls = pgTable(
   },
   (t) => [index("prospect_calls_prospect_idx").on(t.prospectId, t.calledAt)],
 );
+
+/** Interne presentatieafspraak; verandert geen dealerstatus of facturen. */
+export const presentationAgreements = pgTable("presentation_agreements", {
+  id: uuid().primaryKey().defaultRandom(),
+  contactId: uuid().notNull().references(() => contacts.id, { onDelete: "restrict" }),
+  version: integer().notNull().default(1),
+  title: text().notNull(),
+  mode: text().notNull(),
+  valueEur: numeric({ precision: 14, scale: 2 }).notNull(),
+  contributionEur: numeric({ precision: 14, scale: 2 }).notNull().default("0"),
+  costEur: numeric({ precision: 14, scale: 2 }),
+  paidEur: numeric({ precision: 14, scale: 2 }).notNull().default("0"),
+  rate: numeric({ precision: 5, scale: 2 }).notNull().default("0"),
+  minimumOrderEur: numeric({ precision: 14, scale: 2 }).notNull().default("0"),
+  remainder: text().notNull().default("minimum"),
+  expiresOn: date(),
+  terms: text().notNull(),
+  approvedBy: uuid().notNull().references(() => users.id),
+  ...timestamps,
+}, t => [uniqueIndex("presentation_agreements_contact_idx").on(t.contactId),
+  check("presentation_agreements_mode_check", sql`${t.mode} in ('first_order', 'spread', 'free', 'contribution')`),
+  check("presentation_agreements_amount_check", sql`${t.valueEur} > 0 and ${t.contributionEur} >= 0 and ${t.contributionEur} <= ${t.valueEur} and ${t.paidEur} >= 0 and ${t.paidEur} <= ${t.valueEur} - ${t.contributionEur} and (${t.costEur} is null or ${t.costEur} >= 0) and ${t.rate} between 0 and 100 and ${t.minimumOrderEur} >= 0`),
+  check("presentation_agreements_remainder_check", sql`${t.remainder} in ('minimum', 'carry')`),
+]);
+
+/** Handmatig bevestigde verrekening op een bestaande order/factuur. */
+export const presentationRedemptions = pgTable("presentation_redemptions", {
+  id: uuid().primaryKey().defaultRandom(),
+  agreementId: uuid().notNull().references(() => presentationAgreements.id, { onDelete: "restrict" }),
+  reference: text().notNull(),
+  orderEur: numeric({ precision: 14, scale: 2 }).notNull(),
+  amountEur: numeric({ precision: 14, scale: 2 }).notNull(),
+  bookedOn: date().notNull(),
+  note: text(),
+  createdBy: uuid().notNull().references(() => users.id),
+  voidedAt: timestamp({ withTimezone: true }),
+  voidedBy: uuid().references(() => users.id),
+  voidReason: text(),
+  createdAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
+}, t => [index("presentation_redemptions_agreement_idx").on(t.agreementId),
+  uniqueIndex("presentation_redemptions_reference_idx").on(t.agreementId, t.reference).where(sql`${t.voidedAt} is null`),
+  check("presentation_redemptions_amount_check", sql`${t.amountEur} > 0 and ${t.orderEur} >= ${t.amountEur}`),
+]);
+
+/** Relatiedoel staat los van beroep/contacttype. */
+export const partnerProfiles = pgTable("partner_profiles", {
+  contactId: uuid().primaryKey().references(() => contacts.id, { onDelete: "restrict" }),
+  version: integer().notNull().default(1),
+  interest: text().notNull().default("unknown"),
+  stage: text().notNull().default("new"),
+  language: text().notNull().default("en-es"),
+  ownerId: uuid().references(() => users.id),
+  nextAction: text(), nextActionOn: date(),
+  notes: text().notNull().default(""),
+  active: boolean().notNull().default(false),
+  published: boolean().notNull().default(false),
+  activeContractId: uuid(),
+  publicName: text(), publicAddress: text(), publicCity: text(), publicCountry: text(),
+  publicEmail: text(), publicPhone: text(), publicWebsite: text(),
+  latitude: numeric({ precision: 10, scale: 7 }), longitude: numeric({ precision: 10, scale: 7 }),
+  ...timestamps,
+}, t => [check("partner_profiles_interest_check", sql`${t.interest} in ('unknown','interested','candidate','not_interested')`),
+  check("partner_profiles_stage_check", sql`${t.stage} in ('new','contacted','discussion','proposal','active','later','stopped')`),
+  check("partner_profiles_public_check", sql`not ${t.published} or ${t.active}`)]);
+
+/** Concepten én exact verzonden inhoud. Sending/unknown nooit automatisch opnieuw sturen. */
+export const partnerMessages = pgTable("partner_messages", {
+  id: uuid().primaryKey().defaultRandom(),
+  contactId: uuid().notNull().references(() => contacts.id, { onDelete: "restrict" }),
+  status: text().notNull().default("draft"),
+  source: text().notNull().default("crm"),
+  personal: boolean().notNull().default(true),
+  mailboxUser: text().notNull(), toEmail: text().notNull(),
+  subject: text().notNull(), body: text().notNull(), html: text(),
+  messageId: text(), referencesHeader: text(),
+  attachments: jsonb().$type<Array<{ name: string; size: number }>>().notNull().default(sql`'[]'::jsonb`),
+  authorId: uuid().references(() => users.id),
+  sentAt: timestamp({ withTimezone: true }),
+  ...timestamps,
+}, t => [index("partner_messages_contact_idx").on(t.contactId, t.sentAt),
+  uniqueIndex("partner_messages_identity_idx").on(t.mailboxUser, t.messageId),
+  check("partner_messages_status_check", sql`${t.status} in ('draft','sending','sent','unknown')`)]);
+
+/** Iedere versie bewaart tekst, gebied en handmatig geverifieerd ondertekend bewijs. */
+export const partnerContracts = pgTable("partner_contracts", {
+  id: uuid().primaryKey().defaultRandom(),
+  contactId: uuid().notNull().references(() => contacts.id, { onDelete: "restrict" }),
+  version: integer().notNull(),
+  body: text().notNull(),
+  validFrom: date().notNull(), validUntil: date().notNull(),
+  exclusive: boolean().notNull().default(false),
+  latitude: numeric({ precision: 10, scale: 7 }), longitude: numeric({ precision: 10, scale: 7 }),
+  radiusKm: numeric({ precision: 8, scale: 2 }),
+  territoryTerms: text().notNull(),
+  legalReviewed: boolean().notNull().default(false),
+  signedPath: text(), signedHash: text(),
+  habitatSigner: text(), partnerSigner: text(), signedOn: date(),
+  verifiedBy: uuid().references(() => users.id), verifiedAt: timestamp({ withTimezone: true }),
+  createdBy: uuid().notNull().references(() => users.id),
+  createdAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
+}, t => [uniqueIndex("partner_contracts_version_idx").on(t.contactId, t.version),
+  check("partner_contracts_dates_check", sql`${t.validUntil} >= ${t.validFrom}`),
+  check("partner_contracts_radius_check", sql`not ${t.exclusive} or (${t.radiusKm} > 0 and ${t.latitude} between -90 and 90 and ${t.longitude} between -180 and 180)`)]);

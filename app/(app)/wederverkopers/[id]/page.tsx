@@ -156,6 +156,11 @@ export default async function ResellerDetailPage({ params }: { params: Promise<{
         }
       />
 
+      <Card className="mb-5 p-5">
+        <Link href={`/wederverkopers/${id}/presentatie`} className="font-semibold text-accent hover:underline">Presentatiepakket en verrekeningen →</Link>
+        <p className="mt-1 text-sm text-muted">Gratis, een eigen bijdrage of verrekenen bij één of meerdere orders. Bekijk de afspraak en het resterende tegoed.</p>
+      </Card>
+
       {windowsDealers.length > 0 && <Card className="mb-5 p-4"><Link href={`/contacts/${id}?tab=kozijnen`} className="font-medium text-accent hover:underline">Kozijnen: offertes, orders en betalingen bekijken →</Link><p className="mt-1 text-xs text-muted">Gekoppeld aan {windowsDealers.map(d => d.companyName || d.email).join(", ")} in Habitat One Windows.</p></Card>}
       <div className="mb-5 grid grid-cols-2 gap-3 sm:grid-cols-4">
         <StatTile label="Producten" value={String(rows.length)} tone="neutral" />

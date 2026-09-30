@@ -1,4 +1,5 @@
 import "server-only";
+import { partnerContext } from "@/lib/partner-context";
 import { and, desc, eq, inArray, isNull, sql } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "@/lib/db";
@@ -57,7 +58,8 @@ export async function prepareInboxSuggestions() {
     db.select({ email: companies.email }).from(companies).where(inArray(sql`lower(${companies.email})`, senders)),
   ]) : [[], []];
   const known = new Set([...knownContacts, ...knownCompanies].map(c => c.email?.toLowerCase()));
-  const proposals = await analyze(mails);
+  const contextual = await Promise.all(mails.map(async m => ({ ...m, crmContext: await partnerContext(m.fromEmail) })));
+  const proposals = await analyze(contextual);
   for (const mail of mails) {
     const suggestion = proposals.get(mail.id)!;
     const archive = mail.status === "new" && mail.bodyLength <= 5000 && suggestion.category === "newsletter" && !suggestion.needsReply && canAutoArchive(mail, known.has(mail.fromEmail?.toLowerCase()));
