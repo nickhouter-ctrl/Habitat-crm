@@ -71,7 +71,6 @@ const GROEP_SLEUTEL = "habitat-menu-groepen";
  * waarschuwing van de React-compiler). Zo leest React de waarde meteen goed.
  */
 type Groepstand = Record<string, boolean>;
-const LEEG: Groepstand = {};
 /**
  * Heb je nog nooit iets in- of uitgeklapt, dan staan deze twee open: het dagwerk
  * (klanten en verkoop). De rest wacht tot je hem nodig hebt. Zodra je zelf iets
@@ -118,29 +117,29 @@ type NavItem = { href: string; label: string; icon: LucideIcon; exact?: boolean 
  * vertaling of een andere naam je opengeklapte groepen niet vergeet.
  */
 const NAV_GROUPS: { id: string; label: string | null; items: NavItem[] }[] = [
+  // Bovenaan wat je elke dag als eerste opendoet — geen kop, altijd zichtbaar.
   {
     id: "start",
     label: null,
     items: [
       { href: "/", label: "Start", icon: Home, exact: true },
       { href: "/assistent", label: "Assistent", icon: FileCheck },
-      { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
-      { href: "/scan", label: "Scannen", icon: ScanLine },
+      { href: "/inbox", label: "Mail-inbox", icon: Mail },
       { href: "/agenda", label: "Agenda", icon: CalendarDays },
+      { href: "/scan", label: "Scannen", icon: ScanLine },
     ],
   },
+  // Wie er zijn, in de volgorde waarin ze binnenkomen: gesproken → aanvraag →
+  // vastgelegd → online toegang.
   {
     id: "klanten",
     label: "Klanten",
     items: [
       { href: "/contacts", label: "Contacten", icon: Users },
-      { href: "/accounts", label: "Website-accounts", icon: UserCog },
-      { href: "/windows-accounts", label: "Windows-accounts", icon: UserCog },
       { href: "/aanvragen", label: "Aanvragen", icon: Inbox },
       { href: "/beurs", label: "Beursstand", icon: QrCode },
-      { href: "/leads", label: "Leads", icon: Megaphone },
-      { href: "/broadcast", label: "Broadcast", icon: Send },
-      { href: "/commissies", label: "Commissies", icon: Percent },
+      { href: "/wederverkopers", label: "Wederverkopers", icon: Store },
+      { href: "/accounts", label: "Website-accounts", icon: UserCog },
     ],
   },
   {
@@ -152,19 +151,22 @@ const NAV_GROUPS: { id: string; label: string | null; items: NavItem[] }[] = [
       { href: "/properties", label: "Panden", icon: Building2 },
     ],
   },
+  // De weg van een verkoop: calculeren → offerte → voorschot → factuur →
+  // commissie. De prijslijsten staan eronder, want die gebruik je erbij.
   {
     id: "verkoop",
     label: "Verkoop",
     items: [
-      { href: "/quotes", label: "Offertes", icon: FileText },
       { href: "/calculator", label: "Offerte-calculator", icon: Calculator },
-      { href: "/invoices", label: "Facturen", icon: Receipt },
+      { href: "/quotes", label: "Offertes", icon: FileText },
       { href: "/voorschotten", label: "Voorschotten", icon: HandCoins },
-      { href: "/prijzenboek", label: "Prijzenboek", icon: Euro },
+      { href: "/invoices", label: "Facturen", icon: Receipt },
+      { href: "/commissies", label: "Commissies", icon: Percent },
       { href: "/prijslijst", label: "Prijslijst", icon: Tag },
-      { href: "/catalogi", label: "Catalogi", icon: BookOpen },
+      { href: "/prijzenboek", label: "Prijzenboek", icon: Euro },
     ],
   },
+  // Wat we verkopen: het assortiment zelf, plus wat je klanten meegeeft.
   {
     id: "producten",
     label: "Producten",
@@ -173,56 +175,59 @@ const NAV_GROUPS: { id: string; label: string | null; items: NavItem[] }[] = [
       { href: "/merken", label: "Merken", icon: Tag },
       { href: "/samples", label: "Samples", icon: Layers },
       { href: "/samplecatalogus", label: "Samplecatalogus", icon: Layers },
-      { href: "/wederverkopers", label: "Wederverkopers", icon: Store },
+      { href: "/catalogi", label: "Catalogi", icon: BookOpen },
     ],
   },
+  // Van bestellen tot binnen: dezelfde route die een container aflegt.
   {
     id: "inkoop",
     label: "Inkoop & logistiek",
     items: [
       { href: "/bestellen", label: "Bestellen", icon: ShoppingCart },
-      { href: "/leveranciers", label: "Leveranciers", icon: HardHat },
       { href: "/inkooporders", label: "Inkooporders", icon: PackagePlus },
       { href: "/inkooporders/te-verwerken", label: "Facturen keuren", icon: FileCheck },
+      { href: "/leveranciers", label: "Leveranciers", icon: HardHat },
       { href: "/shipments", label: "Shipments", icon: Boxes },
       { href: "/pakbonnen", label: "Pakbonnen", icon: Truck },
       { href: "/leveringen", label: "Leveringen", icon: PackageCheck },
     ],
   },
-  {
-    id: "marketing",
-    label: "Marketing",
-    items: [
-      { href: "/marketing/assets", label: "Beeldbibliotheek", icon: Images },
-      { href: "/marketing/creatives", label: "Creatives", icon: Palette },
-      { href: "/marketing/campaigns", label: "Campagnes", icon: Send },
-      { href: "/marketing/insights", label: "Wat werkt", icon: TrendingUp },
-      { href: "/marketing/competitors", label: "Concurrenten", icon: Radar },
-    ],
-  },
-  {
-    id: "communicatie",
-    label: "Communicatie",
-    items: [
-      { href: "/inbox", label: "Mail-inbox", icon: Mail },
-      { href: "/archief", label: "Archief", icon: FileText },
-    ],
-  },
+  // Kozijnen is een eigen platform met eigen klantaccounts; die twee horen bij
+  // elkaar en niet los bij Klanten en Producten.
   {
     id: "kozijnen",
     label: "Kozijnen",
     items: [
       { href: "/kozijnen", label: "Kozijnen", icon: AppWindow },
+      { href: "/windows-accounts", label: "Windows-accounts", icon: UserCog },
     ],
   },
+  // Zelf naar buiten: eerst de koude lijsten en de mailrondes (Teresa), daarna
+  // het advertentiewerk.
+  {
+    id: "marketing",
+    label: "Marketing",
+    items: [
+      { href: "/leads", label: "Leads", icon: Megaphone },
+      { href: "/broadcast", label: "Broadcast", icon: Send },
+      { href: "/marketing/campaigns", label: "Campagnes", icon: Send },
+      { href: "/marketing/creatives", label: "Creatives", icon: Palette },
+      { href: "/marketing/assets", label: "Beeldbibliotheek", icon: Images },
+      { href: "/marketing/insights", label: "Wat werkt", icon: TrendingUp },
+      { href: "/marketing/competitors", label: "Concurrenten", icon: Radar },
+    ],
+  },
+  // Cijfers en wat er gebeurd is.
   {
     id: "rapporten",
-    label: "Rapporten",
+    label: "Cijfers",
     items: [
+      { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
       { href: "/rapporten", label: "Rapporten", icon: BarChart3 },
-      { href: "/rapporten/seo", label: "SEO", icon: LineChart },
       { href: "/rapporten/analytics", label: "Analytics", icon: Activity },
+      { href: "/rapporten/seo", label: "SEO", icon: LineChart },
       { href: "/rapporten/business", label: "Bedrijfsprofiel", icon: Store },
+      { href: "/archief", label: "Archief", icon: FileText },
       { href: "/rapporten/logboek", label: "Logboek", icon: History },
     ],
   },
