@@ -1,132 +1,168 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { geoMercator, geoPath } from "d3-geo";
-import { feature } from "topojson-client";
-import type { Feature, Geometry } from "geojson";
-import { MapPin, Minus, Plus, RotateCcw, X } from "lucide-react";
-import topo from "@/lib/geo/countries-110m.json";
-import { rolLabel } from "@/lib/beurs";
+import type * as Leaflet from "leaflet";
+import "leaflet/dist/leaflet.css";
+import { ExternalLink, LocateFixed, MapPin, Search } from "lucide-react";
 import type { Bereik, Speld } from "@/lib/beurs-kaart";
+import { rolLabel } from "@/lib/beurs";
+import styles from "./kaart.module.css";
 
-const B = 900, H = 500;
-const BEGIN = { k: 1, x: 0, y: 0 };
-type Blik = typeof BEGIN;
+type Taal = "nl" | "en" | "es";
+type Locatie = { key: string; lat: number; lon: number; plaats: string; spelden: Speld[] };
+const tekst = (taal: Taal, nl: string, en: string, es: string) => taal === "es" ? es : taal === "en" ? en : nl;
+const zoektekst = (s: string) => s.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
 
-export function BeursKaart({ spelden, bereik, taal = "nl", zonderLocatie = 0 }: {
-  spelden: Speld[]; bereik: Bereik; taal?: "nl" | "en" | "es"; zonderLocatie?: number;
+/** Only base-map tiles leave the browser. Contact data stays in local overlays. */
+export function BeursKaart({ spelden, taal = "nl", zonderLocatie = 0, zonderContacten = [] }: {
+  spelden: Speld[]; bereik: Bereik; taal?: Taal; zonderLocatie?: number; zonderContacten?: { id: string | null; naam: string; bedrijf: string | null }[];
 }) {
-  const t = (nl: string, en: string, es: string) => taal === "es" ? es : taal === "en" ? en : nl;
-  const [blik, setBlik] = useState<Blik>(BEGIN);
-  const [selectie, setSelectie] = useState<number[]>([]);
-  const svgRef = useRef<SVGSVGElement>(null);
-  const [unit, setUnit] = useState(1);
-  useEffect(() => {
-    const svg = svgRef.current;
-    if (!svg) return;
-    const observer = new ResizeObserver(([entry]) => setUnit(Math.max(1, B / Math.max(1, entry.contentRect.width))));
-    observer.observe(svg);
-    return () => observer.disconnect();
-  }, []);
-  const sleep = useRef<{ x: number; y: number; blik: Blik } | null>(null);
-  const { landen, punten } = useMemo(() => {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const fc = feature(topo as any, (topo as any).objects.countries) as unknown as { features: Feature<Geometry, { name: string }>[] };
-    const projectie = geoMercator().fitExtent([[40, 40], [B - 40, H - 40]], {
-      type: "MultiPoint", coordinates: [[bereik.west, bereik.south], [bereik.east, bereik.north]],
-    });
-    const pad = geoPath(projectie);
-    return {
-      landen: fc.features.map(f => ({ d: pad(f) ?? "", naam: f.properties.name })),
-      punten: spelden.map((s, i) => { const xy = projectie([s.lon, s.lat])!; return { ...s, i, x: xy[0], y: xy[1] }; }),
-    };
-  }, [spelden, bereik]);
-
-  // Clusters live in screen coordinates: zoom separates nearby places without
-  // moving their geographic anchors (the former radial offsets did move them).
-  const groepen = useMemo(() => {
-    const uit: { x: number; y: number; leden: typeof punten }[] = [];
-    for (const p of punten) {
-      const x = p.x * blik.k + blik.x, y = p.y * blik.k + blik.y;
-      if (x < -20 || x > B + 20 || y < -20 || y > H + 20) continue;
-      const groep = uit.find(g => Math.hypot(g.x - x, g.y - y) < 30 * unit);
-      if (groep) { const n = groep.leden.length; groep.x = (groep.x * n + x) / (n + 1); groep.y = (groep.y * n + y) / (n + 1); groep.leden.push(p); }
-      else uit.push({ x, y, leden: [p] });
+  const t = (nl: string, en: string, es: string) => tekst(taal, nl, en, es);
+  const [zoek, setZoek] = useState("");
+  const [gekozen, setGekozen] = useState<string | null>(null);
+  const [kaart, setKaart] = useState<Leaflet.Map | null>(null);
+  const [fout, setFout] = useState(false);
+  const [tegelFout, setTegelFout] = useState(false);
+  const element = useRef<HTMLDivElement>(null);
+  const lijst = useRef<HTMLDivElement>(null);
+  const leaflet = useRef<typeof Leaflet | null>(null);
+  const locaties = useMemo(() => {
+    const groepen = new Map<string, Locatie>();
+    const query = zoektekst(zoek.trim());
+    for (const s of spelden) {
+      if (query && !zoektekst([s.plaats, ...s.namen, ...s.bedrijven].join(" ")).includes(query)) continue;
+      const key = `${s.lat.toFixed(6)},${s.lon.toFixed(6)}`;
+      const groep = groepen.get(key);
+      if (groep) groep.spelden.push(s);
+      else groepen.set(key, { key, lat: s.lat, lon: s.lon, plaats: s.plaats, spelden: [s] });
     }
-    return uit;
-  }, [punten, blik, unit]);
-  const gekozen = selectie.map(i => spelden[i]).filter(Boolean);
-  const aantal = spelden.reduce((n, s) => n + s.namen.length, 0);
-  const plaatsen = [...new Set(spelden.map(s => s.plaats))].sort((a, b) => a.localeCompare(b));
-  const labels: { x: number; y: number; width: number }[] = [];
+    return [...groepen.values()].sort((a, b) => a.plaats.localeCompare(b.plaats));
+  }, [spelden, zoek]);
+  const aantal = locaties.reduce((n, l) => n + l.spelden.reduce((n, s) => n + s.contacten.length, 0), 0);
 
-  function zoom(factor: number) {
-    setBlik(v => { const k = Math.max(1, Math.min(40, v.k * factor)); return { k, x: B / 2 - (B / 2 - v.x) * k / v.k, y: H / 2 - (H / 2 - v.y) * k / v.k }; });
-  }
-  function naarPlaats(plaats: string) {
-    if (!plaats) { setBlik(BEGIN); setSelectie([]); return; }
-    const p = punten.find(p => p.plaats === plaats)!;
-    const k = Math.min(40, Math.max(3, blik.k));
-    setBlik({ k, x: B / 2 - p.x * k, y: H / 2 - p.y * k });
-    setSelectie(punten.filter(p => p.plaats === plaats).map(p => p.i));
-  }
-  const knop = "grid size-10 place-items-center rounded-lg border bg-surface text-foreground shadow-sm hover:bg-background focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-current disabled:opacity-40";
+  useEffect(() => {
+    let weg = false;
+    let map: Leaflet.Map | undefined;
+    let observer: ResizeObserver | undefined;
+    import("leaflet").then(L => {
+      if (weg || !element.current) return;
+      leaflet.current = L;
+      map = L.map(element.current, { center: [40, 0], zoom: 5, scrollWheelZoom: false, fadeAnimation: false, minZoom: 2, maxZoom: 18 });
+      L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
+        maxZoom: 19,
+        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">OpenStreetMap</a>',
+        referrerPolicy: "strict-origin-when-cross-origin",
+      }).on("tileerror", () => setTegelFout(true)).on("tileload", () => setTegelFout(false)).addTo(map);
+      L.control.scale({ imperial: false }).addTo(map);
+      observer = new ResizeObserver(() => map?.invalidateSize());
+      observer.observe(element.current);
+      setKaart(map);
+    }).catch(() => { if (!weg) setFout(true); });
+    return () => { weg = true; observer?.disconnect(); map?.remove(); };
+  }, []);
 
-  return <div className="min-w-0 overflow-hidden rounded-xl border bg-surface">
+  useEffect(() => {
+    if (!kaart || !locaties.length) return;
+    kaart.fitBounds(locaties.map(l => [l.lat, l.lon] as [number, number]), { padding: [45, 45], maxZoom: 11, animate: false });
+  }, [kaart, locaties]);
+
+  useEffect(() => {
+    if (!kaart || !gekozen) return;
+    const l = locaties.find(l => l.key === gekozen);
+    if (l) kaart.setView([l.lat, l.lon], Math.max(kaart.getZoom(), l.spelden.some(s => s.contacten.some(c => c.exact)) ? 16 : 11), { animate: false });
+    const rij = lijst.current?.querySelector<HTMLElement>(`[data-locatie="${gekozen}"]`);
+    if (rij && lijst.current) lijst.current.scrollTo({ top: rij.offsetTop - lijst.current.offsetTop, behavior: "smooth" });
+  }, [kaart, gekozen, locaties]);
+
+  useEffect(() => {
+    const L = leaflet.current;
+    if (!kaart || !L) return;
+    const laag = L.layerGroup().addTo(kaart);
+    function teken() {
+      if (!kaart || !L) return;
+      laag.clearLayers();
+      const clusters: { x: number; y: number; leden: Locatie[] }[] = [];
+      for (const l of locaties) {
+        const p = kaart.latLngToContainerPoint([l.lat, l.lon]);
+        const groep = clusters.find(c => Math.hypot(c.x - p.x, c.y - p.y) < 42);
+        if (groep) groep.leden.push(l);
+        else clusters.push({ x: p.x, y: p.y, leden: [l] });
+      }
+      for (const groep of clusters) {
+        const meerderePlaatsen = groep.leden.length > 1;
+        const n = groep.leden.reduce((n, l) => n + l.spelden.reduce((n, s) => n + s.contacten.length, 0), 0);
+        const actief = groep.leden.some(l => l.key === gekozen);
+        const kleur = actief ? "#b5532b" : "#287dad";
+        const bounds = L.latLngBounds(groep.leden.map(l => [l.lat, l.lon]));
+        // Only numbers and fixed colours enter this SVG; names use textContent below.
+        const html = meerderePlaatsen
+          ? `<span style="display:grid;place-items:center;width:38px;height:38px;border:3px solid white;border-radius:50%;background:${kleur};color:white;font:700 14px sans-serif;box-shadow:0 2px 6px #0004">${n}</span>`
+          : `<svg width="34" height="44" viewBox="0 0 34 44" xmlns="http://www.w3.org/2000/svg"><path d="M17 42C13 36 2 24 2 17a15 15 0 1 1 30 0c0 7-11 19-15 25Z" fill="${kleur}" stroke="white" stroke-width="2"/><circle cx="17" cy="17" r="${n > 1 ? 10 : 6}" fill="white"/>${n > 1 ? `<text x="17" y="21" text-anchor="middle" fill="${kleur}" font-size="11" font-family="sans-serif" font-weight="700">${n}</text>` : ""}</svg>`;
+        const marker = L.marker(bounds.getCenter(), {
+          icon: L.divIcon({ html, className: styles.pin, iconSize: meerderePlaatsen ? [38, 38] : [34, 44], iconAnchor: meerderePlaatsen ? [19, 19] : [17, 42], popupAnchor: [0, -38] }),
+          title: `${groep.leden.map(l => l.plaats).join(" / ")} (${n})`,
+          alt: `${groep.leden.map(l => l.plaats).join(" / ")} (${n})`,
+          riseOnHover: true, zIndexOffset: actief ? 1000 : 0,
+        }).addTo(laag);
+        if (meerderePlaatsen) marker.on("click", () => kaart.fitBounds(bounds, { padding: [60, 60], maxZoom: 18 }));
+        else {
+          const l = groep.leden[0];
+          const inhoud = document.createElement("div");
+          const titel = document.createElement("strong"); titel.textContent = l.plaats; inhoud.append(titel);
+          for (const s of l.spelden) for (const c of s.contacten) {
+            const p = document.createElement("p"); p.style.margin = "8px 0 0"; p.textContent = [c.bedrijf, c.naam, c.adres].filter(Boolean).join(" · "); inhoud.append(p);
+          }
+          marker.bindPopup(inhoud, { autoPan: false, maxWidth: 280 });
+          marker.on("click", () => setGekozen(l.key));
+          if (actief) marker.openPopup();
+        }
+      }
+    }
+    teken();
+    kaart.on("moveend zoomend", teken);
+    return () => { kaart.off("moveend zoomend", teken); laag.remove(); };
+  }, [kaart, locaties, gekozen]);
+
+  function overzicht() {
+    setGekozen(null);
+    if (kaart && locaties.length) kaart.fitBounds(locaties.map(l => [l.lat, l.lon] as [number, number]), { padding: [45, 45], maxZoom: 11 });
+  }
+
+  return <div className={`${styles.kaart} overflow-hidden rounded-xl border bg-surface`}>
     <div className="flex flex-wrap items-center justify-between gap-3 border-b px-4 py-3">
-      <div className="flex items-center gap-2 text-sm"><MapPin className="size-4 text-muted" /><strong>{aantal}</strong> {t("contacten op de kaart", "contacts on the map", "contactos en el mapa")}</div>
-      <label className="flex items-center gap-2 text-xs text-muted">
-        {t("Ga naar", "Go to", "Ir a")}
-        <select aria-label={t("Ga naar een plaats", "Go to a place", "Ir a una localidad")} className="max-w-56 rounded-md border bg-surface px-2 py-2 text-sm text-foreground" value={gekozen.length && gekozen.every(s => s.plaats === gekozen[0].plaats) ? gekozen[0].plaats : ""} onChange={e => naarPlaats(e.target.value)}>
-          <option value="">{t("Alle locaties", "All locations", "Todas las ubicaciones")}</option>
-          {plaatsen.map(p => <option key={p}>{p}</option>)}
-        </select>
-      </label>
+      <div className="flex items-center gap-2 text-sm"><MapPin className="size-4 text-muted" /><strong>{aantal} / {spelden.reduce((n, s) => n + s.contacten.length, 0) + zonderLocatie}</strong> {t("contacten op de kaart", "contacts on the map", "contactos en el mapa")}</div>
+      <button type="button" onClick={overzicht} className="inline-flex items-center gap-2 rounded-lg border px-3 py-2 text-xs font-medium hover:bg-background"><LocateFixed className="size-4" />{t("Alle locaties", "All locations", "Todas las ubicaciones")}</button>
     </div>
-    <div className="relative overflow-hidden bg-[#eaf0f2]">
-      <svg ref={svgRef} viewBox={`0 0 ${B} ${H}`} role="group" aria-label={t("Kaart met beurscontacten", "Trade fair contact map", "Mapa de contactos de la feria")} className="block h-auto min-h-64 w-full touch-none select-none" style={{ aspectRatio: `${B}/${H}`, cursor: "grab" }}
-        onPointerDown={e => { if ((e.target as Element).closest('[role="button"]')) return; e.currentTarget.setPointerCapture(e.pointerId); sleep.current = { x: e.clientX, y: e.clientY, blik }; }}
-        onPointerMove={e => { const start = sleep.current, svg = svgRef.current; if (!start || !svg) return; const matrix = svg.getScreenCTM()?.inverse(); if (!matrix) return; const a = new DOMPoint(start.x, start.y).matrixTransform(matrix), b = new DOMPoint(e.clientX, e.clientY).matrixTransform(matrix); setBlik({ ...start.blik, x: start.blik.x + b.x - a.x, y: start.blik.y + b.y - a.y }); }}
-        onPointerUp={() => { sleep.current = null; }} onPointerCancel={() => { sleep.current = null; }} onLostPointerCapture={() => { sleep.current = null; }}>
-        <g transform={`translate(${blik.x},${blik.y}) scale(${blik.k})`} aria-hidden="true">
-          {landen.map((l, i) => <path key={i} d={l.d} fill="#f8f6ef" stroke="#b6c3c7" strokeWidth={0.8} vectorEffect="non-scaling-stroke" />)}
-        </g>
-        {groepen.map(g => {
-          const n = g.leden.reduce((n, p) => n + p.namen.length, 0);
-          const steden = [...new Set(g.leden.map(p => p.plaats))];
-          const mixed = new Set(g.leden.map(p => p.kleur)).size > 1;
-          const actief = g.leden.some(p => selectie.includes(p.i));
-          const tekst = steden.length === 1 ? steden[0].split(" · ")[0] : `${steden.length} ${t("plaatsen", "places", "localidades")}`;
-          const width = (tekst.length * 6.6 + 14) * unit, x = Math.max(width / 2 + 4, Math.min(B - width / 2 - 4, g.x)), y = g.y + 30 * unit;
-          const toonLabel = actief || (y < H - 10 * unit && !groepen.some(other => other !== g && Math.abs(other.y - y) < 23 * unit && Math.abs(other.x - x) < width / 2 + 17 * unit) && !labels.some(l => Math.abs(l.y - y) < 20 * unit && Math.abs(l.x - x) < (l.width + width) / 2));
-          if (toonLabel) labels.push({ x, y, width });
-          const kies = () => setSelectie(g.leden.map(p => p.i));
-          return <g key={g.leden.map(p => p.i).join("-")}>
-            <g role="button" tabIndex={0} aria-pressed={actief} aria-label={`${steden.join(", ")} — ${n} ${t("contacten", "contacts", "contactos")}`} onClick={kies} onKeyDown={e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); kies(); } }} className="cursor-pointer outline-none [&:focus-visible>circle:first-of-type]:stroke-[#172f3d]">
-              <title>{`${steden.join(" / ")}: ${g.leden.flatMap(p => p.namen).join(", ")}`}</title>
-              <circle cx={g.x} cy={g.y} r={19 * unit} fill={actief ? "#172f3d20" : "transparent"} stroke={actief ? "#172f3d" : "transparent"} strokeWidth={2 * unit} />
-              <circle cx={g.x} cy={g.y} r={(n > 1 ? 13 : 9) * unit} fill={mixed ? "#334b59" : g.leden[0].kleur} stroke="white" strokeWidth={2.5 * unit} />
-              {n > 1 && <text x={g.x} y={g.y + 4 * unit} textAnchor="middle" fill="white" fontSize={11 * unit} fontWeight={700} pointerEvents="none">{n}</text>}
-            </g>
-            {toonLabel && <g pointerEvents="none" aria-hidden="true"><rect x={x - width / 2} y={y - 11 * unit} width={width} height={18 * unit} rx={4 * unit} fill="#ffffff" fillOpacity={0.94} /><text x={x} y={y + 2 * unit} textAnchor="middle" fill="#30434d" fontSize={11 * unit} fontWeight={actief ? 700 : 500}>{tekst}</text></g>}
-          </g>;
-        })}
-      </svg>
-      <div className="absolute right-3 top-3 flex flex-col gap-2">
-        <button type="button" className={knop} disabled={blik.k >= 40} onClick={() => zoom(1.6)} aria-label={t("Inzoomen", "Zoom in", "Acercar")}><Plus className="size-4" /></button>
-        <button type="button" className={knop} disabled={blik.k <= 1} onClick={() => zoom(1 / 1.6)} aria-label={t("Uitzoomen", "Zoom out", "Alejar")}><Minus className="size-4" /></button>
-        <button type="button" className={knop} onClick={() => { setBlik(BEGIN); setSelectie([]); }} aria-label={t("Alle locaties tonen", "Show all locations", "Mostrar todas las ubicaciones")}><RotateCcw className="size-4" /></button>
+    <div className="grid md:grid-cols-[18rem_minmax(0,1fr)] xl:grid-cols-[20rem_minmax(0,1fr)]">
+      <aside className="order-2 min-w-0 border-t md:order-1 md:border-r md:border-t-0" aria-label={t("Bedrijven op de kaart", "Companies on the map", "Empresas en el mapa")}>
+        <div className="border-b p-3"><label className="flex items-center gap-2 rounded-lg border bg-background px-3 py-2"><Search className="size-4 shrink-0 text-muted" /><input value={zoek} onChange={e => { setZoek(e.target.value); setGekozen(null); }} className="min-w-0 w-full bg-transparent text-sm outline-none" aria-label={t("Zoek bedrijf, contact of plaats", "Search company, contact or city", "Buscar empresa, contacto o localidad")} placeholder={t("Bedrijf, naam of plaats…", "Company, name or city…", "Empresa, nombre o localidad…")} /></label></div>
+        <div ref={lijst} className="relative max-h-80 overflow-y-auto overscroll-contain md:h-[530px] md:max-h-none">
+          {!locaties.length && <p className="p-5 text-sm text-muted">{t("Geen locaties gevonden.", "No locations found.", "No se han encontrado ubicaciones.")}</p>}
+          {locaties.map(l => <section key={l.key} data-locatie={l.key} className={`border-b last:border-b-0 ${gekozen === l.key ? "bg-[#b5532b]/[0.07]" : ""}`}>
+            <h3 className="px-4 pt-4 text-xs font-medium uppercase tracking-wide text-muted">{l.plaats}</h3>
+            {l.spelden.flatMap(s => s.contacten.map((c, i) => <div key={`${c.id ?? c.naam}-${s.rol}-${i}`} className="px-4 pb-4 pt-2">
+              <button type="button" onClick={() => setGekozen(l.key)} aria-pressed={gekozen === l.key} className="block w-full rounded text-left hover:text-accent focus-visible:outline-2 focus-visible:outline-offset-2">
+                <span className="block text-base font-semibold leading-snug">{c.bedrijf || c.naam}</span>
+                {c.bedrijf && <span className="mt-1 block text-sm text-muted">{c.naam}</span>}
+              </button>
+              {c.adres && <p className="mt-1 text-sm text-muted">{c.adres}</p>}
+              <p className="mt-1 text-xs text-muted">{c.exact ? t("Adreslocatie", "Address location", "Ubicación de la dirección") : c.adres ? t("Adres bekend · pin bij benadering", "Address known · approximate pin", "Dirección conocida · ubicación aproximada") : t("Plaats / regio bij benadering", "Approximate city / region", "Localidad / región aproximada")}</p>
+              <p className="mt-1 flex items-center gap-1.5 text-xs text-muted"><span className="size-2 rounded-full" style={{ background: s.kleur }} />{rolLabel(s.rol, taal)}</p>
+              {c.id && <a href={`/contacts/${encodeURIComponent(c.id)}`} className="mt-2 inline-flex items-center gap-1 text-xs font-medium text-accent hover:underline">{t("Contact bekijken", "View contact", "Ver contacto")}<ExternalLink className="size-3" /></a>}
+            </div>))}
+          </section>)}
+        </div>
+      </aside>
+      <div className="relative order-1 min-w-0 md:order-2">
+        <div ref={element} className="z-0 h-[380px] w-full bg-[#e9f0f1] md:h-[600px]" aria-label={t("Interactieve kaart met beurscontacten", "Interactive trade fair contact map", "Mapa interactivo de contactos de la feria")} />
+        {!kaart && !fout && <div className="pointer-events-none absolute inset-0 grid place-items-center text-sm text-muted">{t("Kaart laden…", "Loading map…", "Cargando mapa…")}</div>}
+        {(fout || tegelFout) && <div role="status" className="absolute bottom-8 left-3 right-3 rounded-lg border bg-surface p-3 text-sm shadow">{t("De kaartachtergrond kon niet laden. De contacten blijven beschikbaar in de lijst.", "The base map could not load. Contacts remain available in the list.", "No se ha podido cargar el mapa. Los contactos siguen disponibles en la lista.")}</div>}
       </div>
     </div>
-    <div className="border-t px-4 py-3 text-xs leading-relaxed text-muted">
-      {t("Locaties op plaatsniveau, geen exacte bedrijfsadressen. Klik op een stip voor de contacten. Een getal is het aantal contacten; zoom in om nabijgelegen plaatsen te scheiden.", "Locations are approximate, not exact business addresses. Select a dot to see contacts. Numbers show contact counts; zoom in to separate nearby places.", "Ubicaciones aproximadas, no direcciones exactas. Pulsa un punto para ver los contactos. El número indica los contactos; acerca el mapa para separar localidades cercanas.")}
-      {zonderLocatie > 0 && <p className="mt-1 font-medium text-foreground">{zonderLocatie} {t("contacten zonder kaartlocatie — ze staan wel in de lijst.", "contacts without a map location — still included in the list.", "contactos sin ubicación en el mapa; sí aparecen en la lista.")}</p>}
-    </div>
-    {gekozen.length > 0 && <div className="relative border-t bg-background px-4 py-4" aria-live="polite">
-      <button type="button" className="absolute right-3 top-3 rounded p-1 text-muted hover:text-foreground" aria-label={t("Details sluiten", "Close details", "Cerrar detalles")} onClick={() => setSelectie([])}><X className="size-4" /></button>
-      <div className="grid gap-4 pr-7 sm:grid-cols-2">
-        {gekozen.map((s, i) => <div key={`${s.plaats}-${s.rol}-${i}`}><div className="flex items-center gap-2 font-medium"><span className="size-2.5 rounded-full" style={{ background: s.kleur }} />{s.plaats}</div><p className="mt-1 text-xs text-muted">{rolLabel(s.rol, taal)} · {s.namen.length}</p><p className="mt-2 text-sm">{s.bedrijven.join(" · ")}</p><p className="mt-1 text-sm text-muted">{s.namen.join(", ")}</p></div>)}
-      </div>
-    </div>}
+    {zonderContacten.length > 0 && <details className="border-t px-4 py-3 text-sm">
+      <summary className="cursor-pointer font-medium">{zonderContacten.length} {t("contacten zonder kaartlocatie", "contacts without a map location", "contactos sin ubicación en el mapa")}</summary>
+      <ul className="mt-3 grid gap-2 sm:grid-cols-2">{zonderContacten.map((c, i) => <li key={c.id ?? i}>{c.id ? <a className="text-accent hover:underline" href={`/contacts/${encodeURIComponent(c.id)}`}>{c.bedrijf ? `${c.bedrijf} · ${c.naam}` : c.naam}</a> : c.naam}</li>)}</ul>
+    </details>}
+    <p className="border-t px-4 py-3 text-xs leading-relaxed text-muted">{t("Bij ieder contact staat of de pin op een bevestigd adres of bij benadering op een plaats/regio staat. Een getal groepeert contacten; klik om in te zoomen. Selecteer een bedrijf om het op de kaart te zien.", "Each contact indicates whether its pin is at a confirmed address or an approximate city/region. Numbers group contacts; click to zoom in. Select a company to locate it on the map.", "Cada contacto indica si su ubicación corresponde a una dirección confirmada o a una localidad/región aproximada. Los números agrupan contactos; pulsa para acercar. Selecciona una empresa para verla en el mapa.")}{zonderLocatie > 0 && <span className="ml-1 font-medium">{zonderLocatie} {t("contacten hebben nog geen kaartlocatie.", "contacts have no map location yet.", "contactos aún no tienen ubicación en el mapa.")}</span>}</p>
   </div>;
 }

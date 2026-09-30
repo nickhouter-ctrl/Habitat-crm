@@ -228,10 +228,10 @@ export default async function BeursContactenPage({
               {zonderPlaats > 0 ? ` · ${t("{n} zonder", { n: zonderPlaats })}` : ""}
             </span>
           </CardHeader>
-          <CardContent className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_16rem]">
-            <BeursKaart key={rijen.map(r => `${r.contactId}:${r.lat}:${r.lon}`).join("|")} spelden={spelden} bereik={bereik} taal={taal} zonderLocatie={rijen.filter(r => r.lat === null || r.lon === null).length} />
+          <CardContent className="space-y-4">
+            <BeursKaart key={rijen.map(r => `${r.contactId}:${r.lat}:${r.lon}`).join("|")} spelden={spelden} bereik={bereik} taal={taal} zonderLocatie={rijen.filter(r => !speldjes([r]).length).length} zonderContacten={rijen.filter(r => !speldjes([r]).length).map(r => ({ id: r.contactId, naam: r.naam, bedrijf: r.bedrijf }))} />
             {/* Legenda: elk soort bezoeker zijn eigen kleur, met het aantal. */}
-            <ul className="space-y-2 text-sm lg:border-l lg:pl-5">
+            <ul className="flex flex-wrap gap-x-5 gap-y-2 text-xs">
               {merken.map((m) => (
                 <li key={m.rol} className="flex items-center gap-2.5">
                   <span

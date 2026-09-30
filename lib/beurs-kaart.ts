@@ -31,6 +31,7 @@ export interface Speld {
   namen: string[];
   /** En van welke bedrijven, voor het label bij aanwijzen. */
   bedrijven: string[];
+  contacten: { id: string | null; naam: string; bedrijf: string | null; adres: string | null; exact: boolean }[];
 }
 
 /**
@@ -74,13 +75,14 @@ export function speldjes(rijen: BeursContact[], taal = "nl"): Speld[] {
     const lon = getal(r.lon);
     if (lat === null || lon === null || Math.abs(lat) > 85 || Math.abs(lon) > 180) continue;
     const rol = r.rol ?? "anders";
-    // Afronden op ~100 meter: dezelfde stad levert exact dezelfde coördinaten,
-    // maar zo vallen ook twee net iets andere metingen samen.
-    const sleutel = `${lat.toFixed(3)},${lon.toFixed(3)}|${rol}`;
+    // Behoud adresprecisie; alleen echt gelijke locaties delen een speld.
+    const sleutel = `${lat.toFixed(6)},${lon.toFixed(6)}|${rol}`;
     const plaats = [r.plaats, r.land ? landNaam(r.land, taal) : null].filter(Boolean).join(" · ");
     const bedrijf = r.bedrijf?.trim() || null;
+    const contact = { id: r.contactId, naam: r.naam, bedrijf, adres: [r.adres, r.postcode].filter(Boolean).join(", ") || null, exact: !!r.adres && (r.tags ?? []).includes("geo:adres-bevestigd") };
     const bestaand = perSpeld.get(sleutel);
     if (bestaand) {
+      bestaand.contacten.push(contact);
       if (!bestaand.namen.includes(r.naam)) bestaand.namen.push(r.naam);
       if (bedrijf && !bestaand.bedrijven.includes(bedrijf)) bestaand.bedrijven.push(bedrijf);
     } else {
@@ -92,6 +94,7 @@ export function speldjes(rijen: BeursContact[], taal = "nl"): Speld[] {
         kleur: kleurVoor(rol),
         namen: [r.naam],
         bedrijven: bedrijf ? [bedrijf] : [],
+        contacten: [contact],
       });
     }
   }
@@ -108,7 +111,7 @@ export function legenda(
   taal: "nl" | "en" | "es" = "nl",
 ): { rol: string; label: string; kleur: string; aantal: number }[] {
   const telling = new Map<string, number>();
-  for (const s of spelden) telling.set(s.rol, (telling.get(s.rol) ?? 0) + s.namen.length);
+  for (const s of spelden) telling.set(s.rol, (telling.get(s.rol) ?? 0) + s.contacten.length);
   return ROLLEN.filter((r) => telling.get(r.key)).map((r) => ({
     rol: r.key,
     label: rolLabel(r.key, taal),

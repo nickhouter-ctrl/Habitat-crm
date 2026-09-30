@@ -1,0 +1,6 @@
+.kaart :global(.leaflet-container) { font-family: inherit; }
+.kaart :global(.leaflet-popup-content) { line-height: 1.5; }
+.kaart :global(.leaflet-control-attribution) { font-size: 10px; }
+.kaart :global(.leaflet-control-zoom a) { width: 34px; height: 34px; line-height: 34px; }
+.pin { background: transparent; border: 0; }
+.pin:focus-visible { outline: 3px solid #b5532b; outline-offset: 3px; border-radius: 6px; }

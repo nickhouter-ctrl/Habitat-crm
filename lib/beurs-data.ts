@@ -28,6 +28,8 @@ export async function haalBeursGesprekken(limiet = 2000): Promise<BeursGesprek[]
       tags: contacts.tags,
       wanneer: quoteRequests.createdAt,
       plaats: contacts.city,
+      adres: contacts.addressLine,
+      postcode: contacts.postalCode,
       land: contacts.country,
       lat: contacts.latitude,
       lon: contacts.longitude,

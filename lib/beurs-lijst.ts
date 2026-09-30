@@ -23,6 +23,8 @@ export interface BeursGesprek {
   wanneer: Date | null;
   /** Waar de bezoeker zit — stad en land van het contact. */
   plaats: string | null;
+  adres?: string | null;
+  postcode?: string | null;
   land: string | null;
   /** Coördinaten van die stad, voor de kaart; numeric komt als string binnen. */
   lat: string | null;

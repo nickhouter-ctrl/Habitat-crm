@@ -170,3 +170,22 @@ describe("lijstje per stad", () => {
     ]);
   });
 });
+
+
+describe("adreslocaties op de kaart", () => {
+  it("houdt afzonderlijke huisnummers binnen 100 meter uit elkaar", () => {
+    const pins = speldjes([
+      contact({ naam: "A", lat: "40.421801", lon: "-3.693101" }),
+      contact({ naam: "B", lat: "40.421899", lon: "-3.693199" }),
+    ]);
+    expect(pins).toHaveLength(2);
+  });
+  it("noemt een adres alleen precies na bevestiging van de coördinaten", () => {
+    const pins = speldjes([
+      contact({ naam: "A", lat: "40", lon: "-3", adres: "Calle Prim 12", tags: ["geo:adres-bevestigd"] }),
+      contact({ naam: "B", lat: "41", lon: "-3", adres: "Calle Prim 12" }),
+    ]);
+    expect(pins[0].contacten[0].exact).toBe(true);
+    expect(pins[1].contacten[0].exact).toBe(false);
+  });
+});
