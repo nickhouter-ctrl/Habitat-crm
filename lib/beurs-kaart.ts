@@ -61,7 +61,7 @@ export interface Bereik {
 }
 
 const getal = (v: string | null): number | null => {
-  if (v === null) return null;
+  if (v === null || v.trim() === "") return null;
   const n = Number(v);
   return Number.isFinite(n) ? n : null;
 };
@@ -72,7 +72,7 @@ export function speldjes(rijen: BeursContact[], taal = "nl"): Speld[] {
   for (const r of rijen) {
     const lat = getal(r.lat);
     const lon = getal(r.lon);
-    if (lat === null || lon === null) continue;
+    if (lat === null || lon === null || Math.abs(lat) > 85 || Math.abs(lon) > 180) continue;
     const rol = r.rol ?? "anders";
     // Afronden op ~100 meter: dezelfde stad levert exact dezelfde coördinaten,
     // maar zo vallen ook twee net iets andere metingen samen.

@@ -229,7 +229,7 @@ export default async function BeursContactenPage({
             </span>
           </CardHeader>
           <CardContent className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_16rem]">
-            <BeursKaart spelden={spelden} bereik={bereik} />
+            <BeursKaart key={rijen.map(r => `${r.contactId}:${r.lat}:${r.lon}`).join("|")} spelden={spelden} bereik={bereik} taal={taal} zonderLocatie={rijen.filter(r => r.lat === null || r.lon === null).length} />
             {/* Legenda: elk soort bezoeker zijn eigen kleur, met het aantal. */}
             <ul className="space-y-2 text-sm lg:border-l lg:pl-5">
               {merken.map((m) => (
