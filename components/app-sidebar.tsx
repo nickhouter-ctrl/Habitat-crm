@@ -1,7 +1,7 @@
 "use client";
 
 import {
-  Contact,
+  ChevronRight,
   History,
   Activity,
   BarChart3,
@@ -50,7 +50,7 @@ import type { LucideIcon } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useState } from "react";
+import { useState, useSyncExternalStore } from "react";
 
 import { signOutAction } from "@/lib/auth/actions";
 import { useT } from "@/components/taal-provider";
@@ -59,9 +59,67 @@ import { ThemaSchakelaar } from "@/components/thema-schakelaar";
 import { GlobalSearch } from "@/components/global-search";
 import { cn, initials } from "@/lib/utils";
 
+const GROEP_SLEUTEL = "habitat-menu-groepen";
+
+/**
+ * Welke groepen staan open? Dat leeft in de localStorage van dit apparaat en
+ * niet in de database: het is een voorkeur van één browser, geen bedrijfsdata.
+ *
+ * Bewust een kleine store met `useSyncExternalStore` in plaats van een effect
+ * dat state zet: bij het eerste renderen op de server bestaat localStorage niet,
+ * en een effect dat daarna alsnog state zet geeft een tweede render (en een
+ * waarschuwing van de React-compiler). Zo leest React de waarde meteen goed.
+ */
+type Groepstand = Record<string, boolean>;
+const LEEG: Groepstand = {};
+/**
+ * Heb je nog nooit iets in- of uitgeklapt, dan staan deze twee open: het dagwerk
+ * (klanten en verkoop). De rest wacht tot je hem nodig hebt. Zodra je zelf iets
+ * klapt telt alleen jouw keuze nog.
+ */
+const STANDAARD_OPEN: Groepstand = { klanten: true, verkoop: true };
+let standCache: Groepstand | null = null;
+const luisteraars = new Set<() => void>();
+
+function leesStand(): Groepstand {
+  if (standCache) return standCache;
+  try {
+    const rauw = localStorage.getItem(GROEP_SLEUTEL);
+    standCache = rauw ? (JSON.parse(rauw) as Groepstand) : STANDAARD_OPEN;
+  } catch {
+    standCache = STANDAARD_OPEN; // privémodus: dan gewoon de standaardgroepen
+  }
+  return standCache;
+}
+
+function schrijfStand(volgende: Groepstand) {
+  standCache = volgende;
+  try {
+    localStorage.setItem(GROEP_SLEUTEL, JSON.stringify(volgende));
+  } catch {
+    /* zie boven */
+  }
+  for (const fn of luisteraars) fn();
+}
+
+function abonneer(fn: () => void) {
+  luisteraars.add(fn);
+  return () => luisteraars.delete(fn);
+}
+
 type NavItem = { href: string; label: string; icon: LucideIcon; exact?: boolean };
-const NAV_GROUPS: { label: string | null; items: NavItem[] }[] = [
+/**
+ * De zijbalk had elf groepen met vijftig links, allemaal open: te lang om iets
+ * in te vinden. De groepen klappen nu in; alleen het bovenste blokje en de
+ * groep waar je in zit staan open. Wat je open- of dichtklapt blijft op dit
+ * apparaat bewaard.
+ *
+ * `id` is die onthoud-sleutel — die hangt niet aan het label, zodat een
+ * vertaling of een andere naam je opengeklapte groepen niet vergeet.
+ */
+const NAV_GROUPS: { id: string; label: string | null; items: NavItem[] }[] = [
   {
+    id: "start",
     label: null,
     items: [
       { href: "/", label: "Start", icon: Home, exact: true },
@@ -72,6 +130,7 @@ const NAV_GROUPS: { label: string | null; items: NavItem[] }[] = [
     ],
   },
   {
+    id: "klanten",
     label: "Klanten",
     items: [
       { href: "/contacts", label: "Contacten", icon: Users },
@@ -79,13 +138,13 @@ const NAV_GROUPS: { label: string | null; items: NavItem[] }[] = [
       { href: "/windows-accounts", label: "Windows-accounts", icon: UserCog },
       { href: "/aanvragen", label: "Aanvragen", icon: Inbox },
       { href: "/beurs", label: "Beursstand", icon: QrCode },
-      { href: "/beurs/contacten", label: "Beurscontacten", icon: Contact },
       { href: "/leads", label: "Leads", icon: Megaphone },
       { href: "/broadcast", label: "Broadcast", icon: Send },
       { href: "/commissies", label: "Commissies", icon: Percent },
     ],
   },
   {
+    id: "projecten",
     label: "Projecten",
     items: [
       { href: "/projects", label: "Projecten", icon: Briefcase },
@@ -94,6 +153,7 @@ const NAV_GROUPS: { label: string | null; items: NavItem[] }[] = [
     ],
   },
   {
+    id: "verkoop",
     label: "Verkoop",
     items: [
       { href: "/quotes", label: "Offertes", icon: FileText },
@@ -102,11 +162,11 @@ const NAV_GROUPS: { label: string | null; items: NavItem[] }[] = [
       { href: "/voorschotten", label: "Voorschotten", icon: HandCoins },
       { href: "/prijzenboek", label: "Prijzenboek", icon: Euro },
       { href: "/prijslijst", label: "Prijslijst", icon: Tag },
-      { href: "/prijslijst/distributeur", label: "Verkooppunten", icon: Store },
       { href: "/catalogi", label: "Catalogi", icon: BookOpen },
     ],
   },
   {
+    id: "producten",
     label: "Producten",
     items: [
       { href: "/products", label: "Producten", icon: Boxes },
@@ -117,6 +177,7 @@ const NAV_GROUPS: { label: string | null; items: NavItem[] }[] = [
     ],
   },
   {
+    id: "inkoop",
     label: "Inkoop & logistiek",
     items: [
       { href: "/bestellen", label: "Bestellen", icon: ShoppingCart },
@@ -129,6 +190,7 @@ const NAV_GROUPS: { label: string | null; items: NavItem[] }[] = [
     ],
   },
   {
+    id: "marketing",
     label: "Marketing",
     items: [
       { href: "/marketing/assets", label: "Beeldbibliotheek", icon: Images },
@@ -139,6 +201,7 @@ const NAV_GROUPS: { label: string | null; items: NavItem[] }[] = [
     ],
   },
   {
+    id: "communicatie",
     label: "Communicatie",
     items: [
       { href: "/inbox", label: "Mail-inbox", icon: Mail },
@@ -146,12 +209,14 @@ const NAV_GROUPS: { label: string | null; items: NavItem[] }[] = [
     ],
   },
   {
+    id: "kozijnen",
     label: "Kozijnen",
     items: [
       { href: "/kozijnen", label: "Kozijnen", icon: AppWindow },
     ],
   },
   {
+    id: "rapporten",
     label: "Rapporten",
     items: [
       { href: "/rapporten", label: "Rapporten", icon: BarChart3 },
@@ -174,6 +239,10 @@ export function AppSidebar({
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
   const t = useT();
+  // Onbekende groep = dicht. Het bovenste blokje en de groep waar je in zit
+  // staan altijd open, ongeacht wat hier staat.
+  const openGroepen = useSyncExternalStore(abonneer, leesStand, () => STANDAARD_OPEN);
+  const klapGroep = (id: string, nu: boolean) => schrijfStand({ ...openGroepen, [id]: !nu });
 
   // Alleen netheid: de echte grens ligt in app/(app)/layout.tsx en in de guards
   // bij de server actions. Dit voorkomt dode links in het menu.
@@ -188,15 +257,34 @@ export function AppSidebar({
 
   const navBody = (onNavigate?: () => void) => (
     <>
-      <nav className="flex-1 space-y-4 overflow-y-auto px-2 py-3">
-        {groups.map((group, gi) => (
-          <div key={gi} className="space-y-0.5">
+      <nav className="flex-1 space-y-2 overflow-y-auto px-2 py-3">
+        {groups.map((group) => {
+          // Zit je in deze groep, dan staat hij open — anders klik je je eigen
+          // pagina weg. Het bovenste blokje (zonder kop) blijft altijd staan.
+          const bevatHuidige = group.items.some((i) => isActive(i.href, i.exact));
+          const uitgeklapt = !group.label || bevatHuidige || openGroepen[group.id] === true;
+          // Tellers van wat er dichtgeklapt onder zit: "Facturen keuren (3)" mag
+          // je niet missen doordat de groep dicht staat.
+          const groepTeller = group.items.reduce((n, i) => n + (badges[i.href] ?? 0), 0);
+          return (
+          <div key={group.id} className="space-y-0.5">
             {group.label && (
-              <p className="px-2.5 pb-1 text-[10px] font-semibold uppercase tracking-wider text-muted/60">
-                {t(group.label)}
-              </p>
+              <button
+                type="button"
+                onClick={() => klapGroep(group.id, uitgeklapt)}
+                aria-expanded={uitgeklapt}
+                className="flex w-full items-center gap-1.5 rounded-md px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider text-muted/70 transition-colors hover:bg-background hover:text-foreground"
+              >
+                <ChevronRight className={cn("size-3 shrink-0 transition-transform", uitgeklapt && "rotate-90")} />
+                <span className="truncate">{t(group.label)}</span>
+                {!uitgeklapt && groepTeller > 0 && (
+                  <span className="ml-auto grid h-4 min-w-4 shrink-0 place-items-center rounded-full bg-red-500 px-1 text-[10px] font-semibold text-white">
+                    {groepTeller > 99 ? "99+" : groepTeller}
+                  </span>
+                )}
+              </button>
             )}
-            {group.items.map((item) => {
+            {uitgeklapt && group.items.map((item) => {
               const active = isActive(item.href, item.exact);
               return (
                 <Link
@@ -219,7 +307,8 @@ export function AppSidebar({
               );
             })}
           </div>
-        ))}
+          );
+        })}
       </nav>
 
       <div className="flex items-center gap-1 border-t px-2 py-2">
