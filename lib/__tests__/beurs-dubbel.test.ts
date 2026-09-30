@@ -21,6 +21,7 @@ const mocks = vi.hoisted(() => ({
   insertAanvraag: vi.fn(),
   mail: vi.fn(),
   update: vi.fn(),
+  set: vi.fn(),
 }));
 
 vi.mock("server-only", () => ({}));
@@ -37,7 +38,7 @@ vi.mock("@/lib/db", () => ({
         returning: vi.fn().mockResolvedValue([{ id: "contact-nieuw" }]),
       }),
     }),
-    update: () => ({ set: () => ({ where: mocks.update }) }),
+    update: () => ({ set: (values: unknown) => { mocks.set(values); return { where: mocks.update }; } }),
   },
 }));
 vi.mock("@/lib/email", () => ({
@@ -107,6 +108,27 @@ describe("dezelfde bezoeker twee keer opslaan", () => {
     const res = await slaBeursbezoekerOp(bezoeker);
 
     expect(res.dubbel).toBe(false);
+    expect(mocks.mail).toHaveBeenCalledTimes(1);
+    expect(mocks.set.mock.calls.some(([value]) => value.tags)).toBe(true);
+  });
+
+  it("registreert geen filmmail als de verzending mislukt", async () => {
+    mocks.zoekAanvraag.mockResolvedValue(undefined);
+    mocks.mail.mockResolvedValue({ sent: false });
+
+    const res = await slaBeursbezoekerOp(bezoeker);
+
+    expect(res.mail).toBe("mislukt");
+    expect(mocks.set.mock.calls.some(([value]) => value.tags)).toBe(false);
+  });
+
+  it("meldt een verstuurde mail niet als mislukt als de registratie faalt", async () => {
+    mocks.zoekAanvraag.mockResolvedValue(undefined);
+    mocks.update.mockResolvedValueOnce(undefined).mockRejectedValueOnce(new Error("database unavailable"));
+
+    const res = await slaBeursbezoekerOp(bezoeker);
+
+    expect(res.mail).toBe("verstuurd");
     expect(mocks.mail).toHaveBeenCalledTimes(1);
   });
 });

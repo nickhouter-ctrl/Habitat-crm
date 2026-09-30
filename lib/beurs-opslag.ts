@@ -281,9 +281,25 @@ export async function slaBeursbezoekerOp(d: BeursBezoeker): Promise<BeursOpslagR
         tekst.account ? `\n\n${tekst.account.tekst}\n${tekst.account.link}` : ""
       }\n\n${tekst.groet}\n${COMPANY.legalName}`,
     });
-    if (res.sent) mail = "verstuurd";
+    if (res.sent) {
+      mail = "verstuurd";
+      // De bevestiging bevat de films al. De opvolglijst gebruikt dezelfde tag,
+      // zodat nieuwe bezoekers geen onnodige tweede filmmail krijgen.
+      // Voeg atomair toe: behoud ook tags die tijdens het versturen zijn gezet.
+      await db
+        .update(contacts)
+        .set({
+          tags: sql`array_append(coalesce(${contacts.tags}, '{}'::text[]), 'beurs:film-mail')`,
+          updatedAt: new Date(),
+        })
+        .where(and(
+          eq(contacts.id, contactId),
+          sql`not coalesce(${contacts.tags}, '{}'::text[]) @> array['beurs:film-mail']`,
+        ));
+    }
   } catch {
-    mail = "mislukt";
+    // Een fout bij de registratie maakt een al verstuurde mail niet ongedaan.
+    // Alleen geslaagde verzendingen krijgen de tag; nooit vooraf markeren.
   }
 
   return { contactId, aanvraagId: aanvraag.id, mail, account, dubbel: false };
