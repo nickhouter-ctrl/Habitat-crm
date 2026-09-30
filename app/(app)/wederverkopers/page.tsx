@@ -1,147 +1,89 @@
-import { asc, eq, sql } from "drizzle-orm";
-import Link from "next/link";
+import { asc, eq, inArray, or, sql } from 'drizzle-orm';
+import Link from 'next/link';
+import { Badge, Card, CardContent, LinkButton, PageHeader, StatTile, TBody, Table, Td, Th, THead, Tr } from '@/components/ui';
+import { db } from '@/lib/db';
+import { companies, consignments, contacts, partnerProfiles, products } from '@/lib/db/schema';
+import { requireModuleRead } from '@/lib/auth/guards';
+import { STAGES } from '@/lib/partners';
+import { formatEUR } from '@/lib/utils';
 
-import {
-  Card,
-  CardHeader,
-  CardTitle,
-  Field,
-  PageHeader,
-  StatTile,
-  TBody,
-  Table,
-  Td,
-  Th,
-  THead,
-  Tr,
-} from "@/components/ui";
-import { SubmitButton } from "@/components/submit-button";
-import { Combobox, type ComboOption } from "@/components/combobox";
-import { db } from "@/lib/db";
-import { consignments, contacts, products } from "@/lib/db/schema";
-import { formatEUR } from "@/lib/utils";
-import { markAsReseller } from "./actions";
+export const metadata = { title: 'Verkooppunten' };
 
-export const metadata = { title: "Wederverkopers" };
-
-export default async function WederverkopersPage() {
-  const [resellers, summaryRows, allContacts] = await Promise.all([
-    db
-      .select({ id: contacts.id, name: contacts.name, email: contacts.email, phone: contacts.phone })
-      .from(contacts)
-      .where(eq(contacts.type, "reseller"))
-      .orderBy(asc(contacts.name)),
-    db
-      .select({
-        resellerId: consignments.resellerId,
-        products: sql<number>`count(*)::int`,
-        inStoreQty: sql<number>`coalesce(sum(${consignments.qtyPlaced} - ${consignments.qtySold}), 0)::float8`,
-        // Live dealerprijs: override → particulier −25% → momentopname.
-        inStoreValue: sql<number>`coalesce(sum((${consignments.qtyPlaced} - ${consignments.qtySold}) * coalesce(${products.dealerPriceEur}, ${products.priceEur} * 0.75, ${consignments.dealerPriceEur}, 0)), 0)::float8`,
-        soldValue: sql<number>`coalesce(sum(${consignments.qtySold} * coalesce(${products.dealerPriceEur}, ${products.priceEur} * 0.75, ${consignments.dealerPriceEur}, 0)), 0)::float8`,
-      })
-      .from(consignments)
-      .leftJoin(products, eq(consignments.productId, products.id))
-      .groupBy(consignments.resellerId),
-    db.select({ id: contacts.id, name: contacts.name, type: contacts.type }).from(contacts).orderBy(asc(contacts.name)),
+export default async function VerkooppuntenPage({ searchParams }: {
+  searchParams: Promise<{ q?: string; status?: string }>;
+}) {
+  const access = await requireModuleRead('producten');
+  const s = await searchParams;
+  const [resellers, summaryRows] = await Promise.all([
+    db.select({ contact: contacts, company: companies.name, profile: partnerProfiles }).from(contacts)
+      .leftJoin(companies, eq(companies.id, contacts.companyId))
+      .leftJoin(partnerProfiles, eq(partnerProfiles.contactId, contacts.id))
+      .where(or(
+        eq(contacts.type, 'reseller'),
+        eq(partnerProfiles.active, true),
+        inArray(partnerProfiles.interest, ['interested', 'candidate']),
+        sql`coalesce(${contacts.tags}, '{}'::text[]) @> array['rol:wederverkoper'] and (${partnerProfiles.contactId} is null or ${partnerProfiles.interest} <> 'not_interested')`,
+      )).orderBy(asc(contacts.name)),
+    db.select({
+      resellerId: consignments.resellerId,
+      inStoreValue: sql<number>`coalesce(sum((${consignments.qtyPlaced} - ${consignments.qtySold}) * coalesce(${products.dealerPriceEur}, ${products.priceEur} * 0.75, ${consignments.dealerPriceEur}, 0)), 0)::float8`,
+      soldValue: sql<number>`coalesce(sum(${consignments.qtySold} * coalesce(${products.dealerPriceEur}, ${products.priceEur} * 0.75, ${consignments.dealerPriceEur}, 0)), 0)::float8`,
+    }).from(consignments).leftJoin(products, eq(consignments.productId, products.id)).groupBy(consignments.resellerId),
   ]);
-
-  const byId = new Map(summaryRows.map((s) => [s.resellerId, s]));
-  const totals = summaryRows.reduce(
-    (s, r) => {
-      s.inStoreValue += Number(r.inStoreValue);
-      s.soldValue += Number(r.soldValue);
-      return s;
-    },
-    { inStoreValue: 0, soldValue: 0 },
+  const byId = new Map(summaryRows.map(r => [r.resellerId, r]));
+  const candidate = (r: typeof resellers[number]) => !r.profile?.active && r.profile?.stage !== 'stopped' && r.profile?.interest !== 'not_interested';
+  const visible = resellers.filter(r =>
+    (!s.q || `${r.contact.name} ${r.company ?? ''} ${r.contact.email ?? ''}`.toLowerCase().includes(s.q.toLowerCase())) &&
+    (!s.status || s.status === 'active' && r.profile?.active || s.status === 'candidate' && candidate(r)),
   );
+  const totals = resellers.reduce((sum, r) => {
+    const stock = byId.get(r.contact.id);
+    return { stock: sum.stock + Number(stock?.inStoreValue ?? 0), sales: sum.sales + Number(stock?.soldValue ?? 0) };
+  }, { stock: 0, sales: 0 });
 
-  const contactOptions: ComboOption[] = allContacts
-    .filter((c) => c.type !== "reseller")
-    .map((c) => ({ value: c.id, label: c.name }));
-
-  return (
-    <>
-      <PageHeader title="Wederverkopers" />
-
-      <div className="mb-6 grid gap-4 sm:grid-cols-3">
-        <StatTile label="Wederverkopers" value={String(resellers.length)} tone="neutral" />
-        <StatTile
-          label="Nu in winkels"
-          value={formatEUR(totals.inStoreValue)}
-          hint="consignatievoorraad · dealerprijs · ex. BTW"
-          tone={totals.inStoreValue > 0 ? "info" : "neutral"}
-        />
-        <StatTile
-          label="Verkocht via dealers"
-          value={formatEUR(totals.soldValue)}
-          hint="onze omzet · dealerprijs · ex. BTW"
-          tone={totals.soldValue > 0 ? "success" : "neutral"}
-        />
-      </div>
-
-      <Card className="mb-5">
-        <CardHeader>
-          <CardTitle>Nieuwe wederverkoper</CardTitle>
-          <span className="text-xs text-muted">markeer een bestaand contact als wederverkoper</span>
-        </CardHeader>
-        <form action={markAsReseller} className="flex flex-wrap items-end gap-3 px-5 pb-5">
-          <Field label="Contact" className="min-w-72 flex-1">
-            <Combobox name="contactId" options={contactOptions} placeholder="zoek contact…" />
-          </Field>
-          <SubmitButton size="sm" variant="secondary" pendingLabel="…">+ Als wederverkoper</SubmitButton>
-        </form>
-      </Card>
-
-      <Card className="overflow-hidden">
-        <CardHeader>
-          <CardTitle>Alle wederverkopers</CardTitle>
-        </CardHeader>
-        {resellers.length === 0 ? (
-          <div className="px-5 pb-5 text-sm text-muted">
-            Nog geen wederverkopers — markeer hierboven een contact.
-          </div>
-        ) : (
-          <Table>
-            <THead>
-              <tr>
-                <Th>Wederverkoper</Th>
-                <Th className="text-right">Producten</Th>
-                <Th className="text-right">Nu in winkel</Th>
-                <Th className="text-right">Verkocht (omzet)</Th>
-                <Th />
-              </tr>
-            </THead>
-            <TBody>
-              {resellers.map((r) => {
-                const s = byId.get(r.id);
-                return (
-                  <Tr key={r.id}>
-                    <Td>
-                      <Link href={`/wederverkopers/${r.id}`} className="font-medium hover:underline">
-                        {r.name}
-                      </Link>
-                      {r.email ? <span className="block text-xs text-muted">{r.email}</span> : null}
-                    </Td>
-                    <Td className="text-right tabular-nums">{s?.products || "—"}</Td>
-                    <Td className="text-right tabular-nums">
-                      {s && s.inStoreValue > 0 ? formatEUR(s.inStoreValue) : <span className="text-muted">—</span>}
-                    </Td>
-                    <Td className="text-right tabular-nums">
-                      {s && s.soldValue > 0 ? formatEUR(s.soldValue) : <span className="text-muted">—</span>}
-                    </Td>
-                    <Td className="text-right">
-                      <Link href={`/wederverkopers/${r.id}`} className="text-accent hover:underline">
-                        openen →
-                      </Link>
-                    </Td>
-                  </Tr>
-                );
-              })}
-            </TBody>
-          </Table>
-        )}
-      </Card>
-    </>
-  );
+  return <div className="space-y-6">
+    <PageHeader title="Verkooppunten" subtitle="Van interesse naar een officiële samenwerking. Contract, presentatie en afname per klant."
+      actions={access.magModule('aanvragen') && <LinkButton href="/opvolging">Opvolging</LinkButton>} />
+    <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+      <Link href="/wederverkopers?status=candidate"><StatTile label="Kandidaten" value={resellers.filter(candidate).length} /></Link>
+      <Link href="/wederverkopers?status=active"><StatTile label="Officieel" value={resellers.filter(r => r.profile?.active).length} /></Link>
+      <StatTile label="In winkels" value={formatEUR(totals.stock)} hint="consignatie · ex. btw" />
+      <StatTile label="Omzet via dealers" value={formatEUR(totals.sales)} hint="consignatie · ex. btw" />
+    </div>
+    <Card><CardContent>
+      <form action="/wederverkopers" className="flex flex-wrap gap-2">
+        <input aria-label="Zoek verkooppunt" name="q" defaultValue={s.q} placeholder="Zoek bedrijf of contact…"
+          className="rounded-lg border border-border bg-surface px-3 py-2 text-foreground" />
+        <select aria-label="Verkooppuntstatus" name="status" defaultValue={s.status ?? ''}
+          className="rounded-lg border border-border bg-surface px-3 py-2 text-foreground">
+          <option value="">Alle verkooppunten</option><option value="candidate">Kandidaten</option><option value="active">Officieel</option>
+        </select>
+        <button className="rounded-lg border px-4 py-2 text-sm">Filteren</button>
+      </form>
+      <p className="mt-3 text-xs text-muted">Een architect of bouwbedrijf kan ook verkooppunt worden. Leg de interesse vast in het klantdossier.</p>
+    </CardContent></Card>
+    <Card>
+      {visible.length ? <Table><THead><tr><Th>Contact / bedrijf</Th><Th>Status</Th><Th>Plaats</Th><Th className="text-right">Beheer</Th></tr></THead>
+        <TBody>{visible.map(r => <Tr key={r.contact.id}>
+          <Td>
+            {access.magModule('aanvragen') ? <Link className="font-semibold hover:underline" href={`/opvolging/${r.contact.id}`}>{r.contact.name}</Link> : <span className="font-semibold">{r.contact.name}</span>}
+            <p className="text-muted">{r.company ?? r.contact.email}</p>
+          </Td>
+          <Td>
+            <Badge tone={r.profile?.active ? 'success' : 'neutral'}>{r.profile?.active ? 'Officieel verkooppunt' : r.profile?.stage === 'stopped' ? 'Gestopt' : r.profile?.interest === 'not_interested' ? 'Geen interesse' : 'Kandidaat'}</Badge>
+            {!r.profile?.active && <p className="mt-1 text-xs text-muted">{STAGES[(r.profile?.stage ?? 'new') as keyof typeof STAGES]}</p>}
+          </Td>
+          <Td>{r.profile?.publicCity ?? r.contact.city ?? 'Nog vastleggen'}</Td>
+          <Td><div className="flex flex-wrap justify-end gap-3">
+            <Link href={`/wederverkopers/${r.contact.id}/samenwerking`} className="font-medium text-accent hover:underline">Samenwerking</Link>
+            <Link href={`/wederverkopers/${r.contact.id}/presentatie`} className="text-muted hover:underline">Presentatie</Link>
+            <Link href={`/wederverkopers/${r.contact.id}`} className="text-muted hover:underline">Voorraad</Link>
+          </div></Td>
+        </Tr>)}</TBody></Table> : <div className="space-y-3 p-8">
+        <p className="font-medium">Geen verkooppunten bij dit filter.</p>
+        <p className="text-sm text-muted">Open een klantdossier en kies ‘Wil verkooppunt worden’ bij de interesse.</p>
+        {access.magModule('aanvragen') && <LinkButton href="/opvolging" variant="secondary">Naar opvolging</LinkButton>}
+      </div>}
+    </Card>
+  </div>;
 }

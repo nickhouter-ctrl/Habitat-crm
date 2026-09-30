@@ -329,6 +329,7 @@ export default async function ContactDetailPage({
               ← Contacten
             </Link>
             <Link href="#online-toegang" className="text-sm underline">Online toegang</Link>
+            {ik?.magModule('aanvragen') && <LinkButton href={`/opvolging/${id}`} variant="secondary">Opvolging</LinkButton>}
             <LinkButton href={`/contacts/${id}/edit`} variant="secondary">
               Bewerken
             </LinkButton>

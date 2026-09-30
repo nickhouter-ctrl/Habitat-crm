@@ -19,5 +19,5 @@ export async function partnerContext(email: string | null | undefined, viewerEma
   const sent=await db.select({subject:partnerMessages.subject,body:partnerMessages.body,sentAt:partnerMessages.sentAt}).from(partnerMessages)
     .where(and(eq(partnerMessages.contactId,contact.id),eq(partnerMessages.status,'sent'),partnerMailVisible(viewerEmail)))
     .orderBy(desc(partnerMessages.sentAt)).limit(3);
-  return `${PARTNER_DIRECTION}\nCRM-brongegevens: ${JSON.stringify({naam:contact.name,beroep:contact.type,interesse:profile?.interest??(contact.tags?.includes('rol:wederverkoper')?'interested':'unknown'),fase:profile?.stage,notities:profile?.notes,contactnotities:contact.notes?.slice(0,3000),beursgesprekken:requests.map(r=>({...r,message:r.message?.slice(0,2000)})),volgendeActie:profile?.nextAction,verzonden:sent.map(m=>({...m,body:m.body.slice(0,3000)}))})}`;
+  return `${PARTNER_DIRECTION}\nCRM-brongegevens: ${JSON.stringify({naam:contact.name,beroep:contact.type,herkomst:contact.source,interesse:profile?.interest??(contact.tags?.includes('rol:wederverkoper')?'interested':'unknown'),fase:profile?.stage,notities:profile?.notes,contactnotities:contact.notes?.slice(0,3000),aanvragen:requests.map(r=>({...r,message:r.message?.slice(0,2000)})),volgendeActie:profile?.nextAction,verzonden:sent.map(m=>({...m,body:m.body.slice(0,3000)}))})}`;
 }

@@ -11,7 +11,7 @@ import { uploadDocumentFile } from '@/lib/storage';
 import type { Result } from '../../../beurs/opvolging/actions';
 class InputError extends Error{}
 function fail(e:unknown):Result{return{error:e instanceof InputError?e.message:e instanceof z.ZodError?e.issues[0].message:'Bewerking mislukt. Controleer de gegevens en probeer opnieuw.'};}
-function refresh(id:string){revalidatePath(`/wederverkopers/${id}/samenwerking`);revalidatePath('/beurs/opvolging');revalidatePath('/verkooppunten');}
+function refresh(id:string){revalidatePath(`/wederverkopers/${id}/samenwerking`);revalidatePath('/opvolging');revalidatePath(`/opvolging/${id}`);revalidatePath('/beurs/opvolging');revalidatePath('/wederverkopers');revalidatePath('/verkooppunten');}
 const optionalNumber=(min:number,max:number)=>z.union([z.literal(''),z.coerce.number().min(min).max(max)]);
 export async function createContract(_:Result,fd:FormData):Promise<Result>{
  const u=await requireModule('producten');

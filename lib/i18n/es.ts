@@ -35,6 +35,8 @@ export const es: Dictionary = {
   Samples: "Muestras",
   Samplecatalogus: "Catálogo de muestras",
   Wederverkopers: "Distribuidores",
+  Opvolging: "Seguimiento",
+  Verkooppunten: "Puntos de venta",
   "Inkoop & logistiek": "Compras y logística",
   Bestellen: "Pedidos",
   Leveranciers: "Proveedores",

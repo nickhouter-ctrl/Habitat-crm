@@ -1,5 +1,5 @@
 "use server";
-import { and, eq, isNull, sql } from "drizzle-orm";
+import { and, eq, inArray, isNull, sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { requireModule } from "@/lib/auth/guards";
@@ -18,7 +18,7 @@ import { recordSentEmail } from "@/lib/sent-email";
 export type Result={error?:string;success?:string};
 class InputError extends Error {}
 function failure(e:unknown):Result { return {error:e instanceof InputError?e.message:e instanceof z.ZodError?e.issues[0].message:"Opslaan mislukt. Controleer de gegevens en probeer opnieuw."}; }
-function refresh(id?:string){revalidatePath('/beurs/opvolging');if(id)revalidatePath(`/beurs/opvolging/${id}`);}
+function refresh(id?:string){revalidatePath('/opvolging');revalidatePath('/beurs/opvolging');revalidatePath('/wederverkopers');if(id){revalidatePath(`/opvolging/${id}`);revalidatePath(`/beurs/opvolging/${id}`);}}
 async function contact(id:string){const [c]=await db.select().from(contacts).where(eq(contacts.id,z.string().uuid().parse(id)));if(!c)throw new InputError('Contact niet gevonden.');return c;}
 export async function saveProfile(_:Result,fd:FormData):Promise<Result>{
   const user=await requireModule('aanvragen');
@@ -29,15 +29,15 @@ export async function saveProfile(_:Result,fd:FormData):Promise<Result>{
       if((old?.version??0)!==d.version)throw new InputError('Dit dossier is gewijzigd. Vernieuw de pagina.');
       const values={interest:d.interest,stage:old?.active && d.stage!=='stopped'?'active':d.stage,language:d.language,ownerId:d.ownerId||null,nextAction:d.nextAction||null,nextActionOn:d.nextActionOn||null,notes:d.notes,version:d.version+1,updatedAt:new Date(),...(d.stage==='stopped'?{active:false,published:false}:{})};
       await tx.insert(partnerProfiles).values({contactId:d.contactId,...values}).onConflictDoUpdate({target:partnerProfiles.contactId,set:values});
-      const [task]=await tx.select().from(activities).where(and(eq(activities.contactId,d.contactId),eq(activities.type,'task'),eq(activities.subject,'Beursopvolging'),isNull(activities.completedAt))).limit(1);
+      const [task]=await tx.select().from(activities).where(and(eq(activities.contactId,d.contactId),eq(activities.type,'task'),inArray(activities.subject,['Opvolging','Beursopvolging']),isNull(activities.completedAt))).limit(1);
       if(d.nextAction && d.nextActionOn){
         const wall=new Date(`${d.nextActionOn}T17:00:00Z`);
         const values={body:d.nextAction,dueAt:new Date(wall.getTime()-madridUtcOffsetMinutes(wall)*60000),assigneeId:d.ownerId||user.id,updatedAt:new Date()};
         if(task)await tx.update(activities).set(values).where(eq(activities.id,task.id));
-        else await tx.insert(activities).values({contactId:d.contactId,type:'task',subject:'Beursopvolging',authorId:user.id,...values});
+        else await tx.insert(activities).values({contactId:d.contactId,type:'task',subject:'Opvolging',authorId:user.id,...values});
       }else if(task)await tx.update(activities).set({completedAt:new Date(),updatedAt:new Date()}).where(eq(activities.id,task.id));
       await tx.insert(activities).values({contactId:d.contactId,type:'note',subject:'Verkooppuntdossier bijgewerkt',body:JSON.stringify({before:old,after:values}),authorId:user.id});
-    });revalidatePath('/agenda');refresh(d.contactId);return{success:'Dossier opgeslagen. Beroep en oorspronkelijke beursgegevens blijven bewaard.'};
+    });revalidatePath('/agenda');refresh(d.contactId);return{success:'Dossier opgeslagen. Beroep en oorspronkelijke gegevens blijven bewaard.'};
   }catch(e){return failure(e);}
 }
 export async function syncSent(_:Result,_fd:FormData):Promise<Result>{
@@ -59,7 +59,7 @@ export async function generateDraft(id:string,instruction:string){
   const user=await requireModule('aanvragen');await requireModule('inbox');
   const c=await contact(id);const context=await partnerContext(c.email,user.email);
   const [p]=await db.select().from(partnerProfiles).where(eq(partnerProfiles.contactId,id));
-  return genereerMailAntwoord({soort:'mail',klantNaam:c.name,klantEmail:c.email,bericht:'Persoonlijke opvolging van ons gesprek op de beurs. Vraag naar de volgende stap en verwerk de vastgelegde interesse.',crmContext:context,medewerker:user.name??'Habitat One',instructie:`${z.string().max(2000).parse(instruction)}\n${p?.language==='en-es'||!p?'Schrijf in Engels én Spaans.':''}\nDe video’s en technische data sheets staan op https://www.habitat-one.com/beurs/films . Vermeld deze link.`,taal:p?.language==='en-es'?undefined:p?.language});
+  return genereerMailAntwoord({soort:'mail',klantNaam:c.name,klantEmail:c.email,bericht:'Persoonlijke opvolging van dit contact. Vraag naar de volgende stap en verwerk de vastgelegde interesse. Noem herkomst en eerdere gesprekken alleen wanneer deze in het dossier staan.',crmContext:context,medewerker:user.name??'Habitat One',instructie:`${z.string().max(2000).parse(instruction)}\n${p?.language==='en-es'||!p?'Schrijf in Engels én Spaans.':''}\nDe video’s en technische data sheets staan op https://www.habitat-one.com/beurs/films . Vermeld deze link.`,taal:p?.language==='en-es'?undefined:p?.language});
 }
 export async function sendDraft(_:Result,fd:FormData):Promise<Result>{
   const user=await requireModule('aanvragen');await requireModule('inbox');

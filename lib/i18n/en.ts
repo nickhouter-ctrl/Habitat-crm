@@ -34,6 +34,8 @@ export const en: Dictionary = {
   Samples: "Samples",
   Samplecatalogus: "Sample catalogue",
   Wederverkopers: "Resellers",
+  Opvolging: "Follow-up",
+  Verkooppunten: "Stockists",
   "Inkoop & logistiek": "Purchasing & logistics",
   Bestellen: "Ordering",
   Leveranciers: "Suppliers",
