@@ -7,6 +7,7 @@ import { db } from '@/lib/db';
 import { contacts, partnerContracts, partnerProfiles, activities } from '@/lib/db/schema';
 import { requireModule } from '@/lib/auth/guards';
 import { dateInput, distanceKm } from '@/lib/partners';
+import { contractDetailsInput, contractTerms } from '@/lib/partner-contract';
 import { uploadDocumentFile } from '@/lib/storage';
 import type { Result } from '../../../beurs/opvolging/actions';
 class InputError extends Error{}
@@ -15,7 +16,9 @@ function refresh(id:string){revalidatePath(`/wederverkopers/${id}/samenwerking`)
 const optionalNumber=(min:number,max:number)=>z.union([z.literal(''),z.coerce.number().min(min).max(max)]);
 export async function createContract(_:Result,fd:FormData):Promise<Result>{
  const u=await requireModule('producten');
- try{const d=z.object({contactId:z.string().uuid(),body:z.string().trim().min(100).max(50000),validFrom:dateInput,validUntil:dateInput,exclusive:z.string().optional(),latitude:optionalNumber(-90,90),longitude:optionalNumber(-180,180),radiusKm:optionalNumber(.01,1000),territoryTerms:z.string().trim().min(5).max(6000),legalReviewed:z.string().optional()}).parse(Object.fromEntries(fd));
+ try{const raw=Object.fromEntries(fd);const details=raw.formMode==='guided'?contractDetailsInput.parse(raw):null;
+ const d=z.object({contactId:z.string().uuid(),body:z.string().trim().min(100).max(50000),validFrom:dateInput,validUntil:dateInput,exclusive:z.string().optional(),latitude:optionalNumber(-90,90),longitude:optionalNumber(-180,180),radiusKm:optionalNumber(.01,1000),territoryTerms:z.string().trim().min(5).max(12000),legalReviewed:z.string().optional()}).parse({...raw,...(details?{territoryTerms:contractTerms(details)}:{})});
+ if(details&&d.legalReviewed==='on'&&(!details.brandName||details.brandName==='[MERKNAAM]'))throw new InputError('Vul eerst de definitieve merknaam in. Zonder merknaam kun je wel als concept opslaan.');
  if(d.validUntil<d.validFrom)throw new InputError('Einddatum ligt vóór begindatum.');if(d.exclusive==='on'&&(d.latitude===''||d.longitude===''||d.radiusKm===''))throw new InputError('Vul middelpunt en straal in voor exclusiviteit.');
  await db.transaction(async tx=>{const [c]=await tx.select().from(contacts).where(eq(contacts.id,d.contactId)).for('update');if(!c)throw new InputError('Contact niet gevonden.');
  const [prev]=await tx.select().from(partnerContracts).where(eq(partnerContracts.contactId,d.contactId)).orderBy(desc(partnerContracts.version)).limit(1);
