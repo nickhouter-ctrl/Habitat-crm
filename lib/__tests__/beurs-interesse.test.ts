@@ -67,7 +67,7 @@ describe("films in de bevestigingsmail", () => {
   it("staat er vanaf nu meteen in, in de taal van de bezoeker", () => {
     expect(beursMail({ naam: "Ana", taal: "es" }).films.link).toContain("/es/beurs/films");
     expect(beursMail({ naam: "Ann", taal: "en" }).films.link).toBe("https://www.habitat-one.com/beurs/films");
-    expect(beursMail({ naam: "Jan", taal: "nl" }).films.knop).toBe("Bekijk de films");
+    expect(beursMail({ naam: "Jan", taal: "nl" }).films.knop).toBe("Bekijk video’s en technische datasheets");
   });
 
   it("zegt erbij dat ze stil zijn — anders denkt iemand dat zijn geluid stuk is", () => {

@@ -89,7 +89,7 @@ describe("bevestigingsmail", () => {
   });
 
   it("legt zakelijke prijzen en de mogelijkheid tot winkelverkoop uit", () => {
-    const m = beursMail({ naam: "Ana", taal: "nl" });
+    const m = beursMail({ naam: "Ana", taal: "nl", rol: "wederverkoper" });
     expect(m.alineas.join(" ")).toContain("na de beurs");
     expect(m.alineas.join(" ")).toContain("20% korting op de retailprijs");
     expect(m.alineas.join(" ")).toContain("betere inkoopprijzen");

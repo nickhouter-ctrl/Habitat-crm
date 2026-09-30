@@ -230,14 +230,15 @@ export async function stuurBeursVervolgmail(): Promise<VerwijderResultaat> {
   let verstuurd = 0;
   let mislukt = 0;
   for (const c of teDoen.slice(0, PORTIE)) {
-    const tekst = beursVervolgmail(c.naam ?? "");
+    const wilVerkopen = (c.tags ?? []).includes("rol:wederverkoper");
+    const tekst = beursVervolgmail(c.naam ?? "", wilVerkopen);
     try {
       const res = await sendEmail({
         to: c.email!,
         subject: tekst.subject,
         attachments: await beursBijlagen(),
-        html: brandedEmail(vervolgmailHtml(c.naam ?? "", signatureHtml())),
-        text: vervolgmailTekst(c.naam ?? ""),
+        html: brandedEmail(vervolgmailHtml(c.naam ?? "", signatureHtml(), wilVerkopen)),
+        text: vervolgmailTekst(c.naam ?? "", wilVerkopen),
       });
       if (!res.sent) throw new Error(res.reason ?? "niet verstuurd");
       // Pas tággen als hij écht weg is; anders slaan we iemand over die niets kreeg.

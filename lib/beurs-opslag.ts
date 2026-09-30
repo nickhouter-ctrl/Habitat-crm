@@ -260,7 +260,7 @@ export async function slaBeursbezoekerOp(d: BeursBezoeker): Promise<BeursOpslagR
   // Bevestiging naar de bezoeker.
   let mail: "verstuurd" | "mislukt" = "mislukt";
   try {
-    const tekst = beursMail({ naam: d.naam, taal: d.taal, wens, interesses, accountLink: activatieLink });
+    const tekst = beursMail({ naam: d.naam, taal: d.taal, rol: d.rol, wens, interesses, accountLink: activatieLink });
     const res = await sendEmail({
       to: email,
       subject: tekst.subject,

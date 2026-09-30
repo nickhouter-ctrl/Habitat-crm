@@ -162,7 +162,7 @@ const MAIL: Record<BeursTaal, MailTekst> = {
       "We nemen na de beurs contact met je op om er rustig op terug te komen. Heb je eerder een vraag, antwoord dan gerust op deze mail.",
     films: {
       tekst: "De films die bij ons op het scherm liepen kun je hier bekijken — stil, met de tekst in beeld.",
-      knop: "Bekijk de films",
+      knop: "Bekijk video’s en technische datasheets",
       link: "https://www.habitat-one.com/nl/beurs/films",
     },
     gevraagd: (lijst) => `Je vroeg om ${lijst}. Dat staat genoteerd.`,
@@ -179,7 +179,7 @@ const MAIL: Record<BeursTaal, MailTekst> = {
       "We will get in touch after the fair to follow up properly. If anything comes up before then, simply reply to this email.",
     films: {
       tekst: "The films that were playing on our screen are here — no sound, the text is on screen.",
-      knop: "Watch the films",
+      knop: "View videos and technical data sheets",
       link: "https://www.habitat-one.com/beurs/films",
     },
     gevraagd: (lijst) => `You asked about ${lijst}. We have noted it.`,
@@ -196,7 +196,7 @@ const MAIL: Record<BeursTaal, MailTekst> = {
       "Nos pondremos en contacto contigo después de la feria para retomarlo con calma. Si surge algo antes, responde a este correo.",
     films: {
       tekst: "Aquí tienes los vídeos que se veían en nuestra pantalla: sin sonido, con el texto en imagen.",
-      knop: "Ver los vídeos",
+      knop: "Ver vídeos y fichas técnicas",
       link: "https://www.habitat-one.com/es/beurs/films",
     },
     gevraagd: (lijst) => `Nos pediste ${lijst}. Queda anotado.`,
@@ -214,6 +214,7 @@ const MAIL: Record<BeursTaal, MailTekst> = {
 export function beursMail(args: {
   naam: string;
   taal: BeursTaal;
+  rol?: string | null;
   wens?: string | null;
   interesses?: readonly string[] | null;
   /** Link om een wachtwoord in te stellen voor het website-account. */
@@ -234,12 +235,13 @@ export function beursMail(args: {
     alineas.push(t.gevraagd(lijst.join(", ")));
   }
   alineas.push(t.vervolg);
-  alineas.push(BEURS_PRIJSUITLEG[args.taal], BEURS_VERKOOPPUNT[args.taal]);
+  alineas.push(BEURS_PRIJSUITLEG[args.taal]);
+  if (args.rol === "wederverkoper") alineas.push(BEURS_VERKOOPPUNT[args.taal]);
   alineas.push(args.taal === "es"
-    ? "Adjuntamos la ficha técnica de Flexible Stone en español e inglés."
+    ? "La ficha técnica de Flexible Stone está disponible en español e inglés, tanto adjunta como para descargar en la página de vídeos que encontrarás a continuación."
     : args.taal === "en"
-      ? "Attached is the Flexible Stone technical data sheet in English and Spanish."
-      : "In de bijlage vind je de technische datasheet van Flexible Stone in het Engels en Spaans.");
+      ? "The Flexible Stone technical data sheet is available in English and Spanish, both attached and for download on the video page below."
+      : "De technische datasheet van Flexible Stone vind je in het Engels en Spaans in de bijlage én als download op de videopagina hieronder.");
   return {
     subject: t.onderwerp,
     alineas,

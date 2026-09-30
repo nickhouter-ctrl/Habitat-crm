@@ -38,7 +38,7 @@ export interface VervolgmailTekst {
  */
 const ONDERWERP = "The films from our stand · Los vídeos de nuestro stand";
 
-export function beursVervolgmail(naam: string): VervolgmailTekst {
+export function beursVervolgmail(naam: string, wilVerkopen = false): VervolgmailTekst {
   const voornaam = naam.trim().split(/\s+/)[0] || naam.trim();
   return {
     subject: ONDERWERP,
@@ -49,12 +49,12 @@ export function beursVervolgmail(naam: string): VervolgmailTekst {
         alineas: [
           `Thank you again for stopping by our stand (${BEURS.stand}) at ${BEURS.naam}. As promised, here are the films that were playing on the screen — what Flexible Stone is made of, how it is produced and what the technical testing shows.`,
           "They have no sound; the text is on screen. Watch them whenever it suits you.",
-          "Attached is the Flexible Stone technical data sheet in English and Spanish.",
+          "The Flexible Stone technical data sheet is available in English and Spanish, both attached and for download on the video page below.",
           BEURS_PRIJSUITLEG.en,
-          BEURS_VERKOOPPUNT.en,
+          ...(wilVerkopen ? [BEURS_VERKOOPPUNT.en] : []),
           "If you would like prices, samples or documentation for a project, simply reply to this email.",
         ],
-        knop: "Watch the films",
+        knop: "View videos and technical data sheets",
         link: FILMPAGINA.en,
         groet: "Kind regards,",
       },
@@ -64,12 +64,12 @@ export function beursVervolgmail(naam: string): VervolgmailTekst {
         alineas: [
           `Gracias de nuevo por pasar por nuestro stand (${BEURS.stand}) en ${BEURS.naam}. Como te prometimos, aquí tienes los vídeos que se veían en la pantalla: de qué está hecho Flexible Stone, cómo se produce y qué resultados dan los ensayos técnicos.`,
           "No tienen sonido; el texto aparece en imagen. Puedes verlos cuando te venga bien.",
-          "Adjuntamos la ficha técnica de Flexible Stone en español e inglés.",
+          "La ficha técnica de Flexible Stone está disponible en español e inglés, tanto adjunta como para descargar en la página de vídeos que encontrarás a continuación.",
           BEURS_PRIJSUITLEG.es,
-          BEURS_VERKOOPPUNT.es,
+          ...(wilVerkopen ? [BEURS_VERKOOPPUNT.es] : []),
           "Si quieres precios, muestras o documentación para un proyecto, responde a este correo.",
         ],
-        knop: "Ver los vídeos",
+        knop: "Ver vídeos y fichas técnicas",
         link: FILMPAGINA.es,
         groet: "Un saludo,",
       },
@@ -83,8 +83,8 @@ export function beursVervolgmail(naam: string): VervolgmailTekst {
  * hij te lezen én te testen zonder iets te versturen — en dat bleek nodig, want
  * "ik zie de link niet in de mail" is niet te onderzoeken in een verzonden mail.
  */
-export function vervolgmailHtml(naam: string, signature = ""): string {
-  const tekst = beursVervolgmail(naam);
+export function vervolgmailHtml(naam: string, signature = "", wilVerkopen = false): string {
+  const tekst = beursVervolgmail(naam, wilVerkopen);
   return (
     tekst.blokken
       .map(
@@ -101,8 +101,8 @@ export function vervolgmailHtml(naam: string, signature = ""): string {
 }
 
 /** Platte tekstversie, voor postvakken die geen HTML tonen. */
-export function vervolgmailTekst(naam: string): string {
-  return beursVervolgmail(naam)
+export function vervolgmailTekst(naam: string, wilVerkopen = false): string {
+  return beursVervolgmail(naam, wilVerkopen)
     .blokken.map((b) => `${b.hallo(naam)}\n\n${b.alineas.join("\n\n")}\n\n${b.knop}: ${b.link}\n\n${b.groet}`)
     .join("\n\n— — —\n\n");
 }
