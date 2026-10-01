@@ -7,6 +7,7 @@ import { mailZichtbaarVoor } from '@/lib/mail-visibility';
 import { partnerMailVisible } from '@/lib/partner-context';
 import { conversationState, INTEREST, STAGES } from '@/lib/partners';
 import { followupSources } from '@/lib/followup-source';
+import { hasResellerInterest, recommendedFollowupMail } from '@/lib/followup-mail';
 import { PageHeader, Card, CardContent, StatTile, LinkButton, Badge } from '@/components/ui';
 import { SyncButton } from './forms';
 
@@ -14,7 +15,7 @@ export const metadata = { title: 'Opvolging' };
 export const dynamic = 'force-dynamic';
 
 export default async function Page({ searchParams }: {
-  searchParams: Promise<{ q?: string; filter?: string; bron?: string }>;
+  searchParams: Promise<{ q?: string; filter?: string; bron?: string; groep?: string }>;
 }) {
   const access = await requireModuleRead('aanvragen');
   const s = await searchParams;
@@ -52,12 +53,13 @@ export default async function Page({ searchParams }: {
       origins: followupSources(r.contact.source, sources.filter(m => m.contactId === r.contact.id).map(m => m.source)),
       state: conversationState(inc ? new Date(inc) : null, out ? new Date(out) : null),
       due: !!r.profile?.nextActionOn && r.profile.nextActionOn <= today,
-      interested: r.profile ? ['interested', 'candidate'].includes(r.profile.interest) : !!r.contact.tags?.includes('rol:wederverkoper'),
+      interested: hasResellerInterest(r.contact,r.profile),
     };
   });
   const visible = data.filter(r =>
     (!s.q || `${r.contact.name} ${r.company ?? ''} ${r.contact.email ?? ''}`.toLowerCase().includes(s.q.toLowerCase())) &&
     (!s.bron || r.origins.some(o => o.key === s.bron)) &&
+    (!s.groep || s.groep==='reseller' && r.interested || s.groep==='professional' && !r.interested) &&
     (!s.filter || s.filter === 'due' && r.due || s.filter === 'reply' && r.state === 'Antwoord nodig' ||
       s.filter === 'interested' && r.interested || s.filter === 'new' && !r.out || s.filter === 'active' && r.profile?.active),
   );
@@ -87,11 +89,14 @@ export default async function Page({ searchParams }: {
             <option value="">Alle herkomsten</option><option value="beurs">Beurs</option><option value="website">Website</option>
             <option value="other">Overige kanalen</option><option value="unknown">Niet vastgelegd</option>
           </select>
+          <select aria-label="Mailgroep" name="groep" defaultValue={s.groep ?? ''} className={input}>
+            <option value="">Alle mailgroepen</option><option value="professional">Architecten, bouwbedrijven & overige klanten</option><option value="reseller">Verkooppunten & geïnteresseerden</option>
+          </select>
           <button className="rounded-lg border px-4 py-2 text-sm">Filteren</button>
         </form>
         {canMail && access.heeftCap('schrijven') && <SyncButton />}
       </div>
-      <p className="mt-3 text-xs text-muted">Automatische informatie- en filmmails tellen niet als persoonlijke opvolging.</p>
+      <p className="mt-3 text-xs text-muted">Open een klant voor het passende mailvoorstel. Verkooppuntinteresse kun je apart van het beroep vastleggen. Automatische informatie- en filmmails tellen niet als persoonlijke opvolging.</p>
     </CardContent></Card>
     <Card><div className="border-b px-5 py-3 text-xs text-muted">{visible.length} van {data.length} contacten</div><div className="overflow-x-auto"><table className="w-full text-left text-sm">
       <thead className="border-b bg-background text-foreground"><tr>
@@ -102,6 +107,7 @@ export default async function Page({ searchParams }: {
           <Link className="font-semibold underline-offset-4 hover:underline" href={`/opvolging/${r.contact.id}`}>{r.contact.name}</Link>
           <p className="text-muted">{r.company ?? r.contact.email}</p>
           <p className="mt-1 text-xs text-muted">{r.origins.map(o => o.label).join(' · ')}</p>
+          <p className="mt-1 text-xs">Mailvoorstel: {({reseller:'verkooppunt',professional:'zakelijke klant',custom:'eigen mail'})[recommendedFollowupMail(r.contact,r.profile)]}</p>
         </td>
         <td className="px-5 py-4">
           {INTEREST[(r.profile?.interest ?? (r.interested ? 'interested' : 'unknown')) as keyof typeof INTEREST]}

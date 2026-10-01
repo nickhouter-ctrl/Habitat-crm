@@ -13,7 +13,8 @@ import { getMailAccounts } from "@/lib/gmail";
 import { syncPartnerSent } from "@/lib/partner-mail-sync";
 import { isMarketingGebruiker, marketingMailbox } from "@/lib/mail-visibility";
 import { persoonlijkeMail, sendEmail } from "@/lib/email";
-import { beursBijlagen } from "@/lib/beurs-bijlagen";
+import { followupAttachments } from "@/lib/followup-mail-attachments";
+import { followupMailKind, followupMailSource, hasResellerInterest } from "@/lib/followup-mail";
 import { recordSentEmail } from "@/lib/sent-email";
 export type Result={error?:string;success?:string};
 class InputError extends Error {}
@@ -49,10 +50,15 @@ export async function syncSent(_:Result,_fd:FormData):Promise<Result>{
 }
 export async function saveDraft(_:Result,fd:FormData):Promise<Result>{
   const user=await requireModule('aanvragen');await requireModule('inbox');
-  try {const d=z.object({contactId:z.string().uuid(),subject:z.string().trim().min(1).max(250),body:z.string().trim().min(3).max(20000)}).parse(Object.fromEntries(fd));
+  try {const d=z.object({contactId:z.string().uuid(),subject:z.string().trim().min(1).max(250),body:z.string().trim().min(3).max(20000),templateKind:z.enum(['professional','reseller','custom']).default('custom')}).parse(Object.fromEntries(fd));
     const c=await contact(d.contactId);const to=z.string().email().parse(c.email);
+    if(d.templateKind==='reseller'){
+      const [profile]=await db.select().from(partnerProfiles).where(eq(partnerProfiles.contactId,c.id));
+      if(!hasResellerInterest(c,profile))throw new InputError('Leg eerst de verkooppuntinteresse vast bij Relatie en volgende stap en sla het dossier op. Het beroep kan hetzelfde blijven.');
+    }
     const mailbox=(isMarketingGebruiker(user.email)?marketingMailbox():process.env.GMAIL_USER?.trim().toLowerCase());if(!mailbox)throw new InputError('Geen afzender ingesteld.');
-    await db.insert(partnerMessages).values({...d,toEmail:to,mailboxUser:mailbox,authorId:user.id});refresh(d.contactId);return{success:'Concept bewaard. Controleer het concept hieronder voordat je verstuurt.'};
+    const attachments=await followupAttachments(d.templateKind);
+    await db.insert(partnerMessages).values({contactId:d.contactId,subject:d.subject,body:d.body,source:followupMailSource(d.templateKind),attachments:attachments.map(a=>({name:a.filename,size:Buffer.byteLength(a.content)})),toEmail:to,mailboxUser:mailbox,authorId:user.id});refresh(d.contactId);return{success:'Concept met bijlagen bewaard. Controleer het hieronder voordat je verstuurt.'};
   }catch(e){return failure(e);}
 }
 export async function generateDraft(id:string,instruction:string){
@@ -71,18 +77,20 @@ export async function sendDraft(_:Result,fd:FormData):Promise<Result>{
     if(blocked)throw new InputError('Dit adres staat op de niet-mailenlijst.');
     const [profile]=await db.select().from(partnerProfiles).where(eq(partnerProfiles.contactId,c.id));
     if(profile?.stage==='stopped')throw new InputError('Dit dossier is gestopt. Heropen het bewust voordat je een nieuwe benadering verstuurt.');
-    const attachments=await beursBijlagen();const rendered=persoonlijkeMail(d.body);
+    const kind=followupMailKind(d.source);
+    if(kind==='reseller'&&!hasResellerInterest(c,profile))throw new InputError('De verkooppuntinteresse is niet meer vastgelegd. Controleer het dossier en maak zo nodig een ander voorstel.');
+    const attachments=await followupAttachments(kind);const rendered=persoonlijkeMail(d.body);
     const [claimed]=await db.update(partnerMessages).set({status:'sending',html:rendered.html,body:rendered.text,attachments:attachments.map(a=>({name:a.filename,size:Buffer.byteLength(a.content)})),updatedAt:new Date()})
       .where(and(eq(partnerMessages.id,id),eq(partnerMessages.status,'draft'),eq(partnerMessages.updatedAt,new Date(seen)))).returning();
     if(!claimed)throw new InputError('Dit concept wordt al verstuurd.');
     try {
-      const r=await sendEmail({to:d.toEmail,subject:d.subject,html:rendered.html,text:rendered.text,attachments,fromUser:{name:user.name},fromMailbox:d.mailboxUser===marketingMailbox()?'marketing':'main',noCompanyBcc:d.mailboxUser===marketingMailbox()});
+      const r=await sendEmail({to:d.toEmail,subject:d.subject,html:rendered.html,text:rendered.text,attachments,fromUser:{name:kind==='custom'?user.name:'Hans'},fromMailbox:d.mailboxUser===marketingMailbox()?'marketing':'main',noCompanyBcc:d.mailboxUser===marketingMailbox()});
       if(!r.sent)throw new Error('Mailprovider bevestigt geen verzending');
       await db.update(partnerMessages).set({status:'sent',messageId:r.messageId??null,sentAt:new Date(),updatedAt:new Date()}).where(eq(partnerMessages.id,id));
       await recordSentEmail({kind:'other',contactId:c.id,toEmail:d.toEmail,subject:d.subject,html:rendered.html,text:rendered.text});
       await db.update(contacts).set({lastContactedAt:new Date()}).where(eq(contacts.id,c.id));
       await db.update(partnerProfiles).set({stage:'contacted',version:sql`${partnerProfiles.version}+1`,updatedAt:new Date()}).where(and(eq(partnerProfiles.contactId,c.id),eq(partnerProfiles.stage,'new')));
-      refresh(c.id);return{success:'Verstuurd en bewaard, inclusief technische data sheets.'};
+      refresh(c.id);return{success:'Verstuurd en bewaard, inclusief alle getoonde bijlagen.'};
     }catch{await db.update(partnerMessages).set({status:'unknown',updatedAt:new Date()}).where(and(eq(partnerMessages.id,id),eq(partnerMessages.status,'sending')));refresh(c.id);return{error:'Verzending niet volledig bevestigd. Controleer Verzonden en synchroniseer voordat je opnieuw mailt.'};}
   }catch(e){return failure(e);}
 }
