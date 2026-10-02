@@ -12,7 +12,7 @@ export interface EmailAttachment {
   contentType?: string;
 }
 
-import { withMandatoryBcc } from "@/lib/mail-bcc";
+import { nickFrederiqueCc, withMandatoryBcc, type MailCopyPolicy } from "@/lib/mail-bcc";
 
 export async function sendEmail(input: {
   to: string;
@@ -22,6 +22,8 @@ export async function sendEmail(input: {
   attachments?: EmailAttachment[];
   /** Extra BCC bovenop de standaard bedrijfs-BCC. */
   bcc?: string;
+  /** Vervangt alle standaard/extra kopieën door CC aan Nick en Frederique. */
+  copyPolicy?: MailCopyPolicy;
   /** Verstuur vanaf het inkoop-postvak i.p.v. hi@ (bv. een afgekeurde factuur). */
   fromPurchase?: boolean;
   /**
@@ -63,7 +65,8 @@ export async function sendEmail(input: {
     .join(", ") || undefined;
   // Voeg de vaste bedrijfs-BCC (nick@) toe op ELK transport — ook Resend/stub, die
   // lib/gmail.ts overslaan. Op het Gmail-pad dedupliceert sendMail dit nog eens.
-  const bcc = input.noCompanyBcc ? bccBase : withMandatoryBcc(bccBase, input.to);
+  const bcc = input.copyPolicy ? undefined : input.noCompanyBcc ? bccBase : withMandatoryBcc(bccBase, input.to);
+  const cc = input.copyPolicy ? nickFrederiqueCc(input.to) : undefined;
 
   // Voorkeur: Gmail (verstuurt vanaf GMAIL_USER, bv. hi@habitat-one.com). Valt
   // terug op Resend; en als niets is ingesteld een stub, zodat de accept-link
@@ -89,6 +92,7 @@ export async function sendEmail(input: {
       const res = await sendMail({
         to: input.to,
         bcc,
+        copyPolicy: input.copyPolicy,
         noCompanyBcc: input.noCompanyBcc,
         account,
         fromName,
@@ -128,6 +132,7 @@ export async function sendEmail(input: {
       from,
       to: input.to,
       ...(bccLijst?.length ? { bcc: bccLijst } : {}),
+      ...(cc ? { cc: cc.split(", ").filter(Boolean) } : {}),
       subject: input.subject,
       html: input.html,
       text: input.text,

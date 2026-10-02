@@ -3,6 +3,7 @@ import { eq } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { activities, appointments, contacts, quoteRequests } from "@/lib/db/schema";
 import { appointmentConfirmedEmail, sendEmail } from "@/lib/email";
+import { isFairSource } from "@/lib/followup-source";
 
 export const SHOWROOM = "Showroom — Camí de la Fontana 3, Jávea";
 /**
@@ -100,7 +101,7 @@ export async function confirmAppointment(
   });
   try {
     const mail = appointmentConfirmedEmail({ lang: req.locale, contactName: req.name, when, location, note, fair: beurs });
-    await sendEmail({ to: req.email, subject: mail.subject, html: mail.html, text: mail.text });
+    await sendEmail({ to: req.email, subject: mail.subject, html: mail.html, text: mail.text, copyPolicy: isFairSource(req.source) ? "nick-frederique" : undefined });
   } catch (err) {
     console.warn("[appointments] bevestigingsmail mislukt:", err);
   }

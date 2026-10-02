@@ -1,8 +1,17 @@
 /**
- * Het centrale bedrijfsadres leest ALTIJD elke uitgaande mail mee, ongeacht de
- * env-config. Zo komt er nooit een mail buiten hi@ om.
+ * Standaard bedrijfskopie. Persoonlijke inlogmails en expliciete kopieafspraken
+ * gebruiken hun eigen ontvangers; die krijgen deze BCC niet.
  */
 export const COMPANY_INBOX = "hi@habitat-one.com";
+
+/** Beursmails: alleen deze twee collega's krijgen een zichtbare kopie. */
+export const NICK_FREDERIQUE = ["nick@habitat-one.com", "frederique@habitat-one.com"] as const;
+export type MailCopyPolicy = "nick-frederique";
+
+export function nickFrederiqueCc(to: string): string | undefined {
+  const direct = new Set(to.split(",").map(a => (a.match(/<([^<>]+)>/)?.[1] ?? a).trim().toLowerCase()));
+  return NICK_FREDERIQUE.filter(a => !direct.has(a)).join(", ") || undefined;
+}
 
 /**
  * Vaste, altijd-aanwezige BCC op ELKE uitgaande mail, ongeacht het transport

@@ -63,4 +63,18 @@ describe("sendEmail via Resend", () => {
     await sendEmail({ to: "klant@example.com", subject: "Met kopie", html: "<p>hoi</p>", bcc: "extra@example.com" });
     expect(payloads[0].bcc).toContain("extra@example.com");
   });
+
+  it("stuurt beurskopieën uitsluitend in CC naar Nick en Frederique", async () => {
+    process.env.EMAIL_BCC = "hans@habitat-one.com, hi@habitat-one.com";
+    await sendEmail({ to: "klant@example.com", subject: "Beurs", html: "<p>hoi</p>", bcc: "extra@example.com", copyPolicy: "nick-frederique" });
+    expect(payloads[0].cc).toEqual(["nick@habitat-one.com", "frederique@habitat-one.com"]);
+    expect(payloads[0]).not.toHaveProperty("bcc");
+    expect(payloads[0].to).toBe("klant@example.com");
+  });
+
+  it("zet een directe ontvanger niet nogmaals in CC", async () => {
+    await sendEmail({ to: "Nick <NICK@habitat-one.com>", subject: "Kopie", html: "<p>hoi</p>", copyPolicy: "nick-frederique" });
+    expect(payloads[0].cc).toEqual(["frederique@habitat-one.com"]);
+    expect(payloads[0]).not.toHaveProperty("bcc");
+  });
 });

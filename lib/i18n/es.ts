@@ -4,8 +4,10 @@
  * utilizable en lugar de mostrar nombres de claves.
  */
 import type { Dictionary } from "@/lib/i18n";
+import { workflowEs } from './workflow';
 
 export const es: Dictionary = {
+  ...workflowEs,
   // ── navegación y grupos ───────────────────────────────────────────────────
   Start: "Inicio",
   Assistent: "Asistente",
@@ -365,6 +367,7 @@ export const es: Dictionary = {
   "Beurscontacten": "Contactos de feria",
   "stand {nr}|standnummer": "stand {nr}",
   "Alle beurscontacten": "Todos los contactos de feria",
+  "Beurscontacten opvolgen": "Seguimiento de contactos de feria",
   "Bezoeker vastleggen": "Registrar visitante",
   "De bezoeker krijgt meteen een bevestigingsmail; de gegevens staan bij Beurscontacten. Mails en afspraken beheer je bij Opvolging.": "El visitante recibe al momento un correo de confirmación; sus datos están en Contactos de feria. Gestiona los correos y las citas en Seguimiento.",
   "Klik op een naam om het klantdossier te openen, een mailvoorstel te kiezen en afspraken vast te leggen.": "Haz clic en un nombre para abrir la ficha del cliente, elegir una propuesta de correo y registrar citas.",

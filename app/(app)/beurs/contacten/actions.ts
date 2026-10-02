@@ -235,6 +235,7 @@ export async function stuurBeursVervolgmail(): Promise<VerwijderResultaat> {
     try {
       const res = await sendEmail({
         to: c.email!,
+        copyPolicy: "nick-frederique",
         subject: tekst.subject,
         attachments: await beursBijlagen(),
         html: brandedEmail(vervolgmailHtml(c.naam ?? "", signatureHtml(), wilVerkopen)),

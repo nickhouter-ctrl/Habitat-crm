@@ -10,9 +10,11 @@ import { extractInvoiceFieldsWithAI } from "@/lib/ai-invoice-extract";
 import { genereerMailAntwoord } from "@/lib/ai-reply";
 import { extractAttachmentAmount } from "@/lib/amount-extract";
 import { db } from "@/lib/db";
-import { activities, emailInbox, inboxSuggestions, mailAttachments, purchaseOrders, quoteRequests, users } from "@/lib/db/schema";
+import { activities, contacts, emailInbox, inboxSuggestions, mailAttachments, purchaseOrders, quoteRequests, users } from "@/lib/db/schema";
 import { escapeHtml, persoonlijkeMail, sendEmail } from "@/lib/email";
 import { partnerContext } from "@/lib/partner-context";
+import { isFairContact, isFairSource } from "@/lib/followup-source";
+import { recordPartnerReply } from '@/lib/partner-correspondence';
 import { recordSentEmail } from "@/lib/sent-email";
 import { runImapPoll, type ImapPollResult } from "@/lib/imap-poll";
 import { mailZichtbaarVoor, marketingMailbox } from "@/lib/mail-visibility";
@@ -237,11 +239,23 @@ export async function replyToMail(emailId: string, formData: FormData) {
   const postvak = mail.mailboxUser === marketingMailbox() && mail.mailboxUser ? "marketing" : "main";
 
   let sent = false;
+  let providerMessageId: string | undefined;
+  let savedAttachments: { name: string; size: number }[] = [];
+  let sentHtml = '', sentText = '';
   try {
+    const recipients = await db.select({ source: contacts.source, tags: contacts.tags }).from(contacts)
+      .where(sql`lower(trim(${contacts.email})) = ${mail.fromEmail.trim().toLowerCase()}`);
+    const linkedRequest = mail.linkedQuoteRequestId
+      ? await db.query.quoteRequests.findFirst({ where: eq(quoteRequests.id, mail.linkedQuoteRequestId), columns: { source: true } })
+      : null;
+    const fair = recipients.some(isFairContact) || isFairSource(linkedRequest?.source);
     const attachments = await catalogusMailBijlagen(bijlagePaden);
     const opgemaakt = persoonlijkeMail(message, me);
+    savedAttachments = attachments.map(a => ({ name: a.filename, size: Buffer.byteLength(a.content) }));
+    sentHtml = opgemaakt.html; sentText = opgemaakt.text;
     const res = await sendEmail({
       to: mail.fromEmail,
+      copyPolicy: fair ? "nick-frederique" : undefined,
       subject,
       html: opgemaakt.html,
       text: opgemaakt.text,
@@ -255,11 +269,16 @@ export async function replyToMail(emailId: string, formData: FormData) {
       references: mail.messageId ?? undefined,
     });
     sent = res.sent;
+    providerMessageId = res.messageId;
   } catch (err) {
     console.warn("[inbox] antwoord versturen mislukt:", err);
   }
 
   if (sent) {
+    try {
+      await recordPartnerReply({ toEmail: mail.fromEmail, mailboxUser: mail.mailboxUser ?? process.env.GMAIL_USER?.trim().toLowerCase() ?? 'hi@habitat-one.com', subject, body: sentText, html: sentHtml, messageId: providerMessageId, referencesHeader: mail.messageId ?? undefined, authorId: user.id, attachments: savedAttachments });
+      revalidatePath('/opvolging'); revalidatePath('/beurs/opvolging');
+    } catch { console.warn('[inbox] verzonden antwoord wordt opnieuw gekoppeld bij mailboxsynchronisatie'); }
     await db.update(emailInbox).set({ readAt: mail.readAt ?? new Date() }).where(eq(emailInbox.id, emailId));
     revalidatePath("/", "layout");
     await db.update(inboxSuggestions).set({ status: "reviewed", draft: null, draftSubject: null, draftAttachments: [], needsReply: false, reviewedBy: user.id, reviewedAt: new Date(), updatedAt: new Date() }).where(eq(inboxSuggestions.emailId, emailId));

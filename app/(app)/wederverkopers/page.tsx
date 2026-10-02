@@ -1,3 +1,4 @@
+import { tekst } from '@/lib/i18n/server';
 import { asc, eq, inArray, or, sql } from 'drizzle-orm';
 import Link from 'next/link';
 import { Badge, Card, CardContent, LinkButton, PageHeader, StatTile, TBody, Table, Td, Th, THead, Tr } from '@/components/ui';
@@ -12,6 +13,7 @@ export const metadata = { title: 'Verkooppunten' };
 export default async function VerkooppuntenPage({ searchParams }: {
   searchParams: Promise<{ q?: string; status?: string }>;
 }) {
+ const t=await tekst();
   const access = await requireModuleRead('producten');
   const s = await searchParams;
   const [resellers, summaryRows] = await Promise.all([
@@ -42,47 +44,47 @@ export default async function VerkooppuntenPage({ searchParams }: {
   }, { stock: 0, sales: 0 });
 
   return <div className="space-y-6">
-    <PageHeader title="Verkooppunten" subtitle="Van interesse naar een officiële samenwerking. Contract, presentatie en afname per klant."
-      actions={access.magModule('aanvragen') && <LinkButton href="/opvolging">Opvolging</LinkButton>} />
+    <PageHeader title={t("Verkooppunten")} subtitle={t("Van interesse naar een officiële samenwerking. Contract, presentatie en afname per klant.")}
+      actions={access.magModule('aanvragen') && <LinkButton href="/opvolging">{t("Opvolging")}</LinkButton>} />
     <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-      <Link href="/wederverkopers?status=candidate"><StatTile label="Kandidaten" value={resellers.filter(candidate).length} /></Link>
-      <Link href="/wederverkopers?status=active"><StatTile label="Officieel" value={resellers.filter(r => r.profile?.active).length} /></Link>
-      <StatTile label="In winkels" value={formatEUR(totals.stock)} hint="consignatie · ex. btw" />
-      <StatTile label="Omzet via dealers" value={formatEUR(totals.sales)} hint="consignatie · ex. btw" />
+      <Link href="/wederverkopers?status=candidate"><StatTile label={t("Kandidaten")} value={resellers.filter(candidate).length} /></Link>
+      <Link href="/wederverkopers?status=active"><StatTile label={t("Officieel")} value={resellers.filter(r => r.profile?.active).length} /></Link>
+      <StatTile label={t("In winkels")} value={formatEUR(totals.stock)} hint={t("consignatie · ex. btw")} />
+      <StatTile label={t("Omzet via dealers")} value={formatEUR(totals.sales)} hint={t("consignatie · ex. btw")} />
     </div>
     <Card><CardContent>
       <form action="/wederverkopers" className="flex flex-wrap gap-2">
-        <input aria-label="Zoek verkooppunt" name="q" defaultValue={s.q} placeholder="Zoek bedrijf of contact…"
+        <input aria-label={t("Zoek verkooppunt")} name="q" defaultValue={s.q} placeholder={t("Zoek bedrijf of contact…")}
           className="rounded-lg border border-border bg-surface px-3 py-2 text-foreground" />
-        <select aria-label="Verkooppuntstatus" name="status" defaultValue={s.status ?? ''}
+        <select aria-label={t("Verkooppuntstatus")} name="status" defaultValue={s.status ?? ''}
           className="rounded-lg border border-border bg-surface px-3 py-2 text-foreground">
-          <option value="">Alle verkooppunten</option><option value="candidate">Kandidaten</option><option value="active">Officieel</option>
+          <option value="">{t("Alle verkooppunten")}</option><option value="candidate">{t("Kandidaten")}</option><option value="active">{t("Officieel")}</option>
         </select>
-        <button className="rounded-lg border px-4 py-2 text-sm">Filteren</button>
+        <button className="rounded-lg border px-4 py-2 text-sm">{t("Filteren")}</button>
       </form>
-      <p className="mt-3 text-xs text-muted">Een architect of bouwbedrijf kan ook verkooppunt worden. Leg de interesse vast in het klantdossier.</p>
+      <p className="mt-3 text-xs text-muted">{t("Een architect of bouwbedrijf kan ook verkooppunt worden. Leg de interesse vast in het klantdossier.")}</p>
     </CardContent></Card>
     <Card>
-      {visible.length ? <Table><THead><tr><Th>Contact / bedrijf</Th><Th>Status</Th><Th>Plaats</Th><Th className="text-right">Beheer</Th></tr></THead>
+      {visible.length ? <Table><THead><tr><Th>{t("Contact / bedrijf")}</Th><Th>{t("Status")}</Th><Th>{t("Plaats")}</Th><Th className="text-right">{t("Beheer")}</Th></tr></THead>
         <TBody>{visible.map(r => <Tr key={r.contact.id}>
           <Td>
             {access.magModule('aanvragen') ? <Link className="font-semibold hover:underline" href={`/opvolging/${r.contact.id}`}>{r.contact.name}</Link> : <span className="font-semibold">{r.contact.name}</span>}
             <p className="text-muted">{r.company ?? r.contact.email}</p>
           </Td>
           <Td>
-            <Badge tone={r.profile?.active ? 'success' : 'neutral'}>{r.profile?.active ? 'Officieel verkooppunt' : r.profile?.stage === 'stopped' ? 'Gestopt' : r.profile?.interest === 'not_interested' ? 'Geen interesse' : 'Kandidaat'}</Badge>
-            {!r.profile?.active && <p className="mt-1 text-xs text-muted">{STAGES[(r.profile?.stage ?? 'new') as keyof typeof STAGES]}</p>}
+            <Badge tone={r.profile?.active ? 'success' : 'neutral'}>{r.profile?.active ? t("Officieel verkooppunt") : r.profile?.stage === 'stopped' ? t("Gestopt") : r.profile?.interest === 'not_interested' ? t("Geen interesse") : t("Kandidaat")}</Badge>
+            {!r.profile?.active && <p className="mt-1 text-xs text-muted">{t(STAGES[(r.profile?.stage ?? "new") as keyof typeof STAGES])}</p>}
           </Td>
-          <Td>{r.profile?.publicCity ?? r.contact.city ?? 'Nog vastleggen'}</Td>
+          <Td>{r.profile?.publicCity ?? r.contact.city ?? t("Nog vastleggen")}</Td>
           <Td><div className="flex flex-wrap justify-end gap-3">
-            <Link href={`/wederverkopers/${r.contact.id}/samenwerking`} className="font-medium text-accent hover:underline">Samenwerking</Link>
-            <Link href={`/wederverkopers/${r.contact.id}/presentatie`} className="text-muted hover:underline">Presentatie</Link>
-            <Link href={`/wederverkopers/${r.contact.id}`} className="text-muted hover:underline">Voorraad</Link>
+            <Link href={`/wederverkopers/${r.contact.id}/samenwerking`} className="font-medium text-accent hover:underline">{t("Samenwerking")}</Link>
+            <Link href={`/wederverkopers/${r.contact.id}/presentatie`} className="text-muted hover:underline">{t("Presentatie")}</Link>
+            <Link href={`/wederverkopers/${r.contact.id}`} className="text-muted hover:underline">{t("Voorraad")}</Link>
           </div></Td>
         </Tr>)}</TBody></Table> : <div className="space-y-3 p-8">
-        <p className="font-medium">Geen verkooppunten bij dit filter.</p>
-        <p className="text-sm text-muted">Open een klantdossier en kies ‘Wil verkooppunt worden’ bij de interesse.</p>
-        {access.magModule('aanvragen') && <LinkButton href="/opvolging" variant="secondary">Naar opvolging</LinkButton>}
+        <p className="font-medium">{t("Geen verkooppunten bij dit filter.")}</p>
+        <p className="text-sm text-muted">{t("Open een klantdossier en kies ‘Wil verkooppunt worden’ bij de interesse.")}</p>
+        {access.magModule('aanvragen') && <LinkButton href="/opvolging" variant="secondary">{t("Naar opvolging")}</LinkButton>}
       </div>}
     </Card>
   </div>;

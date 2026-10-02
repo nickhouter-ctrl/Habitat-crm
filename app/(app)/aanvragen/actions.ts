@@ -15,6 +15,7 @@ import { appointmentProposalEmail, persoonlijkeMail, sendEmail } from "@/lib/ema
 import { recordSentEmail } from "@/lib/sent-email";
 import { catalogusMailBijlagen, listCatalogFiles } from "@/lib/storage";
 import { confirmAppointment, isBeursAanvraag } from "@/lib/appointments";
+import { isFairSource } from "@/lib/followup-source";
 
 async function requireUser() {
   // Centrale guard: ingelogd én geen alleen-lezen (viewer) account.
@@ -177,7 +178,7 @@ export async function proposeSlots(quoteRequestId: string, formData: FormData) {
       // showroom in Jávea. Anders sturen we iemand naar de verkeerde stad.
       fair: isBeursAanvraag(req.source),
     });
-    await sendEmail({ to: req.email, subject: mail.subject, html: mail.html, text: mail.text });
+    await sendEmail({ to: req.email, subject: mail.subject, html: mail.html, text: mail.text, copyPolicy: isFairSource(req.source) ? "nick-frederique" : undefined });
   } catch (err) {
     console.warn("[aanvragen] voorstel-mail mislukt:", err);
   }
@@ -262,6 +263,7 @@ export async function mailQuoteRequestCustomer(quoteRequestId: string, formData:
     const opgemaakt = persoonlijkeMail(message, me);
     const res = await sendEmail({
       to: req.email,
+      copyPolicy: isFairSource(req.source) ? "nick-frederique" : undefined,
       subject,
       html: opgemaakt.html,
       text: opgemaakt.text,

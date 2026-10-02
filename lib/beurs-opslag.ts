@@ -263,6 +263,7 @@ export async function slaBeursbezoekerOp(d: BeursBezoeker): Promise<BeursOpslagR
     const tekst = beursMail({ naam: d.naam, taal: d.taal, rol: d.rol, wens, interesses, accountLink: activatieLink });
     const res = await sendEmail({
       to: email,
+      copyPolicy: "nick-frederique",
       subject: tekst.subject,
       attachments: await beursBijlagen(),
       html: brandedEmail(

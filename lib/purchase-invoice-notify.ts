@@ -18,30 +18,13 @@ import { brandedEmail, escapeHtml, sendEmail } from "@/lib/email";
 import { formatEUR } from "@/lib/utils";
 import { crmUrl } from "@/lib/crm-url";
 import { getLoginToken } from "@/lib/login-links";
+import { NICK_FREDERIQUE } from "@/lib/mail-bcc";
 
 const APP_URL = crmUrl();
 
-/**
- * Wie facturen keurt: Nick en Hans. Staat hier hard in plaats van alleen in
- * INVOICE_NOTIFY_EMAILS, omdat een niet-gezette env-variabele anders stil
- * terugvalt op de algemene notify-lijst (hi@ + nick@) en Hans de melding dan
- * nooit ziet — precies wat er bij de eerste test gebeurde.
- */
-const KEURDERS = [
-  "nick@habitat-one.com",
-  "hans@habitat-one.com",
-  "frederique@habitat-one.com",
-  "hi@habitat-one.com",
-];
-
-/** Ontvangers van factuurmeldingen: eigen env, anders de vaste keurders. */
-function ontvangerLijst(): string[] {
-  const eigen = (process.env.INVOICE_NOTIFY_EMAILS ?? "")
-    .split(",")
-    .map((e) => e.trim())
-    .filter(Boolean);
-  return eigen.length > 0 ? eigen : KEURDERS;
-}
+// Alleen Nick en Frederique ontvangen goedkeurmeldingen. Een oudere env-lijst
+// mag Hans of een gedeeld postvak niet opnieuw toevoegen. Persoonlijke links
+// blijven per ontvanger verstuurd, zonder CC/BCC van elkaars inloglink.
 
 /**
  * Ieder zijn eigen mail, met zijn eigen gebruikers-id in de knoppen.
@@ -51,7 +34,7 @@ function ontvangerLijst(): string[] {
  * gebeurde bij de Iberdrola-factuur, die zonder naam in het logboek belandde.
  */
 async function ontvangersMetId(): Promise<{ email: string; userId: string | null; loginToken: string | null }[]> {
-  const lijst = ontvangerLijst();
+  const lijst = NICK_FREDERIQUE;
   const rijen = await db
     .select({ id: users.id, email: users.email })
     .from(users)

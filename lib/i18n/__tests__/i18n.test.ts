@@ -77,12 +77,9 @@ describe("woordenboeken", () => {
       "Prospects",
       // Tijd- en plaatsnamen zijn in alle drie de talen gelijk.
       "Filter",
-      "Status", "Website",
+      "Status", "Website", "Contact",
       "30 min",
       "Showroom Jávea",
-      // In het Engels toevallig hetzelfde woord.
-      "Status",
-      "Website",
     ]);
     for (const [naam, dict] of [["en", en], ["es", es]] as const) {
       const verdacht = Object.entries(dict).filter(([k, v]) => k === v && !gelijk.has(k));

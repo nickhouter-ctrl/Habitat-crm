@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { isBeursAanvraag } from "@/lib/appointments";
+import { isFairSource } from "@/lib/followup-source";
 import { clientIp, rateLimit, RATE_LIMITED } from "@/lib/rate-limit";
 import { NOTIFY_RECIPIENTS, NOTIFY_TO } from "@/lib/mail-bcc";
 
@@ -117,6 +118,7 @@ export async function POST(req: Request) {
     ];
     await sendMail({
       to: NOTIFY_TO,
+      copyPolicy: isFairSource(v.source) ? "nick-frederique" : undefined,
       bcc: NOTIFY_RECIPIENTS.slice(1).join(", ") || undefined,
       replyTo: v.email,
       subject: `${kindLabel} — ${v.name}`,
@@ -156,7 +158,7 @@ export async function POST(req: Request) {
       // agenda-titel en de voorstelmail — daarom staat hij op één plek.
       const fair = isBeursAanvraag(v.source);
       const ack = appointmentReceivedEmail({ lang: v.locale, contactName: v.name, when: when || null, fair });
-      await sendMail({ to: v.email, subject: ack.subject, html: ack.html, text: ack.text });
+      await sendMail({ to: v.email, subject: ack.subject, html: ack.html, text: ack.text, copyPolicy: isFairSource(v.source) ? "nick-frederique" : undefined });
       confirmStatus = "sent";
     } catch (err) {
       console.error("[quote-requests] bevestiging mislukt:", err);
@@ -179,6 +181,7 @@ export async function POST(req: Request) {
       });
       await sendMail({
         to: v.email,
+        copyPolicy: isFairSource(v.source) ? "nick-frederique" : undefined,
         subject: confirm.subject,
         html: confirm.html,
         text: confirm.text,

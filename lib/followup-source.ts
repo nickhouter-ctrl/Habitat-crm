@@ -10,14 +10,22 @@ const LABELS: Record<string, string> = {
   import: 'Import',
 };
 
+export function isFairSource(source: string | null | undefined): boolean {
+  return /^beurs(?::|$)|^website:feria/i.test(source?.trim() ?? '');
+}
+
+export function isFairContact(contact: { source?: string | null; tags?: string[] | null }): boolean {
+  return isFairSource(contact.source) || (contact.tags ?? []).some(isFairSource);
+}
+
 /** Show only the recorded origin; a registration date is not a meeting date. */
 export function followupSource(source: string | null | undefined) {
   if (!source?.trim()) return { key: 'unknown', label: 'Niet vastgelegd' };
   const value = source.trim();
-  if (/^beurs(?::|$)/i.test(value)) {
+  if (isFairSource(value)) {
     return { key: 'beurs', label: value === 'beurs:360-cevisama-2026' ? 'Beurs · 360 by Cevisama' : 'Beurs' };
   }
-  return { key: value === 'website' ? 'website' : 'other', label: LABELS[value] ?? value };
+  return { key: /^website(?::|$)/i.test(value) ? 'website' : 'other', label: LABELS[value] ?? (/^website(?::|$)/i.test(value) ? 'Website' : value) };
 }
 
 export function followupSources(source: string | null | undefined, requestSources: string[] = []) {

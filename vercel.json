@@ -105,7 +105,7 @@
     },
     {
       "path": "/api/cron/partner-sent",
-      "schedule": "4-59/10 * * * *"
+      "schedule": "* * * * *"
     }
   ]
 }

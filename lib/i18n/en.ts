@@ -3,8 +3,10 @@
  * an untranslated screen stays usable instead of showing key names.
  */
 import type { Dictionary } from "@/lib/i18n";
+import { workflowEn } from './workflow';
 
 export const en: Dictionary = {
+  ...workflowEn,
   // ── navigatie en groepen ──────────────────────────────────────────────────
   Start: "Home",
   Assistent: "Assistant",
@@ -364,6 +366,7 @@ export const en: Dictionary = {
   "Beurscontacten": "Trade-fair contacts",
   "stand {nr}|standnummer": "stand {nr}",
   "Alle beurscontacten": "All trade-fair contacts",
+  "Beurscontacten opvolgen": "Follow up trade-fair contacts",
   "Bezoeker vastleggen": "Log a visitor",
   "De bezoeker krijgt meteen een bevestigingsmail; de gegevens staan bij Beurscontacten. Mails en afspraken beheer je bij Opvolging.": "The visitor receives a confirmation email right away; their details are under Trade-fair contacts. Manage emails and appointments under Follow-up.",
   "Klik op een naam om het klantdossier te openen, een mailvoorstel te kiezen en afspraken vast te leggen.": "Click a name to open the client record, choose an email proposal and record appointments.",

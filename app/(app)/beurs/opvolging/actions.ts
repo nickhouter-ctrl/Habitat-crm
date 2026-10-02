@@ -1,4 +1,5 @@
 "use server";
+import { tekst } from '@/lib/i18n/server';
 import { and, desc, eq, inArray, isNull, or, sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
@@ -79,7 +80,7 @@ export async function syncSent(_:Result,_fd:FormData):Promise<Result>{
   const user=await requireModule('inbox');
   void _; void _fd;
   try {let imported=0,more=false; for(const a of getMailAccounts().filter(a=>a.user.toLowerCase()!==marketingMailbox()||isMarketingGebruiker(user.email))){const r=await syncPartnerSent(a);imported+=r.imported;more ||= r.more;}
-    refresh();return{success:`${imported} verzonden mails gekoppeld.${more?' Er zijn meer mails; klik opnieuw om verder op te halen.':''}`};
+    const t=await tekst();refresh();return{success:t('{n} verzonden mails gekoppeld.',{n:imported})+(more?' '+t('Er zijn meer mails; klik opnieuw om verder op te halen.'):'')};
   }catch{return{error:'Verzonden mails konden niet volledig worden opgehaald. Reeds gekoppelde mails blijven bewaard.'};}
 }
 export async function saveDraft(_:Result,fd:FormData):Promise<Result>{

@@ -109,6 +109,7 @@ describe("dezelfde bezoeker twee keer opslaan", () => {
 
     expect(res.dubbel).toBe(false);
     expect(mocks.mail).toHaveBeenCalledTimes(1);
+    expect(mocks.mail).toHaveBeenCalledWith(expect.objectContaining({ copyPolicy: "nick-frederique" }));
     expect(mocks.set.mock.calls.some(([value]) => value.tags)).toBe(true);
   });
 

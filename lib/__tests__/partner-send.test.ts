@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 const m=vi.hoisted(()=>({guard:vi.fn(),select:vi.fn(),claim:vi.fn(),mail:vi.fn(),attachments:vi.fn(),insert:vi.fn(),bewaard:vi.fn(),set:vi.fn(),context:vi.fn(),ai:vi.fn()}));
+vi.mock('@/lib/i18n/server', async () => ({ tekst: async () => (await import('@/lib/i18n')).maakT('nl') }));
 vi.mock('server-only',()=>({}));
 vi.mock('next/cache',()=>({revalidatePath:vi.fn()}));
 vi.mock('@/lib/auth/guards',()=>({requireModule:m.guard}));
