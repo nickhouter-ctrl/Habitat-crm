@@ -22,7 +22,9 @@ export async function recordPartnerReply(args: {
 /** Beroep, interesse en bestaande afspraken blijven intact. Privémail geeft geen gedeelde fasewijziging. */
 export async function markPartnerContacted(contactId: string, at: Date, mailboxUser: string) {
   if (mailboxUser.trim().toLowerCase() === marketingMailbox()) return;
-  await db.update(contacts).set({ lastContactedAt: sql`greatest(${contacts.lastContactedAt}, ${at})` }).where(eq(contacts.id, contactId));
+  // Raw SQL parameters bypass the column's Date encoder. Bind an ISO string
+  // explicitly: postgres-js otherwise rejects the Date before running SQL.
+  await db.update(contacts).set({ lastContactedAt: sql`greatest(${contacts.lastContactedAt}, ${at.toISOString()}::timestamptz)` }).where(eq(contacts.id, contactId));
   await db.insert(partnerProfiles).values({ contactId, stage: 'contacted' }).onConflictDoNothing();
   await db.update(partnerProfiles).set({ stage: 'contacted', version: sql`${partnerProfiles.version} + 1`, updatedAt: new Date() })
     .where(and(eq(partnerProfiles.contactId, contactId), eq(partnerProfiles.stage, 'new')));

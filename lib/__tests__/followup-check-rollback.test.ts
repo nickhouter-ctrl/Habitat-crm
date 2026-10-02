@@ -26,6 +26,7 @@ vi.mock('@/lib/followup-mail-attachments', () => ({ followupAttachments: vi.fn()
 import { activities, contacts, partnerProfiles, users } from '@/lib/db/schema';
 import { FOLLOWUP_DONE, FOLLOWUP_REOPENED } from '@/lib/followup-checklist';
 import { latestFollowupCompletions } from '@/lib/followup-checklist-data';
+import { markPartnerContacted } from '@/lib/partner-correspondence';
 import { saveProfile, setFollowupCompleted } from '../../app/(app)/beurs/opvolging/actions';
 
 const enabled = process.env.FOLLOWUP_ROLLBACK_DB_TEST === '1';
@@ -74,6 +75,13 @@ it.skipIf(!enabled)('bewaart, heropent en auditeert afvinken zonder andere taken
       const history = await tx.select().from(activities).where(and(eq(activities.contactId, contactId), inArray(activities.subject, [FOLLOWUP_DONE, FOLLOWUP_REOPENED])));
       expect(history).toHaveLength(4);
       expect(history.every(event => event.authorId === authorId)).toBe(true);
+      // A raw Date in the GREATEST SQL parameter failed only against the real
+      // postgres-js driver. Exercise that boundary and out-of-order replies.
+      const newestReply = new Date('2026-10-02T10:00:00Z');
+      await markPartnerContacted(contactId, newestReply, 'rollback@example.invalid');
+      await markPartnerContacted(contactId, new Date('2020-01-01T10:00:00Z'), 'rollback@example.invalid');
+      expect((await tx.select().from(contacts).where(eq(contacts.id, contactId)))[0].lastContactedAt?.toISOString()).toBe(newestReply.toISOString());
+      expect((await tx.select().from(partnerProfiles).where(eq(partnerProfiles.contactId, contactId)))[0].stage).toBe('discussion');
       throw rollback; // Onvoorwaardelijk terugdraaien, ook wanneer alle checks slagen.
     });
     throw new Error('De integratietransactie is onverwacht vastgelegd');
