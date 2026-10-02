@@ -84,6 +84,8 @@ export const START_TEGELS: StartTegel[] = [
   t("/aanvragen", "Aanvragen", "Offerte-aanvragen via de website", Inbox, "Klantcontact"),
   t("/agenda", "Agenda", "Afspraken en taken van het team", CalendarDays, "Klantcontact"),
   t("/contacts", "Contacten", "Alle klanten en relaties", Users, "Klantcontact"),
+  t("/beurs/contacten", "Beurscontacten", "Alle contacten van de beurs, met kaart en filters", Users, "Klantcontact"),
+  t("/opvolging", "Opvolging", "Mailvoorstellen, gesprekken en afspraken per klant", Send, "Klantcontact"),
   t("/leads", "Leads", "Bedrijven vinden en de prospectlijst beheren", Megaphone, "Klantcontact"),
   t("/broadcast", "Broadcast", "E-mailcampagnes naar bedrijven versturen", Send, "Klantcontact"),
   t("/accounts", "Klant-accounts", "Portaal-toegang voor klanten", UserCog, "Klantcontact"),
@@ -140,6 +142,8 @@ export const START_GROEPEN = [...new Set(START_TEGELS.map((x) => x.groep))];
  */
 export const STANDAARD_HOOFDKNOPPEN = [
   "/inbox",
+  "/opvolging",
+  "/beurs/contacten",
   "/aanvragen",
   "/quotes",
   "/projects",

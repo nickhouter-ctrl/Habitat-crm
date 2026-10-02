@@ -56,7 +56,7 @@ export const FOLLOWUP_DESIGNS = {
 export function followupDesigns(kind: FollowupMailKind) { return FOLLOWUP_DESIGNS[kind]; }
 export function followupDesignUrl(filename: string) { return `/mail/followup/${filename}`; }
 
-export type FollowupMailContext = { name: string; isFair: boolean; meetingDate: string };
+export type FollowupMailContext = { name: string; isFair: boolean; meetingDate: string; company?: string | null; interests?: string[] };
 
 export function followupProposal(kind: Exclude<FollowupMailKind, 'custom'>, context: FollowupMailContext) {
   const name = context.name.trim() || 'there';
@@ -70,6 +70,13 @@ export function followupProposal(kind: Exclude<FollowupMailKind, 'custom'>, cont
   const introEn = context.isFair
     ? `It was a pleasure to welcome you to our Habitat One stand at Feria Hábitat${enDate ? ` on ${enDate}` : ''}. Thank you for your interest and enthusiasm!`
     : 'Thank you for your interest in Habitat One’s Flexible Stone panels. We’d love to explore how we can work together.';
+  const company=context.company?.trim();
+  const identity=(value:string)=>value.normalize('NFD').replace(/\p{M}/gu,'').replace(/[^\p{L}\p{N}]/gu,'').toLowerCase();
+  const personalCompany=company&&identity(company)!==identity(name)?company:'';
+  const interests={stalen:{es:'muestras',en:'samples'},prijzen:{es:'precios',en:'pricing'},content:{es:'imágenes y documentación',en:'images and product information'},showroom:{es:'una visita a nuestro showroom en Jávea',en:'a visit to our showroom in Jávea'}};
+  const selected=Object.entries(interests).filter(([key])=>context.interests?.includes(key)).map(([,value])=>value);
+  const interestEs=selected.length?`\n\nNos habéis indicado vuestro interés en ${selected.map(i=>i.es).join(', ')}. Nos gustaría comentar qué necesitáis y cómo podemos ayudaros.`:'';
+  const interestEn=selected.length?`\n\nYou expressed an interest in ${selected.map(i=>i.en).join(', ')}. We’d love to discuss what you need and how we can help.`:'';
   const link = 'https://www.habitat-one.com/beurs/films';
   const signature = 'Hans\nHabitat One\nTouch. Feel. Experience.';
   const es = kind === 'professional' ? `Hola ${name}:\n\n${introEs}\n\nNos gustaría dar el siguiente paso con vosotros. Hemos diseñado un expositor compacto para profesionales, con muestras para ver y tocar y una pantalla que muestra cómo se trabaja con nuestros paneles Flexible Stone. Encontraréis el diseño conceptual adjunto.\n\nPorque una foto está bien, pero tocar y doblar el material suele provocar la misma reacción: «Un momento… ¿esto es realmente piedra?» 😉\n\nNos encantaría comentar cómo adaptar el expositor con las muestras, los vídeos y la información de producto más adecuados para vuestro equipo y vuestros proyectos. Así podréis presentar nuestros materiales a vuestros clientes y ayudarles a descubrir todas sus posibilidades.\n\n¿Os interesa la idea? Responded a este correo y le damos forma juntos.`
@@ -80,6 +87,6 @@ export function followupProposal(kind: Exclude<FollowupMailKind, 'custom'>, cont
     subject: kind === 'professional'
       ? 'Una idea flexible para vuestros proyectos / A flexible idea for your projects'
       : 'Una idea flexible para vuestra tienda / A flexible idea for your shop or showroom',
-    body: `${es}\n\nAquí tenéis los vídeos y las fichas técnicas:\n${link}\n\nUn cordial saludo,\n${signature}\n\n──────── English ────────\n\n${en}\n\nYou can find our videos and technical data sheets here:\n${link}\n\nWarm regards,\n${signature}`,
+    body: `${es.replace(introEs,`${introEs}${personalCompany?`\n\nPensando en ${personalCompany}, nos gustaría preparar una propuesta adaptada a vuestro negocio.`:''}${interestEs}`)}\n\nAquí tenéis los vídeos y las fichas técnicas:\n${link}\n\nUn cordial saludo,\n${signature}\n\n──────── English ────────\n\n${en.replace(introEn,`${introEn}${personalCompany?`\n\nWith ${personalCompany} in mind, we’d love to put together a proposal tailored to your business.`:''}${interestEn}`)}\n\nYou can find our videos and technical data sheets here:\n${link}\n\nWarm regards,\n${signature}`,
   };
 }

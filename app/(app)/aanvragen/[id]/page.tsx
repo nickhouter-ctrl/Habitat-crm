@@ -1,6 +1,7 @@
 import { desc, eq, ilike } from "drizzle-orm";
 import Link from "next/link";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
+import { z } from "zod";
 
 import { AiMailForm } from "@/components/ai-mail-form";
 import { ConfirmSubmit } from "@/components/confirm-submit";
@@ -24,6 +25,8 @@ import {
   Textarea,
 } from "@/components/ui";
 import { db } from "@/lib/db";
+import { isBeursRegistratie } from "@/lib/aanvraag-selectie";
+import { requireModuleRead } from "@/lib/auth/guards";
 import { emailInbox, quoteRequests, sentEmails } from "@/lib/db/schema";
 import { formatDate } from "@/lib/utils";
 import {
@@ -57,10 +60,14 @@ export default async function QuoteRequestDetailPage({
   params: Promise<{ id: string }>;
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
+  await requireModuleRead('aanvragen');
   const { id } = await params;
+  if (!z.string().uuid().safeParse(id).success) notFound();
   const sp = await searchParams;
   const req = await db.query.quoteRequests.findFirst({ where: eq(quoteRequests.id, id) });
   if (!req) notFound();
+  // Oude links blijven werken en openen nu het centrale klantdossier.
+  if (isBeursRegistratie(req)) redirect(req.contactId ? `/opvolging/${req.contactId}` : '/beurs/contacten');
 
   const catalogi = await listCatalogFiles();
   // Opvolg-banner: klant stil sinds onze laatste mail (alleen bij open/geaccepteerd).

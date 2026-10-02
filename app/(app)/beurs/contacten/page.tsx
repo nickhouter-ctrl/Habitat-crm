@@ -21,6 +21,7 @@ import {
 } from "@/components/ui";
 import { BEURS, INTERESSES, ROLLEN, interesseLabel, rolOmschrijving } from "@/lib/beurs";
 import { haalBeursGesprekken } from "@/lib/beurs-data";
+import { requireModuleRead } from "@/lib/auth/guards";
 import {
   type BeursRichting,
   type BeursSortering,
@@ -60,6 +61,7 @@ export default async function BeursContactenPage({
 }: {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
+  await requireModuleRead('aanvragen');
   const [params, t, taal, datumLocale] = await Promise.all([searchParams, tekst(), huidigeTaal(), datumTaal()]);
   const q = typeof params.q === "string" ? params.q.trim() : "";
   const rolParam = typeof params.rol === "string" ? params.rol : "";
@@ -145,7 +147,7 @@ export default async function BeursContactenPage({
         subtitle={`${BEURS.naam} · ${BEURS.plaats} · ${t("stand {nr}|standnummer", { nr: BEURS.stand })}`}
         actions={
           <>
-            <LinkButton href="/opvolging">Opvolging</LinkButton>
+            <LinkButton href="/opvolging?bron=beurs">{t("Opvolging")}</LinkButton>
             <LinkButton href="/beurs" variant="secondary">
               {t("Naar de stand")}
             </LinkButton>
@@ -156,6 +158,8 @@ export default async function BeursContactenPage({
           </>
         }
       />
+
+      <p className="mb-4 text-sm text-muted">{t("Klik op een naam om het klantdossier te openen, een mailvoorstel te kiezen en afspraken vast te leggen.")}</p>
 
       <div className="mb-5 grid grid-cols-2 gap-3 sm:grid-cols-4">
         <StatTile label={t("Gesproken")} value={kengetallen.totaal} hint={t("hele beurs")} />
@@ -286,7 +290,7 @@ export default async function BeursContactenPage({
               <Tr key={r.aanvraagId}>
                 <Td>
                   {r.contactId ? (
-                    <Link href={`/contacts/${r.contactId}`} className="font-medium text-accent hover:underline">
+                    <Link href={`/opvolging/${r.contactId}`} className="font-medium text-accent hover:underline">
                       {r.naam}
                     </Link>
                   ) : (

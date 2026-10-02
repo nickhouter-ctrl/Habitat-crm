@@ -72,7 +72,7 @@ export default async function BeursPage() {
           <CardHeader>
             <CardTitle>{t("Bezoeker vastleggen")}</CardTitle>
             <span className="text-xs text-muted">
-              {t("De bezoeker krijgt meteen een bevestigingsmail; de gegevens staan bij Contacten en in de opvolglijst op Aanvragen.")}
+              {t("De bezoeker krijgt meteen een bevestigingsmail; de gegevens staan bij Beurscontacten. Mails en afspraken beheer je bij Opvolging.")}
             </span>
           </CardHeader>
           <CardContent>
@@ -142,7 +142,7 @@ export default async function BeursPage() {
             {t("De hele beurs, met zoeken en sorteren, staat bij")}{" "}
             <Link href="/beurs/contacten" className="text-accent hover:underline">{t("Beurscontacten")}</Link>. {t("Ook terug te vinden bij")}{" "}
             <Link href="/contacts?bron=beurs" className="text-accent hover:underline">{t("Contacten")}</Link> {t("en|voegwoord")}{" "}
-            <Link href="/aanvragen" className="text-accent hover:underline">{t("Aanvragen")}</Link>.
+            <Link href="/opvolging?bron=beurs" className="text-accent hover:underline">{t("Opvolging")}</Link>.
           </span>
         </CardHeader>
         <CardContent>

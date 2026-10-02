@@ -51,6 +51,8 @@ export interface ReplyDraftRequest {
   /** Beschikbare brochures/catalogi (bestandsnamen uit /catalogi) — de AI kiest
    *  welke als bijlage meegaan als de klant of de medewerker erom vraagt. */
   beschikbareBijlagen?: string[];
+  /** Ruimte voor een volledig tweetalig voorstel; gewone antwoorden houden hun limiet. */
+  maxTokens?: number;
 }
 
 const TAAL_NAAM: Record<string, string> = {
@@ -110,7 +112,7 @@ Geef ALLEEN een JSON-object terug (geen markdown): {"subject": "...", "body": ".
       },
       body: JSON.stringify({
         model: MODEL,
-        max_tokens: 900,
+        max_tokens: Math.max(256, Math.min(req.maxTokens ?? 900, 2500)),
         temperature: 0.5,
         system: SYSTEM,
         messages: [{ role: "user", content: prompt }],

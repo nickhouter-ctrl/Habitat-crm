@@ -22,6 +22,7 @@ import { openVoorstellenFilter } from "@/lib/assistant/achterhaald";
 import { normalizeDocItems } from "@/lib/documents";
 import { PO_OPEN_STATUSES } from "@/lib/purchase-orders";
 import { formatEUR } from "@/lib/utils";
+import { gewoneAanvragen } from "@/lib/aanvraag-selectie";
 
 export type DagtaakTone = "accent" | "warning" | "danger" | "success";
 export type DagtaakPrioriteit = "hoog" | "middel" | "laag";
@@ -63,7 +64,7 @@ const RANG: Record<string, number> = {
 async function dagtakenBeperkt(userEmail?: string | null): Promise<Dagtaak[]> {
   const t = await tekst();
   const [[aanvragen], opvolgAanvragen, [suggestions]] = await Promise.all([
-    db.select({ n: sql<number>`count(*)::int` }).from(quoteRequests).where(eq(quoteRequests.status, "pending")),
+    db.select({ n: sql<number>`count(*)::int` }).from(quoteRequests).where(and(gewoneAanvragen, eq(quoteRequests.status, "pending"))),
     aanvragenTeOpvolgen(),
     db
       .select({ n: sql<number>`count(*)::int` })
@@ -138,7 +139,7 @@ export async function verzamelDagtaken(rol?: string, userEmail?: string | null):
       db
         .select({ n: sql<number>`count(*)::int` })
         .from(quoteRequests)
-        .where(eq(quoteRequests.status, "pending")),
+        .where(and(gewoneAanvragen, eq(quoteRequests.status, "pending"))),
       // Vervallen verkoopfacturen (openstaand bedrag = totaal − betaald).
       db
         .select({

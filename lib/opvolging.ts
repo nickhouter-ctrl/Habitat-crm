@@ -10,6 +10,7 @@ import { and, eq, isNull, sql } from "drizzle-orm";
 
 import { db } from "@/lib/db";
 import { contacts, documents, emailInbox, quoteRequests, sentEmails } from "@/lib/db/schema";
+import { gewoneAanvragen } from "@/lib/aanvraag-selectie";
 
 /** Na zoveel dagen stilte verschijnt het signaal. */
 export const OPVOLG_DAGEN = 5;
@@ -95,6 +96,7 @@ export async function aanvragenTeOpvolgen(): Promise<OpvolgAanvraag[]> {
     .from(quoteRequests)
     .where(
       and(
+        gewoneAanvragen,
         sql`${quoteRequests.status} in ('pending', 'accepted')`,
         sql`${LAATSTE_UIT} <= now() - make_interval(days => ${OPVOLG_DAGEN})`,
         sql`not exists (select 1 from ${emailInbox} where lower(${emailInbox.fromEmail}) = lower(${quoteRequests.email}) and ${emailInbox.receivedAt} > ${LAATSTE_UIT})`,

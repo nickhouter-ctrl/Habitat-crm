@@ -1,4 +1,4 @@
-import { desc, eq, sql } from "drizzle-orm";
+import { and, desc, eq, sql } from "drizzle-orm";
 import Link from "next/link";
 
 import { RowLink } from "@/components/row-link";
@@ -10,6 +10,7 @@ import {
   CardContent,
   EmptyState,
   PageHeader,
+  LinkButton,
   StatTile,
   TBody,
   Table,
@@ -19,6 +20,8 @@ import {
 } from "@/components/ui";
 import { db } from "@/lib/db";
 import { quoteRequests } from "@/lib/db/schema";
+import { gewoneAanvragen } from "@/lib/aanvraag-selectie";
+import { requireModuleRead } from "@/lib/auth/guards";
 import { formatDate } from "@/lib/utils";
 
 export const metadata = { title: "Aanvragen" };
@@ -34,12 +37,13 @@ export default async function QuoteRequestsPage({
 }: {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
+  await requireModuleRead('aanvragen');
   const sp = await searchParams;
   const status = typeof sp.status === "string" ? sp.status : "";
 
   const [rows, [counts]] = await Promise.all([
     db.query.quoteRequests.findMany({
-      where: status ? eq(quoteRequests.status, status) : undefined,
+      where: and(gewoneAanvragen, status ? eq(quoteRequests.status, status) : undefined),
       orderBy: desc(quoteRequests.createdAt),
       limit: 200,
     }),
@@ -49,7 +53,7 @@ export default async function QuoteRequestsPage({
         accepted: sql<number>`count(case when status = 'accepted' then 1 end)::int`,
         rejected: sql<number>`count(case when status = 'rejected' then 1 end)::int`,
       })
-      .from(quoteRequests),
+      .from(quoteRequests).where(gewoneAanvragen),
   ]);
 
   return (
@@ -57,7 +61,10 @@ export default async function QuoteRequestsPage({
       <PageHeader
         title="Aanvragen"
         subtitle="Offerte-aanvragen via de website — bekijk, accepteer of wijs af."
+        actions={<LinkButton href="/beurs/contacten" variant="secondary">Beurscontacten</LinkButton>}
       />
+
+      <p className="mb-4 text-sm text-muted">De contacten van de beurs staan bij <Link href="/beurs/contacten" className="text-accent underline">Beurscontacten</Link>. Persoonlijke mails en afspraken beheer je bij <Link href="/opvolging" className="text-accent underline">Opvolging</Link>.</p>
 
       <p className="mb-4 text-sm"><Link href="/accounts?source=windows" className="text-accent underline">Aanvragen kozijnensysteem bekijken en goedkeuren →</Link></p>
       <div className="mb-5 grid grid-cols-2 gap-3 sm:grid-cols-3">

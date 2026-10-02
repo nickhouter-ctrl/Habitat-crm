@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-const m=vi.hoisted(()=>({guard:vi.fn(),select:vi.fn(),claim:vi.fn(),mail:vi.fn(),attachments:vi.fn(),insert:vi.fn(),set:vi.fn()}));
+const m=vi.hoisted(()=>({guard:vi.fn(),select:vi.fn(),claim:vi.fn(),mail:vi.fn(),attachments:vi.fn(),insert:vi.fn(),set:vi.fn(),context:vi.fn(),ai:vi.fn()}));
 vi.mock('server-only',()=>({}));
 vi.mock('next/cache',()=>({revalidatePath:vi.fn()}));
 vi.mock('@/lib/auth/guards',()=>({requireModule:m.guard}));
@@ -7,10 +7,10 @@ vi.mock('@/lib/db',()=>({db:{select:()=>({from:()=>({where:m.select})}),insert:(
 vi.mock('@/lib/email',()=>({sendEmail:m.mail,persoonlijkeMail:(body:string)=>({html:body,text:body})}));
 vi.mock('@/lib/followup-mail-attachments',()=>({followupAttachments:m.attachments}));
 vi.mock('@/lib/sent-email',()=>({recordSentEmail:vi.fn()}));
-vi.mock('@/lib/partner-context',()=>({partnerContext:vi.fn(),partnerMailVisible:vi.fn()}));
+vi.mock('@/lib/partner-context',()=>({partnerContext:m.context,partnerMailVisible:vi.fn()}));
 vi.mock('@/lib/partner-mail-sync',()=>({syncPartnerSent:vi.fn()}));
-vi.mock('@/lib/ai-reply',()=>({genereerMailAntwoord:vi.fn()}));
-import { saveDraft, sendDraft, editDraft } from '../../app/(app)/beurs/opvolging/actions';
+vi.mock('@/lib/ai-reply',()=>({genereerMailAntwoord:m.ai}));
+import { saveDraft, sendDraft, editDraft, generateDraft } from '../../app/(app)/beurs/opvolging/actions';
 import { followupMailSource } from '../followup-mail';
 const id='00000000-0000-4000-8000-000000000001';
 const date=new Date('2026-09-30T12:00:00Z');
@@ -62,5 +62,22 @@ describe('voorstel bewaren en aanpassen',()=>{
  it('bewerken houdt de opgeslagen voorstelsoort en bijlagen intact',async()=>{
    const f=form();f.set('subject','Aangepast');f.set('body','Ander voorstel');m.claim.mockResolvedValue([draft]);
    expect((await editDraft({},f)).success).toBeTruthy();expect(m.set).toHaveBeenCalledWith({subject:'Aangepast',body:'Ander voorstel',updatedAt:expect.any(Date)});expect(m.mail).not.toHaveBeenCalled();
+ });
+});
+
+describe('persoonlijk uitwerken met behoud van het juiste voorstel',()=>{
+ it('gebruikt de actuele dossiercontext, eigen tekst, twee talen en echte bijlagen',async()=>{
+   m.select.mockResolvedValueOnce([{id,email:draft.toEmail,name:'Ana'}]).mockResolvedValueOnce([{interest:'interested',language:'es'}]);m.context.mockResolvedValue('Gesprek en ontvangen reactie');m.ai.mockResolvedValue({subject:'Ana, showroom',body:'Spaans / Engels'});
+   await generateDraft(id,'Bespreek hun nieuwe showroom','reseller','Ons concept met een handmatige aanpassing');
+   expect(m.ai).toHaveBeenCalledWith(expect.objectContaining({crmContext:'Gesprek en ontvangen reactie',medewerker:'Hans',taal:undefined,maxTokens:2000,beschikbareBijlagen:expect.arrayContaining(['habitat-one-showroom-compact-v1.jpg','habitat-one-showroom-large-v1.jpg'])}));
+   expect(m.ai.mock.calls[0][0].bericht).toContain('handmatige aanpassing');expect(m.ai.mock.calls[0][0].instructie).toContain('Geen consignatie');expect(m.ai.mock.calls[0][0].instructie).toContain('eerst Spaans en daarna Engels');
+   expect(m.insert).not.toHaveBeenCalled();expect(m.mail).not.toHaveBeenCalled();
+ });
+ it('maakt geen verkooppuntvoorstel wanneer iemand die interesse heeft afgewezen',async()=>{
+   m.select.mockResolvedValueOnce([{id,email:draft.toEmail,name:'Ana',type:'reseller'}]).mockResolvedValueOnce([{interest:'not_interested'}]);
+   await expect(generateDraft(id,'','reseller','Voorstel')).rejects.toThrow('verkooppuntinteresse');expect(m.ai).not.toHaveBeenCalled();
+ });
+ it('onbekende voorstelsoorten krijgen geen dossiergegevens of AI-toegang',async()=>{
+   await expect(generateDraft(id,'','../../.env','Voorstel')).rejects.toThrow();expect(m.context).not.toHaveBeenCalled();expect(m.ai).not.toHaveBeenCalled();
  });
 });

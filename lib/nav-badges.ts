@@ -6,13 +6,14 @@
  * betaalstatus van inkoop leeft alleen in Holded (keuze Nick 24-08-2026).
  */
 import "server-only";
-import { and, count, eq, inArray, isNull, sql } from "drizzle-orm";
+import { and, count, eq, isNull, sql } from "drizzle-orm";
 
 import { magPad } from "@/lib/auth/modules";
 import { voorstelZichtbaarVoor, mailZichtbaarVoor } from "@/lib/mail-visibility";
 import { db } from "@/lib/db";
 import { emailInbox, inboxSuggestions, purchaseInvoiceReviews, quoteRequests } from "@/lib/db/schema";
 import { openVoorstellenFilter } from "@/lib/assistant/achterhaald";
+import { gewoneAanvragen } from "@/lib/aanvraag-selectie";
 
 export async function verzamelNavBadges(rol?: string, userEmail?: string | null): Promise<Record<string, number>> {
   // Een teller op een menu-item dat iemand niet mag zien, hoeft niet geteld te
@@ -22,7 +23,7 @@ export async function verzamelNavBadges(rol?: string, userEmail?: string | null)
 
   const [[pending], [inboxNew], [teKeuren], [suggestions]] = await Promise.all([
     mag("/aanvragen")
-      ? db.select({ value: count() }).from(quoteRequests).where(eq(quoteRequests.status, "pending"))
+      ? db.select({ value: count() }).from(quoteRequests).where(and(gewoneAanvragen, eq(quoteRequests.status, "pending")))
       : nul,
     mag("/inbox")
       ? db

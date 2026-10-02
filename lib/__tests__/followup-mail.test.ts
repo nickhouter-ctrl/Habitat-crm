@@ -45,6 +45,13 @@ describe('passend voorstel zonder beroepen te veranderen',()=>{
     expect(body).toContain('agreed presentation investment');
     expect(body).not.toMatch(/consign|20%|first order|pay.*as you sell/i);
   });
+  it('maakt het voorstel passend bij het eigen bedrijf en de vastgelegde vragen',()=>{
+    const body=followupProposal('professional',{name:'Ana',company:'Estudio Ana',isFair:true,meetingDate:'',interests:['stalen','showroom','unknown']}).body;
+    expect(body).toContain('Pensando en Estudio Ana');expect(body).toContain('With Estudio Ana in mind');
+    expect(body).toContain('muestras');expect(body).toContain('samples');expect(body).toContain('our showroom in Jávea');
+    expect(body).not.toContain('unknown');expect(body).not.toContain('interest in pricing');
+    expect(followupProposal('professional',{name:'Ána García',company:'AnaGarcia',isFair:false,meetingDate:''}).body).not.toContain('With AnaGarcia in mind');
+  });
   it('gebruikt alleen bekende broncodes als bijlagenkeuze',()=>{
     expect(followupMailKind(followupMailSource('reseller'))).toBe('reseller');
     expect(followupMailKind('../../.env')).toBe('custom');

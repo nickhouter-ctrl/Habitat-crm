@@ -136,10 +136,11 @@ const NAV_GROUPS: { id: string; label: string | null; items: NavItem[] }[] = [
     label: "Klanten",
     items: [
       { href: "/contacts", label: "Contacten", icon: Users },
-      { href: "/aanvragen", label: "Aanvragen", icon: Inbox },
-      { href: "/beurs", label: "Beursstand", icon: QrCode, exact: true },
+      { href: "/beurs/contacten", label: "Beurscontacten", icon: Users },
       { href: "/opvolging", label: "Opvolging", icon: Send },
       { href: "/wederverkopers", label: "Verkooppunten", icon: Store },
+      { href: "/aanvragen", label: "Aanvragen", icon: Inbox },
+      { href: "/beurs", label: "Beursstand", icon: QrCode, exact: true },
       { href: "/accounts", label: "Website-accounts", icon: UserCog },
     ],
   },
