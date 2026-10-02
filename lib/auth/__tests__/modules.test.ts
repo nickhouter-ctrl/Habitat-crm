@@ -190,8 +190,10 @@ describe("guards in de code", () => {
         const src = readFileSync(f, "utf8");
         // _start slaat de guard bewust over: eigen tegelvoorkeuren.
         if (f.includes("/_start/")) return false;
-        // Een module, of iets strengers: beheerder of een mogelijkheid.
-        return !/require(?:Module\("|Admin|Capability)/.test(src);
+        // Een module, of iets strengers: beheerder of een mogelijkheid. Het
+        // aanhalingsteken doet niet mee: `requireModule('inkoop')` is dezelfde
+        // guard als met dubbele, en op dat verschil mag deze test niet vallen.
+        return !/require(?:Module\(["']|Admin|Capability)/.test(src);
       });
     expect(zonder.map((f) => f.replace(process.cwd() + "/", ""))).toEqual([]);
   });

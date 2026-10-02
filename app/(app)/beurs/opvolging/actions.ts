@@ -1,5 +1,5 @@
 "use server";
-import { and, eq, inArray, isNull, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, isNull, or, sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { requireModule } from "@/lib/auth/guards";
@@ -16,11 +16,41 @@ import { persoonlijkeMail, sendEmail } from "@/lib/email";
 import { followupAttachments } from "@/lib/followup-mail-attachments";
 import { followupDesigns, followupMailKind, followupMailSource, hasResellerInterest } from "@/lib/followup-mail";
 import { recordSentEmail } from "@/lib/sent-email";
-export type Result={error?:string;success?:string};
+import { isFairContact } from "@/lib/followup-source";
+import { FOLLOWUP_DONE, FOLLOWUP_REOPENED, followupCheckInput } from "@/lib/followup-checklist";
+import { followupCompletionFilter } from "@/lib/followup-checklist-data";
+/**
+ * Een bewaard concept, zoals de controlepopup het laat zien.
+ *
+ * `saveDraft` geeft dit terug zodat het scherm meteen kan tonen wát er klaar
+ * staat: naar wie, van wie, met welke bijlagen. Eerder moest je het concept
+ * verderop in de mailhistorie opzoeken om het te versturen, en dan weet je niet
+ * zeker of je naar het juiste kijkt.
+ */
+export type DraftSamenvatting={id:string;updatedAt:string;to:string;mailbox:string;afzender:string;subject:string;body:string;attachments:string[]};
+export type Result={error?:string;success?:string;draft?:DraftSamenvatting};
 class InputError extends Error {}
 function failure(e:unknown):Result { return {error:e instanceof InputError?e.message:e instanceof z.ZodError?e.issues[0].message:"Opslaan mislukt. Controleer de gegevens en probeer opnieuw."}; }
 function refresh(id?:string){revalidatePath('/opvolging');revalidatePath('/beurs/opvolging');revalidatePath('/wederverkopers');if(id){revalidatePath(`/opvolging/${id}`);revalidatePath(`/beurs/opvolging/${id}`);}}
 async function contact(id:string){const [c]=await db.select().from(contacts).where(eq(contacts.id,z.string().uuid().parse(id)));if(!c)throw new InputError('Contact niet gevonden.');return c;}
+export async function setFollowupCompleted(_:Result,fd:FormData):Promise<Result>{
+  const user=await requireModule('aanvragen');
+  try {
+    const d=followupCheckInput.parse({contactId:fd.get('contactId'),expectedEventId:fd.get('expectedEventId'),completed:fd.get('completed')??'off'});
+    await db.transaction(async tx=>{
+      const [c]=await tx.select({id:contacts.id}).from(contacts).where(eq(contacts.id,d.contactId)).for('update');
+      if(!c)throw new InputError('Contact niet gevonden.');
+      const [last]=await tx.select().from(activities).where(and(eq(activities.contactId,d.contactId),followupCompletionFilter)).orderBy(desc(activities.createdAt),desc(activities.id)).limit(1);
+      if((last?.id??'')!==d.expectedEventId)throw new InputError('De opvolgstatus is inmiddels gewijzigd. Vernieuw de lijst.');
+      const now=new Date(),today=now.toLocaleDateString('sv-SE',{timeZone:'Europe/Madrid'});
+      await tx.insert(activities).values({contactId:d.contactId,type:'note',subject:d.completed==='on'?FOLLOWUP_DONE:FOLLOWUP_REOPENED,body:d.completed==='on'?'Huidige opvolging afgehandeld. Relatie, mails en afspraken blijven bewaard.':'Opvolging opnieuw geopend.',authorId:user.id,createdAt:now,updatedAt:now});
+      if(d.completed==='on')await tx.update(activities).set({completedAt:now,updatedAt:now}).where(and(eq(activities.contactId,d.contactId),eq(activities.type,'task'),inArray(activities.subject,['Opvolging','Beursopvolging']),isNull(activities.completedAt),or(isNull(activities.dueAt),sql`(${activities.dueAt} at time zone 'Europe/Madrid')::date <= ${today}::date`)));
+      else if(last?.subject===FOLLOWUP_DONE)await tx.update(activities).set({completedAt:null,updatedAt:now}).where(and(eq(activities.contactId,d.contactId),eq(activities.type,'task'),inArray(activities.subject,['Opvolging','Beursopvolging']),eq(activities.completedAt,last.createdAt)));
+    });
+    revalidatePath('/agenda');revalidatePath('/');revalidatePath(`/contacts/${d.contactId}`);refresh(d.contactId);
+    return{success:d.completed==='on'?'Opvolging afgehandeld.':'Opvolging heropend.'};
+  }catch(e){return failure(e);}
+}
 export async function saveProfile(_:Result,fd:FormData):Promise<Result>{
   const user=await requireModule('aanvragen');
   try {const d=profileInput.parse(Object.fromEntries(fd));
@@ -37,6 +67,10 @@ export async function saveProfile(_:Result,fd:FormData):Promise<Result>{
         if(task)await tx.update(activities).set(values).where(eq(activities.id,task.id));
         else await tx.insert(activities).values({contactId:d.contactId,type:'task',subject:'Opvolging',authorId:user.id,...values});
       }else if(task)await tx.update(activities).set({completedAt:new Date(),updatedAt:new Date()}).where(eq(activities.id,task.id));
+      if(d.nextAction&&(old?.nextAction!==d.nextAction||old?.nextActionOn!==(d.nextActionOn||null))){
+        const [last]=await tx.select().from(activities).where(and(eq(activities.contactId,d.contactId),followupCompletionFilter)).orderBy(desc(activities.createdAt),desc(activities.id)).limit(1);
+        if(last?.subject===FOLLOWUP_DONE){const reopenedAt=new Date();await tx.insert(activities).values({contactId:d.contactId,type:'note',subject:FOLLOWUP_REOPENED,body:'Nieuwe volgende actie vastgelegd.',authorId:user.id,createdAt:reopenedAt,updatedAt:reopenedAt});}
+      }
       await tx.insert(activities).values({contactId:d.contactId,type:'note',subject:'Verkooppuntdossier bijgewerkt',body:JSON.stringify({before:old,after:values}),authorId:user.id});
     });revalidatePath('/agenda');refresh(d.contactId);return{success:'Dossier opgeslagen. Beroep en oorspronkelijke gegevens blijven bewaard.'};
   }catch(e){return failure(e);}
@@ -58,7 +92,9 @@ export async function saveDraft(_:Result,fd:FormData):Promise<Result>{
     }
     const mailbox=(isMarketingGebruiker(user.email)?marketingMailbox():process.env.GMAIL_USER?.trim().toLowerCase());if(!mailbox)throw new InputError('Geen afzender ingesteld.');
     const attachments=await followupAttachments(d.templateKind);
-    await db.insert(partnerMessages).values({contactId:d.contactId,subject:d.subject,body:d.body,source:followupMailSource(d.templateKind),attachments:attachments.map(a=>({name:a.filename,size:Buffer.byteLength(a.content)})),toEmail:to,mailboxUser:mailbox,authorId:user.id});refresh(d.contactId);return{success:'Concept met bijlagen bewaard. Controleer het hieronder voordat je verstuurt.'};
+    const [bewaard]=await db.insert(partnerMessages).values({contactId:d.contactId,subject:d.subject,body:d.body,source:followupMailSource(d.templateKind),attachments:attachments.map(a=>({name:a.filename,size:Buffer.byteLength(a.content)})),toEmail:to,mailboxUser:mailbox,authorId:user.id}).returning();
+    refresh(d.contactId);
+    return{success:'Concept met bijlagen bewaard. Controleer het en verstuur het hier.',draft:{id:bewaard.id,updatedAt:bewaard.updatedAt.toISOString(),to,mailbox,afzender:d.templateKind==='custom'?(user.name??'Habitat One'):'Hans',subject:d.subject,body:d.body,attachments:attachments.map(a=>a.filename)}};
   }catch(e){return failure(e);}
 }
 export async function generateDraft(id:string,instruction:string,proposalKind:unknown='custom',currentDraft:unknown=''){
@@ -89,7 +125,7 @@ export async function sendDraft(_:Result,fd:FormData):Promise<Result>{
       .where(and(eq(partnerMessages.id,id),eq(partnerMessages.status,'draft'),eq(partnerMessages.updatedAt,new Date(seen)))).returning();
     if(!claimed)throw new InputError('Dit concept wordt al verstuurd.');
     try {
-      const r=await sendEmail({to:d.toEmail,subject:d.subject,html:rendered.html,text:rendered.text,attachments,fromUser:{name:kind==='custom'?user.name:'Hans'},fromMailbox:d.mailboxUser===marketingMailbox()?'marketing':'main',noCompanyBcc:d.mailboxUser===marketingMailbox()});
+      const r=await sendEmail({to:d.toEmail,subject:d.subject,html:rendered.html,text:rendered.text,attachments,fromUser:{name:kind==='custom'?user.name:'Hans'},fromMailbox:d.mailboxUser===marketingMailbox()?'marketing':'main',noCompanyBcc:d.mailboxUser===marketingMailbox(),copyPolicy:isFairContact(c)?'nick-frederique':undefined});
       if(!r.sent)throw new Error('Mailprovider bevestigt geen verzending');
       await db.update(partnerMessages).set({status:'sent',messageId:r.messageId??null,sentAt:new Date(),updatedAt:new Date()}).where(eq(partnerMessages.id,id));
       await recordSentEmail({kind:'other',contactId:c.id,toEmail:d.toEmail,subject:d.subject,html:rendered.html,text:rendered.text});
