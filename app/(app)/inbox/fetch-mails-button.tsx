@@ -1,4 +1,5 @@
 "use client";
+import { useT as useUiTranslation } from '@/components/taal-provider';
 
 import { useState, useTransition } from "react";
 import { RefreshCw } from "lucide-react";
@@ -9,6 +10,7 @@ import { fetchMails } from "./actions";
 
 /** Knop op /inbox om handmatig nieuwe mails via IMAP op te halen. */
 export function FetchMailsButton() {
+  const uiT = useUiTranslation();
   const [pending, start] = useTransition();
   const [result, setResult] = useState<string | null>(null);
 
@@ -36,10 +38,10 @@ export function FetchMailsButton() {
           })
         }
         className={buttonClass({ variant: "secondary" })}
-        title="Nieuwe mails ophalen via IMAP"
+        title={uiT("Nieuwe mails ophalen via IMAP")}
       >
         <RefreshCw className={`h-4 w-4${pending ? " animate-spin" : ""}`} />
-        {pending ? "Bezig…" : "Mails ophalen"}
+        {pending ? uiT("Bezig…") : uiT("Mails ophalen")}
       </button>
       {result && <span className="text-xs text-muted">{result}</span>}
     </div>

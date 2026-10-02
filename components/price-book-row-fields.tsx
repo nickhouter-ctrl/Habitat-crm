@@ -1,4 +1,5 @@
 "use client";
+import { useT as useUiTranslation } from '@/components/taal-provider';
 
 /**
  * De rekenvelden van een prijzenboek-rij: factor, snijverlies, kostopbouw
@@ -38,6 +39,7 @@ export function PriceBookRowFields({
   marginPct: string;
   priceEur: string;
 }) {
+  const uiT = useUiTranslation();
   const urenRef = useRef<HTMLInputElement>(null);
   const materiaalRef = useRef<HTMLInputElement>(null);
   const kostRef = useRef<HTMLInputElement>(null);
@@ -69,14 +71,14 @@ export function PriceBookRowFields({
 
   return (
     <div className="contents">
-      <Input name="factor" defaultValue={factor} className="text-right" title="Factor: aantal = maat × factor" />
+      <Input name="factor" defaultValue={factor} className="text-right" title={uiT("Factor: aantal = maat × factor")} />
       <Input
         name="wastePct"
         defaultValue={wastePct}
         inputMode="decimal"
         className="text-right"
         placeholder="0"
-        title="Snijverlies in %: wordt automatisch bij het aantal opgeteld (tegels, panelen, plankvloeren)"
+        title={uiT("Snijverlies in %: wordt automatisch bij het aantal opgeteld (tegels, panelen, plankvloeren)")}
       />
       <Input
         ref={urenRef}
@@ -86,7 +88,7 @@ export function PriceBookRowFields({
         inputMode="decimal"
         className="text-right"
         placeholder="—"
-        title={`Uren ploeg per eenheid — × € ${UURTARIEF_ONDERAANNEMER}/uur`}
+        title={uiT("Uren ploeg per eenheid — × € {v0}/uur", { v0: UURTARIEF_ONDERAANNEMER })}
       />
       <Input
         ref={materiaalRef}
@@ -96,21 +98,21 @@ export function PriceBookRowFields({
         inputMode="decimal"
         className="text-right"
         placeholder="—"
-        title="Materiaalkost per eenheid (excl. btw)"
+        title={uiT("Materiaalkost per eenheid (excl. btw)")}
       />
       <Input
         ref={kostRef}
         name="costEur"
         defaultValue={costEur}
         onChange={herberekenPrijs}
-        placeholder="kost"
+        placeholder={uiT("kost")}
         inputMode="decimal"
         readOnly={afgeleid}
         className={`text-right ${afgeleid ? "bg-background/60 text-muted" : ""}`}
         title={
           afgeleid
-            ? `Afgeleid: uren × € ${UURTARIEF_ONDERAANNEMER} + materiaal. Maak uren en materiaal leeg om zelf een kost te typen.`
-            : "Onze kost per eenheid (excl. btw)"
+            ? uiT("Afgeleid: uren × € {v0} + materiaal. Maak uren en materiaal leeg om zelf een kost te typen.", { v0: UURTARIEF_ONDERAANNEMER })
+            : uiT("Onze kost per eenheid (excl. btw)")
         }
       />
       <Input
@@ -120,16 +122,16 @@ export function PriceBookRowFields({
         onChange={herberekenPrijs}
         inputMode="decimal"
         className="text-right"
-        title="Marge, % van de verkoopprijs"
+        title={uiT("Marge, % van de verkoopprijs")}
       />
       <Input
         ref={prijsRef}
         name="priceEur"
         defaultValue={priceEur}
-        placeholder="auto"
+        placeholder={uiT("auto")}
         inputMode="decimal"
         className="text-right font-semibold"
-        title="Verkoop per eenheid (excl. btw) — rekent mee met kost en marge, overtypen mag"
+        title={uiT("Verkoop per eenheid (excl. btw) — rekent mee met kost en marge, overtypen mag")}
       />
     </div>
   );

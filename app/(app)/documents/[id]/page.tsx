@@ -1,3 +1,5 @@
+import { datumTaal } from "@/lib/i18n/server";
+import { tekst as uiTranslation } from '@/lib/i18n/server';
 import { and, asc, eq, inArray, ne, or } from "drizzle-orm";
 import { headers } from "next/headers";
 import Link from "next/link";
@@ -89,6 +91,8 @@ export default async function DocumentDetailPage({
   params: Promise<{ id: string }>;
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
+  const uiDateLocale = await datumTaal();
+  const uiT = await uiTranslation();
   const { id } = await params;
   const sp = await searchParams;
   const pakbonId = typeof sp.pakbon === "string" ? sp.pakbon : null;
@@ -379,7 +383,7 @@ export default async function DocumentDetailPage({
     : null;
 
   const partyName = doc.contact?.name ?? doc.company?.name ?? null;
-  const kindLabel = documentKindMeta[doc.kind];
+  const kindLabel = uiT(documentKindMeta[doc.kind]);
   // Facturatie-check: welke verplichte klantgegevens ontbreken (blokkeert versturen).
   // Bedrijf: van de factuur zelf, anders dat van het contact (zakelijke klant) —
   // zelfde volgorde als de PDF-route, anders vraagt de check een NIE/BSN van een SL.
@@ -421,17 +425,16 @@ export default async function DocumentDetailPage({
           <span className="flex flex-wrap items-center gap-3">
             {kindLabel} {doc.docNumber ?? ""}
             <Badge tone={documentStatusMeta[doc.status].tone}>
-              {documentStatusMeta[doc.status].label}
+              {uiT(documentStatusMeta[doc.status].label)}
             </Badge>
-            {linkedInvoices.length > 0 && <Badge tone="success">Gefactureerd</Badge>}
+            {linkedInvoices.length > 0 && <Badge tone="success">{uiT("Gefactureerd")}</Badge>}
           </span>
         }
-        subtitle={doc.title ?? (partyName ? `Voor ${partyName}` : undefined)}
+        subtitle={doc.title ?? (partyName ? uiT("Voor {v0}", { v0: partyName }) : undefined)}
         actions={
           <>
             <Link href={doc.kind === "invoice" ? "/invoices" : "/quotes"} className="text-sm text-muted hover:underline">
-              ← Terug
-            </Link>
+              {uiT("← Terug")} </Link>
             <a
               href={`/documents/${id}/pdf`}
               target="_blank"
@@ -441,8 +444,7 @@ export default async function DocumentDetailPage({
               PDF
             </a>
             <LinkButton href={`/documents/${id}/edit`} variant="secondary">
-              Bewerken
-            </LinkButton>
+              {uiT("Bewerken")} </LinkButton>
           </>
         }
       />
@@ -456,13 +458,12 @@ export default async function DocumentDetailPage({
       {invoiceMissing.length > 0 && (
         <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900">
           <span>
-            <strong>Klantgegevens onvolledig</strong> — deze factuur kan niet verstuurd of goedgekeurd worden. Ontbreekt:{" "}
+            <strong>{uiT("Klantgegevens onvolledig")}</strong> {uiT("— deze factuur kan niet verstuurd of goedgekeurd worden. Ontbreekt:")}{" "}
             <strong>{invoiceMissing.join(", ")}</strong>.
           </span>
           {doc.contact?.id && (
             <LinkButton href={`/contacts/${doc.contact.id}/edit`} variant="secondary" className="shrink-0 text-xs">
-              Klant aanvullen
-            </LinkButton>
+              {uiT("Klant aanvullen")} </LinkButton>
           )}
         </div>
       )}
@@ -478,8 +479,8 @@ export default async function DocumentDetailPage({
           <div className="mb-2 flex items-center justify-between gap-3">
             <p className={`text-sm font-medium ${klantAkkoord ? "text-amber-900" : "text-muted"}`}>
               {klantAkkoord
-                ? `📦 ${bestelRegels.length} artikel${bestelRegels.length === 1 ? "" : "en"} nog te bestellen bij ${bestelMerkenInDoc.join(" en ")}`
-                : `${bestelRegels.length} artikel${bestelRegels.length === 1 ? "" : "en"} van ${bestelMerkenInDoc.join(" en ")} — wordt op bestelling geleverd`}
+                ? uiT("📦 {v0} artikel{v1} nog te bestellen bij {v2}", { v0: bestelRegels.length, v1: bestelRegels.length === 1 ? "" : "en", v2: bestelMerkenInDoc.join(" en ") })
+                : uiT("{v0} artikel{v1} van {v2} — wordt op bestelling geleverd", { v0: bestelRegels.length, v1: bestelRegels.length === 1 ? "" : "en", v2: bestelMerkenInDoc.join(" en ") })}
             </p>
             {klantAkkoord && (
               <LinkButton
@@ -487,8 +488,7 @@ export default async function DocumentDetailPage({
                 variant="primary"
                 className="text-xs"
               >
-                → Bestellen
-              </LinkButton>
+                {uiT("→ Bestellen")} </LinkButton>
             )}
           </div>
           <ul className={`space-y-1 text-xs ${klantAkkoord ? "text-amber-900" : "text-muted"}`}>
@@ -496,14 +496,13 @@ export default async function DocumentDetailPage({
               <li key={p.sku} className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
                 <span className="font-medium">{p.name}</span>
                 <span className="font-mono opacity-70">{p.sku}</span>
-                <span className="opacity-80">· {p.units} stuks</span>
+                <span className="opacity-80">· {p.units} {uiT("stuks")}</span>
               </li>
             ))}
           </ul>
           {!klantAkkoord && (
             <p className="mt-2 text-xs text-muted">
-              Zodra de klant akkoord is, staat hier de bestelopdracht.
-            </p>
+              {uiT("Zodra de klant akkoord is, staat hier de bestelopdracht.")} </p>
           )}
         </div>
       )}
@@ -512,15 +511,13 @@ export default async function DocumentDetailPage({
         <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 p-4">
           <div className="mb-2 flex items-center justify-between gap-3">
             <p className="text-sm font-medium text-amber-900">
-              ⚠️ {echtTekort.length} product{echtTekort.length === 1 ? "" : "en"} (bijna) niet op voorraad
-            </p>
+              ⚠️ {echtTekort.length} {uiT(echtTekort.length === 1 ? "product" : "producten")} {uiT("(bijna) niet op voorraad")} </p>
             <LinkButton
               href={`/bestellen?q=${encodeURIComponent(echtTekort[0].sku)}`}
               variant="primary"
               className="text-xs"
             >
-              → Bestellen
-            </LinkButton>
+              {uiT("→ Bestellen")} </LinkButton>
           </div>
           <ul className="space-y-1 text-xs text-amber-900">
             {echtTekort.map((p) => (
@@ -528,11 +525,11 @@ export default async function DocumentDetailPage({
                 <span className="font-medium">{p.name}</span>
                 <span className="font-mono text-amber-700">{p.sku}</span>
                 <span className="text-amber-700">
-                  · voorraad {p.stock}, nodig {p.units}
+                  {uiT("· voorraad")} {p.stock}{uiT(", nodig")} {p.units}
                 </span>
                 {p.toOrder > 0 && (
                   <span className="rounded bg-amber-200 px-1.5 py-0.5 font-medium">
-                    minimaal bestellen: {p.toOrder}
+                    {uiT("minimaal bestellen:")} {p.toOrder}
                   </span>
                 )}
               </li>
@@ -544,19 +541,16 @@ export default async function DocumentDetailPage({
       {pakbonDoc && (
         <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-md border border-accent/40 bg-accent/10 px-3 py-2 text-sm">
           <span>
-            ✓ Pakbon <strong>{pakbonDoc.docNumber ?? ""}</strong> klaargezet met dezelfde regels (zonder prijzen).
-          </span>
+            {uiT("✓ Pakbon")} <strong>{pakbonDoc.docNumber ?? ""}</strong> {uiT("klaargezet met dezelfde regels (zonder prijzen).")} </span>
           <Link href={`/documents/${pakbonDoc.id}`} className="font-medium text-accent hover:underline">
-            Open pakbon →
-          </Link>
+            {uiT("Open pakbon →")} </Link>
         </div>
       )}
 
       {doc.kind === "estimate" && linkedInvoices.length > 0 && (
         <div className="mb-4 rounded-lg border border-accent/40 bg-accent/10 p-4">
           <p className="mb-2 text-sm font-medium">
-            Gefactureerd — {linkedInvoices.length} factu{linkedInvoices.length === 1 ? "ur" : "ren"} van deze offerte
-          </p>
+            {uiT("Gefactureerd —")} {linkedInvoices.length} {uiT(linkedInvoices.length === 1 ? "factuur" : "facturen")} {uiT("van deze offerte")} </p>
           <ul className="space-y-1.5 text-sm">
             {linkedInvoices.map((inv) => {
               const total = Number(inv.totalEur ?? 0);
@@ -570,10 +564,10 @@ export default async function DocumentDetailPage({
               return (
                 <li key={inv.id} className="flex flex-wrap items-center gap-x-2 gap-y-1">
                   <Link href={`/documents/${inv.id}`} className="font-medium text-accent hover:underline">
-                    {inv.docNumber ?? "(concept)"}
+                    {inv.docNumber ?? uiT("(concept)")}
                   </Link>
                   <Badge tone={documentStatusMeta[inv.status].tone}>
-                    {documentStatusMeta[inv.status].label}
+                    {uiT(documentStatusMeta[inv.status].label)}
                   </Badge>
                   <span className="tabular-nums">{formatEUR(total)}</span>
                   <span className="text-muted">· {betaling}</span>
@@ -588,41 +582,41 @@ export default async function DocumentDetailPage({
         <div className="mb-4 flex flex-wrap items-center gap-2 rounded-md border border-border bg-muted/30 px-3 py-2 text-sm">
           <span className="text-muted">
             {sourceEstimate.kind === "invoice"
-              ? "Aangepaste factuur — vervangt"
+              ? uiT("Aangepaste factuur — vervangt")
               : doc.kind === "proforma"
-                ? "Voorschot bij offerte"
-                : "Gemaakt van offerte"}
+                ? uiT("Voorschot bij offerte")
+                : uiT("Gemaakt van offerte")}
           </span>
           <Link href={`/documents/${sourceEstimate.id}`} className="font-medium text-accent hover:underline">
-            {sourceEstimate.docNumber ?? (sourceEstimate.kind === "invoice" ? "(factuur)" : "(offerte)")} →
+            {sourceEstimate.docNumber ?? (sourceEstimate.kind === "invoice" ? uiT("(factuur)") : uiT("(offerte)"))} →
           </Link>
         </div>
       )}
 
       {doc.kind === "invoice" && linkedCreditNotes.length > 0 && (
         <div className="mb-4 flex flex-wrap items-center gap-x-3 gap-y-1 rounded-md border border-border bg-muted/30 px-3 py-2 text-sm">
-          <span className="text-muted">Verrekening:</span>
+          <span className="text-muted">{uiT("Verrekening:")}</span>
           {linkedCreditNotes.map((cn) => (
             <Link key={cn.id} href={`/documents/${cn.id}`} className="font-medium text-accent hover:underline">
-              {cn.docNumber ?? "(creditnota)"} ({formatEUR(-Number(cn.totalEur ?? 0))}
-              {cn.status === "draft" ? " · concept" : ""}) →
+              {cn.docNumber ?? uiT("(creditnota)")} ({formatEUR(-Number(cn.totalEur ?? 0))}
+              {cn.status === "draft" ? uiT(" · concept") : ""}) →
             </Link>
           ))}
           <span className={restNaCredit <= 0.01 ? "font-medium text-success" : "text-muted"}>
             {restNaCredit <= 0.01
-              ? "✓ volledig verrekend — er staat niets meer open"
-              : `nog ${formatEUR(restNaCredit)} open na verrekening`}
+              ? uiT("✓ volledig verrekend — er staat niets meer open")
+              : uiT("nog {v0} open na verrekening", { v0: formatEUR(restNaCredit) })}
           </span>
         </div>
       )}
 
       {doc.kind === "invoice" && replacementInvoices.length > 0 && (
         <div className="mb-4 flex flex-wrap items-center gap-2 rounded-md border border-border bg-muted/30 px-3 py-2 text-sm">
-          <span className="text-muted">Vervangen door aangepaste factuur</span>
+          <span className="text-muted">{uiT("Vervangen door aangepaste factuur")}</span>
           {replacementInvoices.map((f) => (
             <Link key={f.id} href={`/documents/${f.id}`} className="font-medium text-accent hover:underline">
-              {f.docNumber ?? "(factuur)"}
-              {f.status === "draft" ? " (concept)" : ""} →
+              {f.docNumber ?? uiT("(factuur)")}
+              {f.status === "draft" ? uiT(" (concept)") : ""} →
             </Link>
           ))}
         </div>
@@ -630,14 +624,14 @@ export default async function DocumentDetailPage({
 
       {doc.kind === "invoice" && linkedDeliveryNotes.length > 0 && (
         <div className="mb-4 flex flex-wrap items-center gap-x-3 gap-y-1 rounded-md border border-border bg-muted/30 px-3 py-2 text-sm">
-          <span className="text-muted">Pakbon{linkedDeliveryNotes.length === 1 ? "" : "nen"}:</span>
+          <span className="text-muted">{uiT(linkedDeliveryNotes.length === 1 ? "Pakbon" : "Pakbonnen")}:</span>
           {linkedDeliveryNotes.map((p) => (
             <Link key={p.id} href={`/documents/${p.id}`} className="flex items-center gap-1.5 hover:underline">
-              <span className="font-medium">{p.docNumber ?? "pakbon"}</span>
+              <span className="font-medium">{p.docNumber ?? uiT("pakbon")}</span>
               {p.deliveredAt ? (
-                <Badge tone="success">Afgeleverd {formatDate(p.deliveredAt)}</Badge>
+                <Badge tone="success">{uiT("Afgeleverd")} {formatDate(p.deliveredAt, uiDateLocale)}</Badge>
               ) : (
-                <Badge tone="neutral">Niet afgeleverd</Badge>
+                <Badge tone="neutral">{uiT("Niet afgeleverd")}</Badge>
               )}
             </Link>
           ))}
@@ -646,14 +640,12 @@ export default async function DocumentDetailPage({
 
       {sp.voorraad === "dubbel" && (
         <div className="mb-4 rounded-md border border-warning/40 bg-warning/10 px-3 py-2 text-sm text-warning">
-          ⚠ Voorraad is voor deze deal al afgeboekt
-          {typeof sp.doc === "string" && sp.doc ? (
-            <> op <strong>{sp.doc}</strong></>
+          {uiT("⚠ Voorraad is voor deze deal al afgeboekt")} {typeof sp.doc === "string" && sp.doc ? (
+            <> {uiT("op")} <strong>{sp.doc}</strong></>
           ) : (
-            " op een ander document"
+            uiT(" op een ander document")
           )}{" "}
-          — niet nogmaals afgeboekt, zodat je niet dubbel telt.
-        </div>
+          {uiT("— niet nogmaals afgeboekt, zodat je niet dubbel telt.")} </div>
       )}
 
       {doc.kind === "invoice" &&
@@ -661,13 +653,10 @@ export default async function DocumentDetailPage({
         items.some((it) => it.productId && it.units) && (
           <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-md border border-warning/40 bg-warning/10 px-3 py-2 text-sm">
             <span className="text-warning">
-              ⚠ Voorraad voor deze factuur is nog niet afgeboekt. Dit gebeurt automatisch zodra
-              de factuur verzonden of betaald is — of doe het nu meteen:
-            </span>
+              {uiT("⚠ Voorraad voor deze factuur is nog niet afgeboekt. Dit gebeurt automatisch zodra de factuur verzonden of betaald is — of doe het nu meteen:")} </span>
             <form action={applyStockOutFromDocument.bind(null, id)}>
-              <SubmitButton size="sm" variant="primary" pendingLabel="Bezig…">
-                → Voorraad afboeken
-              </SubmitButton>
+              <SubmitButton size="sm" variant="primary" pendingLabel={uiT("Bezig…")}>
+                {uiT("→ Voorraad afboeken")} </SubmitButton>
             </form>
           </div>
         )}
@@ -676,11 +665,11 @@ export default async function DocumentDetailPage({
         <div className="space-y-4">
           <Card>
             <CardHeader>
-              <CardTitle>Gegevens</CardTitle>
+              <CardTitle>{uiT("Gegevens")}</CardTitle>
             </CardHeader>
             <CardContent>
               <dl className="grid grid-cols-2 gap-x-3 gap-y-2 text-sm">
-                <dt className="text-muted">Klant</dt>
+                <dt className="text-muted">{uiT("Klant")}</dt>
                 <dd>
                   {doc.contact ? (
                     <Link href={`/contacts/${doc.contact.id}`} className="hover:underline">
@@ -690,7 +679,7 @@ export default async function DocumentDetailPage({
                     partyName ?? "—"
                   )}
                 </dd>
-                <dt className="text-muted">Deal</dt>
+                <dt className="text-muted">{uiT("Deal")}</dt>
                 <dd>
                   {doc.deal ? (
                     <Link href={`/deals/${doc.deal.id}`} className="hover:underline">
@@ -700,7 +689,7 @@ export default async function DocumentDetailPage({
                     "—"
                   )}
                 </dd>
-                <dt className="text-muted">Pand</dt>
+                <dt className="text-muted">{uiT("Pand")}</dt>
                 <dd>
                   {doc.property ? (
                     <Link href={`/properties/${doc.property.id}`} className="hover:underline">
@@ -710,7 +699,7 @@ export default async function DocumentDetailPage({
                     "—"
                   )}
                 </dd>
-                <dt className="text-muted">Project</dt>
+                <dt className="text-muted">{uiT("Project")}</dt>
                 <dd>
                   {doc.project ? (
                     <Link href={`/projects/${doc.project.id}`} className="hover:underline">
@@ -720,11 +709,11 @@ export default async function DocumentDetailPage({
                     "—"
                   )}
                 </dd>
-                <dt className="text-muted">Datum</dt>
-                <dd>{formatDate(doc.issueDate)}</dd>
-                <dt className="text-muted">Vervaldatum</dt>
-                <dd>{formatDate(doc.dueDate)}</dd>
-                <dt className="text-muted">Betaald</dt>
+                <dt className="text-muted">{uiT("Datum")}</dt>
+                <dd>{formatDate(doc.issueDate, uiDateLocale)}</dd>
+                <dt className="text-muted">{uiT("Vervaldatum")}</dt>
+                <dd>{formatDate(doc.dueDate, uiDateLocale)}</dd>
+                <dt className="text-muted">{uiT("Betaald")}</dt>
                 <dd className="tabular-nums">{formatEUR(doc.paidEur)}</dd>
               </dl>
             </CardContent>
@@ -732,43 +721,38 @@ export default async function DocumentDetailPage({
 
           <Card>
             <CardHeader>
-              <CardTitle>Versturen & status</CardTitle>
+              <CardTitle>{uiT("Versturen & status")}</CardTitle>
             </CardHeader>
             <CardContent className="space-y-3 text-sm">
               <LinkButton href={`/documents/${id}/verzenden`} size="sm">
-                {doc.sentAt ? "Opnieuw versturen" : "Versturen naar klant"}
+                {doc.sentAt ? uiT("Opnieuw versturen") : uiT("Versturen naar klant")}
               </LinkButton>
 
               {sp.verzonden === "bezig" && (
                 <p className="rounded-md bg-accent/10 px-3 py-2 text-sm font-medium text-accent">
-                  📨 De mail wordt op de achtergrond verstuurd — je kunt gewoon verder. In de
-                  tijdlijn verschijnt zo de bevestiging.
-                </p>
+                  {uiT("📨 De mail wordt op de achtergrond verstuurd — je kunt gewoon verder. In de tijdlijn verschijnt zo de bevestiging.")} </p>
               )}
               {sp.verzonden === "verzonden" && (
                 <p className="rounded-md bg-success/10 px-3 py-2 text-sm font-medium text-success">
-                  ✓ Mail verstuurd naar de klant.
-                </p>
+                  {uiT("✓ Mail verstuurd naar de klant.")} </p>
               )}
               {sp.verzonden === "geenmail" && (
                 <p className="rounded-md bg-warning/10 px-3 py-2 text-sm text-warning">
-                  De klant-link is aangemaakt, maar de mail kon niet verstuurd worden.
-                </p>
+                  {uiT("De klant-link is aangemaakt, maar de mail kon niet verstuurd worden.")} </p>
               )}
               {sp.verzonden === "geenadres" && (
                 <p className="rounded-md bg-warning/10 px-3 py-2 text-sm text-warning">
-                  Verstuurd zonder mail — dit contact heeft geen e-mailadres.
-                </p>
+                  {uiT("Verstuurd zonder mail — dit contact heeft geen e-mailadres.")} </p>
               )}
 
               {doc.sentAt && (
                 <div className="space-y-1.5 rounded-md bg-background px-3 py-2">
                   <p className="text-muted">
-                    Verstuurd op <span className="text-foreground">{formatDate(doc.sentAt)}</span>
+                    {uiT("Verstuurd op")} <span className="text-foreground">{formatDate(doc.sentAt, uiDateLocale)}</span>
                   </p>
                   {publicUrl && (
                     <p className="break-all">
-                      Klant-link:{" "}
+                      {uiT("Klant-link:")}{" "}
                       <a href={publicUrl} target="_blank" rel="noopener noreferrer" className="text-accent hover:underline">
                         {publicUrl}
                       </a>
@@ -776,25 +760,24 @@ export default async function DocumentDetailPage({
                   )}
                   {publicUrl && doc.requiresContract && (
                     <p className="break-all">
-                      Overeenkomst:{" "}
+                      {uiT("Overeenkomst:")}{" "}
                       <a
                         href={`${publicUrl}/contract`}
                         target="_blank"
                         rel="noopener noreferrer"
                         className="text-accent hover:underline"
                       >
-                        {publicUrl}/contract
-                      </a>
+                        {publicUrl}{uiT("/contract")} </a>
                     </p>
                   )}
                   {doc.signature ? (
                     <div className="font-medium text-success">
                       <p>
-                        ✍️ Ondertekend door {doc.signature.name} op {formatDate(doc.signature.signedAt)}
+                        {uiT("✍️ Ondertekend door")} {doc.signature.name} {uiT("op")} {formatDate(doc.signature.signedAt, uiDateLocale)}
                       </p>
                       <p className="text-[11px] font-normal text-muted">
-                        {doc.signature.email} · IP {doc.signature.ip ?? "onbekend"} · vingerafdruk{" "}
-                        {doc.signature.snapshotSha256.slice(0, 12)} · versie {doc.signature.termsVersion}
+                        {doc.signature.email} {uiT("· IP")} {doc.signature.ip ?? uiT("onbekend")} {uiT("· vingerafdruk")}{" "}
+                        {doc.signature.snapshotSha256.slice(0, 12)} {uiT("· versie")} {doc.signature.termsVersion}
                       </p>
                       <a
                         href={`/documents/${id}/contract/pdf`}
@@ -802,20 +785,19 @@ export default async function DocumentDetailPage({
                         rel="noopener noreferrer"
                         className="text-[11px] font-normal text-accent hover:underline"
                       >
-                        ↓ Getekende overeenkomst (PDF)
-                      </a>
+                        {uiT("↓ Getekende overeenkomst (PDF)")} </a>
                     </div>
                   ) : doc.acceptedAt ? (
                     <p className="font-medium text-success">
-                      ✓ Geaccepteerd door klant op {formatDate(doc.acceptedAt)}
+                      {uiT("✓ Geaccepteerd door klant op")} {formatDate(doc.acceptedAt, uiDateLocale)}
                     </p>
                   ) : doc.rejectedAt ? (
                     <p className="text-danger">
-                      Afgewezen op {formatDate(doc.rejectedAt)}
+                      {uiT("Afgewezen op")} {formatDate(doc.rejectedAt, uiDateLocale)}
                       {doc.rejectReason ? ` — ${doc.rejectReason}` : ""}
                     </p>
                   ) : (
-                    <p className="text-muted">Nog geen reactie van de klant.</p>
+                    <p className="text-muted">{uiT("Nog geen reactie van de klant.")}</p>
                   )}
                 </div>
               )}
@@ -823,78 +805,71 @@ export default async function DocumentDetailPage({
               {doc.kind === "estimate" && !doc.signature && (
                 <form action={contractAction} className="rounded-md bg-background px-3 py-2.5">
                   <p className="text-xs font-medium text-muted">
-                    {doc.requiresContract ? "✓ Contract vereist" : "Contract vereist"}
+                    {doc.requiresContract ? uiT("✓ Contract vereist") : uiT("Contract vereist")}
                   </p>
                   <p className="mb-2 text-[11px] text-muted">
                     {doc.requiresContract
-                      ? "De klant ondertekent een aannemingsovereenkomst — met bevestiging per onderwerp (meerwerk, onvoorziene kosten, stelposten, betaling) in plaats van één klik op akkoord."
-                      : "Zet dit aan bij een volledige verbouwing: de klant tekent dan een overeenkomst in plaats van alleen op 'akkoord' te klikken."}
+                      ? uiT("De klant ondertekent een aannemingsovereenkomst — met bevestiging per onderwerp (meerwerk, onvoorziene kosten, stelposten, betaling) in plaats van één klik op akkoord.")
+                      : uiT("Zet dit aan bij een volledige verbouwing: de klant tekent dan een overeenkomst in plaats van alleen op 'akkoord' te klikken.")}
                   </p>
-                  <SubmitButton size="sm" variant={doc.requiresContract ? "ghost" : "secondary"} pendingLabel="Bezig…">
-                    {doc.requiresContract ? "Contract niet nodig" : "✍️ Contract vereisen"}
+                  <SubmitButton size="sm" variant={doc.requiresContract ? "ghost" : "secondary"} pendingLabel={uiT("Bezig…")}>
+                    {doc.requiresContract ? uiT("Contract niet nodig") : uiT("✍️ Contract vereisen")}
                   </SubmitButton>
                 </form>
               )}
 
               {doc.lockedAt && !doc.unlockedAt && (
                 <form action={unlockAction} className="rounded-md border border-warning/40 bg-warning/10 px-3 py-2.5">
-                  <p className="text-xs font-medium text-warning">🔒 Op slot — ondertekend door de klant</p>
+                  <p className="text-xs font-medium text-warning">{uiT("🔒 Op slot — ondertekend door de klant")}</p>
                   <p className="mb-2 text-[11px] text-muted">
-                    Bewerken en verwijderen zijn geblokkeerd. Ontgrendelen kan met een reden; die wordt
-                    vastgelegd in de tijdlijn.
-                  </p>
+                    {uiT("Bewerken en verwijderen zijn geblokkeerd. Ontgrendelen kan met een reden; die wordt vastgelegd in de tijdlijn.")} </p>
                   <div className="flex flex-wrap gap-2">
                     <input
                       name="reason"
                       required
-                      placeholder="Reden voor ontgrendelen"
+                      placeholder={uiT("Reden voor ontgrendelen")}
                       className="min-w-48 flex-1 rounded-md border bg-surface px-2.5 py-1.5 text-sm outline-none focus:border-ring focus:ring-2 focus:ring-ring/20"
                     />
-                    <SubmitButton size="sm" variant="ghost" pendingLabel="Bezig…">
-                      Ontgrendelen
-                    </SubmitButton>
+                    <SubmitButton size="sm" variant="ghost" pendingLabel={uiT("Bezig…")}>
+                      {uiT("Ontgrendelen")} </SubmitButton>
                   </div>
                 </form>
               )}
 
               {doc.unlockedAt && (
                 <p className="rounded-md bg-warning/10 px-3 py-2 text-[11px] text-warning">
-                  Ontgrendeld op {formatDate(doc.unlockedAt)} — het getekende exemplaar blijft ongewijzigd
-                  bewaard; wijzigingen hier gelden niet met terugwerkende kracht.
-                </p>
+                  {uiT("Ontgrendeld op")} {formatDate(doc.unlockedAt, uiDateLocale)} {uiT("— het getekende exemplaar blijft ongewijzigd bewaard; wijzigingen hier gelden niet met terugwerkende kracht.")} </p>
               )}
 
               {doc.kind === "estimate" && (
                 <form action={reserveAction} className="rounded-md bg-background px-3 py-2.5">
                   <p className="text-xs font-medium text-muted">
-                    {doc.reservedAt ? "✓ Producten gereserveerd" : "Producten reserveren"}
+                    {doc.reservedAt ? uiT("✓ Producten gereserveerd") : uiT("Producten reserveren")}
                   </p>
                   <p className="mb-2 text-[11px] text-muted">
                     {doc.reservedAt
-                      ? `Sinds ${formatDate(doc.reservedAt)} — telt mee als gereserveerde voorraad op het dashboard.`
-                      : "Zet de producten alvast op gereserveerd, zodat je op het dashboard ziet wat besteld moet worden."}
+                      ? uiT("Sinds {v0} — telt mee als gereserveerde voorraad op het dashboard.", { v0: formatDate(doc.reservedAt, uiDateLocale) })
+                      : uiT("Zet de producten alvast op gereserveerd, zodat je op het dashboard ziet wat besteld moet worden.")}
                   </p>
-                  <SubmitButton size="sm" variant={doc.reservedAt ? "ghost" : "secondary"} pendingLabel="Bezig…">
-                    {doc.reservedAt ? "Reservering opheffen" : "🔖 Reserveren"}
+                  <SubmitButton size="sm" variant={doc.reservedAt ? "ghost" : "secondary"} pendingLabel={uiT("Bezig…")}>
+                    {doc.reservedAt ? uiT("Reservering opheffen") : uiT("🔖 Reserveren")}
                   </SubmitButton>
                 </form>
               )}
 
               {doc.kind === "proforma" && (
                 <form action={createInvoiceFromProforma.bind(null, id)} className="rounded-md bg-background px-3 py-2.5">
-                  <p className="text-xs font-medium text-muted">Omzetten naar factuur</p>
+                  <p className="text-xs font-medium text-muted">{uiT("Omzetten naar factuur")}</p>
                   <p className="mb-2 text-[11px] text-muted">
-                    Maak van dit voorschot een echte factuur (mét btw) — hier gaat de btw pas lopen.
-                  </p>
-                  <SubmitButton size="sm" variant="secondary" pendingLabel="Bezig…">
-                    → Factuur maken
-                  </SubmitButton>
+                    {uiT("Maak van dit voorschot een echte factuur (mét btw) — hier gaat de btw pas lopen.")} </p>
+                  <SubmitButton size="sm" variant="secondary" pendingLabel={uiT("Bezig…")}>
+                    {uiT("→ Factuur maken")} </SubmitButton>
                 </form>
               )}
 
               {doc.kind === "estimate" && (
                 <div className="rounded-md bg-background px-3 py-2.5">
-                  <p className="text-xs font-medium text-muted">Voorschotten bij deze offerte</p>
+                  <p className="text-xs font-medium text-muted">{uiT("Voorschotten bij deze offerte")}</p>
                   {linkedVoorschotten.length > 0 ? (
                     <ul className="mb-2 mt-1 space-y-1">
                       {linkedVoorschotten.map((v) => (
@@ -904,7 +879,7 @@ export default async function DocumentDetailPage({
                           </Link>
                           <span className="flex items-center gap-2">
                             <Badge tone={v.status === "paid" ? "success" : "neutral"}>
-                              {v.status === "paid" ? "betaald" : "open"}
+                              {v.status === "paid" ? uiT("betaald") : uiT("open")}
                             </Badge>
                             <span className="tabular-nums">{formatEUR(v.totalEur)}</span>
                           </span>
@@ -913,16 +888,14 @@ export default async function DocumentDetailPage({
                     </ul>
                   ) : (
                     <p className="mb-2 text-[11px] text-muted">
-                      Een voorschot dat aan deze offerte hangt en op de eindfactuur wordt verrekend.
-                    </p>
+                      {uiT("Een voorschot dat aan deze offerte hangt en op de eindfactuur wordt verrekend.")} </p>
                   )}
                   <LinkButton
                     href={`/documents/new?kind=fondos&sourceDocumentId=${id}${doc.projectId ? `&projectId=${doc.projectId}` : ""}${doc.contactId ? `&contactId=${doc.contactId}` : ""}`}
                     size="sm"
                     variant="secondary"
                   >
-                    + Provisión de fondos
-                  </LinkButton>
+                    {uiT("+ Provisión de fondos")} </LinkButton>
                 </div>
               )}
 
@@ -931,7 +904,7 @@ export default async function DocumentDetailPage({
                   termijn-proforma's worden bij akkoord klaargezet. */}
               {doc.kind === "estimate" && Array.isArray(doc.paymentSchedule) && doc.paymentSchedule.length > 0 && (
                 <div className="space-y-2 rounded-md bg-background px-3 py-2.5">
-                  <p className="text-xs font-medium text-muted">Factureren per termijn (betalingsschema)</p>
+                  <p className="text-xs font-medium text-muted">{uiT("Factureren per termijn (betalingsschema)")}</p>
                   {doc.paymentSchedule.map((t, i) => {
                     const proforma = linkedVoorschotten.find((v) => v.title?.startsWith(`Termijn ${i + 1} —`));
                     return (
@@ -940,64 +913,57 @@ export default async function DocumentDetailPage({
                           <p className="truncate text-sm font-medium">
                             {t.pct}% {t.label}
                           </p>
-                          <p className="text-xs text-muted">Termijn {i + 1} · {formatEUR(t.amountEur)} ex. BTW</p>
+                          <p className="text-xs text-muted">{uiT("Termijn")} {i + 1} · {formatEUR(t.amountEur)} {uiT("ex. BTW")}</p>
                         </div>
                         {proforma ? (
                           <Link href={`/documents/${proforma.id}`} className="text-sm text-accent hover:underline">
                             {proforma.docNumber}
                           </Link>
                         ) : (
-                          <Badge tone="neutral">bij akkoord</Badge>
+                          <Badge tone="neutral">{uiT("bij akkoord")}</Badge>
                         )}
                       </div>
                     );
                   })}
                   <p className="text-[11px] text-muted">
-                    Bij akkoord op de offerte worden de termijn-proforma&apos;s automatisch op het project klaargezet —
-                    versturen en factureren doe je per termijn vanaf de proforma.
-                  </p>
+                    {uiT("Bij akkoord op de offerte worden de termijn-proforma's automatisch op het project klaargezet — versturen en factureren doe je per termijn vanaf de proforma.")} </p>
                 </div>
               )}
 
               {doc.kind === "estimate" && !(Array.isArray(doc.paymentSchedule) && doc.paymentSchedule.length > 0) && phaseList.length > 0 && (
                 <div className="space-y-2 rounded-md bg-background px-3 py-2.5">
-                  <p className="text-xs font-medium text-muted">Factureren per fase</p>
+                  <p className="text-xs font-medium text-muted">{uiT("Factureren per fase")}</p>
                   {phaseList.map((ph) => (
                     <div key={ph.key} className="flex items-center justify-between gap-2 border-b border-border/60 pb-1.5 last:border-0">
                       <div className="min-w-0">
                         <p className="truncate text-sm font-medium">{ph.label}</p>
                         <p className="text-xs text-muted">
-                          {ph.lines} regel{ph.lines === 1 ? "" : "s"} · {formatEUR(ph.subtotal)} ex. BTW
-                        </p>
+                          {ph.lines} {uiT(ph.lines === 1 ? "regel" : "regels")} · {formatEUR(ph.subtotal)} {uiT("ex. BTW")} </p>
                       </div>
                       {ph.covered ? (
-                        <Badge tone="success">✓ Gefactureerd</Badge>
+                        <Badge tone="success">{uiT("✓ Gefactureerd")}</Badge>
                       ) : (
                         <form action={makeInvoice}>
                           <input type="hidden" name="phase" value={ph.key} />
                           <SubmitButton size="sm" variant="secondary" pendingLabel="…">
-                            → Factuur
-                          </SubmitButton>
+                            {uiT("→ Factuur")} </SubmitButton>
                         </form>
                       )}
                     </div>
                   ))}
                   <p className="text-[11px] text-muted">
-                    Of factureer hieronder een percentage van de hele offerte.
-                  </p>
+                    {uiT("Of factureer hieronder een percentage van de hele offerte.")} </p>
                 </div>
               )}
 
               {doc.kind === "estimate" && fullyInvoiced && (
                 <div className="rounded-md bg-background px-3 py-2.5 text-xs text-muted">
-                  ✓ Volledig gefactureerd ({invoicedPct}%). Zie de gekoppelde factu
-                  {linkedInvoices.length === 1 ? "ur" : "ren"} bovenaan.
-                </div>
+                  {uiT(linkedInvoices.length === 1 ? "✓ Volledig gefactureerd ({pct}%). Zie de gekoppelde factuur bovenaan." : "✓ Volledig gefactureerd ({pct}%). Zie de gekoppelde facturen bovenaan.", { pct: invoicedPct })} </div>
               )}
 
               {doc.kind === "estimate" && !fullyInvoiced && (
                 <form action={makeInvoice} className="space-y-2 rounded-md bg-background px-3 py-2.5">
-                  <p className="text-xs font-medium text-muted">Factuur maken van deze offerte</p>
+                  <p className="text-xs font-medium text-muted">{uiT("Factuur maken van deze offerte")}</p>
                   <div className="flex items-center gap-2">
                     <Input
                       type="number"
@@ -1009,22 +975,20 @@ export default async function DocumentDetailPage({
                       className="w-20 text-right"
                     />
                     <span className="text-sm text-muted">%</span>
-                    <SubmitButton size="sm" variant="secondary" pendingLabel="Bezig…">
-                      → Maak factuur
-                    </SubmitButton>
+                    <SubmitButton size="sm" variant="secondary" pendingLabel={uiT("Bezig…")}>
+                      {uiT("→ Maak factuur")} </SubmitButton>
                   </div>
                   <p className="text-xs text-muted">
                     {invoicedPct > 0
-                      ? `Al ${invoicedPct}% gefactureerd — dit maakt een factuur voor de rest.`
-                      : "Bijv. 50 voor een aanbetaling; maak daarna een tweede factuur voor het restant."}
+                      ? uiT("Al {v0}% gefactureerd — dit maakt een factuur voor de rest.", { v0: invoicedPct })
+                      : uiT("Bijv. 50 voor een aanbetaling; maak daarna een tweede factuur voor het restant.")}
                   </p>
                 </form>
               )}
               {doc.kind !== "deliverynote" && doc.kind !== "creditnote" && doc.kind !== "fondos" && (
                 <form action={makeDeliveryNote}>
-                  <SubmitButton size="sm" variant="secondary" pendingLabel="Bezig…">
-                    → Maak pakbon
-                  </SubmitButton>
+                  <SubmitButton size="sm" variant="secondary" pendingLabel={uiT("Bezig…")}>
+                    {uiT("→ Maak pakbon")} </SubmitButton>
                 </form>
               )}
               {doc.kind === "invoice" && hasProductLines && (
@@ -1032,38 +996,33 @@ export default async function DocumentDetailPage({
                   {isPickedUp ? (
                     <div className="flex items-center justify-between gap-2">
                       <span className="text-sm font-medium text-success">
-                        🤝 Afgehaald{linkedDelivery?.deliveredAt ? ` op ${formatDate(linkedDelivery.deliveredAt)}` : ""}
+                        {uiT("🤝 Afgehaald")}{linkedDelivery?.deliveredAt ? uiT(" op {v0}", { v0: formatDate(linkedDelivery.deliveredAt, uiDateLocale) }) : ""}
                       </span>
                       <form action={undoPickedUp.bind(null, id)}>
                         <SubmitButton size="sm" variant="ghost" className="text-muted" pendingLabel="…">
-                          Ongedaan maken
-                        </SubmitButton>
+                          {uiT("Ongedaan maken")} </SubmitButton>
                       </form>
                     </div>
                   ) : linkedDelivery ? (
                     <p className="text-xs text-muted">
-                      Levering staat ingepland —{" "}
+                      {uiT("Levering staat ingepland —")}{" "}
                       <Link href="/leveringen" className="text-accent hover:underline">
-                        bekijk op leveringen
-                      </Link>
+                        {uiT("bekijk op leveringen")} </Link>
                     </p>
                   ) : (
                     <form action={markPickedUp.bind(null, id)}>
-                      <SubmitButton size="sm" variant="secondary" pendingLabel="Bezig…">
-                        🤝 Markeer als afgehaald
-                      </SubmitButton>
+                      <SubmitButton size="sm" variant="secondary" pendingLabel={uiT("Bezig…")}>
+                        {uiT("🤝 Markeer als afgehaald")} </SubmitButton>
                       <p className="mt-1 text-xs text-muted">
-                        Klant heeft het meegenomen — haalt deze factuur van &ldquo;te plannen leveringen&rdquo; af.
-                      </p>
+                        {uiT("Klant heeft het meegenomen — haalt deze factuur van “te plannen leveringen” af.")} </p>
                     </form>
                   )}
                 </div>
               )}
               {doc.kind === "invoice" && (
                 <form action={makeCreditNote}>
-                  <SubmitButton size="sm" variant="secondary" pendingLabel="Bezig…">
-                    → Maak creditnota
-                  </SubmitButton>
+                  <SubmitButton size="sm" variant="secondary" pendingLabel={uiT("Bezig…")}>
+                    {uiT("→ Maak creditnota")} </SubmitButton>
                 </form>
               )}
               {doc.kind === "invoice" &&
@@ -1071,25 +1030,21 @@ export default async function DocumentDetailPage({
                 restNaCredit > 0.01 &&
                 replacementInvoices.length === 0 && (
                   <form action={makeAdjustedInvoice}>
-                    <SubmitButton size="sm" variant="secondary" pendingLabel="Bezig…">
-                      → Aangepaste factuur (restant {formatEUR(restNaCredit)})
+                    <SubmitButton size="sm" variant="secondary" pendingLabel={uiT("Bezig…")}>
+                      {uiT("→ Aangepaste factuur (restant")} {formatEUR(restNaCredit)})
                     </SubmitButton>
                     <p className="mt-1 text-xs text-muted">
-                      Deze factuur is deels gecrediteerd. Dit crediteert ook het restant en zet een
-                      aangepaste conceptfactuur klaar met alle originele regels — beide blijven
-                      concept totdat jij ze controleert en verstuurt.
-                    </p>
+                      {uiT("Deze factuur is deels gecrediteerd. Dit crediteert ook het restant en zet een aangepaste conceptfactuur klaar met alle originele regels — beide blijven concept totdat jij ze controleert en verstuurt.")} </p>
                   </form>
                 )}
               {(doc.kind === "deliverynote" || doc.kind === "invoice") && doc.stockAppliedAt && (
                 <div className="space-y-1">
                   <p className="text-xs text-success">
-                    ✓ Voorraad afgeboekt op {new Date(doc.stockAppliedAt).toLocaleDateString("nl-NL", { day: "numeric", month: "short", year: "numeric" })}
+                    {uiT("✓ Voorraad afgeboekt op")} {new Date(doc.stockAppliedAt).toLocaleDateString(uiDateLocale, { day: "numeric", month: "short", year: "numeric" })}
                   </p>
                   <form action={reverseStockOutFromDocument.bind(null, id)}>
-                    <SubmitButton size="sm" variant="ghost" className="text-muted" pendingLabel="Bezig…">
-                      Voorraad-afboeking ongedaan maken
-                    </SubmitButton>
+                    <SubmitButton size="sm" variant="ghost" className="text-muted" pendingLabel={uiT("Bezig…")}>
+                      {uiT("Voorraad-afboeking ongedaan maken")} </SubmitButton>
                   </form>
                 </div>
               )}
@@ -1099,19 +1054,17 @@ export default async function DocumentDetailPage({
                   {doc.deliveredAt ? (
                     <div className="flex items-center justify-between gap-2">
                       <span className="text-sm font-medium text-success">
-                        ✓ Afgeleverd op {formatDate(doc.deliveredAt)}
+                        {uiT("✓ Afgeleverd op")} {formatDate(doc.deliveredAt, uiDateLocale)}
                       </span>
                       <form action={setDeliveryNoteDelivered.bind(null, id, false)}>
                         <SubmitButton size="sm" variant="ghost" className="text-muted" pendingLabel="…">
-                          Ongedaan maken
-                        </SubmitButton>
+                          {uiT("Ongedaan maken")} </SubmitButton>
                       </form>
                     </div>
                   ) : (
                     <form action={setDeliveryNoteDelivered.bind(null, id, true)}>
-                      <SubmitButton size="sm" variant="primary" pendingLabel="Bezig…">
-                        → Markeer als afgeleverd
-                      </SubmitButton>
+                      <SubmitButton size="sm" variant="primary" pendingLabel={uiT("Bezig…")}>
+                        {uiT("→ Markeer als afgeleverd")} </SubmitButton>
                     </form>
                   )}
                 </div>
@@ -1120,14 +1073,12 @@ export default async function DocumentDetailPage({
                   {(doc.kind === "invoice" || doc.kind === "creditnote" || doc.kind === "fondos") &&
                     doc.status === "draft" && (
                       <form action={markDocumentSentNoEmail.bind(null, id)} className="pt-1">
-                        <SubmitButton size="sm" variant="primary" pendingLabel="Bezig…">
-                          ✓ Markeer als verstuurd (zonder mail)
-                        </SubmitButton>
+                        <SubmitButton size="sm" variant="primary" pendingLabel={uiT("Bezig…")}>
+                          {uiT("✓ Markeer als verstuurd (zonder mail)")} </SubmitButton>
                         <p className="mt-1 text-[11px] text-muted">
-                          Voor wanneer je het document persoonlijk of per app hebt afgegeven
-                          {doc.kind === "fondos"
-                            ? " — geen voorraadeffect."
-                            : ` — boekt ook de voorraad ${doc.kind === "creditnote" ? "terug" : "af"}.`}
+                          {uiT("Voor wanneer je het document persoonlijk of per app hebt afgegeven")} {doc.kind === "fondos"
+                            ? uiT(" — geen voorraadeffect.")
+                            : uiT(" — boekt ook de voorraad {v0}.", { v0: doc.kind === "creditnote" ? "terug" : "af" })}
                         </p>
                       </form>
                     )}
@@ -1135,19 +1086,17 @@ export default async function DocumentDetailPage({
                     <Select name="status" defaultValue={doc.status} className="flex-1">
                       {STATUS_OPTIONS.map((s) => (
                         <option key={s} value={s}>
-                          {documentStatusMeta[s].label}
+                          {uiT(documentStatusMeta[s].label)}
                         </option>
                       ))}
                     </Select>
-                    <SubmitButton size="sm" variant="secondary" pendingLabel="Bezig…">
-                      Status bijwerken
-                    </SubmitButton>
+                    <SubmitButton size="sm" variant="secondary" pendingLabel={uiT("Bezig…")}>
+                      {uiT("Status bijwerken")} </SubmitButton>
                   </form>
                   <form action={changeStatus}>
                     <input type="hidden" name="status" value="paid" />
-                    <SubmitButton size="sm" variant="ghost" pendingLabel="Bezig…">
-                      Markeer betaald
-                    </SubmitButton>
+                    <SubmitButton size="sm" variant="ghost" pendingLabel={uiT("Bezig…")}>
+                      {uiT("Markeer betaald")} </SubmitButton>
                   </form>
                 </>
               )}
@@ -1157,16 +1106,13 @@ export default async function DocumentDetailPage({
           {doc.kind === "fondos" && (
             <Card className="border-amber-300 bg-amber-50/50">
               <CardHeader>
-                <CardTitle>Provisión de fondos</CardTitle>
+                <CardTitle>{uiT("Provisión de fondos")}</CardTitle>
               </CardHeader>
               <CardContent className="space-y-1.5 text-sm">
                 <p>
-                  Voorschotdocument — <strong>géén factuur</strong> en geen BTW-vermelding
-                  (procedure boekhouder). Blijft buiten Holded en buiten de FAC-reeks.
-                </p>
+                  {uiT("Voorschotdocument —")} <strong>{uiT("géén factuur")}</strong> {uiT("en geen BTW-vermelding (procedure boekhouder). Blijft buiten Holded en buiten de FAC-reeks.")} </p>
                 <p className="text-xs text-muted">
-                  ⚠️ Altijd eerst ter controle naar Paco sturen vóórdat het naar de klant gaat.
-                </p>
+                  {uiT("⚠️ Altijd eerst ter controle naar Paco sturen vóórdat het naar de klant gaat.")} </p>
               </CardContent>
             </Card>
           )}
@@ -1174,67 +1120,59 @@ export default async function DocumentDetailPage({
           {doc.isExternal && (
             <Card className="border-amber-300 bg-amber-50/50">
               <CardHeader>
-                <CardTitle>Externe factuur</CardTitle>
+                <CardTitle>{uiT("Externe factuur")}</CardTitle>
               </CardHeader>
               <CardContent className="text-sm">
-                Factuur van een andere administratie (bv. Creadores) — alleen ter registratie op
-                het project. Wordt bewust <strong>niet</strong> naar Habitats Holded gepusht.
-              </CardContent>
+                {uiT("Factuur van een andere administratie (bv. Creadores) — alleen ter registratie op het project. Wordt bewust")} <strong>{uiT("niet")}</strong> {uiT("naar Habitats Holded gepusht.")} </CardContent>
             </Card>
           )}
 
           {doc.kind !== "fondos" && !doc.isExternal && (
           <Card>
             <CardHeader>
-              <CardTitle>Holded</CardTitle>
-              {(holdedMap || doc.holdedId) && <Badge tone="success">✓ gekoppeld</Badge>}
+              <CardTitle>{uiT("Holded")}</CardTitle>
+              {(holdedMap || doc.holdedId) && <Badge tone="success">{uiT("✓ gekoppeld")}</Badge>}
             </CardHeader>
             <CardContent className="space-y-3 text-sm">
               {sp.holded === "ok" && (
                 <p className="rounded-md bg-green-50 px-3 py-2 text-sm text-success">
-                  Naar Holded gepusht{typeof sp.hid === "string" ? ` (id ${sp.hid})` : ""}.
+                  {uiT("Naar Holded gepusht")}{typeof sp.hid === "string" ? uiT(" (id {v0})", { v0: sp.hid }) : ""}.
                 </p>
               )}
               {typeof sp.holdedError === "string" && (
                 <p className="rounded-md bg-red-50 px-3 py-2 text-sm text-danger">
-                  Mislukt: {sp.holdedError}
+                  {uiT("Mislukt:")} {sp.holdedError}
                 </p>
               )}
               {sp.holdedUpdate === "ok" && (
                 <p className="rounded-md bg-green-50 px-3 py-2 text-sm text-success">
-                  Factuur bijgewerkt in Holded.
-                </p>
+                  {uiT("Factuur bijgewerkt in Holded.")} </p>
               )}
               {holdedMap || doc.holdedId ? (
                 <>
                   <dl className="grid grid-cols-2 gap-x-3 gap-y-1.5">
-                    <dt className="text-muted">Holded-id</dt>
+                    <dt className="text-muted">{uiT("Holded-id")}</dt>
                     <dd className="font-mono text-xs">{holdedMap?.holdedId ?? doc.holdedId}</dd>
-                    <dt className="text-muted">Laatste sync</dt>
-                    <dd>{formatDate(holdedMap?.lastSyncedAt)}</dd>
+                    <dt className="text-muted">{uiT("Laatste sync")}</dt>
+                    <dd>{formatDate(holdedMap?.lastSyncedAt, uiDateLocale)}</dd>
                   </dl>
                   <form action={updateDocumentInHoldedAction.bind(null, id)} className="mt-1">
-                    <SubmitButton variant="secondary" size="sm" pendingLabel="Bijwerken…">
-                      Bijwerken in Holded
-                    </SubmitButton>
+                    <SubmitButton variant="secondary" size="sm" pendingLabel={uiT("Bijwerken…")}>
+                      {uiT("Bijwerken in Holded")} </SubmitButton>
                   </form>
                   <p className="text-xs text-muted">
-                    Stuurt de huidige versie naar Holded. Lukt alleen zolang de factuur daar nog
-                    niet definitief is.
-                  </p>
+                    {uiT("Stuurt de huidige versie naar Holded. Lukt alleen zolang de factuur daar nog niet definitief is.")} </p>
                 </>
               ) : (
                 <>
-                  <p className="text-muted">Nog niet naar Holded gepusht.</p>
+                  <p className="text-muted">{uiT("Nog niet naar Holded gepusht.")}</p>
                   {!process.env.HOLDED_API_KEY && (
                     <p className="text-xs text-warning">
-                      ⚠️ HOLDED_API_KEY niet ingesteld — push faalt tot de sleutel op de server staat.
-                    </p>
+                      {uiT("⚠️ HOLDED_API_KEY niet ingesteld — push faalt tot de sleutel op de server staat.")} </p>
                   )}
                   <form action={pushDocumentToHoldedAction.bind(null, id)}>
-                    <SubmitButton variant="primary" size="sm" pendingLabel="Pushen…">
-                      Push naar Holded
-                    </SubmitButton>
+                    <SubmitButton variant="primary" size="sm" pendingLabel={uiT("Pushen…")}>
+                      {uiT("Push naar Holded")} </SubmitButton>
                   </form>
                 </>
               )}
@@ -1245,11 +1183,10 @@ export default async function DocumentDetailPage({
           {(doc.kind === "estimate" || doc.status === "draft") && (
             <form action={removeDoc}>
               <ConfirmSubmit
-                message={`${kindLabel} ${doc.docNumber ?? ""} definitief verwijderen?`}
+                message={uiT("{v0} {v1} definitief verwijderen?", { v0: kindLabel, v1: doc.docNumber ?? "" })}
                 className="text-xs text-muted underline-offset-2 hover:text-danger hover:underline"
               >
-                {kindLabel} verwijderen
-              </ConfirmSubmit>
+                {kindLabel} {uiT("verwijderen")} </ConfirmSubmit>
             </form>
           )}
         </div>
@@ -1257,25 +1194,25 @@ export default async function DocumentDetailPage({
         <div className="lg:col-span-2">
           <Card className="overflow-hidden">
             <CardHeader>
-              <CardTitle>Regels</CardTitle>
+              <CardTitle>{uiT("Regels")}</CardTitle>
             </CardHeader>
             {items.length === 0 ? (
               <CardContent>
-                <p className="text-sm text-muted">Geen regels.</p>
+                <p className="text-sm text-muted">{uiT("Geen regels.")}</p>
               </CardContent>
             ) : (
               <>
                 <Table>
                   <THead>
                     <tr>
-                      <Th>Omschrijving</Th>
-                      <Th>Categorie</Th>
-                      <Th className="text-right">Aantal</Th>
-                      <Th className="text-right">Prijs</Th>
-                      <Th className="text-right">Korting</Th>
-                      <Th className="text-right">BTW%</Th>
-                      <Th className="text-right">Netto</Th>
-                      <Th className="text-right">BTW</Th>
+                      <Th>{uiT("Omschrijving")}</Th>
+                      <Th>{uiT("Categorie")}</Th>
+                      <Th className="text-right">{uiT("Aantal")}</Th>
+                      <Th className="text-right">{uiT("Prijs")}</Th>
+                      <Th className="text-right">{uiT("Korting")}</Th>
+                      <Th className="text-right">{uiT("BTW%")}</Th>
+                      <Th className="text-right">{uiT("Netto")}</Th>
+                      <Th className="text-right">{uiT("BTW")}</Th>
                     </tr>
                   </THead>
                   <TBody>
@@ -1305,24 +1242,23 @@ export default async function DocumentDetailPage({
                 <div className="border-t px-5 py-4">
                   <div className="ml-auto w-full max-w-xs space-y-1 text-sm">
                     <div className="flex justify-between">
-                      <span className="text-muted">Subtotaal</span>
+                      <span className="text-muted">{uiT("Subtotaal")}</span>
                       <span className="tabular-nums">{formatEUR(doc.subtotalEur)}</span>
                     </div>
                     <div className="flex justify-between">
-                      <span className="text-muted">BTW</span>
+                      <span className="text-muted">{uiT("BTW")}</span>
                       <span className="tabular-nums">{formatEUR(doc.taxEur)}</span>
                     </div>
                     <div className="flex justify-between border-t pt-1 text-base font-semibold">
-                      <span>Totaal</span>
+                      <span>{uiT("Totaal")}</span>
                       <span className="tabular-nums">{formatEUR(doc.totalEur)}</span>
                     </div>
                     {costedRevenue > 0 && (
                       <div
                         className={`mt-2 flex justify-between border-t pt-2 text-xs ${docMargin < 0 ? "text-danger" : "text-muted"}`}
                       >
-                        <span title="Interne brutomarge — staat niet op de klant-PDF">
-                          Marge (intern)
-                          {!marginComplete ? ` · ${costedLines}/${items.length} regels` : ""}
+                        <span title={uiT("Interne brutomarge — staat niet op de klant-PDF")}>
+                          {uiT("Marge (intern)")} {!marginComplete ? uiT(" · {v0}/{v1} regels", { v0: costedLines, v1: items.length }) : ""}
                         </span>
                         <span className="tabular-nums font-medium">
                           {formatEUR(docMargin)}
@@ -1339,17 +1275,16 @@ export default async function DocumentDetailPage({
           {begroting && (
             <Card className="mt-4">
               <CardHeader>
-                <CardTitle>Begroting (intern)</CardTitle>
+                <CardTitle>{uiT("Begroting (intern)")}</CardTitle>
                 <span className="text-xs text-muted">
-                  verkoop · kost · marge per bouwfase — staat niet op de klant-PDF
-                </span>
+                  {uiT("verkoop · kost · marge per bouwfase — staat niet op de klant-PDF")} </span>
               </CardHeader>
               <CardContent>
                 <div className="hidden grid-cols-[1.8fr_1fr_1fr_1.2fr] gap-2 px-2 text-[11px] font-medium uppercase tracking-wide text-muted sm:grid">
-                  <span>Fase</span>
-                  <span className="text-right">Verkoop</span>
-                  <span className="text-right">Kost</span>
-                  <span className="text-right">Marge</span>
+                  <span>{uiT("Fase")}</span>
+                  <span className="text-right">{uiT("Verkoop")}</span>
+                  <span className="text-right">{uiT("Kost")}</span>
+                  <span className="text-right">{uiT("Marge")}</span>
                 </div>
                 {begrotingPerFase.map((f) => {
                   const marge = f.verkoop - f.kost;
@@ -1361,7 +1296,7 @@ export default async function DocumentDetailPage({
                           <span className="mr-1.5 inline-block text-xs text-muted transition-transform group-open:rotate-90">▸</span>
                           {f.label}
                           <span className="ml-1.5 text-xs font-normal text-muted">
-                            {f.lines} {f.lines === 1 ? "regel" : "regels"}
+                            {f.lines} {f.lines === 1 ? uiT("regel") : uiT("regels")}
                           </span>
                         </span>
                         <span className="text-right tabular-nums">{formatEUR(f.verkoop)}</span>
@@ -1370,7 +1305,7 @@ export default async function DocumentDetailPage({
                           {formatEUR(marge)}
                           {pct != null ? ` · ${pct.toFixed(0)}%` : ""}
                           {!f.kostCompleet && (
-                            <span className="ml-1 font-normal text-muted" title="Niet elke regel heeft een kostprijs — de echte marge ligt lager">
+                            <span className="ml-1 font-normal text-muted" title={uiT("Niet elke regel heeft een kostprijs — de echte marge ligt lager")}>
                               *
                             </span>
                           )}
@@ -1381,12 +1316,12 @@ export default async function DocumentDetailPage({
                           <div key={i} className="grid items-baseline gap-2 text-xs text-muted sm:grid-cols-[1.8fr_1fr_1fr_1.2fr]">
                             <span>
                               {r.name}
-                              <span className="text-muted/70"> — {r.units}{r.unit ? ` ${r.unit}` : "×"}</span>
+                              <span className="text-muted/70"> — {r.units}{r.unit ? ` ${r.unit}` : uiT("×")}</span>
                             </span>
                             <span className="text-right tabular-nums">{formatEUR(r.verkoop)}</span>
                             <span className="text-right tabular-nums">{r.kost != null ? formatEUR(r.kost) : "—"}</span>
                             <span className="text-right tabular-nums">
-                              {r.kost != null ? formatEUR(r.verkoop - r.kost) : "kost onbekend"}
+                              {r.kost != null ? formatEUR(r.verkoop - r.kost) : uiT("kost onbekend")}
                             </span>
                           </div>
                         ))}
@@ -1395,7 +1330,7 @@ export default async function DocumentDetailPage({
                   );
                 })}
                 <div className="grid items-center gap-2 px-2 pt-2.5 text-sm font-semibold sm:grid-cols-[1.8fr_1fr_1fr_1.2fr]">
-                  <span>Totaal (ex btw)</span>
+                  <span>{uiT("Totaal (ex btw)")}</span>
                   <span className="text-right tabular-nums">{formatEUR(begroting.verkoop)}</span>
                   <span className="text-right tabular-nums">{formatEUR(begroting.kost)}</span>
                   <span className={`text-right tabular-nums ${begroting.verkoop - begroting.kost < 0 ? "text-danger" : ""}`}>
@@ -1406,10 +1341,8 @@ export default async function DocumentDetailPage({
                   </span>
                 </div>
                 <p className="mt-2 text-xs text-muted">
-                  {begroting.kostCompleet ? "" : "* Regels zonder kostprijs tellen als € 0 kost — de echte marge ligt daar lager. "}
-                  Bij akkoord worden deze fases automatisch de budgetregels van het project; de nacalculatie op het
-                  project vergelijkt ze daarna met de werkelijke kosten.
-                </p>
+                  {begroting.kostCompleet ? "" : uiT("* Regels zonder kostprijs tellen als € 0 kost — de echte marge ligt daar lager. ")}
+                  {uiT("Bij akkoord worden deze fases automatisch de budgetregels van het project; de nacalculatie op het project vergelijkt ze daarna met de werkelijke kosten.")} </p>
               </CardContent>
             </Card>
           )}
@@ -1417,7 +1350,7 @@ export default async function DocumentDetailPage({
           {doc.notes && (
             <Card className="mt-4">
               <CardHeader>
-                <CardTitle>Notities</CardTitle>
+                <CardTitle>{uiT("Notities")}</CardTitle>
               </CardHeader>
               <CardContent className="whitespace-pre-wrap text-sm">{doc.notes}</CardContent>
             </Card>
@@ -1425,12 +1358,12 @@ export default async function DocumentDetailPage({
 
           <Card className="mt-4">
             <CardHeader>
-              <CardTitle>Tekeningen / bijlagen</CardTitle>
-              <span className="text-xs text-muted">PDF-bestanden (bv. kozijn-tekeningen) — worden meegestuurd in de mail naar de klant</span>
+              <CardTitle>{uiT("Tekeningen / bijlagen")}</CardTitle>
+              <span className="text-xs text-muted">{uiT("PDF-bestanden (bv. kozijn-tekeningen) — worden meegestuurd in de mail naar de klant")}</span>
             </CardHeader>
             <CardContent className="space-y-3">
               {attachmentLinks.length === 0 ? (
-                <p className="text-sm text-muted">Nog geen bijlagen.</p>
+                <p className="text-sm text-muted">{uiT("Nog geen bijlagen.")}</p>
               ) : (
                 <ul className="divide-y divide-border">
                   {attachmentLinks.map((a) => (
@@ -1443,15 +1376,14 @@ export default async function DocumentDetailPage({
                         ) : (
                           a.name
                         )}
-                        <span className="ml-2 text-xs text-muted">{(a.size / 1024).toFixed(0)} kB</span>
+                        <span className="ml-2 text-xs text-muted">{(a.size / 1024).toFixed(0)} {uiT("kB")}</span>
                       </span>
                       <form action={deleteDocumentAttachment.bind(null, doc.id, a.path)}>
                         <ConfirmSubmit
-                          message={`Bijlage "${a.name}" verwijderen?`}
+                          message={uiT("Bijlage \"{v0}\" verwijderen?", { v0: a.name })}
                           className="rounded px-2 py-1 text-xs font-medium text-danger hover:bg-danger/10"
                         >
-                          Verwijderen
-                        </ConfirmSubmit>
+                          {uiT("Verwijderen")} </ConfirmSubmit>
                       </form>
                     </li>
                   ))}

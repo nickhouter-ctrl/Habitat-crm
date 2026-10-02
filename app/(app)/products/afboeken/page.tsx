@@ -1,3 +1,5 @@
+import { datumTaal } from "@/lib/i18n/server";
+import { tekst as uiTranslation } from '@/lib/i18n/server';
 /**
  * Voorraad afboeken zonder verkoop: showroommodel, eigen gebruik, breuk.
  *
@@ -36,13 +38,18 @@ import { REASON_LABEL, WRITEOFF_REASONS } from "@/lib/stock-writeoff";
 import { formatEUR } from "@/lib/utils";
 import { reverseStockWriteoffAction, writeOffStockAction } from "./actions";
 
-export const metadata = { title: "Voorraad afboeken" };
+export async function generateMetadata() {
+  const uiT = await uiTranslation();
+  return { title: uiT("Voorraad afboeken") };
+}
 
 export default async function VoorraadAfboekenPage({
   searchParams,
 }: {
   searchParams: Promise<{ ok?: string; fout?: string }>;
 }) {
+  const uiDateLocale = await datumTaal();
+  const uiT = await uiTranslation();
   const { ok, fout } = await searchParams;
 
   const [voorraadProducten, projectOpts, historie, totaal] = await Promise.all([
@@ -103,52 +110,52 @@ export default async function VoorraadAfboekenPage({
   return (
     <>
       <PageHeader
-        title="Voorraad afboeken"
-        subtitle="showroom, eigen gebruik, monsters en breuk — alles wat eraf gaat zonder verkoop"
+        title={uiT("Voorraad afboeken")}
+        subtitle={uiT("showroom, eigen gebruik, monsters en breuk — alles wat eraf gaat zonder verkoop")}
       />
 
       <div className="mb-5 grid grid-cols-2 gap-3 sm:grid-cols-3">
-        <StatTile label="Afboekingen" value={som.aantal} hint="niet teruggedraaid" />
-        <StatTile label="Kostprijs afgeboekt" value={formatEUR(som.kosten)} hint="wat het ons kostte" />
-        <StatTile label="Producten met voorraad" value={voorraadProducten.length} />
+        <StatTile label={uiT("Afboekingen")} value={som.aantal} hint={uiT("niet teruggedraaid")} />
+        <StatTile label={uiT("Kostprijs afgeboekt")} value={formatEUR(som.kosten)} hint={uiT("wat het ons kostte")} />
+        <StatTile label={uiT("Producten met voorraad")} value={voorraadProducten.length} />
       </div>
 
       {ok && (
         <p className="mb-4 rounded-md bg-success/10 p-3 text-sm">
-          Afgeboekt. De voorraad is bijgewerkt{" "}
-          <span className="text-muted">— staat er een project bij, dan is de kostprijs daar als kostenregel geboekt.</span>
+          {uiT("Afgeboekt. De voorraad is bijgewerkt")}{" "}
+          <span className="text-muted">{uiT("— staat er een project bij, dan is de kostprijs daar als kostenregel geboekt.")}</span>
         </p>
       )}
       {fout && (
         <p className="mb-4 rounded-md bg-danger/10 p-3 text-sm">
           {fout.startsWith("tekort:")
-            ? `Niet afgeboekt: er ligt maar ${fout.slice(7)}. Kies een lager aantal, of boek het als telverschil.`
+            ? uiT("Niet afgeboekt: er ligt maar {v0}. Kies een lager aantal, of boek het als telverschil.", { v0: fout.slice(7) })
             : fout === "aantal"
-              ? "Vul een aantal groter dan nul in."
-              : "Kies een product."}
+              ? uiT("Vul een aantal groter dan nul in.")
+              : uiT("Kies een product.")}
         </p>
       )}
 
       <Card className="mb-5">
         <CardHeader>
-          <CardTitle>Afboeken</CardTitle>
-          <span className="text-xs text-muted">de kostprijs van nu wordt vastgelegd — later prijswijzigen verandert dit niet</span>
+          <CardTitle>{uiT("Afboeken")}</CardTitle>
+          <span className="text-xs text-muted">{uiT("de kostprijs van nu wordt vastgelegd — later prijswijzigen verandert dit niet")}</span>
         </CardHeader>
         <CardContent>
           <form action={writeOffStockAction} className="grid gap-3 lg:grid-cols-[2fr_0.7fr_1fr_1.2fr_0.9fr_auto] lg:items-end">
-            <Field label="Product" hint="typ een naam of SKU">
+            <Field label={uiT("Product")} hint={uiT("typ een naam of SKU")}>
               <Combobox
                 name="productId"
                 options={productOptions}
-                placeholder="zoek product…"
+                placeholder={uiT("zoek product…")}
                 clearable
                 menuClassName="w-[28rem]"
               />
             </Field>
-            <Field label="Aantal" htmlFor="qty">
+            <Field label={uiT("Aantal")} htmlFor="qty">
               <Input id="qty" name="qty" inputMode="decimal" required className="text-right" placeholder="1" />
             </Field>
-            <Field label="Reden" htmlFor="reason">
+            <Field label={uiT("Reden")} htmlFor="reason">
               <Select id="reason" name="reason" defaultValue="showroom">
                 {WRITEOFF_REASONS.map((r) => (
                   <option key={r.value} value={r.value}>
@@ -157,23 +164,22 @@ export default async function VoorraadAfboekenPage({
                 ))}
               </Select>
             </Field>
-            <Field label="Project" hint="optioneel — dan telt de kostprijs daar mee">
+            <Field label={uiT("Project")} hint={uiT("optioneel — dan telt de kostprijs daar mee")}>
               <Combobox
                 name="projectId"
                 clearable
-                placeholder="Zoek een project…"
+                placeholder={uiT("Zoek een project…")}
                 options={projectOpts.map((p) => ({ value: p.id, label: p.name }))}
               />
             </Field>
-            <Field label="Datum" htmlFor="date">
+            <Field label={uiT("Datum")} htmlFor="date">
               <Input id="date" name="date" type="date" defaultValue={vandaag} />
             </Field>
-            <SubmitButton variant="primary" pendingLabel="Afboeken…">
-              Afboeken
-            </SubmitButton>
+            <SubmitButton variant="primary" pendingLabel={uiT("Afboeken…")}>
+              {uiT("Afboeken")} </SubmitButton>
             <div className="lg:col-span-6">
-              <Field label="Notitie" htmlFor="note">
-                <Textarea id="note" name="note" rows={2} placeholder="bijv. showmodel in de showroom in Xàbia" />
+              <Field label={uiT("Notitie")} htmlFor="note">
+                <Textarea id="note" name="note" rows={2} placeholder={uiT("bijv. showmodel in de showroom in Xàbia")} />
               </Field>
             </div>
           </form>
@@ -182,24 +188,24 @@ export default async function VoorraadAfboekenPage({
 
       <Card>
         <CardHeader>
-          <CardTitle>Afgeboekt</CardTitle>
-          <span className="text-xs text-muted">laatste 100 · terugdraaien zet de voorraad weer terug</span>
+          <CardTitle>{uiT("Afgeboekt")}</CardTitle>
+          <span className="text-xs text-muted">{uiT("laatste 100 · terugdraaien zet de voorraad weer terug")}</span>
         </CardHeader>
         {historie.length === 0 ? (
           <CardContent>
-            <p className="text-sm text-muted">Nog niets afgeboekt.</p>
+            <p className="text-sm text-muted">{uiT("Nog niets afgeboekt.")}</p>
           </CardContent>
         ) : (
           <Table>
             <THead>
               <tr>
-                <Th>Datum</Th>
-                <Th>Product</Th>
-                <Th className="text-right">Aantal</Th>
-                <Th>Reden</Th>
-                <Th>Project</Th>
-                <Th className="text-right">Kostprijs</Th>
-                <Th>Door</Th>
+                <Th>{uiT("Datum")}</Th>
+                <Th>{uiT("Product")}</Th>
+                <Th className="text-right">{uiT("Aantal")}</Th>
+                <Th>{uiT("Reden")}</Th>
+                <Th>{uiT("Project")}</Th>
+                <Th className="text-right">{uiT("Kostprijs")}</Th>
+                <Th>{uiT("Door")}</Th>
                 <Th />
               </tr>
             </THead>
@@ -207,7 +213,7 @@ export default async function VoorraadAfboekenPage({
               {historie.map((h) => (
                 <Tr key={h.id} className={h.reversedAt ? "opacity-50" : undefined}>
                   <Td className="whitespace-nowrap">
-                    {new Date(h.date).toLocaleDateString("nl-NL", { day: "numeric", month: "short", year: "numeric" })}
+                    {new Date(h.date).toLocaleDateString(uiDateLocale, { day: "numeric", month: "short", year: "numeric" })}
                   </Td>
                   <Td>
                     {h.productId ? (
@@ -241,15 +247,14 @@ export default async function VoorraadAfboekenPage({
                   <Td className="text-xs text-muted">{h.door ?? "—"}</Td>
                   <Td className="text-right">
                     {h.reversedAt ? (
-                      <span className="text-xs text-muted">teruggedraaid</span>
+                      <span className="text-xs text-muted">{uiT("teruggedraaid")}</span>
                     ) : (
                       <form action={reverseStockWriteoffAction.bind(null, h.id)}>
                         <ConfirmSubmit
-                          message={`${h.productName} × ${Number(h.qty)} weer op voorraad zetten?`}
+                          message={uiT("{v0} × {v1} weer op voorraad zetten?", { v0: h.productName, v1: Number(h.qty) })}
                           className="rounded p-1 text-xs text-muted transition-colors hover:bg-danger/10 hover:text-danger"
                         >
-                          Terugdraaien
-                        </ConfirmSubmit>
+                          {uiT("Terugdraaien")} </ConfirmSubmit>
                       </form>
                     )}
                   </Td>

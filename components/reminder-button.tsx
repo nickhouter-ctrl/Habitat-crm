@@ -1,4 +1,5 @@
 "use client";
+import { useT as useUiTranslation } from '@/components/taal-provider';
 
 import { Bell, ChevronDown } from "lucide-react";
 import { useState, useTransition } from "react";
@@ -26,17 +27,18 @@ export function ReminderButton({
   documentId: string;
   className?: string;
 }) {
+  const uiT = useUiTranslation();
   const [pending, startTransition] = useTransition();
   const [open, setOpen] = useState(false);
   const [result, setResult] = useState<{ ok: boolean; error?: string } | null>(null);
 
   if (result?.ok) {
-    return <span className="text-xs font-medium text-success">Verstuurd ✓</span>;
+    return <span className="text-xs font-medium text-success">{uiT("Verstuurd ✓")}</span>;
   }
 
   const send = (level?: ReminderLevel) => {
     setOpen(false);
-    if (!window.confirm("Herinnering nu naar de klant e-mailen?")) return;
+    if (!window.confirm(uiT("Herinnering nu naar de klant e-mailen?"))) return;
     setResult(null);
     startTransition(async () => {
       setResult(await sendPaymentReminderNow(documentId, level));
@@ -58,7 +60,7 @@ export function ReminderButton({
         )}
       >
         <Bell className="size-3.5" />
-        {pending ? "Versturen…" : "Herinnering"}
+        {pending ? uiT("Versturen…") : uiT("Herinnering")}
         <ChevronDown className="size-3" />
       </button>
 
@@ -73,7 +75,7 @@ export function ReminderButton({
                 onClick={() => send(o.level)}
                 className="block w-full px-3 py-1.5 text-left text-xs hover:bg-background"
               >
-                {o.label}
+                {uiT(o.label)}
               </button>
             ))}
           </div>
@@ -81,7 +83,7 @@ export function ReminderButton({
       )}
 
       {result && !result.ok && (
-        <span className="max-w-44 text-right text-[11px] text-danger">{result.error}</span>
+        <span className="max-w-44 text-right text-[11px] text-danger">{uiT(result.error ?? "")}</span>
       )}
     </span>
   );

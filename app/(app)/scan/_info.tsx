@@ -1,4 +1,5 @@
 "use client";
+import { useT as useUiTranslation } from '@/components/taal-provider';
 
 import { useCallback, useState } from "react";
 
@@ -9,6 +10,7 @@ import { lookupProductInfo, type ProductInfo } from "./actions";
 
 /** Opzoeken: scan een product en bekijk prijs, maten en voorraad (lees-alleen). */
 export function ProductLookup() {
+  const uiT = useUiTranslation();
   const [info, setInfo] = useState<ProductInfo | null>(null);
   const [notFound, setNotFound] = useState<string | null>(null);
   const [manual, setManual] = useState("");
@@ -56,26 +58,23 @@ export function ProductLookup() {
           <Input
             value={manual}
             onChange={(e) => setManual(e.target.value)}
-            placeholder="…of typ een barcode / SKU"
+            placeholder={uiT("…of typ een barcode / SKU")}
           />
           <Button type="submit" variant="secondary" disabled={busy}>
-            Zoek
-          </Button>
+            {uiT("Zoek")} </Button>
         </form>
       )}
 
       {notFound && (
         <div className="space-y-3 rounded-lg border p-4 text-sm">
           <p>
-            Geen product met code <span className="font-mono">{notFound}</span>.
+            {uiT("Geen product met code")} <span className="font-mono">{notFound}</span>.
           </p>
           <div className="flex flex-wrap gap-2">
             <Button variant="secondary" onClick={reset}>
-              Opnieuw scannen
-            </Button>
+              {uiT("Opnieuw scannen")} </Button>
             <LinkButton href="/products" variant="ghost">
-              Naar producten
-            </LinkButton>
+              {uiT("Naar producten")} </LinkButton>
           </div>
         </div>
       )}
@@ -99,7 +98,7 @@ export function ProductLookup() {
               </p>
               <div className="mt-1.5">
                 <Badge tone={info.availability === "stock" ? "success" : "neutral"}>
-                  {info.availability === "stock" ? "Op voorraad-artikel" : "Op bestelling"}
+                  {info.availability === "stock" ? uiT("Op voorraad-artikel") : uiT("Op bestelling")}
                 </Badge>
               </div>
             </div>
@@ -108,22 +107,22 @@ export function ProductLookup() {
           {/* Prijzen */}
           <div className="grid grid-cols-2 gap-3">
             <div className="rounded-md bg-background p-3">
-              <p className="text-xs text-muted">Showroom (particulier)</p>
+              <p className="text-xs text-muted">{uiT("Showroom (particulier)")}</p>
               <p className="text-lg font-semibold tabular-nums">
                 {info.priceEur != null ? formatEUR(incl(info.priceEur, info.vatRate)) : "—"}
               </p>
               <p className="text-xs text-muted">
-                {info.priceEur != null ? `${formatEUR(info.priceEur)} excl. · ` : ""}
-                {info.vatRate}% btw{info.unit ? ` · per ${info.unit}` : ""}
+                {info.priceEur != null ? uiT("{v0} excl. · ", { v0: formatEUR(info.priceEur) }) : ""}
+                {info.vatRate}{uiT("% btw")}{info.unit ? uiT(" · per {v0}", { v0: info.unit }) : ""}
               </p>
             </div>
             <div className="rounded-md bg-background p-3">
-              <p className="text-xs text-muted">Zakelijk (B2B)</p>
+              <p className="text-xs text-muted">{uiT("Zakelijk (B2B)")}</p>
               <p className="text-lg font-semibold tabular-nums">
                 {info.tradePriceEur != null ? formatEUR(incl(info.tradePriceEur, info.vatRate)) : "—"}
               </p>
               <p className="text-xs text-muted">
-                {info.tradePriceEur != null ? `${formatEUR(info.tradePriceEur)} excl.` : "geen B2B-prijs"}
+                {info.tradePriceEur != null ? uiT("{v0} excl.", { v0: formatEUR(info.tradePriceEur) }) : uiT("geen B2B-prijs")}
               </p>
             </div>
           </div>
@@ -132,14 +131,14 @@ export function ProductLookup() {
           <dl className="grid grid-cols-2 gap-x-3 gap-y-1.5 text-sm">
             {info.dimensions && (
               <>
-                <dt className="text-muted">Afmetingen</dt>
+                <dt className="text-muted">{uiT("Afmetingen")}</dt>
                 <dd className="text-right tabular-nums">{info.dimensions}</dd>
               </>
             )}
-            <dt className="text-muted">Voorraad</dt>
+            <dt className="text-muted">{uiT("Voorraad")}</dt>
             <dd className="text-right tabular-nums">
               <span className={info.stockQty <= 0 ? "text-danger" : ""}>{info.stockQty}</span>
-              {info.stockMin != null && <span className="text-muted"> / min {info.stockMin}</span>}
+              {info.stockMin != null && <span className="text-muted"> {uiT("/ min")} {info.stockMin}</span>}
             </dd>
           </dl>
 
@@ -147,8 +146,7 @@ export function ProductLookup() {
           {info.sizes.length > 0 && (
             <div>
               <p className="mb-1 text-xs font-medium uppercase tracking-wide text-muted">
-                Beschikbare maten
-              </p>
+                {uiT("Beschikbare maten")} </p>
               <ul className="divide-y rounded-md border text-sm">
                 {info.sizes.map((s, i) => (
                   <li key={i} className="flex items-center justify-between gap-2 px-3 py-2">
@@ -161,7 +159,7 @@ export function ProductLookup() {
                         <span className="block tabular-nums">{formatEUR(s.priceEur)}</span>
                       )}
                       <span className={`text-xs ${s.inStock ? "text-success" : "text-muted"}`}>
-                        {s.inStock ? `voorraad ${s.stockQty ?? ""}`.trim() : "op bestelling"}
+                        {s.inStock ? `voorraad ${s.stockQty ?? ""}`.trim() : uiT("op bestelling")}
                       </span>
                     </span>
                   </li>
@@ -176,11 +174,9 @@ export function ProductLookup() {
 
           <div className="flex flex-wrap gap-2">
             <Button variant="secondary" onClick={reset}>
-              Volgende scannen
-            </Button>
+              {uiT("Volgende scannen")} </Button>
             <LinkButton href={`/products/${info.id}`} variant="ghost">
-              Open product →
-            </LinkButton>
+              {uiT("Open product →")} </LinkButton>
           </div>
         </div>
       )}

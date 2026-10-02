@@ -13,14 +13,14 @@ export function cn(...inputs: ClassValue[]) {
 export { formatEUR } from "./parse-money";
 
 /** Format a date (Date | ISO string | unix seconds) as a short readable string. */
-export function formatDate(value: Date | string | number | null | undefined) {
+export function formatDate(value: Date | string | number | null | undefined, locale = "nl-NL") {
   if (value == null) return "—";
   const d =
     typeof value === "number"
       ? new Date(value * (value < 1e12 ? 1000 : 1))
       : new Date(value);
   if (Number.isNaN(d.getTime())) return "—";
-  return new Intl.DateTimeFormat("nl-NL", {
+  return new Intl.DateTimeFormat(locale, {
     day: "numeric",
     month: "short",
     year: "numeric",

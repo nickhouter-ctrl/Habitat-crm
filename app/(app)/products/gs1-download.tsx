@@ -1,4 +1,5 @@
 "use client";
+import { useT as useUiTranslation } from '@/components/taal-provider';
 
 import { useState } from "react";
 
@@ -6,16 +7,17 @@ import { buttonClass } from "@/components/ui";
 
 /** Dropdown waarmee je kunt kiezen sinds wanneer producten in de GS1-export. */
 export function Gs1ExcelDownload() {
+  const uiT = useUiTranslation();
   const [open, setOpen] = useState(false);
   const [since, setSince] = useState<string>("");
 
   const url = since ? `/api/products/barcodes-xlsx?since=${since}` : "/api/products/barcodes-xlsx";
 
   const presets: Array<{ label: string; daysBack: number | null }> = [
-    { label: "Alle barcodes", daysBack: null },
-    { label: "Sinds vandaag", daysBack: 0 },
-    { label: "Laatste 7 dagen", daysBack: 7 },
-    { label: "Laatste 30 dagen", daysBack: 30 },
+    { label: uiT("Alle barcodes"), daysBack: null },
+    { label: uiT("Sinds vandaag"), daysBack: 0 },
+    { label: uiT("Laatste 7 dagen"), daysBack: 7 },
+    { label: uiT("Laatste 30 dagen"), daysBack: 30 },
   ];
 
   const setPreset = (daysBack: number | null) => {
@@ -34,15 +36,14 @@ export function Gs1ExcelDownload() {
         type="button"
         onClick={() => setOpen((o) => !o)}
         className={buttonClass({ variant: "secondary" })}
-        title="MijnGS1 import-template (xlsx) — kies welke barcodes je wilt exporteren"
+        title={uiT("MijnGS1 import-template (xlsx) — kies welke barcodes je wilt exporteren")}
       >
-        GS1 Excel ▾
-      </button>
+        {uiT("GS1 Excel ▾")} </button>
       {open && (
         <>
           <div className="fixed inset-0 z-10" onClick={() => setOpen(false)} />
           <div className="absolute right-0 z-20 mt-1 w-72 rounded-md border border-border bg-background p-3 shadow-lg">
-            <p className="mb-2 text-xs font-medium text-muted">Welke producten?</p>
+            <p className="mb-2 text-xs font-medium text-muted">{uiT("Welke producten?")}</p>
             <div className="grid grid-cols-2 gap-1">
               {presets.map((p) => (
                 <button
@@ -57,7 +58,7 @@ export function Gs1ExcelDownload() {
             </div>
 
             <div className="mt-3 border-t border-border pt-3">
-              <label className="text-xs text-muted">Of vanaf specifieke datum:</label>
+              <label className="text-xs text-muted">{uiT("Of vanaf specifieke datum:")}</label>
               <input
                 type="date"
                 value={since}
@@ -69,20 +70,16 @@ export function Gs1ExcelDownload() {
             <div className="mt-3 rounded-md bg-background-soft p-2 text-xs">
               {since ? (
                 <>
-                  Alleen producten met barcode <strong>gewijzigd vanaf {since}</strong>.
+                  {uiT("Alleen producten met barcode")} <strong>{uiT("gewijzigd vanaf")} {since}</strong>.
                 </>
               ) : (
                 <>
-                  <strong>Alle</strong> producten met barcode — risico op dubbele
-                  import als ze al in GS1 staan.
-                </>
+                  <strong>{uiT("Alle")}</strong> {uiT("producten met barcode — risico op dubbele import als ze al in GS1 staan.")} </>
               )}
             </div>
 
             <p className="mt-2 text-[11px] leading-snug text-muted">
-              Zonder productfoto&apos;s — onze website-crops zijn vaak te klein/bannervormig en
-              laten AECOC de import afkeuren. Foto&apos;s kun je later in MijnGS1 toevoegen.
-            </p>
+              {uiT("Zonder productfoto's — onze website-crops zijn vaak te klein/bannervormig en laten AECOC de import afkeuren. Foto's kun je later in MijnGS1 toevoegen.")} </p>
 
             <a
               href={url}
@@ -90,8 +87,7 @@ export function Gs1ExcelDownload() {
               onClick={() => setOpen(false)}
               className={`mt-3 inline-flex w-full justify-center ${buttonClass({ variant: "primary" })}`}
             >
-              Download .xlsx
-            </a>
+              {uiT("Download .xlsx")} </a>
           </div>
         </>
       )}

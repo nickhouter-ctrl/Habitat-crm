@@ -1,3 +1,4 @@
+import { tekst } from "@/lib/i18n/server";
 import Link from "next/link";
 
 import { cn } from "@/lib/utils";
@@ -13,7 +14,8 @@ const TABS = [
 ];
 
 /** Tabbalk over de rapporten-pagina's. `active` = het huidige pad. */
-export function ReportsNav({ active }: { active: string }) {
+export async function ReportsNav({ active }: { active: string }) {
+  const uiT = await tekst();
   return (
     <div className="mb-6 flex gap-0.5 overflow-x-auto border-b border-border">
       {TABS.map((t) => {
@@ -27,7 +29,7 @@ export function ReportsNav({ active }: { active: string }) {
               on ? "border-accent text-accent" : "border-transparent text-muted hover:border-border hover:text-foreground",
             )}
           >
-            {t.label}
+            {uiT(t.label)}
           </Link>
         );
       })}

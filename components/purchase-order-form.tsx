@@ -1,4 +1,5 @@
 "use client";
+import { useT as useUiTranslation } from '@/components/taal-provider';
 
 import { FileText, Loader2, Plus, Trash2, Upload, X } from "lucide-react";
 import { useMemo, useRef, useState } from "react";
@@ -91,6 +92,7 @@ export function PurchaseOrderForm({
   workers?: POWorkerOption[];
   action: (formData: FormData) => void | Promise<void>;
 }) {
+  const uiT = useUiTranslation();
   const [kind, setKind] = useState<"order" | "invoice">(
     (order?.kind as "order" | "invoice") ?? "order",
   );
@@ -259,9 +261,7 @@ export function PurchaseOrderForm({
       </div>
       {kind === "invoice" && (
         <p className="-mt-3 text-xs text-muted">
-          Voor een binnengekomen factuur of bon (werknemer, materialen…): vul het bedrag in en hang de
-          PDF eronder. Geen productregels of voorraad.
-        </p>
+          {uiT("Voor een binnengekomen factuur of bon (werknemer, materialen…): vul het bedrag in en hang de PDF eronder. Geen productregels of voorraad.")} </p>
       )}
 
       {/* Upload / auto-read */}
@@ -275,13 +275,10 @@ export function PurchaseOrderForm({
             onClick={() => fileRef.current?.click()}
           >
             {uploading ? <Loader2 className="size-4 animate-spin" /> : <Upload className="size-4" />}
-            {uploading ? "Bezig met uitlezen…" : "Document uploaden (PDF)"}
+            {uploading ? uiT("Bezig met uitlezen…") : uiT("Document uploaden (PDF)")}
           </Button>
           <span className="text-xs text-muted">
-            Proforma, factuur of bon. De PDF wordt automatisch uitgelezen (leverancier, bedrag,
-            {kind === "order" ? " regels, aantallen" : " datum"}). Excel/afbeelding wordt alleen als
-            bijlage bewaard.
-          </span>
+            {uiT("Proforma, factuur of bon. De PDF wordt automatisch uitgelezen (leverancier, bedrag,")} {kind === "order" ? uiT(" regels, aantallen") : uiT(" datum")}{uiT("). Excel/afbeelding wordt alleen als bijlage bewaard.")} </span>
           <input
             ref={fileRef}
             type="file"
@@ -308,13 +305,13 @@ export function PurchaseOrderForm({
                 <FileText className="size-4 shrink-0 text-muted" />
                 <span className="flex-1 truncate">{a.name}</span>
                 {a.size != null && (
-                  <span className="text-xs text-muted">{Math.round(a.size / 1024)} kB</span>
+                  <span className="text-xs text-muted">{Math.round(a.size / 1024)} {uiT("kB")}</span>
                 )}
                 <button
                   type="button"
                   onClick={() => setAttachments((arr) => arr.filter((_, idx) => idx !== i))}
                   className="text-muted hover:text-danger"
-                  aria-label="Bijlage verwijderen"
+                  aria-label={uiT("Bijlage verwijderen")}
                 >
                   <X className="size-4" />
                 </button>
@@ -326,9 +323,9 @@ export function PurchaseOrderForm({
 
       <div className="grid gap-4 sm:grid-cols-2">
         <Field
-          label="Leverancier"
+          label={uiT("Leverancier")}
           htmlFor="supplier"
-          hint={suppliers.length ? "kies uit de lijst of typ een nieuwe naam" : undefined}
+          hint={suppliers.length ? uiT("kies uit de lijst of typ een nieuwe naam") : undefined}
         >
           {/* Bewust een datalist en geen keuzelijst: een leverancier kan ook
               iemand zijn die er nog niet in staat, en het veld wordt door het
@@ -343,7 +340,7 @@ export function PurchaseOrderForm({
             autoComplete="off"
             value={supplier}
             onChange={(e) => setSupplier(e.target.value)}
-            placeholder="KingKonree International (H.K) Limited"
+            placeholder={uiT("KingKonree International (H.K) Limited")}
           />
           <datalist id="po-suppliers">
             {suppliers.map((s) => (
@@ -353,25 +350,25 @@ export function PurchaseOrderForm({
             ))}
           </datalist>
         </Field>
-        <Field label="Referentie / PI-nummer" htmlFor="reference">
+        <Field label={uiT("Referentie / PI-nummer")} htmlFor="reference">
           <Input
             id="reference"
             name="reference"
             value={reference}
             onChange={(e) => setReference(e.target.value)}
-            placeholder="33#kkr20251126xm"
+            placeholder={uiT("33#kkr20251126xm")}
           />
         </Field>
-        <Field label="Status" htmlFor="status">
+        <Field label={uiT("Status")} htmlFor="status">
           <Select id="status" name="status" value={status} onChange={(e) => setStatus(e.target.value as PurchaseOrder["status"])}>
             {Object.entries(PO_STATUS_META).map(([v, m]) => (
               <option key={v} value={v}>
-                {m.label}
+                {uiT(m.label)}
               </option>
             ))}
           </Select>
         </Field>
-        <Field label="Valuta" htmlFor="currency">
+        <Field label={uiT("Valuta")} htmlFor="currency">
           <Select id="currency" name="currency" value={currency} onChange={(e) => setCurrency(e.target.value)}>
             {[...new Set([currency, ...CURRENCIES])].map((c) => (
               <option key={c} value={c}>
@@ -380,7 +377,7 @@ export function PurchaseOrderForm({
             ))}
           </Select>
         </Field>
-        <Field label="Besteldatum" htmlFor="orderDate">
+        <Field label={uiT("Besteldatum")} htmlFor="orderDate">
           <Input
             id="orderDate"
             name="orderDate"
@@ -389,7 +386,7 @@ export function PurchaseOrderForm({
             onChange={(e) => setOrderDate(e.target.value)}
           />
         </Field>
-        <Field label="Verwacht binnen" htmlFor="expectedDate">
+        <Field label={uiT("Verwacht binnen")} htmlFor="expectedDate">
           <Input
             id="expectedDate"
             name="expectedDate"
@@ -403,7 +400,7 @@ export function PurchaseOrderForm({
       {kind === "invoice" ? (
         <>
         <div className="grid gap-4 sm:grid-cols-2">
-          <Field label={`Bedrag totaal (incl. btw, ${currency})`} htmlFor="amountTotal">
+          <Field label={uiT("Bedrag totaal (incl. btw, {v0})", { v0: currency })} htmlFor="amountTotal">
             <Input
               id="amountTotal"
               inputMode="decimal"
@@ -417,7 +414,7 @@ export function PurchaseOrderForm({
               className="text-right"
             />
           </Field>
-          <Field label={`Subtotaal (ex. btw, ${currency})`} htmlFor="amountSubtotal" hint="leeg = gelijk aan totaal (bv. btw verlegd)">
+          <Field label={uiT("Subtotaal (ex. btw, {v0})", { v0: currency })} htmlFor="amountSubtotal" hint={uiT("leeg = gelijk aan totaal (bv. btw verlegd)")}>
             <Input
               id="amountSubtotal"
               inputMode="decimal"
@@ -435,15 +432,15 @@ export function PurchaseOrderForm({
         {nieuw && projects.length > 0 && (
           <div className="space-y-3 rounded-lg border bg-background/50 p-4">
             <div>
-              <span className="text-sm font-semibold">Bij welke werf hoort dit? </span>
-              <span className="text-xs text-muted">optioneel — kan ook later</span>
+              <span className="text-sm font-semibold">{uiT("Bij welke werf hoort dit?")} </span>
+              <span className="text-xs text-muted">{uiT("optioneel — kan ook later")}</span>
             </div>
             <Combobox
               name="linkProjectId"
               options={projects.map((p) => ({ value: p.id, label: p.name }))}
               defaultValue=""
               clearable
-              placeholder="Zoek een werf…"
+              placeholder={uiT("Zoek een werf…")}
               menuClassName="w-full"
               onSelect={(v) => setLinkProjectId(v)}
             />
@@ -476,7 +473,7 @@ export function PurchaseOrderForm({
                 {linkKind === "labor" && (
                   <div className="space-y-3">
                     <div>
-                      <label className="mb-1.5 block text-sm font-medium">Wie heeft deze uren gemaakt?</label>
+                      <label className="mb-1.5 block text-sm font-medium">{uiT("Wie heeft deze uren gemaakt?")}</label>
                       <Combobox
                         name="linkWorkerId"
                         options={workers.map((w) => ({
@@ -486,7 +483,7 @@ export function PurchaseOrderForm({
                         }))}
                         defaultValue=""
                         clearable
-                        placeholder="Zoek in de ploeg…"
+                        placeholder={uiT("Zoek in de ploeg…")}
                         menuClassName="w-full"
                         onSelect={(v) => kiesWerker(v)}
                       />
@@ -494,8 +491,7 @@ export function PurchaseOrderForm({
                     <div className="flex flex-wrap items-end gap-3">
                       <div className="w-32">
                         <label className="mb-1.5 block text-sm font-medium" htmlFor="linkHours">
-                          Aantal uren
-                        </label>
+                          {uiT("Aantal uren")} </label>
                         <Input
                           id="linkHours"
                           name="linkHours"
@@ -506,15 +502,15 @@ export function PurchaseOrderForm({
                             setLinkHours(e.target.value);
                             setUrenZelfGetypt(true);
                           }}
-                          placeholder="bijv. 94,5"
+                          placeholder={uiT("bijv. 94,5")}
                         />
                       </div>
                       <p className="flex-1 text-xs text-muted">
                         {berekendeUren != null && !urenZelfGetypt && linkHours === String(berekendeUren)
-                          ? `Berekend: € ${bedragExBtw.toFixed(2)} ex btw ÷ € ${werkerTarief}/u van zijn ploegkaart. Noemt de factuur andere uren, typ ze er dan overheen.`
+                          ? uiT("Berekend: € {v0} ex btw ÷ € {v1}/u van zijn ploegkaart. Noemt de factuur andere uren, typ ze er dan overheen.", { v0: bedragExBtw.toFixed(2), v1: werkerTarief })
                           : linkWorkerId && werkerTarief <= 0
-                            ? "Op zijn ploegkaart staat geen uurtarief. Vul de uren zelf in, anders komt het hele bedrag als één post van 1 uur op de werf."
-                            : "Kies eerst het bedrag en de arbeider; de uren volgen dan uit zijn tarief."}
+                            ? uiT("Op zijn ploegkaart staat geen uurtarief. Vul de uren zelf in, anders komt het hele bedrag als één post van 1 uur op de werf.")
+                            : uiT("Kies eerst het bedrag en de arbeider; de uren volgen dan uit zijn tarief.")}
                       </p>
                     </div>
                   </div>
@@ -527,10 +523,9 @@ export function PurchaseOrderForm({
       ) : (
       <div>
         <div className="mb-2 flex items-center justify-between">
-          <h2 className="text-sm font-semibold">Regels</h2>
+          <h2 className="text-sm font-semibold">{uiT("Regels")}</h2>
           <Button type="button" variant="ghost" size="sm" onClick={() => setRows((rs) => [...rs, toRow({})])}>
-            <Plus className="size-4" /> Regel
-          </Button>
+            <Plus className="size-4" /> {uiT("Regel")} </Button>
         </div>
 
         <div className="space-y-2">
@@ -545,7 +540,7 @@ export function PurchaseOrderForm({
                   <Combobox
                     options={productOptions}
                     defaultValue={r.productId}
-                    placeholder="Koppel product (optioneel)…"
+                    placeholder={uiT("Koppel product (optioneel)…")}
                     clearable
                     emptyText="Geen product"
                     onSelect={(v) => {
@@ -559,15 +554,15 @@ export function PurchaseOrderForm({
                   <Input
                     value={r.name}
                     onChange={(e) => update(i, { name: e.target.value })}
-                    placeholder="Omschrijving"
+                    placeholder={uiT("Omschrijving")}
                   />
                 </div>
                 <div className="space-y-1">
-                  <Input value={r.sku} onChange={(e) => update(i, { sku: e.target.value })} placeholder="SKU" />
+                  <Input value={r.sku} onChange={(e) => update(i, { sku: e.target.value })} placeholder={uiT("SKU")} />
                   <Input
                     value={r.note}
                     onChange={(e) => update(i, { note: e.target.value })}
-                    placeholder="Notitie (kleur, maat…)"
+                    placeholder={uiT("Notitie (kleur, maat…)")}
                   />
                 </div>
                 <Input
@@ -576,7 +571,7 @@ export function PurchaseOrderForm({
                   min="0"
                   value={r.units}
                   onChange={(e) => update(i, { units: e.target.value })}
-                  placeholder="Aantal"
+                  placeholder={uiT("Aantal")}
                   className="text-right"
                 />
                 <div className="space-y-1">
@@ -585,7 +580,7 @@ export function PurchaseOrderForm({
                     step="any"
                     value={r.unitPrice}
                     onChange={(e) => update(i, { unitPrice: e.target.value })}
-                    placeholder="Stukprijs"
+                    placeholder={uiT("Stukprijs")}
                     className="text-right"
                   />
                   <div className="px-1 text-right text-xs text-muted tabular-nums">
@@ -596,7 +591,7 @@ export function PurchaseOrderForm({
                   type="button"
                   onClick={() => setRows((rs) => (rs.length > 1 ? rs.filter((_, idx) => idx !== i) : rs))}
                   className="mt-0.5 flex size-9 items-center justify-center rounded-md text-muted transition-colors hover:bg-danger/10 hover:text-danger"
-                  aria-label="Regel verwijderen"
+                  aria-label={uiT("Regel verwijderen")}
                 >
                   <Trash2 className="size-4" />
                 </button>
@@ -606,26 +601,26 @@ export function PurchaseOrderForm({
         </div>
 
         <div className="mt-3 flex justify-end text-sm">
-          <span className="text-muted">Totaal:&nbsp;</span>
+          <span className="text-muted">{uiT("Totaal:")}</span>
           <span className="font-semibold tabular-nums">{formatMoney(total, currency)}</span>
         </div>
       </div>
       )}
 
-      <Field label="Notities" htmlFor="notes">
+      <Field label={uiT("Notities")} htmlFor="notes">
         <Textarea
           id="notes"
           name="notes"
           rows={3}
           value={notes}
           onChange={(e) => setNotes(e.target.value)}
-          placeholder="Levertijd, aanbetaling, opmerkingen…"
+          placeholder={uiT("Levertijd, aanbetaling, opmerkingen…")}
         />
       </Field>
 
       <div className="flex gap-2">
-        <SubmitButton pendingLabel="Opslaan…">
-          {order ? "Opslaan" : kind === "invoice" ? "Factuur toevoegen" : "Bestelling aanmaken"}
+        <SubmitButton pendingLabel={uiT("Opslaan…")}>
+          {order ? uiT("Opslaan") : kind === "invoice" ? uiT("Factuur toevoegen") : uiT("Bestelling aanmaken")}
         </SubmitButton>
       </div>
     </form>

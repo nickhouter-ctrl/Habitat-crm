@@ -1,3 +1,5 @@
+import { datumTaal } from "@/lib/i18n/server";
+import { tekst as uiTranslation } from '@/lib/i18n/server';
 /**
  * Meerwerk — wat er buiten de aanneemsom is afgesproken.
  *
@@ -31,6 +33,8 @@ import { formatEUR } from "@/lib/utils";
 import { addProjectExtra, deleteProjectExtra, toggleProjectExtraApproved } from "../actions";
 
 export async function ProjectExtrasCard({ projectId }: { projectId: string }) {
+  const uiDateLocale = await datumTaal();
+  const uiT = await uiTranslation();
   const regels = await db
     .select()
     .from(projectExtras)
@@ -44,30 +48,27 @@ export async function ProjectExtrasCard({ projectId }: { projectId: string }) {
   return (
     <Card id="meerwerk" className="mb-5 scroll-mt-24">
       <CardHeader>
-        <CardTitle>Meerwerk</CardTitle>
+        <CardTitle>{uiT("Meerwerk")}</CardTitle>
         <span className="text-xs text-muted">
-          buiten de aanneemsom · komt op de eindafrekening bovenop
-          {totaal > 0 ? ` · ${formatEUR(totaal)} ex. btw${kost > 0 ? ` (kostprijs ${formatEUR(kost)})` : ""}` : ""}
+          {uiT("buiten de aanneemsom · komt op de eindafrekening bovenop")} {totaal > 0 ? uiT(" · {v0} ex. btw{v1}", { v0: formatEUR(totaal), v1: kost > 0 ? ` (kostprijs ${formatEUR(kost)})` : "" }) : ""}
         </span>
       </CardHeader>
       <CardContent className="space-y-4">
         {zonderAkkoord.length > 0 && (
           <p className="rounded-md bg-warning/10 p-3 text-sm">
-            {zonderAkkoord.length} {zonderAkkoord.length === 1 ? "regel" : "regels"} zonder akkoord van de klant, samen{" "}
-            {formatEUR(zonderAkkoord.reduce((s, r) => s + Number(r.amountEur ?? 0), 0))}. Leg dat vast vóór de
-            eindafrekening — achteraf is het een discussie.
-          </p>
+            {zonderAkkoord.length} {zonderAkkoord.length === 1 ? uiT("regel") : uiT("regels")} {uiT("zonder akkoord van de klant, samen")}{" "}
+            {formatEUR(zonderAkkoord.reduce((s, r) => s + Number(r.amountEur ?? 0), 0))}{uiT(". Leg dat vast vóór de eindafrekening — achteraf is het een discussie.")} </p>
         )}
 
         {regels.length > 0 && (
           <Table>
             <THead>
               <tr>
-                <Th>Datum</Th>
-                <Th>Wat</Th>
-                <Th className="text-right">Kostprijs</Th>
-                <Th className="text-right">Aan klant</Th>
-                <Th>Akkoord</Th>
+                <Th>{uiT("Datum")}</Th>
+                <Th>{uiT("Wat")}</Th>
+                <Th className="text-right">{uiT("Kostprijs")}</Th>
+                <Th className="text-right">{uiT("Aan klant")}</Th>
+                <Th>{uiT("Akkoord")}</Th>
                 <Th />
               </tr>
             </THead>
@@ -75,7 +76,7 @@ export async function ProjectExtrasCard({ projectId }: { projectId: string }) {
               {regels.map((r) => (
                 <Tr key={r.id}>
                   <Td className="whitespace-nowrap text-muted">
-                    {new Date(r.date).toLocaleDateString("nl-NL", { day: "numeric", month: "short" })}
+                    {new Date(r.date).toLocaleDateString(uiDateLocale, { day: "numeric", month: "short" })}
                   </Td>
                   <Td>
                     <span className="font-medium">{r.description}</span>
@@ -89,9 +90,9 @@ export async function ProjectExtrasCard({ projectId }: { projectId: string }) {
                     <form action={toggleProjectExtraApproved.bind(null, projectId, r.id, !r.approvedAt)}>
                       <button type="submit" className="text-left">
                         {r.approvedAt ? (
-                          <Badge tone="success">akkoord</Badge>
+                          <Badge tone="success">{uiT("akkoord")}</Badge>
                         ) : (
-                          <Badge tone="warning">nog niet</Badge>
+                          <Badge tone="warning">{uiT("nog niet")}</Badge>
                         )}
                       </button>
                     </form>
@@ -99,11 +100,10 @@ export async function ProjectExtrasCard({ projectId }: { projectId: string }) {
                   <Td className="text-right">
                     <form action={deleteProjectExtra.bind(null, projectId, r.id)}>
                       <ConfirmSubmit
-                        message={`"${r.description}" verwijderen?`}
+                        message={uiT("\"{v0}\" verwijderen?", { v0: r.description })}
                         className="rounded p-1 text-xs text-muted transition-colors hover:bg-danger/10 hover:text-danger"
                       >
-                        ×
-                      </ConfirmSubmit>
+                        {uiT("×")} </ConfirmSubmit>
                     </form>
                   </Td>
                 </Tr>
@@ -119,26 +119,25 @@ export async function ProjectExtrasCard({ projectId }: { projectId: string }) {
           action={addProjectExtra.bind(null, projectId)}
           className="grid gap-x-3 gap-y-1 lg:grid-cols-[2fr_0.9fr_0.9fr_0.9fr_auto] lg:grid-rows-[auto_auto_auto] lg:items-end"
         >
-          <Field className="lg:row-span-3 lg:grid lg:grid-rows-subgrid lg:gap-1.5" label="Wat is er afgesproken?" htmlFor="mw-desc">
-            <Input id="mw-desc" name="description" required placeholder="bijv. extra badkamer betegelen" />
+          <Field className="lg:row-span-3 lg:grid lg:grid-rows-subgrid lg:gap-1.5" label={uiT("Wat is er afgesproken?")} htmlFor="mw-desc">
+            <Input id="mw-desc" name="description" required placeholder={uiT("bijv. extra badkamer betegelen")} />
           </Field>
-          <Field className="lg:row-span-3 lg:grid lg:grid-rows-subgrid lg:gap-1.5" label="Aan klant (€)" htmlFor="mw-amount" hint="ex. btw">
+          <Field className="lg:row-span-3 lg:grid lg:grid-rows-subgrid lg:gap-1.5" label={uiT("Aan klant (€)")} htmlFor="mw-amount" hint={uiT("ex. btw")}>
             <Input id="mw-amount" name="amountEur" inputMode="decimal" required className="text-right" placeholder="0,00" />
           </Field>
-          <Field className="lg:row-span-3 lg:grid lg:grid-rows-subgrid lg:gap-1.5" label="Kostprijs (€)" htmlFor="mw-cost" hint="optioneel">
+          <Field className="lg:row-span-3 lg:grid lg:grid-rows-subgrid lg:gap-1.5" label={uiT("Kostprijs (€)")} htmlFor="mw-cost" hint={uiT("optioneel")}>
             <Input id="mw-cost" name="costEur" inputMode="decimal" className="text-right" placeholder="—" />
           </Field>
-          <Field className="lg:row-span-3 lg:grid lg:grid-rows-subgrid lg:gap-1.5" label="Datum" htmlFor="mw-date">
+          <Field className="lg:row-span-3 lg:grid lg:grid-rows-subgrid lg:gap-1.5" label={uiT("Datum")} htmlFor="mw-date">
             <Input id="mw-date" name="date" type="date" defaultValue={new Date().toISOString().slice(0, 10)} />
           </Field>
           <div className="lg:row-span-3 lg:self-end">
             <SubmitButton variant="secondary" pendingLabel="…">
-              + Meerwerk
-            </SubmitButton>
+              {uiT("+ Meerwerk")} </SubmitButton>
           </div>
           <label className="mt-1 flex items-center gap-2 text-sm lg:col-span-5">
             <input type="checkbox" name="approved" />
-            <span>De klant is hiermee akkoord</span>
+            <span>{uiT("De klant is hiermee akkoord")}</span>
           </label>
         </form>
       </CardContent>

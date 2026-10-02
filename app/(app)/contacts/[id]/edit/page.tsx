@@ -1,3 +1,4 @@
+import { tekst as uiTranslation } from '@/lib/i18n/server';
 import { eq } from "drizzle-orm";
 import Link from "next/link";
 import { notFound } from "next/navigation";
@@ -9,7 +10,10 @@ import { companies, contacts } from "@/lib/db/schema";
 import { addressSuggestions } from "../../../documents/actions";
 import { updateContact } from "../../actions";
 
-export const metadata = { title: "Contact bewerken" };
+export async function generateMetadata() {
+  const uiT = await uiTranslation();
+  return { title: uiT("Contact bewerken") };
+}
 
 export default async function EditContactPage({
   params,
@@ -18,6 +22,7 @@ export default async function EditContactPage({
   params: Promise<{ id: string }>;
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
+  const uiT = await uiTranslation();
   const { id } = await params;
   const sp = await searchParams;
   const hasError = sp.error === "validation";
@@ -64,12 +69,11 @@ export default async function EditContactPage({
   return (
     <>
       <PageHeader
-        title="Contact bewerken"
+        title={uiT("Contact bewerken")}
         subtitle={contact.name}
         actions={
           <Link href={`/contacts/${id}`} className="text-sm text-muted hover:underline">
-            ← Terug naar contact
-          </Link>
+            {uiT("← Terug naar contact")} </Link>
         }
       />
 
@@ -77,14 +81,13 @@ export default async function EditContactPage({
         <CardContent>
           {hasError && (
             <p className="mb-4 rounded-md bg-red-50 px-3 py-2 text-sm text-danger">
-              Controleer de ingevulde gegevens (geldig e-mailadres?).
-            </p>
+              {uiT("Controleer de ingevulde gegevens (geldig e-mailadres?).")} </p>
           )}
           <ContactCreateForm
             action={save}
             onSuggest={addressSuggestions}
             initial={initial}
-            submitLabel="Wijzigingen opslaan"
+            submitLabel={uiT("Wijzigingen opslaan")}
           />
         </CardContent>
       </Card>

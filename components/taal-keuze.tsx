@@ -1,4 +1,5 @@
 "use client";
+import { useT as useUiTranslation } from '@/components/taal-provider';
 
 import { useTransition } from "react";
 import { Languages } from "lucide-react";
@@ -27,10 +28,11 @@ export function TaalKeuze({
   /** Alleen de codes (NL · EN · ES), voor de bovenbalk. */
   compact?: boolean;
 }) {
+  const uiT = useUiTranslation();
   const [pending, start] = useTransition();
 
   return (
-    <div className={cn("flex items-center gap-1", className)} role="group" aria-label="Taal">
+    <div className={cn("flex items-center gap-1", className)} role="group" aria-label={uiT("Taal")}>
       {!compact && <Languages className="mr-1 size-4 shrink-0 text-muted" aria-hidden />}
       {LOCALES.map((l) => (
         <button

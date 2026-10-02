@@ -1,3 +1,4 @@
+import { tekst as uiTranslation } from '@/lib/i18n/server';
 /**
  * Editor voor een nieuwe creative (brief §7): /marketing/creatives/new.
  * Met ?assetId= komt het beeld uit de bibliotheek voorgeselecteerd; met
@@ -25,7 +26,10 @@ import { getEditorSuggestion } from "@/lib/marketing/facets";
 import { marketingStorage } from "@/lib/marketing/storage";
 import { subcategoryForFamily } from "@/lib/marketing/taxonomy";
 
-export const metadata = { title: "Nieuwe creative" };
+export async function generateMetadata() {
+  const uiT = await uiTranslation();
+  return { title: uiT("Nieuwe creative") };
+}
 
 function safeUrl(path: string): string | null {
   try {
@@ -40,6 +44,7 @@ export default async function NewCreativePage({
 }: {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
+  const uiT = await uiTranslation();
   const params = await searchParams;
   const assetIdParam = typeof params.assetId === "string" ? params.assetId : "";
   const fromId = typeof params.from === "string" ? params.from : "";
@@ -138,11 +143,11 @@ export default async function NewCreativePage({
   return (
     <>
       <PageHeader
-        title={fromId ? "Dupliceer en pas aan" : "Nieuwe creative"}
+        title={fromId ? uiT("Dupliceer en pas aan") : uiT("Nieuwe creative")}
         subtitle={
           fromId
-            ? "Een lopende advertentie wijzig je niet — je maakt een kopie en past die aan (anders gaat de leerfase verloren)."
-            : "Kies beeld(en), sjabloon en teksten; de preview toont exact wat er naar Meta gaat."
+            ? uiT("Een lopende advertentie wijzig je niet — je maakt een kopie en past die aan (anders gaat de leerfase verloren).")
+            : uiT("Kies beeld(en), sjabloon en teksten; de preview toont exact wat er naar Meta gaat.")
         }
       />
       <CreativeEditor

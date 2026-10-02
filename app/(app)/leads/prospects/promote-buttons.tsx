@@ -1,4 +1,5 @@
 "use client";
+import { useT as useUiTranslation } from '@/components/taal-provider';
 
 import { useState } from "react";
 
@@ -16,6 +17,7 @@ export function PromoteButtons({
   naam: string;
   action: (id: string, formData: FormData) => Promise<void>;
 }) {
+  const uiT = useUiTranslation();
   const [busy, setBusy] = useState(false);
 
   const verstuur = (type: "lead" | "customer") => async (formData: FormData) => {
@@ -29,20 +31,18 @@ export function PromoteButtons({
   };
 
   const klik = (wat: string) => (e: React.MouseEvent<HTMLButtonElement>) => {
-    if (!confirm(`"${naam}" als ${wat} in de contactenlijst zetten?`)) e.preventDefault();
+    if (!confirm(uiT("\"{v0}\" als {v1} in de contactenlijst zetten?", { v0: naam, v1: wat }))) e.preventDefault();
   };
 
   return (
     <span className="flex justify-end gap-2">
       <form action={verstuur("lead")}>
         <button type="submit" disabled={busy} onClick={klik("lead")} className="text-xs text-accent hover:underline disabled:opacity-50">
-          → contact
-        </button>
+          {uiT("→ contact")} </button>
       </form>
       <form action={verstuur("customer")}>
         <button type="submit" disabled={busy} onClick={klik("klant")} className="text-xs text-accent hover:underline disabled:opacity-50">
-          → klant
-        </button>
+          {uiT("→ klant")} </button>
       </form>
     </span>
   );

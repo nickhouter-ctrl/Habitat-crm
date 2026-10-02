@@ -1,4 +1,5 @@
 "use client";
+import { useT as useUiTranslation } from '@/components/taal-provider';
 
 import { useState } from "react";
 
@@ -43,6 +44,7 @@ export function MappingForm({
   headerRow: number;
   saveAction: (id: string, formData: FormData) => Promise<void>;
 }) {
+  const uiT = useUiTranslation();
   const [mapping, setMapping] = useState<(ProspectField | null)[]>(
     koppen.map((_, i) => initieel[i] ?? null),
   );
@@ -64,7 +66,7 @@ export function MappingForm({
   return (
     <form action={opslaan} className="space-y-4">
       <div className="grid gap-3 sm:grid-cols-2">
-        <Field label="Blad" htmlFor="m-sheet" hint={bladen.length > 1 ? `${bladen.length} bladen in dit bestand` : undefined}>
+        <Field label={uiT("Blad")} htmlFor="m-sheet" hint={bladen.length > 1 ? uiT("{v0} bladen in dit bestand", { v0: bladen.length }) : undefined}>
           <Select id="m-sheet" name="sheetName" defaultValue={sheetName}>
             {bladen.map((b) => (
               <option key={b} value={b}>
@@ -74,9 +76,9 @@ export function MappingForm({
           </Select>
         </Field>
         <Field
-          label="Op welke rij staan de kolomnamen?"
+          label={uiT("Op welke rij staan de kolomnamen?")}
           htmlFor="m-header"
-          hint="Meestal 1. Gekochte lijsten hebben soms een titelregel erboven."
+          hint={uiT("Meestal 1. Gekochte lijsten hebben soms een titelregel erboven.")}
         >
           <Input id="m-header" name="headerRow" type="number" min={1} max={20} defaultValue={headerRow} />
         </Field>
@@ -86,9 +88,9 @@ export function MappingForm({
         <table className="w-full text-sm">
           <thead className="bg-background-soft text-xs uppercase tracking-wide text-muted">
             <tr>
-              <th className="px-3 py-2 text-left">Kolom in het bestand</th>
-              <th className="px-3 py-2 text-left">Wordt</th>
-              <th className="px-3 py-2 text-left">Voorbeelden</th>
+              <th className="px-3 py-2 text-left">{uiT("Kolom in het bestand")}</th>
+              <th className="px-3 py-2 text-left">{uiT("Wordt")}</th>
+              <th className="px-3 py-2 text-left">{uiT("Voorbeelden")}</th>
             </tr>
           </thead>
           <tbody>
@@ -97,7 +99,7 @@ export function MappingForm({
               return (
                 <tr key={`${kop}-${i}`} className={onbekend ? "bg-warning/5" : undefined}>
                   <td className="px-3 py-2 font-medium">
-                    {kop || <span className="text-muted">(kolom {i + 1}, geen naam)</span>}
+                    {kop || <span className="text-muted">{uiT("(kolom")} {i + 1}{uiT(", geen naam)")}</span>}
                   </td>
                   <td className="px-3 py-2">
                     <Select
@@ -111,7 +113,7 @@ export function MappingForm({
                       }
                       className="h-8 w-56 text-xs"
                     >
-                      <option value="">— nog kiezen —</option>
+                      <option value="">{uiT("— nog kiezen —")}</option>
                       {VELDEN.map((v) => (
                         <option
                           key={v}
@@ -135,18 +137,13 @@ export function MappingForm({
 
       {naamOntbreekt && (
         <p className="rounded-md bg-warning/10 px-3 py-2 text-sm text-warning">
-          Wijs één kolom aan als <strong>Bedrijfsnaam</strong>. Zonder naam is een rij niets.
-        </p>
+          {uiT("Wijs één kolom aan als")} <strong>{uiT("Bedrijfsnaam")}</strong>{uiT(". Zonder naam is een rij niets.")} </p>
       )}
       <p className="text-xs text-muted">
-        Een kolom op <strong>Bewaren als label</strong> komt als los label bij de prospect te staan, bijvoorbeeld
-        &quot;Aantal medewerkers: 10-50&quot;. Zo gaat informatie uit het bestand niet verloren zonder dat het CRM er
-        een veld voor nodig heeft. <strong>Contactpersoon</strong> wordt wel ingelezen maar nooit als aanhef in een
-        mail gebruikt — de mail spreekt het bedrijf aan, niet de persoon.
-      </p>
+        {uiT("Een kolom op")} <strong>{uiT("Bewaren als label")}</strong> {uiT("komt als los label bij de prospect te staan, bijvoorbeeld \"Aantal medewerkers: 10-50\". Zo gaat informatie uit het bestand niet verloren zonder dat het CRM er een veld voor nodig heeft.")} <strong>{uiT("Contactpersoon")}</strong> {uiT("wordt wel ingelezen maar nooit als aanhef in een mail gebruikt — de mail spreekt het bedrijf aan, niet de persoon.")} </p>
 
       <Button type="submit" disabled={busy || naamOntbreekt}>
-        {busy ? "Bezig…" : "Kolommen opslaan en voorbeeld bekijken"}
+        {busy ? uiT("Bezig…") : uiT("Kolommen opslaan en voorbeeld bekijken")}
       </Button>
     </form>
   );

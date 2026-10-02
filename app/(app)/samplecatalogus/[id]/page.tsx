@@ -1,3 +1,4 @@
+import { tekst as uiTranslation } from '@/lib/i18n/server';
 import { eq } from "drizzle-orm";
 import { Plus, Printer, ShoppingCart, Trash2 } from "lucide-react";
 import Link from "next/link";
@@ -52,6 +53,7 @@ export default async function VariantDetailPage({
 }: {
   params: Promise<{ id: string }>;
 }) {
+  const uiT = await uiTranslation();
   const { id } = await params;
 
   const [v] = await db
@@ -108,11 +110,9 @@ export default async function VariantDetailPage({
         actions={
           <div className="flex gap-2">
             <LinkButton href={`/labels/catalog/${id}`} variant="secondary">
-              <Printer className="h-4 w-4" /> Label
-            </LinkButton>
+              <Printer className="h-4 w-4" /> {uiT("Label")} </LinkButton>
             <LinkButton href={`/bestellen?variant=${id}`}>
-              <ShoppingCart className="h-4 w-4" /> Toevoegen aan bestelbon
-            </LinkButton>
+              <ShoppingCart className="h-4 w-4" /> {uiT("Toevoegen aan bestelbon")} </LinkButton>
           </div>
         }
       />
@@ -126,23 +126,22 @@ export default async function VariantDetailPage({
               <img src={v.imageUrl} alt={v.color} className="aspect-square w-full object-cover" />
             ) : (
               <div className="flex aspect-square w-full items-center justify-center bg-muted text-sm text-muted">
-                Geen foto
-              </div>
+                {uiT("Geen foto")} </div>
             )}
             <CardContent className="space-y-2 p-4 text-sm">
-              <Row label="SKU">
+              <Row label={uiT("SKU")}>
                 <span className="font-mono">{v.sku}</span>
               </Row>
               {v.legacySku && (
-                <Row label="Bestaande SKU">
+                <Row label={uiT("Bestaande SKU")}>
                   <span className="font-mono">{v.legacySku}</span>
                 </Row>
               )}
-              <Row label="Kleur">
+              <Row label={uiT("Kleur")}>
                 {v.color}
                 {v.colorCn ? ` · ${v.colorCn}` : ""}
               </Row>
-              <Row label="Status">
+              <Row label={uiT("Status")}>
                 <Badge tone={v.status === "available" ? "success" : "neutral"}>
                   {STATUS_LABEL[v.status] ?? v.status}
                 </Badge>
@@ -153,53 +152,50 @@ export default async function VariantDetailPage({
           {/* vinkjes */}
           <Card>
             <CardContent className="space-y-3 p-4">
-              <FlagToggle id={id} field="hasSample" value={v.hasSample} label="Sample in huis" />
-              <FlagToggle id={id} field="inRange" value={v.inRange} label="In assortiment" />
+              <FlagToggle id={id} field="hasSample" value={v.hasSample} label={uiT("Sample in huis")} />
+              <FlagToggle id={id} field="inRange" value={v.inRange} label={uiT("In assortiment")} />
             </CardContent>
           </Card>
 
           {/* koppeling */}
           <Card>
             <CardHeader>
-              <CardTitle>Koppeling</CardTitle>
+              <CardTitle>{uiT("Koppeling")}</CardTitle>
             </CardHeader>
             <CardContent className="space-y-2 p-4 text-sm">
               {linked ? (
                 <>
                   <p>
-                    Gekoppeld aan{" "}
+                    {uiT("Gekoppeld aan")}{" "}
                     <Link href={`/products/${linked.id}`} className="font-medium underline">
                       {linked.name}
                     </Link>{" "}
                     <span className="font-mono text-xs text-muted">{linked.sku}</span>
                   </p>
                   <p className="text-sm">
-                    Voorraad:{" "}
+                    {uiT("Voorraad:")}{" "}
                     {linkedStock > 0 ? (
-                      <span className="font-medium text-success">{linkedStock} op voorraad</span>
+                      <span className="font-medium text-success">{linkedStock} {uiT("op voorraad")}</span>
                     ) : (
-                      <span className="text-muted">niet op voorraad</span>
+                      <span className="text-muted">{uiT("niet op voorraad")}</span>
                     )}
                   </p>
                   <Link
                     href={`/products/${linked.id}/edit`}
                     className="text-xs text-muted underline hover:text-foreground"
                   >
-                    Voorraad/prijs per maat beheren op het product →
-                  </Link>
+                    {uiT("Voorraad/prijs per maat beheren op het product →")} </Link>
                   <form action={unmatchVariant}>
                     <input type="hidden" name="variantId" value={id} />
                     <SubmitButton variant="ghost" size="sm">
-                      Koppeling verwijderen
-                    </SubmitButton>
+                      {uiT("Koppeling verwijderen")} </SubmitButton>
                   </form>
                 </>
               ) : (
                 <>
-                  <p className="text-muted">Nog niet aan een bestaand product gekoppeld.</p>
+                  <p className="text-muted">{uiT("Nog niet aan een bestaand product gekoppeld.")}</p>
                   <LinkButton href={`/samplecatalogus/match?variant=${id}`} variant="secondary" size="sm">
-                    Koppelen
-                  </LinkButton>
+                    {uiT("Koppelen")} </LinkButton>
                 </>
               )}
             </CardContent>
@@ -211,40 +207,38 @@ export default async function VariantDetailPage({
           {/* variant-fallbackprijs */}
           <Card>
             <CardHeader>
-              <CardTitle>Prijs (variant — fallback)</CardTitle>
+              <CardTitle>{uiT("Prijs (variant — fallback)")}</CardTitle>
             </CardHeader>
             <CardContent className="p-4">
               <form action={updateVariantPricing} className="flex flex-wrap items-end gap-3">
                 <input type="hidden" name="id" value={id} />
-                <LabeledInput name="salePrice" label="Verkoopprijs €" defaultValue={v.salePrice} />
-                <LabeledInput name="supplierPrice" label="Inkoopprijs €" defaultValue={v.supplierPrice} />
-                <SubmitButton size="sm">Opslaan</SubmitButton>
+                <LabeledInput name="salePrice" label={uiT("Verkoopprijs €")} defaultValue={v.salePrice} />
+                <LabeledInput name="supplierPrice" label={uiT("Inkoopprijs €")} defaultValue={v.supplierPrice} />
+                <SubmitButton size="sm">{uiT("Opslaan")}</SubmitButton>
               </form>
               <p className="mt-2 text-xs text-muted">
-                Prijs hoort bij de maat — vul bij voorkeur per maat in. Deze prijs geldt als
-                fallback wanneer een maat geen eigen prijs heeft.
-              </p>
+                {uiT("Prijs hoort bij de maat — vul bij voorkeur per maat in. Deze prijs geldt als fallback wanneer een maat geen eigen prijs heeft.")} </p>
             </CardContent>
           </Card>
 
           {/* maten met prijs per maat */}
           <Card>
             <CardHeader>
-              <CardTitle>Beschikbare maten</CardTitle>
+              <CardTitle>{uiT("Beschikbare maten")}</CardTitle>
             </CardHeader>
             <CardContent className="p-0">
               {sizes.length === 0 ? (
-                <p className="p-4 text-sm text-muted">Nog geen maten toegevoegd.</p>
+                <p className="p-4 text-sm text-muted">{uiT("Nog geen maten toegevoegd.")}</p>
               ) : (
                 <Table>
                   <THead>
                     <Tr>
-                      <Th>Maat</Th>
-                      <Th>Dikte</Th>
-                      <Th>m²/doos</Th>
-                      <Th>st/doos</Th>
-                      <Th>Verkoop €</Th>
-                      <Th>Inkoop €</Th>
+                      <Th>{uiT("Maat")}</Th>
+                      <Th>{uiT("Dikte")}</Th>
+                      <Th>{uiT("m²/doos")}</Th>
+                      <Th>{uiT("st/doos")}</Th>
+                      <Th>{uiT("Verkoop €")}</Th>
+                      <Th>{uiT("Inkoop €")}</Th>
                       <Th></Th>
                     </Tr>
                   </THead>
@@ -273,9 +267,9 @@ export default async function VariantDetailPage({
                                   className={`w-24 shrink-0 whitespace-nowrap text-right text-xs ${
                                     st > 0 ? "font-medium text-success" : "text-muted"
                                   }`}
-                                  title="Voorraad van deze maat (beheer op het product)"
+                                  title={uiT("Voorraad van deze maat (beheer op het product)")}
                                 >
-                                  {st > 0 ? `${st} op vrd` : "—"}
+                                  {st > 0 ? uiT("{v0} op vrd", { v0: st }) : "—"}
                                 </span>
                               );
                             })()}
@@ -290,12 +284,12 @@ export default async function VariantDetailPage({
               {/* maat toevoegen */}
               <form action={addSize} className="grid grid-cols-[1.4fr_1fr_0.9fr_0.8fr_1fr_1fr_auto] items-end gap-2 border-t border-border px-3 py-3">
                 <input type="hidden" name="variantId" value={id} />
-                <LabeledInput name="productSize" label="Maat" placeholder="1200x600" />
-                <LabeledInput name="thicknessMm" label="Dikte" placeholder="2.5~3.5" />
-                <LabeledInput name="sqmPerBox" label="m²/doos" />
-                <LabeledInput name="pcsPerBox" label="st/doos" />
-                <LabeledInput name="salePrice" label="Verkoop €" />
-                <LabeledInput name="supplierPrice" label="Inkoop €" />
+                <LabeledInput name="productSize" label={uiT("Maat")} placeholder={uiT("1200x600")} />
+                <LabeledInput name="thicknessMm" label={uiT("Dikte")} placeholder="2.5~3.5" />
+                <LabeledInput name="sqmPerBox" label={uiT("m²/doos")} />
+                <LabeledInput name="pcsPerBox" label={uiT("st/doos")} />
+                <LabeledInput name="salePrice" label={uiT("Verkoop €")} />
+                <LabeledInput name="supplierPrice" label={uiT("Inkoop €")} />
                 <SubmitButton size="sm">
                   <Plus className="h-4 w-4" />
                 </SubmitButton>
@@ -306,7 +300,7 @@ export default async function VariantDetailPage({
           {sizes.length > 0 && (
             <Card>
               <CardHeader>
-                <CardTitle>Maat verwijderen</CardTitle>
+                <CardTitle>{uiT("Maat verwijderen")}</CardTitle>
               </CardHeader>
               <CardContent className="flex flex-wrap gap-2 p-4">
                 {sizes.map((s) => (
@@ -315,7 +309,7 @@ export default async function VariantDetailPage({
                     <input type="hidden" name="variantId" value={id} />
                     <ConfirmSubmit
                       className={buttonClass({ variant: "ghost", size: "sm" })}
-                      message={`Maat ${s.productSize} verwijderen?`}
+                      message={uiT("Maat {v0} verwijderen?", { v0: s.productSize })}
                     >
                       <Trash2 className="h-3.5 w-3.5" /> {s.productSize}
                     </ConfirmSubmit>
@@ -358,7 +352,7 @@ function LabeledInput({
   );
 }
 
-function FlagToggle({
+async function FlagToggle({
   id,
   field,
   value,
@@ -369,6 +363,7 @@ function FlagToggle({
   value: boolean;
   label: string;
 }) {
+  const uiT = await uiTranslation();
   return (
     <form action={toggleVariantFlag} className="flex items-center justify-between gap-3">
       <span className="text-sm">{label}</span>
@@ -382,7 +377,7 @@ function FlagToggle({
           size: "sm",
         })}
       >
-        {value ? "Aan" : "Uit"}
+        {value ? uiT("Aan") : uiT("Uit")}
       </button>
     </form>
   );

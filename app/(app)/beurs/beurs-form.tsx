@@ -1,4 +1,5 @@
 "use client";
+import { useT as useUiTranslation } from '@/components/taal-provider';
 
 /**
  * Invoerscherm op de stand — bedoeld voor een iPad die de hele dag aan staat.
@@ -77,6 +78,7 @@ export function BeursForm({
 }: {
   opslaan: (formData: FormData) => Promise<BeursResultaat>;
 }) {
+  const uiT = useUiTranslation();
   const t = useT();
   const taal = useLocale();
   const landen = useMemo(() => landenVoorKeuze(taal), [taal]);
@@ -256,7 +258,7 @@ export function BeursForm({
             autoComplete="off"
             autoCapitalize="none"
             className="h-12 text-base"
-            placeholder="naam@bedrijf.com"
+            placeholder={uiT("naam@bedrijf.com")}
           />
         </Field>
         <Field label={t("Telefoon")}>

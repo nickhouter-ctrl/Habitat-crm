@@ -1,4 +1,5 @@
 "use client";
+import { useT as useUiTranslation } from '@/components/taal-provider';
 
 /**
  * Werkbalk van de beeldbibliotheek: handmatige upload + sync-triggers voor de
@@ -25,6 +26,7 @@ interface SummaryResponse {
 }
 
 export function AssetToolbar() {
+  const uiT = useUiTranslation();
   const router = useRouter();
   const fileInput = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState<Busy>(null);
@@ -133,7 +135,7 @@ export function AssetToolbar() {
         accept="image/jpeg,image/png,image/webp,image/avif,video/mp4,video/quicktime,video/webm"
         multiple
         className="sr-only"
-        aria-label="Beelden of video's uploaden"
+        aria-label={uiT("Beelden of video's uploaden")}
         onChange={(e) => onUpload(e.target.files)}
       />
       <Button
@@ -143,7 +145,7 @@ export function AssetToolbar() {
         onClick={() => fileInput.current?.click()}
       >
         <Upload className="mr-1.5 size-4" aria-hidden />
-        {busy === "upload" ? "Bezig met uploaden…" : "Media uploaden"}
+        {busy === "upload" ? uiT("Bezig met uploaden…") : uiT("Media uploaden")}
       </Button>
       <Button
         type="button"
@@ -154,7 +156,7 @@ export function AssetToolbar() {
         }
       >
         <CloudDownload className="mr-1.5 size-4" aria-hidden />
-        {busy === "website" ? "Website synct…" : "Sync website"}
+        {busy === "website" ? uiT("Website synct…") : uiT("Sync website")}
       </Button>
       <Button
         type="button"
@@ -169,7 +171,7 @@ export function AssetToolbar() {
         }
       >
         <Instagram className="mr-1.5 size-4" aria-hidden />
-        {busy === "instagram" ? "Instagram synct…" : "Sync Instagram"}
+        {busy === "instagram" ? uiT("Instagram synct…") : uiT("Sync Instagram")}
       </Button>
       {/* aria-live zodat schermlezers de uitkomst van een sync/upload horen. */}
       <p aria-live="polite" className="basis-full text-xs text-muted">

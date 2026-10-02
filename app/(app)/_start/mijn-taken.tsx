@@ -1,3 +1,5 @@
+import { datumTaal } from "@/lib/i18n/server";
+import { tekst as uiTranslation } from '@/lib/i18n/server';
 /**
  * "Mijn taken" op de startpagina: open taken die aan de ingelogde gebruiker
  * zijn toegewezen (of eigen taken zonder assignee), plus een compacte vorm om
@@ -11,7 +13,7 @@ import { completeTask, createTask } from "@/app/(app)/agenda/actions";
 import { SubmitButton } from "@/components/submit-button";
 import { Badge, Card, CardContent, CardHeader, CardTitle, Input, Select } from "@/components/ui";
 
-const DAG_FMT = new Intl.DateTimeFormat("nl-NL", { weekday: "short", day: "numeric", month: "short" });
+
 
 export interface MijnTaak {
   id: string;
@@ -31,6 +33,9 @@ export async function MijnTaken({
   teamleden: { id: string; name: string | null; email: string }[];
   readOnly?: boolean;
 }) {
+  const uiDateLocale = await datumTaal();
+  const DAG_FMT = new Intl.DateTimeFormat(uiDateLocale, { weekday: "short", day: "numeric", month: "short" });
+  const uiT = await uiTranslation();
   const t = await tekst();
   const nu = new Date();
   return (
@@ -92,8 +97,7 @@ export async function MijnTaken({
             </Select>
             <Input name="date" type="date" className="w-auto" title={t("Deadline")} />
             <SubmitButton size="sm" pendingLabel="…">
-              Toevoegen
-            </SubmitButton>
+              {uiT("Toevoegen")} </SubmitButton>
           </form>
         )}
       </CardContent>

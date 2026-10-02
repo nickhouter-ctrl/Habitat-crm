@@ -1,4 +1,5 @@
 "use client";
+import { useT as useUiTranslation } from '@/components/taal-provider';
 
 import { useState } from "react";
 import { Plus, Trash2 } from "lucide-react";
@@ -26,6 +27,7 @@ const num = `${cell} text-right tabular-nums`;
  * Serialiseert naar een hidden input "additionalSizes" (JSON) voor de server action.
  */
 export function SizesEditor({ initial }: { initial?: Size[] | null }) {
+  const uiT = useUiTranslation();
   const [rows, setRows] = useState<Size[]>(
     (initial ?? []).map((s) => ({
       sku: s.sku ?? "",
@@ -56,12 +58,12 @@ export function SizesEditor({ initial }: { initial?: Size[] | null }) {
       <input type="hidden" name="additionalSizes" value={JSON.stringify(clean)} />
       {rows.length > 0 && (
         <div className={`${cols} border-b border-border bg-background/60 px-2 py-1.5 text-[11px] font-medium text-muted`}>
-          <span>Afmeting</span>
+          <span>{uiT("Afmeting")}</span>
           <span>SKU</span>
-          <span className="text-right">Inkoop €</span>
-          <span className="text-right">Kostprijs €</span>
-          <span className="text-right">Verkoop €</span>
-          <span className="text-right">Voorraad</span>
+          <span className="text-right">{uiT("Inkoop €")}</span>
+          <span className="text-right">{uiT("Kostprijs €")}</span>
+          <span className="text-right">{uiT("Verkoop €")}</span>
+          <span className="text-right">{uiT("Voorraad")}</span>
           <span></span>
         </div>
       )}
@@ -70,13 +72,13 @@ export function SizesEditor({ initial }: { initial?: Size[] | null }) {
           <input
             value={row.label}
             onChange={(e) => update(i, { label: e.target.value })}
-            placeholder="1200×600"
+            placeholder={uiT("1200×600")}
             className={cell}
           />
           <input
             value={row.sku}
             onChange={(e) => update(i, { sku: e.target.value })}
-            placeholder="MS-200-1"
+            placeholder={uiT("MS-200-1")}
             className={`${cell} font-mono text-xs`}
           />
           <input
@@ -119,7 +121,7 @@ export function SizesEditor({ initial }: { initial?: Size[] | null }) {
             type="button"
             onClick={() => remove(i)}
             className="rounded-md p-1.5 text-muted hover:bg-muted/50 hover:text-danger"
-            title="Verwijderen"
+            title={uiT("Verwijderen")}
           >
             <Trash2 className="size-4" />
           </button>
@@ -130,8 +132,7 @@ export function SizesEditor({ initial }: { initial?: Size[] | null }) {
         onClick={add}
         className="m-2 inline-flex items-center gap-1 rounded-md border border-dashed border-border px-2.5 py-1.5 text-xs text-muted hover:bg-muted/40"
       >
-        <Plus className="size-3.5" /> Maat toevoegen
-      </button>
+        <Plus className="size-3.5" /> {uiT("Maat toevoegen")} </button>
     </div>
   );
 }

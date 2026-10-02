@@ -1,4 +1,5 @@
 "use client";
+import { useT as useUiTranslation } from '@/components/taal-provider';
 
 import { useMemo, useState } from "react";
 import { Plus, Trash2, Wand2, X } from "lucide-react";
@@ -50,6 +51,7 @@ export function VariantMatrixEditor({
   variants?: Rij[] | null;
   dealerDiscountPct?: number | null;
 }) {
+  const uiT = useUiTranslation();
   const [assen, setAssen] = useState<As[]>(axes ?? []);
   const [rijen, setRijen] = useState<Rij[]>(variants ?? []);
   const [nieuweWaarde, setNieuweWaarde] = useState<Record<string, string>>({});
@@ -174,8 +176,7 @@ export function VariantMatrixEditor({
                 onClick={() => setAssen((a) => a.filter((x) => x.key !== as.key))}
                 className="text-xs text-muted underline underline-offset-2 hover:text-danger"
               >
-                keuze weghalen
-              </button>
+                {uiT("keuze weghalen")} </button>
             </div>
             <div className="mt-1.5 flex flex-wrap items-start gap-2">
               {as.values.map((v) => (
@@ -189,8 +190,7 @@ export function VariantMatrixEditor({
                       <img src={v.imageUrl} alt="" className="size-6 rounded border object-cover" />
                     ) : (
                       <span className="flex size-6 items-center justify-center rounded border border-dashed text-[8px] text-muted">
-                        geen
-                      </span>
+                        {uiT("geen")} </span>
                     )}
                     {v.label}
                     <button
@@ -203,7 +203,7 @@ export function VariantMatrixEditor({
                         )
                       }
                       className="text-muted hover:text-danger"
-                      title={`${v.label} weghalen`}
+                      title={uiT("{v0} weghalen", { v0: v.label })}
                     >
                       <X className="size-3" />
                     </button>
@@ -211,7 +211,7 @@ export function VariantMatrixEditor({
                   <input
                     value={v.imageUrl ?? ""}
                     onChange={(e) => fotoZetten(as.key, v.value, e.target.value)}
-                    placeholder="foto-URL"
+                    placeholder={uiT("foto-URL")}
                     className="h-6 w-36 rounded border border-border bg-background px-1.5 text-[11px]"
                   />
                 </span>
@@ -225,7 +225,7 @@ export function VariantMatrixEditor({
                     waardeToevoegen(as.key);
                   }
                 }}
-                placeholder="waarde + enter"
+                placeholder={uiT("waarde + enter")}
                 className="h-7 w-40 rounded-md border border-dashed border-border bg-background px-2 text-xs"
               />
             </div>
@@ -242,7 +242,7 @@ export function VariantMatrixEditor({
                 asToevoegen();
               }
             }}
-            placeholder="Kleur, Model, Maat…"
+            placeholder={uiT("Kleur, Model, Maat…")}
             className="h-8 w-44 rounded-md border border-dashed border-border bg-background px-2 text-xs"
           />
           <button
@@ -250,16 +250,14 @@ export function VariantMatrixEditor({
             onClick={asToevoegen}
             className="inline-flex items-center gap-1 rounded-md border border-dashed border-border px-2.5 py-1.5 text-xs text-muted hover:bg-muted/40"
           >
-            <Plus className="size-3.5" /> Keuze toevoegen
-          </button>
+            <Plus className="size-3.5" /> {uiT("Keuze toevoegen")} </button>
           {assen.some((a) => a.values.length > 0) && (
             <button
               type="button"
               onClick={voorstellen}
               className="inline-flex items-center gap-1 rounded-md border border-border px-2.5 py-1.5 text-xs text-muted hover:bg-muted/40"
             >
-              <Wand2 className="size-3.5" /> Combinaties voorstellen
-            </button>
+              <Wand2 className="size-3.5" /> {uiT("Combinaties voorstellen")} </button>
           )}
         </div>
       </div>
@@ -268,7 +266,7 @@ export function VariantMatrixEditor({
       {eersteAs && rijen.length > 0 && (
         <div className="rounded-lg border border-border p-2.5">
           <span className="text-[11px] font-medium uppercase tracking-wide text-muted">
-            Prijs per {eersteAs.label.toLowerCase()}
+            {uiT("Prijs per")} {eersteAs.label.toLowerCase()}
           </span>
           <div className="mt-1.5 flex flex-wrap gap-2">
             {eersteAs.values.map((v) => (
@@ -294,8 +292,7 @@ export function VariantMatrixEditor({
                   onClick={() => prijsToepassen(eersteAs.key, v.value)}
                   className="rounded-md border border-border px-2 py-1 text-[11px] text-muted hover:bg-muted/40"
                 >
-                  vul in
-                </button>
+                  {uiT("vul in")} </button>
               </div>
             ))}
           </div>
@@ -308,22 +305,20 @@ export function VariantMatrixEditor({
           style={raster}
           className="border-b border-border bg-background/60 px-2 py-1.5 text-[11px] font-medium text-muted"
         >
-          <span>Artikelcode</span>
+          <span>{uiT("Artikelcode")}</span>
           {assen.map((a) => (
             <span key={a.key}>{a.label}</span>
           ))}
-          <span className="text-right">Advies €</span>
-          <span className="text-right">Korting %</span>
-          <span className="text-right">Inkoop €</span>
-          <span>Foto (URL)</span>
+          <span className="text-right">{uiT("Advies €")}</span>
+          <span className="text-right">{uiT("Korting %")}</span>
+          <span className="text-right">{uiT("Inkoop €")}</span>
+          <span>{uiT("Foto (URL)")}</span>
           <span />
         </div>
 
         {rijen.length === 0 && (
           <p className="px-3 py-4 text-sm text-muted">
-            Nog geen uitvoeringen. Zet hierboven de keuzes klaar en laat de combinaties voorstellen, of voeg
-            hieronder één regel toe.
-          </p>
+            {uiT("Nog geen uitvoeringen. Zet hierboven de keuzes klaar en laat de combinaties voorstellen, of voeg hieronder één regel toe.")} </p>
         )}
 
         {rijen.map((rij, i) => (
@@ -335,7 +330,7 @@ export function VariantMatrixEditor({
             <input
               value={rij.code}
               onChange={(e) => wijzig(i, { code: e.target.value })}
-              placeholder="5-GM-001"
+              placeholder={uiT("5-GM-001")}
               className={`${cell} font-mono text-xs`}
               title={labelVan(rij) || undefined}
             />
@@ -379,7 +374,7 @@ export function VariantMatrixEditor({
               type="number"
               step="0.01"
               min={0}
-              placeholder="uit korting"
+              placeholder={uiT("uit korting")}
               className={num}
             />
             <div className="flex min-w-0 items-center gap-1">
@@ -390,11 +385,11 @@ export function VariantMatrixEditor({
               <input
                 value={rij.imageUrl}
                 onChange={(e) => wijzig(i, { imageUrl: e.target.value })}
-                placeholder="https://…"
+                placeholder={uiT("https://…")}
                 className={`${cell} text-xs`}
               />
               {rij.images?.length ? (
-                <span className="shrink-0 text-[11px] text-muted" title={`${rij.images.length} extra foto's`}>
+                <span className="shrink-0 text-[11px] text-muted" title={uiT("{v0} extra foto's", { v0: rij.images.length })}>
                   +{rij.images.length}
                 </span>
               ) : null}
@@ -404,17 +399,16 @@ export function VariantMatrixEditor({
                   target="_blank"
                   rel="noreferrer"
                   className="shrink-0 text-[11px] text-accent hover:underline"
-                  title="Technische tekening (PDF)"
+                  title={uiT("Technische tekening (PDF)")}
                 >
-                  tekening
-                </a>
+                  {uiT("tekening")} </a>
               ) : null}
             </div>
             <button
               type="button"
               onClick={() => setRijen((r) => r.filter((_, j) => j !== i))}
               className="rounded-md p-1.5 text-muted hover:bg-muted/50 hover:text-danger"
-              title="Uitvoering verwijderen"
+              title={uiT("Uitvoering verwijderen")}
             >
               <Trash2 className="size-4" />
             </button>
@@ -439,14 +433,11 @@ export function VariantMatrixEditor({
           }
           className="m-2 inline-flex items-center gap-1 rounded-md border border-dashed border-border px-2.5 py-1.5 text-xs text-muted hover:bg-muted/40"
         >
-          <Plus className="size-3.5" /> Uitvoering toevoegen
-        </button>
+          <Plus className="size-3.5" /> {uiT("Uitvoering toevoegen")} </button>
       </div>
 
       <p className="text-xs text-muted">
-        {meeTeSturen.length} van de {rijen.length} regels heeft een artikelcode en wordt opgeslagen. Regels zonder
-        code zijn alleen een voorstel — niet elke combinatie bestaat.
-      </p>
+        {meeTeSturen.length} {uiT("van de")} {rijen.length} {uiT("regels heeft een artikelcode en wordt opgeslagen. Regels zonder code zijn alleen een voorstel — niet elke combinatie bestaat.")} </p>
     </div>
   );
 }

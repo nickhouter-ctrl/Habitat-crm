@@ -1,3 +1,4 @@
+import { tekst as uiTranslation } from '@/lib/i18n/server';
 import { eq, sql } from "drizzle-orm";
 import Link from "next/link";
 
@@ -8,7 +9,10 @@ import { documents, products, projects } from "@/lib/db/schema";
 import { normalizeDocItems } from "@/lib/documents";
 import { assignDoorOrientation } from "./actions";
 
-export const metadata = { title: "Draairichtingen" };
+export async function generateMetadata() {
+  const uiT = await uiTranslation();
+  return { title: uiT("Draairichtingen") };
+}
 export const dynamic = "force-dynamic";
 
 const ORIENTS: { key: string; label: string }[] = [
@@ -23,6 +27,7 @@ export default async function DraairichtingenPage({
 }: {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
+  const uiT = await uiTranslation();
   const sp = await searchParams;
 
   const doorProds = await db
@@ -75,24 +80,23 @@ export default async function DraairichtingenPage({
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Draairichtingen toewijzen"
-        subtitle="Verdeel per factuur de deuren over de draairichtingen (S1–S4)."
+        title={uiT("Draairichtingen toewijzen")}
+        subtitle={uiT("Verdeel per factuur de deuren over de draairichtingen (S1–S4).")}
       />
 
       {sp.saved === "1" && (
-        <p className="rounded-md bg-green-50 px-3 py-2 text-sm text-success">Draairichting toegewezen.</p>
+        <p className="rounded-md bg-green-50 px-3 py-2 text-sm text-success">{uiT("Draairichting toegewezen.")}</p>
       )}
       {sp.error === "sum" && (
         <p className="rounded-md bg-red-50 px-3 py-2 text-sm text-danger">
-          Het totaal van de draairichtingen moet gelijk zijn aan het aantal deuren op de regel.
-        </p>
+          {uiT("Het totaal van de draairichtingen moet gelijk zijn aan het aantal deuren op de regel.")} </p>
       )}
 
       {todo.length === 0 ? (
         <EmptyState
           icon={<span>🚪</span>}
-          title="Niets te doen"
-          description="Alle deur-facturen hebben een draairichting toegewezen."
+          title={uiT("Niets te doen")}
+          description={uiT("Alle deur-facturen hebben een draairichting toegewezen.")}
         />
       ) : (
         <div className="space-y-4">
@@ -101,7 +105,7 @@ export default async function DraairichtingenPage({
               <CardContent className="space-y-4 p-5">
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <Link href={`/documents/${d.id}`} className="font-medium hover:underline">
-                    Factuur <span className="text-muted">{d.docNumber ?? "(geen nr.)"}</span>
+                    {uiT("Factuur")} <span className="text-muted">{d.docNumber ?? uiT("(geen nr.)")}</span>
                     {d.title && <span className="ml-1 text-sm text-muted">— {d.title}</span>}
                   </Link>
                   {d.projectName && (
@@ -119,19 +123,18 @@ export default async function DraairichtingenPage({
                     <div className="mb-3 flex flex-wrap items-baseline justify-between gap-2">
                       <span className="font-medium">{it.name}</span>
                       <span className="text-sm text-muted">
-                        Totaal: <span className="font-semibold tabular-nums text-foreground">{Number(it.units)}</span> stuks
-                      </span>
+                        {uiT("Totaal:")} <span className="font-semibold tabular-nums text-foreground">{Number(it.units)}</span> {uiT("stuks")} </span>
                     </div>
                     <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
                       {(orientsByProduct.get(it.productId!) ?? ORIENTS).map((o) => (
                         <label key={o.key} className="block text-xs">
-                          <span className="mb-1 block font-medium text-muted">{o.label}</span>
+                          <span className="mb-1 block font-medium text-muted">{uiT(o.label)}</span>
                           <Input name={o.key} type="number" min={0} step={1} defaultValue="0" className="text-right tabular-nums" />
                         </label>
                       ))}
                     </div>
                     <div className="mt-3 flex justify-end">
-                      <SubmitButton pendingLabel="Opslaan…">Toewijzen</SubmitButton>
+                      <SubmitButton pendingLabel={uiT("Opslaan…")}>{uiT("Toewijzen")}</SubmitButton>
                     </div>
                   </form>
                 ))}

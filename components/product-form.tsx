@@ -1,3 +1,4 @@
+import { tekst as uiTranslation } from '@/lib/i18n/server';
 import { Combobox } from "@/components/combobox";
 import { CostBreakdown } from "@/components/cost-breakdown";
 import {
@@ -13,7 +14,7 @@ import { SubmitButton } from "@/components/submit-button";
 import type { Product } from "@/lib/db/schema";
 import { PRODUCT_UNITS } from "@/lib/products";
 
-export function ProductForm({
+export async function ProductForm({
   action,
   product,
   collections,
@@ -63,32 +64,33 @@ export function ProductForm({
   variantsManaged?: boolean;
   submitLabel?: string;
 }) {
+  const uiT = await uiTranslation();
   return (
     <Card className="max-w-4xl">
       <CardContent>
         <form action={action} className="space-y-5">
-          <Field label="Naam *" htmlFor="name">
+          <Field label={uiT("Naam *")} htmlFor="name">
             <Input
               id="name"
               name="name"
               defaultValue={product?.name ?? ""}
               required
-              placeholder="bv. Magic Stone Bianco 60×60"
+              placeholder={uiT("bv. Magic Stone Bianco 60×60")}
             />
           </Field>
 
           <div className="grid gap-4 sm:grid-cols-5">
-            <Field label="SKU / code" htmlFor="sku">
+            <Field label={uiT("SKU / code")} htmlFor="sku">
               <Input id="sku" name="sku" defaultValue={product?.sku ?? ""} />
             </Field>
             {brands.length > 0 && (
               <Field
-                label="Merk"
+                label={uiT("Merk")}
                 htmlFor="brandId"
-                hint="bepaalt logo, inkoopkorting en of er aannemerskorting geldt"
+                hint={uiT("bepaalt logo, inkoopkorting en of er aannemerskorting geldt")}
               >
                 <Select id="brandId" name="brandId" defaultValue={product?.brandId ?? ""}>
-                  <option value="">Eigen assortiment</option>
+                  <option value="">{uiT("Eigen assortiment")}</option>
                   {brands.map((b) => (
                     <option key={b.id} value={b.id}>
                       {b.name}
@@ -98,9 +100,9 @@ export function ProductForm({
               </Field>
             )}
             <Field
-              label="Barcode (EAN-13)"
+              label={uiT("Barcode (EAN-13)")}
               htmlFor="barcode"
-              hint="Leeg laten = automatisch genereren"
+              hint={uiT("Leeg laten = automatisch genereren")}
               className="sm:col-span-2"
             >
               <Input
@@ -110,7 +112,7 @@ export function ProductForm({
                 inputMode="numeric"
               />
             </Field>
-            <Field label="Voorraad" htmlFor="stockQty" hint="huidige stand">
+            <Field label={uiT("Voorraad")} htmlFor="stockQty" hint={uiT("huidige stand")}>
               <Input
                 id="stockQty"
                 name="stockQty"
@@ -120,7 +122,7 @@ export function ProductForm({
                 className="text-right"
               />
             </Field>
-            <Field label="Min. voorraad" htmlFor="stockMin" hint="alert onder dit aantal">
+            <Field label={uiT("Min. voorraad")} htmlFor="stockMin" hint={uiT("alert onder dit aantal")}>
               <Input
                 id="stockMin"
                 name="stockMin"
@@ -129,39 +131,39 @@ export function ProductForm({
                 min="0"
                 defaultValue={product?.stockMin ?? ""}
                 className="text-right"
-                placeholder="leeg = geen alert"
+                placeholder={uiT("leeg = geen alert")}
               />
             </Field>
           </div>
 
           <div className="grid gap-4 sm:grid-cols-3">
             <Field
-              label="Collectie"
-              hint="Bovenste indeling — bv. Wandpanelen / Badkamer / Accessoires."
+              label={uiT("Collectie")}
+              hint={uiT("Bovenste indeling — bv. Wandpanelen / Badkamer / Accessoires.")}
             >
               <Combobox
                 name="collection"
                 allowCustom
                 clearable
                 defaultValue={product?.collection ?? ""}
-                placeholder="bv. Wandpanelen"
+                placeholder={uiT("bv. Wandpanelen")}
                 options={collections.map((c) => ({ value: c, label: c }))}
               />
             </Field>
             <Field
-              label="Categorie"
-              hint="Productfamilie, bv. &quot;Italian Travertine&quot;."
+              label={uiT("Categorie")}
+              hint={uiT("Productfamilie, bv. &quot;Italian Travertine&quot;.")}
             >
               <Combobox
                 name="category"
                 allowCustom
                 clearable
                 defaultValue={product?.category ?? ""}
-                placeholder="bv. Italian Travertine"
+                placeholder={uiT("bv. Italian Travertine")}
                 options={categories.map((c) => ({ value: c, label: c }))}
               />
             </Field>
-            <Field label="Subcategorie (optioneel)" htmlFor="subcategory">
+            <Field label={uiT("Subcategorie (optioneel)")} htmlFor="subcategory">
               <Input
                 id="subcategory"
                 name="subcategory"
@@ -171,7 +173,7 @@ export function ProductForm({
           </div>
 
           <div className="grid gap-4 sm:grid-cols-3">
-            <Field label="Eenheid" htmlFor="unit">
+            <Field label={uiT("Eenheid")} htmlFor="unit">
               <Select id="unit" name="unit" defaultValue={product?.unit ?? "stuk"}>
                 {PRODUCT_UNITS.map((u) => (
                   <option key={u} value={u}>
@@ -181,11 +183,11 @@ export function ProductForm({
               </Select>
             </Field>
             <Field
-              label="Showroom-prijs (particulier, ex. BTW)"
+              label={uiT("Showroom-prijs (particulier, ex. BTW)")}
               htmlFor="priceEur"
               hint={
                 product?.priceEur && product?.vatRate
-                  ? `Incl ${product.vatRate}% BTW: € ${(Number(product.priceEur) * (1 + Number(product.vatRate) / 100)).toFixed(2)}`
+                  ? uiT("Incl {v0}% BTW: € {v1}", { v0: product.vatRate, v1: (Number(product.priceEur) * (1 + Number(product.vatRate) / 100)).toFixed(2) })
                   : undefined
               }
             >
@@ -198,7 +200,7 @@ export function ProductForm({
                 defaultValue={product?.priceEur ?? ""}
               />
             </Field>
-            <Field label="BTW %" htmlFor="vatRate">
+            <Field label={uiT("BTW %")} htmlFor="vatRate">
               <Select id="vatRate" name="vatRate" defaultValue={String(product?.vatRate ?? 21)}>
                 <option value="21">21%</option>
                 <option value="10">10%</option>
@@ -210,12 +212,12 @@ export function ProductForm({
 
           <div className="grid gap-4 sm:grid-cols-3">
             <Field
-              label="Aannemers-prijs (B2B, ex. BTW)"
+              label={uiT("Aannemers-prijs (B2B, ex. BTW)")}
               htmlFor="tradePriceEur"
               hint={
                 product?.tradePriceEur && product?.vatRate
-                  ? `Incl ${product.vatRate}% BTW: € ${(Number(product.tradePriceEur) * (1 + Number(product.vatRate) / 100)).toFixed(2)} · leeg = automatisch 20% onder de verkoopprijs`
-                  : "Leeg = automatisch 20% onder de verkoopprijs (showroom × 0,80)"
+                  ? uiT("Incl {v0}% BTW: € {v1} · leeg = automatisch 20% onder de verkoopprijs", { v0: product.vatRate, v1: (Number(product.tradePriceEur) * (1 + Number(product.vatRate) / 100)).toFixed(2) })
+                  : uiT("Leeg = automatisch 20% onder de verkoopprijs (showroom × 0,80)")
               }
               className="sm:col-span-2"
             >
@@ -226,7 +228,7 @@ export function ProductForm({
                 step="0.0001"
                 min="0"
                 defaultValue={product?.tradePriceEur ?? ""}
-                placeholder="bv. 20.6198"
+                placeholder={uiT("bv. 20.6198")}
               />
             </Field>
           </div>
@@ -235,10 +237,9 @@ export function ProductForm({
 
           <fieldset className="rounded-md border border-border p-3">
             <legend className="px-1 text-xs font-medium uppercase tracking-wide text-muted">
-              Afmetingen (mm) — synced naar de website
-            </legend>
+              {uiT("Afmetingen (mm) — synced naar de website")} </legend>
             <div className="grid gap-4 sm:grid-cols-4">
-              <Field label="Breedte" htmlFor="widthMm">
+              <Field label={uiT("Breedte")} htmlFor="widthMm">
                 <Input
                   id="widthMm"
                   name="widthMm"
@@ -249,7 +250,7 @@ export function ProductForm({
                   className="text-right"
                 />
               </Field>
-              <Field label="Hoogte" htmlFor="heightMm">
+              <Field label={uiT("Hoogte")} htmlFor="heightMm">
                 <Input
                   id="heightMm"
                   name="heightMm"
@@ -260,7 +261,7 @@ export function ProductForm({
                   className="text-right"
                 />
               </Field>
-              <Field label="Lengte" htmlFor="lengthMm">
+              <Field label={uiT("Lengte")} htmlFor="lengthMm">
                 <Input
                   id="lengthMm"
                   name="lengthMm"
@@ -271,7 +272,7 @@ export function ProductForm({
                   className="text-right"
                 />
               </Field>
-              <Field label="Dikte" htmlFor="thicknessMm">
+              <Field label={uiT("Dikte")} htmlFor="thicknessMm">
                 <Input
                   id="thicknessMm"
                   name="thicknessMm"
@@ -287,8 +288,8 @@ export function ProductForm({
 
           {variantsManaged ? (
             <Field
-              label="Beschikbare maten"
-              hint="dit product heeft uitvoeringen; die beheer je in de kaart hieronder"
+              label={uiT("Beschikbare maten")}
+              hint={uiT("dit product heeft uitvoeringen; die beheer je in de kaart hieronder")}
             >
               <ul className="rounded-lg border border-border px-3 py-2 text-sm text-muted">
                 {(product?.additionalSizes ?? []).slice(0, 8).map((m) => (
@@ -298,30 +299,30 @@ export function ProductForm({
                   </li>
                 ))}
                 {(product?.additionalSizes?.length ?? 0) > 8 && (
-                  <li className="pt-1 text-xs">en nog {(product?.additionalSizes?.length ?? 0) - 8}…</li>
+                  <li className="pt-1 text-xs">{uiT("en nog")} {(product?.additionalSizes?.length ?? 0) - 8}…</li>
                 )}
-                {!product?.additionalSizes?.length && <li>nog geen uitvoeringen</li>}
+                {!product?.additionalSizes?.length && <li>{uiT("nog geen uitvoeringen")}</li>}
               </ul>
             </Field>
           ) : (
             <Field
-              label="Beschikbare maten"
+              label={uiT("Beschikbare maten")}
               htmlFor="additionalSizes"
-              hint="Per maat: afmeting, eigen SKU, prijs (ex. BTW) en of die maat op voorraad is. Kiesbaar bij offertes/bestellen."
+              hint={uiT("Per maat: afmeting, eigen SKU, prijs (ex. BTW) en of die maat op voorraad is. Kiesbaar bij offertes/bestellen.")}
             >
               <SizesEditor initial={product?.additionalSizes ?? null} />
             </Field>
           )}
 
           <Field
-            label="Omschrijving"
+            label={uiT("Omschrijving")}
             htmlFor="description"
-            hint="Wordt automatisch vertaald naar NL/DE/EN/ES bij het pushen naar de website."
+            hint={uiT("Wordt automatisch vertaald naar NL/DE/EN/ES bij het pushen naar de website.")}
           >
             <Textarea id="description" name="description" defaultValue={product?.description ?? ""} />
           </Field>
 
-          <Field label="Afbeelding-URL (optioneel)" htmlFor="imageUrl">
+          <Field label={uiT("Afbeelding-URL (optioneel)")} htmlFor="imageUrl">
             <Input
               id="imageUrl"
               name="imageUrl"
@@ -338,8 +339,7 @@ export function ProductForm({
               defaultChecked={product?.isActive ?? true}
               className="size-4 rounded border-border"
             />
-            Actief (verschijnt in de productkeuze bij offertes/facturen)
-          </label>
+            {uiT("Actief (verschijnt in de productkeuze bij offertes/facturen)")} </label>
 
           <div className="rounded-md border border-border p-3 text-sm">
             <label className="flex items-center gap-2">
@@ -349,19 +349,18 @@ export function ProductForm({
                 defaultChecked={product?.pushToWebsite ?? false}
                 className="size-4 rounded border-border"
               />
-              Op de website tonen (habitat-one)
-            </label>
+              {uiT("Op de website tonen (habitat-one)")} </label>
             <p className="mt-1 text-xs text-muted">
               {product?.websiteProductId
-                ? `Staat al op de website (id ${product.websiteProductId}). Bestaande gegevens worden bij elke sync bijgewerkt.`
+                ? uiT("Staat al op de website (id {v0}). Bestaande gegevens worden bij elke sync bijgewerkt.", { v0: product.websiteProductId })
                 : product?.pushToWebsite
-                  ? "Klaargezet om gepubliceerd te worden — wordt aangemaakt zodra je de sync draait."
-                  : "Niet zichtbaar op de website."}
+                  ? uiT("Klaargezet om gepubliceerd te worden — wordt aangemaakt zodra je de sync draait.")
+                  : uiT("Niet zichtbaar op de website.")}
             </p>
           </div>
 
           <div className="pt-1">
-            <SubmitButton pendingLabel="Opslaan…">{submitLabel}</SubmitButton>
+            <SubmitButton pendingLabel={uiT("Opslaan…")}>{submitLabel}</SubmitButton>
           </div>
         </form>
       </CardContent>

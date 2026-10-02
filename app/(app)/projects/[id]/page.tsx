@@ -1,3 +1,5 @@
+import { datumTaal } from "@/lib/i18n/server";
+import { tekst as uiTranslation } from '@/lib/i18n/server';
 import { loadProjectFunding } from "@/lib/project-funding";
 import { and, asc, desc, eq, inArray, isNull, like, or, sql } from "drizzle-orm";
 import { headers } from "next/headers";
@@ -96,7 +98,10 @@ import {
 import { stuurKlantportaalUitnodiging } from "@/app/klant/actions";
 import { aliassenVanProject } from "@/lib/project-aliases";
 
-export const metadata = { title: "Project" };
+export async function generateMetadata() {
+  const uiT = await uiTranslation();
+  return { title: uiT("Project") };
+}
 
 export default async function ProjectDetailPage({
   params,
@@ -120,6 +125,8 @@ export default async function ProjectDetailPage({
     kosten?: string;
   }>;
 }) {
+  const uiDateLocale = await datumTaal();
+  const uiT = await uiTranslation();
   const { id } = await params;
   const { edit: editEntryId, uren: urenFilterRaw, kosten: kostenFilterRaw, ...voorschotParams } = await searchParams;
   /**
@@ -574,7 +581,7 @@ export default async function ProjectDetailPage({
     factuurExtra?: string;
   }) => (
     <div className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-lg border bg-background px-3 py-2 text-xs">
-      <span className="font-medium">Betaald</span>
+      <span className="font-medium">{uiT("Betaald")}</span>
       {([
         ["", "Alles", contant + factuur, undefined],
         ["contant", "Contant", contant, contantExtra],
@@ -594,7 +601,7 @@ export default async function ProjectDetailPage({
         </Link>
       ))}
       {actief ? (
-        <span className="text-muted">— je ziet nu alleen {actief === "contant" ? "contante" : "per factuur betaalde"} regels; de kaarten bovenaan blijven het hele project tonen.</span>
+        <span className="text-muted">{uiT("— je ziet nu alleen")} {actief === "contant" ? uiT("contante") : uiT("per factuur betaalde")} {uiT("regels; de kaarten bovenaan blijven het hele project tonen.")}</span>
       ) : null}
     </div>
   );
@@ -811,15 +818,14 @@ export default async function ProjectDetailPage({
             {project.name}
             {project.holdedProjectId ? (
               <span className="rounded-full bg-background px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-muted">
-                Holded
-              </span>
+                {uiT("Holded")} </span>
             ) : null}
             <Badge
               tone={
                 project.status === "active" ? "success" : project.status === "completed" ? "info" : "neutral"
               }
             >
-              {project.status === "active" ? "Actief" : project.status === "completed" ? "Afgerond" : "Gearchiveerd"}
+              {project.status === "active" ? uiT("Actief") : project.status === "completed" ? uiT("Afgerond") : uiT("Gearchiveerd")}
             </Badge>
           </span>
         }
@@ -828,19 +834,16 @@ export default async function ProjectDetailPage({
             {project.status === "completed" ? (
               <form action={setProjectStatus.bind(null, id, "active")}>
                 <SubmitButton variant="secondary" pendingLabel="…">
-                  <RotateCcw className="size-4" /> Heropenen
-                </SubmitButton>
+                  <RotateCcw className="size-4" /> {uiT("Heropenen")} </SubmitButton>
               </form>
             ) : (
               <form action={setProjectStatus.bind(null, id, "completed")}>
-                <SubmitButton variant="secondary" pendingLabel="Afronden…">
-                  <Check className="size-4" /> Afronden
-                </SubmitButton>
+                <SubmitButton variant="secondary" pendingLabel={uiT("Afronden…")}>
+                  <Check className="size-4" /> {uiT("Afronden")} </SubmitButton>
               </form>
             )}
             <LinkButton href="/projects" variant="ghost">
-              <ArrowLeft className="size-4" /> Overzicht
-            </LinkButton>
+              <ArrowLeft className="size-4" /> {uiT("Overzicht")} </LinkButton>
           </div>
         }
       />
@@ -853,11 +856,11 @@ export default async function ProjectDetailPage({
         <TabsBar
           className="order-2"
           tabs={[
-            { id: "overzicht", label: "Overzicht", icon: <LayoutDashboard /> },
-            { id: "betalingen", label: "Betalingen", icon: <Wallet /> },
-            { id: "uren", label: "Uren & kosten", icon: <Clock /> },
-            { id: "documenten", label: "Documenten", icon: <FileText />, badge: linkedDocs.length },
-            { id: "gegevens", label: "Gegevens", icon: <Settings /> },
+            { id: "overzicht", label: uiT("Overzicht"), icon: <LayoutDashboard /> },
+            { id: "betalingen", label: uiT("Betalingen"), icon: <Wallet /> },
+            { id: "uren", label: uiT("Uren & kosten"), icon: <Clock /> },
+            { id: "documenten", label: uiT("Documenten"), icon: <FileText />, badge: linkedDocs.length },
+            { id: "gegevens", label: uiT("Gegevens"), icon: <Settings /> },
           ]}
         />
 
@@ -865,32 +868,32 @@ export default async function ProjectDetailPage({
         <TabPanel id="gegevens" className="order-3">
           <Card className="mb-5">
             <CardHeader>
-              <CardTitle>Projectgegevens</CardTitle>
-              <span className="text-xs text-muted">naam, klant, planning en projectinstellingen</span>
+              <CardTitle>{uiT("Projectgegevens")}</CardTitle>
+              <span className="text-xs text-muted">{uiT("naam, klant, planning en projectinstellingen")}</span>
             </CardHeader>
             <CardContent className="p-5">
               <form action={action} className="space-y-4">
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-              <Field label="Naam" htmlFor="name">
+              <Field label={uiT("Naam")} htmlFor="name">
                 <Input id="name" name="name" required defaultValue={project.name} />
               </Field>
-              <Field label="Code (optioneel)" htmlFor="code" hint="korte projectcode, bv. VER">
+              <Field label={uiT("Code (optioneel)")} htmlFor="code" hint={uiT("korte projectcode, bv. VER")}>
                 <Input id="code" name="code" defaultValue={project.code ?? ""} />
               </Field>
-              <Field label="Status" htmlFor="status">
+              <Field label={uiT("Status")} htmlFor="status">
                 <Select id="status" name="status" defaultValue={project.status}>
-                  <option value="active">Actief</option>
-                  <option value="completed">Afgerond</option>
-                  <option value="archived">Gearchiveerd</option>
+                  <option value="active">{uiT("Actief")}</option>
+                  <option value="completed">{uiT("Afgerond")}</option>
+                  <option value="archived">{uiT("Gearchiveerd")}</option>
                 </Select>
               </Field>
-              <Field label="Soort project" htmlFor="kind" hint="bouw toont uren, kosten & begroting">
+              <Field label={uiT("Soort project")} htmlFor="kind" hint={uiT("bouw toont uren, kosten & begroting")}>
                 <Select id="kind" name="kind" defaultValue={project.kind}>
-                  <option value="sales">Verkoop (producten)</option>
-                  <option value="construction">Bouw / werkzaamheden</option>
+                  <option value="sales">{uiT("Verkoop (producten)")}</option>
+                  <option value="construction">{uiT("Bouw / werkzaamheden")}</option>
                 </Select>
               </Field>
-              <Field label="Aanneemprijs (€, ex. BTW)" htmlFor="contractPriceEur" hint="leeg = offertetotaal als doel">
+              <Field label={uiT("Aanneemprijs (€, ex. BTW)")} htmlFor="contractPriceEur" hint={uiT("leeg = offertetotaal als doel")}>
                 <Input
                   id="contractPriceEur"
                   name="contractPriceEur"
@@ -899,13 +902,13 @@ export default async function ProjectDetailPage({
                 />
               </Field>
               <Field
-                label="Werf / adres-alias"
+                label={uiT("Werf / adres-alias")}
                 htmlFor="siteAlias"
-                hint="voor auto-herkenning van facturen (bv. Cap Negre) — komma-gescheiden"
+                hint={uiT("voor auto-herkenning van facturen (bv. Cap Negre) — komma-gescheiden")}
               >
-                <Input id="siteAlias" name="siteAlias" defaultValue={project.siteAlias ?? ""} placeholder="bv. Cap Negre" />
+                <Input id="siteAlias" name="siteAlias" defaultValue={project.siteAlias ?? ""} placeholder={uiT("bv. Cap Negre")} />
               </Field>
-              <Field label="Begrote uren (optioneel)" htmlFor="budgetHours">
+              <Field label={uiT("Begrote uren (optioneel)")} htmlFor="budgetHours">
                 <Input
                   id="budgetHours"
                   name="budgetHours"
@@ -914,9 +917,9 @@ export default async function ProjectDetailPage({
                 />
               </Field>
               <Field
-                label="Opslag op inkoop derden (%)"
+                label={uiT("Opslag op inkoop derden (%)")}
                 htmlFor="purchaseMarginPct"
-                hint={`bovenop kostprijs — leeg = ${DEFAULT_PURCHASE_MARGIN_PCT}%`}
+                hint={uiT("bovenop kostprijs — leeg = {v0}%", { v0: DEFAULT_PURCHASE_MARGIN_PCT })}
               >
                 <Input
                   id="purchaseMarginPct"
@@ -927,9 +930,9 @@ export default async function ProjectDetailPage({
                 />
               </Field>
               <Field
-                label="Opslag op uren (%)"
+                label={uiT("Opslag op uren (%)")}
                 htmlFor="laborMarginPct"
-                hint={`bovenop kostprijs — leeg = ${DEFAULT_LABOR_MARGIN_PCT}%`}
+                hint={uiT("bovenop kostprijs — leeg = {v0}%", { v0: DEFAULT_LABOR_MARGIN_PCT })}
               >
                 <Input
                   id="laborMarginPct"
@@ -939,57 +942,56 @@ export default async function ProjectDetailPage({
                   defaultValue={project.laborMarginPct ? String(project.laborMarginPct).replace(".", ",") : ""}
                 />
               </Field>
-              <Field label="Verantwoordelijke" htmlFor="ownerId">
+              <Field label={uiT("Verantwoordelijke")} htmlFor="ownerId">
                 <Combobox
                   name="ownerId"
                   options={ownerOptions}
                   defaultValue={project.ownerId ?? ""}
-                  placeholder="— geen — / kies medewerker"
+                  placeholder={uiT("— geen — / kies medewerker")}
                   clearable
                 />
               </Field>
-              <Field label="Klant" htmlFor="contactId">
+              <Field label={uiT("Klant")} htmlFor="contactId">
                 <Combobox
                   name="contactId"
                   options={contactOptions}
                   defaultValue={project.contactId ?? ""}
-                  placeholder="— geen — / zoek contact"
+                  placeholder={uiT("— geen — / zoek contact")}
                   clearable
                 />
               </Field>
-              <Field label="Pand (optioneel)" htmlFor="propertyId">
+              <Field label={uiT("Pand (optioneel)")} htmlFor="propertyId">
                 <Combobox
                   name="propertyId"
                   options={propertyOptions}
                   defaultValue={project.propertyId ?? ""}
-                  placeholder="— geen — / zoek pand"
+                  placeholder={uiT("— geen — / zoek pand")}
                   clearable
                 />
               </Field>
-              <Field label="Startdatum" htmlFor="startDate">
+              <Field label={uiT("Startdatum")} htmlFor="startDate">
                 <Input id="startDate" name="startDate" type="date" defaultValue={project.startDate ?? ""} />
               </Field>
-              <Field label="Einddatum (gepland)" htmlFor="endDate">
+              <Field label={uiT("Einddatum (gepland)")} htmlFor="endDate">
                 <Input id="endDate" name="endDate" type="date" defaultValue={project.endDate ?? ""} />
               </Field>
-              <Field label="Overeenkomst" htmlFor="contractDate" hint="datum van de aannemingsovereenkomst — komt in de voorschotbrief">
+              <Field label={uiT("Overeenkomst")} htmlFor="contractDate" hint={uiT("datum van de aannemingsovereenkomst — komt in de voorschotbrief")}>
                 <Input id="contractDate" name="contractDate" type="date" defaultValue={project.contractDate ?? ""} />
               </Field>
             </div>
-            <Field label="Omschrijving" htmlFor="description">
+            <Field label={uiT("Omschrijving")} htmlFor="description">
               <Textarea id="description" name="description" rows={3} defaultValue={project.description ?? ""} />
             </Field>
             <div className="flex flex-wrap items-center justify-between gap-2 border-t pt-4">
-              <SubmitButton pendingLabel="Opslaan…">Opslaan</SubmitButton>
+              <SubmitButton pendingLabel={uiT("Opslaan…")}>{uiT("Opslaan")}</SubmitButton>
               {!project.holdedProjectId && (
                 <ConfirmSubmit
                   formAction={remove}
-                  message="Dit project definitief verwijderen?"
-                  pendingLabel="Verwijderen…"
+                  message={uiT("Dit project definitief verwijderen?")}
+                  pendingLabel={uiT("Verwijderen…")}
                   className="rounded-md px-3 py-2 text-sm font-medium text-danger transition-colors hover:bg-danger/10"
                 >
-                  Project verwijderen
-                </ConfirmSubmit>
+                  {uiT("Project verwijderen")} </ConfirmSubmit>
               )}
             </div>
               </form>
@@ -1000,29 +1002,27 @@ export default async function ProjectDetailPage({
         {/* KPI-strip — de kerncijfers, altijd zichtbaar onder de tabbalk */}
         <div className="order-1 mb-6 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
           <StatTile
-            label={contractPrice != null ? "Aanneemprijs" : targetIsImplicit ? "Doel" : "Offerte (doel)"}
+            label={contractPrice != null ? uiT("Aanneemprijs") : targetIsImplicit ? uiT("Doel") : uiT("Offerte (doel)")}
             value={formatEUR(targetRevenue)}
-            hint="ex. BTW"
+            hint={uiT("ex. BTW")}
             tone="info"
           />
-          <StatTile label="Gefactureerd" value={formatEUR(projRevenue)} hint={`nog ${formatEUR(toInvoice)} te doen`} tone="neutral" />
+          <StatTile label={uiT("Gefactureerd")} value={formatEUR(projRevenue)} hint={uiT("nog {v0} te doen", { v0: formatEUR(toInvoice) })} tone="neutral" />
           <StatTile
-            label="Ontvangen"
+            label={uiT("Ontvangen")}
             value={formatEUR(receivedTotalEx)}
-            hint={`${paymentRows.length} ${paymentRows.length === 1 ? "betaling" : "betalingen"} · ${formatEUR(receivedTotal)} ontvangen${
-              receivedTotal - receivedTotalEx > 0.01 ? `, waarvan ${formatEUR(receivedTotal - receivedTotalEx)} btw` : " · geen btw"
-            }`}
+            hint={uiT("{v0} {v1} · {v2} ontvangen{v3}", { v0: paymentRows.length, v1: paymentRows.length === 1 ? "betaling" : "betalingen", v2: formatEUR(receivedTotal), v3: receivedTotal - receivedTotalEx > 0.01 ? `, waarvan ${formatEUR(receivedTotal - receivedTotalEx)} btw` : " · geen btw" })}
             tone={receivedTotalEx > 0 ? "success" : "neutral"}
           />
-          <StatTile label="Kosten" value={formatEUR(realizedCost)} hint="uren + inkoop derden + kostprijs eigen voorraad" tone="neutral" />
+          <StatTile label={uiT("Kosten")} value={formatEUR(realizedCost)} hint={uiT("uren + inkoop derden + kostprijs eigen voorraad")} tone="neutral" />
           {/* "Resultaat" las alsof het verdiend was, terwijl het een vooruitblik
               is: doel − kosten, dus alleen waar als de volle aanneemprijs ook
               echt gefactureerd wordt. Bij Silvestre is daarvan pas € 49.736,80
               gefactureerd, dus dat verschil moet je kunnen zien. */}
           <StatTile
-            label="Verwacht resultaat"
+            label={uiT("Verwacht resultaat")}
             value={`${formatEUR(resultToDate)}${resultMarginPct != null ? ` · ${resultMarginPct}%` : ""}`}
-            hint="als de volle aanneemprijs gefactureerd wordt"
+            hint={uiT("als de volle aanneemprijs gefactureerd wordt")}
             tone={resultTone}
           />
         </div>
@@ -1031,40 +1031,38 @@ export default async function ProjectDetailPage({
         <TabPanel id="overzicht" className="order-3">
       <Card id="geldstroom" className="mb-5 scroll-mt-24">
         <CardHeader>
-          <CardTitle>Kosten, klantbetalingen en voorschotruimte</CardTitle>
+          <CardTitle>{uiT("Kosten, klantbetalingen en voorschotruimte")}</CardTitle>
           <span className="text-xs text-muted">
-            geboekte kosten · ontvangen klantgeld · resterende ruimte inclusief opslag — incl. wat via Creadores liep
-          </span>
+            {uiT("geboekte kosten · ontvangen klantgeld · resterende ruimte inclusief opslag — incl. wat via Creadores liep")} </span>
         </CardHeader>
         <CardContent>
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
             <div className="rounded-lg border bg-background p-3">
-              <p className="text-xs text-muted">Geboekte uren en externe inkoop</p>
+              <p className="text-xs text-muted">{uiT("Geboekte uren en externe inkoop")}</p>
               <p className="text-lg font-semibold tabular-nums text-danger">− {formatEUR(cover.prefinanced)}</p>
-              <p className="text-xs text-muted">uren {formatEUR(laborCost)} + inkoop derden {formatEUR(materialCost)} · ex. btw</p>
+              <p className="text-xs text-muted">{uiT("uren")} {formatEUR(laborCost)} {uiT("+ inkoop derden")} {formatEUR(materialCost)} {uiT("· ex. btw")}</p>
             </div>
             {/* Eigen voorraad apart: wel kostprijs, geen kasuitgave — telt dus
                 niet mee in "eruit gegaan" en niet in de voorschotdekking. */}
             <div className="rounded-lg border bg-background p-3">
-              <p className="text-xs text-muted">Eigen voorraad (kostprijs)</p>
+              <p className="text-xs text-muted">{uiT("Eigen voorraad (kostprijs)")}</p>
               <p className="text-lg font-semibold tabular-nums">{formatEUR(ownProductCostRealized)}</p>
-              <p className="text-xs text-muted">verkoopprijs telt mee in de doorbelasting; kostprijs is voor de resultaatberekening</p>
+              <p className="text-xs text-muted">{uiT("verkoopprijs telt mee in de doorbelasting; kostprijs is voor de resultaatberekening")}</p>
             </div>
             <div className="rounded-lg border bg-background p-3">
-              <p className="text-xs text-muted">Ontvangen van klant</p>
+              <p className="text-xs text-muted">{uiT("Ontvangen van klant")}</p>
               <p className="text-lg font-semibold tabular-nums text-success">+ {formatEUR(receivedTotalEx)}</p>
               <p className="text-xs text-muted">
-                {paymentRows.length} {paymentRows.length === 1 ? "betaling" : "betalingen"} · ex. btw van{" "}
-                {formatEUR(receivedTotal)} ontvangen
-                {receivedTotalEx - dekkingOntvangenEx > 0.01
-                  ? ` · waarvan ${formatEUR(receivedTotalEx - dekkingOntvangenEx)} voor eigen producten`
+                {paymentRows.length} {paymentRows.length === 1 ? uiT("betaling") : uiT("betalingen")} {uiT("· ex. btw van")}{" "}
+                {formatEUR(receivedTotal)} {uiT("ontvangen")} {receivedTotalEx - dekkingOntvangenEx > 0.01
+                  ? uiT(" · waarvan {v0} voor eigen producten", { v0: formatEUR(receivedTotalEx - dekkingOntvangenEx) })
                   : ""}
               </p>
             </div>
             {/* Het stoplicht: dekt wat er binnen is de kasuitgaven (uren + inkoop
                 derden)? Eigen voorraad staat hier bewust buiten. */}
             <div className="rounded-lg border bg-background p-3">
-              <p className="text-xs text-muted">Voorschotruimte incl. opslag</p>
+              <p className="text-xs text-muted">{uiT("Voorschotruimte incl. opslag")}</p>
               <p
                 className={`text-lg font-semibold tabular-nums ${
                   cover.tone === "success" ? "text-success" : cover.tone === "warning" ? "text-warning" : "text-danger"
@@ -1074,26 +1072,25 @@ export default async function ProjectDetailPage({
               </p>
               <p className="text-xs text-muted">
                 {cover.status === "gedekt"
-                  ? "gedekt door voorschotten en betalingen · ex. btw"
+                  ? uiT("gedekt door voorschotten en betalingen · ex. btw")
                   : cover.status === "bijna_op"
-                    ? "bijna op — nieuw voorschot voorbereiden · ex. btw"
-                    : "onvoldoende voorschot incl. opslag · ex. btw"}
+                    ? uiT("bijna op — nieuw voorschot voorbereiden · ex. btw")
+                    : uiT("onvoldoende voorschot incl. opslag · ex. btw")}
                 {cover.status !== "gedekt" && (
                   <>
                     {" · "}
                     <Link href="#voorschot-opvragen" className="underline underline-offset-2">
-                      nieuw voorschot vragen →
-                    </Link>
+                      {uiT("nieuw voorschot vragen →")} </Link>
                   </>
                 )}
               </p>
             </div>
             <div className="rounded-lg border bg-background p-3">
-              <p className="text-xs text-muted">Nog te factureren</p>
+              <p className="text-xs text-muted">{uiT("Nog te factureren")}</p>
               <p className={`text-lg font-semibold tabular-nums ${toInvoice > 0 ? "text-warning" : ""}`}>{formatEUR(toInvoice)}</p>
               <p className="text-xs text-muted">
-                {contractPrice != null ? "aanneemprijs" : "doel"} {formatEUR(targetRevenue)} − gefactureerd {formatEUR(projRevenue)}
-                {notInvoicedAdvancesEx > 0 ? ` − voorschotten ${formatEUR(notInvoicedAdvancesEx)}` : ""}
+                {contractPrice != null ? uiT("aanneemprijs") : uiT("doel")} {formatEUR(targetRevenue)} {uiT("− gefactureerd")} {formatEUR(projRevenue)}
+                {notInvoicedAdvancesEx > 0 ? uiT(" − voorschotten {v0}", { v0: formatEUR(notInvoicedAdvancesEx) }) : ""}
               </p>
             </div>
           </div>
@@ -1103,77 +1100,74 @@ export default async function ProjectDetailPage({
       {/* ─────────────── Resultaat (P&L) ─────────────── */}
       <Card id="resultaat" className="mb-5 scroll-mt-24">
         <CardHeader>
-          <CardTitle>Resultaat — zitten we goed?</CardTitle>
+          <CardTitle>{uiT("Resultaat — zitten we goed?")}</CardTitle>
           <span className="text-xs text-muted">
-            norm: minimaal {MIN_MARGIN_LABEL}% marge van de verkoopprijs (= kostprijs ÷ {(1 - MIN_MARGIN_PCT / 100).toFixed(2).replace(".", ",")}) · alle bedragen ex. BTW
-          </span>
+            {uiT("norm: minimaal")} {MIN_MARGIN_LABEL}{uiT("% marge van de verkoopprijs (= kostprijs ÷")} {(1 - MIN_MARGIN_PCT / 100).toFixed(2).replace(".", ",")}{uiT(") · alle bedragen ex. BTW")} </span>
         </CardHeader>
         <CardContent className="space-y-3">
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
             <div className="rounded-lg border bg-background p-3">
-              <p className="text-xs text-muted">Doel (omzet)</p>
+              <p className="text-xs text-muted">{uiT("Doel (omzet)")}</p>
               <p className="text-lg font-semibold tabular-nums">{formatEUR(targetRevenue)}</p>
             </div>
             <div className="rounded-lg border bg-background p-3">
-              <p className="text-xs text-muted">Max. kosten ({MIN_MARGIN_LABEL}% marge)</p>
+              <p className="text-xs text-muted">{uiT("Max. kosten (")}{MIN_MARGIN_LABEL}{uiT("% marge)")}</p>
               <p className="text-lg font-semibold tabular-nums">{formatEUR(maxCost)}</p>
-              <p className="text-xs text-muted">kostenplafond</p>
+              <p className="text-xs text-muted">{uiT("kostenplafond")}</p>
             </div>
             <div className="rounded-lg border bg-background p-3">
-              <p className="text-xs text-muted">Kosten tot nu toe</p>
+              <p className="text-xs text-muted">{uiT("Kosten tot nu toe")}</p>
               <p className="text-lg font-semibold tabular-nums">
                 {formatEUR(realizedCost)}
                 {budgetCostTotal > 0 && (
                   <span className={`ml-2 text-xs font-normal ${realizedCost > budgetCostTotal ? "text-danger" : "text-success"}`}>
-                    {realizedCost > budgetCostTotal ? "▲ boven" : "▼ onder"} begroting
-                  </span>
+                    {realizedCost > budgetCostTotal ? uiT("▲ boven") : uiT("▼ onder")} {uiT("begroting")} </span>
                 )}
               </p>
               {/* Anders dan de kas-/voorschotkant telt hier de voorraad WEL mee. */}
-              <p className="text-xs text-muted">incl. kostprijs producten uit eigen voorraad</p>
+              <p className="text-xs text-muted">{uiT("incl. kostprijs producten uit eigen voorraad")}</p>
             </div>
             <div className="rounded-lg border bg-background p-3">
-              <p className="text-xs text-muted">Ruimte tot plafond</p>
+              <p className="text-xs text-muted">{uiT("Ruimte tot plafond")}</p>
               <p className={`text-lg font-semibold tabular-nums ${costHeadroom < 0 ? "text-danger" : "text-success"}`}>
                 {costHeadroom < 0 ? `− ${formatEUR(Math.abs(costHeadroom))}` : formatEUR(costHeadroom)}
               </p>
-              <p className="text-xs text-muted">{costHeadroom < 0 ? "boven plafond" : "kosten mogen er nog bij"}</p>
+              <p className="text-xs text-muted">{costHeadroom < 0 ? uiT("boven plafond") : uiT("kosten mogen er nog bij")}</p>
             </div>
           </div>
           <div className={`rounded-lg p-3 text-sm ${resultTone === "danger" ? "bg-danger/10 text-danger" : resultTone === "warning" ? "bg-warning/10 text-warning" : resultTone === "neutral" ? "bg-background text-muted" : "bg-success/10 text-success"}`}>
             <span className="font-semibold">
               {resultTone === "danger"
-                ? "⚠ Let op — verlies"
+                ? uiT("⚠ Let op — verlies")
                 : resultTone === "warning"
-                  ? `⚠ Onder de norm — minder dan ${MIN_MARGIN_LABEL}% marge`
+                  ? uiT("⚠ Onder de norm — minder dan {v0}% marge", { v0: MIN_MARGIN_LABEL })
                   : resultTone === "neutral"
-                    ? "Nog geen doel ingesteld"
-                    : `✓ Op koers — ${MIN_MARGIN_LABEL}%+ marge`}
+                    ? uiT("Nog geen doel ingesteld")
+                    : uiT("✓ Op koers — {v0}%+ marge", { v0: MIN_MARGIN_LABEL })}
             </span>{" "}
-            Resultaat tot nu toe {formatEUR(resultToDate)}
-            {resultMarginPct != null ? ` (${pct1(resultMarginPct)}% marge)` : ""} ·{" "}
-            kosten zijn {costRatio != null ? `${Math.round(costRatio * 100)}%` : "—"} van het doel
-            {costHeadroom < 0 ? ` · ${formatEUR(Math.abs(costHeadroom))} boven het ${MIN_MARGIN_PCT}%-plafond` : ` · nog ${formatEUR(costHeadroom)} ruimte tot het plafond`}.
+            {uiT("Resultaat tot nu toe")} {formatEUR(resultToDate)}
+            {resultMarginPct != null ? uiT(" ({v0}% marge)", { v0: pct1(resultMarginPct) }) : ""} ·{" "}
+            {uiT("kosten zijn")} {costRatio != null ? `${Math.round(costRatio * 100)}%` : "—"} {uiT("van het doel")} {costHeadroom < 0 ? uiT(" · {v0} boven het {v1}%-plafond", { v0: formatEUR(Math.abs(costHeadroom)), v1: MIN_MARGIN_PCT }) : uiT(" · nog {v0} ruimte tot het plafond", { v0: formatEUR(costHeadroom) })}.
           </div>
 
           {/* Drie stromen apart: uren (norm), eigen producten (gemeten), inkoop (kost). */}
           <div className="grid gap-3 lg:grid-cols-3">
             <div className="rounded-lg border bg-background p-3">
               <div className="mb-2 flex items-baseline justify-between gap-2">
-                <p className="text-sm font-semibold">Uren — arbeid</p>
-                <span className="text-xs text-muted">opslag {margins.laborMarginPct}%</span>
+                <p className="text-sm font-semibold">{uiT("Uren — arbeid")}</p>
+                <span className="text-xs text-muted">{uiT("opslag")} {margins.laborMarginPct}%</span>
               </div>
               <dl className="space-y-1 text-sm">
                 <div className="flex justify-between gap-2">
-                  <dt className="text-muted">Kostprijs</dt>
+                  <dt className="text-muted">{uiT("Kostprijs")}</dt>
                   <dd className="tabular-nums">{formatEUR(margins.laborCost)}</dd>
                 </div>
                 <div className="flex justify-between gap-2">
-                  <dt className="text-muted">Door te belasten</dt>
+                  <dt className="text-muted">{uiT("Door te belasten")}</dt>
                   <dd className="tabular-nums">{formatEUR(margins.laborRevenue)}</dd>
                 </div>
                 <div className="flex justify-between gap-2 border-t pt-1 font-semibold">
-                  <dt>Marge op uren</dt>
+                  <dt>{uiT("Marge op uren")}</dt>
                   <dd className="tabular-nums text-success">
                     {formatEUR(margins.laborMargin)}
                     <span className="ml-1 text-xs font-normal text-muted">{margins.laborMarginPct}%</span>
@@ -1181,16 +1175,15 @@ export default async function ProjectDetailPage({
                 </div>
               </dl>
               <p className="mt-2 text-xs text-muted">
-                {laborHours.toLocaleString("nl-NL")} uur gewerkt
-                {arbeidPoCost > 0
-                  ? ` · inclusief ${formatEUR(arbeidPoCost)} aan arbeidsfacturen van derden`
+                {laborHours.toLocaleString(uiDateLocale)} {uiT("uur gewerkt")} {arbeidPoCost > 0
+                  ? uiT(" · inclusief {v0} aan arbeidsfacturen van derden", { v0: formatEUR(arbeidPoCost) })
                   : ""}
               </p>
             </div>
 
             <div className="rounded-lg border bg-background p-3">
               <div className="mb-2 flex items-baseline justify-between gap-2">
-                <p className="text-sm font-semibold">Eigen producten</p>
+                <p className="text-sm font-semibold">{uiT("Eigen producten")}</p>
                 {margins.productMarginPct != null && (
                   <span className={`text-xs ${margins.productMarginPct < MIN_MARGIN_PCT ? "text-warning" : "text-muted"}`}>
                     {margins.productMarginPct.toFixed(1).replace(".", ",")}%
@@ -1203,32 +1196,30 @@ export default async function ProjectDetailPage({
                     {/* Kostprijs bovenaan, net als bij Uren en Inkoop derden:
                         overal eerst wat het ons kost, daaronder wat het opbrengt. */}
                     <div className="flex justify-between gap-2">
-                      <dt className="text-muted">Kostprijs</dt>
+                      <dt className="text-muted">{uiT("Kostprijs")}</dt>
                       <dd className="tabular-nums">{formatEUR(margins.productCost)}</dd>
                     </div>
                     <div className="flex justify-between gap-2">
-                      <dt className="text-muted">Gefactureerd</dt>
+                      <dt className="text-muted">{uiT("Gefactureerd")}</dt>
                       <dd className="tabular-nums">{formatEUR(margins.productRevenue)}</dd>
                     </div>
                     <div className="flex justify-between gap-2 border-t pt-1 font-semibold">
-                      <dt>Marge op producten</dt>
+                      <dt>{uiT("Marge op producten")}</dt>
                       <dd className={`tabular-nums ${margins.productMargin < 0 ? "text-danger" : "text-success"}`}>
                         {formatEUR(margins.productMargin)}
                       </dd>
                     </div>
                   </dl>
                   <p className="mt-2 text-xs text-muted">
-                    gemeten uit de factuurregels
-                    {margins.uncostedProductRevenue > 0
-                      ? ` · ${formatEUR(margins.uncostedProductRevenue)} zonder kostprijs, niet meegeteld`
+                    {uiT("gemeten uit de factuurregels")} {margins.uncostedProductRevenue > 0
+                      ? uiT(" · {v0} zonder kostprijs, niet meegeteld", { v0: formatEUR(margins.uncostedProductRevenue) })
                       : ""}
                   </p>
                 </>
               ) : (
                 <p className="text-sm text-muted">
-                  Nog niets van onszelf gefactureerd op dit project.
-                  {margins.uncostedProductRevenue > 0
-                    ? ` ${formatEUR(margins.uncostedProductRevenue)} gefactureerd zonder kostprijs — vul die op de regels in om de marge te zien.`
+                  {uiT("Nog niets van onszelf gefactureerd op dit project.")} {margins.uncostedProductRevenue > 0
+                    ? uiT(" {v0} gefactureerd zonder kostprijs — vul die op de regels in om de marge te zien.", { v0: formatEUR(margins.uncostedProductRevenue) })
                     : ""}
                 </p>
               )}
@@ -1236,20 +1227,20 @@ export default async function ProjectDetailPage({
 
             <div className="rounded-lg border bg-background p-3">
               <div className="mb-2 flex items-baseline justify-between gap-2">
-                <p className="text-sm font-semibold">Inkoop derden</p>
-                <span className="text-xs text-muted">opslag {margins.purchaseMarginPct}%</span>
+                <p className="text-sm font-semibold">{uiT("Inkoop derden")}</p>
+                <span className="text-xs text-muted">{uiT("opslag")} {margins.purchaseMarginPct}%</span>
               </div>
               <dl className="space-y-1 text-sm">
                 <div className="flex justify-between gap-2">
-                  <dt className="text-muted">Kostprijs</dt>
+                  <dt className="text-muted">{uiT("Kostprijs")}</dt>
                   <dd className="tabular-nums">{formatEUR(margins.purchaseCost)}</dd>
                 </div>
                 <div className="flex justify-between gap-2">
-                  <dt className="text-muted">Door te belasten</dt>
+                  <dt className="text-muted">{uiT("Door te belasten")}</dt>
                   <dd className="tabular-nums">{formatEUR(margins.purchaseRevenue)}</dd>
                 </div>
                 <div className="flex justify-between gap-2 border-t pt-1 font-semibold">
-                  <dt>Marge op inkoop</dt>
+                  <dt>{uiT("Marge op inkoop")}</dt>
                   <dd className="tabular-nums text-success">
                     {formatEUR(margins.purchaseMargin)}
                     <span className="ml-1 text-xs font-normal text-muted">{margins.purchaseMarginPct}%</span>
@@ -1257,52 +1248,42 @@ export default async function ProjectDetailPage({
                 </div>
               </dl>
               <p className="mt-2 text-xs text-muted">
-                inkooporders {formatEUR(poCost)} + losse kosten {formatEUR(looseCost)}
+                {uiT("inkooporders")} {formatEUR(poCost)} {uiT("+ losse kosten")} {formatEUR(looseCost)}
                 {/* Dezelfde euro's mogen niet twee keer meetellen: een factuur van
                     een bouwer zit als uren in de kaart hiernaast. Dat hier benoemen
                     scheelt het vermoeden dat het dubbel staat. */}
                 {arbeidPoCost > 0
-                  ? ` · ${formatEUR(arbeidPoCost)} aan arbeidsfacturen telt bij Uren — arbeid, niet hier`
+                  ? uiT(" · {v0} aan arbeidsfacturen telt bij Uren — arbeid, niet hier", { v0: formatEUR(arbeidPoCost) })
                   : ""}
               </p>
             </div>
           </div>
           {/* Eén uitlegregel voor alle drie — beter dan drie keer jargon in de kaarten. */}
           <p className="text-xs text-muted">
-            &quot;Norm {margins.laborMarginPct}%&quot; betekent: uren en inkoop hebben geen eigen verkoopprijs, dus
-            &quot;door te belasten&quot; is de kostprijs plus onze opslag op kostprijs. Eigen producten zijn wél echt gemeten:
-            verkoopprijs min kostprijs van de factuurregels.
-          </p>
+            {uiT("\"Norm")} {margins.laborMarginPct}{uiT("%\" betekent: uren en inkoop hebben geen eigen verkoopprijs, dus \"door te belasten\" is de kostprijs plus onze opslag op kostprijs. Eigen producten zijn wél echt gemeten: verkoopprijs min kostprijs van de factuurregels.")} </p>
 
           {/* Eén blok i.p.v. twee: "minimaal door te belasten" stond eerst los
               én nogmaals als eerste regel van dit sommetje — dubbel en rommelig. */}
           {margins.totalRevenue > 0 && (
             <div className="rounded-lg border border-accent/30 bg-accent/5 p-3 text-sm">
-              <p className="font-semibold">Wat moet er nu nog binnenkomen?</p>
+              <p className="font-semibold">{uiT("Wat moet er nu nog binnenkomen?")}</p>
               <p className="mb-2 text-xs text-muted">
-                gerekend mét marge en mét eigen producten — dit is dus een ander getal dan de voorschotdekking bij
-                Geldstroom, die alleen naar kale kasuitgaven kijkt
-              </p>
+                {uiT("gerekend mét marge en mét eigen producten — dit is dus een ander getal dan de voorschotdekking bij Geldstroom, die alleen naar kale kasuitgaven kijkt")} </p>
               <dl className="space-y-1">
                 <div className="flex justify-between gap-2">
                   <dt className="text-muted">
-                    Werk tot nu toe moet minimaal opbrengen
-                    <span className="block text-xs">
-                      uren {formatEUR(margins.laborRevenue)} + inkoop {formatEUR(margins.purchaseRevenue)} + eigen
-                      producten {formatEUR(margins.productRevenue)} · alle bedragen ex. btw
-                    </span>
+                    {uiT("Werk tot nu toe moet minimaal opbrengen")} <span className="block text-xs">
+                      {uiT("uren")} {formatEUR(margins.laborRevenue)} {uiT("+ inkoop")} {formatEUR(margins.purchaseRevenue)} {uiT("+ eigen producten")} {formatEUR(margins.productRevenue)} {uiT("· alle bedragen ex. btw")} </span>
                   </dt>
                   <dd className="tabular-nums">{formatEUR(margins.totalRevenue)}</dd>
                 </div>
                 <div className="flex justify-between gap-2">
                   <dt className="text-muted">
-                    Al ontvangen
-                    <span className="block text-xs">
+                    {uiT("Al ontvangen")} <span className="block text-xs">
                       {/* Gefactureerd is géén geld: een verstuurde factuur kan onbetaald
                           zijn. Daarom telt hier wat er ECHT binnen is — betalingen op
                           facturen én voorschotten. */}
-                      alle betalingen, op factuur én als voorschot
-                    </span>
+                      {uiT("alle betalingen, op factuur én als voorschot")} </span>
                   </dt>
                   <dd className="tabular-nums">− {formatEUR(receivedTotalEx)}</dd>
                 </div>
@@ -1310,16 +1291,14 @@ export default async function ProjectDetailPage({
                     gewoon wat het is: de klant heeft vooruitbetaald. */}
                 {margins.totalRevenue - receivedTotalEx >= -0.01 ? (
                   <div className="flex justify-between gap-2 border-t pt-1 font-semibold">
-                    <dt>Nog te ontvangen</dt>
+                    <dt>{uiT("Nog te ontvangen")}</dt>
                     <dd className="tabular-nums">{formatEUR(Math.max(0, margins.totalRevenue - receivedTotalEx))}</dd>
                   </div>
                 ) : (
                   <div className="flex justify-between gap-2 border-t pt-1 font-semibold">
                     <dt>
-                      Vooruit ontvangen
-                      <span className="block text-xs font-normal text-muted">
-                        de klant heeft vooruitbetaald voor werk dat nog komt
-                      </span>
+                      {uiT("Vooruit ontvangen")} <span className="block text-xs font-normal text-muted">
+                        {uiT("de klant heeft vooruitbetaald voor werk dat nog komt")} </span>
                     </dt>
                     <dd className="tabular-nums text-success">{formatEUR(receivedTotalEx - margins.totalRevenue)}</dd>
                   </div>
@@ -1327,47 +1306,38 @@ export default async function ProjectDetailPage({
                 {openInvoicedEx > 0.01 && (
                   <div className="flex justify-between gap-2 pt-1">
                     <dt className="text-muted">
-                      waarvan al gefactureerd, nog niet betaald
-                      <span className="block text-xs">openstaande facturen</span>
+                      {uiT("waarvan al gefactureerd, nog niet betaald")} <span className="block text-xs">{uiT("openstaande facturen")}</span>
                     </dt>
                     <dd className="tabular-nums text-warning">{formatEUR(openInvoicedEx)}</dd>
                   </div>
                 )}
                 {margins.totalRevenue - receivedTotalEx - openInvoicedEx > 0.01 && (
                   <div className="flex justify-between gap-2">
-                    <dt className="text-muted">nog te factureren</dt>
+                    <dt className="text-muted">{uiT("nog te factureren")}</dt>
                     <dd className="tabular-nums">{formatEUR(margins.totalRevenue - receivedTotalEx - openInvoicedEx)}</dd>
                   </div>
                 )}
               </dl>
               {targetRevenue > 0 && margins.totalRevenue > targetRevenue && (
                 <p className="mt-2 text-xs text-warning">
-                  ⚠ Wat het werk moet opbrengen ({formatEUR(margins.totalRevenue)}) ligt {formatEUR(margins.totalRevenue - targetRevenue)} boven
-                  de aanneemprijs van {formatEUR(targetRevenue)} — leg het verschil vast als meerwerk.
-                </p>
+                  {uiT("⚠ Wat het werk moet opbrengen (")}{formatEUR(margins.totalRevenue)}{uiT(") ligt")} {formatEUR(margins.totalRevenue - targetRevenue)} {uiT("boven de aanneemprijs van")} {formatEUR(targetRevenue)} {uiT("— leg het verschil vast als meerwerk.")} </p>
               )}
               {voorschottenOnverrekendEx > 0 && (
                 <p className="mt-2 text-xs text-muted">
-                  Op de eindafrekening moet er méér op papier dan er nog binnenkomt:{" "}
-                  <strong>{formatEUR(Math.max(0, margins.totalRevenue - projRevenue))}</strong>, want de{" "}
-                  {formatEUR(voorschottenOnverrekendEx)} aan voorschotten is wél betaald maar nooit gefactureerd. Die
-                  gaat er als verrekening weer af, en de btw over het hele werk wordt dan in één keer afgerekend.
-                </p>
+                  {uiT("Op de eindafrekening moet er méér op papier dan er nog binnenkomt:")}{" "}
+                  <strong>{formatEUR(Math.max(0, margins.totalRevenue - projRevenue))}</strong>{uiT(", want de")}{" "}
+                  {formatEUR(voorschottenOnverrekendEx)} {uiT("aan voorschotten is wél betaald maar nooit gefactureerd. Die gaat er als verrekening weer af, en de btw over het hele werk wordt dan in één keer afgerekend.")} </p>
               )}
               <form action={createFinalSettlement.bind(null, id)} className="mt-3 space-y-2">
                 <label className="flex items-start gap-2 text-xs">
                   <input type="checkbox" name="bundel" className="mt-0.5" />
                   <span>
-                    Voorschotten op één regel samenvatten
-                    <span className="block text-muted">
-                      dan staat er &quot;Reeds ontvangen voorschotten&quot; in plaats van elke betaling apart — de
-                      bedragen blijven volledig op de factuur staan
-                    </span>
+                    {uiT("Voorschotten op één regel samenvatten")} <span className="block text-muted">
+                      {uiT("dan staat er \"Reeds ontvangen voorschotten\" in plaats van elke betaling apart — de bedragen blijven volledig op de factuur staan")} </span>
                   </span>
                 </label>
-                <SubmitButton size="sm" variant="secondary" pendingLabel="Opstellen…">
-                  Eindafrekening opstellen
-                </SubmitButton>
+                <SubmitButton size="sm" variant="secondary" pendingLabel={uiT("Opstellen…")}>
+                  {uiT("Eindafrekening opstellen")} </SubmitButton>
               </form>
             </div>
           )}
@@ -1402,15 +1372,13 @@ export default async function ProjectDetailPage({
             <CardHeader>
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div>
-                  <CardTitle>Voortgang</CardTitle>
+                  <CardTitle>{uiT("Voortgang")}</CardTitle>
                   <span className="text-xs text-muted">
-                    {totaalPct}% van het werk gereed{totGewicht > 0 ? " (gewogen naar begrote waarde)" : ""} · {gereed} van{" "}
-                    {fases.length} fases afgerond
-                  </span>
+                    {totaalPct}{uiT("% van het werk gereed")}{totGewicht > 0 ? uiT(" (gewogen naar begrote waarde)") : ""} · {gereed} {uiT("van")}{" "}
+                    {fases.length} {uiT("fases afgerond")} </span>
                 </div>
                 <LinkButton href={`/projects/${id}/voortgang/pdf`} target="_blank" variant="secondary">
-                  <Printer className="size-4" /> Voortgang-PDF voor de klant
-                </LinkButton>
+                  <Printer className="size-4" /> {uiT("Voortgang-PDF voor de klant")} </LinkButton>
               </div>
               {/* Totaalbalk */}
               <div className="mt-2 h-2 w-full overflow-hidden rounded-full bg-background">
@@ -1445,7 +1413,7 @@ export default async function ProjectDetailPage({
                         key={p}
                         formAction={setPhaseProgress.bind(null, id, f.name, p)}
                         className={`rounded border px-1.5 py-0.5 text-[11px] tabular-nums hover:bg-background ${f.progressPct === p ? "border-success font-semibold" : "text-muted"}`}
-                        title={`Zet op ${p}%`}
+                        title={uiT("Zet op {v0}%", { v0: p })}
                       >
                         {p}
                       </button>
@@ -1453,10 +1421,9 @@ export default async function ProjectDetailPage({
                     <button
                       formAction={setPhaseProgress.bind(null, id, f.name, 100)}
                       className={`rounded border px-1.5 py-0.5 text-[11px] hover:bg-background ${f.progressPct >= 100 ? "border-success font-semibold text-success" : "text-muted"}`}
-                      title="Fase afvinken (100%)"
+                      title={uiT("Fase afvinken (100%)")}
                     >
-                      ✓ klaar
-                    </button>
+                      {uiT("✓ klaar")} </button>
                   </div>
                 </form>
               ))}
@@ -1470,26 +1437,22 @@ export default async function ProjectDetailPage({
         <CardHeader>
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
-              <CardTitle>Begroting</CardTitle>
+              <CardTitle>{uiT("Begroting")}</CardTitle>
               <span className="text-xs text-muted">
-                {hasBudgetContent
-                  ? `${phaseRows.length} ${phaseRows.length === 1 ? "fase" : "fases"}${budgetLineCount > 0 ? ` · ${budgetLineCount} ${budgetLineCount === 1 ? "onderdeel" : "onderdelen"}` : ""}${budgetTargetTotal > 0 ? ` · totaal ${formatEUR(budgetTargetTotal)}${begrootMargePct != null ? ` · marge ${begrootMargePct}%` : ""}` : " · uitleg/bestek"}`
-                  : "nog geen begroting — bouw 'm per fase op een eigen scherm"}
+                {hasBudgetContent ? `${phaseRows.length} ${phaseRows.length === 1 ? uiT("fase") : uiT("fases")}${budgetLineCount > 0 ? ` · ${budgetLineCount} ${budgetLineCount === 1 ? uiT("onderdeel") : uiT("onderdelen")}` : ""}${budgetTargetTotal > 0 ? uiT(" · totaal {v0}{v1}", { v0: formatEUR(budgetTargetTotal), v1: begrootMargePct != null ? uiT(" · marge {v0}%", { v0: begrootMargePct }) : "" }) : uiT(" · uitleg/bestek")}` : uiT("nog geen begroting — bouw 'm per fase op een eigen scherm")}
               </span>
             </div>
             <div className="flex flex-wrap items-center gap-2">
               <LinkButton href={`/projects/${id}/begroting`} variant={hasBudgetContent ? "secondary" : "primary"}>
-                {hasBudgetContent ? "Begroting openen" : "+ Begroting maken"}
+                {hasBudgetContent ? uiT("Begroting openen") : uiT("+ Begroting maken")}
               </LinkButton>
               {hasBudgetContent && (
                 <>
                   <LinkButton href={`/projects/${id}/begroting/pdf`} target="_blank" variant="secondary">
-                    <Printer className="size-4" /> Printen
-                  </LinkButton>
+                    <Printer className="size-4" /> {uiT("Printen")} </LinkButton>
                   <form action={sendBudgetToClient.bind(null, id)}>
-                    <SubmitButton variant="secondary" pendingLabel="Versturen…">
-                      <Send className="size-4" /> Versturen naar klant
-                    </SubmitButton>
+                    <SubmitButton variant="secondary" pendingLabel={uiT("Versturen…")}>
+                      <Send className="size-4" /> {uiT("Versturen naar klant")} </SubmitButton>
                   </form>
                 </>
               )}
@@ -1505,20 +1468,19 @@ export default async function ProjectDetailPage({
       {advanceDocs.length > 0 && (
         <Card id="aanbetalingen" className="mb-5 scroll-mt-24">
           <CardHeader>
-            <CardTitle>Aanbetalingen / voorschotten</CardTitle>
+            <CardTitle>{uiT("Aanbetalingen / voorschotten")}</CardTitle>
             <span className="text-xs text-muted">
-              {formatEUR(advPaidTotal)} betaald · {formatEUR(advOpenToSettle)} nog te verrekenen op de eindfactuur
-            </span>
+              {formatEUR(advPaidTotal)} {uiT("betaald ·")} {formatEUR(advOpenToSettle)} {uiT("nog te verrekenen op de eindfactuur")} </span>
           </CardHeader>
           <CardContent className="p-0">
             <Table>
               <THead>
                 <tr>
-                  <Th>Voorschot</Th>
-                  <Th>Bedrag</Th>
-                  <Th>BTW</Th>
-                  <Th>Status</Th>
-                  <Th>Verrekend</Th>
+                  <Th>{uiT("Voorschot")}</Th>
+                  <Th>{uiT("Bedrag")}</Th>
+                  <Th>{uiT("BTW")}</Th>
+                  <Th>{uiT("Status")}</Th>
+                  <Th>{uiT("Verrekend")}</Th>
                 </tr>
               </THead>
               <TBody>
@@ -1529,21 +1491,21 @@ export default async function ProjectDetailPage({
                         {a.docNumber ?? "—"}
                       </Link>
                       <span className="block text-xs text-muted">
-                        {a.kind === "proforma" ? "proforma" : a.kind === "fondos" ? "provisión de fondos" : "factuur"}
+                        {a.kind === "proforma" ? uiT("proforma") : a.kind === "fondos" ? uiT("provisión de fondos") : uiT("factuur")}
                       </span>
                     </Td>
                     <Td className="tabular-nums">{formatEUR(Number(a.totalEur ?? 0))}</Td>
-                    <Td>{a.kind === "fondos" ? "geen btw" : a.vatReverseCharge ? "verlegd" : "met btw"}</Td>
+                    <Td>{a.kind === "fondos" ? uiT("geen btw") : a.vatReverseCharge ? uiT("verlegd") : uiT("met btw")}</Td>
                     <Td>
                       <Badge tone={a.status === "paid" ? "success" : "neutral"}>
-                        {a.status === "paid" ? "Betaald" : a.status === "sent" ? "Verstuurd" : "Concept"}
+                        {a.status === "paid" ? uiT("Betaald") : a.status === "sent" ? uiT("Verstuurd") : uiT("Concept")}
                       </Badge>
                     </Td>
                     <Td>
                       {a.settledAt ? (
-                        <Badge tone="neutral">Verrekend</Badge>
+                        <Badge tone="neutral">{uiT("Verrekend")}</Badge>
                       ) : a.status === "paid" ? (
-                        <span className="text-xs text-warning">nog openstaand</span>
+                        <span className="text-xs text-warning">{uiT("nog openstaand")}</span>
                       ) : (
                         <span className="text-xs text-muted">—</span>
                       )}
@@ -1574,23 +1536,20 @@ export default async function ProjectDetailPage({
       {/* ─────────────── Ontvangen betalingen (van klant) ─────────────── */}
       <Card id="ontvangen" className="mb-5 scroll-mt-24">
         <CardHeader>
-          <CardTitle>Ontvangen betalingen</CardTitle>
+          <CardTitle>{uiT("Ontvangen betalingen")}</CardTitle>
           <span className="text-xs text-muted">
-            wat de klant al heeft betaald · {formatEUR(receivedTotal)} ontvangen, waarvan {formatEUR(receivedTotalEx)} ex.
-            btw (contant = geen btw, factuurbetalingen volgen hun eigen factuur) · betaalde facturen komen er automatisch
-            bij · telt niet mee in omzet/marge
-          </span>
+            {uiT("wat de klant al heeft betaald ·")} {formatEUR(receivedTotal)} {uiT("ontvangen, waarvan")} {formatEUR(receivedTotalEx)} {uiT("ex. btw (contant = geen btw, factuurbetalingen volgen hun eigen factuur) · betaalde facturen komen er automatisch bij · telt niet mee in omzet/marge")} </span>
         </CardHeader>
         <CardContent className="space-y-4">
           {paymentRows.length > 0 && (
             <Table>
               <THead>
                 <tr>
-                  <Th>Datum</Th>
-                  <Th>Omschrijving</Th>
-                  <Th>Wijze</Th>
-                  <Th className="text-right">Bedrag</Th>
-                  <Th className="text-right">waarvan ex. btw</Th>
+                  <Th>{uiT("Datum")}</Th>
+                  <Th>{uiT("Omschrijving")}</Th>
+                  <Th>{uiT("Wijze")}</Th>
+                  <Th className="text-right">{uiT("Bedrag")}</Th>
+                  <Th className="text-right">{uiT("waarvan ex. btw")}</Th>
                   <Th />
                 </tr>
               </THead>
@@ -1598,7 +1557,7 @@ export default async function ProjectDetailPage({
                 {paymentRows.map((p) => (
                   <Tr key={p.id}>
                     <Td className="whitespace-nowrap">
-                      {p.date ? new Date(p.date).toLocaleDateString("nl-NL", { day: "numeric", month: "short", year: "numeric" }) : "—"}
+                      {p.date ? new Date(p.date).toLocaleDateString(uiDateLocale, { day: "numeric", month: "short", year: "numeric" }) : "—"}
                     </Td>
                     <Td>
                       {p.documentId ? (
@@ -1619,11 +1578,11 @@ export default async function ProjectDetailPage({
                     <Td className="text-right tabular-nums text-muted">
                       {formatEUR(exBtwVanOntvangst(p))}
                       {p.vatAmountEur != null ? (
-                        <span className="block text-xs">{formatEUR(Number(p.vatAmountEur))} btw</span>
+                        <span className="block text-xs">{formatEUR(Number(p.vatAmountEur))} {uiT("btw")}</span>
                       ) : p.vatRate != null ? (
-                        <span className="block text-xs">{Number(p.vatRate) === 0 ? "geen btw" : `${Number(p.vatRate)}% btw`}</span>
+                        <span className="block text-xs">{Number(p.vatRate) === 0 ? uiT("geen btw") : uiT("{v0}% btw", { v0: Number(p.vatRate) })}</span>
                       ) : p.method === "cash" ? (
-                        <span className="block text-xs">geen btw</span>
+                        <span className="block text-xs">{uiT("geen btw")}</span>
                       ) : null}
                     </Td>
                     <Td className="text-right">
@@ -1631,10 +1590,10 @@ export default async function ProjectDetailPage({
                           niet weghalen — hij komt terug bij de volgende synchronisatie.
                           Zet de factuur terug op verstuurd als het niet klopt. */}
                       {p.documentId ? (
-                        <span className="text-xs text-muted">via factuur</span>
+                        <span className="text-xs text-muted">{uiT("via factuur")}</span>
                       ) : (
                         <form action={deleteProjectPayment.bind(null, id, p.id)}>
-                          <SubmitButton size="sm" variant="ghost" className="text-muted" pendingLabel="…">×</SubmitButton>
+                          <SubmitButton size="sm" variant="ghost" className="text-muted" pendingLabel="…">{uiT("×")}</SubmitButton>
                         </form>
                       )}
                     </Td>
@@ -1644,17 +1603,17 @@ export default async function ProjectDetailPage({
             </Table>
           )}
           <form action={addProjectPayment.bind(null, id)} className="grid gap-3 sm:grid-cols-2 lg:grid-cols-[0.9fr_1.3fr_1.1fr_0.9fr_0.7fr_0.9fr_auto] lg:items-end">
-            <Field label="Datum">
+            <Field label={uiT("Datum")}>
               <Input name="date" type="date" />
             </Field>
-            <Field label="Omschrijving">
-              <Input name="description" placeholder="bijv. factuur F26009 / voorschot" />
+            <Field label={uiT("Omschrijving")}>
+              <Input name="description" placeholder={uiT("bijv. factuur F26009 / voorschot")} />
             </Field>
             {/* Deelbetaling op een voorschotverzoek: dan loopt de stand
                 "nog open" bij Voorschot opvragen mee. */}
-            <Field label="Hoort bij" hint={openAdvanceRequests.length ? "voorschotverzoek" : "geen open verzoek"}>
+            <Field label={uiT("Hoort bij")} hint={openAdvanceRequests.length ? uiT("voorschotverzoek") : uiT("geen open verzoek")}>
               <Select name="advanceRequestId" defaultValue="" disabled={openAdvanceRequests.length === 0}>
-                <option value="">— los —</option>
+                <option value="">{uiT("— los —")}</option>
                 {openAdvanceRequests.map((v) => (
                   <option key={v.id} value={v.id}>
                     {v.label}
@@ -1662,30 +1621,30 @@ export default async function ProjectDetailPage({
                 ))}
               </Select>
             </Field>
-            <Field label="Wijze">
+            <Field label={uiT("Wijze")}>
               <Select name="method" defaultValue="bank">
-                <option value="bank">Bankoverschrijving</option>
-                <option value="cash">Contant</option>
-                <option value="invoice">Via factuur</option>
-                <option value="advance">Voorschot</option>
-                <option value="other">Overig</option>
+                <option value="bank">{uiT("Bankoverschrijving")}</option>
+                <option value="cash">{uiT("Contant")}</option>
+                <option value="invoice">{uiT("Via factuur")}</option>
+                <option value="advance">{uiT("Voorschot")}</option>
+                <option value="other">{uiT("Overig")}</option>
               </Select>
             </Field>
-            <Field label="BTW" hint="leeg = systeem beslist">
+            <Field label={uiT("BTW")} hint={uiT("leeg = systeem beslist")}>
               <Select name="vatRate" defaultValue="">
-                <option value="">automatisch</option>
-                <option value="0">geen btw</option>
+                <option value="">{uiT("automatisch")}</option>
+                <option value="0">{uiT("geen btw")}</option>
                 <option value="21">21%</option>
                 <option value="10">10%</option>
               </Select>
             </Field>
-            <Field label="Bedrag (€)">
+            <Field label={uiT("Bedrag (€)")}>
               <Input name="amountEur" inputMode="decimal" required placeholder="0,00" />
             </Field>
-            <Field label="BTW-bedrag (€)" hint="bij gemengde tarieven">
+            <Field label={uiT("BTW-bedrag (€)")} hint={uiT("bij gemengde tarieven")}>
               <Input name="vatAmountEur" inputMode="decimal" className="text-right" placeholder="—" />
             </Field>
-            <SubmitButton size="sm" variant="secondary" pendingLabel="…">+ Betaling</SubmitButton>
+            <SubmitButton size="sm" variant="secondary" pendingLabel="…">{uiT("+ Betaling")}</SubmitButton>
           </form>
         </CardContent>
       </Card>
@@ -1703,10 +1662,10 @@ export default async function ProjectDetailPage({
           <TabsBar
             className="mb-4"
             tabs={[
-              { id: "uren", label: "Uren — arbeid", badge: timeRows.length },
-              { id: "kosten", label: "Kosten & inkoop", badge: costRows.length + linkedPOs.length },
-              { id: "producten", label: "Eigen producten" },
-              { id: "meerwerk", label: "Meerwerk" },
+              { id: "uren", label: uiT("Uren — arbeid"), badge: timeRows.length },
+              { id: "kosten", label: uiT("Kosten & inkoop"), badge: costRows.length + linkedPOs.length },
+              { id: "producten", label: uiT("Eigen producten") },
+              { id: "meerwerk", label: uiT("Meerwerk") },
             ]}
           />
           <TabPanel id="producten">
@@ -1723,13 +1682,12 @@ export default async function ProjectDetailPage({
           {/* Uren */}
           <Card id="uren" className="scroll-mt-24">
             <CardHeader>
-              <CardTitle>Uren — arbeid</CardTitle>
+              <CardTitle>{uiT("Uren — arbeid")}</CardTitle>
               <span className="text-xs text-muted">
-                {laborHours.toLocaleString("nl-NL")} uur · {formatEUR(laborCost)} kosten
-                {arbeidPoCost > 0 ? ` (waarvan ${formatEUR(arbeidPoCost)} uit arbeidsfacturen)` : ""}
-                {project.budgetHours ? ` · begroot ${Number(project.budgetHours).toLocaleString("nl-NL")} u` : ""}
+                {laborHours.toLocaleString(uiDateLocale)} {uiT("uur ·")} {formatEUR(laborCost)} {uiT("kosten")} {arbeidPoCost > 0 ? uiT(" (waarvan {v0} uit arbeidsfacturen)", { v0: formatEUR(arbeidPoCost) }) : ""}
+                {project.budgetHours ? uiT(" · begroot {v0} u", { v0: Number(project.budgetHours).toLocaleString(uiDateLocale) }) : ""}
                 {laborCost > 0
-                  ? ` · door te belasten ${formatEUR(margins.laborRevenue)} — ${margins.laborMarginPct}% opslag op kostprijs = ${formatEUR(margins.laborMargin)}`
+                  ? uiT(" · door te belasten {v0} — {v1}% opslag op kostprijs = {v2}", { v0: formatEUR(margins.laborRevenue), v1: margins.laborMarginPct, v2: formatEUR(margins.laborMargin) })
                   : ""}
               </span>
             </CardHeader>
@@ -1737,13 +1695,11 @@ export default async function ProjectDetailPage({
               {pendingTimeRows.length > 0 && (
                 <div className="flex flex-wrap items-center gap-3 rounded-lg border border-amber-300 bg-amber-50/60 px-3 py-2 text-sm">
                   <span>
-                    ⏱ <strong>{pendingTimeRows.length}</strong> portaal-regel{pendingTimeRows.length === 1 ? "" : "s"} (
-                    {pendingHours.toLocaleString("nl-NL")} uur) te controleren — tellen nog niet mee in de kosten.
-                  </span>
+                    ⏱ <strong>{pendingTimeRows.length}</strong> {uiT(pendingTimeRows.length === 1 ? "portaal-regel" : "portaal-regels")} (
+                    {pendingHours.toLocaleString(uiDateLocale)} {uiT("uur) te controleren — tellen nog niet mee in de kosten.")} </span>
                   <form action={approveAllPendingTimeEntries.bind(null, id)}>
                     <SubmitButton size="sm" variant="secondary" pendingLabel="…">
-                      Alles goedkeuren
-                    </SubmitButton>
+                      {uiT("Alles goedkeuren")} </SubmitButton>
                   </form>
                 </div>
               )}
@@ -1753,12 +1709,12 @@ export default async function ProjectDetailPage({
                   actief={urenFilter}
                   contant={urenContant.kost}
                   factuur={urenFactuur.kost}
-                  contantExtra={`(${urenContant.uren.toLocaleString("nl-NL")} u)`}
-                  factuurExtra={`(${urenFactuur.uren.toLocaleString("nl-NL")} u)`}
+                  contantExtra={`(${urenContant.uren.toLocaleString(uiDateLocale)} u)`}
+                  factuurExtra={`(${urenFactuur.uren.toLocaleString(uiDateLocale)} u)`}
                 />
               )}
               {timeRows.length > 0 && zichtbareTimeRows.length === 0 && (
-                <p className="text-sm text-muted">Geen urenregels die {urenFilter === "contant" ? "contant" : "per factuur"} betaald zijn.</p>
+                <p className="text-sm text-muted">{uiT("Geen urenregels die")} {urenFilter === "contant" ? uiT("contant") : uiT("per factuur")} {uiT("betaald zijn.")}</p>
               )}
               {zichtbareTimeRows.length > 0 && (
                 /* Lange lijsten schuiven in zichzelf i.p.v. de hele pagina uit te
@@ -1767,11 +1723,11 @@ export default async function ProjectDetailPage({
                 <Table wrapperClassName="max-h-[30rem] overflow-y-auto rounded-lg border">
                   <THead className="sticky top-0 z-10 bg-surface">
                     <tr>
-                      <Th>Datum</Th>
-                      <Th>Arbeider</Th>
-                      <Th className="text-right">Uren</Th>
-                      <Th className="text-right">Tarief</Th>
-                      <Th className="text-right">Kosten</Th>
+                      <Th>{uiT("Datum")}</Th>
+                      <Th>{uiT("Arbeider")}</Th>
+                      <Th className="text-right">{uiT("Uren")}</Th>
+                      <Th className="text-right">{uiT("Tarief")}</Th>
+                      <Th className="text-right">{uiT("Kosten")}</Th>
                       <Th />
                     </tr>
                   </THead>
@@ -1785,33 +1741,32 @@ export default async function ProjectDetailPage({
                               <form action={updateTimeEntry.bind(null, id, t.id)} className="flex flex-wrap items-end gap-3">
                                 <input type="hidden" name="note" defaultValue={t.note ?? ""} />
                                 <div className="text-sm">
-                                  <span className="block text-xs text-muted">Arbeider</span>
+                                  <span className="block text-xs text-muted">{uiT("Arbeider")}</span>
                                   <span className="font-medium">{t.workerName ?? "—"}</span>
                                 </div>
-                                <Field label="Datum">
+                                <Field label={uiT("Datum")}>
                                   <Input type="date" name="date" defaultValue={String(t.date).slice(0, 10)} />
                                 </Field>
-                                <Field label="Uren">
+                                <Field label={uiT("Uren")}>
                                   <Input name="hours" defaultValue={moneyForInput(t.hours)} inputMode="decimal" className="w-24 text-right tabular-nums" />
                                 </Field>
-                                <Field label="Tarief (€/u)">
+                                <Field label={uiT("Tarief (€/u)")}>
                                   {/* Zonder opschonen staat hier "3800.000000" — en dat
                                       werd bij opslaan 3,8 miljard. Zie lib/parse-money.ts. */}
                                   <Input name="hourlyCostEur" defaultValue={moneyForInput(t.hourlyCostEur)} inputMode="decimal" className="w-24 text-right tabular-nums" />
                                 </Field>
                                 {/* Betaalwijze hoort hier te staan: zonder dit veld kon je
                                     een regel niet van contant naar per factuur zetten. */}
-                                <Field label="Betaald">
+                                <Field label={uiT("Betaald")}>
                                   <Select name="paymentMethod" defaultValue={t.paymentMethod}>
-                                    <option value="cash">Contant</option>
-                                    <option value="invoice">Per factuur</option>
+                                    <option value="cash">{uiT("Contant")}</option>
+                                    <option value="invoice">{uiT("Per factuur")}</option>
                                   </Select>
                                 </Field>
-                                <SubmitButton size="sm" variant="secondary" pendingLabel="…">Opslaan</SubmitButton>
+                                <SubmitButton size="sm" variant="secondary" pendingLabel="…">{uiT("Opslaan")}</SubmitButton>
                                 <Link href={`/projects/${id}#uren`} className="px-2 py-2 text-xs text-muted hover:underline">
-                                  Annuleer
-                                </Link>
-                                <p className="w-full text-xs text-muted">Kosten = uren × tarief — wordt na opslaan herberekend.</p>
+                                  {uiT("Annuleer")} </Link>
+                                <p className="w-full text-xs text-muted">{uiT("Kosten = uren × tarief — wordt na opslaan herberekend.")}</p>
                               </form>
                             </Td>
                           </Tr>
@@ -1820,7 +1775,7 @@ export default async function ProjectDetailPage({
                       const pending = isPendingEntry(t);
                       return (
                         <Tr key={t.id} className={pending ? "bg-amber-50/60" : undefined}>
-                          <Td className="whitespace-nowrap">{new Date(t.date).toLocaleDateString("nl-NL", { day: "numeric", month: "short" })}</Td>
+                          <Td className="whitespace-nowrap">{new Date(t.date).toLocaleDateString(uiDateLocale, { day: "numeric", month: "short" })}</Td>
                           <Td>
                             {t.workerName ?? "—"}
                             {/* Zelfde badge als in de kostenlijst: zo zie je per regel
@@ -1828,10 +1783,10 @@ export default async function ProjectDetailPage({
                             <Badge tone={t.paymentMethod === "cash" ? "warning" : "neutral"} className="ml-2">
                               {PAY_LABEL[t.paymentMethod]}
                             </Badge>
-                            {pending && <Badge tone="warning" className="ml-2">te controleren</Badge>}
+                            {pending && <Badge tone="warning" className="ml-2">{uiT("te controleren")}</Badge>}
                             {t.note ? <span className="block text-xs text-muted">{t.note}</span> : null}
                           </Td>
-                          <Td className="text-right tabular-nums">{Number(t.hours).toLocaleString("nl-NL")}</Td>
+                          <Td className="text-right tabular-nums">{Number(t.hours).toLocaleString(uiDateLocale)}</Td>
                           <Td className="text-right tabular-nums text-muted">{formatEUR(t.hourlyCostEur)}</Td>
                           <Td className="text-right tabular-nums font-medium">{formatEUR(Number(t.hours) * Number(t.hourlyCostEur))}</Td>
                           <Td className="text-right whitespace-nowrap">
@@ -1839,15 +1794,14 @@ export default async function ProjectDetailPage({
                               {pending && (
                                 <form action={approveTimeEntry.bind(null, id, t.id)}>
                                   <SubmitButton size="sm" variant="secondary" pendingLabel="…">
-                                    Goedkeuren
-                                  </SubmitButton>
+                                    {uiT("Goedkeuren")} </SubmitButton>
                                 </form>
                               )}
-                              <Link href={`/projects/${id}?edit=${t.id}#uren`} title="Bewerk" className="rounded px-1.5 py-1 text-muted hover:bg-muted/50">
+                              <Link href={`/projects/${id}?edit=${t.id}#uren`} title={uiT("Bewerk")} className="rounded px-1.5 py-1 text-muted hover:bg-muted/50">
                                 ✎
                               </Link>
                               <form action={deleteTimeEntry.bind(null, id, t.id)}>
-                                <SubmitButton size="sm" variant="ghost" className="text-muted" pendingLabel="…">×</SubmitButton>
+                                <SubmitButton size="sm" variant="ghost" className="text-muted" pendingLabel="…">{uiT("×")}</SubmitButton>
                               </form>
                             </div>
                           </Td>
@@ -1860,13 +1814,13 @@ export default async function ProjectDetailPage({
               {zichtbareTimeRows.length > 0 && (
                 <p className="text-right text-xs text-muted">
                   {urenFilter
-                    ? `${urenFilter === "contant" ? "Contant" : "Per factuur"} in deze lijst: ${formatEUR(zichtbareUrenKost)}`
-                    : `Samen: ${formatEUR(laborCost)}`}
+                    ? uiT("{v0} in deze lijst: {v1}", { v0: urenFilter === "contant" ? "Contant" : "Per factuur", v1: formatEUR(zichtbareUrenKost) })
+                    : uiT("Samen: {v0}", { v0: formatEUR(laborCost) })}
                 </p>
               )}
               {workerRows.length === 0 ? (
                 <p className="text-sm text-muted">
-                  Voeg eerst arbeiders toe in <Link href="/ploeg" className="text-accent hover:underline">Ploeg</Link>.
+                  {uiT("Voeg eerst arbeiders toe in")} <Link href="/ploeg" className="text-accent hover:underline">{uiT("Ploeg")}</Link>.
                 </p>
               ) : (
                 <TimeEntryForm workers={workerOptions} action={addTimeEntry.bind(null, id)} />
@@ -1876,10 +1830,9 @@ export default async function ProjectDetailPage({
                   krijgt een persoonlijke link en kan alleen hier uren invullen. */}
               <div className="mt-5 border-t pt-4">
                 <p className="mb-2 text-sm font-medium">
-                  Urenportaal{" "}
+                  {uiT("Urenportaal")}{" "}
                   <span className="font-normal text-muted">
-                    — persoonlijke invul-link per arbeider, alleen voor dit project (deel via WhatsApp)
-                  </span>
+                    {uiT("— persoonlijke invul-link per arbeider, alleen voor dit project (deel via WhatsApp)")} </span>
                 </p>
                 {portalLinkRows.length > 0 && (
                   <ul className="mb-3 space-y-1.5">
@@ -1889,8 +1842,7 @@ export default async function ProjectDetailPage({
                         <CopyLinkButton url={`${portalBase}/${l.token}`} />
                         <form action={deleteWorkerPortalLink.bind(null, id, l.id)}>
                           <SubmitButton size="sm" variant="ghost" className="text-muted" pendingLabel="…">
-                            Intrekken
-                          </SubmitButton>
+                            {uiT("Intrekken")} </SubmitButton>
                         </form>
                       </li>
                     ))}
@@ -1898,10 +1850,10 @@ export default async function ProjectDetailPage({
                 )}
                 {unlinkedWorkers.length > 0 ? (
                   <form action={createWorkerPortalLink.bind(null, id)} className="flex flex-wrap items-end gap-2">
-                    <Field label="Arbeider / ploegbaas">
+                    <Field label={uiT("Arbeider / ploegbaas")}>
                       <Combobox
                         name="workerId"
-                        placeholder="Zoek een arbeider…"
+                        placeholder={uiT("Zoek een arbeider…")}
                         options={unlinkedWorkers.map((w) => ({
                           value: w.id,
                           label: w.name,
@@ -1910,14 +1862,13 @@ export default async function ProjectDetailPage({
                       />
                     </Field>
                     <SubmitButton size="sm" variant="secondary" pendingLabel="…">
-                      + Link aanmaken
-                    </SubmitButton>
+                      {uiT("+ Link aanmaken")} </SubmitButton>
                   </form>
                 ) : (
                   portalLinkRows.length === 0 && (
                     <p className="text-sm text-muted">
-                      Voeg eerst arbeiders toe in{" "}
-                      <Link href="/ploeg" className="text-accent hover:underline">Ploeg</Link>.
+                      {uiT("Voeg eerst arbeiders toe in")}{" "}
+                      <Link href="/ploeg" className="text-accent hover:underline">{uiT("Ploeg")}</Link>.
                     </p>
                   )
                 )}
@@ -1930,13 +1881,13 @@ export default async function ProjectDetailPage({
           {/* Kosten & inkoop */}
           <Card id="kosten" className="scroll-mt-24">
             <CardHeader>
-              <CardTitle>Kosten &amp; inkoop</CardTitle>
+              <CardTitle>{uiT("Kosten & inkoop")}</CardTitle>
               <span className="text-xs text-muted">
-                gekoppelde inkoop {formatEUR(poCost)} + losse kosten {formatEUR(looseCost)} = {formatEUR(materialCost)}
-                {" · alle bedragen ex. btw"}
-                {` · door te belasten ${formatEUR(margins.purchaseRevenue)} — ${margins.purchaseMarginPct}% opslag op kostprijs = ${formatEUR(margins.purchaseMargin)}`}
+                {uiT("gekoppelde inkoop")} {formatEUR(poCost)} {uiT("+ losse kosten")} {formatEUR(looseCost)} = {formatEUR(materialCost)}
+                {uiT(" · alle bedragen ex. btw")}
+                {uiT(" · door te belasten {v0} — {v1}% opslag op kostprijs = {v2}", { v0: formatEUR(margins.purchaseRevenue), v1: margins.purchaseMarginPct, v2: formatEUR(margins.purchaseMargin) })}
                 {arbeidPoCost > 0
-                  ? ` · ${formatEUR(arbeidPoCost)} aan arbeidsfacturen telt hier NIET in mee — die staat bij Uren — arbeid`
+                  ? uiT(" · {v0} aan arbeidsfacturen telt hier NIET in mee — die staat bij Uren — arbeid", { v0: formatEUR(arbeidPoCost) })
                   : ""}
               </span>
             </CardHeader>
@@ -1947,11 +1898,8 @@ export default async function ProjectDetailPage({
               {arbeidZonderUren.length > 0 && (
                 <div className="rounded-lg border border-amber-300 bg-amber-50/60 px-3 py-2 text-sm">
                   <p>
-                    ⚠ <strong>{arbeidZonderUren.length}</strong> arbeidsfactu
-                    {arbeidZonderUren.length === 1 ? "ur" : "ren"} van samen{" "}
-                    <strong>{formatEUR(arbeidZonderUrenCost)}</strong> staat op &quot;telt als uren&quot;, maar er is
-                    geen urenregel bij gemaakt. Dat bedrag telt nu nergens mee in de projectkosten.
-                  </p>
+                    ⚠ <strong>{arbeidZonderUren.length}</strong> {uiT(arbeidZonderUren.length === 1 ? "arbeidsfactuur" : "arbeidsfacturen")} {uiT("van samen")}{" "}
+                    <strong>{formatEUR(arbeidZonderUrenCost)}</strong> {uiT("staat op \"telt als uren\", maar er is geen urenregel bij gemaakt. Dat bedrag telt nu nergens mee in de projectkosten.")} </p>
                   <ul className="mt-1 space-y-0.5">
                     {arbeidZonderUren.map((p) => (
                       <li key={p.id}>
@@ -1969,7 +1917,7 @@ export default async function ProjectDetailPage({
               )}
               {linkedPOs.length > 0 && (
                 <div>
-                  <p className="mb-1 text-xs font-medium uppercase tracking-wide text-muted">Gekoppelde inkooporders</p>
+                  <p className="mb-1 text-xs font-medium uppercase tracking-wide text-muted">{uiT("Gekoppelde inkooporders")}</p>
                   <Table wrapperClassName="max-h-[22rem] overflow-y-auto rounded-lg border">
                     <TBody>
                       {linkedPOs.map((p) => {
@@ -1988,11 +1936,10 @@ export default async function ProjectDetailPage({
                             {p.reference ? <span className="ml-1 text-xs text-muted">{p.reference}</span> : null}
                             {p.countAsLabor ? (
                               poGeboekt.has(p.id) ? (
-                                <span className="ml-1 text-xs text-muted">· telt mee bij Uren — arbeid</span>
+                                <span className="ml-1 text-xs text-muted">{uiT("· telt mee bij Uren — arbeid")}</span>
                               ) : (
                                 <span className="ml-1 text-xs font-medium text-warning">
-                                  · geen urenregel — telt nergens mee
-                                </span>
+                                  {uiT("· geen urenregel — telt nergens mee")} </span>
                               )
                             ) : null}
                           </Td>
@@ -2000,7 +1947,7 @@ export default async function ProjectDetailPage({
                             className={`text-right tabular-nums${p.countAsLabor ? " text-muted" : ""}`}
                             title={
                               p.countAsLabor
-                                ? "Dit bedrag telt mee in Uren — arbeid en NIET in de inkoop hierboven; anders zou dezelfde factuur twee keer in de projectkosten staan."
+                                ? uiT("Dit bedrag telt mee in Uren — arbeid en NIET in de inkoop hierboven; anders zou dezelfde factuur twee keer in de projectkosten staan.")
                                 : undefined
                             }
                           >
@@ -2009,15 +1956,14 @@ export default async function ProjectDetailPage({
                               <Link
                                 href={`/inkooporders/${p.id}/edit`}
                                 className="ml-1 cursor-help text-xs text-warning"
-                                title="Op deze inkooporder staat geen btw/subtotaal — dit bedrag is het factuurtotaal en zit er dus mogelijk incl. btw in. Vul het subtotaal (ex. btw) in."
+                                title={uiT("Op deze inkooporder staat geen btw/subtotaal — dit bedrag is het factuurtotaal en zit er dus mogelijk incl. btw in. Vul het subtotaal (ex. btw) in.")}
                               >
-                                btw?
-                              </Link>
+                                {uiT("btw?")} </Link>
                             ) : ex.vatAssumed ? (
                               <Link
                                 href={`/inkooporders/${p.id}/edit`}
                                 className="ml-1 cursor-help text-xs text-muted"
-                                title={`Geen btw uitgelezen — ex. btw afgeleid van het factuurtotaal ${formatEUR(p.total)} met 21% aangenomen, net als bij de urenboeking. Vul het echte subtotaal in om de aanname te vervangen.`}
+                                title={uiT("Geen btw uitgelezen — ex. btw afgeleid van het factuurtotaal {v0} met 21% aangenomen, net als bij de urenboeking. Vul het echte subtotaal in om de aanname te vervangen.", { v0: formatEUR(p.total) })}
                               >
                                 21%?
                               </Link>
@@ -2025,7 +1971,7 @@ export default async function ProjectDetailPage({
                           </Td>
                           <Td className="text-right">
                             <form action={unlinkPurchaseOrder.bind(null, id, p.id)}>
-                              <SubmitButton size="sm" variant="ghost" className="text-muted" pendingLabel="…">ontkoppel</SubmitButton>
+                              <SubmitButton size="sm" variant="ghost" className="text-muted" pendingLabel="…">{uiT("ontkoppel")}</SubmitButton>
                             </form>
                           </Td>
                         </Tr>
@@ -2045,32 +1991,31 @@ export default async function ProjectDetailPage({
               )}
               {costRows.length > 0 && zichtbareCostRows.length === 0 && (
                 <p className="text-sm text-muted">
-                  Geen losse kosten die {kostenFilter === "contant" ? "contant" : "per factuur"} betaald zijn.
-                </p>
+                  {uiT("Geen losse kosten die")} {kostenFilter === "contant" ? uiT("contant") : uiT("per factuur")} {uiT("betaald zijn.")} </p>
               )}
               {zichtbareCostRows.length > 0 && (
                 <Table wrapperClassName="max-h-[30rem] overflow-y-auto rounded-lg border">
                   <THead className="sticky top-0 z-10 bg-surface">
                     <tr>
-                      <Th>Datum</Th>
-                      <Th>Categorie</Th>
-                      <Th>Omschrijving</Th>
-                      <Th className="text-right">Bedrag</Th>
-                      <Th>Betaling</Th>
+                      <Th>{uiT("Datum")}</Th>
+                      <Th>{uiT("Categorie")}</Th>
+                      <Th>{uiT("Omschrijving")}</Th>
+                      <Th className="text-right">{uiT("Bedrag")}</Th>
+                      <Th>{uiT("Betaling")}</Th>
                       <Th />
                     </tr>
                   </THead>
                   <TBody>
                     {zichtbareCostRows.map((c) => (
                       <Tr key={c.id}>
-                        <Td className="whitespace-nowrap">{new Date(c.date).toLocaleDateString("nl-NL", { day: "numeric", month: "short" })}</Td>
+                        <Td className="whitespace-nowrap">{new Date(c.date).toLocaleDateString(uiDateLocale, { day: "numeric", month: "short" })}</Td>
                         <Td>{BUDGET_CAT_LABEL[c.category] ?? c.category}</Td>
                         <Td>{c.description}{c.supplier ? <span className="block text-xs text-muted">{c.supplier}</span> : null}</Td>
                         <Td className="text-right tabular-nums font-medium">{formatEUR(c.amountEur)}</Td>
                         <Td><Badge tone={c.paymentMethod === "cash" ? "warning" : "neutral"}>{PAY_LABEL[c.paymentMethod]}</Badge></Td>
                         <Td className="text-right">
                           <form action={deleteProjectCost.bind(null, id, c.id)}>
-                            <SubmitButton size="sm" variant="ghost" className="text-muted" pendingLabel="…">×</SubmitButton>
+                            <SubmitButton size="sm" variant="ghost" className="text-muted" pendingLabel="…">{uiT("×")}</SubmitButton>
                           </form>
                         </Td>
                       </Tr>
@@ -2081,53 +2026,53 @@ export default async function ProjectDetailPage({
               {zichtbareCostRows.length > 0 && (
                 <p className="text-right text-xs text-muted">
                   {kostenFilter
-                    ? `${kostenFilter === "contant" ? "Contant" : "Per factuur"} in deze lijst: ${formatEUR(zichtbareKostenSom)}`
-                    : `Samen: ${formatEUR(looseCost)}`}
+                    ? uiT("{v0} in deze lijst: {v1}", { v0: kostenFilter === "contant" ? "Contant" : "Per factuur", v1: formatEUR(zichtbareKostenSom) })
+                    : uiT("Samen: {v0}", { v0: formatEUR(looseCost) })}
                 </p>
               )}
               <form action={addProjectCost.bind(null, id)} className="grid gap-3 sm:grid-cols-2 lg:grid-cols-[0.9fr_1fr_1.6fr_0.9fr_0.9fr_0.9fr_auto] lg:items-end">
-                <Field label="Datum">
+                <Field label={uiT("Datum")}>
                   <Input name="date" type="date" required />
                 </Field>
-                <Field label="Categorie">
+                <Field label={uiT("Categorie")}>
                   <Select name="category" defaultValue="material">
-                    <option value="material">Materiaal</option>
-                    <option value="subcontractor">Onderaanneming</option>
-                    <option value="equipment">Materieel</option>
-                    <option value="other">Overig</option>
+                    <option value="material">{uiT("Materiaal")}</option>
+                    <option value="subcontractor">{uiT("Onderaanneming")}</option>
+                    <option value="equipment">{uiT("Materieel")}</option>
+                    <option value="other">{uiT("Overig")}</option>
                   </Select>
                 </Field>
-                <Field label="Omschrijving">
-                  <Input name="description" required placeholder="bijv. tegels + lijm" />
+                <Field label={uiT("Omschrijving")}>
+                  <Input name="description" required placeholder={uiT("bijv. tegels + lijm")} />
                 </Field>
-                <Field label="Bedrag (€)">
+                <Field label={uiT("Bedrag (€)")}>
                   <Input name="amountEur" inputMode="decimal" required placeholder="0,00" />
                 </Field>
-                <Field label="Doorbelast (€)" hint="klantprijs ex. btw — leeg = kost + marge">
-                  <Input name="chargeEur" inputMode="decimal" placeholder="auto" />
+                <Field label={uiT("Doorbelast (€)")} hint={uiT("klantprijs ex. btw — leeg = kost + marge")}>
+                  <Input name="chargeEur" inputMode="decimal" placeholder={uiT("auto")} />
                 </Field>
-                <Field label="Betaling">
+                <Field label={uiT("Betaling")}>
                   <Select name="paymentMethod" defaultValue="invoice">
-                    <option value="cash">Contant</option>
-                    <option value="invoice">Per factuur</option>
+                    <option value="cash">{uiT("Contant")}</option>
+                    <option value="invoice">{uiT("Per factuur")}</option>
                   </Select>
                 </Field>
-                <SubmitButton size="sm" variant="secondary" pendingLabel="…">+ Kost</SubmitButton>
+                <SubmitButton size="sm" variant="secondary" pendingLabel="…">{uiT("+ Kost")}</SubmitButton>
               </form>
               {unlinkedPOs.length > 0 && (
                 <form action={linkPurchaseOrderToProject.bind(null, id)} className="flex flex-wrap items-end gap-2 border-t pt-3">
-                  <Field label="Bestaande inkooporder koppelen" className="flex-1">
+                  <Field label={uiT("Bestaande inkooporder koppelen")} className="flex-1">
                     <Combobox
                       name="purchaseOrderId"
                       clearable
-                      placeholder="— kies of zoek een inkooporder —"
+                      placeholder={uiT("— kies of zoek een inkooporder —")}
                       options={unlinkedPOs.map((p) => ({
                         value: p.id,
                         label: `${p.supplier}${p.reference ? ` · ${p.reference}` : ""} — ${formatEUR(poExVatAmount(p))} ex. btw`,
                       }))}
                     />
                   </Field>
-                  <SubmitButton size="sm" variant="secondary" pendingLabel="…">Koppelen</SubmitButton>
+                  <SubmitButton size="sm" variant="secondary" pendingLabel="…">{uiT("Koppelen")}</SubmitButton>
                 </form>
               )}
             </CardContent>
@@ -2140,26 +2085,26 @@ export default async function ProjectDetailPage({
         <TabPanel id="gegevens" className="order-3">
           <Card>
             <CardHeader>
-              <CardTitle>Gegevens</CardTitle>
+              <CardTitle>{uiT("Gegevens")}</CardTitle>
             </CardHeader>
             <CardContent className="space-y-1.5 text-sm">
               <div className="flex justify-between gap-3">
-                <span className="text-muted">Aangemaakt</span>
-                <span>{new Date(project.createdAt).toLocaleDateString("nl-NL", { day: "numeric", month: "short", year: "numeric" })}</span>
+                <span className="text-muted">{uiT("Aangemaakt")}</span>
+                <span>{new Date(project.createdAt).toLocaleDateString(uiDateLocale, { day: "numeric", month: "short", year: "numeric" })}</span>
               </div>
               <div className="flex justify-between gap-3">
-                <span className="text-muted">Bijgewerkt</span>
-                <span>{new Date(project.updatedAt).toLocaleDateString("nl-NL", { day: "numeric", month: "short", year: "numeric" })}</span>
+                <span className="text-muted">{uiT("Bijgewerkt")}</span>
+                <span>{new Date(project.updatedAt).toLocaleDateString(uiDateLocale, { day: "numeric", month: "short", year: "numeric" })}</span>
               </div>
               {project.holdedProjectId && (
                 <div className="flex justify-between gap-3 border-t pt-1.5">
-                  <span className="text-muted">Holded-ID</span>
+                  <span className="text-muted">{uiT("Holded-ID")}</span>
                   <span className="truncate font-mono text-xs">{project.holdedProjectId}</span>
                 </div>
               )}
               {project.code && (
                 <div className="flex justify-between gap-3">
-                  <span className="text-muted">Code</span>
+                  <span className="text-muted">{uiT("Code")}</span>
                   <span className="font-medium">{project.code}</span>
                 </div>
               )}
@@ -2174,42 +2119,38 @@ export default async function ProjectDetailPage({
               de verdeelvelden bij inkoop. */}
           <Card className="mt-5">
             <CardHeader>
-              <CardTitle>Ook bekend als</CardTitle>
+              <CardTitle>{uiT("Ook bekend als")}</CardTitle>
               <span className="text-xs text-muted">{aliassen.length}</span>
             </CardHeader>
             <CardContent className="space-y-3 text-sm">
               {aliassen.length === 0 ? (
                 <p className="text-muted">
-                  Nog geen andere namen. Noemt een leverancier deze werf anders op zijn factuur of urenlijst, zet die
-                  naam hier — dan vind je de werf bij het verdelen door te typen wat er op zijn lijst staat.
-                </p>
+                  {uiT("Nog geen andere namen. Noemt een leverancier deze werf anders op zijn factuur of urenlijst, zet die naam hier — dan vind je de werf bij het verdelen door te typen wat er op zijn lijst staat.")} </p>
               ) : (
                 <ul className="divide-y divide-border/70">
                   {aliassen.map((a) => (
                     <li key={a.id} className="flex items-center justify-between gap-3 py-1.5">
                       <span>
                         <span className="font-medium">{a.label}</span>
-                        {a.supplier && <span className="ml-2 text-xs text-muted">bij {a.supplier}</span>}
+                        {a.supplier && <span className="ml-2 text-xs text-muted">{uiT("bij")} {a.supplier}</span>}
                       </span>
                       <form action={deleteProjectAlias.bind(null, id, a.id)}>
                         <button type="submit" className="text-xs text-muted hover:text-danger hover:underline">
-                          verwijderen
-                        </button>
+                          {uiT("verwijderen")} </button>
                       </form>
                     </li>
                   ))}
                 </ul>
               )}
               <form action={addProjectAlias.bind(null, id)} className="flex flex-wrap items-end gap-2">
-                <Field label="Naam bij de ander" htmlFor="alias-label">
-                  <Input id="alias-label" name="label" required placeholder="cata Gorg" className="w-40" />
+                <Field label={uiT("Naam bij de ander")} htmlFor="alias-label">
+                  <Input id="alias-label" name="label" required placeholder={uiT("cata Gorg")} className="w-40" />
                 </Field>
-                <Field label="Leverancier" htmlFor="alias-sup" hint="leeg = voor iedereen">
-                  <Input id="alias-sup" name="supplier" placeholder="Pieter Hoogendijk" className="w-44" />
+                <Field label={uiT("Leverancier")} htmlFor="alias-sup" hint={uiT("leeg = voor iedereen")}>
+                  <Input id="alias-sup" name="supplier" placeholder={uiT("Pieter Hoogendijk")} className="w-44" />
                 </Field>
-                <SubmitButton variant="secondary" size="sm" pendingLabel="Bezig…">
-                  Toevoegen
-                </SubmitButton>
+                <SubmitButton variant="secondary" size="sm" pendingLabel={uiT("Bezig…")}>
+                  {uiT("Toevoegen")} </SubmitButton>
               </form>
             </CardContent>
           </Card>
@@ -2217,23 +2158,19 @@ export default async function ProjectDetailPage({
           {project.contactId && (
             <Card className="mt-5">
               <CardHeader>
-                <CardTitle>Klantportaal</CardTitle>
+                <CardTitle>{uiT("Klantportaal")}</CardTitle>
               </CardHeader>
               <CardContent className="space-y-3 text-sm">
                 <p className="text-muted">
-                  De klant volgt op <span className="font-mono text-xs">/klant</span> de voortgang en betalingen
-                  (alleen klantprijzen) en kan er zelf ontbrekende gegevens aanvullen (adres, NIF/NIE, telefoon).
-                </p>
+                  {uiT("De klant volgt op")} <span className="font-mono text-xs">{uiT("/klant")}</span> {uiT("de voortgang en betalingen (alleen klantprijzen) en kan er zelf ontbrekende gegevens aanvullen (adres, NIF/NIE, telefoon).")} </p>
                 <div className="flex flex-wrap gap-2">
                   <form action={stuurKlantportaalUitnodiging.bind(null, id, false)}>
-                    <SubmitButton variant="secondary" size="sm" pendingLabel="Versturen…">
-                      ✉️ Portaal-uitnodiging mailen
-                    </SubmitButton>
+                    <SubmitButton variant="secondary" size="sm" pendingLabel={uiT("Versturen…")}>
+                      {uiT("✉️ Portaal-uitnodiging mailen")} </SubmitButton>
                   </form>
                   <form action={stuurKlantportaalUitnodiging.bind(null, id, true)}>
-                    <SubmitButton variant="ghost" size="sm" pendingLabel="Versturen…" title="Stuurt de uitnodiging naar jouw eigen mailadres; de knop logt in als de klant zodat je ziet wat die ziet.">
-                      🧪 Testversie naar mijzelf
-                    </SubmitButton>
+                    <SubmitButton variant="ghost" size="sm" pendingLabel={uiT("Versturen…")} title={uiT("Stuurt de uitnodiging naar jouw eigen mailadres; de knop logt in als de klant zodat je ziet wat die ziet.")}>
+                      {uiT("🧪 Testversie naar mijzelf")} </SubmitButton>
                   </form>
                 </div>
               </CardContent>
@@ -2245,14 +2182,14 @@ export default async function ProjectDetailPage({
         <TabPanel id="documenten" className="order-3">
           <Card id="documenten" className="scroll-mt-24">
             <CardHeader>
-              <CardTitle>Documenten in dit project</CardTitle>
+              <CardTitle>{uiT("Documenten in dit project")}</CardTitle>
               <span className="text-xs text-muted">{linkedDocs.length}</span>
             </CardHeader>
             <CardContent className="space-y-2 text-sm">
               {invoiceDocs.length > 0 && margins.productRevenue > 0 && (
                 <div className="rounded-md bg-background px-3 py-2 text-xs">
                   <div className="flex items-center justify-between">
-                    <span className="text-muted">Marge op eigen producten (gefactureerd)</span>
+                    <span className="text-muted">{uiT("Marge op eigen producten (gefactureerd)")}</span>
                     <span
                       className={`tabular-nums font-medium ${margins.productMargin < 0 ? "text-danger" : "text-foreground"}`}
                     >
@@ -2264,9 +2201,7 @@ export default async function ProjectDetailPage({
                   </div>
                   {margins.uncostedProductRevenue > 0 && (
                     <p className="mt-1 text-muted">
-                      {formatEUR(margins.uncostedProductRevenue)} gefactureerd zonder kostprijs (bv. een
-                      aanbetaling) — niet meegeteld, anders zou dat als 100% marge tellen.
-                    </p>
+                      {formatEUR(margins.uncostedProductRevenue)} {uiT("gefactureerd zonder kostprijs (bv. een aanbetaling) — niet meegeteld, anders zou dat als 100% marge tellen.")} </p>
                   )}
                 </div>
               )}
@@ -2276,23 +2211,20 @@ export default async function ProjectDetailPage({
                   variant="secondary"
                   className="text-xs"
                 >
-                  + Nieuwe offerte
-                </LinkButton>
+                  {uiT("+ Nieuwe offerte")} </LinkButton>
                 <LinkButton
                   href={`/documents/new?kind=fondos&projectId=${id}${project.contactId ? `&contactId=${project.contactId}` : ""}${project.propertyId ? `&propertyId=${project.propertyId}` : ""}`}
                   variant="ghost"
                   className="text-xs"
-                  title="Voorschotdocument zonder btw voor particulieren/buitenlandse klanten — eerst langs Paco"
+                  title={uiT("Voorschotdocument zonder btw voor particulieren/buitenlandse klanten — eerst langs Paco")}
                 >
-                  + Provisión de fondos
-                </LinkButton>
+                  {uiT("+ Provisión de fondos")} </LinkButton>
                 <LinkButton
                   href={`/documents/new?kind=invoice&projectId=${id}${project.contactId ? `&contactId=${project.contactId}` : ""}${project.propertyId ? `&propertyId=${project.propertyId}` : ""}`}
                   variant="ghost"
                   className="text-xs"
                 >
-                  + Nieuwe factuur
-                </LinkButton>
+                  {uiT("+ Nieuwe factuur")} </LinkButton>
               </div>
 
               {/* Bestaand document (factuur/offerte) aan dit project koppelen. */}
@@ -2301,25 +2233,23 @@ export default async function ProjectDetailPage({
                   <Combobox
                     name="documentId"
                     className="flex-1"
-                    placeholder="Zoek een bestaande factuur/offerte om te koppelen…"
+                    placeholder={uiT("Zoek een bestaande factuur/offerte om te koppelen…")}
                     options={unlinkedDocs.map((d) => {
                       const k = d.kind === "invoice" ? "Factuur" : d.kind === "estimate" ? "Offerte" : "Creditnota";
                       return {
                         value: d.id,
-                        label: `${k} ${d.docNumber ?? "(geen nr.)"}${d.title ? ` — ${d.title}` : ""} · € ${Number(d.totalEur ?? 0).toLocaleString("nl-NL", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+                        label: `${k} ${d.docNumber ?? "(geen nr.)"}${d.title ? ` — ${d.title}` : ""} · € ${Number(d.totalEur ?? 0).toLocaleString(uiDateLocale, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
                       };
                     })}
                   />
-                  <SubmitButton pendingLabel="Koppelen…" className="h-8 px-3 text-xs">
-                    Koppel
-                  </SubmitButton>
+                  <SubmitButton pendingLabel={uiT("Koppelen…")} className="h-8 px-3 text-xs">
+                    {uiT("Koppel")} </SubmitButton>
                 </form>
               )}
 
               {linkedDocs.length === 0 ? (
                 <p className="text-muted">
-                  Nog niets gekoppeld — gebruik de knoppen hierboven, of kies dit project in het projectveld bij het bewerken van een bestaand document.
-                </p>
+                  {uiT("Nog niets gekoppeld — gebruik de knoppen hierboven, of kies dit project in het projectveld bij het bewerken van een bestaand document.")} </p>
               ) : (
                 <ul className="space-y-2">
                   {linkedDocs.map((d) => {
@@ -2332,19 +2262,18 @@ export default async function ProjectDetailPage({
                         <div className="flex items-center justify-between gap-2">
                           <Link href={`/documents/${d.id}`} className="truncate hover:underline">
                             <span className="font-medium">{kindLabel}</span>{" "}
-                            <span className="text-muted">{d.docNumber ?? "(geen nr.)"}</span>
+                            <span className="text-muted">{d.docNumber ?? uiT("(geen nr.)")}</span>
                             {d.title && <span className="ml-1 text-xs text-muted">— {d.title}</span>}
                           </Link>
                           <span className={`shrink-0 text-xs tabular-nums ${voided ? "text-muted line-through" : "text-muted"}`}>
-                            € {Number(d.subtotalEur ?? d.totalEur ?? 0).toLocaleString("nl-NL", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}{" "}
-                            ex. btw
-                          </span>
+                            € {Number(d.subtotalEur ?? d.totalEur ?? 0).toLocaleString(uiDateLocale, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}{" "}
+                            {uiT("ex. btw")} </span>
                         </div>
                         {(d.kind === "invoice" || d.kind === "creditnote") && marginByDoc.has(d.id) && (
                           <div className="mt-0.5 text-[11px] text-muted">
-                            Marge:{" "}
+                            {uiT("Marge:")}{" "}
                             <span className={marginByDoc.get(d.id)!.margin < 0 ? "font-medium text-danger" : "font-medium text-foreground"}>
-                              € {marginByDoc.get(d.id)!.margin.toLocaleString("nl-NL", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                              € {marginByDoc.get(d.id)!.margin.toLocaleString(uiDateLocale, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                               {marginByDoc.get(d.id)!.pct != null ? ` · ${marginByDoc.get(d.id)!.pct}%` : ""}
                             </span>
                           </div>
@@ -2353,76 +2282,73 @@ export default async function ProjectDetailPage({
                           <div className="mt-1.5 flex flex-wrap items-center gap-1.5 text-[11px]">
                             {d.kind === "deliverynote" ? (
                               d.deliveredAt ? (
-                                <Badge tone="success">Afgeleverd</Badge>
+                                <Badge tone="success">{uiT("Afgeleverd")}</Badge>
                               ) : (
-                                <Badge tone="neutral">Niet afgeleverd</Badge>
+                                <Badge tone="neutral">{uiT("Niet afgeleverd")}</Badge>
                               )
                             ) : voided ? (
-                              <Badge tone="danger">Geannuleerd</Badge>
+                              <Badge tone="danger">{uiT("Geannuleerd")}</Badge>
                             ) : booked ? (
                               <>
-                                <Badge tone="success">Voorraad afgeboekt</Badge>
+                                <Badge tone="success">{uiT("Voorraad afgeboekt")}</Badge>
                                 <ConfirmSubmit
                                   formAction={reverseStockOutFromDocument.bind(null, d.id)}
-                                  message="Voorraad-afboeking terugdraaien? De stuks komen weer in voorraad."
+                                  message={uiT("Voorraad-afboeking terugdraaien? De stuks komen weer in voorraad.")}
                                   pendingLabel="…"
                                   className="rounded px-2 py-0.5 text-[11px] font-medium text-muted transition-colors hover:bg-muted/50"
                                 >
-                                  Terugdraaien
-                                </ConfirmSubmit>
+                                  {uiT("Terugdraaien")} </ConfirmSubmit>
                               </>
                             ) : (
                               <ConfirmSubmit
                                 formAction={applyStockOutFromDocument.bind(null, d.id)}
-                                message="Voorraad van deze factuur nu afboeken?"
+                                message={uiT("Voorraad van deze factuur nu afboeken?")}
                                 pendingLabel="…"
                                 className="rounded px-2 py-0.5 text-[11px] font-medium text-foreground transition-colors hover:bg-muted/50"
                               >
-                                Voorraad afboeken
-                              </ConfirmSubmit>
+                                {uiT("Voorraad afboeken")} </ConfirmSubmit>
                             )}
                             {!voided && (
                               <ConfirmSubmit
                                 formAction={cancelSaleReturnStock.bind(null, d.id)}
-                                message="Deze verkoop annuleren? De factuur wordt op 'geannuleerd' gezet en de voorraad komt terug."
-                                pendingLabel="Annuleren…"
+                                message={uiT("Deze verkoop annuleren? De factuur wordt op 'geannuleerd' gezet en de voorraad komt terug.")}
+                                pendingLabel={uiT("Annuleren…")}
                                 className="rounded px-2 py-0.5 text-[11px] font-medium text-danger transition-colors hover:bg-danger/10"
                               >
-                                Annuleren
-                              </ConfirmSubmit>
+                                {uiT("Annuleren")} </ConfirmSubmit>
                             )}
                           </div>
                         )}
                         {d.kind === "estimate" && d.status !== "rejected" && (
                           <div className="mt-1.5 flex flex-wrap items-center gap-1.5 text-[11px]">
                             {isEstimateConverted(Number(d.totalEur ?? 0)) ? (
-                              <Badge tone="success">Gefactureerd</Badge>
+                              <Badge tone="success">{uiT("Gefactureerd")}</Badge>
                             ) : (
                               <>
                                 {(d.status === "accepted" || d.reservedAt) && (
-                                  <Badge tone="info">Gereserveerd</Badge>
+                                  <Badge tone="info">{uiT("Gereserveerd")}</Badge>
                                 )}
                                 {d.status !== "accepted" && (
                                   <ConfirmSubmit
                                     formAction={toggleReserveEstimate.bind(null, d.id)}
                                     message={
                                       d.reservedAt
-                                        ? "Reservering opheffen? De producten tellen dan niet meer als gereserveerd."
-                                        : "Deze offerte-producten reserveren? Ze tellen dan mee als gereserveerde voorraad (dashboard + bestellijst)."
+                                        ? uiT("Reservering opheffen? De producten tellen dan niet meer als gereserveerd.")
+                                        : uiT("Deze offerte-producten reserveren? Ze tellen dan mee als gereserveerde voorraad (dashboard + bestellijst).")
                                     }
-                                    pendingLabel="Bezig…"
+                                    pendingLabel={uiT("Bezig…")}
                                     className="rounded px-2 py-0.5 text-[11px] font-medium text-foreground transition-colors hover:bg-muted/50"
                                   >
-                                    {d.reservedAt ? "Reservering opheffen" : "🔖 Reserveren"}
+                                    {d.reservedAt ? uiT("Reservering opheffen") : uiT("🔖 Reserveren")}
                                   </ConfirmSubmit>
                                 )}
                                 <ConfirmSubmit
                                   formAction={approveEstimateToInvoice.bind(null, d.id)}
-                                  message="Een factuur aanmaken van deze offerte? De gereserveerde producten gaan naar verkocht; je belandt op de nieuwe factuur om te versturen."
-                                  pendingLabel="Bezig…"
+                                  message={uiT("Een factuur aanmaken van deze offerte? De gereserveerde producten gaan naar verkocht; je belandt op de nieuwe factuur om te versturen.")}
+                                  pendingLabel={uiT("Bezig…")}
                                   className="rounded bg-primary/10 px-2 py-0.5 text-[11px] font-medium text-primary transition-colors hover:bg-primary/20"
                                 >
-                                  {d.status === "accepted" ? "→ Factuur maken (verkopen)" : "✓ Goedkeuren → factuur"}
+                                  {d.status === "accepted" ? uiT("→ Factuur maken (verkopen)") : uiT("✓ Goedkeuren → factuur")}
                                 </ConfirmSubmit>
                               </>
                             )}
@@ -2440,20 +2366,20 @@ export default async function ProjectDetailPage({
         <div className="mt-5 grid gap-5 lg:grid-cols-2">
           <Card className="overflow-hidden">
             <CardHeader>
-              <CardTitle>Gereserveerd</CardTitle>
+              <CardTitle>{uiT("Gereserveerd")}</CardTitle>
               <span className="text-xs text-muted">
-                {reservedProducts.length} {reservedProducts.length === 1 ? "product" : "producten"}
+                {reservedProducts.length} {reservedProducts.length === 1 ? uiT("product") : uiT("producten")}
               </span>
             </CardHeader>
             {reservedProducts.length === 0 ? (
-              <p className="px-5 py-4 text-sm text-muted">Niets gereserveerd — uit geaccepteerde offertes.</p>
+              <p className="px-5 py-4 text-sm text-muted">{uiT("Niets gereserveerd — uit geaccepteerde offertes.")}</p>
             ) : (
               <Table>
                 <THead>
                   <tr>
-                    <Th>Product</Th>
-                    <Th className="text-right">Aantal</Th>
-                    <Th className="text-right">Bedrag</Th>
+                    <Th>{uiT("Product")}</Th>
+                    <Th className="text-right">{uiT("Aantal")}</Th>
+                    <Th className="text-right">{uiT("Bedrag")}</Th>
                   </tr>
                 </THead>
                 <TBody>
@@ -2470,26 +2396,25 @@ export default async function ProjectDetailPage({
               </Table>
             )}
             <p className="border-t px-5 py-3 text-xs text-muted">
-              Uit geaccepteerde offertes; keur een offerte goed om naar verkocht te boeken.
-            </p>
+              {uiT("Uit geaccepteerde offertes; keur een offerte goed om naar verkocht te boeken.")} </p>
           </Card>
 
           <Card className="overflow-hidden">
             <CardHeader>
-              <CardTitle>Verkocht</CardTitle>
+              <CardTitle>{uiT("Verkocht")}</CardTitle>
               <span className="text-xs text-muted">
-                {soldProducts.length} {soldProducts.length === 1 ? "product" : "producten"}
+                {soldProducts.length} {soldProducts.length === 1 ? uiT("product") : uiT("producten")}
               </span>
             </CardHeader>
             {soldProducts.length === 0 ? (
-              <p className="px-5 py-4 text-sm text-muted">Nog niets verkocht — uit facturen.</p>
+              <p className="px-5 py-4 text-sm text-muted">{uiT("Nog niets verkocht — uit facturen.")}</p>
             ) : (
               <Table>
                 <THead>
                   <tr>
-                    <Th>Product</Th>
-                    <Th className="text-right">Aantal</Th>
-                    <Th className="text-right">Bedrag</Th>
+                    <Th>{uiT("Product")}</Th>
+                    <Th className="text-right">{uiT("Aantal")}</Th>
+                    <Th className="text-right">{uiT("Bedrag")}</Th>
                   </tr>
                 </THead>
                 <TBody>
@@ -2505,7 +2430,7 @@ export default async function ProjectDetailPage({
                 </TBody>
               </Table>
             )}
-            <p className="border-t px-5 py-3 text-xs text-muted">Uit facturen (minus creditnota&apos;s).</p>
+            <p className="border-t px-5 py-3 text-xs text-muted">{uiT("Uit facturen (minus creditnota's).")}</p>
           </Card>
         </div>
       )}

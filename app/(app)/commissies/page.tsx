@@ -1,3 +1,4 @@
+import { tekst as uiTranslation } from '@/lib/i18n/server';
 import { asc, desc, inArray } from "drizzle-orm";
 import Link from "next/link";
 
@@ -26,12 +27,16 @@ import { ensureCommissions } from "@/lib/commission";
 import { formatEUR } from "@/lib/utils";
 import { createReferral, deleteReferral, toggleReferral, updateReferral } from "./actions";
 
-export const metadata = { title: "Commissies" };
+export async function generateMetadata() {
+  const uiT = await uiTranslation();
+  return { title: uiT("Commissies") };
+}
 
 const COMM_TONE = { pending: "warning", approved: "info", paid: "success" } as const;
 const COMM_LABEL = { pending: "Openstaand", approved: "Goedgekeurd", paid: "Uitbetaald" } as const;
 
 export default async function CommissiesPage() {
+  const uiT = await uiTranslation();
   await ensureCommissions();
 
   const [refs, entries, contactRows] = await Promise.all([
@@ -52,58 +57,58 @@ export default async function CommissiesPage() {
 
   return (
     <>
-      <PageHeader title="Commissies" subtitle="Aanbreng-relaties: wie bracht wie, en wat verdient de aanbrenger" />
+      <PageHeader title={uiT("Commissies")} subtitle={uiT("Aanbreng-relaties: wie bracht wie, en wat verdient de aanbrenger")} />
 
       <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-3">
-        <StatTile label="Aanbreng-relaties" value={String(refs.length)} tone="neutral" />
-        <StatTile label="Commissie totaal" value={formatEUR(totalCommission)} hint="ex. btw" tone={totalCommission ? "info" : "neutral"} />
-        <StatTile label="Nog uit te betalen" value={formatEUR(openCommission)} tone={openCommission ? "warning" : "neutral"} />
+        <StatTile label={uiT("Aanbreng-relaties")} value={String(refs.length)} tone="neutral" />
+        <StatTile label={uiT("Commissie totaal")} value={formatEUR(totalCommission)} hint={uiT("ex. btw")} tone={totalCommission ? "info" : "neutral"} />
+        <StatTile label={uiT("Nog uit te betalen")} value={formatEUR(openCommission)} tone={openCommission ? "warning" : "neutral"} />
       </div>
 
       <Card className="mb-5">
         <CardHeader>
-          <CardTitle>Nieuwe aanbreng-relatie</CardTitle>
-          <span className="text-xs text-muted">de aanbrenger verdient een % op de facturen van de aangebrachte klant</span>
+          <CardTitle>{uiT("Nieuwe aanbreng-relatie")}</CardTitle>
+          <span className="text-xs text-muted">{uiT("de aanbrenger verdient een % op de facturen van de aangebrachte klant")}</span>
         </CardHeader>
         <form action={createReferral} className="grid gap-3 px-5 pb-5 lg:grid-cols-[1.4fr_1.4fr_1fr_0.8fr_0.8fr_auto] lg:items-end">
-          <Field label="Aanbrenger (bedrijf A / aannemer)">
-            <Combobox name="referrerContactId" options={contactOptions} placeholder="zoek contact…" />
+          <Field label={uiT("Aanbrenger (bedrijf A / aannemer)")}>
+            <Combobox name="referrerContactId" options={contactOptions} placeholder={uiT("zoek contact…")} />
           </Field>
-          <Field label="Aangebrachte klant (bedrijf B / particulier)">
-            <Combobox name="refereeContactId" options={contactOptions} placeholder="zoek contact…" />
+          <Field label={uiT("Aangebrachte klant (bedrijf B / particulier)")}>
+            <Combobox name="refereeContactId" options={contactOptions} placeholder={uiT("zoek contact…")} />
           </Field>
-          <Field label="Soort">
+          <Field label={uiT("Soort")}>
             <Select name="scope" defaultValue="business">
-              <option value="business">Zakelijk (bedrijf brengt bedrijf)</option>
-              <option value="particulier">Particulier (aannemer brengt particulier)</option>
+              <option value="business">{uiT("Zakelijk (bedrijf brengt bedrijf)")}</option>
+              <option value="particulier">{uiT("Particulier (aannemer brengt particulier)")}</option>
             </Select>
           </Field>
-          <Field label="Commissie %">
+          <Field label={uiT("Commissie %")}>
             <Input name="commissionPct" inputMode="decimal" placeholder="5" className="text-right" />
           </Field>
-          <Field label="Klantkorting % (particulier)">
+          <Field label={uiT("Klantkorting % (particulier)")}>
             <Input name="customerDiscountPct" inputMode="decimal" placeholder="0" className="text-right" />
           </Field>
-          <SubmitButton size="sm" variant="secondary" pendingLabel="…">+ Toevoegen</SubmitButton>
+          <SubmitButton size="sm" variant="secondary" pendingLabel="…">{uiT("+ Toevoegen")}</SubmitButton>
         </form>
       </Card>
 
       <Card className="mb-5 overflow-hidden">
         <CardHeader>
-          <CardTitle>Aanbreng-relaties</CardTitle>
+          <CardTitle>{uiT("Aanbreng-relaties")}</CardTitle>
         </CardHeader>
         {refs.length === 0 ? (
-          <div className="px-5 pb-5 text-sm text-muted">Nog geen relaties.</div>
+          <div className="px-5 pb-5 text-sm text-muted">{uiT("Nog geen relaties.")}</div>
         ) : (
           <Table>
             <THead>
               <tr>
-                <Th>Aanbrenger</Th>
-                <Th>Aangebrachte klant</Th>
-                <Th>Soort</Th>
-                <Th className="text-right">Commissie %</Th>
-                <Th className="text-right">Klantkorting %</Th>
-                <Th>Actief</Th>
+                <Th>{uiT("Aanbrenger")}</Th>
+                <Th>{uiT("Aangebrachte klant")}</Th>
+                <Th>{uiT("Soort")}</Th>
+                <Th className="text-right">{uiT("Commissie %")}</Th>
+                <Th className="text-right">{uiT("Klantkorting %")}</Th>
+                <Th>{uiT("Actief")}</Th>
                 <Th />
               </tr>
             </THead>
@@ -114,7 +119,7 @@ export default async function CommissiesPage() {
                   <Tr key={r.id}>
                     <Td>{nameById.get(r.referrerContactId) ?? "—"}</Td>
                     <Td>{nameById.get(r.refereeContactId) ?? "—"}</Td>
-                    <Td><Badge tone={r.scope === "particulier" ? "warning" : "info"}>{r.scope === "particulier" ? "Particulier" : "Zakelijk"}</Badge></Td>
+                    <Td><Badge tone={r.scope === "particulier" ? "warning" : "info"}>{r.scope === "particulier" ? uiT("Particulier") : uiT("Zakelijk")}</Badge></Td>
                     <Td className="text-right">
                       <Input form={fid} name="commissionPct" defaultValue={String(Number(r.commissionPct))} inputMode="decimal" className="h-8 w-16 px-2 py-1 text-right" />
                     </Td>
@@ -123,18 +128,18 @@ export default async function CommissiesPage() {
                     </Td>
                     <Td>
                       {r.active ? (
-                        <form action={toggleReferral.bind(null, r.id, false)}><SubmitButton size="sm" variant="ghost" className="text-success" pendingLabel="…">✓ actief</SubmitButton></form>
+                        <form action={toggleReferral.bind(null, r.id, false)}><SubmitButton size="sm" variant="ghost" className="text-success" pendingLabel="…">{uiT("✓ actief")}</SubmitButton></form>
                       ) : (
-                        <form action={toggleReferral.bind(null, r.id, true)}><SubmitButton size="sm" variant="ghost" className="text-muted" pendingLabel="…">uit</SubmitButton></form>
+                        <form action={toggleReferral.bind(null, r.id, true)}><SubmitButton size="sm" variant="ghost" className="text-muted" pendingLabel="…">{uiT("uit")}</SubmitButton></form>
                       )}
                     </Td>
                     <Td className="text-right whitespace-nowrap">
                       <div className="flex items-center justify-end gap-1">
                         <form id={fid} action={updateReferral.bind(null, r.id)}>
-                          <SubmitButton size="sm" variant="secondary" pendingLabel="…">opslaan</SubmitButton>
+                          <SubmitButton size="sm" variant="secondary" pendingLabel="…">{uiT("opslaan")}</SubmitButton>
                         </form>
                         <form action={deleteReferral.bind(null, r.id)}>
-                          <SubmitButton size="sm" variant="ghost" className="text-muted" pendingLabel="…">×</SubmitButton>
+                          <SubmitButton size="sm" variant="ghost" className="text-muted" pendingLabel="…">{uiT("×")}</SubmitButton>
                         </form>
                       </div>
                     </Td>
@@ -148,22 +153,22 @@ export default async function CommissiesPage() {
 
       <Card className="overflow-hidden">
         <CardHeader>
-          <CardTitle>Verdiende commissie</CardTitle>
-          <span className="text-xs text-muted">per factuur van een aangebrachte klant</span>
+          <CardTitle>{uiT("Verdiende commissie")}</CardTitle>
+          <span className="text-xs text-muted">{uiT("per factuur van een aangebrachte klant")}</span>
         </CardHeader>
         {entries.length === 0 ? (
-          <div className="px-5 pb-5 text-sm text-muted">Nog geen commissie — ontstaat zodra een aangebrachte klant een factuur krijgt.</div>
+          <div className="px-5 pb-5 text-sm text-muted">{uiT("Nog geen commissie — ontstaat zodra een aangebrachte klant een factuur krijgt.")}</div>
         ) : (
           <Table>
             <THead>
               <tr>
-                <Th>Aanbrenger</Th>
-                <Th>Klant</Th>
-                <Th>Factuur</Th>
-                <Th className="text-right">Basis</Th>
+                <Th>{uiT("Aanbrenger")}</Th>
+                <Th>{uiT("Klant")}</Th>
+                <Th>{uiT("Factuur")}</Th>
+                <Th className="text-right">{uiT("Basis")}</Th>
                 <Th className="text-right">%</Th>
-                <Th className="text-right">Commissie</Th>
-                <Th>Status</Th>
+                <Th className="text-right">{uiT("Commissie")}</Th>
+                <Th>{uiT("Status")}</Th>
               </tr>
             </THead>
             <TBody>
@@ -175,7 +180,7 @@ export default async function CommissiesPage() {
                     <Td>{ref ? nameById.get(ref.refereeContactId) ?? "—" : "—"}</Td>
                     <Td>
                       {e.documentId ? (
-                        <Link href={`/documents/${e.documentId}`} className="text-accent hover:underline">{docById.get(e.documentId) ?? "factuur"}</Link>
+                        <Link href={`/documents/${e.documentId}`} className="text-accent hover:underline">{docById.get(e.documentId) ?? uiT("factuur")}</Link>
                       ) : "—"}
                     </Td>
                     <Td className="text-right tabular-nums">{formatEUR(e.baseAmountEur)}</Td>

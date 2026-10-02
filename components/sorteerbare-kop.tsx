@@ -1,3 +1,4 @@
+import { tekst } from "@/lib/i18n/server";
 import Link from "next/link";
 
 import { Th } from "@/components/ui";
@@ -16,7 +17,7 @@ import { cn } from "@/lib/utils";
  * De sortering staat in de URL, dus een gesorteerde lijst is te delen en te
  * bookmarken.
  */
-export function SorteerbareKop({
+export async function SorteerbareKop({
   sleutel,
   actief,
   oplopend,
@@ -37,6 +38,7 @@ export function SorteerbareKop({
   className?: string;
   children: React.ReactNode;
 }) {
+  const t = await tekst();
   const volgende: "asc" | "desc" = actief ? (oplopend ? "desc" : "asc") : aflopendEerst ? "desc" : "asc";
   return (
     <Th className={className}>
@@ -46,7 +48,7 @@ export function SorteerbareKop({
           "inline-flex items-center gap-1 hover:text-foreground",
           actief ? "text-foreground" : "text-muted",
         )}
-        title={`Sorteren op ${typeof children === "string" ? children : sleutel}`}
+        title={t("Sorteren op {kolom}", { kolom: typeof children === "string" ? children : sleutel })}
       >
         {children}
         <span aria-hidden className={cn("text-[10px]", actief ? "opacity-100" : "opacity-0")}>

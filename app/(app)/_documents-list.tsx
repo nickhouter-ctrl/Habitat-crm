@@ -1,3 +1,5 @@
+import { datumTaal } from "@/lib/i18n/server";
+import { tekst as uiTranslation } from '@/lib/i18n/server';
 import { and, asc, desc, eq, inArray, isNotNull, ne, notInArray, sql, type SQL } from "drizzle-orm";
 import { CornerDownRight, Trash2 } from "lucide-react";
 import Link from "next/link";
@@ -75,6 +77,8 @@ export async function DocumentsList({
   /** `sort` = kolomsleutel, `dir` = asc/desc. Leeg = nieuwste datum eerst. */
   searchParams?: Record<string, string | undefined>;
 }) {
+  const uiDateLocale = await datumTaal();
+  const uiT = await uiTranslation();
   const kinds = Array.isArray(kind) ? kind : [kind];
   const primaryKind = kinds[0];
   const showKindColumn = kinds.length > 1;
@@ -262,21 +266,21 @@ export async function DocumentsList({
         <Td className={cn("font-medium", sub && "py-2")}>
           <span className={cn(sub && "flex items-center gap-1.5 pl-5 text-sm text-muted")}>
             {sub && <CornerDownRight className="size-3.5 shrink-0 text-warning" />}
-            {d.docNumber ?? "(geen nr.)"}
+            {d.docNumber ?? uiT("(geen nr.)")}
           </span>
           {!sub && d.title && <span className="block text-xs text-muted">{d.title}</span>}
         </Td>
         {showKindColumn && (
           <Td className={cn(sub && "py-2")}>
             <Badge tone={d.kind === "creditnote" ? "warning" : "neutral"}>
-              {documentKindMeta[d.kind]}
+              {uiT(documentKindMeta[d.kind])}
             </Badge>
           </Td>
         )}
         <Td className={cn(sub && "py-2")}>
           {sub ? (
             // Zelfde klant als de factuur erboven — niet herhalen, dat is ruis.
-            <span className="text-xs text-muted">bij {factuurInBeeld.get(d.sourceDocumentId!)?.docNumber ?? "factuur"}</span>
+            <span className="text-xs text-muted">{uiT("bij")} {factuurInBeeld.get(d.sourceDocumentId!)?.docNumber ?? uiT("factuur")}</span>
           ) : (
             <>
               {d.contact ? (
@@ -301,10 +305,10 @@ export async function DocumentsList({
           {d.kind === "deliverynote" ? (
             d.deliveredAt ? (
               <span className="flex items-center gap-1">
-                <Badge tone="success">Afgeleverd {formatDate(d.deliveredAt)}</Badge>
+                <Badge tone="success">{uiT("Afgeleverd")} {formatDate(d.deliveredAt, uiDateLocale)}</Badge>
                 <form action={setDeliveryNoteDelivered.bind(null, d.id, false)}>
                   <ConfirmSubmit
-                    message="Afgeleverd ongedaan maken?"
+                    message={uiT("Afgeleverd ongedaan maken?")}
                     className="rounded p-1 text-muted transition-colors hover:bg-muted/50"
                   >
                     ↺
@@ -314,11 +318,10 @@ export async function DocumentsList({
             ) : (
               <form action={setDeliveryNoteDelivered.bind(null, d.id, true)}>
                 <ConfirmSubmit
-                  message="Pakbon markeren als afgeleverd?"
+                  message={uiT("Pakbon markeren als afgeleverd?")}
                   className="rounded bg-accent/10 px-2 py-0.5 text-xs font-medium text-accent transition-colors hover:bg-accent/20"
                 >
-                  Markeer afgeleverd
-                </ConfirmSubmit>
+                  {uiT("Markeer afgeleverd")} </ConfirmSubmit>
               </form>
             )
           ) : (
@@ -326,26 +329,26 @@ export async function DocumentsList({
               {isVerrekend ? (
                 // Volledig gecrediteerd: er hoeft niets meer te gebeuren met
                 // deze factuur — dat is belangrijker dan "verstuurd/vervallen".
-                <Badge tone="success">Verrekend</Badge>
+                <Badge tone="success">{uiT("Verrekend")}</Badge>
               ) : (
                 <Badge tone={documentStatusMeta[d.status].tone}>
-                  {documentStatusMeta[d.status].label}
+                  {uiT(documentStatusMeta[d.status].label)}
                 </Badge>
               )}
               {isDeelsVerrekend && (
-                <Badge tone="warning">Deels verrekend</Badge>
+                <Badge tone="warning">{uiT("Deels verrekend")}</Badge>
               )}
               {d.kind === "estimate" && invoicedEstimateIds.has(d.id) && (
-                <Badge tone="success">Gefactureerd</Badge>
+                <Badge tone="success">{uiT("Gefactureerd")}</Badge>
               )}
               {d.kind === "estimate" && opvolgDagen.has(d.id) && (
-                <Badge tone="warning">⏳ {opvolgDagen.get(d.id)} dgn stil</Badge>
+                <Badge tone="warning">⏳ {opvolgDagen.get(d.id)} {uiT("dgn stil")}</Badge>
               )}
             </span>
           )}
         </Td>
-        <Td className={cn("text-muted", sub && "py-2")}>{formatDate(d.issueDate)}</Td>
-        <Td className={cn("text-muted", sub && "py-2")}>{sub ? "" : formatDate(d.dueDate)}</Td>
+        <Td className={cn("text-muted", sub && "py-2")}>{formatDate(d.issueDate, uiDateLocale)}</Td>
+        <Td className={cn("text-muted", sub && "py-2")}>{sub ? "" : formatDate(d.dueDate, uiDateLocale)}</Td>
         <Td className={cn("text-right tabular-nums", sub && "py-2")}>
           {formatEUR(sign(d.kind) * Number(d.subtotalEur ?? 0))}
         </Td>
@@ -369,8 +372,8 @@ export async function DocumentsList({
               {formatEUR(Number(d.paidEur ?? 0) + creditBedrag)}
               <span className="block text-xs">
                 {Number(d.paidEur ?? 0) > 0.01
-                  ? `waarvan ${formatEUR(creditBedrag)} verrekend`
-                  : "verrekend"}
+                  ? uiT("waarvan {v0} verrekend", { v0: formatEUR(creditBedrag) })
+                  : uiT("verrekend")}
               </span>
             </>
           ) : (
@@ -390,7 +393,7 @@ export async function DocumentsList({
             {(d.kind === "estimate" || d.status === "draft") && (
               <form action={deleteDocument.bind(null, d.id)}>
                 <ConfirmSubmit
-                  message={`${documentKindMeta[d.kind]} ${d.docNumber ?? ""} definitief verwijderen?`}
+                  message={uiT("{v0} {v1} definitief verwijderen?", { v0: uiT(documentKindMeta[d.kind]), v1: d.docNumber ?? "" })}
                   className="rounded p-1 text-muted transition-colors hover:bg-danger/10 hover:text-danger"
                 >
                   <Trash2 className="size-4" />
@@ -417,11 +420,11 @@ export async function DocumentsList({
       />
 
       <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
-        <StatTile label="Aantal" value={rows.length} />
-        <StatTile label="Totaal ex. BTW" value={formatEUR(totalEx)} hint={showKindColumn ? "fact. − creditnota's" : undefined} />
-        <StatTile label="Totaal incl. BTW" value={formatEUR(totalIncl)} hint="met BTW" />
-        <StatTile label="Betaald" value={formatEUR(paid)} hint="incl. BTW" />
-        <StatTile label="Openstaand" value={formatEUR(outstanding)} hint="na verrekening creditnota's" />
+        <StatTile label={uiT("Aantal")} value={rows.length} />
+        <StatTile label={uiT("Totaal ex. BTW")} value={formatEUR(totalEx)} hint={showKindColumn ? uiT("fact. − creditnota's") : undefined} />
+        <StatTile label={uiT("Totaal incl. BTW")} value={formatEUR(totalIncl)} hint={uiT("met BTW")} />
+        <StatTile label={uiT("Betaald")} value={formatEUR(paid)} hint={uiT("incl. BTW")} />
+        <StatTile label={uiT("Openstaand")} value={formatEUR(outstanding)} hint={uiT("na verrekening creditnota's")} />
       </div>
 
       {/* Zoeken als GET-formulier: de zoekterm staat in de URL, dus een
@@ -433,31 +436,29 @@ export async function DocumentsList({
           type="search"
           name="q"
           defaultValue={zoek}
-          placeholder="Zoek op nummer, omschrijving, klant of project…"
+          placeholder={uiT("Zoek op nummer, omschrijving, klant of project…")}
           className="h-9 w-full max-w-sm rounded-md border border-border bg-background px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
         />
         {sorteerOp && <input type="hidden" name="sort" value={sorteerOp} />}
         {sorteerOp && <input type="hidden" name="dir" value={oplopend ? "asc" : "desc"} />}
         {soortFilter && <input type="hidden" name="soort" value={soortFilter} />}
-        <SubmitButton size="sm" variant="secondary" pendingLabel="Zoeken…">
-          Zoeken
-        </SubmitButton>
+        <SubmitButton size="sm" variant="secondary" pendingLabel={uiT("Zoeken…")}>
+          {uiT("Zoeken")} </SubmitButton>
         {zoek && (
           <Link href={metParams({ q: undefined })} className="text-sm text-muted hover:underline">
-            wissen
-          </Link>
+            {uiT("wissen")} </Link>
         )}
         {zoek && (
           <span className="text-sm text-muted">
-            {rows.length} {rows.length === 1 ? "resultaat" : "resultaten"} voor “{zoek}”
+            {rows.length} {rows.length === 1 ? uiT("resultaat") : uiT("resultaten")} {uiT("voor “")}{zoek}”
           </span>
         )}
       </form>
 
       {showKindColumn && (
         <div className="mb-4 flex flex-wrap items-center gap-1.5 text-sm">
-          <span className="mr-1 text-xs uppercase tracking-wide text-muted">Tonen</span>
-          {[{ waarde: "", label: "Alles" }, ...kinds.map((k) => ({ waarde: k, label: documentKindMeta[k] }))].map(
+          <span className="mr-1 text-xs uppercase tracking-wide text-muted">{uiT("Tonen")}</span>
+          {[{ waarde: "", label: uiT("Alles") }, ...kinds.map((k) => ({ waarde: k, label: uiT(documentKindMeta[k]) }))].map(
             (optie) => {
               const actief = (soortFilter ?? "") === optie.waarde;
               return (
@@ -479,8 +480,8 @@ export async function DocumentsList({
 
       {rows.length === 0 ? (
         <EmptyState
-          title={`Nog geen ${title.toLowerCase()}`}
-          description="Maak er een aan, of synchroniseer met Holded om bestaande documenten op te halen."
+          title={uiT("Nog geen {v0}", { v0: title.toLowerCase() })}
+          description={uiT("Maak er een aan, of synchroniseer met Holded om bestaande documenten op te halen.")}
           action={<LinkButton href={newHref}>{newLabel}</LinkButton>}
         />
       ) : (
@@ -488,15 +489,15 @@ export async function DocumentsList({
           <Table>
             <THead>
               <tr>
-                <SorteerKop sleutel="docNumber">Nr.</SorteerKop>
-                {showKindColumn && <SorteerKop sleutel="kind">Type</SorteerKop>}
-                <SorteerKop sleutel="klant">Klant</SorteerKop>
-                <SorteerKop sleutel="status">Status</SorteerKop>
-                <SorteerKop sleutel="issueDate">Datum</SorteerKop>
-                <SorteerKop sleutel="dueDate">Vervaldatum</SorteerKop>
-                <SorteerKop sleutel="subtotalEur" className="text-right">Subtotaal</SorteerKop>
-                <SorteerKop sleutel="totalEur" className="text-right">Totaal</SorteerKop>
-                <SorteerKop sleutel="paidEur" className="text-right">Betaald</SorteerKop>
+                <SorteerKop sleutel="docNumber">{uiT("Nr.")}</SorteerKop>
+                {showKindColumn && <SorteerKop sleutel="kind">{uiT("Type")}</SorteerKop>}
+                <SorteerKop sleutel="klant">{uiT("Klant")}</SorteerKop>
+                <SorteerKop sleutel="status">{uiT("Status")}</SorteerKop>
+                <SorteerKop sleutel="issueDate">{uiT("Datum")}</SorteerKop>
+                <SorteerKop sleutel="dueDate">{uiT("Vervaldatum")}</SorteerKop>
+                <SorteerKop sleutel="subtotalEur" className="text-right">{uiT("Subtotaal")}</SorteerKop>
+                <SorteerKop sleutel="totalEur" className="text-right">{uiT("Totaal")}</SorteerKop>
+                <SorteerKop sleutel="paidEur" className="text-right">{uiT("Betaald")}</SorteerKop>
                 <Th />
               </tr>
             </THead>

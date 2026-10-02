@@ -1,3 +1,5 @@
+import { datumTaal } from "@/lib/i18n/server";
+import { tekst as uiTranslation } from '@/lib/i18n/server';
 /**
  * Campagne-overzicht (brief §7): campagnes met effective_status, afkeuringen
  * PROMINENT bovenaan (niet weggestopt in een log), en een handmatige
@@ -30,7 +32,10 @@ import {
 import { db } from "@/lib/db";
 import { adCampaigns, ads, adSets, creativeSpecs } from "@/lib/db/schema";
 
-export const metadata = { title: "Meta-campagnes" };
+export async function generateMetadata() {
+  const uiT = await uiTranslation();
+  return { title: uiT("Meta-campagnes") };
+}
 
 function statusTone(status: string | null): BadgeTone {
   if (!status) return "neutral";
@@ -41,6 +46,8 @@ function statusTone(status: string | null): BadgeTone {
 }
 
 export default async function CampaignsPage() {
+  const uiDateLocale = await datumTaal();
+  const uiT = await uiTranslation();
   const campaigns = await db
     .select({
       campaign: adCampaigns,
@@ -76,17 +83,16 @@ export default async function CampaignsPage() {
   return (
     <>
       <PageHeader
-        title="Meta-campagnes"
+        title={uiT("Meta-campagnes")}
         subtitle={
           lastSync
-            ? `Laatste statussync: ${lastSync.toLocaleString("nl-NL", { dateStyle: "medium", timeStyle: "short" })}`
-            : "Nog niet gesynchroniseerd met Meta"
+            ? uiT("Laatste statussync: {v0}", { v0: lastSync.toLocaleString(uiDateLocale, { dateStyle: "medium", timeStyle: "short" }) })
+            : uiT("Nog niet gesynchroniseerd met Meta")
         }
         actions={
           <form action={syncNowAction}>
             <button type="submit" className={buttonClass({ variant: "secondary" })}>
-              <RefreshCw className="size-4" aria-hidden /> Status nu verversen
-            </button>
+              <RefreshCw className="size-4" aria-hidden /> {uiT("Status nu verversen")} </button>
           </form>
         }
       />
@@ -95,8 +101,7 @@ export default async function CampaignsPage() {
         <Card className="mb-5 border-red-300 bg-red-50 p-4" role="alert">
           <h2 className="flex items-center gap-2 text-sm font-semibold text-danger">
             <AlertTriangle className="size-4" aria-hidden />
-            {problems.length} advertentie{problems.length === 1 ? "" : "s"} met een probleem
-          </h2>
+            {problems.length} {uiT(problems.length === 1 ? "advertentie" : "advertenties")} {uiT("met een probleem")} </h2>
           <ul className="mt-2 space-y-2 text-sm">
             {problems.map(({ ad, adSetName, campaignId, headline }) => (
               <li key={ad.id} className="rounded-md bg-white/70 p-2.5">
@@ -104,7 +109,7 @@ export default async function CampaignsPage() {
                   <Badge tone="danger">{ad.effectiveStatus}</Badge>
                   <span className="font-medium">{ad.name}</span>
                   <span className="text-muted">
-                    in <Link href={`/marketing/campaigns/${campaignId}`} className="underline">{adSetName}</Link>
+                    {uiT("in")} <Link href={`/marketing/campaigns/${campaignId}`} className="underline">{adSetName}</Link>
                     {headline ? ` · "${headline}"` : ""}
                   </span>
                 </div>
@@ -114,9 +119,7 @@ export default async function CampaignsPage() {
                   </p>
                 ))}
                 <p className="mt-1 text-xs text-muted">
-                  Wat nu: bij een afkeuring — dupliceer de creative, pas hem aan en publiceer
-                  opnieuw. Bij een publicatiefout — probeer opnieuw vanaf de campagnepagina.
-                </p>
+                  {uiT("Wat nu: bij een afkeuring — dupliceer de creative, pas hem aan en publiceer opnieuw. Bij een publicatiefout — probeer opnieuw vanaf de campagnepagina.")} </p>
               </li>
             ))}
           </ul>
@@ -124,24 +127,24 @@ export default async function CampaignsPage() {
       )}
 
       <Card className="mb-5 p-4">
-        <h2 className="mb-3 text-sm font-medium">Nieuwe campagne</h2>
+        <h2 className="mb-3 text-sm font-medium">{uiT("Nieuwe campagne")}</h2>
         <CampaignForm />
       </Card>
 
       {campaigns.length === 0 ? (
         <EmptyState
-          title="Nog geen campagnes"
-          description="Maak hierboven een campagne aan; advertentiesets en advertenties volgen op de campagnepagina."
+          title={uiT("Nog geen campagnes")}
+          description={uiT("Maak hierboven een campagne aan; advertentiesets en advertenties volgen op de campagnepagina.")}
         />
       ) : (
         <Table>
           <THead>
             <Tr>
-              <Th>Campagne</Th>
-              <Th>Doelstelling</Th>
-              <Th>Status (Meta)</Th>
-              <Th className="text-right">Sets</Th>
-              <Th className="text-right">Ads</Th>
+              <Th>{uiT("Campagne")}</Th>
+              <Th>{uiT("Doelstelling")}</Th>
+              <Th>{uiT("Status (Meta)")}</Th>
+              <Th className="text-right">{uiT("Sets")}</Th>
+              <Th className="text-right">{uiT("Ads")}</Th>
               <Th />
             </Tr>
           </THead>
@@ -159,7 +162,7 @@ export default async function CampaignsPage() {
                 <Td className="text-muted">{campaign.objective ?? "—"}</Td>
                 <Td>
                   <Badge tone={statusTone(campaign.effectiveStatus)}>
-                    {campaign.effectiveStatus ?? "nog niet in Meta"}
+                    {campaign.effectiveStatus ?? uiT("nog niet in Meta")}
                   </Badge>
                 </Td>
                 <Td className="text-right tabular-nums">{adSetCount}</Td>
@@ -169,8 +172,7 @@ export default async function CampaignsPage() {
                     href={`/marketing/campaigns/${campaign.id}`}
                     className="text-sm text-accent hover:underline"
                   >
-                    Beheer
-                  </Link>
+                    {uiT("Beheer")} </Link>
                 </Td>
               </Tr>
             ))}
@@ -179,10 +181,7 @@ export default async function CampaignsPage() {
       )}
 
       <p className="mt-4 text-xs text-muted">
-        Advertenties worden altijd <strong>gepauzeerd</strong> aangemaakt (§3.4); activeren
-        gebeurt bewust in Meta Ads Manager. Planning is in Europe/Madrid — Meta rekent in de
-        tijdzone van het advertentie-account.
-      </p>
+        {uiT("Advertenties worden altijd")} <strong>{uiT("gepauzeerd")}</strong> {uiT("aangemaakt (§3.4); activeren gebeurt bewust in Meta Ads Manager. Planning is in Europe/Madrid — Meta rekent in de tijdzone van het advertentie-account.")} </p>
     </>
   );
 }

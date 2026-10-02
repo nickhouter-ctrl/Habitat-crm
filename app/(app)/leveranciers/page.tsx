@@ -1,3 +1,5 @@
+import { datumTaal } from "@/lib/i18n/server";
+import { tekst as uiTranslation } from '@/lib/i18n/server';
 /**
  * Leveranciers — één regel per partij waar we spullen of diensten van kopen.
  *
@@ -36,7 +38,10 @@ import { workers } from "@/lib/db/schema";
 import { naamHoortBij } from "@/lib/purchase-orders";
 import { formatEUR } from "@/lib/utils";
 
-export const metadata = { title: "Leveranciers" };
+export async function generateMetadata() {
+  const uiT = await uiTranslation();
+  return { title: uiT("Leveranciers") };
+}
 
 type Rij = {
   sleutel: string;
@@ -54,6 +59,8 @@ export default async function LeveranciersPage({
 }: {
   searchParams: Promise<{ q?: string }>;
 }) {
+  const uiDateLocale = await datumTaal();
+  const uiT = await uiTranslation();
   const { q = "" } = await searchParams;
 
   // Groeperen op een genormaliseerde naam; de langste schrijfwijze tonen, want
@@ -109,29 +116,28 @@ export default async function LeveranciersPage({
   return (
     <>
       <PageHeader
-        title="Leveranciers"
-        subtitle="alles wat we per partij hebben ingekocht en waar het op geboekt is"
+        title={uiT("Leveranciers")}
+        subtitle={uiT("alles wat we per partij hebben ingekocht en waar het op geboekt is")}
         actions={
           <Link href="/ploeg" className="text-sm text-accent hover:underline">
-            Eigen ploeg →
-          </Link>
+            {uiT("Eigen ploeg →")} </Link>
         }
       />
 
       <div className="mb-5 grid grid-cols-2 gap-3 sm:grid-cols-3">
-        <StatTile label="Leveranciers" value={leveranciers.length} />
-        <StatTile label="Ingekocht (ex. btw)" value={formatEUR(totaal)} hint="alles bij elkaar" />
+        <StatTile label={uiT("Leveranciers")} value={leveranciers.length} />
+        <StatTile label={uiT("Ingekocht (ex. btw)")} value={formatEUR(totaal)} hint={uiT("alles bij elkaar")} />
         <StatTile
-          label="Eigen ploeg"
+          label={uiT("Eigen ploeg")}
           value={ploegrijen.length}
-          hint={`${formatEUR(ploegTotaal)} gefactureerd — staat op /ploeg`}
+          hint={uiT("{v0} gefactureerd — staat op /ploeg", { v0: formatEUR(ploegTotaal) })}
         />
       </div>
 
       <form method="get" className="mb-4 flex max-w-md items-center gap-2">
         <div className="relative flex-1">
           <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted" />
-          <Input name="q" defaultValue={q} placeholder="Zoek een leverancier…" className="pl-9" />
+          <Input name="q" defaultValue={q} placeholder={uiT("Zoek een leverancier…")} className="pl-9" />
         </div>
       </form>
 
@@ -139,18 +145,17 @@ export default async function LeveranciersPage({
         <Table>
           <THead>
             <tr>
-              <Th>Leverancier</Th>
-              <Th className="text-right">Facturen</Th>
-              <Th className="text-right">Ingekocht (ex. btw)</Th>
-              <Th>Laatste factuur</Th>
+              <Th>{uiT("Leverancier")}</Th>
+              <Th className="text-right">{uiT("Facturen")}</Th>
+              <Th className="text-right">{uiT("Ingekocht (ex. btw)")}</Th>
+              <Th>{uiT("Laatste factuur")}</Th>
             </tr>
           </THead>
           <TBody>
             {gefilterd.length === 0 ? (
               <Tr>
                 <Td colSpan={4} className="text-muted">
-                  Geen leveranciers gevonden.
-                </Td>
+                  {uiT("Geen leveranciers gevonden.")} </Td>
               </Tr>
             ) : (
               gefilterd.map((r) => (
@@ -160,14 +165,14 @@ export default async function LeveranciersPage({
                       {r.naam}
                     </Link>
                     <span className="ml-2 inline-flex gap-1 align-middle">
-                      {r.is_vaste_last && <Badge tone="neutral">vaste last</Badge>}
+                      {r.is_vaste_last && <Badge tone="neutral">{uiT("vaste last")}</Badge>}
                     </span>
                   </Td>
                   <Td className="text-right tabular-nums text-muted">{r.facturen}</Td>
                   <Td className="text-right tabular-nums font-medium">{formatEUR(Number(r.totaal_ex ?? 0))}</Td>
                   <Td className="whitespace-nowrap text-muted">
                     {r.laatste
-                      ? new Date(r.laatste).toLocaleDateString("nl-NL", { day: "numeric", month: "short", year: "numeric" })
+                      ? new Date(r.laatste).toLocaleDateString(uiDateLocale, { day: "numeric", month: "short", year: "numeric" })
                       : "—"}
                   </Td>
                 </Tr>

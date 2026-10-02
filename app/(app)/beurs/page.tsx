@@ -1,3 +1,4 @@
+import { tekst as uiTranslation } from '@/lib/i18n/server';
 /**
  * De stand-pagina: bezoekers vastleggen tijdens de beurs.
  *
@@ -17,7 +18,10 @@ import { datumTaal, huidigeTaal, tekst } from "@/lib/i18n/server";
 import { legBezoekerVast } from "./actions";
 import { BeursForm } from "./beurs-form";
 
-export const metadata = { title: "Beursstand" };
+export async function generateMetadata() {
+  const uiT = await uiTranslation();
+  return { title: uiT("Beursstand") };
+}
 export const dynamic = "force-dynamic";
 
 /** Rol uit de tags van het contact ("rol:architect"). */

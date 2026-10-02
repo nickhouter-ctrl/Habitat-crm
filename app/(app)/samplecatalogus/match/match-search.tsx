@@ -1,4 +1,5 @@
 "use client";
+import { useT as useUiTranslation } from '@/components/taal-provider';
 
 import { useState, useTransition } from "react";
 
@@ -15,6 +16,7 @@ type Hit = {
 
 /** Handmatig een bestaand product zoeken en aan deze variant koppelen. */
 export function MatchSearch({ variantId }: { variantId: string }) {
+  const uiT = useUiTranslation();
   const [term, setTerm] = useState("");
   const [hits, setHits] = useState<Hit[]>([]);
   const [open, setOpen] = useState(false);
@@ -39,8 +41,7 @@ export function MatchSearch({ variantId }: { variantId: string }) {
         onClick={() => setOpen(true)}
         className="text-xs text-muted underline hover:text-foreground"
       >
-        Handmatig zoeken…
-      </button>
+        {uiT("Handmatig zoeken…")} </button>
     );
   }
 
@@ -50,10 +51,10 @@ export function MatchSearch({ variantId }: { variantId: string }) {
         autoFocus
         value={term}
         onChange={(e) => run(e.target.value)}
-        placeholder="Zoek bestaand product (naam of SKU)…"
+        placeholder={uiT("Zoek bestaand product (naam of SKU)…")}
         className="h-8 w-full rounded-md border border-border bg-background px-2 text-sm"
       />
-      {pending && <p className="text-xs text-muted">Zoeken…</p>}
+      {pending && <p className="text-xs text-muted">{uiT("Zoeken…")}</p>}
       {hits.length > 0 && (
         <ul className="divide-y divide-border rounded-md border border-border">
           {hits.map((h) => (
@@ -67,8 +68,7 @@ export function MatchSearch({ variantId }: { variantId: string }) {
                 <input type="hidden" name="variantId" value={variantId} />
                 <input type="hidden" name="productId" value={h.id} />
                 <button type="submit" className={buttonClass({ variant: "secondary", size: "sm" })}>
-                  Koppel
-                </button>
+                  {uiT("Koppel")} </button>
               </form>
             </li>
           ))}

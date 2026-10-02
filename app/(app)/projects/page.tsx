@@ -1,3 +1,4 @@
+import { tekst as uiTranslation } from '@/lib/i18n/server';
 import { loadProjectFunding } from "@/lib/project-funding";
 import { and, asc, desc, eq, inArray, isNotNull, ne, sql } from "drizzle-orm";
 import Link from "next/link";
@@ -36,7 +37,10 @@ import { coverReceivedEx } from "@/lib/receipts";
 import { poExVatSql } from "@/lib/purchase-orders-sql";
 import { formatEUR } from "@/lib/utils";
 
-export const metadata = { title: "Projecten" };
+export async function generateMetadata() {
+  const uiT = await uiTranslation();
+  return { title: uiT("Projecten") };
+}
 
 /**
  * Gereserveerde waarde van een project = som van de offerte-subtotalen (ex. btw)
@@ -95,6 +99,7 @@ export default async function ProjectsPage({
 }: {
   searchParams: Promise<{ status?: string; funding?: string }>;
 }) {
+  const uiT = await uiTranslation();
   const { status, funding: fundingFilter } = await searchParams;
   const funding = await loadProjectFunding();
   const filter: Filter = status === "inactive" || status === "all" ? status : "active";
@@ -422,61 +427,60 @@ export default async function ProjectsPage({
 
   const statusBadge = (s: string) =>
     s === "active" ? (
-      <Badge tone="success">Actief</Badge>
+      <Badge tone="success">{uiT("Actief")}</Badge>
     ) : s === "completed" ? (
-      <Badge tone="info">Afgerond</Badge>
+      <Badge tone="info">{uiT("Afgerond")}</Badge>
     ) : (
-      <Badge tone="neutral">Gearchiveerd</Badge>
+      <Badge tone="neutral">{uiT("Gearchiveerd")}</Badge>
     );
 
   return (
     <>
       <PageHeader
-        title="Projecten"
+        title={uiT("Projecten")}
         actions={
           <LinkButton href="/projects/new" variant="primary">
-            Nieuw project
-          </LinkButton>
+            {uiT("Nieuw project")} </LinkButton>
         }
       />
 
-      {fundingFilter==="attention"&&<p className="mb-4 rounded-lg bg-warning/10 p-3 text-sm">Projecten waar een aanvullend voorschot nodig is of binnenkort nodig wordt. <Link href="/projects" className="text-accent underline">Alle projecten tonen</Link></p>}
+      {fundingFilter==="attention"&&<p className="mb-4 rounded-lg bg-warning/10 p-3 text-sm">{uiT("Projecten waar een aanvullend voorschot nodig is of binnenkort nodig wordt.")} <Link href="/projects" className="text-accent underline">{uiT("Alle projecten tonen")}</Link></p>}
       <div className="mb-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
         <StatTile
-          label="Projecten"
+          label={uiT("Projecten")}
           value={String(rows.length)}
           hint={FILTERS.find((f) => f.key === filter)?.label}
           tone="neutral"
         />
         <StatTile
-          label="Aanvullend voorschot nodig"
+          label={uiT("Aanvullend voorschot nodig")}
           value={formatEUR(totals.voorgeschoten)}
-          hint="tekort na doorbelasting inclusief opslag · ex. BTW"
+          hint={uiT("tekort na doorbelasting inclusief opslag · ex. BTW")}
           tone={totals.voorgeschoten > 0.01 ? "danger" : "success"}
         />
         <StatTile
-          label="Gefactureerd"
+          label={uiT("Gefactureerd")}
           value={formatEUR(totals.invoiced)}
-          hint="facturen − creditnota's · ex. BTW"
+          hint={uiT("facturen − creditnota's · ex. BTW")}
           tone="success"
         />
         <StatTile
-          label="Nog te factureren"
+          label={uiT("Nog te factureren")}
           value={formatEUR(totals.toInvoice)}
-          hint="doel − gefactureerd − ontvangen · ex. BTW"
+          hint={uiT("doel − gefactureerd − ontvangen · ex. BTW")}
           tone={totals.toInvoice > 0 ? "warning" : "neutral"}
         />
         <StatTile
-          label="Resultaat tot nu toe"
+          label={uiT("Resultaat tot nu toe")}
           value={formatEUR(totals.resultToDate)}
-          hint="doel − kosten tot nu toe · ex. BTW"
+          hint={uiT("doel − kosten tot nu toe · ex. BTW")}
           tone={totals.resultToDate < 0 ? "danger" : "info"}
         />
       </div>
 
       <Card className="overflow-hidden">
         <CardHeader>
-          <CardTitle>Alle projecten</CardTitle>
+          <CardTitle>{uiT("Alle projecten")}</CardTitle>
           <div className="flex items-center gap-1 text-xs">
             {FILTERS.map((f) => (
               <Link
@@ -486,33 +490,32 @@ export default async function ProjectsPage({
                   filter === f.key ? "bg-primary/10 text-primary" : "text-muted hover:bg-muted/50"
                 }`}
               >
-                {f.label}
+                {uiT(f.label)}
               </Link>
             ))}
           </div>
         </CardHeader>
         {rows.length === 0 ? (
           <div className="px-5 pb-5 text-sm text-muted">
-            Geen projecten in deze weergave — maak er een aan met “Nieuw project”.
-          </div>
+            {uiT("Geen projecten in deze weergave — maak er een aan met “Nieuw project”.")} </div>
         ) : (
           <Table>
             <THead>
               <tr>
-                <Th>Project</Th>
-                <Th>Klant</Th>
-                <Th className="text-right">Aanneemprijs</Th>
-                <Th className="text-right">Gefactureerd</Th>
-                <Th className="text-right">Openstaand</Th>
-                <Th className="text-right">Voorschot</Th>
-                <Th className="text-right">Open facturen</Th>
-                <Th className="text-right">Nog te factureren</Th>
-                <Th className="text-right">Marge uren</Th>
-                <Th className="text-right">Marge inkoop</Th>
-                <Th className="text-right">Marge eigen producten</Th>
-                <Th className="text-right">Resultaat tot nu toe</Th>
-                <Th>Op koers</Th>
-                <Th>Status</Th>
+                <Th>{uiT("Project")}</Th>
+                <Th>{uiT("Klant")}</Th>
+                <Th className="text-right">{uiT("Aanneemprijs")}</Th>
+                <Th className="text-right">{uiT("Gefactureerd")}</Th>
+                <Th className="text-right">{uiT("Openstaand")}</Th>
+                <Th className="text-right">{uiT("Voorschot")}</Th>
+                <Th className="text-right">{uiT("Open facturen")}</Th>
+                <Th className="text-right">{uiT("Nog te factureren")}</Th>
+                <Th className="text-right">{uiT("Marge uren")}</Th>
+                <Th className="text-right">{uiT("Marge inkoop")}</Th>
+                <Th className="text-right">{uiT("Marge eigen producten")}</Th>
+                <Th className="text-right">{uiT("Resultaat tot nu toe")}</Th>
+                <Th>{uiT("Op koers")}</Th>
+                <Th>{uiT("Status")}</Th>
               </tr>
             </THead>
             <TBody>
@@ -549,7 +552,7 @@ export default async function ProjectsPage({
                       {p.contractPriceEur != null ? (
                         formatEUR(p.contractPriceEur)
                       ) : p.fin.hasTarget ? (
-                        <span className="text-muted" title="Doel uit begroting/offerte">
+                        <span className="text-muted" title={uiT("Doel uit begroting/offerte")}>
                           {formatEUR(p.fin.targetRevenue)}*
                         </span>
                       ) : (
@@ -570,15 +573,15 @@ export default async function ProjectsPage({
                       {p.cover.requiredRevenue <= 0.01 ? (
                         <span className="text-muted">—</span>
                       ) : p.cover.status === "voorgeschoten" ? (
-                        <Link href={`/projects/${p.id}#voorschot-opvragen`} title="Voorschottekort inclusief opslag — nieuw voorschot vragen">
+                        <Link href={`/projects/${p.id}#voorschot-opvragen`} title={uiT("Voorschottekort inclusief opslag — nieuw voorschot vragen")}>
                           <Badge tone="danger">− {formatEUR(-p.cover.saldo)}</Badge>
                         </Link>
                       ) : p.cover.status === "bijna_op" ? (
-                        <Link href={`/projects/${p.id}#voorschot-opvragen`} title={`Nog ${formatEUR(p.cover.saldo)} dekking over`}>
-                          <Badge tone="warning">bijna op</Badge>
+                        <Link href={`/projects/${p.id}#voorschot-opvragen`} title={uiT("Nog {v0} dekking over", { v0: formatEUR(p.cover.saldo) })}>
+                          <Badge tone="warning">{uiT("bijna op")}</Badge>
                         </Link>
                       ) : (
-                        <span className="text-success" title={`${formatEUR(p.cover.saldo)} dekking over`}>
+                        <span className="text-success" title={uiT("{v0} dekking over", { v0: formatEUR(p.cover.saldo) })}>
                           ✓
                         </span>
                       )}
@@ -595,7 +598,7 @@ export default async function ProjectsPage({
                     </Td>
                     <Td className="text-right tabular-nums">
                       {p.margins.laborCost > 0 ? (
-                        <span title={`${p.margins.laborMarginPct}% norm · kostprijs ${formatEUR(p.margins.laborCost)} → door te belasten ${formatEUR(p.margins.laborRevenue)}`}>
+                        <span title={uiT("{v0}% norm · kostprijs {v1} → door te belasten {v2}", { v0: p.margins.laborMarginPct, v1: formatEUR(p.margins.laborCost), v2: formatEUR(p.margins.laborRevenue) })}>
                           {formatEUR(p.margins.laborMargin)}
                         </span>
                       ) : (
@@ -604,7 +607,7 @@ export default async function ProjectsPage({
                     </Td>
                     <Td className="text-right tabular-nums">
                       {p.margins.purchaseCost > 0 ? (
-                        <span title={`${p.margins.purchaseMarginPct}% norm · kostprijs ${formatEUR(p.margins.purchaseCost)} → door te belasten ${formatEUR(p.margins.purchaseRevenue)}`}>
+                        <span title={uiT("{v0}% norm · kostprijs {v1} → door te belasten {v2}", { v0: p.margins.purchaseMarginPct, v1: formatEUR(p.margins.purchaseCost), v2: formatEUR(p.margins.purchaseRevenue) })}>
                           {formatEUR(p.margins.purchaseMargin)}
                         </span>
                       ) : (
@@ -615,7 +618,7 @@ export default async function ProjectsPage({
                       {p.margins.productRevenue > 0 ? (
                         <span
                           className={p.margins.productMargin < 0 ? "font-medium text-danger" : undefined}
-                          title={`gefactureerd ${formatEUR(p.margins.productRevenue)} − kostprijs ${formatEUR(p.margins.productCost)}`}
+                          title={uiT("gefactureerd {v0} − kostprijs {v1}", { v0: formatEUR(p.margins.productRevenue), v1: formatEUR(p.margins.productCost) })}
                         >
                           {formatEUR(p.margins.productMargin)}
                           {p.margins.productMarginPct != null && (
@@ -644,7 +647,7 @@ export default async function ProjectsPage({
                       {p.fin.tone === "neutral" ? (
                         <span className="text-muted">—</span>
                       ) : (
-                        <Badge tone={koers.tone}>{koers.label}</Badge>
+                        <Badge tone={koers.tone}>{uiT(koers.label)}</Badge>
                       )}
                     </Td>
                     <Td>{statusBadge(p.status)}</Td>

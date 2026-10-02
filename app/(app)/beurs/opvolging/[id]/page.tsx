@@ -1,3 +1,4 @@
+import { tekst as uiTranslation } from '@/lib/i18n/server';
 import { tekst, datumTaal } from '@/lib/i18n/server';
 import { and, desc, eq, inArray, sql } from 'drizzle-orm';
 import Link from 'next/link';
@@ -16,7 +17,10 @@ import { FollowupCheck } from '../check';
 import { FOLLOWUP_DONE, FOLLOWUP_REOPENED, followupCompleted } from '@/lib/followup-checklist';
 import { latestFollowupCompletions } from '@/lib/followup-checklist-data';
 import { FollowupLive } from '../live';
-export const metadata={title:'Klantdossier'};
+export async function generateMetadata() {
+  const uiT = await uiTranslation();
+  return {title:uiT("Klantdossier")};
+}
 export default async function Page({params}:{params:Promise<{id:string}>}){
  const t=await tekst(); const dateLocale=await datumTaal();
  const access=await requireModuleRead('aanvragen');const {id}=await params;if(!z.string().uuid().safeParse(id).success)notFound();

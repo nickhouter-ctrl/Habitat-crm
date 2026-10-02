@@ -1,3 +1,4 @@
+import { tekst as uiTranslation } from '@/lib/i18n/server';
 import { tekst, datumTaal } from '@/lib/i18n/server';
 import Link from "next/link";
 import { notFound } from "next/navigation";
@@ -10,8 +11,12 @@ import { Badge, Card, CardHeader, CardTitle, PageHeader, StatTile } from "@/comp
 import { formatEUR } from "@/lib/utils";
 import { cents, PRESENTATION_MODES, presentationAmounts, type PresentationInput } from "@/lib/presentation";
 import { AgreementForm, RedemptionForm, VoidForm } from "./forms";
-export const metadata = { title: "Presentatieafspraak" };
+export async function generateMetadata() {
+  const uiT = await uiTranslation();
+  return { title: uiT("Presentatieafspraak") };
+}
 export default async function PresentationPage({ params }: { params: Promise<{ id: string }> }) {
+
  const t=await tekst(); const dateLocale=await datumTaal();
   const access = await requireModuleRead("producten");
   const { id } = await params;

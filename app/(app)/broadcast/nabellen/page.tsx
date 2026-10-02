@@ -1,3 +1,5 @@
+import { datumTaal } from "@/lib/i18n/server";
+import { tekst as uiTranslation } from '@/lib/i18n/server';
 /**
  * Nabellen: wie heeft de campagnemail gekregen, en hoe staat dat gesprek ervoor?
  *
@@ -23,7 +25,10 @@ import { legBelpogingVast } from "./actions";
 import { BelFormulier } from "./bel-formulier";
 
 export const dynamic = "force-dynamic";
-export const metadata = { title: "Nabellen" };
+export async function generateMetadata() {
+  const uiT = await uiTranslation();
+  return { title: uiT("Nabellen") };
+}
 
 const PER_PAGINA = 40;
 
@@ -62,6 +67,7 @@ export default async function NabellenPage({
 }: {
   searchParams: Promise<Record<string, string | undefined>>;
 }) {
+  const uiDateLocale = await datumTaal();
   await requireModule("broadcast");
   const t = await tekst();
   const sp = await searchParams;
@@ -253,7 +259,7 @@ export default async function NabellenPage({
                   </Td>
                   <Td className="text-muted">{[r.city, r.province].filter(Boolean).join(" · ") || "—"}</Td>
                   <Td className="whitespace-nowrap text-muted">
-                    {formatDate(new Date(r.sent_at))}
+                    {formatDate(new Date(r.sent_at), uiDateLocale)}
                     {/* De campagnenaam is vrije tekst van ons zelf en staat altijd in het Nederlands;
                         wat de beller wil weten is wat voor bedrijf hij aan de lijn krijgt. */}
                     <span className="block text-xs">{branche(r)}</span>
@@ -265,7 +271,7 @@ export default async function NabellenPage({
                           {t(UITKOMST[r.laatste_uitkomst]?.label ?? r.laatste_uitkomst)}
                         </Badge>
                         <span className="block text-xs text-muted">
-                          {r.laatste_belpoging ? formatDate(new Date(r.laatste_belpoging)) : ""}
+                          {r.laatste_belpoging ? formatDate(new Date(r.laatste_belpoging), uiDateLocale) : ""}
                           {r.pogingen > 1 ? ` · ${r.pogingen} ${t("pogingen")}` : ""}
                         </span>
                         {r.laatste_notitie && <span className="block max-w-[16rem] truncate text-xs">{r.laatste_notitie}</span>}

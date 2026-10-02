@@ -1,4 +1,5 @@
 "use client";
+import { useT as useUiTranslation } from '@/components/taal-provider';
 
 import { useState, useTransition } from "react";
 
@@ -7,6 +8,7 @@ import { findMissingEmails } from "./actions";
 
 /** Zoekt alsnog e-mailadressen voor prospects zonder mail (maar mét website). */
 export function FindEmailsButton({ missingCount }: { missingCount: number }) {
+  const uiT = useUiTranslation();
   const [pending, start] = useTransition();
   const [msg, setMsg] = useState<string | null>(null);
 
@@ -27,7 +29,7 @@ export function FindEmailsButton({ missingCount }: { missingCount: number }) {
           })
         }
       >
-        {pending ? "Zoeken…" : `Zoek ontbrekende e-mails (${missingCount})`}
+        {pending ? uiT("Zoeken…") : uiT("Zoek ontbrekende e-mails ({v0})", { v0: missingCount })}
       </Button>
       {msg && <span className="text-xs text-muted">{msg}</span>}
     </span>

@@ -1,3 +1,4 @@
+import { tekst as uiTranslation } from '@/lib/i18n/server';
 /**
  * AI-carrouselbouwer: /marketing/creatives/carousel. Kies 2–10 beelden, laat
  * de AI de verhaalvolgorde en alle teksten schrijven, en maak de kaartjes als
@@ -17,7 +18,10 @@ import { aiCreativeCopyConfigured } from "@/lib/marketing/ai-copy";
 import { marketingStorage } from "@/lib/marketing/storage";
 import { subcategoryForFamily } from "@/lib/marketing/taxonomy";
 
-export const metadata = { title: "Carrousel met AI" };
+export async function generateMetadata() {
+  const uiT = await uiTranslation();
+  return { title: uiT("Carrousel met AI") };
+}
 
 function safeUrl(path: string): string | null {
   try {
@@ -28,6 +32,7 @@ function safeUrl(path: string): string | null {
 }
 
 export default async function CarouselBuilderPage() {
+  const uiT = await uiTranslation();
   const [assetRows, igAgg] = await Promise.all([
     db
       .select({
@@ -74,8 +79,8 @@ export default async function CarouselBuilderPage() {
   return (
     <>
       <PageHeader
-        title="Carrousel met AI"
-        subtitle="Kies je beelden — de AI bepaalt de sterkste verhaalvolgorde en schrijft per kaartje teksten die op elkaar doorlopen."
+        title={uiT("Carrousel met AI")}
+        subtitle={uiT("Kies je beelden — de AI bepaalt de sterkste verhaalvolgorde en schrijft per kaartje teksten die op elkaar doorlopen.")}
       />
       <CarouselBuilder
         assets={pickerAssets}

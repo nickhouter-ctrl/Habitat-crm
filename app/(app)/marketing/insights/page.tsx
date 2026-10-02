@@ -1,3 +1,5 @@
+import { datumTaal } from "@/lib/i18n/server";
+import { tekst as uiTranslation } from '@/lib/i18n/server';
 /**
  * "Wat werkt" (brief §8): per facet de rangorde op Wilson lower bound, met
  * betrouwbaarheidsondergrens, steekproefgrootte en advertentie-dagen
@@ -23,7 +25,10 @@ import { db } from "@/lib/db";
 import { facetPerformance } from "@/lib/db/schema";
 import { MIN_AD_DAYS, MIN_IMPRESSIONS } from "@/lib/marketing/stats";
 
-export const metadata = { title: "Wat werkt" };
+export async function generateMetadata() {
+  const uiT = await uiTranslation();
+  return { title: uiT("Wat werkt") };
+}
 
 const FACET_LABELS: Record<string, string> = {
   template: "Sjabloon",
@@ -44,6 +49,8 @@ function pct(value: string | null): string {
 }
 
 export default async function InsightsPage() {
+  const uiDateLocale = await datumTaal();
+  const uiT = await uiTranslation();
   const rows = await db
     .select()
     .from(facetPerformance)
@@ -61,18 +68,18 @@ export default async function InsightsPage() {
   return (
     <>
       <PageHeader
-        title="Wat werkt"
+        title={uiT("Wat werkt")}
         subtitle={
           computedAt
-            ? `Prestaties per creative-eigenschap over de laatste 90 dagen · herbouwd ${computedAt.toLocaleString("nl-NL", { dateStyle: "medium", timeStyle: "short" })}`
-            : "Prestaties per creative-eigenschap over de laatste 90 dagen"
+            ? uiT("Prestaties per creative-eigenschap over de laatste 90 dagen · herbouwd {v0}", { v0: computedAt.toLocaleString(uiDateLocale, { dateStyle: "medium", timeStyle: "short" }) })
+            : uiT("Prestaties per creative-eigenschap over de laatste 90 dagen")
         }
       />
 
       {rows.length === 0 ? (
         <EmptyState
-          title="Nog geen advertentiedata"
-          description={`Zodra advertenties draaien en de nachtelijke herbouw heeft gelopen, verschijnt hier per eigenschap (sjabloon, palet, taal, …) wat aantoonbaar werkt. Oordelen verschijnen pas vanaf ${MIN_IMPRESSIONS.toLocaleString("nl-NL")} impressies en ${MIN_AD_DAYS} advertentie-dagen.`}
+          title={uiT("Nog geen advertentiedata")}
+          description={uiT("Zodra advertenties draaien en de nachtelijke herbouw heeft gelopen, verschijnt hier per eigenschap (sjabloon, palet, taal, …) wat aantoonbaar werkt. Oordelen verschijnen pas vanaf {v0} impressies en {v1} advertentie-dagen.", { v0: MIN_IMPRESSIONS.toLocaleString(uiDateLocale), v1: MIN_AD_DAYS })}
         />
       ) : (
         <div className="grid gap-5 lg:grid-cols-2">
@@ -84,10 +91,10 @@ export default async function InsightsPage() {
                 <Table>
                   <THead>
                     <Tr>
-                      <Th>Waarde</Th>
-                      <Th className="text-right">CTR (95% ondergrens)</Th>
-                      <Th className="text-right">Kosten/lead (EB)</Th>
-                      <Th className="text-right">Basis</Th>
+                      <Th>{uiT("Waarde")}</Th>
+                      <Th className="text-right">{uiT("CTR (95% ondergrens)")}</Th>
+                      <Th className="text-right">{uiT("Kosten/lead (EB)")}</Th>
+                      <Th className="text-right">{uiT("Basis")}</Th>
                     </Tr>
                   </THead>
                   <TBody>
@@ -103,19 +110,17 @@ export default async function InsightsPage() {
                               {row.cplEbEur ? formatEUR(row.cplEbEur) : "—"}
                             </Td>
                             <Td className="text-right text-xs text-muted">
-                              {row.adCount} adv. · {row.adDays} adv.-dagen ·{" "}
-                              {row.impressions.toLocaleString("nl-NL")} impr.
-                            </Td>
+                              {row.adCount} {uiT("adv. ·")} {row.adDays} {uiT("adv.-dagen ·")}{" "}
+                              {row.impressions.toLocaleString(uiDateLocale)} {uiT("impr.")} </Td>
                           </>
                         ) : (
                           <>
                             <Td colSpan={2} className="text-right">
-                              <Badge tone="neutral">nog te weinig data</Badge>
+                              <Badge tone="neutral">{uiT("nog te weinig data")}</Badge>
                             </Td>
                             <Td className="text-right text-xs text-muted">
-                              {row.adCount} adv. · {row.adDays} adv.-dagen ·{" "}
-                              {row.impressions.toLocaleString("nl-NL")} impr.
-                            </Td>
+                              {row.adCount} {uiT("adv. ·")} {row.adDays} {uiT("adv.-dagen ·")}{" "}
+                              {row.impressions.toLocaleString(uiDateLocale)} {uiT("impr.")} </Td>
                           </>
                         )}
                       </Tr>
@@ -129,13 +134,8 @@ export default async function InsightsPage() {
       )}
 
       <p className="mt-5 max-w-3xl text-xs text-muted">
-        De rangorde gebruikt de <strong>Wilson-ondergrens (95%)</strong> van de CTR, niet het
-        rauwe percentage — zo wint een advertentie met 3 klikken op 11 impressies het niet van
-        een bewezen presteerder. Kosten per lead zijn met <strong>empirical Bayes</strong> naar
-        het accountgemiddelde getrokken, gewogen naar volume. Oordelen verschijnen pas vanaf{" "}
-        {MIN_IMPRESSIONS.toLocaleString("nl-NL")} impressies én {MIN_AD_DAYS} advertentie-dagen
-        per waarde. De leerlaag adviseert; een mens beslist.
-      </p>
+        {uiT("De rangorde gebruikt de")} <strong>{uiT("Wilson-ondergrens (95%)")}</strong> {uiT("van de CTR, niet het rauwe percentage — zo wint een advertentie met 3 klikken op 11 impressies het niet van een bewezen presteerder. Kosten per lead zijn met")} <strong>{uiT("empirical Bayes")}</strong> {uiT("naar het accountgemiddelde getrokken, gewogen naar volume. Oordelen verschijnen pas vanaf")}{" "}
+        {MIN_IMPRESSIONS.toLocaleString(uiDateLocale)} {uiT("impressies én")} {MIN_AD_DAYS} {uiT("advertentie-dagen per waarde. De leerlaag adviseert; een mens beslist.")} </p>
     </>
   );
 }

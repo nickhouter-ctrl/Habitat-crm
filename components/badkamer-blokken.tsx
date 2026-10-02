@@ -1,4 +1,5 @@
 "use client";
+import { useT as useUiTranslation } from '@/components/taal-provider';
 
 /**
  * Badkamer-blokken in de offerte-wizard: eerst het aantal invullen, dan
@@ -21,6 +22,7 @@ const VELDEN = [
 export const MAX_BADKAMERS = 12;
 
 export function BadkamerBlokken({ defaults }: { defaults: Record<string, string | undefined> }) {
+  const uiT = useUiTranslation();
   const [aantal, setAantal] = useState(() => {
     const uitParam = Number.parseInt(defaults.b_aantal ?? "", 10);
     if (Number.isFinite(uitParam)) return Math.min(Math.max(uitParam, 0), MAX_BADKAMERS);
@@ -35,10 +37,10 @@ export function BadkamerBlokken({ defaults }: { defaults: Record<string, string 
   return (
     <div>
       <p className="mb-1.5 text-xs font-medium uppercase tracking-wide text-muted">
-        Badkamers &amp; sanitair <span className="normal-case tracking-normal">— per badkamer: m² en wat erin komt</span>
+        {uiT("Badkamers & sanitair")} <span className="normal-case tracking-normal">{uiT("— per badkamer: m² en wat erin komt")}</span>
       </p>
       <label className="mb-3 flex items-center gap-2 text-sm">
-        <span className="text-muted">Aantal badkamers</span>
+        <span className="text-muted">{uiT("Aantal badkamers")}</span>
         <Input
           name="b_aantal"
           inputMode="numeric"
@@ -55,7 +57,7 @@ export function BadkamerBlokken({ defaults }: { defaults: Record<string, string 
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {Array.from({ length: aantal }, (_, idx) => idx + 1).map((i) => (
             <div key={i} className="rounded-md border p-2.5">
-              <p className="mb-1.5 text-xs font-semibold">Badkamer {i}</p>
+              <p className="mb-1.5 text-xs font-semibold">{uiT("Badkamer")} {i}</p>
               <div className="grid grid-cols-5 gap-1.5">
                 {VELDEN.map(({ veld, label }) => (
                   <label key={veld} className="text-center text-[10px] text-muted">

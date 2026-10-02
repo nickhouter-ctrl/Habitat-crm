@@ -1,3 +1,5 @@
+import { datumTaal } from "@/lib/i18n/server";
+import { tekst as uiTranslation } from '@/lib/i18n/server';
 import { eq } from "drizzle-orm";
 import Link from "next/link";
 import { notFound } from "next/navigation";
@@ -17,7 +19,10 @@ import { MappingForm } from "./mapping-form";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 120;
-export const metadata = { title: "Import bekijken" };
+export async function generateMetadata() {
+  const uiT = await uiTranslation();
+  return { title: uiT("Import bekijken") };
+}
 
 export default async function ImportDetailPage({
   params,
@@ -26,6 +31,8 @@ export default async function ImportDetailPage({
   params: Promise<{ id: string }>;
   searchParams: Promise<{ error?: string; stap?: string }>;
 }) {
+  const uiDateLocale = await datumTaal();
+  const uiT = await uiTranslation();
   const { id } = await params;
   const sp = await searchParams;
   const batch = await db.query.prospectImports.findFirst({ where: eq(prospectImports.id, id) });
@@ -34,19 +41,17 @@ export default async function ImportDetailPage({
   const kopregel = (
     <PageHeader
       title={batch.label}
-      subtitle={`${batch.filename}${batch.vendor ? ` · ${batch.vendor}` : ""} · geüpload ${formatDate(batch.createdAt)}`}
+      subtitle={uiT("{v0}{v1} · geüpload {v2}", { v0: batch.filename, v1: batch.vendor ? ` · ${batch.vendor}` : "", v2: formatDate(batch.createdAt, uiDateLocale) })}
       actions={
         <div className="flex items-center gap-3">
           <Link href="/leads/import" className="text-sm underline">
-            Alle imports
-          </Link>
+            {uiT("Alle imports")} </Link>
           <form action={deleteImportBatch.bind(null, id)}>
             <ConfirmSubmit
-              message={`"${batch.label}" terugdraaien? Prospects uit deze lijst die nog niet gemaild zijn, worden verwijderd.`}
+              message={uiT("\"{v0}\" terugdraaien? Prospects uit deze lijst die nog niet gemaild zijn, worden verwijderd.", { v0: batch.label })}
               className="rounded px-2 py-1 text-sm text-muted transition-colors hover:bg-danger/10 hover:text-danger"
             >
-              Terugdraaien
-            </ConfirmSubmit>
+              {uiT("Terugdraaien")} </ConfirmSubmit>
           </form>
         </div>
       }
@@ -65,14 +70,13 @@ export default async function ImportDetailPage({
     return (
       <>
         {kopregel}
-        {sp.error && <p className="mb-4 rounded-md bg-danger/10 px-3 py-2 text-sm text-danger">{sp.error}</p>}
+        {sp.error && <p className="mb-4 rounded-md bg-danger/10 px-3 py-2 text-sm text-danger">{uiT(sp.error ?? "")}</p>}
         <Card>
           <CardHeader>
-            <CardTitle>Welke kolom is wat?</CardTitle>
+            <CardTitle>{uiT("Welke kolom is wat?")}</CardTitle>
             {voorstel.onbekend.length > 0 && (
               <span className="text-xs text-warning">
-                {voorstel.onbekend.length} {voorstel.onbekend.length === 1 ? "kolom" : "kolommen"} niet herkend
-              </span>
+                {voorstel.onbekend.length} {voorstel.onbekend.length === 1 ? uiT("kolom") : uiT("kolommen")} {uiT("niet herkend")} </span>
             )}
           </CardHeader>
           <CardContent>
@@ -101,24 +105,24 @@ export default async function ImportDetailPage({
   return (
     <>
       {kopregel}
-      {sp.error && <p className="mb-4 rounded-md bg-danger/10 px-3 py-2 text-sm text-danger">{sp.error}</p>}
+      {sp.error && <p className="mb-4 rounded-md bg-danger/10 px-3 py-2 text-sm text-danger">{uiT(sp.error ?? "")}</p>}
 
       <div className="mb-5 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
-        <StatTile label="Rijen in bestand" value={String(plan.totaal)} />
-        <StatTile label="Nieuw" value={String(plan.nieuw.length)} tone="success" hint="worden toegevoegd" />
-        <StatTile label="Vallen weg" value={String(weg)} tone={weg > 0 ? "warning" : "neutral"} hint="dubbel, bekend of afgemeld" />
-        <StatTile label="Zonder e-mail" value={String(plan.zonderEmail)} hint="wel in de lijst, niet mailbaar" />
-        <StatTile label="Al toegevoegd" value={String(batch.insertedCount)} tone={batch.insertedCount > 0 ? "info" : "neutral"} />
+        <StatTile label={uiT("Rijen in bestand")} value={String(plan.totaal)} />
+        <StatTile label={uiT("Nieuw")} value={String(plan.nieuw.length)} tone="success" hint={uiT("worden toegevoegd")} />
+        <StatTile label={uiT("Vallen weg")} value={String(weg)} tone={weg > 0 ? "warning" : "neutral"} hint={uiT("dubbel, bekend of afgemeld")} />
+        <StatTile label={uiT("Zonder e-mail")} value={String(plan.zonderEmail)} hint={uiT("wel in de lijst, niet mailbaar")} />
+        <StatTile label={uiT("Al toegevoegd")} value={String(batch.insertedCount)} tone={batch.insertedCount > 0 ? "info" : "neutral"} />
       </div>
 
       <div className="grid gap-4 lg:grid-cols-2">
         <Card>
           <CardHeader>
-            <CardTitle>Wat er wegvalt, en waarom</CardTitle>
+            <CardTitle>{uiT("Wat er wegvalt, en waarom")}</CardTitle>
           </CardHeader>
           <CardContent className="space-y-3 text-sm">
             {redenen.length === 0 ? (
-              <p className="text-muted">Niets — elke rij in dit bestand is nieuw en bruikbaar.</p>
+              <p className="text-muted">{uiT("Niets — elke rij in dit bestand is nieuw en bruikbaar.")}</p>
             ) : (
               <ul className="space-y-1.5">
                 {redenen.map(([reden, n]) => (
@@ -132,50 +136,48 @@ export default async function ImportDetailPage({
             {plan.voorbeelden.length > 0 && (
               <details className="rounded-md bg-background-soft p-3">
                 <summary className="cursor-pointer text-xs font-medium text-muted">
-                  Voorbeelden met rijnummer ({plan.voorbeelden.length})
+                  {uiT("Voorbeelden met rijnummer (")}{plan.voorbeelden.length})
                 </summary>
                 <ul className="mt-2 space-y-1 text-xs text-muted">
                   {plan.voorbeelden.map((v, i) => (
                     <li key={i}>
-                      rij {v.rij}: <span className="font-mono">{v.waarde}</span> — {REDEN_TEKST[v.reden]}
+                      {uiT("rij")} {v.rij}: <span className="font-mono">{v.waarde}</span> — {REDEN_TEKST[v.reden]}
                     </li>
                   ))}
                 </ul>
               </details>
             )}
             <p className="text-xs text-muted">
-              Een rij met een onleesbaar e-mailadres wordt niet weggegooid: die komt er zonder adres in, zodat naam,
-              telefoon en plaats bewaard blijven.
-            </p>
+              {uiT("Een rij met een onleesbaar e-mailadres wordt niet weggegooid: die komt er zonder adres in, zodat naam, telefoon en plaats bewaard blijven.")} </p>
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader>
-            <CardTitle>Importeren</CardTitle>
-            {batch.status === "done" && <Badge tone="success">Klaar</Badge>}
+            <CardTitle>{uiT("Importeren")}</CardTitle>
+            {batch.status === "done" && <Badge tone="success">{uiT("Klaar")}</Badge>}
           </CardHeader>
           <CardContent className="space-y-3 text-sm">
             <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1.5">
-              <dt className="text-muted">Herkomst</dt>
+              <dt className="text-muted">{uiT("Herkomst")}</dt>
               <dd>{batch.provenance}</dd>
               {batch.vendor && (
                 <>
-                  <dt className="text-muted">Leverancier</dt>
+                  <dt className="text-muted">{uiT("Leverancier")}</dt>
                   <dd>
                     {batch.vendor}
-                    {batch.acquiredAt ? ` · ${formatDate(batch.acquiredAt)}` : ""}
+                    {batch.acquiredAt ? ` · ${formatDate(batch.acquiredAt, uiDateLocale)}` : ""}
                     {batch.vendorRef ? ` · ${batch.vendorRef}` : ""}
                   </dd>
                 </>
               )}
-              <dt className="text-muted">Categorie</dt>
+              <dt className="text-muted">{uiT("Categorie")}</dt>
               <dd>{batch.defaultCategory}</dd>
-              <dt className="text-muted">Taal</dt>
+              <dt className="text-muted">{uiT("Taal")}</dt>
               <dd>{batch.language}</dd>
-              <dt className="text-muted">Blad · kopregel</dt>
+              <dt className="text-muted">{uiT("Blad · kopregel")}</dt>
               <dd>
-                {batch.sheetName} · rij {batch.headerRow}
+                {batch.sheetName} {uiT("· rij")} {batch.headerRow}
               </dd>
             </dl>
 
@@ -183,33 +185,31 @@ export default async function ImportDetailPage({
               <ApplyButton id={id} aantal={nogTeDoen} applyAction={applyImport} />
             ) : (
               <p className="rounded-md bg-success/10 px-3 py-2 text-success">
-                Alles uit deze lijst staat in het CRM — {batch.insertedCount} prospects.{" "}
+                {uiT("Alles uit deze lijst staat in het CRM —")} {batch.insertedCount} {uiT("prospects.")}{" "}
                 <Link href="/leads/prospects" className="underline">
-                  Bekijk de lijst
-                </Link>
+                  {uiT("Bekijk de lijst")} </Link>
               </p>
             )}
             <Link href={`/leads/import/${id}?stap=kolommen`} className="block text-xs underline">
-              Kolommen opnieuw kiezen
-            </Link>
+              {uiT("Kolommen opnieuw kiezen")} </Link>
           </CardContent>
         </Card>
       </div>
 
       <Card className="mt-4 overflow-hidden">
         <CardHeader>
-          <CardTitle>Eerste {Math.min(VOORBEELD_RIJEN, plan.nieuw.length)} rijen zoals ze erin komen</CardTitle>
+          <CardTitle>{uiT("Eerste")} {Math.min(VOORBEELD_RIJEN, plan.nieuw.length)} {uiT("rijen zoals ze erin komen")}</CardTitle>
         </CardHeader>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead className="bg-background-soft text-xs uppercase tracking-wide text-muted">
               <tr>
-                <th className="px-3 py-2 text-left">Rij</th>
-                <th className="px-3 py-2 text-left">Bedrijf</th>
-                <th className="px-3 py-2 text-left">E-mail</th>
-                <th className="px-3 py-2 text-left">Plaats</th>
-                <th className="px-3 py-2 text-left">Branche</th>
-                <th className="px-3 py-2 text-left">Labels</th>
+                <th className="px-3 py-2 text-left">{uiT("Rij")}</th>
+                <th className="px-3 py-2 text-left">{uiT("Bedrijf")}</th>
+                <th className="px-3 py-2 text-left">{uiT("E-mail")}</th>
+                <th className="px-3 py-2 text-left">{uiT("Plaats")}</th>
+                <th className="px-3 py-2 text-left">{uiT("Branche")}</th>
+                <th className="px-3 py-2 text-left">{uiT("Labels")}</th>
               </tr>
             </thead>
             <tbody>

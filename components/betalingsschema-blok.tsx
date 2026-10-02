@@ -1,4 +1,5 @@
 "use client";
+import { useT as useUiTranslation } from '@/components/taal-provider';
 
 /**
  * Betalingsschema in de offerte-wizard: eerst het aantal termijnen, dan per
@@ -19,6 +20,7 @@ export function BetalingsschemaBlok({
   /** Standaardtermijnen in de gekozen offertetaal: [{ label, pct }]. */
   standaard: { label: string; pct: number }[];
 }) {
+  const uiT = useUiTranslation();
   const [aantal, setAantal] = useState(() => {
     // Alleen een zelf gekozen aantal blijft staan; anders volgt het aantal de
     // (automatisch gegenereerde) fase-lijst.
@@ -35,10 +37,10 @@ export function BetalingsschemaBlok({
   return (
     <div>
       <p className="mb-1.5 text-xs font-medium uppercase tracking-wide text-muted">
-        Betalingsschema <span className="normal-case tracking-normal">— komt met de bedragen op de offerte; 0% of lege omschrijving = termijn vervalt</span>
+        {uiT("Betalingsschema")} <span className="normal-case tracking-normal">{uiT("— komt met de bedragen op de offerte; 0% of lege omschrijving = termijn vervalt")}</span>
       </p>
       <label className="mb-2 flex items-center gap-2 text-sm">
-        <span className="text-muted">Aantal termijnen</span>
+        <span className="text-muted">{uiT("Aantal termijnen")}</span>
         <Input
           name="s_aantal"
           inputMode="numeric"
@@ -56,7 +58,7 @@ export function BetalingsschemaBlok({
         <div className="space-y-1.5">
           {Array.from({ length: aantal }, (_, idx) => idx + 1).map((i) => (
             <div key={i} className="flex items-center gap-2">
-              <span className="w-16 shrink-0 text-xs text-muted">Termijn {i}</span>
+              <span className="w-16 shrink-0 text-xs text-muted">{uiT("Termijn")} {i}</span>
               {(() => {
                 const vers = standaard[i - 1]?.label ?? "";
                 const getypt = defaults[`s${i}_label`];
@@ -64,7 +66,7 @@ export function BetalingsschemaBlok({
                 const waarde = basis != null && getypt != null && getypt.trim() !== "" && getypt !== basis ? getypt : vers;
                 return (
                   <>
-                    <Input name={`s${i}_label`} defaultValue={waarde} placeholder="omschrijving, bv. bij start dakwerk…" className="flex-1" />
+                    <Input name={`s${i}_label`} defaultValue={waarde} placeholder={uiT("omschrijving, bv. bij start dakwerk…")} className="flex-1" />
                     <input type="hidden" name={`s${i}_label_basis`} value={vers} />
                   </>
                 );

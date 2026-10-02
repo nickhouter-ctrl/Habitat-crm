@@ -1,4 +1,5 @@
 "use client";
+import { useT as useUiTranslation } from '@/components/taal-provider';
 
 /**
  * Uren boeken op een werf.
@@ -31,6 +32,7 @@ export function TimeEntryForm({
   workers: TimeEntryWorker[];
   action: (formData: FormData) => void | Promise<void>;
 }) {
+  const uiT = useUiTranslation();
   const [workerId, setWorkerId] = useState("");
   const [tarief, setTarief] = useState("");
 
@@ -48,28 +50,27 @@ export function TimeEntryForm({
 
   return (
     <form action={action} className="grid gap-3 sm:grid-cols-2 lg:grid-cols-[1.6fr_0.8fr_1fr_auto] lg:items-end">
-      <Field label="Arbeider">
+      <Field label={uiT("Arbeider")}>
         <Combobox
           name="workerId"
-          placeholder="Zoek een arbeider…"
+          placeholder={uiT("Zoek een arbeider…")}
           options={workers.map((w) => ({ value: w.value, label: w.label }))}
           onSelect={(v) => kiesArbeider(v)}
         />
       </Field>
-      <Field label="Uren">
+      <Field label={uiT("Uren")}>
         <Input name="hours" inputMode="decimal" required placeholder="8" />
       </Field>
-      <Field label="Datum">
+      <Field label={uiT("Datum")}>
         <Input name="date" type="date" required />
       </Field>
       <SubmitButton size="sm" variant="secondary" pendingLabel="…">
-        + Uren
-      </SubmitButton>
+        {uiT("+ Uren")} </SubmitButton>
 
       <Field
-        label="Tarief (€/u)"
+        label={uiT("Tarief (€/u)")}
         className="lg:col-span-2"
-        hint={gekozen && tarieven.length === 0 ? "op zijn ploegkaart staat geen tarief" : "ex. btw"}
+        hint={gekozen && tarieven.length === 0 ? uiT("op zijn ploegkaart staat geen tarief") : uiT("ex. btw")}
       >
         <div className="flex flex-wrap items-center gap-2">
           <Input
@@ -78,7 +79,7 @@ export function TimeEntryForm({
             className="w-28 text-right"
             value={tarief}
             onChange={(e) => setTarief(e.target.value)}
-            placeholder="tarief"
+            placeholder={uiT("tarief")}
           />
           {tarieven.map((t) => (
             <button
@@ -97,8 +98,8 @@ export function TimeEntryForm({
           ))}
         </div>
       </Field>
-      <Field label="Notitie" className="lg:col-span-2">
-        <Input name="note" placeholder="optioneel" />
+      <Field label={uiT("Notitie")} className="lg:col-span-2">
+        <Input name="note" placeholder={uiT("optioneel")} />
       </Field>
     </form>
   );

@@ -1,3 +1,5 @@
+import { datumTaal } from "@/lib/i18n/server";
+import { tekst as uiTranslation } from '@/lib/i18n/server';
 /**
  * De ploeg: één regel per arbeider, met wat hij tot nu toe heeft gedaan.
  *
@@ -32,9 +34,14 @@ import { formatDate, formatEUR } from "@/lib/utils";
 import { workerOverview } from "@/lib/worker-stats";
 import { createWorker } from "./actions";
 
-export const metadata = { title: "Ploeg" };
+export async function generateMetadata() {
+  const uiT = await uiTranslation();
+  return { title: uiT("Ploeg") };
+}
 
 export default async function PloegPage() {
+  const uiDateLocale = await datumTaal();
+  const uiT = await uiTranslation();
   const rows = await workerOverview();
   const actief = rows.filter((w) => w.active);
   const inactief = rows.filter((w) => !w.active);
@@ -45,26 +52,24 @@ export default async function PloegPage() {
   return (
     <>
       <PageHeader
-        title="Ploeg"
-        subtitle="De eigen jongens en onderaannemers. Klik op een naam voor zijn uren, werven en facturen."
+        title={uiT("Ploeg")}
+        subtitle={uiT("De eigen jongens en onderaannemers. Klik op een naam voor zijn uren, werven en facturen.")}
       />
 
       <div className="mb-5 grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <StatTile label="Actief" value={String(actief.length)} />
-        <StatTile label="Uren geboekt" value={urenTotaal.toLocaleString("nl-NL")} hint="goedgekeurd" />
-        <StatTile label="Arbeidskost" value={formatEUR(kostTotaal)} hint="ex. btw, alle werven" />
-        <StatTile label="Inactief" value={String(inactief.length)} tone="neutral" />
+        <StatTile label={uiT("Actief")} value={String(actief.length)} />
+        <StatTile label={uiT("Uren geboekt")} value={urenTotaal.toLocaleString(uiDateLocale)} hint={uiT("goedgekeurd")} />
+        <StatTile label={uiT("Arbeidskost")} value={formatEUR(kostTotaal)} hint={uiT("ex. btw, alle werven")} />
+        <StatTile label={uiT("Inactief")} value={String(inactief.length)} tone="neutral" />
       </div>
 
       {dubbel.length > 0 && (
         <Card className="mb-5 border-warning/40 bg-warning/5">
           <CardContent className="py-4 text-sm">
             <p className="font-medium">
-              {dubbel.length} ploegkaarten delen een naam met een andere kaart.
-            </p>
+              {dubbel.length} {uiT("ploegkaarten delen een naam met een andere kaart.")} </p>
             <p className="mt-1 text-muted">
-              Dan staan zijn uren verspreid en klopt geen van beide overzichten. Werkt iemand tegen
-              twee verschillende tarieven, gebruik dan één kaart met beide tarieven erop. Het gaat om:{" "}
+              {uiT("Dan staan zijn uren verspreid en klopt geen van beide overzichten. Werkt iemand tegen twee verschillende tarieven, gebruik dan één kaart met beide tarieven erop. Het gaat om:")}{" "}
               {dubbel.map((w) => w.name).join(", ")}.
             </p>
           </CardContent>
@@ -73,25 +78,25 @@ export default async function PloegPage() {
 
       <Card className="mb-5 overflow-hidden">
         <CardHeader>
-          <CardTitle>Arbeiders</CardTitle>
-          <span className="text-xs text-muted">alle bedragen zonder btw, over alle werven</span>
+          <CardTitle>{uiT("Arbeiders")}</CardTitle>
+          <span className="text-xs text-muted">{uiT("alle bedragen zonder btw, over alle werven")}</span>
         </CardHeader>
         {rows.length === 0 ? (
           <CardContent>
-            <EmptyState title="Nog geen arbeiders" description="Voeg hieronder de eerste toe." />
+            <EmptyState title={uiT("Nog geen arbeiders")} description={uiT("Voeg hieronder de eerste toe.")} />
           </CardContent>
         ) : (
           <Table>
             <THead>
               <Tr>
-                <Th>Naam</Th>
-                <Th>Functie</Th>
-                <Th className="text-right">Uurtarief</Th>
-                <Th className="text-right">Tweede tarief</Th>
-                <Th className="text-right">Uren</Th>
-                <Th className="text-right">Arbeidskost</Th>
-                <Th className="text-right">Werven</Th>
-                <Th className="text-right">Laatst gewerkt</Th>
+                <Th>{uiT("Naam")}</Th>
+                <Th>{uiT("Functie")}</Th>
+                <Th className="text-right">{uiT("Uurtarief")}</Th>
+                <Th className="text-right">{uiT("Tweede tarief")}</Th>
+                <Th className="text-right">{uiT("Uren")}</Th>
+                <Th className="text-right">{uiT("Arbeidskost")}</Th>
+                <Th className="text-right">{uiT("Werven")}</Th>
+                <Th className="text-right">{uiT("Laatst gewerkt")}</Th>
               </Tr>
             </THead>
             <TBody>
@@ -101,24 +106,24 @@ export default async function PloegPage() {
                     <Link href={`/ploeg/${w.id}`} className="font-medium text-accent hover:underline">
                       {w.name}
                     </Link>
-                    {!w.active && <Badge tone="neutral" className="ml-2">inactief</Badge>}
+                    {!w.active && <Badge tone="neutral" className="ml-2">{uiT("inactief")}</Badge>}
                     {w.dubbele_naam && (
-                      <Badge tone="warning" className="ml-2">dubbele kaart</Badge>
+                      <Badge tone="warning" className="ml-2">{uiT("dubbele kaart")}</Badge>
                     )}
                   </Td>
                   <Td className="text-muted">{w.role ?? "—"}</Td>
                   <Td className="text-right tabular-nums">
-                    {Number(w.hourly_cost_eur ?? 0) > 0 ? `${formatEUR(w.hourly_cost_eur)}/u` : "—"}
+                    {Number(w.hourly_cost_eur ?? 0) > 0 ? uiT("{v0}/u", { v0: formatEUR(w.hourly_cost_eur) }) : "—"}
                   </Td>
                   <Td className="text-right tabular-nums text-muted">
                     {Number(w.hourly_cost_cash_eur ?? 0) > 0
-                      ? `${formatEUR(w.hourly_cost_cash_eur)}/u`
+                      ? uiT("{v0}/u", { v0: formatEUR(w.hourly_cost_cash_eur) })
                       : "—"}
                   </Td>
-                  <Td className="text-right tabular-nums">{Number(w.uren ?? 0).toLocaleString("nl-NL")}</Td>
+                  <Td className="text-right tabular-nums">{Number(w.uren ?? 0).toLocaleString(uiDateLocale)}</Td>
                   <Td className="text-right tabular-nums font-medium">{formatEUR(Number(w.kost ?? 0))}</Td>
                   <Td className="text-right tabular-nums">{w.werven}</Td>
-                  <Td className="text-right text-muted">{w.laatst ? formatDate(w.laatst) : "—"}</Td>
+                  <Td className="text-right text-muted">{w.laatst ? formatDate(w.laatst, uiDateLocale) : "—"}</Td>
                 </Tr>
               ))}
             </TBody>
@@ -128,33 +133,32 @@ export default async function PloegPage() {
 
       <Card>
         <CardHeader>
-          <CardTitle>Arbeider toevoegen</CardTitle>
+          <CardTitle>{uiT("Arbeider toevoegen")}</CardTitle>
           <span className="text-xs text-muted">
-een tweede tarief is optioneel — je kiest bij het boeken van uren welke geldt
-          </span>
+{uiT("een tweede tarief is optioneel — je kiest bij het boeken van uren welke geldt")} </span>
         </CardHeader>
         <CardContent>
           <form action={createWorker} className="grid gap-3 sm:grid-cols-2 lg:grid-cols-6 lg:items-end">
-            <Field label="Naam" htmlFor="w-name">
-              <Input id="w-name" name="name" required placeholder="Voornaam Achternaam" />
+            <Field label={uiT("Naam")} htmlFor="w-name">
+              <Input id="w-name" name="name" required placeholder={uiT("Voornaam Achternaam")} />
             </Field>
-            <Field label="Functie" htmlFor="w-role">
-              <Input id="w-role" name="role" placeholder="bijv. tegelzetter" />
+            <Field label={uiT("Functie")} htmlFor="w-role">
+              <Input id="w-role" name="role" placeholder={uiT("bijv. tegelzetter")} />
             </Field>
-            <Field label="Uurtarief (€/u)" htmlFor="w-rate" hint="ex. btw">
+            <Field label={uiT("Uurtarief (€/u)")} htmlFor="w-rate" hint={uiT("ex. btw")}>
               <Input id="w-rate" name="hourlyCostEur" inputMode="decimal" placeholder="25,00" />
             </Field>
-            <Field label="Tweede tarief (€/u)" htmlFor="w-rate-cash" hint="optioneel — geldt soms">
+            <Field label={uiT("Tweede tarief (€/u)")} htmlFor="w-rate-cash" hint={uiT("optioneel — geldt soms")}>
               <Input id="w-rate-cash" name="hourlyCostCashEur" inputMode="decimal" placeholder="20,00" />
             </Field>
-            <Field label="Taal urenportaal" htmlFor="w-lang">
+            <Field label={uiT("Taal urenportaal")} htmlFor="w-lang">
               <Select id="w-lang" name="portalLang" defaultValue="es">
                 <option value="es">Español</option>
                 <option value="nl">Nederlands</option>
                 <option value="en">English</option>
               </Select>
             </Field>
-            <SubmitButton pendingLabel="Bezig…">Toevoegen</SubmitButton>
+            <SubmitButton pendingLabel={uiT("Bezig…")}>{uiT("Toevoegen")}</SubmitButton>
           </form>
         </CardContent>
       </Card>

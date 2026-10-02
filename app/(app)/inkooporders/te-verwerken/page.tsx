@@ -1,3 +1,5 @@
+import { datumTaal } from "@/lib/i18n/server";
+import { tekst as uiTranslation } from '@/lib/i18n/server';
 /**
  * De goedkeuringspoort: binnengekomen inkoopfacturen die op beoordeling wachten.
  *
@@ -23,16 +25,21 @@ import { formatEUR } from "@/lib/utils";
 import { ReviewCard, type ReviewCardData, type ReviewCheck, type ReviewLine } from "./review-card";
 import { alleAliassen, zoektermenPerProject } from "@/lib/project-aliases";
 
-export const metadata = { title: "Facturen keuren — inkoop" };
+export async function generateMetadata() {
+  const uiT = await uiTranslation();
+  return { title: uiT("Facturen keuren — inkoop") };
+}
 export const dynamic = "force-dynamic";
 
-const fmtDate = (d: Date | string | null) =>
-  d ? new Date(d).toLocaleDateString("nl-NL", { day: "numeric", month: "short", year: "numeric" }) : "—";
+const fmtDate = (d: Date | string | null, uiDateLocale = "nl-NL") =>
+  d ? new Date(d).toLocaleDateString(uiDateLocale, { day: "numeric", month: "short", year: "numeric" }) : "—";
 
 const dagenSinds = (d: Date | string | null) =>
   d ? Math.floor((Date.now() - new Date(d).getTime()) / 86_400_000) : 0;
 
 export default async function FacturenKeurenPage() {
+  const uiDateLocale = await datumTaal();
+  const uiT = await uiTranslation();
   const [rows, projectRijen, aliassen] = await Promise.all([
     db
       .select({
@@ -190,32 +197,31 @@ export default async function FacturenKeurenPage() {
   return (
     <>
       <PageHeader
-        title="Facturen keuren"
+        title={uiT("Facturen keuren")}
         subtitle={
           rows.length === 0
-            ? "Geen inkoopfacturen die op beoordeling wachten."
-            : `${rows.length} factu${rows.length === 1 ? "ur" : "ren"} · ${formatEUR(totaal)} · pas na goedkeuring komen ze in de inkoop`
+            ? uiT("Geen inkoopfacturen die op beoordeling wachten.")
+            : uiT(rows.length === 1 ? "{n} factuur · {total} · pas na goedkeuring komt deze in de inkoop" : "{n} facturen · {total} · pas na goedkeuring komen ze in de inkoop", { n: rows.length, total: formatEUR(totaal) })
         }
         actions={
           <LinkButton href="/inkooporders" variant="ghost">
-            ← Inkooporders
-          </LinkButton>
+            {uiT("← Inkooporders")} </LinkButton>
         }
       />
 
       {rows.length > 0 && (
         <div className="mb-5 flex flex-wrap gap-2 text-xs">
-          {afkeuren > 0 && <Badge tone="danger">{afkeuren} incompleet — terugsturen</Badge>}
-          {onleesbaar > 0 && <Badge tone="neutral">{onleesbaar} niet gelezen — handmatig bekijken</Badge>}
-          {oudste >= 7 && <Badge tone="warning">oudste wacht {oudste} dagen</Badge>}
+          {afkeuren > 0 && <Badge tone="danger">{afkeuren} {uiT("incompleet — terugsturen")}</Badge>}
+          {onleesbaar > 0 && <Badge tone="neutral">{onleesbaar} {uiT("niet gelezen — handmatig bekijken")}</Badge>}
+          {oudste >= 7 && <Badge tone="warning">{uiT("oudste wacht")} {oudste} {uiT("dagen")}</Badge>}
         </div>
       )}
 
       {rows.length === 0 ? (
         <EmptyState
-          title="Niets te keuren"
-          description="Zodra er een factuur op purchase@habitat-one.com binnenkomt, wordt die uitgelezen en verschijnt hij hier. Tot je 'm goedkeurt telt hij niet mee in de projectkosten en gaat hij niet naar Holded."
-          action={<LinkButton href="/inkooporders">Naar inkooporders</LinkButton>}
+          title={uiT("Niets te keuren")}
+          description={uiT("Zodra er een factuur op purchase@habitat-one.com binnenkomt, wordt die uitgelezen en verschijnt hij hier. Tot je 'm goedkeurt telt hij niet mee in de projectkosten en gaat hij niet naar Holded.")}
+          action={<LinkButton href="/inkooporders">{uiT("Naar inkooporders")}</LinkButton>}
         />
       ) : (
         <div className="grid gap-5">
@@ -226,10 +232,10 @@ export default async function FacturenKeurenPage() {
             .map(([mailId, groep]) => (
             <Card key={mailId} id={`mail-${mailId}`} className="scroll-mt-20">
               <CardHeader>
-                <CardTitle>{groep.subject || "(geen onderwerp)"}</CardTitle>
+                <CardTitle>{groep.subject || uiT("(geen onderwerp)")}</CardTitle>
                 <span className="text-xs text-muted">
-                  van {groep.from} · {fmtDate(groep.receivedAt)}
-                  {groep.items.length > 1 ? ` · ${groep.items.length} facturen in deze mail` : ""}
+                  {uiT("van")} {groep.from} · {fmtDate(groep.receivedAt, uiDateLocale)}
+                  {groep.items.length > 1 ? uiT(" · {v0} facturen in deze mail", { v0: groep.items.length }) : ""}
                 </span>
               </CardHeader>
               <CardContent className="space-y-4">

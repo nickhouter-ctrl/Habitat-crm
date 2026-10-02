@@ -1,4 +1,5 @@
 "use client";
+import { useT as useUiTranslation } from '@/components/taal-provider';
 
 import { useState, useTransition } from "react";
 import { Plus, Search } from "lucide-react";
@@ -25,6 +26,7 @@ type Var = {
 };
 
 export function OrderSearch({ suppliers }: { suppliers: string[] }) {
+  const uiT = useUiTranslation();
   const [term, setTerm] = useState("");
   const [res, setRes] = useState<{ products: Prod[]; variants: Var[] }>({
     products: [],
@@ -51,12 +53,12 @@ export function OrderSearch({ suppliers }: { suppliers: string[] }) {
           autoFocus
           value={term}
           onChange={(e) => run(e.target.value)}
-          placeholder="Zoek product of catalogus-SKU om toe te voegen…"
+          placeholder={uiT("Zoek product of catalogus-SKU om toe te voegen…")}
           className="pl-9"
         />
       </div>
 
-      {pending && <p className="text-xs text-muted">Zoeken…</p>}
+      {pending && <p className="text-xs text-muted">{uiT("Zoeken…")}</p>}
 
       {!empty && (
         <div className="divide-y divide-border rounded-lg border border-border">
@@ -113,6 +115,7 @@ function AddRow({
   sizes?: Array<{ sku: string; label: string; stockQty?: number | null }>;
   suppliers: string[];
 }) {
+  const uiT = useUiTranslation();
   return (
     <form action={addToOrder} className="flex flex-wrap items-center gap-2 px-3 py-2">
       <input type="hidden" name="kind" value={kind} />
@@ -134,7 +137,7 @@ function AddRow({
         name="supplierName"
         defaultValue={defaultSupplier}
         list="supplier-list"
-        placeholder="Leverancier"
+        placeholder={uiT("Leverancier")}
         className="h-8 w-36 rounded-md border border-border bg-background px-2 text-sm"
       />
       <datalist id="supplier-list">
@@ -145,14 +148,14 @@ function AddRow({
       {sizes.length > 0 && (
         <select
           name="size"
-          title="Maat"
+          title={uiT("Maat")}
           className="h-8 w-40 rounded-md border border-border bg-background px-2 text-sm"
         >
-          <option value="">Standaardmaat</option>
+          <option value="">{uiT("Standaardmaat")}</option>
           {sizes.map((sz) => (
             <option key={sz.sku || sz.label} value={sz.label}>
               {sz.label}
-              {(sz.stockQty ?? 0) > 0 ? ` — ${sz.stockQty} op vrd` : ""}
+              {(sz.stockQty ?? 0) > 0 ? uiT(" — {v0} op vrd", { v0: sz.stockQty ?? 0 }) : ""}
             </option>
           ))}
         </select>
@@ -170,9 +173,9 @@ function AddRow({
         defaultValue="stuk"
         className="h-8 rounded-md border border-border bg-background px-2 text-sm"
       >
-        <option value="stuk">stuk</option>
-        <option value="doos">doos</option>
-        <option value="m2">m²</option>
+        <option value="stuk">{uiT("stuk")}</option>
+        <option value="doos">{uiT("doos")}</option>
+        <option value="m2">{uiT("m²")}</option>
       </select>
       <button type="submit" className={buttonClass({ size: "sm" })}>
         <Plus className="h-4 w-4" />

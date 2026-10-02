@@ -1,3 +1,5 @@
+import { datumTaal } from "@/lib/i18n/server";
+import { tekst as uiTranslation } from '@/lib/i18n/server';
 import { eq } from "drizzle-orm";
 import { ArrowLeft, Calculator, Check, AlertCircle, FileText } from "lucide-react";
 import Link from "next/link";
@@ -12,10 +14,15 @@ import { cn, formatEUR } from "@/lib/utils";
 
 import { applyLandedCost, saveAttachmentAmount } from "./actions";
 
-export const metadata = { title: "Kostenanalyse" };
+export async function generateMetadata() {
+  const uiT = await uiTranslation();
+  return { title: uiT("Kostenanalyse") };
+}
 export const dynamic = "force-dynamic";
 
 export default async function KostenanalysePage({ params }: { params: Promise<{ id: string }> }) {
+  const uiDateLocale = await datumTaal();
+  const uiT = await uiTranslation();
   const { id } = await params;
   const po = await db.query.purchaseOrders.findFirst({ where: eq(purchaseOrders.id, id) });
   if (!po) notFound();
@@ -28,12 +35,11 @@ export default async function KostenanalysePage({ params }: { params: Promise<{ 
   return (
     <>
       <PageHeader
-        title={`Kostenanalyse — ${po.supplier}`}
-        subtitle={po.reference ?? "Geen referentie"}
+        title={uiT("Kostenanalyse — {v0}", { v0: po.supplier })}
+        subtitle={po.reference ?? uiT("Geen referentie")}
         actions={
           <LinkButton href={`/inkooporders/${id}`} variant="ghost">
-            <ArrowLeft className="h-4 w-4" /> Terug naar PO
-          </LinkButton>
+            <ArrowLeft className="h-4 w-4" /> {uiT("Terug naar PO")} </LinkButton>
         }
       />
 
@@ -41,23 +47,21 @@ export default async function KostenanalysePage({ params }: { params: Promise<{ 
         {/* LEFT: bijlagen + bedragen */}
         <Card className="p-5">
           <h2 className="mb-3 text-lg font-medium">
-            Gekoppelde facturen ({attachments.length})
+            {uiT("Gekoppelde facturen (")}{attachments.length})
           </h2>
           {attachments.length === 0 ? (
             <p className="text-sm text-muted">
-              Nog geen mail-bijlagen gekoppeld aan deze PO. Ga naar{" "}
+              {uiT("Nog geen mail-bijlagen gekoppeld aan deze PO. Ga naar")}{" "}
               <Link href="/inbox" className="underline">
-                /inbox
-              </Link>{" "}
-              en link binnenkomende facturen aan deze PO.
-            </p>
+                {uiT("/inbox")} </Link>{" "}
+              {uiT("en link binnenkomende facturen aan deze PO.")} </p>
           ) : (
             <Table>
               <THead>
                 <tr>
-                  <Th>Bijlage</Th>
-                  <Th>Categorie</Th>
-                  <Th>Bedrag €</Th>
+                  <Th>{uiT("Bijlage")}</Th>
+                  <Th>{uiT("Categorie")}</Th>
+                  <Th>{uiT("Bedrag €")}</Th>
                 </tr>
               </THead>
               <TBody>
@@ -103,7 +107,7 @@ export default async function KostenanalysePage({ params }: { params: Promise<{ 
                         <button
                           type="submit"
                           className="rounded-md border border-border px-2 py-1 text-xs hover:bg-background-soft"
-                          title="Opslaan"
+                          title={uiT("Opslaan")}
                         >
                           ✓
                         </button>
@@ -117,8 +121,7 @@ export default async function KostenanalysePage({ params }: { params: Promise<{ 
           {result.missingAmounts > 0 && (
             <p className="mt-3 flex items-center gap-2 rounded-md bg-warning/10 px-3 py-2 text-xs text-warning">
               <AlertCircle className="h-3.5 w-3.5" />
-              {result.missingAmounts} bijlage(s) zonder bedrag — vul in voor accurate berekening.
-            </p>
+              {result.missingAmounts} {uiT("bijlage(s) zonder bedrag — vul in voor accurate berekening.")} </p>
           )}
         </Card>
 
@@ -127,12 +130,11 @@ export default async function KostenanalysePage({ params }: { params: Promise<{ 
           <Card className="space-y-3 p-5">
             <h2 className="flex items-center gap-2 text-lg font-medium">
               <Calculator className="h-5 w-5" />
-              Landed-cost berekening
-            </h2>
+              {uiT("Landed-cost berekening")} </h2>
 
             <div className="space-y-1.5 border-y border-border py-3 text-sm">
               <div className="flex justify-between">
-                <span className="text-muted">Factory-totaal (PO lijnen)</span>
+                <span className="text-muted">{uiT("Factory-totaal (PO lijnen)")}</span>
                 <span className="font-medium tabular-nums">
                   {formatEUR(result.factoryTotalEur)}
                 </span>
@@ -148,11 +150,10 @@ export default async function KostenanalysePage({ params }: { params: Promise<{ 
               ))}
               {result.breakdown.length === 0 && (
                 <div className="text-xs italic text-muted">
-                  (geen extra kosten ingevuld nog)
-                </div>
+                  {uiT("(geen extra kosten ingevuld nog)")} </div>
               )}
               <div className="mt-2 flex justify-between border-t border-border pt-2 text-sm">
-                <span className="font-medium">Landed total</span>
+                <span className="font-medium">{uiT("Landed total")}</span>
                 <span className="font-semibold tabular-nums">
                   {formatEUR(result.landedTotalEur)}
                 </span>
@@ -161,14 +162,12 @@ export default async function KostenanalysePage({ params }: { params: Promise<{ 
 
             <div className="rounded-md bg-accent/10 px-3 py-2">
               <p className="text-xs font-medium uppercase tracking-wide text-muted">
-                Overhead ratio
-              </p>
+                {uiT("Overhead ratio")} </p>
               <p className="text-2xl font-semibold text-accent tabular-nums">
                 {(result.ratio * 100).toFixed(2)}%
               </p>
               <p className="text-xs text-muted">
-                Bovenop factory-prijs. Elk product wordt opgehoogd met dit %.
-              </p>
+                {uiT("Bovenop factory-prijs. Elk product wordt opgehoogd met dit %.")} </p>
             </div>
 
             {result.factoryTotalEur > 0 && result.overheadTotalEur > 0 && (
@@ -179,19 +178,17 @@ export default async function KostenanalysePage({ params }: { params: Promise<{ 
                 }}
               >
                 <button className={cn(buttonClass({}), "w-full")}>
-                  <Check className="h-4 w-4" /> Pas landed cost toe op alle producten
-                </button>
+                  <Check className="h-4 w-4" /> {uiT("Pas landed cost toe op alle producten")} </button>
                 <p className="mt-2 text-xs text-muted">
-                  Werkt purchaseCostEur bij voor elke product in PO ({items.filter((i) => i.productId).length} producten).
-                </p>
+                  {uiT("Werkt purchaseCostEur bij voor elke product in PO (")}{items.filter((i) => i.productId).length} {uiT("producten).")} </p>
               </form>
             )}
 
             {po.landedCostSummary && (
               <p className="text-xs text-success">
-                ✓ Laatst toegepast:{" "}
-                {new Date(po.landedCostSummary.appliedAt).toLocaleString("nl-NL")} —{" "}
-                ratio {(po.landedCostSummary.ratio * 100).toFixed(2)}%
+                {uiT("✓ Laatst toegepast:")}{" "}
+                {new Date(po.landedCostSummary.appliedAt).toLocaleString(uiDateLocale)} —{" "}
+                {uiT("ratio")} {(po.landedCostSummary.ratio * 100).toFixed(2)}%
               </p>
             )}
           </Card>
@@ -200,14 +197,13 @@ export default async function KostenanalysePage({ params }: { params: Promise<{ 
           {items.length > 0 && result.ratio > 0 && (
             <Card className="p-4">
               <h3 className="mb-2 text-xs font-medium uppercase tracking-wide text-muted">
-                Per-product impact
-              </h3>
+                {uiT("Per-product impact")} </h3>
               <Table>
                 <THead>
                   <tr>
-                    <Th>Product</Th>
-                    <Th className="text-right">Factory</Th>
-                    <Th className="text-right">Nieuw</Th>
+                    <Th>{uiT("Product")}</Th>
+                    <Th className="text-right">{uiT("Factory")}</Th>
+                    <Th className="text-right">{uiT("Nieuw")}</Th>
                   </tr>
                 </THead>
                 <TBody>
@@ -229,8 +225,7 @@ export default async function KostenanalysePage({ params }: { params: Promise<{ 
                   {items.length > 10 && (
                     <Tr>
                       <Td colSpan={3} className="text-center text-xs italic text-muted">
-                        + {items.length - 10} meer producten
-                      </Td>
+                        + {items.length - 10} {uiT("meer producten")} </Td>
                     </Tr>
                   )}
                 </TBody>

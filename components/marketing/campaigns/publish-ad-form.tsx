@@ -1,4 +1,5 @@
 "use client";
+import { useT as useUiTranslation } from '@/components/taal-provider';
 
 /**
  * Publiceer een goedgekeurde creative als GEPAUZEERDE Meta-advertentie
@@ -54,6 +55,7 @@ export function PublishAdForm({
   approvedSpecs: ApprovedSpec[];
   carouselSets?: CarouselSetOption[];
 }) {
+  const uiT = useUiTranslation();
   const router = useRouter();
   const [mode, setMode] = useState<"single" | "carousel">("single");
   const [specId, setSpecId] = useState(approvedSpecs[0]?.id ?? "");
@@ -72,10 +74,9 @@ export function PublishAdForm({
   if (approvedSpecs.length === 0) {
     return (
       <p className="text-sm text-muted">
-        Er zijn nog geen goedgekeurde creatives. Keur eerst een creative goed onder{" "}
+        {uiT("Er zijn nog geen goedgekeurde creatives. Keur eerst een creative goed onder")}{" "}
         <Link href="/marketing/creatives" className="text-accent underline">
-          Creatives
-        </Link>
+          {uiT("Creatives")} </Link>
         .
       </p>
     );
@@ -168,7 +169,7 @@ export function PublishAdForm({
 
   return (
     <form onSubmit={publish} className="space-y-3">
-      <div className="flex gap-1" role="tablist" aria-label="Advertentievorm">
+      <div className="flex gap-1" role="tablist" aria-label={uiT("Advertentievorm")}>
         {(
           [
             ["single", "Eén beeld"],
@@ -194,7 +195,7 @@ export function PublishAdForm({
       </div>
 
       {mode === "single" ? (
-        <Field label="Goedgekeurde creative" htmlFor={`pub-spec-${adSetId}`}>
+        <Field label={uiT("Goedgekeurde creative")} htmlFor={`pub-spec-${adSetId}`}>
           <select
             id={`pub-spec-${adSetId}`}
             value={specId}
@@ -211,7 +212,7 @@ export function PublishAdForm({
             // eslint-disable-next-line @next/next/no-img-element
             <img
               src={`/api/creatives/render?id=${specId}`}
-              alt="Voorbeeld van de gekozen creative"
+              alt={uiT("Voorbeeld van de gekozen creative")}
               className="mt-2 max-h-48 rounded-md border border-border bg-background object-contain"
             />
           )}
@@ -219,13 +220,11 @@ export function PublishAdForm({
       ) : (
         <fieldset>
           <legend className="mb-1 text-sm font-medium">
-            Kaartjes ({carouselIds.length} gekozen — klikvolgorde = kaartvolgorde)
-          </legend>
+            {uiT("Kaartjes (")}{carouselIds.length} {uiT("gekozen — klikvolgorde = kaartvolgorde)")} </legend>
           {carouselSets.length > 0 && (
             <div className="mb-2 space-y-1 rounded-md border border-accent/40 bg-accent/5 p-2">
               <p className="text-xs font-medium">
-                Kant-en-klare carrouselsets (AI-bouwer) — één klik vult kaartjes, volgorde en tekst:
-              </p>
+                {uiT("Kant-en-klare carrouselsets (AI-bouwer) — één klik vult kaartjes, volgorde en tekst:")} </p>
               <div className="flex flex-wrap gap-1.5">
                 {carouselSets.map((set) => (
                   <button
@@ -250,10 +249,10 @@ export function PublishAdForm({
             <select
               value={cardFormat}
               onChange={(e) => setCardFormat(e.target.value)}
-              aria-label="Filter op formaat"
+              aria-label={uiT("Filter op formaat")}
               className="h-8 rounded-md border border-border bg-background px-2 text-sm"
             >
-              <option value="">Alle formaten</option>
+              <option value="">{uiT("Alle formaten")}</option>
               {formats.map((f) => (
                 <option key={f} value={f}>
                   {FORMAT_LABEL[f] ?? f}
@@ -263,10 +262,10 @@ export function PublishAdForm({
             <select
               value={cardLocale}
               onChange={(e) => setCardLocale(e.target.value)}
-              aria-label="Filter op taal"
+              aria-label={uiT("Filter op taal")}
               className="h-8 rounded-md border border-border bg-background px-2 text-sm"
             >
-              <option value="">Alle talen</option>
+              <option value="">{uiT("Alle talen")}</option>
               {locales.map((l) => (
                 <option key={l} value={l}>
                   {l.toUpperCase()}
@@ -276,8 +275,7 @@ export function PublishAdForm({
           </div>
           {visibleCards.length === 0 && (
             <p className="rounded-md border border-border p-3 text-sm text-muted">
-              Geen goedgekeurde creatives in dit formaat/deze taal.
-            </p>
+              {uiT("Geen goedgekeurde creatives in dit formaat/deze taal.")} </p>
           )}
           <ul className="grid max-h-96 list-none grid-cols-3 gap-2 overflow-y-auto rounded-md border border-border p-2 sm:grid-cols-4">
             {visibleCards.map((s) => {
@@ -289,7 +287,7 @@ export function PublishAdForm({
                     type="button"
                     onClick={() => toggleCard(s.id)}
                     aria-pressed={picked}
-                    aria-label={`${picked ? "Deselecteer" : "Selecteer"} ${s.label}`}
+                    aria-label={`${picked ? uiT("Deselecteer") : uiT("Selecteer")} ${s.label}`}
                     className={cn(
                       "relative block w-full overflow-hidden rounded-md border text-left transition-colors",
                       picked ? "border-accent ring-2 ring-accent/40" : "border-border hover:border-accent/50",
@@ -316,9 +314,7 @@ export function PublishAdForm({
             })}
           </ul>
           <p className="mt-1 text-xs text-muted">
-            Elk kaartje krijgt zijn eigen kop en ondertitel uit de creative; kies dus varianten met
-            hetzelfde formaat en dezelfde taal.
-          </p>
+            {uiT("Elk kaartje krijgt zijn eigen kop en ondertitel uit de creative; kies dus varianten met hetzelfde formaat en dezelfde taal.")} </p>
           {(() => {
             const picked = approvedSpecs.filter((s) => carouselIds.includes(s.id));
             const mixedFormat = new Set(picked.map((s) => s.format)).size > 1;
@@ -326,28 +322,26 @@ export function PublishAdForm({
             if (!mixedFormat && !mixedLocale) return null;
             return (
               <p className="mt-1 text-xs font-medium text-amber-700" role="alert">
-                ⚠ Je selectie mixt {mixedFormat ? "formaten" : ""}
-                {mixedFormat && mixedLocale ? " én " : ""}
-                {mixedLocale ? "talen" : ""} — de carrousel oogt dan rommelig. Kies bij voorkeur
-                één formaat en één taal.
-              </p>
+                {uiT("⚠ Je selectie mixt")} {mixedFormat ? uiT("formaten") : ""}
+                {mixedFormat && mixedLocale ? uiT(" én ") : ""}
+                {mixedLocale ? uiT("talen") : ""} {uiT("— de carrousel oogt dan rommelig. Kies bij voorkeur één formaat en één taal.")} </p>
             );
           })()}
         </fieldset>
       )}
 
       <div className="grid gap-3 sm:grid-cols-2">
-        <Field label="Advertentienaam" htmlFor={`pub-name-${adSetId}`}>
+        <Field label={uiT("Advertentienaam")} htmlFor={`pub-name-${adSetId}`}>
           <Input
             id={`pub-name-${adSetId}`}
             required
             maxLength={200}
             value={name}
             onChange={(e) => setName(e.target.value)}
-            placeholder="bv. FlexStone ES vierkant prijs-hoek"
+            placeholder={uiT("bv. FlexStone ES vierkant prijs-hoek")}
           />
         </Field>
-        <Field label="Landingspagina" htmlFor={`pub-link-${adSetId}`}>
+        <Field label={uiT("Landingspagina")} htmlFor={`pub-link-${adSetId}`}>
           <Input
             id={`pub-link-${adSetId}`}
             required
@@ -357,7 +351,7 @@ export function PublishAdForm({
           />
         </Field>
       </div>
-      <Field label="Advertentietekst (message)" htmlFor={`pub-msg-${adSetId}`}>
+      <Field label={uiT("Advertentietekst (message)")} htmlFor={`pub-msg-${adSetId}`}>
         <textarea
           id={`pub-msg-${adSetId}`}
           required
@@ -373,7 +367,7 @@ export function PublishAdForm({
           disabled={!!busy || (mode === "carousel" ? carouselIds.length < 2 : !specId)}
           className={buttonClass({ variant: "secondary", size: "sm", className: "mt-1" })}
         >
-          ✨ {busy === AI_BUSY ? "AI schrijft…" : "Schrijf met AI (kijkt naar je kaartjes)"}
+          ✨ {busy === AI_BUSY ? uiT("AI schrijft…") : uiT("Schrijf met AI (kijkt naar je kaartjes)")}
         </button>
       </Field>
 
@@ -392,7 +386,7 @@ export function PublishAdForm({
       </div>
 
       <button type="submit" disabled={!!busy} className={buttonClass()}>
-        {busy ?? (mode === "carousel" ? "Publiceer carrousel gepauzeerd naar Meta" : "Publiceer gepauzeerd naar Meta")}
+        {busy ?? (mode === "carousel" ? uiT("Publiceer carrousel gepauzeerd naar Meta") : uiT("Publiceer gepauzeerd naar Meta"))}
       </button>
     </form>
   );

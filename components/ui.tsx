@@ -2,6 +2,7 @@
  * Small set of UI primitives for Habitat CRM. Plain Tailwind, no runtime deps.
  * These are server-renderable; interactive bits live in their own client files.
  */
+import { StatTileLink } from "@/components/stat-tile-link";
 import Link from "next/link";
 import type { ComponentProps, ReactNode } from "react";
 
@@ -317,9 +318,7 @@ export function StatTile({
         <div className="min-w-0">
           <p className="text-xs font-medium uppercase tracking-wide text-muted">
             {href ? (
-              <a href={href} className="after:absolute after:inset-0" aria-label={`Bekijk onderbouwing: ${label}`}>
-                {label}
-              </a>
+              <StatTileLink href={href} label={label} />
             ) : (
               label
             )}

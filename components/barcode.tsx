@@ -1,5 +1,6 @@
 "use client";
 
+import { useT } from "@/components/taal-provider";
 import JsBarcode from "jsbarcode";
 import { useEffect, useRef } from "react";
 
@@ -19,6 +20,7 @@ export function Barcode({
   fontSize?: number;
   className?: string;
 }) {
+  const t = useT();
   const ref = useRef<SVGSVGElement>(null);
   useEffect(() => {
     if (!ref.current || !value) return;
@@ -37,5 +39,5 @@ export function Barcode({
     }
   }, [value, height, width, fontSize]);
   if (!value) return null;
-  return <svg ref={ref} className={className} aria-label={`Barcode ${value}`} />;
+  return <svg ref={ref} className={className} aria-label={t("Barcode {waarde}", { waarde: value })} />;
 }

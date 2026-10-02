@@ -1,3 +1,5 @@
+import { datumTaal } from "@/lib/i18n/server";
+import { tekst as uiTranslation } from '@/lib/i18n/server';
 /**
  * "Voorschot opvragen" — de brief die de boekhouder voorschrijft, per project.
  *
@@ -69,6 +71,8 @@ export async function AdvanceRequestCard({
   doorTeBelasten: number;
   params: { vbedrag?: string; vtermijn?: string; vdatum?: string; vmail?: string; vstand?: string; vrestant?: string };
 }) {
+  const uiDateLocale = await datumTaal();
+  const uiT = await uiTranslation();
   // Tekort afgerond op duizendtallen: een voorschot vraag je niet op de cent.
   const tekortAfgerond = cover.suggestedRequestEur;
   const amount = parseAmount(params.vbedrag);
@@ -164,7 +168,7 @@ export async function AdvanceRequestCard({
           clientName,
           senderName: ondertekenaar?.name ?? null,
           senderPhone: ondertekenaar?.phone ?? null,
-          dateLabel: new Date().toLocaleDateString("nl-NL", { day: "2-digit", month: "2-digit", year: "numeric" }),
+          dateLabel: new Date().toLocaleDateString(uiDateLocale, { day: "2-digit", month: "2-digit", year: "numeric" }),
         })
       : null;
 
@@ -185,7 +189,7 @@ export async function AdvanceRequestCard({
           clientName,
           senderName: ondertekenaar?.name ?? null,
           senderPhone: ondertekenaar?.phone ?? null,
-          dateLabel: new Date().toLocaleDateString("nl-NL", { day: "2-digit", month: "2-digit", year: "numeric" }),
+          dateLabel: new Date().toLocaleDateString(uiDateLocale, { day: "2-digit", month: "2-digit", year: "numeric" }),
         })
       : null;
 
@@ -199,18 +203,16 @@ export async function AdvanceRequestCard({
           clientName,
           senderName: ondertekenaar?.name ?? null,
           senderPhone: ondertekenaar?.phone ?? null,
-          dateLabel: new Date().toLocaleDateString("nl-NL", { day: "2-digit", month: "2-digit", year: "numeric" }),
+          dateLabel: new Date().toLocaleDateString(uiDateLocale, { day: "2-digit", month: "2-digit", year: "numeric" }),
         })
       : null;
 
   return (
     <Card id="voorschot-opvragen" className="mb-5 scroll-mt-24">
       <CardHeader>
-        <CardTitle>Voorschot opvragen</CardTitle>
+        <CardTitle>{uiT("Voorschot opvragen")}</CardTitle>
         <span className="text-xs text-muted">
-          brief in Nederlands én Spaans, zoals de boekhouder hem wil · na ontvangst het bedrag boeken bij Ontvangen
-          betalingen
-        </span>
+          {uiT("brief in Nederlands én Spaans, zoals de boekhouder hem wil · na ontvangst het bedrag boeken bij Ontvangen betalingen")} </span>
       </CardHeader>
       <CardContent className="space-y-4">
         {/* De aanleiding om een voorschot te vragen: schieten we voor? Niet de
@@ -222,62 +224,54 @@ export async function AdvanceRequestCard({
           }`}
         >
           <div className="flex flex-wrap items-baseline justify-between gap-x-6 gap-y-1 text-sm">
-            <span className="font-medium">Is het voorschot nog voldoende?</span>
+            <span className="font-medium">{uiT("Is het voorschot nog voldoende?")}</span>
             <span className="text-muted">
-              geboekte kosten (uren {formatEUR(laborCost)} + inkoop derden {formatEUR(purchaseCost)}){" "}
+              {uiT("geboekte kosten (uren")} {formatEUR(laborCost)} {uiT("+ inkoop derden")} {formatEUR(purchaseCost)}){" "}
               <strong className="tabular-nums text-foreground">{formatEUR(cover.prefinanced)}</strong>
             </span>
             <span className="text-muted">
-              dekking ontvangen <strong className="tabular-nums text-foreground">{formatEUR(cover.received)}</strong>
+              {uiT("dekking ontvangen")} <strong className="tabular-nums text-foreground">{formatEUR(cover.received)}</strong>
             </span>
             <span
               className={`font-semibold tabular-nums ${
                 cover.tone === "success" ? "text-success" : cover.tone === "warning" ? "text-warning" : "text-danger"
               }`}
             >
-              {cover.saldo >= 0 ? `${formatEUR(cover.saldo)} beschikbaar na doorbelasting` : `${formatEUR(-cover.saldo)} tekort na doorbelasting`}
+              {cover.saldo >= 0 ? uiT("{v0} beschikbaar na doorbelasting", { v0: formatEUR(cover.saldo) }) : uiT("{v0} tekort na doorbelasting", { v0: formatEUR(-cover.saldo) })}
             </span>
           </div>
           <p className="mt-1 text-xs text-muted">
-            {cover.status === "gedekt" ? "De ontvangen betalingen dekken de doorbelasting inclusief opslag en productverkoop."
-              : cover.status === "bijna_op" ? "Het voorschot is bijna verbruikt. Bereid een nieuw verzoek voor voordat je verdere kosten maakt."
-              : `Er is onvoldoende ontvangen om de doorbelasting inclusief verdiensten te dekken. Voorgesteld verzoek: ${formatEUR(tekortAfgerond)}.`}
-            {" "}Alle bedragen ex. btw.
-          </p>
+            {cover.status === "gedekt" ? uiT("De ontvangen betalingen dekken de doorbelasting inclusief opslag en productverkoop.")
+              : cover.status === "bijna_op" ? uiT("Het voorschot is bijna verbruikt. Bereid een nieuw verzoek voor voordat je verdere kosten maakt.")
+              : uiT("Er is onvoldoende ontvangen om de doorbelasting inclusief verdiensten te dekken. Voorgesteld verzoek: {v0}.", { v0: formatEUR(tekortAfgerond) })}
+            {" "}{uiT("Alle bedragen ex. btw.")} </p>
           <p className="mt-2 text-xs text-muted">
-            Doorbelasting: {formatEUR(cover.requiredRevenue)}. Arbeid en externe materialen inclusief opslag;
-            eigen producten tegen verkoopprijs. Een verstuurd voorschotverzoek telt pas mee na ontvangst.
-            Geboekte kosten geven geen bewijs dat leveranciers al betaald zijn; betaalstatus blijft in Holded.
-          </p>
+            {uiT("Doorbelasting:")} {formatEUR(cover.requiredRevenue)}{uiT(". Arbeid en externe materialen inclusief opslag; eigen producten tegen verkoopprijs. Een verstuurd voorschotverzoek telt pas mee na ontvangst. Geboekte kosten geven geen bewijs dat leveranciers al betaald zijn; betaalstatus blijft in Holded.")} </p>
           {aanneemsom > 0 && doorTeBelasten > aanneemsom && (
             <p className="mt-2 text-xs text-warning">
-              Let op: wat er doorbelast moet worden ({formatEUR(doorTeBelasten)}) ligt boven de aanneemsom van{" "}
-              {formatEUR(aanneemsom)}. Dat verschil is geen voorschotkwestie maar{" "}
+              {uiT("Let op: wat er doorbelast moet worden (")}{formatEUR(doorTeBelasten)}{uiT(") ligt boven de aanneemsom van")}{" "}
+              {formatEUR(aanneemsom)}{uiT(". Dat verschil is geen voorschotkwestie maar")}{" "}
               <Link href="#meerwerk" className="underline underline-offset-2">
-                meerwerk
-              </Link>{" "}
-              — leg het vast en laat de klant akkoord geven.
-            </p>
+                {uiT("meerwerk")} </Link>{" "}
+              {uiT("— leg het vast en laat de klant akkoord geven.")} </p>
           )}
         </div>
 
         {params.vmail === "ok" && (
-          <p className="rounded-md bg-success/10 p-3 text-sm">Het voorschotverzoek is verstuurd{to ? ` naar ${to}` : ""}.</p>
+          <p className="rounded-md bg-success/10 p-3 text-sm">{uiT("Het voorschotverzoek is verstuurd")}{to ? uiT(" naar {v0}", { v0: to }) : ""}.</p>
         )}
         {params.vmail === "mislukt" && (
           <p className="rounded-md bg-danger/10 p-3 text-sm">
-            Versturen is niet gelukt. Controleer het adres en of de mailinstellingen kloppen.
-          </p>
+            {uiT("Versturen is niet gelukt. Controleer het adres en of de mailinstellingen kloppen.")} </p>
         )}
         {params.vmail === "geenadres" && (
           <p className="rounded-md bg-warning/10 p-3 text-sm">
-            Deze klant heeft geen e-mailadres. Vul het aan bij de klantgegevens, of vul hieronder zelf een adres in.
-          </p>
+            {uiT("Deze klant heeft geen e-mailadres. Vul het aan bij de klantgegevens, of vul hieronder zelf een adres in.")} </p>
         )}
 
         {eerder.length > 0 && (
           <div className="space-y-2">
-            <p className="text-xs font-medium text-muted">Eerder opgevraagd</p>
+            <p className="text-xs font-medium text-muted">{uiT("Eerder opgevraagd")}</p>
             {eerder.map((m) => {
               const gevraagd = m.amountEur != null ? Number(m.amountEur) : null;
               const binnen = ontvangenPerVerzoek.get(m.id) ?? 0;
@@ -288,11 +282,11 @@ export async function AdvanceRequestCard({
                 <div key={m.id} className="rounded-md border bg-background/50 p-3">
                   <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
                     <span className="text-base font-semibold tabular-nums">
-                      {gevraagd != null ? formatEUR(gevraagd) : "bedrag onbekend"}
+                      {gevraagd != null ? formatEUR(gevraagd) : uiT("bedrag onbekend")}
                     </span>
                     <span className="text-sm">{termijnUit(m.subject)}</span>
                     <span className="text-xs text-muted">
-                      {m.createdAt.toLocaleDateString("nl-NL", { day: "numeric", month: "short", year: "numeric" })} ·{" "}
+                      {m.createdAt.toLocaleDateString(uiDateLocale, { day: "numeric", month: "short", year: "numeric" })} ·{" "}
                       {m.toEmail}
                     </span>
                   </div>
@@ -308,13 +302,12 @@ export async function AdvanceRequestCard({
                       </div>
                       <p className="mt-1 text-xs">
                         {binnen === 0 ? (
-                          <span className="text-muted">nog niets ontvangen</span>
+                          <span className="text-muted">{uiT("nog niets ontvangen")}</span>
                         ) : voldaan ? (
-                          <span className="text-success">volledig ontvangen</span>
+                          <span className="text-success">{uiT("volledig ontvangen")}</span>
                         ) : (
                           <span className="text-warning">
-                            {formatEUR(binnen)} ontvangen · nog {formatEUR(open ?? 0)} open
-                          </span>
+                            {formatEUR(binnen)} {uiT("ontvangen · nog")} {formatEUR(open ?? 0)} {uiT("open")} </span>
                         )}
                       </p>
                     </div>
@@ -329,16 +322,14 @@ export async function AdvanceRequestCard({
                           size="sm"
                           scroll={false}
                         >
-                          Ontvangst bevestigen
-                        </LinkButton>
+                          {uiT("Ontvangst bevestigen")} </LinkButton>
                         <LinkButton
                           href={`?vrestant=${m.id}#voorschot-opvragen`}
                           variant="secondary"
                           size="sm"
                           scroll={false}
                         >
-                          Restant opvragen
-                        </LinkButton>
+                          {uiT("Restant opvragen")} </LinkButton>
                       </>
                     )}
                     {voldaan && (
@@ -347,57 +338,49 @@ export async function AdvanceRequestCard({
                         variant="primary"
                         size="sm"
                       >
-                        + Provisión de fondos
-                      </LinkButton>
+                        {uiT("+ Provisión de fondos")} </LinkButton>
                     )}
                     <LinkButton href={`/sent-mail/${m.id}`} variant="ghost" size="sm">
-                      Brief bekijken
-                    </LinkButton>
+                      {uiT("Brief bekijken")} </LinkButton>
                     <LinkButton
                       href={`/sent-mail/${m.id}/print?auto=1`}
                       variant="ghost"
                       size="sm"
                       target="_blank"
                     >
-                      Printen
-                    </LinkButton>
+                      {uiT("Printen")} </LinkButton>
                   </div>
                 </div>
               );
             })}
             <p className="text-xs text-muted">
-              Deel ontvangen? Boek dat bedrag bij Ontvangen betalingen en kies daar dit verzoek — dan loopt de stand
-              hierboven mee. Het formele stuk (provisión de fondos) maak je pas als alles binnen is.
-            </p>
+              {uiT("Deel ontvangen? Boek dat bedrag bij Ontvangen betalingen en kies daar dit verzoek — dan loopt de stand hierboven mee. Het formele stuk (provisión de fondos) maak je pas als alles binnen is.")} </p>
           </div>
         )}
 
         {standConcept && (
           <form action={sendAdvanceRequest.bind(null, projectId)} className="space-y-3 rounded-md border border-success/40 bg-success/5 p-3">
             <p className="text-sm">
-              <strong>Ontvangst bevestigen</strong> — bedankt voor {formatEUR(standBinnen)} en meldt dat er nog{" "}
-              {formatEUR(Math.round((standGevraagd - standBinnen) * 100) / 100)} openstaat. Vraagt er niet om.
-            </p>
+              <strong>{uiT("Ontvangst bevestigen")}</strong> {uiT("— bedankt voor")} {formatEUR(standBinnen)} {uiT("en meldt dat er nog")}{" "}
+              {formatEUR(Math.round((standGevraagd - standBinnen) * 100) / 100)} {uiT("openstaat. Vraagt er niet om.")} </p>
             <input type="hidden" name="amountEur" value={String(Math.round((standGevraagd - standBinnen) * 100) / 100)} />
             <input type="hidden" name="termLabel" value={termijnUit(standVerzoek?.subject ?? null)} />
             <div className="grid gap-3 sm:grid-cols-2">
-              <Field label="Aan" htmlFor="stand-to">
+              <Field label={uiT("Aan")} htmlFor="stand-to">
                 <Input id="stand-to" name="to" type="email" defaultValue={standVerzoek?.toEmail ?? to ?? ""} required />
               </Field>
-              <Field label="Onderwerp" htmlFor="stand-subject">
+              <Field label={uiT("Onderwerp")} htmlFor="stand-subject">
                 <Input id="stand-subject" name="subject" defaultValue={standConcept.subject} required />
               </Field>
             </div>
-            <Field label="Bericht" htmlFor="stand-text" hint="dit gaat er letterlijk uit — Nederlands en Spaans">
+            <Field label={uiT("Bericht")} htmlFor="stand-text" hint={uiT("dit gaat er letterlijk uit — Nederlands en Spaans")}>
               <Textarea id="stand-text" name="text" rows={18} defaultValue={standConcept.text} className="font-mono text-xs" />
             </Field>
             <div className="flex flex-wrap items-center gap-3">
-              <SubmitButton variant="primary" pendingLabel="Versturen…">
-                Versturen naar de klant
-              </SubmitButton>
+              <SubmitButton variant="primary" pendingLabel={uiT("Versturen…")}>
+                {uiT("Versturen naar de klant")} </SubmitButton>
               <Link href="#voorschot-opvragen" className="text-sm text-muted hover:underline">
-                Annuleren
-              </Link>
+                {uiT("Annuleren")} </Link>
             </div>
           </form>
         )}
@@ -405,39 +388,36 @@ export async function AdvanceRequestCard({
         {restantConcept && (
           <form action={sendAdvanceRequest.bind(null, projectId)} className="space-y-3 rounded-md border border-accent/40 bg-accent/5 p-3">
             <p className="text-sm">
-              <strong>Restant opvragen</strong> — vraagt om de resterende{" "}
-              {formatEUR(Math.round((restantGevraagd - restantBinnen) * 100) / 100)}, mét de bankgegevens erbij.
-            </p>
+              <strong>{uiT("Restant opvragen")}</strong> {uiT("— vraagt om de resterende")}{" "}
+              {formatEUR(Math.round((restantGevraagd - restantBinnen) * 100) / 100)}{uiT(", mét de bankgegevens erbij.")} </p>
             <input type="hidden" name="amountEur" value={String(Math.round((restantGevraagd - restantBinnen) * 100) / 100)} />
             <input type="hidden" name="termLabel" value={termijnUit(restantVerzoek?.subject ?? null)} />
             <div className="grid gap-3 sm:grid-cols-2">
-              <Field label="Aan" htmlFor="rest-to">
+              <Field label={uiT("Aan")} htmlFor="rest-to">
                 <Input id="rest-to" name="to" type="email" defaultValue={restantVerzoek?.toEmail ?? to ?? ""} required />
               </Field>
-              <Field label="Onderwerp" htmlFor="rest-subject">
+              <Field label={uiT("Onderwerp")} htmlFor="rest-subject">
                 <Input id="rest-subject" name="subject" defaultValue={restantConcept.subject} required />
               </Field>
             </div>
-            <Field label="Bericht" htmlFor="rest-text" hint="dit gaat er letterlijk uit — Nederlands en Spaans">
+            <Field label={uiT("Bericht")} htmlFor="rest-text" hint={uiT("dit gaat er letterlijk uit — Nederlands en Spaans")}>
               <Textarea id="rest-text" name="text" rows={20} defaultValue={restantConcept.text} className="font-mono text-xs" />
             </Field>
             <div className="flex flex-wrap items-center gap-3">
-              <SubmitButton variant="primary" pendingLabel="Versturen…">
-                Versturen naar de klant
-              </SubmitButton>
+              <SubmitButton variant="primary" pendingLabel={uiT("Versturen…")}>
+                {uiT("Versturen naar de klant")} </SubmitButton>
               <Link href="#voorschot-opvragen" className="text-sm text-muted hover:underline">
-                Annuleren
-              </Link>
+                {uiT("Annuleren")} </Link>
             </div>
           </form>
         )}
 
         {/* Stap 1 — wat vragen we op? GET, zodat er niets stiekem wordt bewaard. */}
         <form method="get" className="grid gap-3 sm:grid-cols-2 lg:grid-cols-[1.2fr_1fr_1fr_auto] lg:items-end">
-          <Field label="Termijn" hint="komt letterlijk in de brief">
-            <Input name="vtermijn" defaultValue={termLabel} placeholder="1e & 2e termijn" required />
+          <Field label={uiT("Termijn")} hint={uiT("komt letterlijk in de brief")}>
+            <Input name="vtermijn" defaultValue={termLabel} placeholder={uiT("1e & 2e termijn")} required />
           </Field>
-          <Field label="Bedrag (€)">
+          <Field label={uiT("Bedrag (€)")}>
             <Input
               name="vbedrag"
               inputMode="decimal"
@@ -446,30 +426,29 @@ export async function AdvanceRequestCard({
               required
             />
           </Field>
-          <Field label="Overeenkomst" hint={contractDate ? "van het project" : "optioneel"}>
+          <Field label={uiT("Overeenkomst")} hint={contractDate ? uiT("van het project") : uiT("optioneel")}>
             <Input name="vdatum" type="date" defaultValue={agreementDate ?? ""} />
           </Field>
           <SubmitButton size="sm" variant="secondary" pendingLabel="…">
-            Concept opstellen
-          </SubmitButton>
+            {uiT("Concept opstellen")} </SubmitButton>
         </form>
 
         {concept && (
           <form action={sendAdvanceRequest.bind(null, projectId)} className="space-y-3 border-t pt-4">
             <div className="flex flex-wrap gap-x-6 gap-y-1 text-sm">
               <span>
-                <span className="text-muted">Bedrag:</span>{" "}
+                <span className="text-muted">{uiT("Bedrag:")}</span>{" "}
                 <strong className="tabular-nums">{formatEUR(amount ?? 0)}</strong>
               </span>
               <span>
-                <span className="text-muted">Werf:</span> {projectLabel}
+                <span className="text-muted">{uiT("Werf:")}</span> {projectLabel}
               </span>
               <span>
-                <span className="text-muted">Aan:</span> {clientName ?? "onbekend"}
+                <span className="text-muted">{uiT("Aan:")}</span> {clientName ?? uiT("onbekend")}
                 {clientTaxId ? ` · ${clientTaxId}` : ""}
               </span>
               <span>
-                <span className="text-muted">Referentie:</span> {concept.reference}
+                <span className="text-muted">{uiT("Referentie:")}</span> {concept.reference}
               </span>
             </div>
 
@@ -479,23 +458,21 @@ export async function AdvanceRequestCard({
             <input type="hidden" name="termLabel" value={termLabel} />
 
             <div className="grid gap-3 sm:grid-cols-2">
-              <Field label="Aan" htmlFor="to">
+              <Field label={uiT("Aan")} htmlFor="to">
                 <Input id="to" name="to" type="email" defaultValue={to ?? ""} required />
               </Field>
-              <Field label="Onderwerp" htmlFor="subject">
+              <Field label={uiT("Onderwerp")} htmlFor="subject">
                 <Input id="subject" name="subject" defaultValue={concept.subject} required />
               </Field>
             </div>
-            <Field label="Brief" htmlFor="text" hint="dit gaat er letterlijk uit — Nederlands en Spaans">
+            <Field label={uiT("Brief")} htmlFor="text" hint={uiT("dit gaat er letterlijk uit — Nederlands en Spaans")}>
               <Textarea id="text" name="text" rows={26} defaultValue={concept.text} className="font-mono text-xs" />
             </Field>
             <div className="flex flex-wrap items-center gap-3">
-              <SubmitButton variant="primary" pendingLabel="Versturen…">
-                Versturen naar de klant
-              </SubmitButton>
+              <SubmitButton variant="primary" pendingLabel={uiT("Versturen…")}>
+                {uiT("Versturen naar de klant")} </SubmitButton>
               <span className="text-xs text-muted">
-                Het formele stuk (provisión de fondos of voorschotfactuur) maak je pas ná ontvangst.
-              </span>
+                {uiT("Het formele stuk (provisión de fondos of voorschotfactuur) maak je pas ná ontvangst.")} </span>
             </div>
           </form>
         )}

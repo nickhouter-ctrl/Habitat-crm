@@ -1,3 +1,4 @@
+import { tekst as uiTranslation } from '@/lib/i18n/server';
 import { asc, eq } from "drizzle-orm";
 import { notFound } from "next/navigation";
 
@@ -8,13 +9,17 @@ import { products, purchaseOrders } from "@/lib/db/schema";
 import { supplierNameOptions } from "@/lib/supplier-options";
 import { updatePurchaseOrder } from "../../actions";
 
-export const metadata = { title: "Inkooporder bewerken" };
+export async function generateMetadata() {
+  const uiT = await uiTranslation();
+  return { title: uiT("Inkooporder bewerken") };
+}
 
 export default async function EditPurchaseOrderPage({
   params,
 }: {
   params: Promise<{ id: string }>;
 }) {
+  const uiT = await uiTranslation();
   const { id } = await params;
   const order = await db.query.purchaseOrders.findFirst({ where: eq(purchaseOrders.id, id) });
   if (!order) notFound();
@@ -31,7 +36,7 @@ export default async function EditPurchaseOrderPage({
 
   return (
     <>
-      <PageHeader title="Inkooporder bewerken" subtitle={order.supplier} />
+      <PageHeader title={uiT("Inkooporder bewerken")} subtitle={order.supplier} />
       <Card className="p-5">
         <PurchaseOrderForm order={order} products={productOptions} suppliers={suppliers} action={action} />
       </Card>

@@ -1,3 +1,5 @@
+import { datumTaal } from "@/lib/i18n/server";
+import { tekst as uiTranslation } from '@/lib/i18n/server';
 import { and, asc, desc, eq, isNotNull, sql } from "drizzle-orm";
 import Link from "next/link";
 
@@ -25,9 +27,14 @@ import { formatEUR } from "@/lib/utils";
 import { SAMPLE_DEPOSIT_EUR, SAMPLE_STATUS_LABEL } from "@/lib/samples";
 import { createSampleInvoice, giveSample, markSampleSold, returnSample } from "./actions";
 
-export const metadata = { title: "Samples" };
+export async function generateMetadata() {
+  const uiT = await uiTranslation();
+  return { title: uiT("Samples") };
+}
 
 export default async function SamplesPage() {
+  const uiDateLocale = await datumTaal();
+  const uiT = await uiTranslation();
   const [stockAgg, movements, productRows, contactRows] = await Promise.all([
     db
       .select({ total: sql<number>`coalesce(sum(${products.sampleStockQty}), 0)::float8` })
@@ -71,52 +78,52 @@ export default async function SamplesPage() {
   const productOptions: ComboOption[] = productRows.map((p) => ({
     value: p.id,
     label: p.sku ? `${p.name} · ${p.sku}` : p.name,
-    hint: `sample-voorraad ${p.sampleStockQty != null ? Number(p.sampleStockQty).toLocaleString("nl-NL") : "—"}`,
+    hint: `sample-voorraad ${p.sampleStockQty != null ? Number(p.sampleStockQty).toLocaleString(uiDateLocale) : "—"}`,
   }));
   const contactOptions: ComboOption[] = contactRows.map((c) => ({ value: c.id, label: c.name }));
 
-  const dt = (d: unknown) => new Date(d as string).toLocaleDateString("nl-NL", { day: "numeric", month: "short", year: "numeric" });
+  const dt = (d: unknown) => new Date(d as string).toLocaleDateString(uiDateLocale, { day: "numeric", month: "short", year: "numeric" });
 
   return (
     <>
-      <PageHeader title="Samples" subtitle={`Staaltjes · €${SAMPLE_DEPOSIT_EUR} borg per sample`} />
+      <PageHeader title={uiT("Samples")} subtitle={uiT("Staaltjes · €{v0} borg per sample", { v0: SAMPLE_DEPOSIT_EUR })} />
 
       <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <StatTile label="In voorraad" value={Number(stockAgg[0]?.total ?? 0).toLocaleString("nl-NL")} hint="samples op de plank" tone="neutral" />
-        <StatTile label="Uitstaand" value={outQty.toLocaleString("nl-NL")} hint={`${out.length} ${out.length === 1 ? "uitgifte" : "uitgiftes"}`} tone={outQty > 0 ? "info" : "neutral"} />
-        <StatTile label="Borg uitstaand" value={formatEUR(outstandingDeposit)} hint="terug te betalen bij retour" tone={outstandingDeposit > 0 ? "warning" : "neutral"} />
-        <StatTile label="Borg verkocht" value={formatEUR(soldDeposit)} hint="definitief · omzet" tone={soldDeposit > 0 ? "success" : "neutral"} />
+        <StatTile label={uiT("In voorraad")} value={Number(stockAgg[0]?.total ?? 0).toLocaleString(uiDateLocale)} hint={uiT("samples op de plank")} tone="neutral" />
+        <StatTile label={uiT("Uitstaand")} value={outQty.toLocaleString(uiDateLocale)} hint={`${out.length} ${out.length === 1 ? uiT("uitgifte") : uiT("uitgiftes")}`} tone={outQty > 0 ? "info" : "neutral"} />
+        <StatTile label={uiT("Borg uitstaand")} value={formatEUR(outstandingDeposit)} hint={uiT("terug te betalen bij retour")} tone={outstandingDeposit > 0 ? "warning" : "neutral"} />
+        <StatTile label={uiT("Borg verkocht")} value={formatEUR(soldDeposit)} hint={uiT("definitief · omzet")} tone={soldDeposit > 0 ? "success" : "neutral"} />
       </div>
 
       <Card className="mb-5">
         <CardHeader>
-          <CardTitle>Sample uitgeven</CardTitle>
-          <span className="text-xs text-muted">gaat van de sample-voorraad af · €{SAMPLE_DEPOSIT_EUR} borg per stuk</span>
+          <CardTitle>{uiT("Sample uitgeven")}</CardTitle>
+          <span className="text-xs text-muted">{uiT("gaat van de sample-voorraad af · €")}{SAMPLE_DEPOSIT_EUR} {uiT("borg per stuk")}</span>
         </CardHeader>
         <form action={giveSample} className="grid gap-3 px-5 pb-5 sm:grid-cols-2 lg:grid-cols-[1.5fr_1.2fr_0.6fr_1.2fr_auto] lg:items-end">
-          <Field label="Product">
-            <Combobox name="productId" options={productOptions} placeholder="zoek product…" />
+          <Field label={uiT("Product")}>
+            <Combobox name="productId" options={productOptions} placeholder={uiT("zoek product…")} />
           </Field>
-          <Field label="Naar wie (klant/wederverkoper)">
-            <Combobox name="recipientId" options={contactOptions} placeholder="zoek contact…" clearable />
+          <Field label={uiT("Naar wie (klant/wederverkoper)")}>
+            <Combobox name="recipientId" options={contactOptions} placeholder={uiT("zoek contact…")} clearable />
           </Field>
-          <Field label="Aantal">
+          <Field label={uiT("Aantal")}>
             <Input name="qty" inputMode="decimal" defaultValue="1" className="text-right" />
           </Field>
-          <Field label="Notitie / naam (vrij)">
-            <Input name="recipientName" placeholder="optioneel" />
+          <Field label={uiT("Notitie / naam (vrij)")}>
+            <Input name="recipientName" placeholder={uiT("optioneel")} />
           </Field>
-          <SubmitButton size="sm" variant="secondary" pendingLabel="…">+ Uitgeven</SubmitButton>
+          <SubmitButton size="sm" variant="secondary" pendingLabel="…">{uiT("+ Uitgeven")}</SubmitButton>
         </form>
       </Card>
 
       <Card className="mb-5 overflow-hidden">
         <CardHeader>
-          <CardTitle>Waar zijn mijn samples?</CardTitle>
-          <span className="text-xs text-muted">uitstaande samples · {formatEUR(outstandingDeposit)} borg</span>
+          <CardTitle>{uiT("Waar zijn mijn samples?")}</CardTitle>
+          <span className="text-xs text-muted">{uiT("uitstaande samples ·")} {formatEUR(outstandingDeposit)} {uiT("borg")}</span>
         </CardHeader>
         {out.length === 0 ? (
-          <div className="px-5 pb-5 text-sm text-muted">Geen samples uitstaand.</div>
+          <div className="px-5 pb-5 text-sm text-muted">{uiT("Geen samples uitstaand.")}</div>
         ) : (
           <div className="divide-y">
             {groupList.map((g) => (
@@ -127,15 +134,14 @@ export default async function SamplesPage() {
                     {g.name}
                   </span>
                   <span className="text-sm text-muted tabular-nums">
-                    {g.qty.toLocaleString("nl-NL")} {g.qty === 1 ? "sample" : "samples"} · {formatEUR(g.deposit)} borg
-                  </span>
+                    {g.qty.toLocaleString(uiDateLocale)} {g.qty === 1 ? uiT("sample") : uiT("samples")} · {formatEUR(g.deposit)} {uiT("borg")} </span>
                 </summary>
                 {g.contactId && g.toInvoice > 0 && (
                   <div className="flex items-center justify-end gap-3 border-b bg-background/40 px-5 py-2">
-                    <span className="text-xs text-muted">borg nog te factureren: {formatEUR(g.toInvoice)}</span>
+                    <span className="text-xs text-muted">{uiT("borg nog te factureren:")} {formatEUR(g.toInvoice)}</span>
                     <form action={createSampleInvoice.bind(null, g.contactId)}>
-                      <SubmitButton size="sm" variant="primary" pendingLabel="Aanmaken…">
-                        Factuur maken ({formatEUR(g.toInvoice)})
+                      <SubmitButton size="sm" variant="primary" pendingLabel={uiT("Aanmaken…")}>
+                        {uiT("Factuur maken (")}{formatEUR(g.toInvoice)})
                       </SubmitButton>
                     </form>
                   </div>
@@ -143,11 +149,11 @@ export default async function SamplesPage() {
                 <Table>
                   <THead>
                     <tr>
-                      <Th>Datum</Th>
-                      <Th>Product</Th>
-                      <Th className="text-right">Aantal</Th>
-                      <Th className="text-right">Borg</Th>
-                      <Th>Acties</Th>
+                      <Th>{uiT("Datum")}</Th>
+                      <Th>{uiT("Product")}</Th>
+                      <Th className="text-right">{uiT("Aantal")}</Th>
+                      <Th className="text-right">{uiT("Borg")}</Th>
+                      <Th>{uiT("Acties")}</Th>
                     </tr>
                   </THead>
                   <TBody>
@@ -159,18 +165,18 @@ export default async function SamplesPage() {
                           {m.sku ? <span className="block text-xs text-muted">{m.sku}</span> : null}
                           {m.note ? <span className="block text-xs text-muted">{m.note}</span> : null}
                         </Td>
-                        <Td className="text-right tabular-nums">{Number(m.qty).toLocaleString("nl-NL")}</Td>
+                        <Td className="text-right tabular-nums">{Number(m.qty).toLocaleString(uiDateLocale)}</Td>
                         <Td className="text-right tabular-nums">{formatEUR(Number(m.qty) * Number(m.depositEur))}</Td>
                         <Td>
                           {m.documentId ? (
-                            <Badge tone="info">gefactureerd</Badge>
+                            <Badge tone="info">{uiT("gefactureerd")}</Badge>
                           ) : (
                             <div className="flex items-center gap-2">
                               <form action={returnSample.bind(null, m.id)}>
-                                <SubmitButton size="sm" variant="ghost" className="text-muted" pendingLabel="…">retour</SubmitButton>
+                                <SubmitButton size="sm" variant="ghost" className="text-muted" pendingLabel="…">{uiT("retour")}</SubmitButton>
                               </form>
                               <form action={markSampleSold.bind(null, m.id)}>
-                                <SubmitButton size="sm" variant="ghost" className="text-success" pendingLabel="…">verkocht</SubmitButton>
+                                <SubmitButton size="sm" variant="ghost" className="text-success" pendingLabel="…">{uiT("verkocht")}</SubmitButton>
                               </form>
                             </div>
                           )}
@@ -181,7 +187,7 @@ export default async function SamplesPage() {
                 </Table>
                 {g.contactId && (
                   <div className="px-5 pb-3 text-xs">
-                    <Link href={`/contacts/${g.contactId}`} className="text-accent hover:underline">→ contact openen</Link>
+                    <Link href={`/contacts/${g.contactId}`} className="text-accent hover:underline">{uiT("→ contact openen")}</Link>
                   </div>
                 )}
               </details>
@@ -195,18 +201,18 @@ export default async function SamplesPage() {
           <summary className="mb-2 cursor-pointer list-none text-sm font-medium text-muted marker:content-none">
             <span className="inline-flex items-center gap-2">
               <span className="transition group-open:rotate-90">▶</span>
-              Geschiedenis — retour / verkocht ({history.length})
+              {uiT("Geschiedenis — retour / verkocht (")}{history.length})
             </span>
           </summary>
           <Card className="overflow-hidden">
             <Table>
               <THead>
                 <tr>
-                  <Th>Datum</Th>
-                  <Th>Product</Th>
-                  <Th>Bij wie</Th>
-                  <Th className="text-right">Aantal</Th>
-                  <Th>Status</Th>
+                  <Th>{uiT("Datum")}</Th>
+                  <Th>{uiT("Product")}</Th>
+                  <Th>{uiT("Bij wie")}</Th>
+                  <Th className="text-right">{uiT("Aantal")}</Th>
+                  <Th>{uiT("Status")}</Th>
                 </tr>
               </THead>
               <TBody>
@@ -215,7 +221,7 @@ export default async function SamplesPage() {
                     <Td className="whitespace-nowrap">{dt(m.date)}</Td>
                     <Td>{m.productName}{m.sku ? <span className="block text-xs text-muted">{m.sku}</span> : null}</Td>
                     <Td>{m.recipientName ?? "—"}</Td>
-                    <Td className="text-right tabular-nums">{Number(m.qty).toLocaleString("nl-NL")}</Td>
+                    <Td className="text-right tabular-nums">{Number(m.qty).toLocaleString(uiDateLocale)}</Td>
                     <Td><Badge tone={m.status === "sold" ? "success" : "neutral"}>{SAMPLE_STATUS_LABEL[m.status]}</Badge></Td>
                   </Tr>
                 ))}

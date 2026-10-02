@@ -1,4 +1,5 @@
 "use client";
+import { useDateLocale } from "@/components/taal-provider";
 
 import { useMemo, useState } from "react";
 import { geoNaturalEarth1, geoPath } from "d3-geo";
@@ -19,6 +20,7 @@ const ALIAS: Record<string, string> = {
 type Row = { label: string; value: number };
 
 export function WorldMap({ data }: { data: Row[] }) {
+  const uiDateLocale = useDateLocale();
   const [hover, setHover] = useState<{ name: string; value: number; x: number; y: number } | null>(null);
 
   const { shapes, max } = useMemo(() => {
@@ -70,7 +72,7 @@ export function WorldMap({ data }: { data: Row[] }) {
           className="pointer-events-none fixed z-50 rounded-md bg-gray-900 px-2 py-1 text-xs font-medium text-white shadow-lg"
           style={{ left: hover.x + 12, top: hover.y + 12 }}
         >
-          {hover.name}: {hover.value.toLocaleString("nl-NL")}
+          {hover.name}: {hover.value.toLocaleString(uiDateLocale)}
         </div>
       )}
     </div>

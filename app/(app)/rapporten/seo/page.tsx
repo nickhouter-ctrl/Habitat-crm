@@ -1,3 +1,4 @@
+import { tekst as uiTranslation } from '@/lib/i18n/server';
 import { Search } from "lucide-react";
 import Link from "next/link";
 
@@ -15,7 +16,10 @@ import {
 import { getSeoData, scAccessibleSites, scConfigured } from "@/lib/searchconsole";
 import { cn } from "@/lib/utils";
 
-export const metadata = { title: "SEO" };
+export async function generateMetadata() {
+  const uiT = await uiTranslation();
+  return { title: uiT("SEO") };
+}
 
 const nf = (n: number) => Math.round(n).toLocaleString("nl-NL");
 const pf = (n: number) => `${(n * 100).toFixed(1)}%`;
@@ -49,6 +53,7 @@ export default async function SeoPage({
 }: {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
+  const uiT = await uiTranslation();
   const sp = await searchParams;
   const datum = typeof sp.datum === "string" ? sp.datum : undefined;
   const single = Boolean(datum);
@@ -57,11 +62,11 @@ export default async function SeoPage({
   if (!scConfigured()) {
     return (
       <>
-        <PageHeader title="SEO" subtitle="Google Search Console" />
+        <PageHeader title={uiT("SEO")} subtitle={uiT("Google Search Console")} />
         <EmptyState
           icon={<Search />}
-          title="Koppeling nog niet geconfigureerd"
-          description="Zet de env-variabelen SC_SITE_URL, SC_CLIENT_ID, SC_CLIENT_SECRET en SC_REFRESH_TOKEN in Vercel; daarna verschijnt hier je Search Console-data."
+          title={uiT("Koppeling nog niet geconfigureerd")}
+          description={uiT("Zet de env-variabelen SC_SITE_URL, SC_CLIENT_ID, SC_CLIENT_SECRET en SC_REFRESH_TOKEN in Vercel; daarna verschijnt hier je Search Console-data.")}
         />
       </>
     );
@@ -91,8 +96,8 @@ export default async function SeoPage({
   return (
     <>
       <PageHeader
-        title="SEO"
-        subtitle={data ? `Google Search Console · ${periodeLabel}` : "Google Search Console"}
+        title={uiT("SEO")}
+        subtitle={data ? uiT("Google Search Console · {v0}", { v0: periodeLabel }) : uiT("Google Search Console")}
         actions={
           <div className="flex items-center overflow-hidden rounded-md border border-border text-sm">
             {RANGE_TABS.map((per) => (
@@ -106,7 +111,7 @@ export default async function SeoPage({
                     : "text-muted hover:bg-background",
                 )}
               >
-                {per.label}
+                {uiT(per.label)}
               </Link>
             ))}
           </div>
@@ -116,30 +121,25 @@ export default async function SeoPage({
       {single && (
         <div className="mb-5 flex items-center gap-3 text-sm">
           <Link href="/rapporten/seo" className="text-accent hover:underline">
-            ← Terug naar maandoverzicht
-          </Link>
+            {uiT("← Terug naar maandoverzicht")} </Link>
           <span className="rounded-md bg-accent/10 px-2 py-0.5 text-xs font-medium text-accent">
-            Dagoverzicht · {periodeLabel}
+            {uiT("Dagoverzicht ·")} {periodeLabel}
           </span>
         </div>
       )}
 
       {!single && (
         <p className="mb-5 text-xs text-muted">
-          Let op: Google Search Console levert cijfers met ~{data?.lagDays ?? 3} dagen vertraging aan. De laatste paar dagen
-          (incl. vandaag) verschijnen hier dus pas later — dat is normaal en geen fout.
-        </p>
+          {uiT("Let op: Google Search Console levert cijfers met ~")}{data?.lagDays ?? 3} {uiT("dagen vertraging aan. De laatste paar dagen (incl. vandaag) verschijnen hier dus pas later — dat is normaal en geen fout.")} </p>
       )}
 
       {error && (
         <Card className="mb-5 border-danger/30 bg-danger/5 p-4 text-sm text-danger">
-          <p>Kon de data niet ophalen: {error}</p>
+          <p>{uiT("Kon de data niet ophalen:")} {error}</p>
           {accessibleSites.length > 0 && (
             <div className="mt-3 text-foreground">
               <p className="font-medium">
-                Dit Google-account heeft toegang tot deze properties — zet <code>SC_SITE_URL</code> op
-                één hiervan (exact overnemen):
-              </p>
+                {uiT("Dit Google-account heeft toegang tot deze properties — zet")} <code>SC_SITE_URL</code> {uiT("op één hiervan (exact overnemen):")} </p>
               <ul className="mt-1.5 space-y-0.5">
                 {accessibleSites.map((s) => (
                   <li key={s.site} className="font-mono text-xs">
@@ -151,10 +151,7 @@ export default async function SeoPage({
           )}
           {error.includes("(403)") && accessibleSites.length === 0 && (
             <p className="mt-2 text-foreground">
-              Het gekoppelde Google-account ziet géén enkele property — voeg het als gebruiker toe in
-              Search Console (Instellingen → Gebruikers en machtigingen), of vernieuw de koppeling
-              (SC_REFRESH_TOKEN) met een account dat toegang heeft.
-            </p>
+              {uiT("Het gekoppelde Google-account ziet géén enkele property — voeg het als gebruiker toe in Search Console (Instellingen → Gebruikers en machtigingen), of vernieuw de koppeling (SC_REFRESH_TOKEN) met een account dat toegang heeft.")} </p>
           )}
         </Card>
       )}
@@ -162,8 +159,8 @@ export default async function SeoPage({
       {data && !t && (
         <EmptyState
           icon={<Search />}
-          title="Nog geen data in deze periode"
-          description="Search Console heeft voor deze dagen nog geen cijfers (de data loopt een paar dagen achter), of je property is recent geverifieerd. Kies een ruimere periode of kom binnenkort terug."
+          title={uiT("Nog geen data in deze periode")}
+          description={uiT("Search Console heeft voor deze dagen nog geen cijfers (de data loopt een paar dagen achter), of je property is recent geverifieerd. Kies een ruimere periode of kom binnenkort terug.")}
         />
       )}
 
@@ -176,10 +173,10 @@ export default async function SeoPage({
               const d3 = kpiDelta(t.ctr, p?.ctr);
               const d4 = kpiDelta(t.position, p?.position, "position");
               return [
-                <StatTile key="c" label="Kliks" value={nf(t.clicks)} hint={d1.hint} tone={d1.tone === "neutral" ? "success" : d1.tone} />,
-                <StatTile key="i" label="Vertoningen" value={nf(t.impressions)} hint={d2.hint} tone={d2.tone === "neutral" ? "info" : d2.tone} />,
-                <StatTile key="r" label="CTR" value={pf(t.ctr)} hint={d3.hint} tone={d3.tone} />,
-                <StatTile key="p" label="Gem. positie" value={t.position.toFixed(1)} hint={d4.hint ?? "lager = beter"} tone={d4.tone === "neutral" ? "accent" : d4.tone} />,
+                <StatTile key="c" label={uiT("Kliks")} value={nf(t.clicks)} hint={d1.hint} tone={d1.tone === "neutral" ? "success" : d1.tone} />,
+                <StatTile key="i" label={uiT("Vertoningen")} value={nf(t.impressions)} hint={d2.hint} tone={d2.tone === "neutral" ? "info" : d2.tone} />,
+                <StatTile key="r" label={uiT("CTR")} value={pf(t.ctr)} hint={d3.hint} tone={d3.tone} />,
+                <StatTile key="p" label={uiT("Gem. positie")} value={t.position.toFixed(1)} hint={d4.hint ?? uiT("lager = beter")} tone={d4.tone === "neutral" ? "accent" : d4.tone} />,
               ];
             })()}
           </div>
@@ -187,22 +184,22 @@ export default async function SeoPage({
           {!single && data.trend.length > 0 && (
             <Card className="mb-5">
               <CardHeader>
-                <CardTitle>Kliks &amp; vertoningen per dag</CardTitle>
+                <CardTitle>{uiT("Kliks & vertoningen per dag")}</CardTitle>
               </CardHeader>
               <CardContent>
                 <SeoTrendChart data={data.trend} drillBase="/rapporten/seo?datum=" />
-                <p className="mt-2 text-xs text-muted">Tip: klik op een dag in de grafiek voor het volledige dagoverzicht.</p>
+                <p className="mt-2 text-xs text-muted">{uiT("Tip: klik op een dag in de grafiek voor het volledige dagoverzicht.")}</p>
               </CardContent>
             </Card>
           )}
 
-          <p className="mb-3 text-xs text-muted">Klik op een kolomkop om te sorteren.</p>
+          <p className="mb-3 text-xs text-muted">{uiT("Klik op een kolomkop om te sorteren.")}</p>
           <div className="grid gap-5 lg:grid-cols-2">
-            <SortableSeoTable title="Top zoekwoorden" keyLabel="Zoekwoord" rows={data.queries} />
-            <SortableSeoTable title="Top pagina's" keyLabel="Pagina" rows={data.pages} strip />
-            <SortableSeoTable title="Top landen" keyLabel="Land" rows={data.countries} country />
-            <SortableSeoTable title="Apparaten" keyLabel="Apparaat" rows={data.devices} />
-            <SortableSeoTable title="Kansen — positie 5 t/m 20" keyLabel="Zoekwoord" rows={data.opportunities} />
+            <SortableSeoTable title={uiT("Top zoekwoorden")} keyLabel={uiT("Zoekwoord")} rows={data.queries} />
+            <SortableSeoTable title={uiT("Top pagina's")} keyLabel={uiT("Pagina")} rows={data.pages} strip />
+            <SortableSeoTable title={uiT("Top landen")} keyLabel={uiT("Land")} rows={data.countries} country />
+            <SortableSeoTable title={uiT("Apparaten")} keyLabel={uiT("Apparaat")} rows={data.devices} />
+            <SortableSeoTable title={uiT("Kansen — positie 5 t/m 20")} keyLabel={uiT("Zoekwoord")} rows={data.opportunities} />
           </div>
         </>
       )}

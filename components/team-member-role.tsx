@@ -1,4 +1,5 @@
 "use client";
+import { useT as useUiTranslation } from '@/components/taal-provider';
 
 import { useRef, useState, useTransition } from "react";
 
@@ -11,6 +12,7 @@ export function TeamMemberRoleSelect({
   action: (formData: FormData) => Promise<void> | void;
   roles: { value: string; label: string }[];
 }) {
+  const uiT = useUiTranslation();
   const formRef = useRef<HTMLFormElement>(null);
   const [role, setRole] = useState(initialRole);
   const [saved, setSaved] = useState(false);
@@ -39,11 +41,11 @@ export function TeamMemberRoleSelect({
       >
         {roles.map((r) => (
           <option key={r.value} value={r.value}>
-            {r.label}
+            {uiT(r.label)}
           </option>
         ))}
       </select>
-      <span className="text-xs text-muted">{pending ? "Opslaan…" : saved ? "✓ opgeslagen" : ""}</span>
+      <span className="text-xs text-muted">{pending ? uiT("Opslaan…") : saved ? uiT("✓ opgeslagen") : ""}</span>
     </form>
   );
 }

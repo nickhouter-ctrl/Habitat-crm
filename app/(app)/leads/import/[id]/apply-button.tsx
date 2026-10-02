@@ -1,4 +1,5 @@
 "use client";
+import { useT as useUiTranslation } from '@/components/taal-provider';
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
@@ -22,13 +23,14 @@ export function ApplyButton({
   aantal: number;
   applyAction: (id: string) => Promise<Uitkomst>;
 }) {
+  const uiT = useUiTranslation();
   const router = useRouter();
   const [busy, setBusy] = useState(false);
   const [stand, setStand] = useState<Uitkomst | null>(null);
   const [fout, setFout] = useState("");
 
   async function start() {
-    if (!confirm(`${aantal} bedrijven als prospect toevoegen? Ze komen NIET in je contactenlijst.`)) return;
+    if (!confirm(uiT("{v0} bedrijven als prospect toevoegen? Ze komen NIET in je contactenlijst.", { v0: aantal }))) return;
     setBusy(true);
     setFout("");
     try {
@@ -52,13 +54,13 @@ export function ApplyButton({
   return (
     <div className="space-y-2">
       <Button onClick={start} disabled={busy || aantal === 0}>
-        {busy ? "Importeren…" : `Definitief importeren (${aantal})`}
+        {busy ? uiT("Importeren…") : uiT("Definitief importeren ({v0})", { v0: aantal })}
       </Button>
       {stand && (
         <p className="text-sm text-muted">
           {stand.klaar
-            ? `Klaar: ${stand.toegevoegd} prospects toegevoegd.`
-            : `${stand.verwerkt} van ${stand.totaal} verwerkt…`}
+            ? uiT("Klaar: {v0} prospects toegevoegd.", { v0: stand.toegevoegd })
+            : uiT("{v0} van {v1} verwerkt…", { v0: stand.verwerkt, v1: stand.totaal })}
         </p>
       )}
       {fout && <p className="rounded-md bg-danger/10 px-3 py-2 text-sm text-danger">{fout}</p>}

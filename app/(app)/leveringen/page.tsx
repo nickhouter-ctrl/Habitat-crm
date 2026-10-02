@@ -1,3 +1,5 @@
+import { datumTaal } from "@/lib/i18n/server";
+import { tekst as uiTranslation } from '@/lib/i18n/server';
 import { and, desc, eq, inArray } from "drizzle-orm";
 import Link from "next/link";
 
@@ -25,7 +27,10 @@ import { normalizeDocItems } from "@/lib/documents";
 import { cn, formatDate } from "@/lib/utils";
 import { deleteDelivery, dismissDelivery, markPickedUp, planDelivery, setDeliveryStatus } from "./actions";
 
-export const metadata = { title: "Leveringen" };
+export async function generateMetadata() {
+  const uiT = await uiTranslation();
+  return { title: uiT("Leveringen") };
+}
 
 const METHOD_LABEL: Record<string, string> = {
   leveren: "🚚 Leveren",
@@ -49,6 +54,8 @@ export default async function LeveringenPage({
 }: {
   searchParams: Promise<{ status?: string }>;
 }) {
+  const uiDateLocale = await datumTaal();
+  const uiT = await uiTranslation();
   const { status } = await searchParams;
   const filter = status === "geleverd" || status === "alle" ? status : "open";
   const statuses =
@@ -129,18 +136,18 @@ export default async function LeveringenPage({
 
   return (
     <>
-      <PageHeader title="Leveringen" subtitle="Geplande en uitgevoerde leveringen, ophalingen en montages" />
+      <PageHeader title={uiT("Leveringen")} subtitle={uiT("Geplande en uitgevoerde leveringen, ophalingen en montages")} />
 
       <div className="mb-6 grid grid-cols-3 gap-3">
-        <StatTile label="Gepland" value={String(counts.gepland)} tone="neutral" />
-        <StatTile label="Onderweg" value={String(counts.onderweg)} tone="info" />
-        <StatTile label="Geleverd" value={String(counts.geleverd)} tone="success" />
+        <StatTile label={uiT("Gepland")} value={String(counts.gepland)} tone="neutral" />
+        <StatTile label={uiT("Onderweg")} value={String(counts.onderweg)} tone="info" />
+        <StatTile label={uiT("Geleverd")} value={String(counts.geleverd)} tone="success" />
       </div>
 
       {toPlan.length > 0 && (
         <Card className="mb-6 overflow-hidden">
           <CardHeader>
-            <CardTitle>Te plannen ({toPlan.length})</CardTitle>
+            <CardTitle>{uiT("Te plannen (")}{toPlan.length})</CardTitle>
           </CardHeader>
           <div className="divide-y">
             {toPlan.map((d) => (
@@ -148,7 +155,7 @@ export default async function LeveringenPage({
                 <input type="hidden" name="documentId" value={d.id} />
                 <div className="mb-2 flex flex-wrap items-baseline gap-x-2">
                   <Link href={`/documents/${d.id}`} className="font-medium hover:underline">
-                    {d.docNumber ?? "(factuur)"}
+                    {d.docNumber ?? uiT("(factuur)")}
                   </Link>
                   <span className="text-sm">{d.contactName ?? "—"}</span>
                   {(d.projectName || d.title) && (
@@ -163,9 +170,9 @@ export default async function LeveringenPage({
                     defaultValue="leveren"
                     className="rounded-md border bg-background px-2 py-1.5 text-sm outline-none focus:border-ring"
                   >
-                    <option value="leveren">🚚 Leveren</option>
-                    <option value="ophalen">🤝 Ophalen</option>
-                    <option value="plaatsen">🔧 Leveren &amp; plaatsen</option>
+                    <option value="leveren">{uiT("🚚 Leveren")}</option>
+                    <option value="ophalen">{uiT("🤝 Ophalen")}</option>
+                    <option value="plaatsen">{uiT("🔧 Leveren & plaatsen")}</option>
                   </select>
                   <input
                     type="date"
@@ -174,29 +181,25 @@ export default async function LeveringenPage({
                     className="rounded-md border bg-background px-2 py-1.5 text-sm outline-none focus:border-ring"
                   />
                   <label className="flex items-center gap-1 text-xs text-muted">
-                    <input type="checkbox" name="notify" value="1" /> klant mailen
-                  </label>
+                    <input type="checkbox" name="notify" value="1" /> {uiT("klant mailen")} </label>
                   <SubmitButton size="sm" variant="secondary" pendingLabel="…">
-                    Plannen
-                  </SubmitButton>
+                    {uiT("Plannen")} </SubmitButton>
                   <button
                     type="submit"
                     formAction={markPickedUp.bind(null, d.id)}
                     formNoValidate
                     className="rounded-md px-2 py-1.5 text-xs text-muted transition-colors hover:bg-muted/50 hover:text-foreground"
-                    title="Klant heeft het al opgehaald — legt dit vast als afgeronde ophaling"
+                    title={uiT("Klant heeft het al opgehaald — legt dit vast als afgeronde ophaling")}
                   >
-                    Al afgehaald
-                  </button>
+                    {uiT("Al afgehaald")} </button>
                   <button
                     type="submit"
                     formAction={dismissDelivery.bind(null, d.id)}
                     formNoValidate
                     className="rounded-md px-2 py-1.5 text-xs text-muted transition-colors hover:bg-muted/50 hover:text-foreground"
-                    title="Geen levering nodig (bv. werkzaamheden)"
+                    title={uiT("Geen levering nodig (bv. werkzaamheden)")}
                   >
-                    Geen levering
-                  </button>
+                    {uiT("Geen levering")} </button>
                 </div>
               </form>
             ))}
@@ -206,7 +209,7 @@ export default async function LeveringenPage({
 
       <Card className="overflow-hidden">
         <CardHeader>
-          <CardTitle>Leveringen</CardTitle>
+          <CardTitle>{uiT("Leveringen")}</CardTitle>
           <div className="flex items-center gap-1 text-xs">
             {TABS.map((t) => (
               <Link
@@ -217,25 +220,25 @@ export default async function LeveringenPage({
                   filter === t.key ? "bg-primary/10 text-primary" : "text-muted hover:bg-muted/50",
                 )}
               >
-                {t.label}
+                {uiT(t.label)}
               </Link>
             ))}
           </div>
         </CardHeader>
         {rows.length === 0 ? (
           <CardContent>
-            <EmptyState title="Geen leveringen" description="Plan leveringen in vanaf het dashboard." />
+            <EmptyState title={uiT("Geen leveringen")} description={uiT("Plan leveringen in vanaf het dashboard.")} />
           </CardContent>
         ) : (
           <Table>
             <THead>
               <tr>
-                <Th>Datum</Th>
-                <Th>Factuur</Th>
-                <Th>Pakbon</Th>
-                <Th>Klant / project</Th>
-                <Th>Methode</Th>
-                <Th>Status</Th>
+                <Th>{uiT("Datum")}</Th>
+                <Th>{uiT("Factuur")}</Th>
+                <Th>{uiT("Pakbon")}</Th>
+                <Th>{uiT("Klant / project")}</Th>
+                <Th>{uiT("Methode")}</Th>
+                <Th>{uiT("Status")}</Th>
                 <Th />
               </tr>
             </THead>
@@ -243,7 +246,7 @@ export default async function LeveringenPage({
               {rows.map((d) => (
                 <Tr key={d.id}>
                   <Td className="font-medium tabular-nums">
-                    {d.plannedDate ? formatDate(d.plannedDate) : "—"}
+                    {d.plannedDate ? formatDate(d.plannedDate, uiDateLocale) : "—"}
                   </Td>
                   <Td>
                     {d.docId ? (
@@ -257,7 +260,7 @@ export default async function LeveringenPage({
                   <Td>
                     {d.deliveryNoteId ? (
                       <Link href={`/documents/${d.deliveryNoteId}`} className="text-accent hover:underline">
-                        {noteById.get(d.deliveryNoteId) ?? "pakbon"}
+                        {noteById.get(d.deliveryNoteId) ?? uiT("pakbon")}
                       </Link>
                     ) : (
                       <span className="text-muted">—</span>
@@ -266,12 +269,12 @@ export default async function LeveringenPage({
                   <Td className="text-muted">
                     {d.contactName ?? "—"}
                     {d.projectName ? <span className="block text-xs">{d.projectName}</span> : null}
-                    {d.notifiedAt ? <span className="block text-xs text-success">✉ klant gemeld</span> : null}
+                    {d.notifiedAt ? <span className="block text-xs text-success">{uiT("✉ klant gemeld")}</span> : null}
                   </Td>
                   <Td className="text-muted">{METHOD_LABEL[d.method] ?? d.method}</Td>
                   <Td>
                     <Badge tone={STATUS_META[d.status]?.tone ?? "neutral"}>
-                      {STATUS_META[d.status]?.label ?? d.status}
+                      {uiT(STATUS_META[d.status]?.label) ?? d.status}
                     </Badge>
                   </Td>
                   <Td className="text-right">
@@ -279,20 +282,18 @@ export default async function LeveringenPage({
                       {d.status === "gepland" && (
                         <form action={setDeliveryStatus.bind(null, d.id, "onderweg")}>
                           <SubmitButton size="sm" variant="ghost" className="text-xs text-muted" pendingLabel="…">
-                            Onderweg
-                          </SubmitButton>
+                            {uiT("Onderweg")} </SubmitButton>
                         </form>
                       )}
                       {d.status !== "geleverd" && (
                         <form action={setDeliveryStatus.bind(null, d.id, "geleverd")}>
                           <SubmitButton size="sm" variant="secondary" className="text-xs" pendingLabel="…">
-                            Geleverd
-                          </SubmitButton>
+                            {uiT("Geleverd")} </SubmitButton>
                         </form>
                       )}
                       <form action={deleteDelivery.bind(null, d.id)}>
                         <ConfirmSubmit
-                          message="Deze levering verwijderen?"
+                          message={uiT("Deze levering verwijderen?")}
                           className="rounded p-1 text-muted transition-colors hover:bg-danger/10 hover:text-danger"
                         >
                           ✕

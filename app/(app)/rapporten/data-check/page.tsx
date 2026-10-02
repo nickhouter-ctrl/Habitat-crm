@@ -1,3 +1,5 @@
+import { datumTaal } from "@/lib/i18n/server";
+import { tekst as uiTranslation } from '@/lib/i18n/server';
 import { and, eq, inArray, sql } from "drizzle-orm";
 import Link from "next/link";
 
@@ -10,7 +12,10 @@ import { missingBillingFields } from "@/lib/invoice-validation";
 import { getReservedStockByProduct } from "@/lib/stock";
 import { cn } from "@/lib/utils";
 
-export const metadata = { title: "Data-check" };
+export async function generateMetadata() {
+  const uiT = await uiTranslation();
+  return { title: uiT("Data-check") };
+}
 export const dynamic = "force-dynamic";
 
 type Tone = "danger" | "warning" | "info";
@@ -35,6 +40,8 @@ function eur(n: number) {
 }
 
 export default async function DataCheckPage() {
+  const uiDateLocale = await datumTaal();
+  const uiT = await uiTranslation();
   const prods = await db
     .select({
       id: products.id,
@@ -69,12 +76,12 @@ export default async function DataCheckPage() {
   const negStock = prods.filter((p) => p.stockQty != null && Number(p.stockQty) < 0);
   issues.push({
     key: "neg-stock",
-    title: "Negatieve voorraad",
+    title: uiT("Negatieve voorraad"),
     tone: "danger",
     why: "Voorraad onder 0 betekent dat er meer is afgeboekt dan binnen was — of een afboeking die niet klopt.",
     items: negStock.map((p) => ({
       label: `${p.name}${p.sku ? ` (${p.sku})` : ""}`,
-      sub: `${Number(p.stockQty).toLocaleString("nl-NL")} op voorraad`,
+      sub: `${Number(p.stockQty).toLocaleString(uiDateLocale)} op voorraad`,
       href: prodHref(p.id),
     })),
   });
@@ -85,12 +92,12 @@ export default async function DataCheckPage() {
     .filter((x) => (reserved.get(x.p.id) ?? 0) > 0 && x.free < 0);
   issues.push({
     key: "oversold",
-    title: "Meer verkocht dan op voorraad (offertes)",
+    title: uiT("Meer verkocht dan op voorraad (offertes)"),
     tone: "warning",
     why: "Er staat in geaccepteerde offertes meer gereserveerd dan fysiek op voorraad — risico op dubbel verkopen.",
     items: oversold.map((x) => ({
       label: `${x.p.name}${x.p.sku ? ` (${x.p.sku})` : ""}`,
-      sub: `${(reserved.get(x.p.id) ?? 0).toLocaleString("nl-NL")} gereserveerd · ${x.free.toLocaleString("nl-NL")} vrij`,
+      sub: `${(reserved.get(x.p.id) ?? 0).toLocaleString(uiDateLocale)} gereserveerd · ${x.free.toLocaleString(uiDateLocale)} vrij`,
       href: prodHref(x.p.id),
     })),
   });
@@ -101,7 +108,7 @@ export default async function DataCheckPage() {
   );
   issues.push({
     key: "no-cost",
-    title: "Actief product zonder kostprijs",
+    title: uiT("Actief product zonder kostprijs"),
     tone: "warning",
     why: "Zonder kostprijs kan de marge niet berekend worden en kloppen de marge-rapportages niet.",
     items: noCost.map((p) => ({
@@ -117,7 +124,7 @@ export default async function DataCheckPage() {
   );
   issues.push({
     key: "neg-margin",
-    title: "Kostprijs ≥ verkoopprijs",
+    title: uiT("Kostprijs ≥ verkoopprijs"),
     tone: "danger",
     why: "Je verkoopt met verlies of break-even — controleer of de inkoopkosten of de verkoopprijs kloppen.",
     items: badMargin.map((p) => ({
@@ -157,7 +164,7 @@ export default async function DataCheckPage() {
   }
   issues.push({
     key: "margin-outlier",
-    title: "Marge wijkt sterk af van categorie",
+    title: uiT("Marge wijkt sterk af van categorie"),
     tone: "warning",
     why: "Een marge die ver van de rest van de categorie ligt, komt vaak door een verkeerde inkoopkost (zoals eerder bij de grote XPS-platen).",
     items: marginOutliers,
@@ -170,7 +177,7 @@ export default async function DataCheckPage() {
     .filter((x) => x.lines.length > 0);
   issues.push({
     key: "invoice-unbooked",
-    title: "Verstuurde/betaalde factuur zonder voorraad-afboeking",
+    title: uiT("Verstuurde/betaalde factuur zonder voorraad-afboeking"),
     tone: "warning",
     why: "Deze facturen hebben productregels maar de voorraad is niet afgeboekt — je voorraad staat dan te hoog.",
     items: unbooked.map((x) => ({
@@ -184,7 +191,7 @@ export default async function DataCheckPage() {
   const noPhoto = active.filter((p) => !p.imageUrl);
   issues.push({
     key: "no-photo",
-    title: "Actief product zonder foto",
+    title: uiT("Actief product zonder foto"),
     tone: "info",
     why: "Zonder foto staat het product niet netjes op de website en in offertes.",
     items: noPhoto.slice(0, 8).map((p) => ({
@@ -196,7 +203,7 @@ export default async function DataCheckPage() {
   const noPrice = active.filter((p) => p.priceEur == null || Number(p.priceEur) <= 0);
   issues.push({
     key: "no-price",
-    title: "Actief product zonder verkoopprijs",
+    title: uiT("Actief product zonder verkoopprijs"),
     tone: "warning",
     why: "Een product zonder prijs kan niet correct op een offerte of factuur belanden.",
     items: noPrice.map((p) => ({
@@ -207,7 +214,7 @@ export default async function DataCheckPage() {
   const noBarcode = active.filter((p) => !p.barcode);
   issues.push({
     key: "no-barcode",
-    title: "Actief product zonder barcode",
+    title: uiT("Actief product zonder barcode"),
     tone: "info",
     why: "Zonder barcode/GTIN werken labels en scannen niet en mist het op de website-feed.",
     items: noBarcode.slice(0, 8).map((p) => ({
@@ -314,12 +321,11 @@ export default async function DataCheckPage() {
   return (
     <>
       <PageHeader
-        title="Data-gezondheid"
-        subtitle="Controleert of producten, prijzen, voorraad en facturen consistent zijn — en met elkaar kloppen."
+        title={uiT("Data-gezondheid")}
+        subtitle={uiT("Controleert of producten, prijzen, voorraad en facturen consistent zijn — en met elkaar kloppen.")}
         actions={
           <LinkButton href="/rapporten" variant="ghost">
-            ← Rapporten
-          </LinkButton>
+            {uiT("← Rapporten")} </LinkButton>
         }
       />
       <ReportsNav active="/rapporten/data-check" />
@@ -328,12 +334,10 @@ export default async function DataCheckPage() {
         <Card className="mb-5 border-amber-300">
           <div className="border-b border-amber-200 bg-amber-50/60 px-5 py-3">
             <h3 className="text-sm font-semibold text-amber-900">
-              Klanten met onvolledige factuurgegevens ({incompleteClients.length})
+              {uiT("Klanten met onvolledige factuurgegevens (")}{incompleteClients.length})
             </h3>
             <p className="text-xs text-amber-800/80">
-              Deze klanten krijgen facturen/offertes maar missen verplichte gegevens (fiscaal nummer of adres) — een
-              factuur kan pas verstuurd worden als dit is aangevuld.
-            </p>
+              {uiT("Deze klanten krijgen facturen/offertes maar missen verplichte gegevens (fiscaal nummer of adres) — een factuur kan pas verstuurd worden als dit is aangevuld.")} </p>
           </div>
           <ul className="divide-y text-sm">
             {incompleteClients.map(({ c, missing }) => (
@@ -342,10 +346,9 @@ export default async function DataCheckPage() {
                   {c.name}
                 </Link>
                 <span className="flex items-center gap-2">
-                  <span className="text-xs text-amber-700">ontbreekt: {missing.join(", ")}</span>
+                  <span className="text-xs text-amber-700">{uiT("ontbreekt:")} {missing.join(", ")}</span>
                   <LinkButton href={`/contacts/${c.id}/edit`} variant="secondary" className="text-xs">
-                    Aanvullen
-                  </LinkButton>
+                    {uiT("Aanvullen")} </LinkButton>
                 </span>
               </li>
             ))}
@@ -357,13 +360,10 @@ export default async function DataCheckPage() {
         <Card className="mb-5 border-amber-300">
           <div className="border-b border-amber-200 bg-amber-50/60 px-5 py-3">
             <h3 className="text-sm font-semibold text-amber-900">
-              Verstuurde facturen zonder btw-nummer op de PDF ({verstuurdeFacturen.length})
+              {uiT("Verstuurde facturen zonder btw-nummer op de PDF (")}{verstuurdeFacturen.length})
             </h3>
             <p className="text-xs text-amber-800/80">
-              In Spanje hoort er een NIF/CIF van de klant op elke factuur. Deze zijn al verstuurd, dus ze zijn hier alleen
-              ter controle — vul het nummer bij de klant aan, dan staat het er bij een nieuwe download wél op. Nieuwe
-              facturen kunnen sinds kort niet meer zonder verstuurd worden.
-            </p>
+              {uiT("In Spanje hoort er een NIF/CIF van de klant op elke factuur. Deze zijn al verstuurd, dus ze zijn hier alleen ter controle — vul het nummer bij de klant aan, dan staat het er bij een nieuwe download wél op. Nieuwe facturen kunnen sinds kort niet meer zonder verstuurd worden.")} </p>
           </div>
           <ul className="divide-y text-sm">
             {verstuurdeFacturen.map((f) => (
@@ -379,8 +379,7 @@ export default async function DataCheckPage() {
                   <span className="text-xs text-amber-700">{f.reden}</span>
                   {f.contactId && (
                     <LinkButton href={`/contacts/${f.contactId}/edit`} variant="secondary" className="text-xs">
-                      NIF aanvullen
-                    </LinkButton>
+                      {uiT("NIF aanvullen")} </LinkButton>
                   )}
                 </span>
               </li>
@@ -392,11 +391,9 @@ export default async function DataCheckPage() {
       {dupEmailRows.length > 0 && (
         <Card className="mb-5 border-amber-300">
           <div className="border-b border-amber-200 bg-amber-50/60 px-5 py-3">
-            <h3 className="text-sm font-semibold text-amber-900">Mogelijke dubbele contacten ({dupEmailRows.length})</h3>
+            <h3 className="text-sm font-semibold text-amber-900">{uiT("Mogelijke dubbele contacten (")}{dupEmailRows.length})</h3>
             <p className="text-xs text-amber-800/80">
-              Contacten met hetzelfde e-mailadres — controleer of het dubbelen zijn (kan ook een gedeeld bedrijfs-e-mail
-              zijn).
-            </p>
+              {uiT("Contacten met hetzelfde e-mailadres — controleer of het dubbelen zijn (kan ook een gedeeld bedrijfs-e-mail zijn).")} </p>
           </div>
           <ul className="divide-y text-sm">
             {dupEmailRows.map((r) => (
@@ -406,8 +403,7 @@ export default async function DataCheckPage() {
                   <span className="text-xs text-muted">· {r.email}</span>
                 </span>
                 <span className="shrink-0 rounded-full bg-amber-100 px-2 py-0.5 text-xs font-semibold text-amber-800">
-                  {r.n}×
-                </span>
+                  {r.n}{uiT("×")} </span>
               </li>
             ))}
           </ul>
@@ -416,24 +412,19 @@ export default async function DataCheckPage() {
 
       {totalIssues === 0 ? (
         <div className="rounded-lg border border-success/30 bg-success/5 px-4 py-3 text-sm font-medium text-success">
-          ✓ Geen problemen gevonden — alle gecontroleerde data is consistent.
-        </div>
+          {uiT("✓ Geen problemen gevonden — alle gecontroleerde data is consistent.")} </div>
       ) : (
         <div className="mb-5 rounded-lg border border-border bg-surface px-4 py-3 text-sm">
-          <strong>{totalIssues}</strong> aandachtspunt(en) over {withCounts.length - clean} categorie(ën).
-          {clean > 0 && <span className="text-muted"> · {clean} categorie(ën) schoon ✓</span>}
+          <strong>{totalIssues}</strong> {uiT("aandachtspunt(en) over")} {withCounts.length - clean} {uiT("categorie(ën).")} {clean > 0 && <span className="text-muted"> · {clean} {uiT("categorie(ën) schoon ✓")}</span>}
         </div>
       )}
 
       {fd.total > 0 && (
         <div className="mb-5 rounded-lg border border-border bg-surface px-4 py-3 text-sm">
-          Unieke meubelteksten (SEO): <strong>{fd.done}/{fd.total}</strong> meubels met eigen
-          meertalige omschrijving.
-          {fd.done < fd.total && (
+          {uiT("Unieke meubelteksten (SEO):")} <strong>{fd.done}/{fd.total}</strong> {uiT("meubels met eigen meertalige omschrijving.")} {fd.done < fd.total && (
             <span className="text-muted">
               {" "}
-              · de rest volgt automatisch zodra <code>AI_DESCRIPTIONS_ENABLED</code> aanstaat.
-            </span>
+              {uiT("· de rest volgt automatisch zodra")} <code>AI_DESCRIPTIONS_ENABLED</code> {uiT("aanstaat.")} </span>
           )}
         </div>
       )}
@@ -456,7 +447,7 @@ export default async function DataCheckPage() {
               <div className="border-t border-border/60 px-4 py-3">
                 <p className="mb-2 text-xs text-muted">{issue.why}</p>
                 {issue.count === 0 ? (
-                  <p className="text-sm text-success">Niets gevonden ✓</p>
+                  <p className="text-sm text-success">{uiT("Niets gevonden ✓")}</p>
                 ) : (
                   <>
                     {issue.listHref && (
@@ -464,8 +455,7 @@ export default async function DataCheckPage() {
                         href={issue.listHref}
                         className="mb-2 inline-block text-xs text-accent hover:underline"
                       >
-                        Alle bekijken →
-                      </Link>
+                        {uiT("Alle bekijken →")} </Link>
                     )}
                     <ul className="max-h-72 space-y-1.5 overflow-auto pr-1 text-sm">
                       {issue.items.map((it, i) => (
@@ -478,10 +468,9 @@ export default async function DataCheckPage() {
                       ))}
                       {issue.listHref && issue.count > issue.items.length && (
                         <li className="pt-1 text-xs text-muted">
-                          + {issue.count - issue.items.length} meer —{" "}
+                          + {issue.count - issue.items.length} {uiT("meer —")}{" "}
                           <Link href={issue.listHref} className="text-accent hover:underline">
-                            bekijk alle
-                          </Link>
+                            {uiT("bekijk alle")} </Link>
                         </li>
                       )}
                     </ul>

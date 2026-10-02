@@ -1,3 +1,5 @@
+import { datumTaal } from "@/lib/i18n/server";
+import { tekst as uiTranslation } from '@/lib/i18n/server';
 import { BookOpen, Download, Trash2, Upload } from "lucide-react";
 
 import { ConfirmSubmit } from "@/components/confirm-submit";
@@ -7,7 +9,10 @@ import { formatDate } from "@/lib/utils";
 
 import { deleteCatalog, uploadCatalog } from "./actions";
 
-export const metadata = { title: "Catalogi" };
+export async function generateMetadata() {
+  const uiT = await uiTranslation();
+  return { title: uiT("Catalogi") };
+}
 export const dynamic = "force-dynamic";
 
 function formatSize(bytes: number): string {
@@ -16,18 +21,20 @@ function formatSize(bytes: number): string {
 }
 
 export default async function CatalogiPage() {
+  const uiDateLocale = await datumTaal();
+  const uiT = await uiTranslation();
   const files = await listCatalogFiles();
 
   return (
     <>
       <PageHeader
-        title="Catalogi"
-        subtitle="Catalogussen en brochures — uploaden en snel downloaden"
+        title={uiT("Catalogi")}
+        subtitle={uiT("Catalogussen en brochures — uploaden en snel downloaden")}
       />
 
       <Card className="mb-4">
         <CardHeader>
-          <CardTitle>Catalogus uploaden</CardTitle>
+          <CardTitle>{uiT("Catalogus uploaden")}</CardTitle>
         </CardHeader>
         <CardContent>
           <form action={uploadCatalog} className="flex flex-wrap items-center gap-3">
@@ -39,22 +46,21 @@ export default async function CatalogiPage() {
               className="text-sm text-muted file:mr-3 file:cursor-pointer file:rounded-md file:border-0 file:bg-background-soft file:px-3 file:py-1.5 file:text-xs file:font-medium file:text-foreground hover:file:bg-border"
             />
             <button type="submit" className={buttonClass({ variant: "secondary" })}>
-              <Upload className="h-4 w-4" /> Uploaden
-            </button>
+              <Upload className="h-4 w-4" /> {uiT("Uploaden")} </button>
           </form>
-          <p className="mt-2 text-xs text-muted">Alleen PDF, max 25 MB.</p>
+          <p className="mt-2 text-xs text-muted">{uiT("Alleen PDF, max 25 MB.")}</p>
         </CardContent>
       </Card>
 
       <Card>
         <CardHeader>
-          <CardTitle>Catalogussen ({files.length})</CardTitle>
+          <CardTitle>{uiT("Catalogussen (")}{files.length})</CardTitle>
         </CardHeader>
         {files.length === 0 ? (
           <CardContent>
             <EmptyState
-              title="Nog geen catalogussen"
-              description="Upload hierboven een PDF om te beginnen."
+              title={uiT("Nog geen catalogussen")}
+              description={uiT("Upload hierboven een PDF om te beginnen.")}
             />
           </CardContent>
         ) : (
@@ -67,7 +73,7 @@ export default async function CatalogiPage() {
                 </span>
                 <span className="text-xs tabular-nums text-muted">{formatSize(f.size)}</span>
                 {f.uploadedAt && (
-                  <span className="text-xs text-muted">{formatDate(f.uploadedAt)}</span>
+                  <span className="text-xs text-muted">{formatDate(f.uploadedAt, uiDateLocale)}</span>
                 )}
                 <a
                   href={f.url}
@@ -75,8 +81,7 @@ export default async function CatalogiPage() {
                   rel="noreferrer"
                   className={buttonClass({ variant: "secondary" })}
                 >
-                  <Download className="h-4 w-4" /> Download
-                </a>
+                  <Download className="h-4 w-4" /> {uiT("Download")} </a>
                 <form
                   action={async () => {
                     "use server";
@@ -84,7 +89,7 @@ export default async function CatalogiPage() {
                   }}
                 >
                   <ConfirmSubmit
-                    message={`Catalogus "${f.name}" verwijderen?`}
+                    message={uiT("Catalogus \"{v0}\" verwijderen?", { v0: f.name })}
                     className="rounded-md p-1.5 text-muted transition-colors hover:bg-danger/10 hover:text-danger"
                   >
                     <Trash2 className="h-4 w-4" />

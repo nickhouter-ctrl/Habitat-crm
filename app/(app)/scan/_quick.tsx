@@ -1,4 +1,5 @@
 "use client";
+import { useT as useUiTranslation } from '@/components/taal-provider';
 
 import { useCallback, useState } from "react";
 
@@ -8,6 +9,7 @@ import { adjustStock, findProductByBarcode, type ScannedProduct } from "./action
 
 /** Snel bijwerken: scan een product en boek voorraad erbij/eraf of zet de stand. */
 export function QuickAdjust() {
+  const uiT = useUiTranslation();
   const [product, setProduct] = useState<ScannedProduct | null>(null);
   const [notFound, setNotFound] = useState<string | null>(null);
   const [amount, setAmount] = useState("1");
@@ -72,26 +74,23 @@ export function QuickAdjust() {
           <Input
             value={manual}
             onChange={(e) => setManual(e.target.value)}
-            placeholder="…of typ een barcode / SKU"
+            placeholder={uiT("…of typ een barcode / SKU")}
           />
           <Button type="submit" variant="secondary" disabled={busy}>
-            Zoek
-          </Button>
+            {uiT("Zoek")} </Button>
         </form>
       )}
 
       {notFound && (
         <div className="space-y-3 rounded-lg border p-4 text-sm">
           <p>
-            Geen product met code <span className="font-mono">{notFound}</span>.
+            {uiT("Geen product met code")} <span className="font-mono">{notFound}</span>.
           </p>
           <div className="flex flex-wrap gap-2">
             <Button variant="secondary" onClick={reset}>
-              Opnieuw scannen
-            </Button>
+              {uiT("Opnieuw scannen")} </Button>
             <LinkButton href="/products" variant="ghost">
-              Naar producten
-            </LinkButton>
+              {uiT("Naar producten")} </LinkButton>
           </div>
         </div>
       )}
@@ -102,11 +101,11 @@ export function QuickAdjust() {
             <p className="font-medium">{product.name}</p>
             {product.sku && <p className="font-mono text-xs text-muted">{product.sku}</p>}
             <p className="mt-1 text-sm">
-              Huidige voorraad: <strong className="tabular-nums">{product.stockQty}</strong>
+              {uiT("Huidige voorraad:")} <strong className="tabular-nums">{product.stockQty}</strong>
             </p>
           </div>
           <div className="flex items-center gap-2">
-            <label className="text-sm text-muted">Aantal</label>
+            <label className="text-sm text-muted">{uiT("Aantal")}</label>
             <Input
               type="number"
               inputMode="decimal"
@@ -117,22 +116,18 @@ export function QuickAdjust() {
           </div>
           <div className="grid grid-cols-3 gap-2">
             <Button onClick={() => apply("in")} disabled={busy}>
-              Erbij +
-            </Button>
+              {uiT("Erbij +")} </Button>
             <Button variant="secondary" onClick={() => apply("out")} disabled={busy}>
-              Eraf −
-            </Button>
+              {uiT("Eraf −")} </Button>
             <Button variant="ghost" onClick={() => apply("set")} disabled={busy}>
-              Zet op
-            </Button>
+              {uiT("Zet op")} </Button>
           </div>
           <button
             type="button"
             onClick={reset}
             className="w-full rounded-md py-1.5 text-sm text-muted transition-colors hover:bg-muted/50"
           >
-            Annuleren · volgende scannen
-          </button>
+            {uiT("Annuleren · volgende scannen")} </button>
         </div>
       )}
     </div>

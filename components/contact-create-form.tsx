@@ -1,4 +1,5 @@
 "use client";
+import { useT as useUiTranslation } from '@/components/taal-provider';
 
 import Link from "next/link";
 import { useRef, useState } from "react";
@@ -47,6 +48,7 @@ export function ContactCreateForm({
   initial?: ContactFormInitial;
   submitLabel?: string;
 }) {
+  const uiT = useUiTranslation();
   const [type, setType] = useState<Klanttype>(initial?.klanttype ?? "particulier");
   const isEdit = !!initial;
   const [dup, setDup] = useState<{ id: string; name: string } | null>(null);
@@ -77,12 +79,12 @@ export function ContactCreateForm({
   }
   const viesIndicator =
     viesLoading ? (
-      <p className="mt-1 text-xs text-muted">VIES controleren…</p>
+      <p className="mt-1 text-xs text-muted">{uiT("VIES controleren…")}</p>
     ) : vies ? (
       vies.valid ? (
-        <p className="mt-1 text-xs text-success">✓ Geldig EU-btw-nummer (VIES){vies.name ? ` — ${vies.name}` : ""}</p>
+        <p className="mt-1 text-xs text-success">{uiT("✓ Geldig EU-btw-nummer (VIES)")}{vies.name ? ` — ${vies.name}` : ""}</p>
       ) : (
-        <p className="mt-1 text-xs text-danger">✗ Dit btw-nummer is niet geldig volgens VIES</p>
+        <p className="mt-1 text-xs text-danger">{uiT("✗ Dit btw-nummer is niet geldig volgens VIES")}</p>
       )
     ) : null;
   const [addr, setAddr] = useState(initial?.addressLine ?? "");
@@ -123,7 +125,7 @@ export function ContactCreateForm({
     <form action={action} className="space-y-5">
       <input type="hidden" name="klanttype" value={type} />
 
-      <Field label="Type klant">
+      <Field label={uiT("Type klant")}>
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
           {TYPES.map((t) => (
             <button
@@ -137,36 +139,36 @@ export function ContactCreateForm({
                   : "hover:bg-background",
               )}
             >
-              {t.label}
+              {uiT(t.label)}
             </button>
           ))}
         </div>
       </Field>
 
       <div className="grid gap-4 sm:grid-cols-2">
-        <Field label="Voornaam" htmlFor="firstName">
+        <Field label={uiT("Voornaam")} htmlFor="firstName">
           <Input id="firstName" name="firstName" autoComplete="given-name" defaultValue={initial?.firstName ?? ""} />
         </Field>
-        <Field label="Achternaam" htmlFor="lastName">
+        <Field label={uiT("Achternaam")} htmlFor="lastName">
           <Input id="lastName" name="lastName" autoComplete="family-name" defaultValue={initial?.lastName ?? ""} />
         </Field>
       </div>
 
       {type === "zakelijk" && (
         <div className="grid gap-4 sm:grid-cols-2">
-          <Field label="Bedrijfsnaam" htmlFor="companyName">
+          <Field label={uiT("Bedrijfsnaam")} htmlFor="companyName">
             <Input
               id="companyName"
               name="companyName"
-              placeholder="bv. Bouwbedrijf X SL"
+              placeholder={uiT("bv. Bouwbedrijf X SL")}
               defaultValue={initial?.companyName ?? ""}
             />
           </Field>
-          <Field label="CIF / NIF (btw-nummer)" htmlFor="companyVat" hint="Verplicht op facturen in Spanje. Buitenlands nummer met landcode wordt tegen VIES gecheckt.">
+          <Field label={uiT("CIF / NIF (btw-nummer)")} htmlFor="companyVat" hint={uiT("Verplicht op facturen in Spanje. Buitenlands nummer met landcode wordt tegen VIES gecheckt.")}>
             <Input
               id="companyVat"
               name="companyVat"
-              placeholder="bv. B12345678 of NL123456789B01"
+              placeholder={uiT("bv. B12345678 of NL123456789B01")}
               defaultValue={initial?.companyVat ?? ""}
               onBlur={(e) => checkVies(e.currentTarget.value)}
             />
@@ -177,14 +179,14 @@ export function ContactCreateForm({
 
       {type !== "zakelijk" && (
         <Field
-          label="NIE / BSN (fiscaal nummer)"
+          label={uiT("NIE / BSN (fiscaal nummer)")}
           htmlFor="taxId"
-          hint="Verplicht op facturen — NIE of DNI voor particulieren in Spanje, anders het BSN of buitenlandse fiscaal nummer."
+          hint={uiT("Verplicht op facturen — NIE of DNI voor particulieren in Spanje, anders het BSN of buitenlandse fiscaal nummer.")}
         >
           <Input
             id="taxId"
             name="taxId"
-            placeholder="bv. X1234567L of 123456782"
+            placeholder={uiT("bv. X1234567L of 123456782")}
             defaultValue={initial?.taxId ?? ""}
             onBlur={(e) => checkVies(e.currentTarget.value)}
           />
@@ -193,28 +195,27 @@ export function ContactCreateForm({
       )}
 
       <div className="grid gap-4 sm:grid-cols-2">
-        <Field label="E-mail" htmlFor="email">
+        <Field label={uiT("E-mail")} htmlFor="email">
           <Input id="email" name="email" type="email" autoComplete="email" defaultValue={initial?.email ?? ""} onBlur={(e) => checkDup(e.currentTarget.form)} />
         </Field>
-        <Field label="Telefoon" htmlFor="phone">
+        <Field label={uiT("Telefoon")} htmlFor="phone">
           <Input id="phone" name="phone" type="tel" defaultValue={initial?.phone ?? ""} onBlur={(e) => checkDup(e.currentTarget.form)} />
         </Field>
       </div>
 
       {dup && !isEdit && (
         <div className="rounded-lg border border-amber-300 bg-amber-50 px-4 py-2.5 text-sm text-amber-900">
-          Er bestaat al een contact met deze gegevens:{" "}
+          {uiT("Er bestaat al een contact met deze gegevens:")}{" "}
           <Link href={`/contacts/${dup.id}`} className="font-semibold underline" target="_blank">
             {dup.name}
           </Link>
-          . Controleer of je geen dubbele aanmaakt.
-        </div>
+          {uiT(". Controleer of je geen dubbele aanmaakt.")} </div>
       )}
 
       <Field
-        label="Adres (straat + nr.)"
+        label={uiT("Adres (straat + nr.)")}
         htmlFor="addressLine"
-        hint="Begin te typen en kies het juiste adres — postcode en plaats vullen we dan automatisch in."
+        hint={uiT("Begin te typen en kies het juiste adres — postcode en plaats vullen we dan automatisch in.")}
       >
         <div className="relative">
           <Input
@@ -225,7 +226,7 @@ export function ContactCreateForm({
             onChange={(e) => onAddr(e.target.value)}
             onFocus={() => sugs.length > 0 && setOpen(true)}
             onBlur={() => setTimeout(() => setOpen(false), 150)}
-            placeholder="bv. Camí de la Fontana 3"
+            placeholder={uiT("bv. Camí de la Fontana 3")}
           />
           {open && sugs.length > 0 && (
             <ul className="absolute z-20 mt-1 w-full overflow-hidden rounded-md border bg-surface shadow-lg">
@@ -247,32 +248,32 @@ export function ContactCreateForm({
       </Field>
 
       <div className="grid gap-4 sm:grid-cols-3">
-        <Field label="Postcode" htmlFor="postalCode">
+        <Field label={uiT("Postcode")} htmlFor="postalCode">
           <Input id="postalCode" name="postalCode" value={postcode} onChange={(e) => setPostcode(e.target.value)} />
         </Field>
-        <Field label="Plaats" htmlFor="city">
+        <Field label={uiT("Plaats")} htmlFor="city">
           <Input id="city" name="city" value={city} onChange={(e) => setCity(e.target.value)} />
         </Field>
-        <Field label="Provincie" htmlFor="province">
+        <Field label={uiT("Provincie")} htmlFor="province">
           <Input id="province" name="province" value={province} onChange={(e) => setProvince(e.target.value)} />
         </Field>
       </div>
 
-      <Field label="Voorkeurstaal" htmlFor="preferredLanguage" hint="Voor offertes, facturen en herinneringen.">
+      <Field label={uiT("Voorkeurstaal")} htmlFor="preferredLanguage" hint={uiT("Voor offertes, facturen en herinneringen.")}>
         <Select id="preferredLanguage" name="preferredLanguage" defaultValue={initial?.preferredLanguage ?? "es"}>
-          <option value="es">Spaans</option>
+          <option value="es">{uiT("Spaans")}</option>
           <option value="nl">Nederlands</option>
-          <option value="en">Engels</option>
-          <option value="de">Duits</option>
+          <option value="en">{uiT("Engels")}</option>
+          <option value="de">{uiT("Duits")}</option>
         </Select>
       </Field>
 
-      <Field label="Notities" htmlFor="notes">
+      <Field label={uiT("Notities")} htmlFor="notes">
         <Textarea id="notes" name="notes" defaultValue={initial?.notes ?? ""} />
       </Field>
 
       <div className="pt-1">
-        <SubmitButton pendingLabel="Opslaan…">{submitLabel}</SubmitButton>
+        <SubmitButton pendingLabel={uiT("Opslaan…")}>{submitLabel}</SubmitButton>
       </div>
     </form>
   );

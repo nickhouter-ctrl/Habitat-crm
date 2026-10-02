@@ -31,6 +31,11 @@ export const TAAL_COOKIE = "habitat-taal";
 export const LOCALES = ["nl", "en", "es"] as const;
 export type Locale = (typeof LOCALES)[number];
 
+/** Locale for displayed dates and numbers; never use this for stored values. */
+export function dateLocale(locale: Locale): string {
+  return { nl: "nl-NL", en: "en-GB", es: "es-ES" }[locale];
+}
+
 export const LOCALE_LABEL: Record<Locale, string> = {
   nl: "Nederlands",
   en: "English",

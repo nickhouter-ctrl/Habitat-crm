@@ -1,3 +1,5 @@
+import { datumTaal } from "@/lib/i18n/server";
+import { tekst as uiTranslation } from '@/lib/i18n/server';
 /**
  * Logboek — wie heeft wat gedaan.
  *
@@ -33,7 +35,10 @@ import {
 import { db } from "@/lib/db";
 import { activities, contacts, documents, users } from "@/lib/db/schema";
 
-export const metadata = { title: "Logboek" };
+export async function generateMetadata() {
+  const uiT = await uiTranslation();
+  return { title: uiT("Logboek") };
+}
 
 const PERIODES = [
   { value: "7", label: "laatste 7 dagen" },
@@ -48,6 +53,8 @@ export default async function LogboekPage({
 }: {
   searchParams: Promise<{ wie?: string; q?: string; dagen?: string }>;
 }) {
+  const uiDateLocale = await datumTaal();
+  const uiT = await uiTranslation();
   const { wie = "", q = "", dagen = "30" } = await searchParams;
   const dagenNum = Number(dagen) || 0;
 
@@ -101,78 +108,77 @@ export default async function LogboekPage({
   return (
     <>
       <PageHeader
-        title="Logboek"
-        subtitle="wie heeft wat gedaan — goedkeuringen, verstuurde post, voorraad en instellingen"
+        title={uiT("Logboek")}
+        subtitle={uiT("wie heeft wat gedaan — goedkeuringen, verstuurde post, voorraad en instellingen")}
       />
 
       <div className="mb-5 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
         {perPersoon.map((p) => (
-          <StatTile key={p.naam} label={p.naam} value={p.n} hint="handelingen" />
+          <StatTile key={p.naam} label={p.naam} value={p.n} hint={uiT("handelingen")} />
         ))}
       </div>
 
       <Card className="mb-5">
         <CardContent>
           <form method="get" className="grid gap-3 sm:grid-cols-2 lg:grid-cols-[1.2fr_1fr_1.6fr_auto] lg:items-end">
-            <Field label="Wie" htmlFor="wie">
+            <Field label={uiT("Wie")} htmlFor="wie">
               <Select id="wie" name="wie" defaultValue={wie}>
-                <option value="">iedereen</option>
+                <option value="">{uiT("iedereen")}</option>
                 {medewerkers.map((m) => (
                   <option key={m.id} value={m.id}>
                     {m.name ?? m.email}
                   </option>
                 ))}
-                <option value="systeem">systeem / klant</option>
+                <option value="systeem">{uiT("systeem / klant")}</option>
               </Select>
             </Field>
-            <Field label="Periode" htmlFor="dagen">
+            <Field label={uiT("Periode")} htmlFor="dagen">
               <Select id="dagen" name="dagen" defaultValue={dagen}>
                 {PERIODES.map((p) => (
                   <option key={p.value} value={p.value}>
-                    {p.label}
+                    {uiT(p.label)}
                   </option>
                 ))}
               </Select>
             </Field>
-            <Field label="Zoeken" htmlFor="q" hint="in onderwerp en toelichting">
-              <Input id="q" name="q" defaultValue={q} placeholder="bijv. goedgekeurd, Ferhaoui, voorraad" />
+            <Field label={uiT("Zoeken")} htmlFor="q" hint={uiT("in onderwerp en toelichting")}>
+              <Input id="q" name="q" defaultValue={q} placeholder={uiT("bijv. goedgekeurd, Ferhaoui, voorraad")} />
             </Field>
             <button
               type="submit"
               className="h-10 rounded-md bg-accent px-4 text-sm font-medium text-white transition-opacity hover:opacity-90"
             >
-              Filteren
-            </button>
+              {uiT("Filteren")} </button>
           </form>
         </CardContent>
       </Card>
 
       <Card>
         <CardHeader>
-          <CardTitle>Handelingen</CardTitle>
+          <CardTitle>{uiT("Handelingen")}</CardTitle>
           <span className="text-xs text-muted">
-            {rijen.length === 300 ? "laatste 300 (filter verder om ouder terug te zien)" : `${rijen.length} regels`}
+            {rijen.length === 300 ? uiT("laatste 300 (filter verder om ouder terug te zien)") : uiT("{v0} regels", { v0: rijen.length })}
           </span>
         </CardHeader>
         {rijen.length === 0 ? (
           <CardContent>
-            <p className="text-sm text-muted">Niets gevonden in deze periode.</p>
+            <p className="text-sm text-muted">{uiT("Niets gevonden in deze periode.")}</p>
           </CardContent>
         ) : (
           <Table>
             <THead>
               <tr>
-                <Th>Wanneer</Th>
-                <Th>Wie</Th>
-                <Th>Wat</Th>
-                <Th>Bij</Th>
+                <Th>{uiT("Wanneer")}</Th>
+                <Th>{uiT("Wie")}</Th>
+                <Th>{uiT("Wat")}</Th>
+                <Th>{uiT("Bij")}</Th>
               </tr>
             </THead>
             <TBody>
               {rijen.map((r) => (
                 <Tr key={r.id}>
                   <Td className="whitespace-nowrap text-xs text-muted">
-                    {r.createdAt.toLocaleString("nl-NL", {
+                    {r.createdAt.toLocaleString(uiDateLocale, {
                       day: "numeric",
                       month: "short",
                       hour: "2-digit",
@@ -183,7 +189,7 @@ export default async function LogboekPage({
                     {r.door ? (
                       <span className="font-medium">{r.door}</span>
                     ) : (
-                      <Badge tone="neutral">systeem / klant</Badge>
+                      <Badge tone="neutral">{uiT("systeem / klant")}</Badge>
                     )}
                   </Td>
                   <Td>

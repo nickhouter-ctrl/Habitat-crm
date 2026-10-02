@@ -1,4 +1,5 @@
 "use client";
+import { useT as useUiTranslation } from '@/components/taal-provider';
 
 import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
@@ -22,6 +23,7 @@ export function DocumentAttachmentsUploader({
   signAction: (id: string, filename: string, contentType?: string) => Promise<SignResult>;
   attachAction: (id: string, files: Meta[]) => Promise<void>;
 }) {
+  const uiT = useUiTranslation();
   const router = useRouter();
   const inputRef = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
@@ -70,7 +72,7 @@ export function DocumentAttachmentsUploader({
         className="text-sm file:mr-3 file:rounded file:border-0 file:bg-accent/10 file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-accent"
       />
       <Button type="button" size="sm" variant="secondary" onClick={upload} disabled={busy}>
-        {busy ? "Uploaden…" : "Toevoegen"}
+        {busy ? uiT("Uploaden…") : uiT("Toevoegen")}
       </Button>
       {progress && <span className="text-xs text-muted">{progress}</span>}
       {error && <span className="text-xs text-danger">{error}</span>}

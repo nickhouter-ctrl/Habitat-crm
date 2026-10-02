@@ -1,4 +1,5 @@
 "use client";
+import { useT as useUiTranslation } from '@/components/taal-provider';
 
 /**
  * Meerdere producten tegelijk op een project boeken.
@@ -24,6 +25,7 @@ export function DeliveryLinesForm({
   action: (formData: FormData) => void | Promise<void>;
   producten: ComboOption[];
 }) {
+  const uiT = useUiTranslation();
   const [regels, setRegels] = useState<number[]>([0, 1, 2]);
   const [teller, setTeller] = useState(3);
 
@@ -32,19 +34,19 @@ export function DeliveryLinesForm({
       <div className="space-y-2">
         {regels.map((r, i) => (
           <div key={r} className="grid gap-x-2 gap-y-1 lg:grid-cols-[2.2fr_0.6fr_0.9fr_auto] lg:grid-rows-[auto_auto_auto] lg:items-end">
-            <Field className="lg:row-span-3 lg:grid lg:grid-rows-subgrid lg:gap-1.5" label={i === 0 ? "Product" : "\u00a0"} hint={i === 0 ? "typ een naam of SKU" : undefined}>
+            <Field className="lg:row-span-3 lg:grid lg:grid-rows-subgrid lg:gap-1.5" label={i === 0 ? uiT("Product") : "\u00a0"} hint={i === 0 ? uiT("typ een naam of SKU") : undefined}>
               <Combobox
                 name={`productId_${r}`}
                 options={producten}
-                placeholder="zoek product…"
+                placeholder={uiT("zoek product…")}
                 clearable
                 menuClassName="w-[28rem]"
               />
             </Field>
-            <Field className="lg:row-span-3 lg:grid lg:grid-rows-subgrid lg:gap-1.5" label={i === 0 ? "Aantal" : "\u00a0"}>
+            <Field className="lg:row-span-3 lg:grid lg:grid-rows-subgrid lg:gap-1.5" label={i === 0 ? uiT("Aantal") : "\u00a0"}>
               <Input name={`qty_${r}`} inputMode="decimal" className="text-right" placeholder="1" />
             </Field>
-            <Field className="lg:row-span-3 lg:grid lg:grid-rows-subgrid lg:gap-1.5" label={i === 0 ? "Verkoopprijs p/st" : "\u00a0"} hint={i === 0 ? "leeg = catalogusprijs" : undefined}>
+            <Field className="lg:row-span-3 lg:grid lg:grid-rows-subgrid lg:gap-1.5" label={i === 0 ? uiT("Verkoopprijs p/st") : "\u00a0"} hint={i === 0 ? uiT("leeg = catalogusprijs") : undefined}>
               <Input name={`price_${r}`} inputMode="decimal" className="text-right" placeholder="—" />
             </Field>
             <button
@@ -52,7 +54,7 @@ export function DeliveryLinesForm({
               onClick={() => setRegels((rs) => (rs.length > 1 ? rs.filter((x) => x !== r) : rs))}
               className="lg:row-span-3 lg:self-end lg:mb-0 mb-1 rounded p-2 text-muted transition-colors hover:bg-danger/10 hover:text-danger disabled:opacity-30"
               disabled={regels.length === 1}
-              aria-label="Regel verwijderen"
+              aria-label={uiT("Regel verwijderen")}
             >
               <X className="size-4" />
             </button>
@@ -68,24 +70,20 @@ export function DeliveryLinesForm({
         }}
         className="inline-flex items-center gap-1.5 rounded-md border bg-surface px-3 py-1.5 text-sm shadow-sm transition-colors hover:bg-background"
       >
-        <Plus className="size-4" /> Regel erbij
-      </button>
+        <Plus className="size-4" /> {uiT("Regel erbij")} </button>
 
       <div className="flex flex-wrap items-end gap-3 border-t pt-3">
-        <Field label="Datum" htmlFor="lev-date">
+        <Field label={uiT("Datum")} htmlFor="lev-date">
           <Input id="lev-date" name="date" type="date" defaultValue={new Date().toISOString().slice(0, 10)} />
         </Field>
-        <Field label="Notitie" htmlFor="lev-note" className="min-w-56 flex-1">
-          <Input id="lev-note" name="note" placeholder="bijv. geleverd op de werf, week 32" />
+        <Field label={uiT("Notitie")} htmlFor="lev-note" className="min-w-56 flex-1">
+          <Input id="lev-note" name="note" placeholder={uiT("bijv. geleverd op de werf, week 32")} />
         </Field>
-        <SubmitButton variant="secondary" pendingLabel="Boeken…">
-          + Geleverd boeken
-        </SubmitButton>
+        <SubmitButton variant="secondary" pendingLabel={uiT("Boeken…")}>
+          {uiT("+ Geleverd boeken")} </SubmitButton>
       </div>
       <p className="text-xs text-muted">
-        Lege regels worden overgeslagen. Ligt er van één product te weinig op voorraad, dan wordt alleen die regel niet
-        geboekt — de rest gaat gewoon door.
-      </p>
+        {uiT("Lege regels worden overgeslagen. Ligt er van één product te weinig op voorraad, dan wordt alleen die regel niet geboekt — de rest gaat gewoon door.")} </p>
     </form>
   );
 }

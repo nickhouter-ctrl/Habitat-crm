@@ -1,3 +1,5 @@
+import { datumTaal } from "@/lib/i18n/server";
+import { tekst as uiTranslation } from '@/lib/i18n/server';
 import { desc } from "drizzle-orm";
 import Link from "next/link";
 
@@ -10,7 +12,10 @@ import { registerImport, signImportUpload } from "./actions";
 import { UploadForm } from "./upload-form";
 
 export const dynamic = "force-dynamic";
-export const metadata = { title: "Lijst importeren" };
+export async function generateMetadata() {
+  const uiT = await uiTranslation();
+  return { title: uiT("Lijst importeren") };
+}
 
 const STATUS: Record<string, { label: string; tone: "neutral" | "accent" | "warning" | "success" | "danger" }> = {
   uploaded: { label: "Kolommen kiezen", tone: "warning" },
@@ -21,23 +26,25 @@ const STATUS: Record<string, { label: string; tone: "neutral" | "accent" | "warn
 };
 
 export default async function ImportPage({ searchParams }: { searchParams: Promise<{ error?: string; verwijderd?: string }> }) {
+  const uiDateLocale = await datumTaal();
+  const uiT = await uiTranslation();
   const sp = await searchParams;
   const batches = await db.query.prospectImports.findMany({ orderBy: desc(prospectImports.createdAt), limit: 30 });
 
   return (
     <>
       <PageHeader
-        title="Lijst importeren"
-        subtitle="Excel of CSV met bedrijven → prospects, zonder je contactenlijst te vervuilen"
-        actions={<Link href="/leads" className="text-sm underline">Terug naar leads</Link>}
+        title={uiT("Lijst importeren")}
+        subtitle={uiT("Excel of CSV met bedrijven → prospects, zonder je contactenlijst te vervuilen")}
+        actions={<Link href="/leads" className="text-sm underline">{uiT("Terug naar leads")}</Link>}
       />
 
-      {sp.error && <p className="mb-4 rounded-md bg-danger/10 px-3 py-2 text-sm text-danger">{sp.error}</p>}
-      {sp.verwijderd && <p className="mb-4 rounded-md bg-success/10 px-3 py-2 text-sm text-success">De batch is teruggedraaid.</p>}
+      {sp.error && <p className="mb-4 rounded-md bg-danger/10 px-3 py-2 text-sm text-danger">{uiT(sp.error ?? "")}</p>}
+      {sp.verwijderd && <p className="mb-4 rounded-md bg-success/10 px-3 py-2 text-sm text-success">{uiT("De batch is teruggedraaid.")}</p>}
 
       <Card className="mb-6">
         <CardHeader>
-          <CardTitle>Nieuw bestand</CardTitle>
+          <CardTitle>{uiT("Nieuw bestand")}</CardTitle>
         </CardHeader>
         <CardContent>
           <UploadForm signAction={signImportUpload} registerAction={registerImport} />
@@ -46,24 +53,24 @@ export default async function ImportPage({ searchParams }: { searchParams: Promi
 
       <Card className="overflow-hidden">
         <CardHeader>
-          <CardTitle>Eerdere imports</CardTitle>
-          <span className="text-xs text-muted">{batches.length} {batches.length === 1 ? "lijst" : "lijsten"}</span>
+          <CardTitle>{uiT("Eerdere imports")}</CardTitle>
+          <span className="text-xs text-muted">{batches.length} {batches.length === 1 ? uiT("lijst") : uiT("lijsten")}</span>
         </CardHeader>
         {batches.length === 0 ? (
           <CardContent>
-            <EmptyState title="Nog niets geïmporteerd" description="Upload hierboven een Excel- of CSV-bestand om te beginnen." />
+            <EmptyState title={uiT("Nog niets geïmporteerd")} description={uiT("Upload hierboven een Excel- of CSV-bestand om te beginnen.")} />
           </CardContent>
         ) : (
           <Table>
             <THead>
               <tr>
-                <Th>Lijst</Th>
-                <Th>Bestand</Th>
-                <Th>Herkomst</Th>
-                <Th className="text-right">Rijen</Th>
-                <Th className="text-right">Toegevoegd</Th>
-                <Th>Status</Th>
-                <Th>Datum</Th>
+                <Th>{uiT("Lijst")}</Th>
+                <Th>{uiT("Bestand")}</Th>
+                <Th>{uiT("Herkomst")}</Th>
+                <Th className="text-right">{uiT("Rijen")}</Th>
+                <Th className="text-right">{uiT("Toegevoegd")}</Th>
+                <Th>{uiT("Status")}</Th>
+                <Th>{uiT("Datum")}</Th>
               </tr>
             </THead>
             <TBody>
@@ -84,9 +91,9 @@ export default async function ImportPage({ searchParams }: { searchParams: Promi
                     <Td className="text-right tabular-nums">{b.totalRows || "—"}</Td>
                     <Td className="text-right tabular-nums">{b.insertedCount || "—"}</Td>
                     <Td>
-                      <Badge tone={meta.tone}>{meta.label}</Badge>
+                      <Badge tone={meta.tone}>{uiT(meta.label)}</Badge>
                     </Td>
-                    <Td className="text-muted">{formatDate(b.createdAt)}</Td>
+                    <Td className="text-muted">{formatDate(b.createdAt, uiDateLocale)}</Td>
                   </Tr>
                 );
               })}

@@ -1,3 +1,5 @@
+import { datumTaal } from "@/lib/i18n/server";
+import { tekst as uiTranslation } from '@/lib/i18n/server';
 import { desc, eq } from "drizzle-orm";
 import Link from "next/link";
 import { notFound } from "next/navigation";
@@ -41,6 +43,8 @@ export default async function PropertyDetailPage({
 }: {
   params: Promise<{ id: string }>;
 }) {
+  const uiDateLocale = await datumTaal();
+  const uiT = await uiTranslation();
   const { id } = await params;
 
   const property = await db.query.properties.findFirst({
@@ -65,14 +69,14 @@ export default async function PropertyDetailPage({
           <span className="flex items-center gap-3">
             {property.title}
             <Badge tone={propertyStatusMeta[property.status].tone}>
-              {propertyStatusMeta[property.status].label}
+              {uiT(propertyStatusMeta[property.status].label)}
             </Badge>
-            {!property.isPublished && <Badge tone="neutral">niet gepubliceerd</Badge>}
+            {!property.isPublished && <Badge tone="neutral">{uiT("niet gepubliceerd")}</Badge>}
           </span>
         }
         subtitle={
           <>
-            {propertyTypeMeta[property.type]}
+            {uiT(propertyTypeMeta[property.type])}
             {property.reference ? ` · ${property.reference}` : ""}
             {property.location ? ` · ${property.location}` : ""}
           </>
@@ -80,11 +84,9 @@ export default async function PropertyDetailPage({
         actions={
           <>
             <Link href="/properties" className="text-sm text-muted hover:underline">
-              ← Panden
-            </Link>
+              {uiT("← Panden")} </Link>
             <LinkButton href={`/properties/${id}/edit`} variant="secondary">
-              Bewerken
-            </LinkButton>
+              {uiT("Bewerken")} </LinkButton>
           </>
         }
       />
@@ -95,21 +97,21 @@ export default async function PropertyDetailPage({
         <div className="space-y-4">
           <Card>
             <CardHeader>
-              <CardTitle>Gegevens</CardTitle>
+              <CardTitle>{uiT("Gegevens")}</CardTitle>
             </CardHeader>
             <CardContent>
               <dl className="grid grid-cols-2 gap-x-3 gap-y-2 text-sm">
-                <dt className="text-muted">Vraagprijs</dt>
+                <dt className="text-muted">{uiT("Vraagprijs")}</dt>
                 <dd className="font-medium tabular-nums">{formatEUR(property.priceEur)}</dd>
-                <dt className="text-muted">Slaapkamers</dt>
+                <dt className="text-muted">{uiT("Slaapkamers")}</dt>
                 <dd>{property.bedrooms ?? "—"}</dd>
-                <dt className="text-muted">Badkamers</dt>
+                <dt className="text-muted">{uiT("Badkamers")}</dt>
                 <dd>{property.bathrooms ?? "—"}</dd>
-                <dt className="text-muted">Bebouwd</dt>
-                <dd>{property.builtSqm ? `${property.builtSqm} m²` : "—"}</dd>
-                <dt className="text-muted">Perceel</dt>
-                <dd>{property.plotSqm ? `${property.plotSqm} m²` : "—"}</dd>
-                <dt className="text-muted">Eigenaar</dt>
+                <dt className="text-muted">{uiT("Bebouwd")}</dt>
+                <dd>{property.builtSqm ? uiT("{v0} m²", { v0: property.builtSqm }) : "—"}</dd>
+                <dt className="text-muted">{uiT("Perceel")}</dt>
+                <dd>{property.plotSqm ? uiT("{v0} m²", { v0: property.plotSqm }) : "—"}</dd>
+                <dt className="text-muted">{uiT("Eigenaar")}</dt>
                 <dd>
                   {property.ownerContact ? (
                     <Link
@@ -122,10 +124,10 @@ export default async function PropertyDetailPage({
                     "—"
                   )}
                 </dd>
-                <dt className="text-muted">Verantwoordelijke</dt>
+                <dt className="text-muted">{uiT("Verantwoordelijke")}</dt>
                 <dd>{property.owner?.name ?? "—"}</dd>
-                <dt className="text-muted">Aangemaakt</dt>
-                <dd>{formatDate(property.createdAt)}</dd>
+                <dt className="text-muted">{uiT("Aangemaakt")}</dt>
+                <dd>{formatDate(property.createdAt, uiDateLocale)}</dd>
               </dl>
             </CardContent>
           </Card>
@@ -133,7 +135,7 @@ export default async function PropertyDetailPage({
           {property.description && (
             <Card>
               <CardHeader>
-                <CardTitle>Omschrijving</CardTitle>
+                <CardTitle>{uiT("Omschrijving")}</CardTitle>
               </CardHeader>
               <CardContent className="whitespace-pre-wrap text-sm">
                 {property.description}
@@ -145,22 +147,21 @@ export default async function PropertyDetailPage({
         <div className="lg:col-span-2">
           <Card>
             <CardHeader>
-              <CardTitle>Projecten bij dit pand</CardTitle>
+              <CardTitle>{uiT("Projecten bij dit pand")}</CardTitle>
               <LinkButton href="/projects/new" variant="secondary" size="sm">
-                Nieuw project
-              </LinkButton>
+                {uiT("Nieuw project")} </LinkButton>
             </CardHeader>
             {relatedProjects.length === 0 ? (
               <CardContent>
-                <p className="text-sm text-muted">Geen gekoppelde projecten.</p>
+                <p className="text-sm text-muted">{uiT("Geen gekoppelde projecten.")}</p>
               </CardContent>
             ) : (
               <Table>
                 <THead>
                   <tr>
-                    <Th>Project</Th>
-                    <Th>Contact</Th>
-                    <Th className="text-right">Status</Th>
+                    <Th>{uiT("Project")}</Th>
+                    <Th>{uiT("Contact")}</Th>
+                    <Th className="text-right">{uiT("Status")}</Th>
                   </tr>
                 </THead>
                 <TBody>
@@ -182,7 +183,7 @@ export default async function PropertyDetailPage({
                       </Td>
                       <Td className="text-right">
                         <Badge tone={p.status === "active" ? "success" : "neutral"}>
-                          {p.status === "active" ? "Actief" : "Gearchiveerd"}
+                          {p.status === "active" ? uiT("Actief") : uiT("Gearchiveerd")}
                         </Badge>
                       </Td>
                     </Tr>

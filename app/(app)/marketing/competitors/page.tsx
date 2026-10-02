@@ -1,3 +1,5 @@
+import { datumTaal } from "@/lib/i18n/server";
+import { tekst as uiTranslation } from '@/lib/i18n/server';
 /**
  * Concurrentendashboard — fase 5 (brief §8b). Gebouwd op het officiële
  * DSA-advertentiearchief van Meta (ads_archive), niet op scraping. Het
@@ -35,7 +37,10 @@ import {
 import { cn } from "@/lib/utils";
 import { removeCompetitor } from "./actions";
 
-export const metadata = { title: "Concurrenten" };
+export async function generateMetadata() {
+  const uiT = await uiTranslation();
+  return { title: uiT("Concurrenten") };
+}
 
 const SEGMENT_LABELS: Record<string, string> = {
   materials: "Materialen",
@@ -52,13 +57,15 @@ const LANGUAGE_LABELS: Record<string, string> = {
   fr: "Frans",
 };
 
-function formatDate(date: Date | null): string {
+function formatDate(date: Date | null, uiDateLocale = "nl-NL"): string {
   return date
-    ? date.toLocaleDateString("nl-NL", { day: "numeric", month: "short", year: "numeric" })
+    ? date.toLocaleDateString(uiDateLocale, { day: "numeric", month: "short", year: "numeric" })
     : "—";
 }
 
 export default async function CompetitorsPage() {
+  const uiDateLocale = await datumTaal();
+  const uiT = await uiTranslation();
   const now = new Date();
   const rows = await db.select().from(competitors).orderBy(competitors.name);
 
@@ -85,10 +92,8 @@ export default async function CompetitorsPage() {
   return (
     <>
       <PageHeader
-        title="Concurrenten"
-        subtitle={`${rows.length} gevolgd · ${totalAds} advertenties in het archief${
-          lastSeen ? ` · laatst gesynct ${formatDate(lastSeen)}` : ""
-        }`}
+        title={uiT("Concurrenten")}
+        subtitle={uiT("{v0} gevolgd · {v1} advertenties in het archief{v2}", { v0: rows.length, v1: totalAds, v2: lastSeen ? ` · laatst gesynct ${formatDate(lastSeen, uiDateLocale)}` : "" })}
         actions={<CompetitorSyncButton />}
       />
 
@@ -103,12 +108,11 @@ export default async function CompetitorsPage() {
       )}
 
       <Card className="mb-5 space-y-3 p-4">
-        <h2 className="text-sm font-medium">Concurrent zoeken op naam</h2>
+        <h2 className="text-sm font-medium">{uiT("Concurrent zoeken op naam")}</h2>
         <CompetitorSearch hasToken={!!process.env.META_ADS_ARCHIVE_TOKEN} />
         <details>
           <summary className="cursor-pointer text-xs text-muted">
-            Of handmatig toevoegen met een Meta Page-ID
-          </summary>
+            {uiT("Of handmatig toevoegen met een Meta Page-ID")} </summary>
           <div className="mt-3">
             <AddCompetitorForm />
           </div>
@@ -117,8 +121,8 @@ export default async function CompetitorsPage() {
 
       {perCompetitor.length === 0 ? (
         <EmptyState
-          title="Nog geen concurrenten gevolgd"
-          description="Voeg een concurrent toe met zijn Meta Page-ID (uit de Ad Library-URL, parameter view_all_page_id). De wekelijkse sync haalt daarna automatisch het publieke advertentiearchief op."
+          title={uiT("Nog geen concurrenten gevolgd")}
+          description={uiT("Voeg een concurrent toe met zijn Meta Page-ID (uit de Ad Library-URL, parameter view_all_page_id). De wekelijkse sync haalt daarna automatisch het publieke advertentiearchief op.")}
         />
       ) : (
         <div className="space-y-5">
@@ -147,8 +151,7 @@ export default async function CompetitorsPage() {
                     )}
                     {!competitor.metaPageId && (
                       <Badge tone="warning" className="text-[10px]">
-                        prospect — nog geen page-ID
-                      </Badge>
+                        {uiT("prospect — nog geen page-ID")} </Badge>
                     )}
                   </div>
                   <form action={removeCompetitor}>
@@ -157,30 +160,29 @@ export default async function CompetitorsPage() {
                       type="submit"
                       className="text-xs text-muted underline-offset-2 hover:text-danger hover:underline"
                     >
-                      Stop met volgen
-                    </button>
+                      {uiT("Stop met volgen")} </button>
                   </form>
                 </div>
 
                 <div className="grid grid-cols-2 gap-3 p-4 sm:grid-cols-5">
-                  <StatTile label="Advertenties" value={ads.length} hint={`${stillRunning} lopen nu`} />
+                  <StatTile label={uiT("Advertenties")} value={ads.length} hint={uiT("{v0} lopen nu", { v0: stillRunning })} />
                   <StatTile
-                    label="Langlopers (≥ 30 d)"
+                    label={uiT("Langlopers (≥ 30 d)")}
                     value={summary.longRunners.length}
-                    hint="het signaal dat telt"
+                    hint={uiT("het signaal dat telt")}
                   />
                   <StatTile
-                    label="Nieuw deze maand"
+                    label={uiT("Nieuw deze maand")}
                     value={lastMonth?.count ?? 0}
-                    hint={`instroom: ${summary.inflowByMonth.map((m) => m.count).join(" · ")} (laatste 6 mnd)`}
+                    hint={uiT("instroom: {v0} (laatste 6 mnd)", { v0: summary.inflowByMonth.map((m) => m.count).join(" · ") })}
                   />
                   <StatTile
-                    label="EU-bereik (som)"
-                    value={summary.totalReach.toLocaleString("nl-NL")}
-                    hint="ruwe indicatie van budget"
+                    label={uiT("EU-bereik (som)")}
+                    value={summary.totalReach.toLocaleString(uiDateLocale)}
+                    hint={uiT("ruwe indicatie van budget")}
                   />
                   <div className="space-y-1 text-xs">
-                    <p className="font-medium text-muted">Talen / platforms</p>
+                    <p className="font-medium text-muted">{uiT("Talen / platforms")}</p>
                     <p className="flex flex-wrap gap-1">
                       {Object.entries(summary.languageSplit)
                         .sort(([, a], [, b]) => b - a)
@@ -196,7 +198,7 @@ export default async function CompetitorsPage() {
                             {platform}: {count}
                           </Badge>
                         ))}
-                      {ads.length === 0 && <span className="text-muted">nog geen data</span>}
+                      {ads.length === 0 && <span className="text-muted">{uiT("nog geen data")}</span>}
                     </p>
                   </div>
                 </div>
@@ -205,12 +207,12 @@ export default async function CompetitorsPage() {
                   <Table>
                     <THead>
                       <tr>
-                        <Th>Advertentietekst (fragment)</Th>
-                        <Th>Gestart</Th>
-                        <Th className="text-right">Looptijd</Th>
-                        <Th>Status</Th>
-                        <Th className="text-right">EU-bereik</Th>
-                        <Th>Archief</Th>
+                        <Th>{uiT("Advertentietekst (fragment)")}</Th>
+                        <Th>{uiT("Gestart")}</Th>
+                        <Th className="text-right">{uiT("Looptijd")}</Th>
+                        <Th>{uiT("Status")}</Th>
+                        <Th className="text-right">{uiT("EU-bereik")}</Th>
+                        <Th>{uiT("Archief")}</Th>
                       </tr>
                     </THead>
                     <TBody>
@@ -222,7 +224,7 @@ export default async function CompetitorsPage() {
                             </span>
                           </Td>
                           <Td className="whitespace-nowrap text-xs text-muted">
-                            {formatDate(ad.deliveryStart)}
+                            {formatDate(ad.deliveryStart, uiDateLocale)}
                           </Td>
                           <Td
                             className={cn(
@@ -230,17 +232,17 @@ export default async function CompetitorsPage() {
                               (ad.daysRunning ?? 0) >= 60 && "font-semibold text-accent",
                             )}
                           >
-                            {ad.daysRunning != null ? `${ad.daysRunning} d` : "—"}
+                            {ad.daysRunning != null ? uiT("{v0} d", { v0: ad.daysRunning }) : "—"}
                           </Td>
                           <Td>
                             {ad.deliveryStop ? (
-                              <Badge tone="neutral">gestopt {formatDate(ad.deliveryStop)}</Badge>
+                              <Badge tone="neutral">{uiT("gestopt")} {formatDate(ad.deliveryStop, uiDateLocale)}</Badge>
                             ) : (
-                              <Badge tone="success">loopt nog</Badge>
+                              <Badge tone="success">{uiT("loopt nog")}</Badge>
                             )}
                           </Td>
                           <Td className="text-right tabular-nums text-muted">
-                            {ad.euTotalReach != null ? ad.euTotalReach.toLocaleString("nl-NL") : "—"}
+                            {ad.euTotalReach != null ? ad.euTotalReach.toLocaleString(uiDateLocale) : "—"}
                           </Td>
                           <Td>
                             {ad.snapshotUrl ? (
@@ -250,8 +252,7 @@ export default async function CompetitorsPage() {
                                 rel="noopener noreferrer"
                                 className="inline-flex items-center gap-1 text-xs text-accent underline-offset-2 hover:underline"
                               >
-                                Bekijk in Ad Library
-                                <ExternalLink className="size-3" aria-hidden />
+                                {uiT("Bekijk in Ad Library")} <ExternalLink className="size-3" aria-hidden />
                               </a>
                             ) : (
                               "—"
@@ -264,15 +265,13 @@ export default async function CompetitorsPage() {
                 ) : competitor.metaPageId ? (
                   <p className="border-t border-border/60 px-4 py-3 text-xs text-muted">
                     {ads.length === 0
-                      ? "Nog geen advertenties opgehaald — draai de sync."
-                      : "Nog geen langlopers (≥ 30 dagen) — nog te weinig historie om iets uit af te leiden."}
+                      ? uiT("Nog geen advertenties opgehaald — draai de sync.")
+                      : uiT("Nog geen langlopers (≥ 30 dagen) — nog te weinig historie om iets uit af te leiden.")}
                   </p>
                 ) : (
                   <div className="border-t border-border/60 px-4 py-3">
                     <p className="mb-2 text-xs text-muted">
-                      Koppel eerst een Meta Page-ID — daarna haalt de wekelijkse sync het
-                      advertentiearchief op.
-                    </p>
+                      {uiT("Koppel eerst een Meta Page-ID — daarna haalt de wekelijkse sync het advertentiearchief op.")} </p>
                     <CompetitorSearch
                       hasToken={!!process.env.META_ADS_ARCHIVE_TOKEN}
                       competitorId={competitor.id}

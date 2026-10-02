@@ -1,3 +1,4 @@
+import { tekst as uiTranslation } from '@/lib/i18n/server';
 import { asc, eq, sql } from "drizzle-orm";
 import Link from "next/link";
 
@@ -17,9 +18,13 @@ import {
 import { db } from "@/lib/db";
 import { brands, productVariants, products } from "@/lib/db/schema";
 
-export const metadata = { title: "Merken" };
+export async function generateMetadata() {
+  const uiT = await uiTranslation();
+  return { title: uiT("Merken") };
+}
 
 export default async function MerkenPage() {
+  const uiT = await uiTranslation();
   const rijen = await db
     .select({
       id: brands.id,
@@ -38,32 +43,31 @@ export default async function MerkenPage() {
   return (
     <>
       <PageHeader
-        title="Merken"
-        subtitle="Logo, dealerkorting en brochures per merk — de import gebruikt deze gegevens"
+        title={uiT("Merken")}
+        subtitle={uiT("Logo, dealerkorting en brochures per merk — de import gebruikt deze gegevens")}
         actions={
           <LinkButton href="/merken/new" variant="primary">
-            Nieuw merk
-          </LinkButton>
+            {uiT("Nieuw merk")} </LinkButton>
         }
       />
 
       {rijen.length === 0 ? (
         <EmptyState
-          title="Nog geen merken"
-          description="Leg een merk vast met zijn logo en dealerkorting; daarna kun je er producten aan koppelen."
-          action={<LinkButton href="/merken/new">Nieuw merk</LinkButton>}
+          title={uiT("Nog geen merken")}
+          description={uiT("Leg een merk vast met zijn logo en dealerkorting; daarna kun je er producten aan koppelen.")}
+          action={<LinkButton href="/merken/new">{uiT("Nieuw merk")}</LinkButton>}
         />
       ) : (
         <Card className="overflow-hidden">
           <Table>
             <THead>
               <tr>
-                <Th>Merk</Th>
-                <Th>Code</Th>
-                <Th className="text-right">Inkoopkorting</Th>
-                <Th className="text-right">Aannemerskorting</Th>
-                <Th className="text-right">Producten</Th>
-                <Th className="text-right">Uitvoeringen</Th>
+                <Th>{uiT("Merk")}</Th>
+                <Th>{uiT("Code")}</Th>
+                <Th className="text-right">{uiT("Inkoopkorting")}</Th>
+                <Th className="text-right">{uiT("Aannemerskorting")}</Th>
+                <Th className="text-right">{uiT("Producten")}</Th>
+                <Th className="text-right">{uiT("Uitvoeringen")}</Th>
                 <Th />
               </tr>
             </THead>
@@ -89,12 +93,12 @@ export default async function MerkenPage() {
                     {m.tradeDiscountPct ? (
                       `${Number(m.tradeDiscountPct)}%`
                     ) : (
-                      <span className="text-xs text-muted">geen</span>
+                      <span className="text-xs text-muted">{uiT("geen")}</span>
                     )}
                   </Td>
                   <Td className="text-right tabular-nums">{m.producten}</Td>
                   <Td className="text-right tabular-nums text-muted">{m.uitvoeringen}</Td>
-                  <Td>{!m.isActive && <Badge tone="neutral">inactief</Badge>}</Td>
+                  <Td>{!m.isActive && <Badge tone="neutral">{uiT("inactief")}</Badge>}</Td>
                 </Tr>
               ))}
             </TBody>

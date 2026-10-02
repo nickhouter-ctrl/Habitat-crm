@@ -1,4 +1,5 @@
 "use client";
+import { useT as useUiTranslation } from '@/components/taal-provider';
 
 import { PackageCheck, ScanLine, ScanSearch } from "lucide-react";
 import { useState } from "react";
@@ -17,6 +18,7 @@ const MODES: { id: Mode; label: string; desc: string; icon: typeof ScanLine }[] 
 ];
 
 export default function ScanPage() {
+  const uiT = useUiTranslation();
   const [mode, setMode] = useState<Mode | null>(null);
 
   const active = MODES.find((m) => m.id === mode);
@@ -24,8 +26,8 @@ export default function ScanPage() {
   return (
     <>
       <PageHeader
-        title={active ? active.label : "Scannen"}
-        subtitle={active ? active.desc : "Kies wat je wilt scannen"}
+        title={active ? active.label : uiT("Scannen")}
+        subtitle={active ? active.desc : uiT("Kies wat je wilt scannen")}
         actions={
           active ? (
             <button
@@ -33,8 +35,7 @@ export default function ScanPage() {
               onClick={() => setMode(null)}
               className="text-sm text-muted hover:underline"
             >
-              ← Andere modus
-            </button>
+              {uiT("← Andere modus")} </button>
           ) : undefined
         }
       />
@@ -53,7 +54,7 @@ export default function ScanPage() {
                   <m.icon className="size-5" />
                 </span>
                 <span>
-                  <span className="block font-medium">{m.label}</span>
+                  <span className="block font-medium">{uiT(m.label)}</span>
                   <span className="block text-sm text-muted">{m.desc}</span>
                 </span>
               </button>

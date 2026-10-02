@@ -1,4 +1,5 @@
 "use client";
+import { useT as useUiTranslation } from '@/components/taal-provider';
 
 import { useState, useTransition } from "react";
 
@@ -29,6 +30,7 @@ export function CampaignActions({
   inWachtrij?: number;
   bulkGereed?: boolean;
 }) {
+  const uiT = useUiTranslation();
   const [pending, start] = useTransition();
   const [angle, setAngle] = useState("");
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
@@ -37,11 +39,11 @@ export function CampaignActions({
     <div className="space-y-3">
       {/* AI: onderwerp + tekst opstellen in huisstijl */}
       <div className="space-y-2 rounded-lg border bg-background/50 p-3">
-        <p className="text-sm font-medium">Stel op met AI</p>
+        <p className="text-sm font-medium">{uiT("Stel op met AI")}</p>
         <Input
           value={angle}
           onChange={(e) => setAngle(e.target.value)}
-          placeholder="Insteek/aanleiding (optioneel), bv. 'nieuwe badkamercollectie'"
+          placeholder={uiT("Insteek/aanleiding (optioneel), bv. 'nieuwe badkamercollectie'")}
         />
         <Button
           type="button"
@@ -55,9 +57,9 @@ export function CampaignActions({
             })
           }
         >
-          {pending ? "Bezig…" : hasCopy ? "Opnieuw genereren met AI" : "Genereer met AI"}
+          {pending ? uiT("Bezig…") : hasCopy ? uiT("Opnieuw genereren met AI") : uiT("Genereer met AI")}
         </Button>
-        {!aiAvailable && <p className="text-xs text-muted">AI niet beschikbaar — zet ANTHROPIC_API_KEY in de omgeving.</p>}
+        {!aiAvailable && <p className="text-xs text-muted">{uiT("AI niet beschikbaar — zet ANTHROPIC_API_KEY in de omgeving.")}</p>}
       </div>
 
       {/* Testen + verzenden */}
@@ -74,8 +76,7 @@ export function CampaignActions({
             })
           }
         >
-          Stuur testmail naar mij
-        </Button>
+          {uiT("Stuur testmail naar mij")} </Button>
 
         <Button
           type="button"
@@ -84,7 +85,7 @@ export function CampaignActions({
           onClick={() => {
             if (
               !window.confirm(
-                `${recipientCount} bedrijven in de wachtrij zetten? Er gaat niets in één keer uit: het systeem verstuurt ze verspreid over de dagen, binnen de dagcap.`,
+                uiT("{v0} bedrijven in de wachtrij zetten? Er gaat niets in één keer uit: het systeem verstuurt ze verspreid over de dagen, binnen de dagcap.", { v0: recipientCount }),
               )
             )
               return;
@@ -99,7 +100,7 @@ export function CampaignActions({
             });
           }}
         >
-          {pending ? "Bezig…" : inWachtrij > 0 ? `Wachtrij aanvullen (${recipientCount})` : `In de wachtrij zetten (${recipientCount})`}
+          {pending ? uiT("Bezig…") : inWachtrij > 0 ? uiT("Wachtrij aanvullen ({v0})", { v0: recipientCount }) : uiT("In de wachtrij zetten ({v0})", { v0: recipientCount })}
         </Button>
 
         {inWachtrij > 0 && (
@@ -120,15 +121,14 @@ export function CampaignActions({
               })
             }
           >
-            {pending ? "Bezig…" : "Nu een ronde draaien"}
+            {pending ? uiT("Bezig…") : uiT("Nu een ronde draaien")}
           </Button>
         )}
       </div>
 
       {!bulkGereed && (
         <p className="rounded-md bg-warning/10 px-3 py-2 text-sm text-warning">
-          Het verzendkanaal is niet ingesteld (RESEND_API_KEY). Er kan niets verstuurd worden.
-        </p>
+          {uiT("Het verzendkanaal is niet ingesteld (RESEND_API_KEY). Er kan niets verstuurd worden.")} </p>
       )}
 
       {msg && <p className={`text-sm ${msg.ok ? "text-success" : "text-danger"}`}>{msg.text}</p>}

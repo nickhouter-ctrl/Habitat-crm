@@ -1,3 +1,5 @@
+import { datumTaal } from "@/lib/i18n/server";
+import { tekst as uiTranslation } from '@/lib/i18n/server';
 import { auth } from "@/auth";
 import { MarkRead } from "../mark-read";
 import { saveReplyDraft } from "../../assistent/actions";
@@ -28,12 +30,15 @@ import {
 } from "../actions";
 import { InvoiceFromMailButtons } from "../invoice-from-mail-buttons";
 
-export const metadata = { title: "Mail — detail" };
+export async function generateMetadata() {
+  const uiT = await uiTranslation();
+  return { title: uiT("Mail — detail") };
+}
 export const dynamic = "force-dynamic";
 
-function formatDate(d: Date | null): string {
+function formatDate(d: Date | null, uiDateLocale = "nl-NL"): string {
   if (!d) return "—";
-  return d.toLocaleString("nl-NL", {
+  return d.toLocaleString(uiDateLocale, {
     dateStyle: "long",
     timeStyle: "short",
     timeZone: "Europe/Amsterdam",
@@ -47,6 +52,8 @@ export default async function MailDetailPage({
   params: Promise<{ id: string }>;
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
+  const uiDateLocale = await datumTaal();
+  const uiT = await uiTranslation();
   const { id } = await params;
   const sp = await searchParams;
   const mail = await db.query.emailInbox.findFirst({ where: eq(emailInbox.id, id) });
@@ -121,41 +128,40 @@ export default async function MailDetailPage({
     <>
       {!mail.readAt && session?.user?.role !== "viewer" && <MarkRead id={mail.id} />}
       <PageHeader
-        title={mail.subject || "(geen onderwerp)"}
-        subtitle={`${formatDate(mail.receivedAt)} · ${mail.fromName ?? mail.fromEmail ?? "?"}`}
+        title={mail.subject || uiT("(geen onderwerp)")}
+        subtitle={`${formatDate(mail.receivedAt, uiDateLocale)} · ${mail.fromName ?? mail.fromEmail ?? "?"}`}
         actions={
           <LinkButton href="/inbox" variant="ghost">
-            <ArrowLeft className="h-4 w-4" /> Terug
-          </LinkButton>
+            <ArrowLeft className="h-4 w-4" /> {uiT("Terug")} </LinkButton>
         }
       />
 
       {suggestion && <Card className="mb-4 space-y-2 p-4">
-        <p className="font-medium">Voorstel: {MAIL_GROUPS[suggestion.category as MailGroup] ?? "Controleren"}</p>
+        <p className="font-medium">{uiT("Voorstel:")} {MAIL_GROUPS[suggestion.category as MailGroup] ?? uiT("Controleren")}</p>
         <p className="text-sm">{suggestion.summary}</p>
         <p className="text-sm text-muted">{suggestion.reason}</p>
-        {suggestion.deadline && <p className="text-sm text-warning">Termijn uit bericht: {suggestion.deadline}</p>}
-        <Link href="/assistent" className="text-sm text-accent">Alle voorstellen bekijken →</Link>
+        {suggestion.deadline && <p className="text-sm text-warning">{uiT("Termijn uit bericht:")} {suggestion.deadline}</p>}
+        <Link href="/assistent" className="text-sm text-accent">{uiT("Alle voorstellen bekijken →")}</Link>
       </Card>}
       <div className="grid gap-4 lg:grid-cols-[2fr_1fr]">
         {/* LEFT: mail content */}
         <Card className="space-y-4 p-5">
           <div className="space-y-1 border-b border-border pb-3 text-sm">
             <div>
-              <span className="font-medium text-muted">Van:</span>{" "}
+              <span className="font-medium text-muted">{uiT("Van:")}</span>{" "}
               <span>
                 {mail.fromName ? `${mail.fromName} <${mail.fromEmail}>` : (mail.fromEmail ?? "?")}
               </span>
             </div>
             <div>
-              <span className="font-medium text-muted">Aan:</span> <span>{mail.toEmail ?? "?"}</span>
+              <span className="font-medium text-muted">{uiT("Aan:")}</span> <span>{mail.toEmail ?? "?"}</span>
             </div>
             {mail.ccEmail && (
               <div>
-                <span className="font-medium text-muted">CC:</span> <span>{mail.ccEmail}</span>
+                <span className="font-medium text-muted">{uiT("CC:")}</span> <span>{mail.ccEmail}</span>
               </div>
             )}
-            <div className="text-xs text-muted">Message-ID: {mail.messageId}</div>
+            <div className="text-xs text-muted">{uiT("Message-ID:")} {mail.messageId}</div>
           </div>
 
           {/* Body */}
@@ -170,14 +176,14 @@ export default async function MailDetailPage({
               {mail.bodyText}
             </pre>
           ) : (
-            <p className="text-sm text-muted">(geen body)</p>
+            <p className="text-sm text-muted">{uiT("(geen body)")}</p>
           )}
 
           {/* Attachments — downloadbaar vanaf Supabase Storage */}
           {storedAttachments.length > 0 ? (
             <div className="border-t border-border pt-3">
               <p className="mb-2 text-xs font-medium uppercase tracking-wide text-muted">
-                Bijlagen ({storedAttachments.length})
+                {uiT("Bijlagen (")}{storedAttachments.length})
               </p>
               <ul className="space-y-1">
                 {storedAttachments.map((a) => {
@@ -200,13 +206,13 @@ export default async function MailDetailPage({
                         {CATEGORIES[a.category as keyof typeof CATEGORIES] ?? a.category}
                       </span>
                       <span className="text-xs tabular-nums text-muted">
-                        {a.sizeBytes ? `${(a.sizeBytes / 1024).toFixed(0)} kB` : ""}
+                        {a.sizeBytes ? uiT("{v0} kB", { v0: (a.sizeBytes / 1024).toFixed(0) }) : ""}
                       </span>
                       <Link
                         href={`/api/archief/${a.id}`}
                         target="_blank"
                         className="rounded p-1 text-muted opacity-0 transition-opacity hover:bg-background hover:text-foreground group-hover:opacity-100"
-                        title="Download"
+                        title={uiT("Download")}
                       >
                         <Download className="h-3.5 w-3.5" />
                       </Link>
@@ -218,26 +224,24 @@ export default async function MailDetailPage({
                 })}
               </ul>
               <p className="mt-2 text-xs text-muted">
-                Klik <Receipt className="inline h-3 w-3" /> bij een factuur → maakt inkoopfactuur in CRM + pusht naar Holded.
-              </p>
+                {uiT("Klik")} <Receipt className="inline h-3 w-3" /> {uiT("bij een factuur → maakt inkoopfactuur in CRM + pusht naar Holded.")} </p>
             </div>
           ) : metaAttachments.length > 0 ? (
             <div className="border-t border-border pt-3">
               <p className="mb-2 text-xs font-medium uppercase tracking-wide text-muted">
-                Bijlagen ({metaAttachments.length})
+                {uiT("Bijlagen (")}{metaAttachments.length})
               </p>
               <ul className="space-y-1.5">
                 {metaAttachments.map((a, i) => (
                   <li key={i} className="flex items-center gap-2 text-sm text-muted">
                     <Paperclip className="h-3.5 w-3.5" />
                     <span className="font-medium">{a.filename}</span>
-                    <span className="text-xs">{(a.size / 1024).toFixed(0)} kB · {a.contentType}</span>
+                    <span className="text-xs">{(a.size / 1024).toFixed(0)} {uiT("kB ·")} {a.contentType}</span>
                   </li>
                 ))}
               </ul>
               <p className="mt-2 text-xs text-muted">
-                Deze bijlages zijn van vóór de archief-upload — alleen metadata beschikbaar. Open de mail in Gmail om ze te bekijken.
-              </p>
+                {uiT("Deze bijlages zijn van vóór de archief-upload — alleen metadata beschikbaar. Open de mail in Gmail om ze te bekijken.")} </p>
             </div>
           ) : null}
         </Card>
@@ -248,17 +252,15 @@ export default async function MailDetailPage({
           {mail.fromEmail && (
             <Card className="p-4">
               <p className="mb-3 text-xs font-medium uppercase tracking-wide text-muted">
-                <Mail className="mr-1 inline h-3 w-3" /> Beantwoorden
-              </p>
+                <Mail className="mr-1 inline h-3 w-3" /> {uiT("Beantwoorden")} </p>
               {sp.beantwoord === "1" && (
                 <p className="mb-2 rounded-md bg-success/10 px-3 py-2 text-xs text-success">
-                  ✓ Antwoord verstuurd naar {mail.fromEmail}.
+                  {uiT("✓ Antwoord verstuurd naar")} {mail.fromEmail}.
                 </p>
               )}
               {sp.beantwoord === "0" && (
                 <p className="mb-2 rounded-md bg-warning/10 px-3 py-2 text-xs text-warning">
-                  Antwoord kon niet verstuurd worden.
-                </p>
+                  {uiT("Antwoord kon niet verstuurd worden.")} </p>
               )}
               <AiMailForm
                 key={`${mail.id}-${sp.beantwoord ?? ""}`}
@@ -273,7 +275,7 @@ export default async function MailDetailPage({
                     : "Re: je bericht"
                 )}
                 toEmail={mail.fromEmail}
-                placeholder="Typ je antwoord, of kort wat je wilt zeggen en klik ✨…"
+                placeholder={uiT("Typ je antwoord, of kort wat je wilt zeggen en klik ✨…")}
                 aiBeschikbaar={aiReplyConfigured()}
                 bijlagen={catalogi.map((f) => ({ path: f.path, name: f.name, size: f.size }))}
               />
@@ -282,11 +284,11 @@ export default async function MailDetailPage({
 
           {/* Status */}
           <Card className="p-4">
-            <p className="text-xs font-medium uppercase tracking-wide text-muted">Status</p>
+            <p className="text-xs font-medium uppercase tracking-wide text-muted">{uiT("Status")}</p>
             <div className="mt-2 flex items-center gap-2">
-              {mail.status === "new" && <Badge tone="info">nieuw</Badge>}
-              {mail.status === "linked" && <Badge tone="success">gelinkt</Badge>}
-              {mail.status === "archived" && <Badge tone="neutral">gearchiveerd</Badge>}
+              {mail.status === "new" && <Badge tone="info">{uiT("nieuw")}</Badge>}
+              {mail.status === "linked" && <Badge tone="success">{uiT("gelinkt")}</Badge>}
+              {mail.status === "archived" && <Badge tone="neutral">{uiT("gearchiveerd")}</Badge>}
             </div>
             {mail.status !== "new" && (
               <form
@@ -297,8 +299,7 @@ export default async function MailDetailPage({
                 className="mt-3"
               >
                 <button className={cn(buttonClass({ variant: "ghost", size: "sm" }), "w-full")}>
-                  <RotateCcw className="h-3.5 w-3.5" /> Heropenen
-                </button>
+                  <RotateCcw className="h-3.5 w-3.5" /> {uiT("Heropenen")} </button>
               </form>
             )}
             {mail.status === "new" && (
@@ -310,8 +311,7 @@ export default async function MailDetailPage({
                 className="mt-3"
               >
                 <button className={cn(buttonClass({ variant: "ghost", size: "sm" }), "w-full")}>
-                  <Archive className="h-3.5 w-3.5" /> Archiveren
-                </button>
+                  <Archive className="h-3.5 w-3.5" /> {uiT("Archiveren")} </button>
               </form>
             )}
           </Card>
@@ -319,19 +319,19 @@ export default async function MailDetailPage({
           {/* Currently linked */}
           {linkedPO && (
             <Card className="p-4">
-              <p className="text-xs font-medium uppercase tracking-wide text-muted">Gelinkt aan PO</p>
+              <p className="text-xs font-medium uppercase tracking-wide text-muted">{uiT("Gelinkt aan PO")}</p>
               <Link
                 href={`/inkooporders/${linkedPO.id}`}
                 className="mt-1 block text-sm font-medium hover:underline"
               >
                 {linkedPO.supplier} {linkedPO.reference ? `· ${linkedPO.reference}` : ""}
               </Link>
-              <p className="text-xs text-muted">Status PO: {linkedPO.status}</p>
+              <p className="text-xs text-muted">{uiT("Status PO:")} {linkedPO.status}</p>
             </Card>
           )}
           {linkedQR && (
             <Card className="p-4">
-              <p className="text-xs font-medium uppercase tracking-wide text-muted">Gelinkt aan aanvraag</p>
+              <p className="text-xs font-medium uppercase tracking-wide text-muted">{uiT("Gelinkt aan aanvraag")}</p>
               <Link
                 href={`/aanvragen/${linkedQR.id}`}
                 className="mt-1 block text-sm font-medium hover:underline"
@@ -345,11 +345,10 @@ export default async function MailDetailPage({
           {mail.status === "new" && !linkedPO && (
             <Card className="p-4">
               <p className="mb-3 text-xs font-medium uppercase tracking-wide text-muted">
-                <Link2 className="mr-1 inline h-3 w-3" /> Link aan Purchase Order
-              </p>
+                <Link2 className="mr-1 inline h-3 w-3" /> {uiT("Link aan Purchase Order")} </p>
               {suggestedPOs.length > 0 ? (
                 <>
-                  <p className="mb-2 text-xs text-muted">Voorstel op basis van afzender:</p>
+                  <p className="mb-2 text-xs text-muted">{uiT("Voorstel op basis van afzender:")}</p>
                   <ul className="space-y-1.5">
                     {suggestedPOs.map((p) => (
                       <li key={p.id}>
@@ -372,8 +371,7 @@ export default async function MailDetailPage({
                               {p.reference ?? "—"} · {p.status} · {formatEUR(Number(p.total))}
                             </span>
                             <span className="mt-1 block text-[10px] uppercase tracking-wide text-accent">
-                              → Link + zet op "onderweg"
-                            </span>
+                              {uiT("→ Link + zet op \"onderweg\"")} </span>
                           </button>
                         </form>
                       </li>
@@ -381,11 +379,11 @@ export default async function MailDetailPage({
                   </ul>
                 </>
               ) : (
-                <p className="text-xs text-muted">Geen voorstel — kies handmatig.</p>
+                <p className="text-xs text-muted">{uiT("Geen voorstel — kies handmatig.")}</p>
               )}
               <details className="mt-3">
                 <summary className="cursor-pointer text-xs text-muted hover:text-foreground">
-                  Alle recente PO's tonen ({allPOs.length})
+                  {uiT("Alle recente PO's tonen (")}{allPOs.length})
                 </summary>
                 <ul className="mt-2 max-h-72 space-y-1 overflow-y-auto">
                   {allPOs.map((p) => (
@@ -420,9 +418,8 @@ export default async function MailDetailPage({
           {mail.status === "new" && !linkedQR && recentRequests.length > 0 && (
             <Card className="p-4">
               <p className="mb-3 text-xs font-medium uppercase tracking-wide text-muted">
-                <Link2 className="mr-1 inline h-3 w-3" /> Link aan offerte-aanvraag
-              </p>
-              <p className="mb-2 text-xs text-muted">Aanvragen van zelfde e-mailadres:</p>
+                <Link2 className="mr-1 inline h-3 w-3" /> {uiT("Link aan offerte-aanvraag")} </p>
+              <p className="mb-2 text-xs text-muted">{uiT("Aanvragen van zelfde e-mailadres:")}</p>
               <ul className="space-y-1.5">
                 {recentRequests.map((q) => (
                   <li key={q.id}>
@@ -438,7 +435,7 @@ export default async function MailDetailPage({
                       >
                         <span className="block font-medium">{q.name ?? q.email}</span>
                         <span className="block text-muted">
-                          {q.status} · {q.createdAt?.toLocaleDateString("nl-NL")}
+                          {q.status} · {q.createdAt?.toLocaleDateString(uiDateLocale)}
                         </span>
                       </button>
                     </form>
@@ -451,8 +448,7 @@ export default async function MailDetailPage({
           {/* Notes */}
           <Card className="p-4">
             <p className="mb-2 text-xs font-medium uppercase tracking-wide text-muted">
-              Interne notities
-            </p>
+              {uiT("Interne notities")} </p>
             <form
               action={async (formData: FormData) => {
                 "use server";
@@ -464,10 +460,10 @@ export default async function MailDetailPage({
                 name="notes"
                 rows={4}
                 defaultValue={mail.notes ?? ""}
-                placeholder="Notities (alleen intern zichtbaar)…"
+                placeholder={uiT("Notities (alleen intern zichtbaar)…")}
                 className="w-full rounded-md border border-border bg-background px-2 py-1.5 text-sm"
               />
-              <button className={cn(buttonClass({ size: "sm" }), "w-full")}>Bewaren</button>
+              <button className={cn(buttonClass({ size: "sm" }), "w-full")}>{uiT("Bewaren")}</button>
             </form>
           </Card>
         </div>

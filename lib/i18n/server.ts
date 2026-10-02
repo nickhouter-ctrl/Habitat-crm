@@ -7,7 +7,7 @@ import { cache } from "react";
 import { cookies } from "next/headers";
 
 import { huidigeToegangOfNull } from "@/lib/auth/access";
-import { isLocale, maakT, TAAL_COOKIE, woordenboek, type Dictionary, type Locale, type T } from "@/lib/i18n";
+import { dateLocale, isLocale, maakT, TAAL_COOKIE, woordenboek, type Dictionary, type Locale, type T } from "@/lib/i18n";
 
 /**
  * De taal van dit verzoek: de instelling van de ingelogde medewerker, en als
@@ -32,8 +32,7 @@ export async function tekst(): Promise<T> {
  * "18 de septiembre de 2026" te zijn, en dat kan Intl beter dan wij.
  */
 export async function datumTaal(): Promise<string> {
-  const map: Record<Locale, string> = { nl: "nl-NL", en: "en-GB", es: "es-ES" };
-  return map[await huidigeTaal()];
+  return dateLocale(await huidigeTaal());
 }
 
 /** Taal plus woordenboek, om aan de client-laag door te geven. */

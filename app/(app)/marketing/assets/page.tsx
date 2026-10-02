@@ -1,3 +1,5 @@
+import { datumTaal } from "@/lib/i18n/server";
+import { tekst as uiTranslation } from '@/lib/i18n/server';
 /**
  * Beeldbibliotheek (brief §5): rasterweergave van alle assets met filters op
  * bron, product, categorie en tags. Beelden waarvan de organische IG-post
@@ -16,7 +18,10 @@ import { marketingStorage } from "@/lib/marketing/storage";
 import { formatDuration } from "@/lib/marketing/video";
 import { cn } from "@/lib/utils";
 
-export const metadata = { title: "Beeldbibliotheek" };
+export async function generateMetadata() {
+  const uiT = await uiTranslation();
+  return { title: uiT("Beeldbibliotheek") };
+}
 
 const SOURCE_LABELS: Record<string, string> = {
   website: "Website",
@@ -39,6 +44,8 @@ export default async function AssetsPage({
 }: {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
+  const uiDateLocale = await datumTaal();
+  const uiT = await uiTranslation();
   const params = await searchParams;
   const q = typeof params.q === "string" ? params.q.trim() : "";
   const source = typeof params.source === "string" ? params.source : "";
@@ -123,16 +130,16 @@ export default async function AssetsPage({
   return (
     <>
       <PageHeader
-        title="Beeldbibliotheek"
-        subtitle={`${rows.length} ${rows.length === 1 ? "beeld" : "beelden"}${
-          source ? ` uit ${SOURCE_LABELS[source]}` : ""
-        }${category ? ` in ${category}` : ""}${tag ? ` met tag "${tag}"` : ""}${q ? ` voor "${q}"` : ""}`}
+        title={uiT("Beeldbibliotheek")}
+        subtitle={`${rows.length} ${rows.length === 1 ? uiT("beeld") : uiT("beelden")}${
+          source ? uiT(" uit {v0}", { v0: SOURCE_LABELS[source] }) : ""
+        }${category ? uiT(" in {v0}", { v0: category }) : ""}${tag ? uiT(" met tag \"{v0}\"", { v0: tag }) : ""}${q ? uiT(" voor \"{v0}\"", { v0: q }) : ""}`}
         actions={<AssetToolbar />}
       />
 
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         {/* Bron-tabs */}
-        <nav aria-label="Filter op bron" className="flex flex-wrap gap-1">
+        <nav aria-label={uiT("Filter op bron")} className="flex flex-wrap gap-1">
           {[["", "Alle"], ...Object.entries(SOURCE_LABELS)].map(([value, label]) => (
             <Link
               key={value || "alle"}
@@ -155,15 +162,14 @@ export default async function AssetsPage({
           {source && <input type="hidden" name="source" value={source} />}
           {tag && <input type="hidden" name="tag" value={tag} />}
           <label className="sr-only" htmlFor="asset-product">
-            Filter op product
-          </label>
+            {uiT("Filter op product")} </label>
           <select
             id="asset-product"
             name="product"
             defaultValue={productId}
             className="h-9 rounded-md border border-border bg-background px-2 text-sm"
           >
-            <option value="">Alle producten</option>
+            <option value="">{uiT("Alle producten")}</option>
             {productOptions.map((p) => (
               <option key={p.id} value={p.id}>
                 {p.name}
@@ -171,15 +177,14 @@ export default async function AssetsPage({
             ))}
           </select>
           <label className="sr-only" htmlFor="asset-category">
-            Filter op categorie
-          </label>
+            {uiT("Filter op categorie")} </label>
           <select
             id="asset-category"
             name="category"
             defaultValue={category}
             className="h-9 rounded-md border border-border bg-background px-2 text-sm"
           >
-            <option value="">Alle categorieën</option>
+            <option value="">{uiT("Alle categorieën")}</option>
             {categoryOptions.map((c) => (
               <option key={c} value={c}>
                 {c}
@@ -194,20 +199,19 @@ export default async function AssetsPage({
             <Input
               name="q"
               defaultValue={q}
-              placeholder="Zoek op naam, product of tag…"
+              placeholder={uiT("Zoek op naam, product of tag…")}
               className="w-56 pl-8"
-              aria-label="Zoeken in de beeldbibliotheek"
+              aria-label={uiT("Zoeken in de beeldbibliotheek")}
             />
           </div>
           <button type="submit" className="sr-only">
-            Filteren
-          </button>
+            {uiT("Filteren")} </button>
         </form>
       </div>
 
       {/* Tag-chips */}
       {tagOptions.length > 0 && (
-        <nav aria-label="Filter op tag" className="mb-4 flex flex-wrap gap-1">
+        <nav aria-label={uiT("Filter op tag")} className="mb-4 flex flex-wrap gap-1">
           {tagOptions.map((t) => (
             <Link
               key={t}
@@ -228,17 +232,17 @@ export default async function AssetsPage({
 
       {rows.length === 0 ? (
         <EmptyState
-          title={q || source || tag ? "Geen beelden gevonden" : "Nog geen beelden"}
+          title={q || source || tag ? uiT("Geen beelden gevonden") : uiT("Nog geen beelden")}
           description={
             q || source || tag
-              ? "Pas de filters of zoekopdracht aan."
-              : "Vul de bibliotheek via 'Sync website', 'Sync Instagram' of een handmatige upload hierboven."
+              ? uiT("Pas de filters of zoekopdracht aan.")
+              : uiT("Vul de bibliotheek via 'Sync website', 'Sync Instagram' of een handmatige upload hierboven.")
           }
         />
       ) : (
         <ul
           className="grid list-none grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5"
-          aria-label="Beelden"
+          aria-label={uiT("Beelden")}
         >
           {rows.map(({ asset, productName }) => {
             const isEmbed = asset.storagePath.startsWith("embed/");
@@ -262,7 +266,7 @@ export default async function AssetsPage({
                     >
                       <span aria-hidden className="text-3xl">▶</span>
                       <span className="px-3 text-xs">
-                        Bekijk op {asset.storagePath.startsWith("embed/vimeo") ? "Vimeo" : "YouTube"}
+                        {uiT("Bekijk op")} {asset.storagePath.startsWith("embed/vimeo") ? uiT("Vimeo") : uiT("YouTube")}
                       </span>
                     </a>
                   ) : isVideo ? (
@@ -277,18 +281,17 @@ export default async function AssetsPage({
                         preload="none"
                         playsInline
                         className="aspect-square w-full bg-black object-contain"
-                        aria-label={`Video: ${alt}`}
+                        aria-label={uiT("Video: {v0}", { v0: alt })}
                       />
                     ) : (
                       <span className="flex aspect-square w-full items-center justify-center text-xs text-muted">
-                        Opslag niet geconfigureerd
-                      </span>
+                        {uiT("Opslag niet geconfigureerd")} </span>
                     )
                   ) : (
                     <Link
                       href={`/marketing/creatives/new?assetId=${asset.id}`}
                       className="block focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent"
-                      aria-label={`Maak creative met ${alt}`}
+                      aria-label={uiT("Maak creative met {v0}", { v0: alt })}
                     >
                       {url ? (
                         // eslint-disable-next-line @next/next/no-img-element
@@ -302,12 +305,10 @@ export default async function AssetsPage({
                         />
                       ) : (
                         <span className="flex aspect-square w-full items-center justify-center text-xs text-muted">
-                          Opslag niet geconfigureerd
-                        </span>
+                          {uiT("Opslag niet geconfigureerd")} </span>
                       )}
                       <span className="pointer-events-none absolute inset-x-0 bottom-0 hidden bg-gradient-to-t from-black/70 to-transparent px-3 pb-2 pt-8 text-xs font-medium text-white group-hover:block group-focus-within:block">
-                        Maak creative →
-                      </span>
+                        {uiT("Maak creative →")} </span>
                     </Link>
                   )}
                   <div className="pointer-events-none absolute left-2 top-2 flex flex-wrap gap-1">
@@ -321,12 +322,11 @@ export default async function AssetsPage({
                     )}
                     {organicStrong && (
                       <span
-                        title={`Organisch sterk op Instagram: bereik ${reach!.toLocaleString("nl-NL")} (boven het gemiddelde van ${Math.round(avgReach!).toLocaleString("nl-NL")}). Een hint, geen bewijs.`}
+                        title={uiT("Organisch sterk op Instagram: bereik {v0} (boven het gemiddelde van {v1}). Een hint, geen bewijs.", { v0: reach!.toLocaleString(uiDateLocale), v1: Math.round(avgReach!).toLocaleString(uiDateLocale) })}
                       >
                         <Badge tone="success" className="bg-background/85 text-[10px]">
                           <Sparkles className="mr-0.5 inline size-3" aria-hidden />
-                          Organisch sterk
-                        </Badge>
+                          {uiT("Organisch sterk")} </Badge>
                       </span>
                     )}
                   </div>

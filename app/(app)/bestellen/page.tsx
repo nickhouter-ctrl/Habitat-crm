@@ -1,3 +1,5 @@
+import { datumTaal } from "@/lib/i18n/server";
+import { tekst as uiTranslation } from '@/lib/i18n/server';
 import { and, asc, desc, eq, inArray, isNotNull, ne } from "drizzle-orm";
 import { FileDown, Send, Trash2 } from "lucide-react";
 import Link from "next/link";
@@ -43,7 +45,10 @@ import {
 } from "./actions";
 import { OrderSearch } from "./order-search";
 
-export const metadata = { title: "Bestellen" };
+export async function generateMetadata() {
+  const uiT = await uiTranslation();
+  return { title: uiT("Bestellen") };
+}
 export const dynamic = "force-dynamic";
 
 export default async function BestellenPage({
@@ -51,6 +56,8 @@ export default async function BestellenPage({
 }: {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
+  const uiDateLocale = await datumTaal();
+  const uiT = await uiTranslation();
   const sp = await searchParams;
   const prefillVariantId = typeof sp.variant === "string" ? sp.variant : "";
   const session = await auth();
@@ -154,15 +161,15 @@ export default async function BestellenPage({
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Bestellen"
-        subtitle="Stel bestelbonnen samen voor álle producten en catalogus-samples. Regels worden automatisch per leverancier gegroepeerd."
+        title={uiT("Bestellen")}
+        subtitle={uiT("Stel bestelbonnen samen voor álle producten en catalogus-samples. Regels worden automatisch per leverancier gegroepeerd.")}
       />
 
       {prefill && (
         <Card className="border-accent/40 bg-accent/5">
           <CardHeader>
             <CardTitle>
-              Toevoegen: {prefill.productName} — {prefill.color}
+              {uiT("Toevoegen:")} {prefill.productName} — {prefill.color}
             </CardTitle>
           </CardHeader>
           <CardContent>
@@ -186,11 +193,11 @@ export default async function BestellenPage({
                 defaultValue="stuk"
                 className="h-8 rounded-md border border-border bg-background px-2 text-sm"
               >
-                <option value="stuk">stuk</option>
-                <option value="doos">doos</option>
-                <option value="m2">m²</option>
+                <option value="stuk">{uiT("stuk")}</option>
+                <option value="doos">{uiT("doos")}</option>
+                <option value="m2">{uiT("m²")}</option>
               </select>
-              <SubmitButton size="sm">Toevoegen aan bestelbon</SubmitButton>
+              <SubmitButton size="sm">{uiT("Toevoegen aan bestelbon")}</SubmitButton>
             </form>
           </CardContent>
         </Card>
@@ -198,7 +205,7 @@ export default async function BestellenPage({
 
       <Card>
         <CardHeader>
-          <CardTitle>Toevoegen aan een bestelbon</CardTitle>
+          <CardTitle>{uiT("Toevoegen aan een bestelbon")}</CardTitle>
         </CardHeader>
         <CardContent>
           <OrderSearch suppliers={suppliers} />
@@ -208,7 +215,7 @@ export default async function BestellenPage({
       {/* alle producten — bladeren per collectie (tabs) */}
       <Card>
         <CardHeader>
-          <CardTitle>Producten ({browseProducts.length})</CardTitle>
+          <CardTitle>{uiT("Producten (")}{browseProducts.length})</CardTitle>
           <div className="mt-2 flex flex-wrap gap-1">
             <Link
               href="/bestellen"
@@ -216,8 +223,7 @@ export default async function BestellenPage({
                 !selectedCol ? "bg-accent/10 font-medium text-accent" : "text-muted hover:bg-surface"
               }`}
             >
-              Alle
-            </Link>
+              {uiT("Alle")} </Link>
             {collections.map((c) => (
               <Link
                 key={c}
@@ -238,7 +244,7 @@ export default async function BestellenPage({
             ))}
           </datalist>
           {browseGroups.length === 0 ? (
-            <p className="p-4 text-sm text-muted">Geen producten gevonden.</p>
+            <p className="p-4 text-sm text-muted">{uiT("Geen producten gevonden.")}</p>
           ) : (
             <form action={addManyToOrder}>
               <div className="max-h-[32rem] overflow-y-auto">
@@ -280,17 +286,17 @@ export default async function BestellenPage({
                               <p className="truncate text-sm">{p.name}</p>
                               <p className="truncate text-xs text-muted">
                                 {p.sku ? <span className="font-mono">{p.sku}</span> : null}
-                                {inkoop != null ? ` · inkoop ${formatEUR(inkoop)}` : ""}
-                                {kostprijs != null ? ` · kostprijs ${formatEUR(kostprijs)}` : ""}
+                                {inkoop != null ? uiT(" · inkoop {v0}", { v0: formatEUR(inkoop) }) : ""}
+                                {kostprijs != null ? uiT(" · kostprijs {v0}", { v0: formatEUR(kostprijs) }) : ""}
                               </p>
                               {multiSize && (
                                 <div className="mt-1 overflow-hidden rounded border border-border/60 bg-muted/15 text-[10px]">
                                   <div className="grid grid-cols-[1.1fr_1.2fr_0.6fr_0.9fr_0.9fr] gap-x-2 border-b border-border bg-background/60 px-2 py-0.5 font-medium text-muted">
-                                    <span>Afmeting</span>
+                                    <span>{uiT("Afmeting")}</span>
                                     <span>SKU</span>
-                                    <span className="text-right">Vrd</span>
-                                    <span className="text-right">Inkoop</span>
-                                    <span className="text-right">Kostprijs</span>
+                                    <span className="text-right">{uiT("Vrd")}</span>
+                                    <span className="text-right">{uiT("Inkoop")}</span>
+                                    <span className="text-right">{uiT("Kostprijs")}</span>
                                   </div>
                                   {sizes
                                     .filter((sz) => sz.label)
@@ -322,14 +328,14 @@ export default async function BestellenPage({
                               className={`hidden shrink-0 text-xs sm:inline ${
                                 stock > 0 ? "text-success" : "text-muted"
                               }`}
-                              title="Actuele voorraad"
+                              title={uiT("Actuele voorraad")}
                             >
-                              {stock > 0 ? `${stock}${p.unit ? " " + p.unit : ""} op voorraad` : "niet op voorraad"}
+                              {stock > 0 ? uiT("{v0}{v1} op voorraad", { v0: stock, v1: p.unit ? " " + p.unit : "" }) : uiT("niet op voorraad")}
                             </span>
                             <input
                               name="supplierName"
                               list="browse-suppliers"
-                              placeholder="Leverancier"
+                              placeholder={uiT("Leverancier")}
                               defaultValue={supplierForSku(p.sku)}
                               className="h-8 w-32 rounded-md border border-border bg-background px-2 text-sm"
                             />
@@ -337,13 +343,13 @@ export default async function BestellenPage({
                               <select
                                 name="size"
                                 className="h-8 w-36 rounded-md border border-border bg-background px-2 text-sm"
-                                title="Maat"
+                                title={uiT("Maat")}
                               >
-                                <option value="">Standaardmaat</option>
+                                <option value="">{uiT("Standaardmaat")}</option>
                                 {orderable.map((sz) => (
                                   <option key={sz.sku || sz.label} value={sz.label}>
                                     {sz.label}
-                                    {(sz.stockQty ?? 0) > 0 ? ` — ${sz.stockQty} op vrd` : ""}
+                                    {(sz.stockQty ?? 0) > 0 ? uiT(" — {v0} op vrd", { v0: sz.stockQty ?? 0 }) : ""}
                                   </option>
                                 ))}
                               </select>
@@ -363,9 +369,9 @@ export default async function BestellenPage({
                               defaultValue="stuk"
                               className="h-8 rounded-md border border-border bg-background px-2 text-sm"
                             >
-                              <option value="stuk">stuk</option>
-                              <option value="doos">doos</option>
-                              <option value="m2">m²</option>
+                              <option value="stuk">{uiT("stuk")}</option>
+                              <option value="doos">{uiT("doos")}</option>
+                              <option value="m2">{uiT("m²")}</option>
                             </select>
                           </li>
                         );
@@ -376,9 +382,8 @@ export default async function BestellenPage({
               </div>
               <div className="flex flex-wrap items-center justify-between gap-2 border-t border-border bg-surface px-4 py-3">
                 <p className="text-xs text-muted">
-                  Vul aantallen in bij de producten die je wilt bestellen en voeg ze in één keer toe.
-                </p>
-                <SubmitButton>Toevoegen aan bestelbon</SubmitButton>
+                  {uiT("Vul aantallen in bij de producten die je wilt bestellen en voeg ze in één keer toe.")} </p>
+                <SubmitButton>{uiT("Toevoegen aan bestelbon")}</SubmitButton>
               </div>
             </form>
           )}
@@ -388,12 +393,12 @@ export default async function BestellenPage({
       {/* concepten per leverancier */}
       <div>
         <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-muted">
-          Concepten ({drafts.length})
+          {uiT("Concepten (")}{drafts.length})
         </h2>
         {drafts.length === 0 ? (
           <EmptyState
-            title="Nog geen concepten"
-            description="Zoek hierboven een product of sample en voeg het toe; per leverancier ontstaat automatisch een bestelbon."
+            title={uiT("Nog geen concepten")}
+            description={uiT("Zoek hierboven een product of sample en voeg het toe; per leverancier ontstaat automatisch een bestelbon.")}
           />
         ) : (
           <div className="space-y-4">
@@ -404,17 +409,16 @@ export default async function BestellenPage({
                   <CardHeader className="flex flex-row items-start justify-between gap-3">
                     <div>
                       <CardTitle>{o.supplierName}</CardTitle>
-                      <p className="text-xs text-muted">{list.length} regels</p>
+                      <p className="text-xs text-muted">{list.length} {uiT("regels")}</p>
                     </div>
                     <div className="flex gap-2">
                       <LinkButton href={`/bestellen/${o.id}`} variant="secondary" size="sm">
-                        Bekijk &amp; versturen
-                      </LinkButton>
+                        {uiT("Bekijk & versturen")} </LinkButton>
                       <form action={deleteOrder}>
                         <input type="hidden" name="id" value={o.id} />
                         <ConfirmSubmit
                           className={buttonClass({ variant: "ghost", size: "sm" })}
-                          message="Dit concept verwijderen?"
+                          message={uiT("Dit concept verwijderen?")}
                         >
                           <Trash2 className="h-4 w-4" />
                         </ConfirmSubmit>
@@ -428,17 +432,16 @@ export default async function BestellenPage({
                       className="flex flex-wrap items-end gap-2 border-b border-border pb-3"
                     >
                       <input type="hidden" name="id" value={o.id} />
-                      <LabeledMini name="supplierEmail" label="Leverancier e-mail" value={o.supplierEmail} className="w-56" />
-                      <LabeledMini name="customerRef" label="Klant / referentie" value={o.customerRef} className="w-44" />
-                      <LabeledMini name="notes" label="Notitie" value={o.notes} className="w-56" />
+                      <LabeledMini name="supplierEmail" label={uiT("Leverancier e-mail")} value={o.supplierEmail} className="w-56" />
+                      <LabeledMini name="customerRef" label={uiT("Klant / referentie")} value={o.customerRef} className="w-44" />
+                      <LabeledMini name="notes" label={uiT("Notitie")} value={o.notes} className="w-56" />
                       <SubmitButton size="sm" variant="secondary">
-                        Opslaan
-                      </SubmitButton>
+                        {uiT("Opslaan")} </SubmitButton>
                     </form>
 
                     {/* regels */}
                     {list.length === 0 ? (
-                      <p className="text-sm text-muted">Nog geen regels.</p>
+                      <p className="text-sm text-muted">{uiT("Nog geen regels.")}</p>
                     ) : (
                       <ul className="space-y-1.5">
                         {list.map((it) => (
@@ -450,7 +453,7 @@ export default async function BestellenPage({
                               <input
                                 name="size"
                                 defaultValue={it.size ?? ""}
-                                placeholder="maat"
+                                placeholder={uiT("maat")}
                                 className="h-7 w-20 rounded border border-border bg-background px-1.5 text-xs"
                               />
                               <input
@@ -466,9 +469,9 @@ export default async function BestellenPage({
                                 defaultValue={it.unit}
                                 className="h-7 rounded border border-border bg-background px-1 text-xs"
                               >
-                                <option value="stuk">st</option>
-                                <option value="doos">doos</option>
-                                <option value="m2">m²</option>
+                                <option value="stuk">{uiT("st")}</option>
+                                <option value="doos">{uiT("doos")}</option>
+                                <option value="m2">{uiT("m²")}</option>
                               </select>
                               <SubmitButton size="sm" variant="ghost">
                                 ✓
@@ -498,10 +501,9 @@ export default async function BestellenPage({
                         <input type="hidden" name="id" value={o.id} />
                         <ConfirmSubmit
                           className={buttonClass({ size: "sm" })}
-                          message={`Bestelbon voor ${o.supplierName} als verstuurd markeren?`}
+                          message={uiT("Bestelbon voor {v0} als verstuurd markeren?", { v0: o.supplierName })}
                         >
-                          <Send className="h-4 w-4" /> Markeer als verstuurd
-                        </ConfirmSubmit>
+                          <Send className="h-4 w-4" /> {uiT("Markeer als verstuurd")} </ConfirmSubmit>
                       </form>
                     </div>
                   </CardContent>
@@ -516,8 +518,7 @@ export default async function BestellenPage({
       {sent.length > 0 && (
         <div>
           <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-muted">
-            Verstuurd
-          </h2>
+            {uiT("Verstuurd")} </h2>
           <Card className="divide-y divide-border">
             {sent.map((o) => (
               <Link
@@ -527,9 +528,8 @@ export default async function BestellenPage({
               >
                 <span className="text-sm font-medium">{o.supplierName}</span>
                 <span className="flex items-center gap-3 text-xs text-muted">
-                  {(itemsByOrder.get(o.id) ?? []).length} regels
-                  <Badge tone="info">verstuurd</Badge>
-                  {o.sentAt ? formatDate(o.sentAt) : ""}
+                  {(itemsByOrder.get(o.id) ?? []).length} {uiT("regels")} <Badge tone="info">{uiT("verstuurd")}</Badge>
+                  {o.sentAt ? formatDate(o.sentAt, uiDateLocale) : ""}
                 </span>
               </Link>
             ))}

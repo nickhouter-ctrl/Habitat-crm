@@ -1,4 +1,5 @@
 "use client";
+import { useT as useUiTranslation } from '@/components/taal-provider';
 
 import { useTransition } from "react";
 
@@ -17,6 +18,7 @@ export function NoodstopKnop({
   paused: boolean;
   action: (paused: boolean) => Promise<void>;
 }) {
+  const uiT = useUiTranslation();
   const [pending, start] = useTransition();
 
   return (
@@ -30,16 +32,16 @@ export function NoodstopKnop({
           const vraag = paused
             ? "Het verzenden van álle campagnes weer aanzetten?"
             : "Het verzenden van álle campagnes nu stilzetten?";
-          if (!window.confirm(vraag)) return;
+          if (!window.confirm(uiT(vraag))) return;
           start(() => action(!paused));
         }}
       >
-        {pending ? "Bezig…" : paused ? "Verzenden weer aanzetten" : "Alles stilzetten"}
+        {pending ? uiT("Bezig…") : paused ? uiT("Verzenden weer aanzetten") : uiT("Alles stilzetten")}
       </Button>
       <p className="text-xs text-muted">
         {paused
-          ? "Er gaat nu niets uit, ook niet van andere campagnes."
-          : "Zet in één klik al het campagneverzenden stil."}
+          ? uiT("Er gaat nu niets uit, ook niet van andere campagnes.")
+          : uiT("Zet in één klik al het campagneverzenden stil.")}
       </p>
     </div>
   );

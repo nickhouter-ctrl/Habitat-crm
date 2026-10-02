@@ -1,3 +1,4 @@
+import { tekst as uiTranslation } from '@/lib/i18n/server';
 import { and, eq, inArray, sql } from "drizzle-orm";
 import Link from "next/link";
 import { notFound } from "next/navigation";
@@ -38,7 +39,10 @@ import {
   uploadProductPhoto,
 } from "../../actions";
 
-export const metadata = { title: "Product bewerken" };
+export async function generateMetadata() {
+  const uiT = await uiTranslation();
+  return { title: uiT("Product bewerken") };
+}
 
 export default async function EditProductPage({
   params,
@@ -47,6 +51,7 @@ export default async function EditProductPage({
   params: Promise<{ id: string }>;
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
+  const uiT = await uiTranslation();
   const { id } = await params;
   const sp = await searchParams;
 
@@ -160,63 +165,54 @@ export default async function EditProductPage({
   return (
     <>
       <PageHeader
-        title="Product bewerken"
+        title={uiT("Product bewerken")}
         subtitle={product.name}
         actions={
           <Link href="/products" className="text-sm text-muted hover:underline">
-            ← Producten
-          </Link>
+            {uiT("← Producten")} </Link>
         }
       />
       {sp.saved === "1" && (
         <p className="mb-4 max-w-2xl rounded-md bg-green-50 px-3 py-2 text-sm text-success">
-          Opgeslagen.
-        </p>
+          {uiT("Opgeslagen.")} </p>
       )}
       {sp.error === "validation" && (
         <p className="mb-4 max-w-2xl rounded-md bg-red-50 px-3 py-2 text-sm text-danger">
-          Controleer de gegevens (naam verplicht; geldige URL?).
-        </p>
+          {uiT("Controleer de gegevens (naam verplicht; geldige URL?).")} </p>
       )}
       {sp.error === "upload" && (
         <p className="mb-4 max-w-2xl rounded-md bg-red-50 px-3 py-2 text-sm text-danger">
-          Geen bestand gekozen of upload mislukt.
-        </p>
+          {uiT("Geen bestand gekozen of upload mislukt.")} </p>
       )}
       {sp.error === "dubbel" && (
         <p className="mb-4 max-w-2xl rounded-md bg-red-50 px-3 py-2 text-sm text-danger">
-          Artikelcode {sp.code} staat twee keer in de lijst. Elke uitvoering heeft een eigen code.
-        </p>
+          {uiT("Artikelcode")} {sp.code} {uiT("staat twee keer in de lijst. Elke uitvoering heeft een eigen code.")} </p>
       )}
       {sp.error === "bezet" && (
         <p className="mb-4 max-w-2xl rounded-md bg-red-50 px-3 py-2 text-sm text-danger">
-          Artikelcode {sp.code} hoort al bij een ander product van dit merk. Niets opgeslagen.
-        </p>
+          {uiT("Artikelcode")} {sp.code} {uiT("hoort al bij een ander product van dit merk. Niets opgeslagen.")} </p>
       )}
       {sp.error === "opties" && (
         <p className="mb-4 max-w-2xl rounded-md bg-red-50 px-3 py-2 text-sm text-danger">
-          Een uitvoering verwijst naar een keuze die niet meer bestaat. Controleer de keuzes en probeer opnieuw.
-        </p>
+          {uiT("Een uitvoering verwijst naar een keuze die niet meer bestaat. Controleer de keuzes en probeer opnieuw.")} </p>
       )}
       {sp.error === "variants" && (
         <p className="mb-4 max-w-2xl rounded-md bg-red-50 px-3 py-2 text-sm text-danger">
-          De uitvoeringen konden niet worden opgeslagen.
-        </p>
+          {uiT("De uitvoeringen konden niet worden opgeslagen.")} </p>
       )}
       {typeof sp.pushed === "string" && (
         <p className="mb-4 max-w-2xl rounded-md bg-green-50 px-3 py-2 text-sm text-success">
-          {sp.pushed === "created" ? "Aangemaakt op de website" : "Bijgewerkt op de website"} (id {sp.websiteId}) — commit {sp.commit}. Vercel-deploy van de site loopt.
-        </p>
+          {sp.pushed === "created" ? uiT("Aangemaakt op de website") : uiT("Bijgewerkt op de website")} {uiT("(id")} {sp.websiteId}{uiT(") — commit")} {sp.commit}{uiT(". Vercel-deploy van de site loopt.")} </p>
       )}
       {typeof sp.pushError === "string" && (
         <p className="mb-4 max-w-2xl rounded-md bg-red-50 px-3 py-2 text-sm text-danger">
-          Push mislukt: {sp.pushError}
+          {uiT("Push mislukt:")} {sp.pushError}
         </p>
       )}
 
       <Card className="mb-4 max-w-2xl">
         <CardHeader>
-          <CardTitle>Barcode</CardTitle>
+          <CardTitle>{uiT("Barcode")}</CardTitle>
           {product.barcode && (
             <a
               href={`/labels/${id}`}
@@ -224,8 +220,7 @@ export default async function EditProductPage({
               rel="noopener noreferrer"
               className={buttonClass({ variant: "secondary", size: "sm" })}
             >
-              Label printen
-            </a>
+              {uiT("Label printen")} </a>
           )}
         </CardHeader>
         <CardContent className="space-y-3">
@@ -236,13 +231,11 @@ export default async function EditProductPage({
             </div>
           ) : (
             <p className="text-sm text-muted">
-              Nog geen barcode. Genereer er automatisch een (EAN-13), of vul er handmatig één in
-              hierboven en sla op.
-            </p>
+              {uiT("Nog geen barcode. Genereer er automatisch een (EAN-13), of vul er handmatig één in hierboven en sla op.")} </p>
           )}
           <form action={genBarcode}>
             <Button type="submit" size="sm" variant="secondary">
-              {product.barcode ? "Nieuwe barcode genereren" : "Barcode genereren"}
+              {product.barcode ? uiT("Nieuwe barcode genereren") : uiT("Barcode genereren")}
             </Button>
           </form>
         </CardContent>
@@ -251,23 +244,23 @@ export default async function EditProductPage({
       {allocation.length > 0 && (
         <Card className="mb-4 max-w-2xl overflow-hidden">
           <CardHeader>
-            <CardTitle>Per project — gereserveerd / verkocht</CardTitle>
+            <CardTitle>{uiT("Per project — gereserveerd / verkocht")}</CardTitle>
             <span className="text-xs text-muted">
               {totReserved > 0 && (
-                <span className="font-medium text-warning">{totReserved} {unit} gereserveerd</span>
+                <span className="font-medium text-warning">{totReserved} {unit} {uiT("gereserveerd")}</span>
               )}
               {totReserved > 0 && totSold !== 0 ? " · " : ""}
               {totSold !== 0 && (
-                <span className="font-medium text-success">{totSold} {unit} verkocht</span>
+                <span className="font-medium text-success">{totSold} {unit} {uiT("verkocht")}</span>
               )}
             </span>
           </CardHeader>
           <Table>
             <THead>
               <Tr>
-                <Th>Project</Th>
-                <Th className="text-right">Gereserveerd</Th>
-                <Th className="text-right">Verkocht</Th>
+                <Th>{uiT("Project")}</Th>
+                <Th className="text-right">{uiT("Gereserveerd")}</Th>
+                <Th className="text-right">{uiT("Verkocht")}</Th>
               </Tr>
             </THead>
             <TBody>
@@ -308,7 +301,7 @@ export default async function EditProductPage({
             </TBody>
           </Table>
           <p className="px-5 py-3 text-xs text-muted">
-            Gereserveerd = uit geaccepteerde offertes; verkocht = uit facturen (− creditnota&apos;s). Voorraad nu: {product.stockQty != null ? `${Number(product.stockQty)} ${unit}` : "—"}.
+            {uiT("Gereserveerd = uit geaccepteerde offertes; verkocht = uit facturen (− creditnota's). Voorraad nu:")} {product.stockQty != null ? `${Number(product.stockQty)} ${unit}` : "—"}.
           </p>
         </Card>
       )}
@@ -316,9 +309,9 @@ export default async function EditProductPage({
       {(variants.length > 0 || setComponents.length > 0) && (
         <Card className="mb-4 max-w-2xl overflow-hidden">
           <CardHeader>
-            <CardTitle>Wat zit er in deze set</CardTitle>
+            <CardTitle>{uiT("Wat zit er in deze set")}</CardTitle>
             <span className="text-xs text-muted">
-              voorraad {product.stockQty != null ? Number(product.stockQty) : "—"} {unit}
+              {uiT("voorraad")} {product.stockQty != null ? Number(product.stockQty) : "—"} {unit}
             </span>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -327,8 +320,8 @@ export default async function EditProductPage({
                 <p className="mb-1.5 text-xs font-medium uppercase tracking-wide text-muted">
                   {/* Draairichting is een deur-begrip; andere producten hebben gewoon varianten. */}
                   {(product.sku ?? "").toUpperCase().startsWith("DR-")
-                    ? "Voorraad per draairichting"
-                    : "Voorraad per variant"}
+                    ? uiT("Voorraad per draairichting")
+                    : uiT("Voorraad per variant")}
                 </p>
                 <ul className="divide-y rounded-md border">
                   {variants.map((v, i) => (
@@ -343,7 +336,7 @@ export default async function EditProductPage({
                         <span className="block truncate">{v.label}</span>
                         <span className="font-mono text-xs text-muted">{v.sku}</span>
                       </span>
-                      <span className="shrink-0 tabular-nums">{Number(v.stockQty ?? 0)} stuks</span>
+                      <span className="shrink-0 tabular-nums">{Number(v.stockQty ?? 0)} {uiT("stuks")}</span>
                     </li>
                   ))}
                 </ul>
@@ -352,8 +345,7 @@ export default async function EditProductPage({
             {setComponents.length > 0 && (
               <div>
                 <p className="mb-1.5 text-xs font-medium uppercase tracking-wide text-muted">
-                  Bevat (onderdelen)
-                </p>
+                  {uiT("Bevat (onderdelen)")} </p>
                 <ul className="divide-y rounded-md border">
                   {setComponents.map((c, i) => (
                     <li key={i} className="flex items-center gap-3 p-2 text-sm">
@@ -369,7 +361,7 @@ export default async function EditProductPage({
                         <span className="block truncate">{c.name}</span>
                         <span className="font-mono text-xs text-muted">{c.sku}</span>
                       </span>
-                      <span className="shrink-0 text-muted">×{c.qty} per set</span>
+                      <span className="shrink-0 text-muted">{uiT("×")}{c.qty} {uiT("per set")}</span>
                     </li>
                   ))}
                 </ul>
@@ -382,10 +374,10 @@ export default async function EditProductPage({
       <div className="mb-4 grid max-w-2xl gap-4 sm:grid-cols-2">
         <Card>
           <CardHeader>
-            <CardTitle>Foto</CardTitle>
+            <CardTitle>{uiT("Foto")}</CardTitle>
             {product.imageUrl && (
               <form action={removePhoto}>
-                <button className={buttonClass({ variant: "ghost", size: "sm" })}>verwijderen</button>
+                <button className={buttonClass({ variant: "ghost", size: "sm" })}>{uiT("verwijderen")}</button>
               </form>
             )}
           </CardHeader>
@@ -398,7 +390,7 @@ export default async function EditProductPage({
                 className="h-32 w-full rounded border border-border object-contain"
               />
             ) : (
-              <p className="text-sm text-muted">Nog geen foto geüpload.</p>
+              <p className="text-sm text-muted">{uiT("Nog geen foto geüpload.")}</p>
             )}
             <form action={uploadPhoto} encType="multipart/form-data" className="space-y-2">
               <input
@@ -409,7 +401,7 @@ export default async function EditProductPage({
                 className="block w-full text-sm"
               />
               <Button type="submit" size="sm" variant="secondary">
-                {product.imageUrl ? "Vervangen" : "Uploaden"}
+                {product.imageUrl ? uiT("Vervangen") : uiT("Uploaden")}
               </Button>
             </form>
           </CardContent>
@@ -417,23 +409,22 @@ export default async function EditProductPage({
 
         <Card>
           <CardHeader>
-            <CardTitle>Website</CardTitle>
+            <CardTitle>{uiT("Website")}</CardTitle>
             {product.websiteProductId && (
-              <Badge tone="success">✓ op site (id {product.websiteProductId})</Badge>
+              <Badge tone="success">{uiT("✓ op site (id")} {product.websiteProductId})</Badge>
             )}
           </CardHeader>
           <CardContent className="space-y-2">
             <p className="text-xs text-muted">
               {product.websiteProductId
-                ? "Bestaande website-entry wordt bij elke push bijgewerkt (naam, omschrijving, afmetingen, foto)."
+                ? uiT("Bestaande website-entry wordt bij elke push bijgewerkt (naam, omschrijving, afmetingen, foto).")
                 : product.pushToWebsite
-                  ? "Klaargezet — klik 'Push naar website' om 'm aan te maken."
-                  : "Vink 'Op de website tonen' aan in het formulier en sla op om te kunnen pushen."}
+                  ? uiT("Klaargezet — klik 'Push naar website' om 'm aan te maken.")
+                  : uiT("Vink 'Op de website tonen' aan in het formulier en sla op om te kunnen pushen.")}
             </p>
             {!hasGithubToken && (
               <p className="text-xs text-warning">
-                ⚠️ GITHUB_TOKEN_HABITAT_ONE niet ingesteld — push faalt.
-              </p>
+                {uiT("⚠️ GITHUB_TOKEN_HABITAT_ONE niet ingesteld — push faalt.")} </p>
             )}
             <form action={pushSite}>
               <Button
@@ -442,8 +433,7 @@ export default async function EditProductPage({
                 variant="primary"
                 disabled={!product.pushToWebsite && !product.websiteProductId}
               >
-                Push naar website
-              </Button>
+                {uiT("Push naar website")} </Button>
             </form>
           </CardContent>
         </Card>
@@ -456,7 +446,7 @@ export default async function EditProductPage({
         categories={categories}
         brands={merken}
         variantsManaged={Boolean(product.brandId) || uitvoeringen.length > 0}
-        submitLabel="Wijzigingen opslaan"
+        submitLabel={uiT("Wijzigingen opslaan")}
       />
 
       <Card className="mt-4 max-w-4xl scroll-mt-4" id="uitvoeringen">
@@ -467,13 +457,10 @@ export default async function EditProductPage({
                 // eslint-disable-next-line @next/next/no-img-element
                 <img src={merk.logoUrl} alt="" className="h-5 w-auto max-w-24 object-contain" />
               ) : null}
-              Uitvoeringen
-            </span>
+              {uiT("Uitvoeringen")} </span>
           </CardTitle>
           <span className="text-xs text-muted">
-            kleur, model of maat — elk met een eigen artikelcode en eigen prijs. Ze zijn los kiesbaar op een
-            offerteregel.
-          </span>
+            {uiT("kleur, model of maat — elk met een eigen artikelcode en eigen prijs. Ze zijn los kiesbaar op een offerteregel.")} </span>
         </CardHeader>
         <CardContent>
           <form action={saveVariants.bind(null, id)} className="space-y-4">
@@ -493,19 +480,17 @@ export default async function EditProductPage({
               }))}
               dealerDiscountPct={merk?.dealerDiscountPct == null ? null : Number(merk.dealerDiscountPct)}
             />
-            <SubmitButton variant="primary" pendingLabel="Bezig…">
-              Uitvoeringen opslaan
-            </SubmitButton>
+            <SubmitButton variant="primary" pendingLabel={uiT("Bezig…")}>
+              {uiT("Uitvoeringen opslaan")} </SubmitButton>
           </form>
         </CardContent>
       </Card>
       <form action={remove} className="mt-4 max-w-2xl">
         <ConfirmSubmit
-          message={`Product "${product.name}" definitief verwijderen?`}
+          message={uiT("Product \"{v0}\" definitief verwijderen?", { v0: product.name })}
           className="rounded-md px-3 py-2 text-sm font-medium text-danger transition-colors hover:bg-danger/10"
         >
-          Product verwijderen
-        </ConfirmSubmit>
+          {uiT("Product verwijderen")} </ConfirmSubmit>
       </form>
     </>
   );

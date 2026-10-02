@@ -1,4 +1,5 @@
 "use client";
+import { useT as useUiTranslation } from '@/components/taal-provider';
 
 import { Bell, ChevronDown } from "lucide-react";
 import { useState, useTransition } from "react";
@@ -18,13 +19,14 @@ const OPTIONS: { level?: ReminderLevel; label: string }[] = [
  * openstaande creditnota's) van deze klant. Niveau loopt automatisch op, of kies zelf.
  */
 export function AccountReminderButton({ contactId }: { contactId: string }) {
+  const uiT = useUiTranslation();
   const [pending, startTransition] = useTransition();
   const [open, setOpen] = useState(false);
   const [result, setResult] = useState<{ ok: boolean; error?: string } | null>(null);
 
   const send = (level?: ReminderLevel) => {
     setOpen(false);
-    if (!window.confirm("Eén verzamelmail met alle openstaande posten naar de klant sturen?")) return;
+    if (!window.confirm(uiT("Eén verzamelmail met alle openstaande posten naar de klant sturen?"))) return;
     setResult(null);
     startTransition(async () => {
       setResult(await sendAccountReminder(contactId, level));
@@ -40,7 +42,7 @@ export function AccountReminderButton({ contactId }: { contactId: string }) {
         className="inline-flex items-center gap-1.5 rounded-md bg-accent px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-accent/90 disabled:opacity-50"
       >
         <Bell className="size-4" />
-        {pending ? "Versturen…" : "Stuur verzamelherinnering"}
+        {pending ? uiT("Versturen…") : uiT("Stuur verzamelherinnering")}
         <ChevronDown className="size-3.5" />
       </button>
 
@@ -55,7 +57,7 @@ export function AccountReminderButton({ contactId }: { contactId: string }) {
                 onClick={() => send(o.level)}
                 className="block w-full px-3 py-1.5 text-left text-xs hover:bg-background"
               >
-                {o.label}
+                {uiT(o.label)}
               </button>
             ))}
           </div>
@@ -64,7 +66,7 @@ export function AccountReminderButton({ contactId }: { contactId: string }) {
 
       {result && (
         <span className={`text-xs ${result.ok ? "text-success" : "text-danger"}`}>
-          {result.ok ? "Verstuurd ✓" : result.error}
+          {result.ok ? uiT("Verstuurd ✓") : result.error}
         </span>
       )}
     </div>

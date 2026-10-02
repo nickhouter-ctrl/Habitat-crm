@@ -1,4 +1,5 @@
 "use client";
+import { useT as useUiTranslation } from '@/components/taal-provider';
 
 import { Archive, Trash2 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
@@ -18,6 +19,7 @@ export function BulkMailBar({
   archiveAction: (formData: FormData) => void | Promise<void>;
   deleteAction: (formData: FormData) => void | Promise<void>;
 }) {
+  const uiT = useUiTranslation();
   const ref = useRef<HTMLDivElement>(null);
   const [count, setCount] = useState(0);
   const [totaal, setTotaal] = useState(0);
@@ -57,10 +59,10 @@ export function BulkMailBar({
           checked={totaal > 0 && count === totaal}
           onChange={(e) => toggleAll(e.target.checked)}
           className="size-4 rounded border bg-background"
-          aria-label="Alles selecteren"
+          aria-label={uiT("Alles selecteren")}
         />
         <span className="text-muted">
-          {count > 0 ? `${count} geselecteerd` : "Selecteer mails"}
+          {count > 0 ? uiT("{v0} geselecteerd", { v0: count }) : uiT("Selecteer mails")}
         </span>
       </label>
       <div className="ml-auto flex items-center gap-2">
@@ -70,7 +72,7 @@ export function BulkMailBar({
           disabled={count === 0}
           className={buttonClass({ variant: "secondary", size: "sm", className: "disabled:opacity-40" })}
         >
-          <Archive className="size-4" /> Archiveren{count > 0 ? ` (${count})` : ""}
+          <Archive className="size-4" /> {uiT("Archiveren")}{count > 0 ? ` (${count})` : ""}
         </button>
         <button
           type="submit"
@@ -79,14 +81,14 @@ export function BulkMailBar({
           onClick={(e) => {
             if (
               !confirm(
-                `${count} mail${count === 1 ? "" : "s"} definitief verwijderen?\n\nBijlagen van deze mails verdwijnen ook uit het Archief. Mails die aan een inkooporder of aanvraag gelinkt zijn worden overgeslagen.`,
+                uiT("{v0} mail{v1} definitief verwijderen?\n\nBijlagen van deze mails verdwijnen ook uit het Archief. Mails die aan een inkooporder of aanvraag gelinkt zijn worden overgeslagen.", { v0: count, v1: count === 1 ? "" : "s" }),
               )
             )
               e.preventDefault();
           }}
           className={buttonClass({ variant: "secondary", size: "sm", className: "text-danger disabled:opacity-40" })}
         >
-          <Trash2 className="size-4" /> Verwijderen{count > 0 ? ` (${count})` : ""}
+          <Trash2 className="size-4" /> {uiT("Verwijderen")}{count > 0 ? ` (${count})` : ""}
         </button>
       </div>
     </div>

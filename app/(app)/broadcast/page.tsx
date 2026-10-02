@@ -1,3 +1,5 @@
+import { datumTaal } from "@/lib/i18n/server";
+import { tekst as uiTranslation } from '@/lib/i18n/server';
 /**
  * E-mailmarketing — het overzicht.
  *
@@ -37,7 +39,10 @@ import { formatDate } from "@/lib/utils";
 import { NieuweCampagne } from "./nieuwe-campagne";
 import { Verzendtempo } from "./verzendtempo";
 
-export const metadata = { title: "E-mailmarketing" };
+export async function generateMetadata() {
+  const uiT = await uiTranslation();
+  return { title: uiT("E-mailmarketing") };
+}
 export const dynamic = "force-dynamic";
 
 const STATUS: Record<string, { label: string; tone: "neutral" | "accent" | "warning" | "success" }> = {
@@ -53,6 +58,8 @@ export default async function MailingPage({
 }: {
   searchParams: Promise<{ error?: string }>;
 }) {
+  const uiDateLocale = await datumTaal();
+  const uiT = await uiTranslation();
   const t = await tekst();
   const sp = await searchParams;
   const nu = new Date();
@@ -133,7 +140,7 @@ export default async function MailingPage({
         }
       />
 
-      {sp.error && <p className="mb-4 rounded-md bg-danger/10 px-3 py-2 text-sm text-danger">{sp.error}</p>}
+      {sp.error && <p className="mb-4 rounded-md bg-danger/10 px-3 py-2 text-sm text-danger">{uiT(sp.error ?? "")}</p>}
 
       {/* Wat je moet weten vóór je verstuurt. */}
       <div className="mb-5 grid grid-cols-2 gap-3 lg:grid-cols-4">
@@ -173,9 +180,7 @@ export default async function MailingPage({
         <p className="mb-4 flex items-start gap-2 rounded-lg border border-warning/40 bg-warning/10 px-4 py-3 text-sm">
           <AlertTriangle className="mt-0.5 size-4 shrink-0 text-warning" />
           <span>
-            Het verzendkanaal is niet ingesteld (<code className="font-mono text-xs">RESEND_API_KEY</code>). Campagnes
-            kunnen wel klaargezet worden, maar er gaat niets de deur uit.
-          </span>
+            {uiT("Het verzendkanaal is niet ingesteld (")}<code className="font-mono text-xs">RESEND_API_KEY</code>{uiT("). Campagnes kunnen wel klaargezet worden, maar er gaat niets de deur uit.")} </span>
         </p>
       )}
       {inst?.paused && (
@@ -242,7 +247,7 @@ export default async function MailingPage({
               <CardContent>
                 <EmptyState
                   title={t("Nog geen campagne")}
-                  description="Maak er hieronder een. Je kiest voor wie hij is en welke producten erin komen; onderwerp en tekst volgen daarna."
+                  description={uiT("Maak er hieronder een. Je kiest voor wie hij is en welke producten erin komen; onderwerp en tekst volgen daarna.")}
                 />
               </CardContent>
             ) : (
@@ -259,13 +264,13 @@ export default async function MailingPage({
                       <span className="min-w-0 flex-1">
                         <span className="block truncate font-medium">{c.name}</span>
                         <span className="block truncate text-xs text-muted">
-                          {c.subject || "nog geen onderwerp"} · {c.language.toUpperCase()} · {formatDate(c.createdAt)}
+                          {c.subject || uiT("nog geen onderwerp")} · {c.language.toUpperCase()} · {formatDate(c.createdAt, uiDateLocale)}
                         </span>
                       </span>
                       <span className="text-xs text-muted tabular-nums">
-                        {(s.sent ?? 0) > 0 ? `${s.sent} verstuurd` : "—"}
+                        {(s.sent ?? 0) > 0 ? uiT("{v0} verstuurd", { v0: s.sent }) : "—"}
                       </span>
-                      <Badge tone={meta.tone}>{meta.label}</Badge>
+                      <Badge tone={meta.tone}>{uiT(meta.label)}</Badge>
                     </Link>
                   );
                 })}
@@ -286,9 +291,7 @@ export default async function MailingPage({
             </CardHeader>
             <CardContent className="space-y-3 text-sm">
               <p className="text-muted">
-                Campagnes gaan naar <strong>prospects</strong>: bedrijven die apart van je contactenlijst staan. Pas wie
-                klant wordt, zet je over naar contacten.
-              </p>
+                {uiT("Campagnes gaan naar")} <strong>{uiT("prospects")}</strong>{uiT(": bedrijven die apart van je contactenlijst staan. Pas wie klant wordt, zet je over naar contacten.")} </p>
               <dl className="grid grid-cols-[1fr_auto] gap-y-1 text-xs">
                 <dt className="text-muted">{t("Met e-mailadres")}</dt>
                 <dd className="tabular-nums">{mailbaar}</dd>
@@ -312,19 +315,13 @@ export default async function MailingPage({
             </CardHeader>
             <CardContent className="space-y-2 text-xs text-muted">
               <p>
-                <strong className="text-foreground">1.</strong> Campagne maken: voor wie, welke taal, welke producten.
-              </p>
+                <strong className="text-foreground">1.</strong> {uiT("Campagne maken: voor wie, welke taal, welke producten.")} </p>
               <p>
-                <strong className="text-foreground">2.</strong> Onderwerp en tekst — met AI of zelf getypt — naast een
-                voorbeeld van de mail.
-              </p>
+                <strong className="text-foreground">2.</strong> {uiT("Onderwerp en tekst — met AI of zelf getypt — naast een voorbeeld van de mail.")} </p>
               <p>
-                <strong className="text-foreground">3.</strong> Testmail naar jezelf.
-              </p>
+                <strong className="text-foreground">3.</strong> {uiT("Testmail naar jezelf.")} </p>
               <p>
-                <strong className="text-foreground">4.</strong> In de wachtrij zetten. Daarna verstuurt het systeem
-                verspreid over de dagen, binnen de dagcap, en stopt zelf bij te veel bounces.
-              </p>
+                <strong className="text-foreground">4.</strong> {uiT("In de wachtrij zetten. Daarna verstuurt het systeem verspreid over de dagen, binnen de dagcap, en stopt zelf bij te veel bounces.")} </p>
             </CardContent>
           </Card>
         </div>

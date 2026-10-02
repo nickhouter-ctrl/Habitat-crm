@@ -1,3 +1,4 @@
+import { tekst as uiTranslation } from '@/lib/i18n/server';
 import { Download, Search } from "lucide-react";
 import Link from "next/link";
 
@@ -40,7 +41,10 @@ import { FilmmailKnop } from "./filmmail-knop";
 import { OpruimKnop } from "./opruim-knop";
 import { VerwijderKnop } from "./verwijder-knop";
 
-export const metadata = { title: "Beurscontacten" };
+export async function generateMetadata() {
+  const uiT = await uiTranslation();
+  return { title: uiT("Beurscontacten") };
+}
 export const dynamic = "force-dynamic";
 
 const SORTEERBAAR: { key: BeursSortering; label: string }[] = [
@@ -61,6 +65,7 @@ export default async function BeursContactenPage({
 }: {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
+
   await requireModuleRead('aanvragen');
   const [params, t, taal, datumLocale] = await Promise.all([searchParams, tekst(), huidigeTaal(), datumTaal()]);
   const q = typeof params.q === "string" ? params.q.trim() : "";

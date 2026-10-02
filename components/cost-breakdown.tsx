@@ -1,4 +1,5 @@
 "use client";
+import { useT as useUiTranslation } from '@/components/taal-provider';
 
 import { useEffect, useState } from "react";
 
@@ -22,6 +23,7 @@ export function CostBreakdown({
 }: {
   initial?: Partial<Record<keyof Vals | "targetMarginPct", string | number | null>>;
 }) {
+  const uiT = useUiTranslation();
   const [v, setV] = useState<Vals>({
     purchaseCostEur: str(initial?.purchaseCostEur),
     freightCostEur: str(initial?.freightCostEur),
@@ -84,14 +86,13 @@ export function CostBreakdown({
   return (
     <div className="space-y-3 rounded-md border bg-background/50 p-3">
       <p className="text-xs font-medium uppercase tracking-wide text-muted">
-        Kostprijs-opbouw (per eenheid)
-      </p>
+        {uiT("Kostprijs-opbouw (per eenheid)")} </p>
       <div className="grid gap-3 sm:grid-cols-3">
         {moneyInput("purchaseCostEur", "Inkoop €", "fabrieksprijs China (raw factuur)")}
         {moneyInput("freightCostEur", "Vracht €", "5,63% — zeevracht China → Valencia (Alianza)")}
         {moneyInput("transportCostEur", "Transport €", "1,89% — lokaal + containerscan + toeslag")}
         {moneyInput("otherCostEur", "Overig €", "22,14% — Allpack 15% + Teresa 5% + Alianza-handling 2,14%")}
-        <Field label="Invoerrechten %" htmlFor="dutyPct" hint="op inkoop + vracht — uit DUA per HS-code">
+        <Field label={uiT("Invoerrechten %")} htmlFor="dutyPct" hint={uiT("op inkoop + vracht — uit DUA per HS-code")}>
           <Input
             id="dutyPct"
             name="dutyPct"
@@ -111,7 +112,7 @@ export function CostBreakdown({
 
       <div className="flex flex-wrap items-baseline justify-between gap-x-6 gap-y-1 border-t pt-2 text-sm">
         <span>
-          Landed cost (kostprijs):{" "}
+          {uiT("Landed cost (kostprijs):")}{" "}
           <span className="font-semibold tabular-nums">{formatEUR(cost)}</span>
         </span>
         {livePrice > 0 && cost > 0 && (
@@ -123,16 +124,16 @@ export function CostBreakdown({
               "font-medium text-success"
             }
           >
-            Werkelijke marge:{" "}
+            {uiT("Werkelijke marge:")}{" "}
             <span className="text-base tabular-nums">{actualMarginPct.toFixed(1)}%</span>
-            <span className="ml-1 text-xs text-muted">(= max. korting voor break-even)</span>
+            <span className="ml-1 text-xs text-muted">{uiT("(= max. korting voor break-even)")}</span>
           </span>
         )}
       </div>
 
       <div className="flex flex-wrap items-center gap-2 rounded-md bg-background/60 px-3 py-2 text-sm">
-        <span className="text-xs text-muted">Rekenhulp:</span>
-        <span className="text-xs">Bij</span>
+        <span className="text-xs text-muted">{uiT("Rekenhulp:")}</span>
+        <span className="text-xs">{uiT("Bij")}</span>
         <input
           type="number"
           step="0.1"
@@ -143,11 +144,11 @@ export function CostBreakdown({
           placeholder="50"
           className="w-16 rounded-md border border-border bg-background px-2 py-1 text-right text-sm"
         />
-        <span className="text-xs">% marge → verkoopprijs zou</span>
+        <span className="text-xs">{uiT("% marge → verkoopprijs zou")}</span>
         <span className="font-semibold tabular-nums">
           {wantPct && Number(wantPct) > 0 ? formatEUR(advice) : "—"}
         </span>
-        <span className="text-xs text-muted">ex BTW</span>
+        <span className="text-xs text-muted">{uiT("ex BTW")}</span>
         {wantPct && Number(wantPct) > 0 && advice > 0 && (
           <button
             type="button"
@@ -162,15 +163,12 @@ export function CostBreakdown({
             }}
             className="ml-1 rounded-md border border-accent/40 bg-accent/10 px-2 py-0.5 text-xs font-medium text-accent transition-colors hover:bg-accent/20"
           >
-            → Toepassen
-          </button>
+            {uiT("→ Toepassen")} </button>
         )}
       </div>
 
       <p className="text-xs text-muted">
-        De landed cost wordt opgeslagen als kostprijs. De werkelijke marge is live berekend uit
-        verkoop- en kostprijs.
-      </p>
+        {uiT("De landed cost wordt opgeslagen als kostprijs. De werkelijke marge is live berekend uit verkoop- en kostprijs.")} </p>
     </div>
   );
 }

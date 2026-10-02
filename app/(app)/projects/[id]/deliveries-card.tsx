@@ -1,3 +1,5 @@
+import { datumTaal } from "@/lib/i18n/server";
+import { tekst as uiTranslation } from '@/lib/i18n/server';
 /**
  * Producten geleverd op dit project — binnen de aanneemsom, dus zonder losse
  * verkoopfactuur.
@@ -39,6 +41,8 @@ export async function ProjectDeliveriesCard({
   voorschottenEx: number;
   fout?: string;
 }) {
+  const uiDateLocale = await datumTaal();
+  const uiT = await uiTranslation();
   const [voorraad, regels] = await Promise.all([
     db
       .select({
@@ -85,77 +89,68 @@ export async function ProjectDeliveriesCard({
   return (
     <Card id="leveringen" className="mb-5 scroll-mt-24">
       <CardHeader>
-        <CardTitle>Producten geleverd op dit project</CardTitle>
+        <CardTitle>{uiT("Producten geleverd op dit project")}</CardTitle>
         <span className="text-xs text-muted">
-          binnen de aanneemsom — geen losse factuur · voorraad gaat eraf, verkoopprijs telt mee in wat je doorbelast
-        </span>
+          {uiT("binnen de aanneemsom — geen losse factuur · voorraad gaat eraf, verkoopprijs telt mee in wat je doorbelast")} </span>
       </CardHeader>
       <CardContent className="space-y-4">
         {fout?.startsWith("ok:") && (
           <p className="rounded-md bg-success/10 p-3 text-sm">
-            {fout.split(":")[1]} {Number(fout.split(":")[1]) === 1 ? "regel" : "regels"} geboekt.
-            {fout.split(":")[2]
-              ? ` ${fout.split(":")[2]} stuks lagen niet op voorraad — die staan hieronder als nog te bestellen.`
-              : " Alles ging van de voorraad af."}
+            {fout.split(":")[1]} {Number(fout.split(":")[1]) === 1 ? uiT("regel") : uiT("regels")} {uiT("geboekt.")} {fout.split(":")[2]
+              ? uiT(" {v0} stuks lagen niet op voorraad — die staan hieronder als nog te bestellen.", { v0: fout.split(":")[2] })
+              : uiT(" Alles ging van de voorraad af.")}
           </p>
         )}
         {fout?.startsWith("deels:") && (
           <p className="rounded-md bg-warning/10 p-3 text-sm">
-            {fout.split(":")[1]} geboekt · niet gelukt: {decodeURIComponent(fout.split(":").slice(2).join(":"))}
+            {fout.split(":")[1]} {uiT("geboekt · niet gelukt:")} {decodeURIComponent(fout.split(":").slice(2).join(":"))}
           </p>
         )}
         {fout === "leeg" && (
-          <p className="rounded-md bg-warning/10 p-3 text-sm">Niets geboekt — vul minstens één product met aantal in.</p>
+          <p className="rounded-md bg-warning/10 p-3 text-sm">{uiT("Niets geboekt — vul minstens één product met aantal in.")}</p>
         )}
 
         {actief.length > 0 && (
           <div className="grid gap-3 sm:grid-cols-3">
             <div className="rounded-lg border bg-background p-3">
-              <p className="text-xs text-muted">Kostprijs geleverd</p>
+              <p className="text-xs text-muted">{uiT("Kostprijs geleverd")}</p>
               <p className="text-lg font-semibold tabular-nums">{formatEUR(kost)}</p>
             </div>
             <div className="rounded-lg border bg-background p-3">
-              <p className="text-xs text-muted">Door te belasten (verkoop)</p>
+              <p className="text-xs text-muted">{uiT("Door te belasten (verkoop)")}</p>
               <p className="text-lg font-semibold tabular-nums">{formatEUR(verkoop)}</p>
             </div>
             <div className={`rounded-lg border p-3 ${gedekt ? "bg-success/5" : "bg-warning/5"}`}>
-              <p className="text-xs text-muted">Gedekt door voorschotten</p>
+              <p className="text-xs text-muted">{uiT("Gedekt door voorschotten")}</p>
               <p className={`text-lg font-semibold tabular-nums ${gedekt ? "text-success" : "text-warning"}`}>
-                {gedekt ? "ja" : `nee — ${formatEUR(verkoop - voorschottenEx)} te kort`}
+                {gedekt ? uiT("ja") : uiT("nee — {v0} te kort", { v0: formatEUR(verkoop - voorschottenEx) })}
               </p>
-              <p className="text-xs text-muted">{formatEUR(voorschottenEx)} voorschot ontvangen</p>
+              <p className="text-xs text-muted">{formatEUR(voorschottenEx)} {uiT("voorschot ontvangen")}</p>
             </div>
           </div>
         )}
 
         {teBestellen.length > 0 && (
           <div className="rounded-md bg-warning/10 p-3 text-sm">
-            <p className="font-medium">Nog te bestellen voor deze werf</p>
+            <p className="font-medium">{uiT("Nog te bestellen voor deze werf")}</p>
             <ul className="mt-1 space-y-0.5 text-xs">
               {teBestellen.map((r) => (
                 <li key={r.id}>
-                  {Number(r.toOrderQty)} × {r.productName}
+                  {Number(r.toOrderQty)} {uiT("×")} {r.productName}
                   {r.sku ? ` · ${r.sku}` : ""}
                 </li>
               ))}
             </ul>
             <p className="mt-2 text-xs text-muted">
-              Deze stonden niet (voldoende) op voorraad. Ze tellen wél mee in de kosten en in wat je doorbelast — zet ze
-              op een{" "}
+              {uiT("Deze stonden niet (voldoende) op voorraad. Ze tellen wél mee in de kosten en in wat je doorbelast — zet ze op een")}{" "}
               <Link href="/bestellen" className="text-accent underline underline-offset-2">
-                bestelbon
-              </Link>{" "}
-              zodat ze ook echt komen.
-            </p>
+                {uiT("bestelbon")} </Link>{" "}
+              {uiT("zodat ze ook echt komen.")} </p>
           </div>
         )}
 
         <p className="rounded-md bg-background p-3 text-xs text-muted">
-          <strong className="text-foreground">Let op bij de inkoop.</strong> De kostprijs komt hier via het product uit
-          de catalogus. Koppel de inkooporder van diezelfde goederen dan <em>niet</em> óók aan dit project — dan staan
-          de kosten er twee keer op. Inkooporders koppel je alleen voor spullen of werk die rechtstreeks voor deze werf
-          zijn gekocht en niet via de voorraad lopen.
-        </p>
+          <strong className="text-foreground">{uiT("Let op bij de inkoop.")}</strong> {uiT("De kostprijs komt hier via het product uit de catalogus. Koppel de inkooporder van diezelfde goederen dan")} <em>{uiT("niet")}</em> {uiT("óók aan dit project — dan staan de kosten er twee keer op. Inkooporders koppel je alleen voor spullen of werk die rechtstreeks voor deze werf zijn gekocht en niet via de voorraad lopen.")} </p>
 
         <DeliveryLinesForm
           action={deliverToProject.bind(null, projectId)}
@@ -172,11 +167,11 @@ export async function ProjectDeliveriesCard({
           <Table>
             <THead>
               <tr>
-                <Th>Datum</Th>
-                <Th>Product</Th>
-                <Th className="text-right">Aantal</Th>
-                <Th className="text-right">Kostprijs</Th>
-                <Th className="text-right">Verkoop</Th>
+                <Th>{uiT("Datum")}</Th>
+                <Th>{uiT("Product")}</Th>
+                <Th className="text-right">{uiT("Aantal")}</Th>
+                <Th className="text-right">{uiT("Kostprijs")}</Th>
+                <Th className="text-right">{uiT("Verkoop")}</Th>
                 <Th />
               </tr>
             </THead>
@@ -184,7 +179,7 @@ export async function ProjectDeliveriesCard({
               {regels.map((r) => (
                 <Tr key={r.id} className={r.reversedAt ? "opacity-50" : undefined}>
                   <Td className="whitespace-nowrap text-muted">
-                    {new Date(r.date).toLocaleDateString("nl-NL", { day: "numeric", month: "short" })}
+                    {new Date(r.date).toLocaleDateString(uiDateLocale, { day: "numeric", month: "short" })}
                   </Td>
                   <Td>
                     {r.productId ? (
@@ -199,22 +194,21 @@ export async function ProjectDeliveriesCard({
                   <Td className="text-right tabular-nums">
                     {Number(r.qty)}
                     {Number(r.toOrderQty ?? 0) > 0 && (
-                      <span className="block text-xs text-warning">{Number(r.toOrderQty)} te bestellen</span>
+                      <span className="block text-xs text-warning">{Number(r.toOrderQty)} {uiT("te bestellen")}</span>
                     )}
                   </Td>
                   <Td className="text-right tabular-nums text-muted">{formatEUR(Number(r.totalCostEur ?? 0))}</Td>
                   <Td className="text-right tabular-nums font-medium">{formatEUR(Number(r.totalPriceEur ?? 0))}</Td>
                   <Td className="text-right">
                     {r.reversedAt ? (
-                      <Badge tone="neutral">teruggedraaid</Badge>
+                      <Badge tone="neutral">{uiT("teruggedraaid")}</Badge>
                     ) : (
                       <form action={reverseDelivery.bind(null, projectId, r.id)}>
                         <ConfirmSubmit
-                          message={`${r.productName} × ${Number(r.qty)} terugdraaien? De voorraad gaat weer omhoog.`}
+                          message={uiT("{v0} × {v1} terugdraaien? De voorraad gaat weer omhoog.", { v0: r.productName, v1: Number(r.qty) })}
                           className="rounded p-1 text-xs text-muted transition-colors hover:bg-danger/10 hover:text-danger"
                         >
-                          Terugdraaien
-                        </ConfirmSubmit>
+                          {uiT("Terugdraaien")} </ConfirmSubmit>
                       </form>
                     )}
                   </Td>

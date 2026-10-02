@@ -2,7 +2,7 @@
 
 import { createContext, useContext, useMemo } from "react";
 
-import { vertaal, type Locale, type T } from "@/lib/i18n";
+import { dateLocale, vertaal, type Locale, type T } from "@/lib/i18n";
 
 /**
  * De taal voor client-componenten (zijbalk, formulieren, tegels).
@@ -25,4 +25,8 @@ export function useT(): T {
 
 export function useLocale(): Locale {
   return useContext(Ctx);
+}
+
+export function useDateLocale(): string {
+  return dateLocale(useLocale());
 }

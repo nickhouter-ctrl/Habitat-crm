@@ -1,3 +1,5 @@
+import { datumTaal } from "@/lib/i18n/server";
+import { tekst as uiTranslation } from '@/lib/i18n/server';
 import { and, asc, desc, eq, ilike, like, not, or, sql } from "drizzle-orm";
 import { ArrowDown, ArrowUp, FileSpreadsheet, FileText, Image as ImageIcon, Search } from "lucide-react";
 import Link from "next/link";
@@ -10,7 +12,10 @@ import { cn } from "@/lib/utils";
 
 import { CategorySelect } from "./category-select";
 
-export const metadata = { title: "Archief — bijlagen" };
+export async function generateMetadata() {
+  const uiT = await uiTranslation();
+  return { title: uiT("Archief — bijlagen") };
+}
 export const dynamic = "force-dynamic";
 
 function formatBytes(n: number | null): string {
@@ -20,9 +25,9 @@ function formatBytes(n: number | null): string {
   return `${(n / 1024 / 1024).toFixed(1)} MB`;
 }
 
-function formatDate(d: Date | null): string {
+function formatDate(d: Date | null, uiDateLocale = "nl-NL"): string {
   if (!d) return "—";
-  return d.toLocaleDateString("nl-NL", { day: "2-digit", month: "short", year: "2-digit" });
+  return d.toLocaleDateString(uiDateLocale, { day: "2-digit", month: "short", year: "2-digit" });
 }
 
 const CATEGORY_ICONS: Record<string, string> = {
@@ -61,6 +66,8 @@ export default async function ArchiefPage({
 }: {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
+  const uiDateLocale = await datumTaal();
+  const uiT = await uiTranslation();
   const params = await searchParams;
   const q = typeof params.q === "string" ? params.q.trim() : "";
   const category = typeof params.category === "string" ? params.category : "";
@@ -167,8 +174,8 @@ export default async function ArchiefPage({
   return (
     <>
       <PageHeader
-        title="Archief"
-        subtitle={`${counts.total} bijlagen · ${rows.length} weergegeven`}
+        title={uiT("Archief")}
+        subtitle={uiT("{v0} bijlagen · {v1} weergegeven", { v0: counts.total, v1: rows.length })}
       />
 
       <Card className="mb-4 space-y-2.5 p-3">
@@ -181,7 +188,7 @@ export default async function ArchiefPage({
             <Input
               name="q"
               defaultValue={q}
-              placeholder="Zoek op bestand, afzender of onderwerp…"
+              placeholder={uiT("Zoek op bestand, afzender of onderwerp…")}
               className="pl-8"
             />
           </div>
@@ -190,7 +197,7 @@ export default async function ArchiefPage({
             defaultValue={supplier}
             className="h-9 rounded-md border border-border bg-background px-2 text-sm"
           >
-            <option value="">Alle leveranciers</option>
+            <option value="">{uiT("Alle leveranciers")}</option>
             {supplierList.map(
               (s) =>
                 s.supplier && (
@@ -205,26 +212,24 @@ export default async function ArchiefPage({
               href={buildUrl({ type: undefined })}
               className={cn("px-2.5 py-1.5", !type ? "bg-accent/15 font-medium text-accent" : "hover:bg-background-soft")}
             >
-              Alle
-            </Link>
+              {uiT("Alle")} </Link>
             <Link
               href={buildUrl({ type: "doc" })}
               className={cn("border-l border-border px-2.5 py-1.5", type === "doc" ? "bg-accent/15 font-medium text-accent" : "hover:bg-background-soft")}
-              title="Alleen documenten"
+              title={uiT("Alleen documenten")}
             >
               📄 {counts.docs}
             </Link>
             <Link
               href={buildUrl({ type: "image" })}
               className={cn("border-l border-border px-2.5 py-1.5", type === "image" ? "bg-accent/15 font-medium text-accent" : "hover:bg-background-soft")}
-              title="Alleen afbeeldingen"
+              title={uiT("Alleen afbeeldingen")}
             >
               🖼 {counts.images}
             </Link>
           </div>
           <button className="h-9 rounded-md border border-border bg-background px-3 text-sm hover:bg-background-soft">
-            Zoeken
-          </button>
+            {uiT("Zoeken")} </button>
         </form>
 
         {/* Rij 2: categorie-pills */}
@@ -236,7 +241,7 @@ export default async function ArchiefPage({
               !category ? "bg-accent text-accent-foreground" : "bg-background-soft text-muted hover:text-foreground",
             )}
           >
-            Alle ({counts.total})
+            {uiT("Alle (")}{counts.total})
           </Link>
           {visibleCats.map((k) => (
             <Link
@@ -257,8 +262,8 @@ export default async function ArchiefPage({
 
       {rows.length === 0 ? (
         <EmptyState
-          title="Geen bijlagen gevonden"
-          description="Nieuwe bijlagen worden automatisch opgeslagen + gecategoriseerd uit de mail-inbox."
+          title={uiT("Geen bijlagen gevonden")}
+          description={uiT("Nieuwe bijlagen worden automatisch opgeslagen + gecategoriseerd uit de mail-inbox.")}
         />
       ) : (
         <Card>
@@ -267,28 +272,28 @@ export default async function ArchiefPage({
               <tr>
                 <Th className="w-[5rem]">
                   <Link href={sortHref("date")} className="inline-flex items-center gap-1 hover:text-foreground">
-                    Datum <SortArrow k="date" />
+                    {uiT("Datum")} <SortArrow k="date" />
                   </Link>
                 </Th>
                 <Th className="w-10" />
                 <Th>
                   <Link href={sortHref("name")} className="inline-flex items-center gap-1 hover:text-foreground">
-                    Bestand <SortArrow k="name" />
+                    {uiT("Bestand")} <SortArrow k="name" />
                   </Link>
                 </Th>
                 <Th className="w-[10rem]">
                   <Link href={sortHref("category")} className="inline-flex items-center gap-1 hover:text-foreground">
-                    Categorie <SortArrow k="category" />
+                    {uiT("Categorie")} <SortArrow k="category" />
                   </Link>
                 </Th>
                 <Th className="w-[9rem]">
                   <Link href={sortHref("supplier")} className="inline-flex items-center gap-1 hover:text-foreground">
-                    Leverancier <SortArrow k="supplier" />
+                    {uiT("Leverancier")} <SortArrow k="supplier" />
                   </Link>
                 </Th>
                 <Th className="w-[5rem] text-right">
                   <Link href={sortHref("size")} className="inline-flex items-center gap-1 hover:text-foreground">
-                    Grootte <SortArrow k="size" />
+                    {uiT("Grootte")} <SortArrow k="size" />
                   </Link>
                 </Th>
               </tr>
@@ -298,7 +303,7 @@ export default async function ArchiefPage({
                 const isImage = r.contentType?.startsWith("image/");
                 return (
                   <Tr key={r.id}>
-                    <Td className="whitespace-nowrap py-2 text-xs text-muted">{formatDate(r.receivedAt)}</Td>
+                    <Td className="whitespace-nowrap py-2 text-xs text-muted">{formatDate(r.receivedAt, uiDateLocale)}</Td>
                     <Td className="py-2">
                       {isImage ? (
                         <Link href={`/api/archief/${r.id}`} target="_blank">

@@ -1,3 +1,4 @@
+import { tekst as uiTranslation } from '@/lib/i18n/server';
 import { ilike, or } from "drizzle-orm";
 import { Search } from "lucide-react";
 import Link from "next/link";
@@ -14,7 +15,10 @@ import {
   propertyStatusMeta,
 } from "../_meta";
 
-export const metadata = { title: "Zoeken" };
+export async function generateMetadata() {
+  const uiT = await uiTranslation();
+  return { title: uiT("Zoeken") };
+}
 
 function ResultSection({
   title,
@@ -52,20 +56,21 @@ export default async function SearchPage({
 }: {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
+  const uiT = await uiTranslation();
   const params = await searchParams;
   const q = typeof params.q === "string" ? params.q.trim() : "";
 
   const searchForm = (
     <form className="relative mb-6 max-w-md" action="/search">
       <Search className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted" />
-      <Input name="q" defaultValue={q} autoFocus placeholder="Zoek in contacten, projecten, panden, producten, documenten…" className="pl-8" />
+      <Input name="q" defaultValue={q} autoFocus placeholder={uiT("Zoek in contacten, projecten, panden, producten, documenten…")} className="pl-8" />
     </form>
   );
 
   if (q.length < 2) {
     return (
       <>
-        <PageHeader title="Zoeken" subtitle="Typ minstens 2 tekens" />
+        <PageHeader title={uiT("Zoeken")} subtitle={uiT("Typ minstens 2 tekens")} />
         {searchForm}
       </>
     );
@@ -122,14 +127,14 @@ export default async function SearchPage({
 
   return (
     <>
-      <PageHeader title="Zoeken" subtitle={`${total} resultaat${total === 1 ? "" : "en"} voor "${q}"`} />
+      <PageHeader title={uiT("Zoeken")} subtitle={uiT(total === 1 ? "{n} resultaat voor {q}" : "{n} resultaten voor {q}", { n: total, q })} />
       {searchForm}
 
       {total === 0 ? (
-        <EmptyState title="Niets gevonden" description="Probeer een ander zoekwoord." />
+        <EmptyState title={uiT("Niets gevonden")} description={uiT("Probeer een ander zoekwoord.")} />
       ) : (
         <div className="space-y-4">
-          <ResultSection title="Contacten" count={cs.length}>
+          <ResultSection title={uiT("Contacten")} count={cs.length}>
             {cs.map((c) => (
               <Row key={c.id} href={`/contacts/${c.id}`}>
                 <span>
@@ -137,13 +142,13 @@ export default async function SearchPage({
                   {c.email && <span className="ml-2 text-xs text-muted">{c.email}</span>}
                 </span>
                 <Badge tone={c.type === "lead" ? leadStageMeta[c.stage].tone : contactTypeMeta[c.type].tone}>
-                  {c.type === "lead" ? leadStageMeta[c.stage].label : contactTypeMeta[c.type].label}
+                  {c.type === "lead" ? uiT(leadStageMeta[c.stage].label) : uiT(contactTypeMeta[c.type].label)}
                 </Badge>
               </Row>
             ))}
           </ResultSection>
 
-          <ResultSection title="Projecten" count={prjs.length}>
+          <ResultSection title={uiT("Projecten")} count={prjs.length}>
             {prjs.map((p) => (
               <Row key={p.id} href={`/projects/${p.id}`}>
                 <span>
@@ -151,13 +156,13 @@ export default async function SearchPage({
                   {p.code && <span className="ml-2 text-xs text-muted">{p.code}</span>}
                 </span>
                 <Badge tone={p.status === "active" ? "success" : "neutral"}>
-                  {p.status === "active" ? "Actief" : "Gearchiveerd"}
+                  {p.status === "active" ? uiT("Actief") : uiT("Gearchiveerd")}
                 </Badge>
               </Row>
             ))}
           </ResultSection>
 
-          <ResultSection title="Panden" count={ps.length}>
+          <ResultSection title={uiT("Panden")} count={ps.length}>
             {ps.map((p) => (
               <Row key={p.id} href={`/properties/${p.id}`}>
                 <span>
@@ -166,12 +171,12 @@ export default async function SearchPage({
                     <span className="ml-2 text-xs text-muted">{[p.reference, p.location].filter(Boolean).join(" · ")}</span>
                   )}
                 </span>
-                <Badge tone={propertyStatusMeta[p.status].tone}>{propertyStatusMeta[p.status].label}</Badge>
+                <Badge tone={propertyStatusMeta[p.status].tone}>{uiT(propertyStatusMeta[p.status].label)}</Badge>
               </Row>
             ))}
           </ResultSection>
 
-          <ResultSection title="Producten" count={prs.length}>
+          <ResultSection title={uiT("Producten")} count={prs.length}>
             {prs.map((p) => (
               <Row key={p.id} href={`/products/${p.id}/edit`}>
                 <span className="font-medium">{p.name}</span>
@@ -180,16 +185,16 @@ export default async function SearchPage({
             ))}
           </ResultSection>
 
-          <ResultSection title="Offertes & facturen" count={docs.length}>
+          <ResultSection title={uiT("Offertes & facturen")} count={docs.length}>
             {docs.map((d) => (
               <Row key={d.id} href={`/documents/${d.id}`}>
                 <span>
                   <span className="font-medium">
-                    {documentKindMeta[d.kind]} {d.docNumber ?? "(geen nr.)"}
+                    {uiT(documentKindMeta[d.kind])} {d.docNumber ?? uiT("(geen nr.)")}
                   </span>
                   {d.title && <span className="ml-2 text-xs text-muted">{d.title}</span>}
                 </span>
-                <Badge tone={documentStatusMeta[d.status].tone}>{documentStatusMeta[d.status].label}</Badge>
+                <Badge tone={documentStatusMeta[d.status].tone}>{uiT(documentStatusMeta[d.status].label)}</Badge>
               </Row>
             ))}
           </ResultSection>

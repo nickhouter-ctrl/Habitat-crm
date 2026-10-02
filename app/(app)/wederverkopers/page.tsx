@@ -1,3 +1,4 @@
+import { tekst as uiTranslation } from '@/lib/i18n/server';
 import { tekst } from '@/lib/i18n/server';
 import { asc, eq, inArray, or, sql } from 'drizzle-orm';
 import Link from 'next/link';
@@ -8,11 +9,15 @@ import { requireModuleRead } from '@/lib/auth/guards';
 import { STAGES } from '@/lib/partners';
 import { formatEUR } from '@/lib/utils';
 
-export const metadata = { title: 'Verkooppunten' };
+export async function generateMetadata() {
+  const uiT = await uiTranslation();
+  return { title: uiT("Verkooppunten") };
+}
 
 export default async function VerkooppuntenPage({ searchParams }: {
   searchParams: Promise<{ q?: string; status?: string }>;
 }) {
+
  const t=await tekst();
   const access = await requireModuleRead('producten');
   const s = await searchParams;

@@ -1,3 +1,4 @@
+import { tekst as uiTranslation } from '@/lib/i18n/server';
 import { eq } from "drizzle-orm";
 import Link from "next/link";
 import { notFound } from "next/navigation";
@@ -11,7 +12,10 @@ import { getDocumentFormOptions } from "../../../_options";
 import { updateDocument } from "../../actions";
 import { documentKindMeta } from "../../../_meta";
 
-export const metadata = { title: "Document bewerken" };
+export async function generateMetadata() {
+  const uiT = await uiTranslation();
+  return { title: uiT("Document bewerken") };
+}
 
 export default async function EditDocumentPage({
   params,
@@ -20,6 +24,7 @@ export default async function EditDocumentPage({
   params: Promise<{ id: string }>;
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
+  const uiT = await uiTranslation();
   const { id } = await params;
   const sp = await searchParams;
 
@@ -30,23 +35,21 @@ export default async function EditDocumentPage({
   if (!doc) notFound();
 
   const update = updateDocument.bind(null, id);
-  const kindLabel = documentKindMeta[doc.kind];
+  const kindLabel = uiT(documentKindMeta[doc.kind]);
 
   return (
     <>
       <PageHeader
-        title={`${kindLabel} bewerken`}
+        title={uiT("{v0} bewerken", { v0: kindLabel })}
         subtitle={doc.docNumber ?? doc.title ?? undefined}
         actions={
           <Link href={`/documents/${id}`} className="text-sm text-muted hover:underline">
-            ← Terug
-          </Link>
+            {uiT("← Terug")} </Link>
         }
       />
       {sp.error === "validation" && (
         <p className="mb-4 max-w-3xl rounded-md bg-red-50 px-3 py-2 text-sm text-danger">
-          Controleer de gegevens (minstens één regel met een omschrijving).
-        </p>
+          {uiT("Controleer de gegevens (minstens één regel met een omschrijving).")} </p>
       )}
       <DocumentForm
         action={update}
@@ -71,7 +74,7 @@ export default async function EditDocumentPage({
         properties={options.properties}
         projects={options.projects}
         products={options.products}
-        submitLabel="Wijzigingen opslaan"
+        submitLabel={uiT("Wijzigingen opslaan")}
       />
     </>
   );

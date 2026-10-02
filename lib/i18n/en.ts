@@ -3,9 +3,11 @@
  * an untranslated screen stays usable instead of showing key names.
  */
 import type { Dictionary } from "@/lib/i18n";
+import { crmEn } from './crm';
 import { workflowEn } from './workflow';
 
 export const en: Dictionary = {
+  ...crmEn,
   ...workflowEn,
   // ── navigatie en groepen ──────────────────────────────────────────────────
   Start: "Home",

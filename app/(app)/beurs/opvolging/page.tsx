@@ -1,3 +1,4 @@
+import { tekst as uiTranslation } from '@/lib/i18n/server';
 import { tekst, datumTaal } from '@/lib/i18n/server';
 import Link from 'next/link';
 import { and, eq, inArray, isNotNull, or, sql } from 'drizzle-orm';
@@ -16,12 +17,16 @@ import { SyncButton } from './forms';
 import { FollowupCheck } from './check';
 import { FollowupLive } from './live';
 
-export const metadata = { title: 'Opvolging' };
+export async function generateMetadata() {
+  const uiT = await uiTranslation();
+  return { title: uiT("Opvolging") };
+}
 export const dynamic = 'force-dynamic';
 
 export default async function Page({ searchParams }: {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
+
  const t=await tekst(); const dateLocale=await datumTaal();
   const access = await requireModuleRead('aanvragen');
   const params = await searchParams;

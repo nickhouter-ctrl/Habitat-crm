@@ -1,4 +1,5 @@
 "use client";
+import { useT as useUiTranslation } from '@/components/taal-provider';
 
 /**
  * Popup-beeldkiezer voor de editor (taak U6): volledige bibliotheek in een
@@ -54,6 +55,7 @@ export function AssetPickerModal({
   /** Bevestigde selectie (in klikvolgorde — het eerste beeld stuurt de preview). */
   onConfirm: (ids: string[]) => void;
 }) {
+  const uiT = useUiTranslation();
   const dialogRef = useRef<HTMLDialogElement>(null);
   const [query, setQuery] = useState("");
   const [groupBy, setGroupBy] = useState<GroupBy>("categorie");
@@ -128,12 +130,11 @@ export function AssetPickerModal({
       <div className="flex max-h-[85vh] flex-col">
         <header className="flex items-center justify-between gap-3 border-b px-5 py-3.5">
           <h2 id="asset-picker-title" className="font-semibold">
-            Kies beeld(en)
-          </h2>
+            {uiT("Kies beeld(en)")} </h2>
           <button
             type="button"
             onClick={onClose}
-            aria-label="Sluiten"
+            aria-label={uiT("Sluiten")}
             className={buttonClass({ variant: "ghost", size: "sm" })}
           >
             <X className="size-4" aria-hidden />
@@ -144,33 +145,31 @@ export function AssetPickerModal({
           <Input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Zoek op naam, categorie, bron of tag…"
-            aria-label="Zoeken in de bibliotheek"
+            placeholder={uiT("Zoek op naam, categorie, bron of tag…")}
+            aria-label={uiT("Zoeken in de bibliotheek")}
             className="w-64"
           />
           <label htmlFor="asset-picker-group" className="text-sm text-muted">
-            Groepeer op
-          </label>
+            {uiT("Groepeer op")} </label>
           <select
             id="asset-picker-group"
             value={groupBy}
             onChange={(e) => setGroupBy(e.target.value as GroupBy)}
             className="h-9 rounded-md border border-border bg-background px-2 text-sm"
           >
-            <option value="categorie">Categorie</option>
-            <option value="bron">Bron</option>
-            <option value="tag">Tag</option>
+            <option value="categorie">{uiT("Categorie")}</option>
+            <option value="bron">{uiT("Bron")}</option>
+            <option value="tag">{uiT("Tag")}</option>
           </select>
           <span className="ml-auto text-sm text-muted" aria-live="polite">
-            {filtered.length} beeld{filtered.length === 1 ? "" : "en"}
+            {filtered.length} {uiT(filtered.length === 1 ? "beeld" : "beelden")}
           </span>
         </div>
 
         <div className="flex-1 overflow-y-auto px-5 py-4">
           {groups.length === 0 ? (
             <p className="py-10 text-center text-sm text-muted">
-              Geen beelden gevonden voor deze zoekopdracht.
-            </p>
+              {uiT("Geen beelden gevonden voor deze zoekopdracht.")} </p>
           ) : (
             groups.map(([groupName, groupAssets]) => (
               <section key={groupName} className="mb-5" aria-label={groupName}>
@@ -187,7 +186,7 @@ export function AssetPickerModal({
                           type="button"
                           onClick={() => toggle(asset.id)}
                           aria-pressed={isPicked}
-                          aria-label={`${isPicked ? "Deselecteer" : "Selecteer"} ${asset.label}`}
+                          aria-label={`${isPicked ? uiT("Deselecteer") : uiT("Selecteer")} ${asset.label}`}
                           className={cn(
                             "relative block w-full overflow-hidden rounded-md border-2 transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent",
                             isPicked ? "border-accent" : "border-transparent hover:border-border",
@@ -203,8 +202,7 @@ export function AssetPickerModal({
                             />
                           ) : (
                             <span className="flex aspect-square w-full items-center justify-center text-[10px] text-muted">
-                              geen opslag
-                            </span>
+                              {uiT("geen opslag")} </span>
                           )}
                           {isPicked && (
                             <span className="absolute right-1 top-1 flex size-5 items-center justify-center rounded-full bg-accent text-accent-foreground">
@@ -214,7 +212,7 @@ export function AssetPickerModal({
                           {asset.organicStrong && (
                             <span
                               className="absolute left-1 top-1"
-                              title="Organisch sterk op Instagram — hint, geen bewijs"
+                              title={uiT("Organisch sterk op Instagram — hint, geen bewijs")}
                             >
                               <Badge tone="success" className="bg-background/85 px-1 text-[9px]">
                                 <Sparkles className="size-3" aria-hidden />
@@ -234,21 +232,19 @@ export function AssetPickerModal({
         <footer className="flex items-center justify-between gap-3 border-t px-5 py-3.5">
           <span className="text-sm" aria-live="polite">
             {picked.length === 0
-              ? "Nog niets geselecteerd"
-              : `${picked.length} beeld${picked.length === 1 ? "" : "en"} geselecteerd`}
+              ? uiT("Nog niets geselecteerd")
+              : uiT("{v0} beeld{v1} geselecteerd", { v0: picked.length, v1: picked.length === 1 ? "" : "en" })}
           </span>
           <div className="flex items-center gap-2">
             <button type="button" onClick={onClose} className={buttonClass({ variant: "ghost" })}>
-              Annuleer
-            </button>
+              {uiT("Annuleer")} </button>
             <button
               type="button"
               disabled={picked.length === 0}
               onClick={() => onConfirm(picked)}
               className={buttonClass()}
             >
-              Gebruik selectie
-            </button>
+              {uiT("Gebruik selectie")} </button>
           </div>
         </footer>
       </div>

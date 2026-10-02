@@ -1,4 +1,5 @@
 "use client";
+import { useT as useUiTranslation } from '@/components/taal-provider';
 
 import { useTransition } from "react";
 
@@ -17,6 +18,7 @@ export function AccountTierSelect({
   tier: "particulier" | "aannemer";
   onChangeAction: (accountId: string, formData: FormData) => Promise<void>;
 }) {
+  const uiT = useUiTranslation();
   const [pending, startTransition] = useTransition();
   return (
     <span className="inline-flex items-center gap-1.5">
@@ -30,10 +32,10 @@ export function AccountTierSelect({
           startTransition(() => onChangeAction(accountId, fd));
         }}
       >
-        <option value="particulier">Particulier</option>
-        <option value="aannemer">Zakelijk (−20%)</option>
+        <option value="particulier">{uiT("Particulier")}</option>
+        <option value="aannemer">{uiT("Zakelijk (−20%)")}</option>
       </Select>
-      {pending && <span className="text-xs text-muted">opslaan…</span>}
+      {pending && <span className="text-xs text-muted">{uiT("opslaan…")}</span>}
     </span>
   );
 }

@@ -1,3 +1,4 @@
+import { tekst as uiTranslation } from '@/lib/i18n/server';
 /**
  * Campagnepagina (brief §7): advertentiesets met planning (Europe/Madrid,
  * dagdelen alleen mét looptijdbudget) en per set de advertenties met
@@ -46,6 +47,7 @@ export default async function CampaignDetailPage({
 }: {
   params: Promise<{ id: string }>;
 }) {
+  const uiT = await uiTranslation();
   const { id } = await params;
   if (!/^[0-9a-f-]{36}$/i.test(id)) notFound();
 
@@ -112,21 +114,18 @@ export default async function CampaignDetailPage({
     <>
       <PageHeader
         title={campaign.name}
-        subtitle={`${campaign.objective ?? "geen doelstelling"} · Meta-status: ${campaign.effectiveStatus ?? "nog niet in Meta"}`}
+        subtitle={uiT("{v0} · Meta-status: {v1}", { v0: campaign.objective ?? "geen doelstelling", v1: campaign.effectiveStatus ?? "nog niet in Meta" })}
         actions={
           <LinkButton variant="secondary" href="/marketing/campaigns">
-            Alle campagnes
-          </LinkButton>
+            {uiT("Alle campagnes")} </LinkButton>
         }
       />
 
       {!campaign.metaId && (
         <Card className="mb-5 p-4">
-          <h2 className="mb-1 text-sm font-medium">Deze campagne staat nog niet in Meta</h2>
+          <h2 className="mb-1 text-sm font-medium">{uiT("Deze campagne staat nog niet in Meta")}</h2>
           <p className="mb-3 text-sm text-muted">
-            Zet hem gepauzeerd in Meta, of koppel het id van een campagne die al in Business
-            Manager bestaat. Daarna kun je advertentiesets en advertenties publiceren.
-          </p>
+            {uiT("Zet hem gepauzeerd in Meta, of koppel het id van een campagne die al in Business Manager bestaat. Daarna kun je advertentiesets en advertenties publiceren.")} </p>
           <MetaPushControls
             kind="campaign"
             localId={id}
@@ -138,8 +137,8 @@ export default async function CampaignDetailPage({
 
       {sets.length === 0 && (
         <EmptyState
-          title="Nog geen advertentiesets"
-          description="Maak hieronder de eerste advertentieset aan — met taal én doelgroep-as, daar leert de leerlaag langs."
+          title={uiT("Nog geen advertentiesets")}
+          description={uiT("Maak hieronder de eerste advertentieset aan — met taal én doelgroep-as, daar leert de leerlaag langs.")}
         />
       )}
 
@@ -158,17 +157,17 @@ export default async function CampaignDetailPage({
                 <div className="flex flex-wrap items-center gap-2">
                   <h2 className="font-medium">{set.name}</h2>
                   <Badge tone={statusTone(set.effectiveStatus)}>
-                    {set.effectiveStatus ?? "nog niet in Meta"}
+                    {set.effectiveStatus ?? uiT("nog niet in Meta")}
                   </Badge>
                   <Badge tone="neutral">{set.locale?.toUpperCase() ?? "—"}</Badge>
                   <Badge tone="neutral">
-                    {set.audienceSegment ? SEGMENT_LABELS[set.audienceSegment] : "doelgroep-as ontbreekt"}
+                    {set.audienceSegment ? SEGMENT_LABELS[set.audienceSegment] : uiT("doelgroep-as ontbreekt")}
                   </Badge>
                 </div>
                 <p className="text-sm text-muted">
                   {budget}
-                  {set.startTime && ` · start ${formatMadrid(set.startTime)}`}
-                  {set.endTime && ` · einde ${formatMadrid(set.endTime)}`}
+                  {set.startTime && uiT(" · start {v0}", { v0: formatMadrid(set.startTime) })}
+                  {set.endTime && uiT(" · einde {v0}", { v0: formatMadrid(set.endTime) })}
                   {dayparting && ` · ${dayparting}`}
                 </p>
               </div>
@@ -196,7 +195,7 @@ export default async function CampaignDetailPage({
                           )}
                           <span className="font-medium">{ad.name}</span>
                           <Badge tone={statusTone(ad.effectiveStatus)}>
-                            {ad.effectiveStatus ?? "niet gepubliceerd"}
+                            {ad.effectiveStatus ?? uiT("niet gepubliceerd")}
                           </Badge>
                           {spec && (
                             <a
@@ -213,9 +212,7 @@ export default async function CampaignDetailPage({
                               <p key={line}>{line}</p>
                             ))}
                             <p className="text-xs text-muted">
-                              Wat nu: dupliceer de creative, pas hem aan en publiceer opnieuw —
-                              een lopende advertentie wijzig je niet (§3.5).
-                            </p>
+                              {uiT("Wat nu: dupliceer de creative, pas hem aan en publiceer opnieuw — een lopende advertentie wijzig je niet (§3.5).")} </p>
                           </div>
                         )}
                       </li>
@@ -227,8 +224,7 @@ export default async function CampaignDetailPage({
               {/* Publiceren in deze set */}
               <details className="mt-3">
                 <summary className="cursor-pointer text-sm font-medium text-accent">
-                  Advertentie toevoegen (gepauzeerd publiceren)
-                </summary>
+                  {uiT("Advertentie toevoegen (gepauzeerd publiceren)")} </summary>
                 <div className="mt-3">
                   {set.metaId ? (
                     <PublishAdForm
@@ -239,9 +235,7 @@ export default async function CampaignDetailPage({
                   ) : campaign.metaId ? (
                     <div className="space-y-2">
                       <p className="text-sm text-muted">
-                        Zet deze advertentieset eerst in Meta (gepauzeerd), of koppel een
-                        bestaande adset uit Ads Manager — daarna kun je hier publiceren.
-                      </p>
+                        {uiT("Zet deze advertentieset eerst in Meta (gepauzeerd), of koppel een bestaande adset uit Ads Manager — daarna kun je hier publiceren.")} </p>
                       <MetaPushControls
                         kind="adSet"
                         localId={set.id}
@@ -251,9 +245,7 @@ export default async function CampaignDetailPage({
                     </div>
                   ) : (
                     <p className="text-sm text-muted">
-                      Zet eerst de campagne in Meta (bovenaan deze pagina); daarna kan deze
-                      advertentieset erin en kun je hier publiceren.
-                    </p>
+                      {uiT("Zet eerst de campagne in Meta (bovenaan deze pagina); daarna kan deze advertentieset erin en kun je hier publiceren.")} </p>
                   )}
                 </div>
               </details>
@@ -261,8 +253,7 @@ export default async function CampaignDetailPage({
               {/* Planning wijzigen */}
               <details className="mt-2">
                 <summary className="cursor-pointer text-sm font-medium text-accent">
-                  Planning en budget wijzigen
-                </summary>
+                  {uiT("Planning en budget wijzigen")} </summary>
                 <div className="mt-3">
                   <AdSetForm
                     campaignId={id}
@@ -286,7 +277,7 @@ export default async function CampaignDetailPage({
       </div>
 
       <Card className="mt-6 p-4">
-        <h2 className="mb-3 text-sm font-medium">Nieuwe advertentieset</h2>
+        <h2 className="mb-3 text-sm font-medium">{uiT("Nieuwe advertentieset")}</h2>
         <AdSetForm campaignId={id} />
       </Card>
     </>

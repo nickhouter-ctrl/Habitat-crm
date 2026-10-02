@@ -1,4 +1,5 @@
 "use client";
+import { useT as useUiTranslation } from '@/components/taal-provider';
 
 import { ChevronsUpDown, X } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -78,6 +79,7 @@ export function Combobox({
   menuClassName?: string;
   onSelect?: (value: string, option?: ComboOption) => void;
 }) {
+  const uiT = useUiTranslation();
   const initial = options.find((o) => o.value === defaultValue);
   const [value, setValue] = useState<string>(defaultValue);
   const [query, setQuery] = useState<string>(initial?.label ?? (allowCustom ? defaultValue : ""));
@@ -189,7 +191,7 @@ export function Combobox({
           <button
             type="button"
             onClick={clear}
-            title="Wissen"
+            title={uiT("Wissen")}
             className="absolute right-7 top-1/2 -translate-y-1/2 rounded p-0.5 text-muted hover:text-foreground"
           >
             <X className="size-3.5" />

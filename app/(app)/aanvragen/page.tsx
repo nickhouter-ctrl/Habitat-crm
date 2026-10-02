@@ -1,3 +1,5 @@
+import { datumTaal } from "@/lib/i18n/server";
+import { tekst as uiTranslation } from '@/lib/i18n/server';
 import { and, desc, eq, sql } from "drizzle-orm";
 import Link from "next/link";
 
@@ -24,7 +26,10 @@ import { gewoneAanvragen } from "@/lib/aanvraag-selectie";
 import { requireModuleRead } from "@/lib/auth/guards";
 import { formatDate } from "@/lib/utils";
 
-export const metadata = { title: "Aanvragen" };
+export async function generateMetadata() {
+  const uiT = await uiTranslation();
+  return { title: uiT("Aanvragen") };
+}
 
 const STATUS_META: Record<string, { label: string; tone: "info" | "success" | "warning" | "danger" | "neutral" }> = {
   pending: { label: "Open", tone: "info" },
@@ -37,6 +42,8 @@ export default async function QuoteRequestsPage({
 }: {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
+  const uiDateLocale = await datumTaal();
+  const uiT = await uiTranslation();
   await requireModuleRead('aanvragen');
   const sp = await searchParams;
   const status = typeof sp.status === "string" ? sp.status : "";
@@ -59,23 +66,23 @@ export default async function QuoteRequestsPage({
   return (
     <>
       <PageHeader
-        title="Aanvragen"
-        subtitle="Offerte-aanvragen via de website — bekijk, accepteer of wijs af."
-        actions={<LinkButton href="/beurs/contacten" variant="secondary">Beurscontacten</LinkButton>}
+        title={uiT("Aanvragen")}
+        subtitle={uiT("Offerte-aanvragen via de website — bekijk, accepteer of wijs af.")}
+        actions={<LinkButton href="/beurs/contacten" variant="secondary">{uiT("Beurscontacten")}</LinkButton>}
       />
 
-      <p className="mb-4 text-sm text-muted">De contacten van de beurs staan bij <Link href="/beurs/contacten" className="text-accent underline">Beurscontacten</Link>. Persoonlijke mails en afspraken beheer je bij <Link href="/opvolging" className="text-accent underline">Opvolging</Link>.</p>
+      <p className="mb-4 text-sm text-muted">{uiT("De contacten van de beurs staan bij")} <Link href="/beurs/contacten" className="text-accent underline">{uiT("Beurscontacten")}</Link>{uiT(". Persoonlijke mails en afspraken beheer je bij")} <Link href="/opvolging" className="text-accent underline">{uiT("Opvolging")}</Link>.</p>
 
-      <p className="mb-4 text-sm"><Link href="/accounts?source=windows" className="text-accent underline">Aanvragen kozijnensysteem bekijken en goedkeuren →</Link></p>
+      <p className="mb-4 text-sm"><Link href="/accounts?source=windows" className="text-accent underline">{uiT("Aanvragen kozijnensysteem bekijken en goedkeuren →")}</Link></p>
       <div className="mb-5 grid grid-cols-2 gap-3 sm:grid-cols-3">
         <Link href="/aanvragen?status=pending" className="block">
-          <StatTile label="Open" value={counts?.pending ?? 0} hint="wacht op behandeling" />
+          <StatTile label={uiT("Open")} value={counts?.pending ?? 0} hint={uiT("wacht op behandeling")} />
         </Link>
         <Link href="/aanvragen?status=accepted" className="block">
-          <StatTile label="Geaccepteerd" value={counts?.accepted ?? 0} />
+          <StatTile label={uiT("Geaccepteerd")} value={counts?.accepted ?? 0} />
         </Link>
         <Link href="/aanvragen?status=rejected" className="block">
-          <StatTile label="Afgewezen" value={counts?.rejected ?? 0} />
+          <StatTile label={uiT("Afgewezen")} value={counts?.rejected ?? 0} />
         </Link>
       </div>
 
@@ -86,8 +93,7 @@ export default async function QuoteRequestsPage({
             !status ? "bg-accent/10 font-medium text-accent" : "text-muted hover:bg-surface hover:text-foreground"
           }`}
         >
-          Alles
-        </Link>
+          {uiT("Alles")} </Link>
         {Object.entries(STATUS_META).map(([key, meta]) => (
           <Link
             key={key}
@@ -96,26 +102,26 @@ export default async function QuoteRequestsPage({
               status === key ? "bg-accent/10 font-medium text-accent" : "text-muted hover:bg-surface hover:text-foreground"
             }`}
           >
-            {meta.label}
+            {uiT(meta.label)}
           </Link>
         ))}
       </div>
 
       {rows.length === 0 ? (
         <EmptyState
-          title={status === "pending" ? "Geen openstaande aanvragen" : "Geen aanvragen"}
-          description="Aanvragen via 'Vraag offerte aan' op de website verschijnen hier."
+          title={status === "pending" ? uiT("Geen openstaande aanvragen") : uiT("Geen aanvragen")}
+          description={uiT("Aanvragen via 'Vraag offerte aan' op de website verschijnen hier.")}
         />
       ) : (
         <Card className="overflow-hidden">
           <Table>
             <THead>
               <tr>
-                <Th>Klant</Th>
-                <Th>Bedrijf</Th>
-                <Th>Producten</Th>
-                <Th>Status</Th>
-                <Th>Ontvangen</Th>
+                <Th>{uiT("Klant")}</Th>
+                <Th>{uiT("Bedrijf")}</Th>
+                <Th>{uiT("Producten")}</Th>
+                <Th>{uiT("Status")}</Th>
+                <Th>{uiT("Ontvangen")}</Th>
               </tr>
             </THead>
             <TBody>
@@ -144,9 +150,9 @@ export default async function QuoteRequestsPage({
                       )}
                     </Td>
                     <Td>
-                      <Badge tone={meta.tone}>{meta.label}</Badge>
+                      <Badge tone={meta.tone}>{uiT(meta.label)}</Badge>
                     </Td>
-                    <Td className="text-xs text-muted">{formatDate(r.createdAt)}</Td>
+                    <Td className="text-xs text-muted">{formatDate(r.createdAt, uiDateLocale)}</Td>
                   </RowLink>
                 );
               })}
@@ -154,7 +160,7 @@ export default async function QuoteRequestsPage({
           </Table>
           {rows.length === 0 && (
             <CardContent>
-              <p className="text-sm text-muted">Geen aanvragen.</p>
+              <p className="text-sm text-muted">{uiT("Geen aanvragen.")}</p>
             </CardContent>
           )}
         </Card>

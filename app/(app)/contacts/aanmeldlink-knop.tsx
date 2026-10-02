@@ -1,4 +1,5 @@
 "use client";
+import { useT as useUiTranslation } from '@/components/taal-provider';
 
 import { useState, useTransition } from "react";
 import { Link2 } from "lucide-react";
@@ -12,6 +13,7 @@ import { buttonClass } from "@/components/ui";
  * en staat daarna als klant in het CRM, ingelogd op het portaal.
  */
 export function AanmeldlinkKnop() {
+  const uiT = useUiTranslation();
   const [pending, start] = useTransition();
   const [melding, setMelding] = useState<string | null>(null);
 
@@ -21,7 +23,7 @@ export function AanmeldlinkKnop() {
         type="button"
         disabled={pending}
         className={buttonClass({ variant: "secondary" })}
-        title="Deelbare link (14 dagen geldig) waarmee een nieuwe klant zelf zijn gegevens invult — plak hem bv. in WhatsApp."
+        title={uiT("Deelbare link (14 dagen geldig) waarmee een nieuwe klant zelf zijn gegevens invult — plak hem bv. in WhatsApp.")}
         onClick={() =>
           start(async () => {
             try {
@@ -35,7 +37,7 @@ export function AanmeldlinkKnop() {
         }
       >
         <Link2 className="h-4 w-4" />
-        {pending ? "Bezig…" : "Aanmeldlink"}
+        {pending ? uiT("Bezig…") : uiT("Aanmeldlink")}
       </button>
       {melding && <span className="text-xs text-muted">{melding}</span>}
     </span>

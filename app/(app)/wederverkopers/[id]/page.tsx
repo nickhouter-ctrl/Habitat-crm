@@ -1,3 +1,4 @@
+import { tekst as uiTranslation } from '@/lib/i18n/server';
 import { tekst, datumTaal } from '@/lib/i18n/server';
 import { asc, eq } from "drizzle-orm";
 import Link from "next/link";
@@ -28,7 +29,10 @@ import { DEALER_MIN_MARGIN_PCT, dealerMarginPct, dealerPrice } from "@/lib/resel
 import { createResellerInvoice, placeConsignment, recordConsignmentSale, returnConsignment } from "../actions";
 import { getWindowsDealers } from "@/lib/windows-report";
 
-export const metadata = { title: "Wederverkoper" };
+export async function generateMetadata() {
+  const uiT = await uiTranslation();
+  return { title: uiT("Wederverkoper") };
+}
 
 export default async function ResellerDetailPage({ params }: { params: Promise<{ id: string }> }) {
  const t=await tekst(); const dateLocale=await datumTaal();

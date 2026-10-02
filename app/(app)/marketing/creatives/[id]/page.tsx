@@ -1,3 +1,5 @@
+import { datumTaal } from "@/lib/i18n/server";
+import { tekst as uiTranslation } from '@/lib/i18n/server';
 /**
  * Detailpagina van een creative: grote preview, feiten, layoutvalidatie en de
  * goedkeuringsstap met menselijke controlelijst (brief §6b/§7). Wat het
@@ -44,6 +46,8 @@ export default async function CreativeDetailPage({
   params: Promise<{ id: string }>;
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
+  const uiDateLocale = await datumTaal();
+  const uiT = await uiTranslation();
   const { id } = await params;
   const sp = await searchParams;
   const fout = typeof sp.fout === "string" ? sp.fout : "";
@@ -65,15 +69,13 @@ export default async function CreativeDetailPage({
     <>
       <PageHeader
         title={headline}
-        subtitle={`${TEMPLATES[spec.template as keyof typeof TEMPLATES]?.label ?? spec.template} · ${format.label} · ${spec.locale.toUpperCase()} · palet ${spec.palette}`}
+        subtitle={uiT("{v0} · {v1} · {v2} · palet {v3}", { v0: TEMPLATES[spec.template as keyof typeof TEMPLATES]?.label ?? spec.template, v1: format.label, v2: spec.locale.toUpperCase(), v3: spec.palette })}
         actions={
           <>
             <LinkButton href={`/marketing/creatives/new?from=${spec.id}`}>
-              Dupliceer en pas aan
-            </LinkButton>
+              {uiT("Dupliceer en pas aan")} </LinkButton>
             <LinkButton variant="secondary" href="/marketing/creatives">
-              Alle creatives
-            </LinkButton>
+              {uiT("Alle creatives")} </LinkButton>
           </>
         }
       />
@@ -93,43 +95,41 @@ export default async function CreativeDetailPage({
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
               src={`/api/creatives/render?id=${spec.id}`}
-              alt={`Creative: ${headline}`}
+              alt={uiT("Creative: {v0}", { v0: headline })}
               className="size-full object-contain"
             />
           </div>
           <p className="mt-2 text-center text-xs text-muted">
-            Gerenderd door hetzelfde endpoint dat de PNG voor Meta levert.
-          </p>
+            {uiT("Gerenderd door hetzelfde endpoint dat de PNG voor Meta levert.")} </p>
         </Card>
 
         <div className="space-y-4">
           <Card className="p-4 text-sm">
             <div className="flex items-center justify-between">
-              <h2 className="font-medium">Status</h2>
-              <Badge tone={meta.tone}>{meta.label}</Badge>
+              <h2 className="font-medium">{uiT("Status")}</h2>
+              <Badge tone={meta.tone}>{uiT(meta.label)}</Badge>
             </div>
             <dl className="mt-3 space-y-1.5 text-muted">
               <div className="flex justify-between gap-4">
-                <dt>Invalshoek</dt>
+                <dt>{uiT("Invalshoek")}</dt>
                 <dd className="text-foreground">{spec.copyAngle ?? "—"}</dd>
               </div>
               <div className="flex justify-between gap-4">
-                <dt>Gemaakt door</dt>
+                <dt>{uiT("Gemaakt door")}</dt>
                 <dd className="text-foreground">{spec.createdBy ?? "—"}</dd>
               </div>
               <div className="flex justify-between gap-4">
-                <dt>Gemaakt op</dt>
+                <dt>{uiT("Gemaakt op")}</dt>
                 <dd className="text-foreground">
-                  {spec.createdAt.toLocaleString("nl-NL", { dateStyle: "medium", timeStyle: "short" })}
+                  {spec.createdAt.toLocaleString(uiDateLocale, { dateStyle: "medium", timeStyle: "short" })}
                 </dd>
               </div>
               {spec.parentId && (
                 <div className="flex justify-between gap-4">
-                  <dt>Gedupliceerd van</dt>
+                  <dt>{uiT("Gedupliceerd van")}</dt>
                   <dd>
                     <a href={`/marketing/creatives/${spec.parentId}`} className="text-accent underline">
-                      origineel
-                    </a>
+                      {uiT("origineel")} </a>
                   </dd>
                 </div>
               )}
@@ -138,24 +138,22 @@ export default async function CreativeDetailPage({
 
           {issues.length > 0 && (
             <Card className="border-amber-300 bg-amber-50 p-4 text-sm">
-              <h2 className="font-medium">Past niet binnen de layoutgaranties</h2>
+              <h2 className="font-medium">{uiT("Past niet binnen de layoutgaranties")}</h2>
               <ul className="mt-1 list-disc pl-5">
                 {issues.map((issue) => (
                   <li key={issue.role}>{issue.message}</li>
                 ))}
               </ul>
               <p className="mt-1 text-xs">
-                Goedkeuren is geblokkeerd. Dupliceer de creative en kort de teksten in.
-              </p>
+                {uiT("Goedkeuren is geblokkeerd. Dupliceer de creative en kort de teksten in.")} </p>
             </Card>
           )}
 
           {spec.status === "draft" && (
             <Card className="p-4">
-              <h2 className="text-sm font-medium">Goedkeuren</h2>
+              <h2 className="text-sm font-medium">{uiT("Goedkeuren")}</h2>
               <p className="mt-1 text-xs text-muted">
-                Dit kan het systeem niet controleren — loop het zelf na (§6b):
-              </p>
+                {uiT("Dit kan het systeem niet controleren — loop het zelf na (§6b):")} </p>
               <form action={approveCreative} className="mt-3 space-y-2.5">
                 <input type="hidden" name="id" value={spec.id} />
                 {CHECKLIST.map((item) => (
@@ -166,17 +164,16 @@ export default async function CreativeDetailPage({
                       required
                       className="mt-0.5 size-4 accent-[var(--color-accent,#0f2e36)]"
                     />
-                    <span>{item.label}</span>
+                    <span>{uiT(item.label)}</span>
                   </label>
                 ))}
                 <button
                   type="submit"
                   disabled={issues.length > 0}
                   className={buttonClass({ className: "mt-1" })}
-                  title={issues.length > 0 ? "Los eerst de layoutproblemen op" : undefined}
+                  title={issues.length > 0 ? uiT("Los eerst de layoutproblemen op") : undefined}
                 >
-                  Keur goed
-                </button>
+                  {uiT("Keur goed")} </button>
               </form>
             </Card>
           )}
@@ -185,8 +182,7 @@ export default async function CreativeDetailPage({
             <form action={archiveCreative}>
               <input type="hidden" name="id" value={spec.id} />
               <button type="submit" className={buttonClass({ variant: "ghost", size: "sm" })}>
-                Archiveer
-              </button>
+                {uiT("Archiveer")} </button>
             </form>
           )}
         </div>

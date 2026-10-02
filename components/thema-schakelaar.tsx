@@ -1,4 +1,5 @@
 "use client";
+import { useT as useUiTranslation } from '@/components/taal-provider';
 
 import { Monitor, Moon, Sun } from "lucide-react";
 import { useEffect, useState } from "react";
@@ -28,6 +29,7 @@ function pasToe(keuze: Keuze) {
 }
 
 export function ThemaSchakelaar({ className }: { className?: string }) {
+  const uiT = useUiTranslation();
   const [keuze, setKeuze] = useState<Keuze>("systeem");
 
   useEffect(() => {
@@ -51,7 +53,7 @@ export function ThemaSchakelaar({ className }: { className?: string }) {
   return (
     <div
       role="radiogroup"
-      aria-label="Weergave"
+      aria-label={uiT("Weergave")}
       className={cn("inline-flex rounded-md border bg-background p-0.5", className)}
     >
       {OPTIES.map(({ keuze: k, label, Icoon }) => (
@@ -60,7 +62,7 @@ export function ThemaSchakelaar({ className }: { className?: string }) {
           type="button"
           role="radio"
           aria-checked={keuze === k}
-          title={label}
+          title={uiT(label)}
           onClick={() => kies(k)}
           className={cn(
             "rounded p-1.5 transition-colors",
@@ -68,7 +70,7 @@ export function ThemaSchakelaar({ className }: { className?: string }) {
           )}
         >
           <Icoon className="size-3.5" />
-          <span className="sr-only">{label}</span>
+          <span className="sr-only">{uiT(label)}</span>
         </button>
       ))}
     </div>

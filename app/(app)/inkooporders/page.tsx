@@ -1,3 +1,5 @@
+import { datumTaal } from "@/lib/i18n/server";
+import { tekst as uiTranslation } from '@/lib/i18n/server';
 import { and, desc, eq, inArray, isNull, ne, sql } from "drizzle-orm";
 import Link from "next/link";
 
@@ -32,10 +34,13 @@ import { formatMoney, poExVat, poExVatAmount, PO_OPEN_STATUSES, PO_STATUS_META }
 import { cn, formatEUR } from "@/lib/utils";
 
 
-export const metadata = { title: "Inkooporders" };
+export async function generateMetadata() {
+  const uiT = await uiTranslation();
+  return { title: uiT("Inkooporders") };
+}
 
-const fmtDate = (d: string | null) =>
-  d ? new Date(d).toLocaleDateString("nl-NL", { day: "numeric", month: "short", year: "numeric" }) : "—";
+const fmtDate = (d: string | null, uiDateLocale = "nl-NL") =>
+  d ? new Date(d).toLocaleDateString(uiDateLocale, { day: "numeric", month: "short", year: "numeric" }) : "—";
 
 const STATUS_FILTERS = [
   { key: "", label: "Alle" },
@@ -51,6 +56,8 @@ export default async function PurchaseOrdersPage({
 }: {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
+  const uiDateLocale = await datumTaal();
+  const uiT = await uiTranslation();
   const params = await searchParams;
   const q = (typeof params.q === "string" ? params.q : "").trim();
   const statusFilter = typeof params.status === "string" ? params.status : "";
@@ -198,7 +205,7 @@ export default async function PurchaseOrdersPage({
   return (
     <>
       <PageHeader
-        title="Inkooporders"
+        title={uiT("Inkooporders")}
         subtitle={
           `${rows.length} ${rows.length === 1 ? "bestelling/aankoop" : "bestellingen/aankopen"} — overzicht per project; betaalstatus zie je in Holded` +
           (nonEur.length ? ` · ${nonEur.length} in vreemde valuta (niet in het totaal)` : "")
@@ -207,32 +214,31 @@ export default async function PurchaseOrdersPage({
           <>
             {queueCount > 0 && (
               <LinkButton href="/inkooporders/te-verwerken" variant="secondary">
-                📥 Te keuren ({queueCount})
+                {uiT("📥 Te keuren (")}{queueCount})
               </LinkButton>
             )}
             <LinkButton href="/inkooporders/bestellen" variant="secondary">
-              Bijbestellen
-            </LinkButton>
-            <LinkButton href="/inkooporders/new">Toevoegen</LinkButton>
+              {uiT("Bijbestellen")} </LinkButton>
+            <LinkButton href="/inkooporders/new">{uiT("Toevoegen")}</LinkButton>
           </>
         }
       />
 
       {rows.length > 0 && (
         <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
-          <StatTile label="Aantal" value={rows.length} hint={drafts.length ? `${drafts.length} concept(en) niet meegeteld` : undefined} />
-          <StatTile label="Totaal ex. BTW" value={formatEUR(totalEurEx)} hint="zonder concept" />
-          <StatTile label="Totaal incl. BTW" value={formatEUR(totalEurIncl)} hint="zonder concept" />
-          <StatTile label="Onderweg" value={open.length} hint={open.length ? formatEUR(sumEx(open.filter((r) => (r.currency ?? "EUR") === "EUR"))) : "—"} tone="info" />
-          <StatTile label="Ontvangen / gefactureerd" value={received.length} hint={formatEUR(sumEx(received.filter((r) => (r.currency ?? "EUR") === "EUR")))} tone="success" />
+          <StatTile label={uiT("Aantal")} value={rows.length} hint={drafts.length ? uiT("{v0} concept(en) niet meegeteld", { v0: drafts.length }) : undefined} />
+          <StatTile label={uiT("Totaal ex. BTW")} value={formatEUR(totalEurEx)} hint={uiT("zonder concept")} />
+          <StatTile label={uiT("Totaal incl. BTW")} value={formatEUR(totalEurIncl)} hint={uiT("zonder concept")} />
+          <StatTile label={uiT("Onderweg")} value={open.length} hint={open.length ? formatEUR(sumEx(open.filter((r) => (r.currency ?? "EUR") === "EUR"))) : "—"} tone="info" />
+          <StatTile label={uiT("Ontvangen / gefactureerd")} value={received.length} hint={formatEUR(sumEx(received.filter((r) => (r.currency ?? "EUR") === "EUR")))} tone="success" />
         </div>
       )}
 
       {rows.length === 0 ? (
         <EmptyState
-          title="Nog geen inkooporders"
-          description="Voeg een leveranciersbestelling toe (bv. een KKR/Magic Stone proforma) — inkoopfacturen uit de mail verschijnen hier na goedkeuring."
-          action={<LinkButton href="/inkooporders/new">Toevoegen</LinkButton>}
+          title={uiT("Nog geen inkooporders")}
+          description={uiT("Voeg een leveranciersbestelling toe (bv. een KKR/Magic Stone proforma) — inkoopfacturen uit de mail verschijnen hier na goedkeuring.")}
+          action={<LinkButton href="/inkooporders/new">{uiT("Toevoegen")}</LinkButton>}
         />
       ) : (
         <>
@@ -247,16 +253,14 @@ export default async function PurchaseOrdersPage({
               <Input
                 name="q"
                 defaultValue={q}
-                placeholder="Zoek op leverancier, referentie/factuurnummer, container…"
+                placeholder={uiT("Zoek op leverancier, referentie/factuurnummer, container…")}
                 className="max-w-md"
               />
               <button type="submit" className="rounded-md bg-accent px-4 py-2 text-sm font-medium text-white">
-                Zoeken
-              </button>
+                {uiT("Zoeken")} </button>
               {hasFilter && (
                 <LinkButton href="/inkooporders" variant="ghost">
-                  Wissen
-                </LinkButton>
+                  {uiT("Wissen")} </LinkButton>
               )}
             </form>
             <div className="flex flex-wrap items-center gap-1.5">
@@ -269,14 +273,13 @@ export default async function PurchaseOrdersPage({
                     statusFilter === f.key ? "bg-accent text-white" : "bg-background text-muted hover:bg-border",
                   )}
                 >
-                  {f.label}
+                  {uiT(f.label)}
                 </Link>
               ))}
             </div>
             {hasFilter && (
               <p className="text-xs text-muted">
-                {filtered.length} van {rows.length} inkooporders
-              </p>
+                {filtered.length} {uiT("van")} {rows.length} {uiT("inkooporders")} </p>
             )}
           </div>
 
@@ -284,23 +287,22 @@ export default async function PurchaseOrdersPage({
             <Table>
               <THead>
                 <tr>
-                  <SorteerKop sleutel="supplier">Leverancier</SorteerKop>
-                  <SorteerKop sleutel="reference">Referentie</SorteerKop>
-                  <SorteerKop sleutel="project">Project</SorteerKop>
-                  <SorteerKop sleutel="orderDate">Datum</SorteerKop>
-                  <SorteerKop sleutel="expectedDate">Verwacht</SorteerKop>
-                  <SorteerKop sleutel="regels" className="text-right">Regels</SorteerKop>
-                  <SorteerKop sleutel="exVat" className="text-right">Ex. BTW</SorteerKop>
-                  <SorteerKop sleutel="total" className="text-right">Incl. BTW</SorteerKop>
-                  <SorteerKop sleutel="status">Status</SorteerKop>
+                  <SorteerKop sleutel="supplier">{uiT("Leverancier")}</SorteerKop>
+                  <SorteerKop sleutel="reference">{uiT("Referentie")}</SorteerKop>
+                  <SorteerKop sleutel="project">{uiT("Project")}</SorteerKop>
+                  <SorteerKop sleutel="orderDate">{uiT("Datum")}</SorteerKop>
+                  <SorteerKop sleutel="expectedDate">{uiT("Verwacht")}</SorteerKop>
+                  <SorteerKop sleutel="regels" className="text-right">{uiT("Regels")}</SorteerKop>
+                  <SorteerKop sleutel="exVat" className="text-right">{uiT("Ex. BTW")}</SorteerKop>
+                  <SorteerKop sleutel="total" className="text-right">{uiT("Incl. BTW")}</SorteerKop>
+                  <SorteerKop sleutel="status">{uiT("Status")}</SorteerKop>
                 </tr>
               </THead>
               <TBody>
                 {filtered.length === 0 ? (
                   <Tr>
                     <Td className="text-muted" colSpan={9}>
-                      Geen inkooporders gevonden voor deze zoekopdracht/filter.
-                    </Td>
+                      {uiT("Geen inkooporders gevonden voor deze zoekopdracht/filter.")} </Td>
                   </Tr>
                 ) : (
                   gesorteerd.map((po) => {
@@ -313,12 +315,11 @@ export default async function PurchaseOrdersPage({
                           </Link>
                           {po.kind === "invoice" && (
                             <Badge tone="neutral" className="ml-2">
-                              factuur
-                            </Badge>
+                              {uiT("factuur")} </Badge>
                           )}
                           {po.suggestedKind && !po.projectId && (
                             <Badge tone="accent" className="ml-2">
-                              voorstel: {po.suggestedKind === "labor" ? "uren" : "materiaal"}
+                              {uiT("voorstel:")} {po.suggestedKind === "labor" ? uiT("uren") : uiT("materiaal")}
                             </Badge>
                           )}
                         </Td>
@@ -328,10 +329,10 @@ export default async function PurchaseOrdersPage({
                             <Link
                               href={`/projects/${po.projectId}`}
                               className="hover:underline"
-                              title={po.countAsLabor ? "geboekt als uren/arbeid" : "geboekt als materiaalkost"}
+                              title={po.countAsLabor ? uiT("geboekt als uren/arbeid") : uiT("geboekt als materiaalkost")}
                             >
                               {projectNamen.get(po.projectId) ?? "—"}
-                              {po.countAsLabor && <span className="block text-xs text-muted">uren</span>}
+                              {po.countAsLabor && <span className="block text-xs text-muted">{uiT("uren")}</span>}
                             </Link>
                           ) : (
                             <ProjectCel
@@ -342,23 +343,22 @@ export default async function PurchaseOrdersPage({
                             />
                           )}
                         </Td>
-                        <Td className="text-muted">{fmtDate(po.orderDate)}</Td>
-                        <Td className="text-muted">{fmtDate(po.expectedDate)}</Td>
+                        <Td className="text-muted">{fmtDate(po.orderDate, uiDateLocale)}</Td>
+                        <Td className="text-muted">{fmtDate(po.expectedDate, uiDateLocale)}</Td>
                         <Td className="text-right tabular-nums text-muted">{po.items?.length ?? 0}</Td>
                         <Td className="text-right tabular-nums">
                           {formatMoney(poExVatAmount(po), po.currency)}
                           {poExVat(po).vatUnknown && (
                             <span
                               className="ml-1 cursor-help text-xs text-warning"
-                              title="Geen btw/subtotaal op deze inkooporder — dit is het factuurtotaal en zit er dus mogelijk incl. btw in."
+                              title={uiT("Geen btw/subtotaal op deze inkooporder — dit is het factuurtotaal en zit er dus mogelijk incl. btw in.")}
                             >
-                              btw?
-                            </span>
+                              {uiT("btw?")} </span>
                           )}
                         </Td>
                         <Td className="text-right tabular-nums">{formatMoney(po.total, po.currency)}</Td>
                         <Td>
-                          <Badge tone={meta.tone}>{meta.label}</Badge>
+                          <Badge tone={meta.tone}>{uiT(meta.label)}</Badge>
                         </Td>
                       </Tr>
                     );
@@ -383,11 +383,12 @@ export default async function PurchaseOrdersPage({
  * - een bestelling voor voorraad of een leverancier van algemene kosten → een
  *   streepje, dat hoort zo.
  */
-function ProjectCel({ deel, waarschuw }: { deel: InkoopDeel[]; waarschuw: boolean }) {
+async function ProjectCel({ deel, waarschuw }: { deel: InkoopDeel[]; waarschuw: boolean }) {
+  const uiT = await uiTranslation();
   if (deel.length === 0) {
     return waarschuw ? (
-      <span title="Goedgekeurd, maar op geen enkele werf geboekt — deze kost telt nergens mee.">
-        <Badge tone="warning">nog geen project</Badge>
+      <span title={uiT("Goedgekeurd, maar op geen enkele werf geboekt — deze kost telt nergens mee.")}>
+        <Badge tone="warning">{uiT("nog geen project")}</Badge>
       </span>
     ) : (
       <span className="text-xs text-muted">—</span>
@@ -404,10 +405,10 @@ function ProjectCel({ deel, waarschuw }: { deel: InkoopDeel[]; waarschuw: boolea
           {i > 0 && <span className="text-muted">, </span>}
           {d.projectId ? (
             <Link href={`/projects/${d.projectId}`} className="hover:underline">
-              {d.projectNaam ?? "project"}
+              {d.projectNaam ?? uiT("project")}
             </Link>
           ) : (
-            <span className="text-muted">zonder project</span>
+            <span className="text-muted">{uiT("zonder project")}</span>
           )}
         </span>
       ))}
@@ -415,7 +416,7 @@ function ProjectCel({ deel, waarschuw }: { deel: InkoopDeel[]; waarschuw: boolea
         <span className="text-muted"> +{deel.length - toon.length}</span>
       )}
       <span className="block text-xs text-muted">
-        {deel.length === 1 ? "" : `verdeeld over ${deel.length} werven · `}
+        {deel.length === 1 ? "" : uiT("verdeeld over {v0} werven · ", { v0: deel.length })}
         {soorten.map((s) => (s === "uren" ? "uren" : "materiaal")).join(" + ")}
       </span>
     </div>

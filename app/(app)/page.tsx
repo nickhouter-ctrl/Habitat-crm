@@ -1,3 +1,4 @@
+import { tekst as uiTranslation } from '@/lib/i18n/server';
 /**
  * Persoonlijke startpagina — de landingspagina na inloggen.
  * Begroeting op Madrid-tijd, "Vandaag" (automatische dagtaken + mijn taken)
@@ -22,7 +23,10 @@ import { saveStartPrefs } from "./_start/actions";
 import { MijnTaken, type MijnTaak } from "./_start/mijn-taken";
 import { TegelGrid } from "./_start/tegel-grid";
 
-export const metadata = { title: "Start" };
+export async function generateMetadata() {
+  const uiT = await uiTranslation();
+  return { title: uiT("Start") };
+}
 
 /** Sleutel voor de begroeting; de vertaling gebeurt met t(). */
 function begroeting(): string {

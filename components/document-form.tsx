@@ -1,4 +1,5 @@
 "use client";
+import { useT as useUiTranslation } from '@/components/taal-provider';
 
 import {
   Card,
@@ -82,6 +83,7 @@ export function DocumentForm({
   defaults?: { contactId?: string; dealId?: string; propertyId?: string; projectId?: string };
   submitLabel?: string;
 }) {
+  const uiT = useUiTranslation();
   const now = new Date();
   const today = now.toISOString().slice(0, 10);
   const due = new Date(now);
@@ -96,23 +98,23 @@ export function DocumentForm({
       <Card>
         <CardContent className="space-y-5">
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            <Field label={`${KIND_LABEL[kind]}nummer`} htmlFor="docNumber">
+            <Field label={uiT("{v0}nummer", { v0: uiT(KIND_LABEL[kind]) })} htmlFor="docNumber">
               <Input
                 id="docNumber"
                 name="docNumber"
                 defaultValue={doc?.docNumber ?? defaultDocNumber ?? ""}
               />
             </Field>
-            <Field label="Status" htmlFor="status">
+            <Field label={uiT("Status")} htmlFor="status">
               <Select id="status" name="status" defaultValue={doc?.status ?? "draft"}>
                 {DOC_STATUS_OPTIONS.map((o) => (
                   <option key={o.value} value={o.value}>
-                    {o.label}
+                    {uiT(o.label)}
                   </option>
                 ))}
               </Select>
             </Field>
-            <Field label="Datum" htmlFor="issueDate">
+            <Field label={uiT("Datum")} htmlFor="issueDate">
               <Input
                 id="issueDate"
                 name="issueDate"
@@ -120,7 +122,7 @@ export function DocumentForm({
                 defaultValue={doc?.issueDate ?? today}
               />
             </Field>
-            <Field label="Vervaldatum" htmlFor="dueDate">
+            <Field label={uiT("Vervaldatum")} htmlFor="dueDate">
               <Input
                 id="dueDate"
                 name="dueDate"
@@ -130,44 +132,44 @@ export function DocumentForm({
             </Field>
           </div>
 
-          <Field label="Onderwerp / titel" htmlFor="title">
+          <Field label={uiT("Onderwerp / titel")} htmlFor="title">
             <Input
               id="title"
               name="title"
               defaultValue={doc?.title ?? ""}
               placeholder={
                 kind === "invoice"
-                  ? "bv. Renovatie keuken — eindfactuur"
-                  : "bv. Renovatie keuken & badkamer"
+                  ? uiT("bv. Renovatie keuken — eindfactuur")
+                  : uiT("bv. Renovatie keuken & badkamer")
               }
             />
           </Field>
 
           <div className="grid gap-4 sm:grid-cols-3">
-            <Field label="Klant (contact)">
+            <Field label={uiT("Klant (contact)")}>
               <Combobox
                 name="contactId"
                 clearable
                 defaultValue={doc?.contactId ?? defaults?.contactId ?? ""}
-                placeholder="— geen — / zoek een contact"
+                placeholder={uiT("— geen — / zoek een contact")}
                 options={contacts.map((c) => ({ value: c.id, label: c.name }))}
               />
             </Field>
-            <Field label="Pand">
+            <Field label={uiT("Pand")}>
               <Combobox
                 name="propertyId"
                 clearable
                 defaultValue={doc?.propertyId ?? defaults?.propertyId ?? ""}
-                placeholder="— geen — / zoek een pand"
+                placeholder={uiT("— geen — / zoek een pand")}
                 options={properties.map((p) => ({ value: p.id, label: p.name }))}
               />
             </Field>
-            <Field label="Project">
+            <Field label={uiT("Project")}>
               <Combobox
                 name="projectId"
                 clearable
                 defaultValue={doc?.projectId ?? defaults?.projectId ?? ""}
-                placeholder="— geen — / zoek een project"
+                placeholder={uiT("— geen — / zoek een project")}
                 options={projects.map((p) => ({ value: p.id, label: p.name }))}
               />
             </Field>
@@ -176,16 +178,9 @@ export function DocumentForm({
           {kind === "fondos" && (
             <div className="rounded-lg border border-amber-300 bg-amber-50/50 p-3 text-sm">
               <p>
-                <strong>Provisión de fondos</strong> — voorschotdocument, géén factuur: BTW wordt
-                automatisch op 0 gezet en nergens vermeld; telt als voorschot op het project
-                (verrekent op de eindfactuur).
-              </p>
+                <strong>{uiT("Provisión de fondos")}</strong> {uiT("— voorschotdocument, géén factuur: BTW wordt automatisch op 0 gezet en nergens vermeld; telt als voorschot op het project (verrekent op de eindfactuur).")} </p>
               <p className="mt-1 text-xs text-muted">
-                ⚠️ Procedure boekhouder: altijd eerst ter controle naar Paco vóórdat het naar de
-                klant gaat. Alleen voor particulieren en klanten zonder Spaanse empresario-status —
-                Spaanse bouwbedrijven mét certificado censal krijgen een echte factuur met BTW
-                verlegd.
-              </p>
+                {uiT("⚠️ Procedure boekhouder: altijd eerst ter controle naar Paco vóórdat het naar de klant gaat. Alleen voor particulieren en klanten zonder Spaanse empresario-status — Spaanse bouwbedrijven mét certificado censal krijgen een echte factuur met BTW verlegd.")} </p>
             </div>
           )}
 
@@ -193,13 +188,11 @@ export function DocumentForm({
             <div className="flex flex-col gap-2 rounded-lg border bg-background/40 p-3 sm:flex-row sm:gap-6">
               <label className="flex items-center gap-2 text-sm">
                 <input type="checkbox" name="isAdvance" defaultChecked={!!doc?.isAdvance} />
-                Voorschot / aanbetaling op project
-                <span className="text-xs text-muted">(verrekent op de eindfactuur)</span>
+                {uiT("Voorschot / aanbetaling op project")} <span className="text-xs text-muted">{uiT("(verrekent op de eindfactuur)")}</span>
               </label>
               <label className="flex items-center gap-2 text-sm">
                 <input type="checkbox" name="vatReverseCharge" defaultChecked={!!doc?.vatReverseCharge} />
-                BTW verlegd — zonder BTW
-                <span className="text-xs text-muted">(inversión del sujeto pasivo)</span>
+                {uiT("BTW verlegd — zonder BTW")} <span className="text-xs text-muted">{uiT("(inversión del sujeto pasivo)")}</span>
               </label>
             </div>
           )}
@@ -220,14 +213,14 @@ export function DocumentForm({
 
       <Card>
         <CardContent>
-          <Field label="Notities / voorwaarden" htmlFor="notes">
+          <Field label={uiT("Notities / voorwaarden")} htmlFor="notes">
             <Textarea id="notes" name="notes" defaultValue={doc?.notes ?? ""} />
           </Field>
         </CardContent>
       </Card>
 
       <div>
-        <SubmitButton pendingLabel="Opslaan…">{submitLabel}</SubmitButton>
+        <SubmitButton pendingLabel={uiT("Opslaan…")}>{submitLabel}</SubmitButton>
       </div>
     </form>
   );

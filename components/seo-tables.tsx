@@ -1,4 +1,5 @@
 "use client";
+import { useT as useUiTranslation } from '@/components/taal-provider';
 
 import { useState } from "react";
 
@@ -42,6 +43,7 @@ export function SortableSeoTable({
   strip?: boolean;
   country?: boolean;
 }) {
+  const uiT = useUiTranslation();
   // Standaard gesorteerd op kliks (aflopend); positie default oplopend (lager = beter).
   const [sort, setSort] = useState<SortKey>("clicks");
   const [asc, setAsc] = useState(false);
@@ -96,7 +98,7 @@ export function SortableSeoTable({
       </CardHeader>
       <CardContent>
         {rows.length === 0 ? (
-          <p className="py-2 text-sm text-muted">Nog geen data in deze periode.</p>
+          <p className="py-2 text-sm text-muted">{uiT("Nog geen data in deze periode.")}</p>
         ) : (
           <div className="max-h-[28rem] overflow-auto">
             <Table>

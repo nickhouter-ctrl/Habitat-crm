@@ -1,4 +1,5 @@
 "use client";
+import { useT as useUiTranslation } from '@/components/taal-provider';
 
 import { useState, useTransition } from "react";
 import { Receipt } from "lucide-react";
@@ -18,6 +19,7 @@ export function InvoiceFromMailButtons({
   emailId: string;
   attachmentId: string;
 }) {
+  const uiT = useUiTranslation();
   const [pending, start] = useTransition();
   const [result, setResult] = useState<{ ok: boolean; text: string } | null>(null);
 
@@ -43,19 +45,18 @@ export function InvoiceFromMailButtons({
         disabled={pending}
         onClick={() => run(false)}
         className="rounded-md bg-accent/10 px-2 py-1 text-xs font-medium text-accent hover:bg-accent/20 disabled:opacity-50"
-        title="Inkoopfactuur aanmaken + naar Holded sturen"
+        title={uiT("Inkoopfactuur aanmaken + naar Holded sturen")}
       >
-        <Receipt className="mr-1 inline h-3 w-3" /> {pending ? "Bezig…" : "Inkoopfactuur"}
+        <Receipt className="mr-1 inline h-3 w-3" /> {pending ? uiT("Bezig…") : uiT("Inkoopfactuur")}
       </button>
       <button
         type="button"
         disabled={pending}
         onClick={() => run(true)}
         className="rounded-md bg-background-soft px-2 py-1 text-xs font-medium text-muted hover:bg-border disabled:opacity-50"
-        title="Proforma toevoegen — concept-inkooporder dat op goedkeuring wacht"
+        title={uiT("Proforma toevoegen — concept-inkooporder dat op goedkeuring wacht")}
       >
-        <Receipt className="mr-1 inline h-3 w-3" /> Proforma
-      </button>
+        <Receipt className="mr-1 inline h-3 w-3" /> {uiT("Proforma")} </button>
       {result && (
         <span className={`text-xs ${result.ok ? "text-success" : "text-danger"}`}>{result.text}</span>
       )}

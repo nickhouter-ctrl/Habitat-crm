@@ -1,4 +1,5 @@
 "use client";
+import { useT as useUiTranslation } from '@/components/taal-provider';
 
 import { ArrowLeft, ArrowRight, Check, UserPlus, Users } from "lucide-react";
 import { useState } from "react";
@@ -67,6 +68,7 @@ export function DocumentWizard({
   defaults?: { contactId?: string; dealId?: string; propertyId?: string; projectId?: string; sourceDocumentId?: string };
   initialItems?: DocumentLineItem[] | null;
 }) {
+  const uiT = useUiTranslation();
   const [step, setStep] = useState<1 | 2>(1);
   const [mode, setMode] = useState<"existing" | "new">(
     defaults?.contactId || contacts.length > 0 ? "existing" : "new",
@@ -74,7 +76,7 @@ export function DocumentWizard({
   const [contactId, setContactId] = useState(defaults?.contactId ?? contacts[0]?.id ?? "");
   const [nc, setNc] = useState({ name: "", email: "", phone: "", language: "es" });
 
-  const kindLabel = KIND_LABEL[kind];
+  const kindLabel = uiT(KIND_LABEL[kind]);
   const Title = kindLabel.charAt(0).toUpperCase() + kindLabel.slice(1);
 
   const selectedContactName =
@@ -145,27 +147,24 @@ export function DocumentWizard({
                 onClick={() => setMode("existing")}
                 className={buttonClass({ variant: mode === "existing" ? "primary" : "secondary" })}
               >
-                <Users className="size-4" /> Bestaande klant
-              </button>
+                <Users className="size-4" /> {uiT("Bestaande klant")} </button>
               <button
                 type="button"
                 onClick={() => setMode("new")}
                 className={buttonClass({ variant: mode === "new" ? "primary" : "secondary" })}
               >
-                <UserPlus className="size-4" /> Nieuwe klant
-              </button>
+                <UserPlus className="size-4" /> {uiT("Nieuwe klant")} </button>
             </div>
 
             {mode === "existing" ? (
               contacts.length === 0 ? (
                 <p className="text-sm text-muted">
-                  Nog geen contacten — kies &quot;Nieuwe klant&quot;.
-                </p>
+                  {uiT("Nog geen contacten — kies \"Nieuwe klant\".")} </p>
               ) : (
-                <Field label="Kies een contact">
+                <Field label={uiT("Kies een contact")}>
                   <Combobox
                     defaultValue={contactId}
-                    placeholder="Typ een naam om te zoeken…"
+                    placeholder={uiT("Typ een naam om te zoeken…")}
                     options={contacts.map((c) => ({ value: c.id, label: c.name }))}
                     onSelect={(v) => setContactId(v)}
                   />
@@ -173,15 +172,15 @@ export function DocumentWizard({
               )
             ) : (
               <div className="grid gap-4 sm:grid-cols-2">
-                <Field label="Naam *" htmlFor="nc-name">
+                <Field label={uiT("Naam *")} htmlFor="nc-name">
                   <Input
                     id="nc-name"
                     value={nc.name}
                     onChange={(e) => setNc({ ...nc, name: e.target.value })}
-                    placeholder="Familie Janssen / Bedrijf X"
+                    placeholder={uiT("Familie Janssen / Bedrijf X")}
                   />
                 </Field>
-                <Field label="E-mail" htmlFor="nc-email">
+                <Field label={uiT("E-mail")} htmlFor="nc-email">
                   <Input
                     id="nc-email"
                     type="email"
@@ -189,14 +188,14 @@ export function DocumentWizard({
                     onChange={(e) => setNc({ ...nc, email: e.target.value })}
                   />
                 </Field>
-                <Field label="Telefoon" htmlFor="nc-phone">
+                <Field label={uiT("Telefoon")} htmlFor="nc-phone">
                   <Input
                     id="nc-phone"
                     value={nc.phone}
                     onChange={(e) => setNc({ ...nc, phone: e.target.value })}
                   />
                 </Field>
-                <Field label="Taal" htmlFor="nc-lang">
+                <Field label={uiT("Taal")} htmlFor="nc-lang">
                   <Select
                     id="nc-lang"
                     value={nc.language}
@@ -204,7 +203,7 @@ export function DocumentWizard({
                   >
                     {LANGS.map((l) => (
                       <option key={l.value} value={l.value}>
-                        {l.label}
+                        {uiT(l.label)}
                       </option>
                     ))}
                   </Select>
@@ -214,60 +213,59 @@ export function DocumentWizard({
           </CardContent>
         </Card>
         <Button type="button" disabled={!step1Valid} onClick={() => setStep(2)}>
-          Volgende <ArrowRight className="size-4" />
+          {uiT("Volgende")} <ArrowRight className="size-4" />
         </Button>
       </div>
 
       {/* ---- Step 2: content ---- */}
       <div className={cn("space-y-5", step !== 2 && "hidden")}>
         <p className="text-sm text-muted">
-          Klant: <span className="font-medium text-foreground">{selectedContactName}</span>{" "}
+          {uiT("Klant:")} <span className="font-medium text-foreground">{selectedContactName}</span>{" "}
           ·{" "}
           <button
             type="button"
             onClick={() => setStep(1)}
             className="text-accent hover:underline"
           >
-            wijzigen
-          </button>
+            {uiT("wijzigen")} </button>
         </p>
 
         <Card>
           <CardContent className="space-y-5">
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-              <Field label={`${Title}nummer`} htmlFor="docNumber">
+              <Field label={uiT("{v0}nummer", { v0: Title })} htmlFor="docNumber">
                 <Input id="docNumber" name="docNumber" defaultValue={defaultDocNumber} />
               </Field>
-              <Field label="Datum" htmlFor="issueDate">
+              <Field label={uiT("Datum")} htmlFor="issueDate">
                 <Input id="issueDate" name="issueDate" type="date" defaultValue={today} />
               </Field>
-              <Field label="Vervaldatum" htmlFor="dueDate">
+              <Field label={uiT("Vervaldatum")} htmlFor="dueDate">
                 <Input id="dueDate" name="dueDate" type="date" defaultValue={defaultDue} />
               </Field>
             </div>
-            <Field label="Onderwerp / titel" htmlFor="title">
+            <Field label={uiT("Onderwerp / titel")} htmlFor="title">
               <Input
                 id="title"
                 name="title"
-                placeholder="bv. Renovatie keuken & badkamer"
+                placeholder={uiT("bv. Renovatie keuken & badkamer")}
               />
             </Field>
             <div className="grid gap-4 sm:grid-cols-2">
-              <Field label="Project (optioneel)">
+              <Field label={uiT("Project (optioneel)")}>
                 <Combobox
                   name="projectId"
                   clearable
                   defaultValue={defaults?.projectId ?? ""}
-                  placeholder="— geen — / zoek een project"
+                  placeholder={uiT("— geen — / zoek een project")}
                   options={projects.map((p) => ({ value: p.id, label: p.name }))}
                 />
               </Field>
-              <Field label="Pand (optioneel)">
+              <Field label={uiT("Pand (optioneel)")}>
                 <Combobox
                   name="propertyId"
                   clearable
                   defaultValue={defaults?.propertyId ?? ""}
-                  placeholder="— geen — / zoek een pand"
+                  placeholder={uiT("— geen — / zoek een pand")}
                   options={properties.map((p) => ({ value: p.id, label: p.name }))}
                 />
               </Field>
@@ -277,13 +275,11 @@ export function DocumentWizard({
               <div className="flex flex-col gap-2 rounded-lg border bg-background/40 p-3 sm:flex-row sm:gap-6">
                 <label className="flex items-center gap-2 text-sm">
                   <input type="checkbox" name="isAdvance" />
-                  Voorschot / aanbetaling op project
-                  <span className="text-xs text-muted">(verrekent op de eindfactuur)</span>
+                  {uiT("Voorschot / aanbetaling op project")} <span className="text-xs text-muted">{uiT("(verrekent op de eindfactuur)")}</span>
                 </label>
                 <label className="flex items-center gap-2 text-sm">
                   <input type="checkbox" name="vatReverseCharge" />
-                  BTW verlegd — zonder BTW
-                  <span className="text-xs text-muted">(inversión del sujeto pasivo)</span>
+                  {uiT("BTW verlegd — zonder BTW")} <span className="text-xs text-muted">{uiT("(inversión del sujeto pasivo)")}</span>
                 </label>
               </div>
             )}
@@ -304,7 +300,7 @@ export function DocumentWizard({
 
         <Card>
           <CardContent className="space-y-3">
-            <Field label="Notities / voorwaarden" htmlFor="notes">
+            <Field label={uiT("Notities / voorwaarden")} htmlFor="notes">
               {/* Bewust leeg: de verbouwings-voorbehouden (onvoorzien, meerwerk,
                   stelposten) horen alleen op gecalculeerde verbouwingsoffertes —
                   de calculator zet ze daar zelf op, in de taal van de klant. Een
@@ -320,8 +316,7 @@ export function DocumentWizard({
                   className="size-4 rounded border bg-background"
                 />
                 <span>
-                  Direct ook een <strong>pakbon</strong> klaarzetten met dezelfde regels
-                  <span className="text-muted"> — zonder prijzen, klaar om mee te nemen naar de levering</span>
+                  {uiT("Direct ook een")} <strong>{uiT("pakbon")}</strong> {uiT("klaarzetten met dezelfde regels")} <span className="text-muted"> {uiT("— zonder prijzen, klaar om mee te nemen naar de levering")}</span>
                 </span>
               </label>
             )}
@@ -330,11 +325,9 @@ export function DocumentWizard({
 
         <div className="flex gap-2">
           <Button type="button" variant="secondary" onClick={() => setStep(1)}>
-            <ArrowLeft className="size-4" /> Vorige
-          </Button>
+            <ArrowLeft className="size-4" /> {uiT("Vorige")} </Button>
           <Button type="submit">
-            <Check className="size-4" /> {Title} aanmaken
-          </Button>
+            <Check className="size-4" /> {Title} {uiT("aanmaken")} </Button>
         </div>
       </div>
     </form>

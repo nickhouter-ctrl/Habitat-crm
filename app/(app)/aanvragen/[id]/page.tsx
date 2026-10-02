@@ -1,3 +1,5 @@
+import { datumTaal } from "@/lib/i18n/server";
+import { tekst as uiTranslation } from '@/lib/i18n/server';
 import { desc, eq, ilike } from "drizzle-orm";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
@@ -60,6 +62,8 @@ export default async function QuoteRequestDetailPage({
   params: Promise<{ id: string }>;
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
+  const uiDateLocale = await datumTaal();
+  const uiT = await uiTranslation();
   await requireModuleRead('aanvragen');
   const { id } = await params;
   if (!z.string().uuid().safeParse(id).success) notFound();
@@ -148,14 +152,13 @@ export default async function QuoteRequestDetailPage({
         title={
           <span className="flex items-center gap-2">
             {kindMeta.emoji} {req.name}
-            <Badge tone={meta.tone}>{meta.label}</Badge>
+            <Badge tone={meta.tone}>{uiT(meta.label)}</Badge>
           </span>
         }
-        subtitle={`${kindMeta.label} · ontvangen ${formatDate(req.createdAt)}${req.locale ? ` · taal: ${req.locale}` : ""}`}
+        subtitle={uiT("{v0} · ontvangen {v1}{v2}", { v0: uiT(kindMeta.label), v1: formatDate(req.createdAt, uiDateLocale), v2: req.locale ? uiT(" · taal: {taal}",{taal:req.locale}) : "" })}
         actions={
           <LinkButton href="/aanvragen" variant="ghost">
-            ← Overzicht
-          </LinkButton>
+            {uiT("← Overzicht")} </LinkButton>
         }
       />
 
@@ -163,25 +166,24 @@ export default async function QuoteRequestDetailPage({
         <div className="space-y-5">
           <Card>
             <CardHeader>
-              <CardTitle>Klantgegevens</CardTitle>
+              <CardTitle>{uiT("Klantgegevens")}</CardTitle>
               {req.contactId && (
                 <Link href={`/contacts/${req.contactId}`} className="text-xs text-accent hover:underline">
-                  Bekijk contact →
-                </Link>
+                  {uiT("Bekijk contact →")} </Link>
               )}
             </CardHeader>
             <CardContent className="space-y-1.5 text-sm">
-              <Row label="Naam" value={req.name} />
-              <Row label="E-mail" value={<a href={`mailto:${req.email}`} className="text-accent hover:underline">{req.email}</a>} />
-              {req.phone && <Row label="Telefoon" value={<a href={`tel:${req.phone}`} className="text-accent hover:underline">{req.phone}</a>} />}
-              {req.company && <Row label="Bedrijf" value={req.company} />}
+              <Row label={uiT("Naam")} value={req.name} />
+              <Row label={uiT("E-mail")} value={<a href={`mailto:${req.email}`} className="text-accent hover:underline">{req.email}</a>} />
+              {req.phone && <Row label={uiT("Telefoon")} value={<a href={`tel:${req.phone}`} className="text-accent hover:underline">{req.phone}</a>} />}
+              {req.company && <Row label={uiT("Bedrijf")} value={req.company} />}
             </CardContent>
           </Card>
 
           {req.message && (
             <Card>
               <CardHeader>
-                <CardTitle>Bericht</CardTitle>
+                <CardTitle>{uiT("Bericht")}</CardTitle>
               </CardHeader>
               <CardContent>
                 <p className="whitespace-pre-line text-sm leading-relaxed">{req.message}</p>
@@ -192,7 +194,7 @@ export default async function QuoteRequestDetailPage({
           {conversatie.length > 0 && (
             <Card>
               <CardHeader>
-                <CardTitle>Conversatie</CardTitle>
+                <CardTitle>{uiT("Conversatie")}</CardTitle>
                 <span className="text-xs text-muted">{conversatie.length}</span>
               </CardHeader>
               <CardContent className="space-y-3">
@@ -207,9 +209,9 @@ export default async function QuoteRequestDetailPage({
                   >
                     <div className="mb-1.5 flex flex-wrap items-center gap-2 text-xs">
                       <Badge tone={m.soort === "uit" ? "info" : "neutral"}>
-                        {m.soort === "uit" ? "Wij → klant" : `${req.name} → ons`}
+                        {m.soort === "uit" ? uiT("Wij → klant") : uiT("{v0} → ons", { v0: req.name })}
                       </Badge>
-                      {m.datum && <span className="text-muted">{formatDate(m.datum)}</span>}
+                      {m.datum && <span className="text-muted">{formatDate(m.datum, uiDateLocale)}</span>}
                       {m.subject && (
                         <span className="min-w-0 truncate font-medium" title={m.subject}>
                           {m.subject}
@@ -217,12 +219,11 @@ export default async function QuoteRequestDetailPage({
                       )}
                       {m.href && (
                         <Link href={m.href} className="ml-auto text-accent hover:underline">
-                          Open in inbox →
-                        </Link>
+                          {uiT("Open in inbox →")} </Link>
                       )}
                     </div>
                     <p className="max-h-56 overflow-y-auto whitespace-pre-line text-sm leading-relaxed">
-                      {m.tekst || "(geen tekst)"}
+                      {m.tekst || uiT("(geen tekst)")}
                     </p>
                   </div>
                 ))}
@@ -233,7 +234,7 @@ export default async function QuoteRequestDetailPage({
           {products.length > 0 && (
             <Card>
               <CardHeader>
-                <CardTitle>Producten in aanvraag</CardTitle>
+                <CardTitle>{uiT("Producten in aanvraag")}</CardTitle>
                 <span className="text-xs text-muted">{products.length}</span>
               </CardHeader>
               <CardContent className="space-y-1 text-sm">
@@ -249,12 +250,12 @@ export default async function QuoteRequestDetailPage({
 
           <Card>
             <CardHeader>
-              <CardTitle>Interne notitie</CardTitle>
+              <CardTitle>{uiT("Interne notitie")}</CardTitle>
             </CardHeader>
             <CardContent>
               <form action={saveNotes} className="space-y-2">
-                <Textarea name="notes" rows={3} defaultValue={req.notes ?? ""} placeholder="Notitie alleen zichtbaar voor jullie team…" />
-                <SubmitButton size="sm" variant="secondary" pendingLabel="Opslaan…">Notitie opslaan</SubmitButton>
+                <Textarea name="notes" rows={3} defaultValue={req.notes ?? ""} placeholder={uiT("Notitie alleen zichtbaar voor jullie team…")} />
+                <SubmitButton size="sm" variant="secondary" pendingLabel={uiT("Opslaan…")}>{uiT("Notitie opslaan")}</SubmitButton>
               </form>
             </CardContent>
           </Card>
@@ -263,23 +264,20 @@ export default async function QuoteRequestDetailPage({
         <div className="space-y-5">
           <Card>
             <CardHeader>
-              <CardTitle>Acties</CardTitle>
+              <CardTitle>{uiT("Acties")}</CardTitle>
             </CardHeader>
             <CardContent className="space-y-2">
               {req.status === "pending" && (
                 <>
                   <form action={accept}>
-                    <SubmitButton variant="primary" className="w-full" pendingLabel="Accepteren…">
-                      ✓ Accepteren
-                    </SubmitButton>
+                    <SubmitButton variant="primary" className="w-full" pendingLabel={uiT("Accepteren…")}>
+                      {uiT("✓ Accepteren")} </SubmitButton>
                   </form>
                   <p className="text-xs text-muted">
-                    Bij accepteren wordt automatisch een contact aangemaakt (als nog niet bekend). Mailen naar klant komt in een latere release.
-                  </p>
+                    {uiT("Bij accepteren wordt automatisch een contact aangemaakt (als nog niet bekend). Mailen naar klant komt in een latere release.")} </p>
                   <form action={reject}>
-                    <SubmitButton variant="ghost" className="w-full text-danger hover:bg-danger/10" pendingLabel="Afwijzen…">
-                      Afwijzen
-                    </SubmitButton>
+                    <SubmitButton variant="ghost" className="w-full text-danger hover:bg-danger/10" pendingLabel={uiT("Afwijzen…")}>
+                      {uiT("Afwijzen")} </SubmitButton>
                   </form>
                 </>
               )}
@@ -287,26 +285,24 @@ export default async function QuoteRequestDetailPage({
                 <>
                   <div className="text-sm">
                     {req.status === "accepted" && req.acceptedAt && (
-                      <p>✓ Geaccepteerd op {formatDate(req.acceptedAt)}</p>
+                      <p>{uiT("✓ Geaccepteerd op")} {formatDate(req.acceptedAt, uiDateLocale)}</p>
                     )}
                     {req.status === "rejected" && req.rejectedAt && (
-                      <p>Afgewezen op {formatDate(req.rejectedAt)}</p>
+                      <p>{uiT("Afgewezen op")} {formatDate(req.rejectedAt, uiDateLocale)}</p>
                     )}
                   </div>
                   <form action={reopen}>
-                    <SubmitButton size="sm" variant="ghost" className="w-full" pendingLabel="Heropenen…">
-                      Heropenen
-                    </SubmitButton>
+                    <SubmitButton size="sm" variant="ghost" className="w-full" pendingLabel={uiT("Heropenen…")}>
+                      {uiT("Heropenen")} </SubmitButton>
                   </form>
                 </>
               )}
               <form action={remove}>
                 <ConfirmSubmit
-                  message="Deze aanvraag definitief verwijderen?"
+                  message={uiT("Deze aanvraag definitief verwijderen?")}
                   className="w-full rounded-md px-3 py-2 text-sm font-medium text-danger transition-colors hover:bg-danger/10"
                 >
-                  Aanvraag verwijderen
-                </ConfirmSubmit>
+                  {uiT("Aanvraag verwijderen")} </ConfirmSubmit>
               </form>
             </CardContent>
           </Card>
@@ -314,54 +310,50 @@ export default async function QuoteRequestDetailPage({
           {isAppointment && (
             <Card>
               <CardHeader>
-                <CardTitle>{beurs ? "📅 Beursafspraak inplannen" : "📅 Afspraak inplannen"}</CardTitle>
+                <CardTitle>{beurs ? uiT("📅 Beursafspraak inplannen") : uiT("📅 Afspraak inplannen")}</CardTitle>
               </CardHeader>
               <CardContent>
                 {(req.appointmentDate || req.appointmentTime) && (
                   <p className="mb-2 rounded-md bg-accent/10 px-3 py-2 text-xs text-accent">
-                    Voorkeur van de klant: <strong>{[req.appointmentDate, req.appointmentTime].filter(Boolean).join(" · ")}</strong>
+                    {uiT("Voorkeur van de klant:")} <strong>{[req.appointmentDate, req.appointmentTime].filter(Boolean).join(" · ")}</strong>
                     {req.appointmentDate && !req.appointmentTime
-                      ? " — alleen een dag gekozen, dus vul zelf een tijd in of stel hieronder een paar tijden voor."
-                      : " — al ingevuld hieronder."}
+                      ? uiT(" — alleen een dag gekozen, dus vul zelf een tijd in of stel hieronder een paar tijden voor.")
+                      : uiT(" — al ingevuld hieronder.")}
                   </p>
                 )}
                 <form action={schedule} className="space-y-2">
                   <div className="grid grid-cols-2 gap-2">
-                    <Field label="Datum" htmlFor="date">
+                    <Field label={uiT("Datum")} htmlFor="date">
                       <Input type="date" name="date" required defaultValue={req.appointmentDate ?? ""} />
                     </Field>
-                    <Field label="Tijd" htmlFor="time">
+                    <Field label={uiT("Tijd")} htmlFor="time">
                       <Input type="time" name="time" required defaultValue={req.appointmentTime ?? ""} />
                     </Field>
                   </div>
-                  <Field label="Locatie" htmlFor="location">
+                  <Field label={uiT("Locatie")} htmlFor="location">
                     <Input name="location" defaultValue={standaardLocatie(req.source)} />
                   </Field>
-                  <Textarea name="note" rows={2} placeholder="Opmerking voor de klant (optioneel)…" />
-                  <SubmitButton variant="primary" className="w-full" pendingLabel="Inplannen…">
-                    Inplannen + klant bevestigen
-                  </SubmitButton>
+                  <Textarea name="note" rows={2} placeholder={uiT("Opmerking voor de klant (optioneel)…")} />
+                  <SubmitButton variant="primary" className="w-full" pendingLabel={uiT("Inplannen…")}>
+                    {uiT("Inplannen + klant bevestigen")} </SubmitButton>
                 </form>
                 <p className="mt-2 text-xs text-muted">
-                  De klant krijgt direct een bevestigingsmail; de afspraak verschijnt in de agenda.
-                </p>
+                  {uiT("De klant krijgt direct een bevestigingsmail; de afspraak verschijnt in de agenda.")} </p>
 
                 <div className="mt-5 border-t pt-4">
-                  <p className="text-sm font-medium">Of: stel andere tijden voor</p>
+                  <p className="text-sm font-medium">{uiT("Of: stel andere tijden voor")}</p>
                   <p className="mb-2 text-xs text-muted">
                     {beurs && req.appointmentDate
-                      ? "De klant koos een beursdag. Vul hieronder een paar tijden op die dag in — de datum staat al klaar — en hij kiest er zelf één via een link. Bij de keuze wordt de afspraak automatisch bevestigd en in de agenda gezet."
-                      : "Komt het gevraagde moment niet uit? Geef een paar opties — de klant kiest er zelf één via een link. Bij de keuze wordt de afspraak automatisch bevestigd en in de agenda gezet."}
+                      ? uiT("De klant koos een beursdag. Vul hieronder een paar tijden op die dag in — de datum staat al klaar — en hij kiest er zelf één via een link. Bij de keuze wordt de afspraak automatisch bevestigd en in de agenda gezet.")
+                      : uiT("Komt het gevraagde moment niet uit? Geef een paar opties — de klant kiest er zelf één via een link. Bij de keuze wordt de afspraak automatisch bevestigd en in de agenda gezet.")}
                   </p>
                   {sp.proposed === "1" && (
                     <p className="mb-2 rounded-md bg-success/10 px-3 py-2 text-xs text-success">
-                      ✓ Voorstel met opties verstuurd naar de klant.
-                    </p>
+                      {uiT("✓ Voorstel met opties verstuurd naar de klant.")} </p>
                   )}
                   {sp.error === "slots" && (
                     <p className="mb-2 rounded-md bg-warning/10 px-3 py-2 text-xs text-warning">
-                      Vul minstens één datum + tijd in.
-                    </p>
+                      {uiT("Vul minstens één datum + tijd in.")} </p>
                   )}
                   <form action={propose} className="space-y-2">
                     {[0, 1, 2, 3].map((i) => (
@@ -376,9 +368,8 @@ export default async function QuoteRequestDetailPage({
                         <Input type="time" name={`time_${i}`} defaultValue={i === 0 ? req.appointmentTime ?? "" : ""} />
                       </div>
                     ))}
-                    <SubmitButton variant="secondary" className="w-full" pendingLabel="Versturen…">
-                      Voorstel sturen naar klant
-                    </SubmitButton>
+                    <SubmitButton variant="secondary" className="w-full" pendingLabel={uiT("Versturen…")}>
+                      {uiT("Voorstel sturen naar klant")} </SubmitButton>
                   </form>
                 </div>
               </CardContent>
@@ -387,24 +378,20 @@ export default async function QuoteRequestDetailPage({
 
           <Card>
             <CardHeader>
-              <CardTitle>Mail de klant</CardTitle>
+              <CardTitle>{uiT("Mail de klant")}</CardTitle>
             </CardHeader>
             <CardContent>
               {sp.gemaild === "1" && (
                 <p className="mb-2 rounded-md bg-success/10 px-3 py-2 text-xs text-success">
-                  ✓ Mail verstuurd naar de klant.
-                </p>
+                  {uiT("✓ Mail verstuurd naar de klant.")} </p>
               )}
               {sp.gemaild === "0" && (
                 <p className="mb-2 rounded-md bg-warning/10 px-3 py-2 text-xs text-warning">
-                  Mail kon niet verstuurd worden.
-                </p>
+                  {uiT("Mail kon niet verstuurd worden.")} </p>
               )}
               {stilDagen != null && (
                 <p className="mb-2 rounded-md bg-warning/10 px-3 py-2 text-xs text-warning">
-                  ⏳ De klant heeft al <strong>{stilDagen} dagen</strong> niet gereageerd op je
-                  laatste mail — stuur eventueel een vriendelijke herinnering.
-                </p>
+                  {uiT("⏳ De klant heeft al")} <strong>{stilDagen} {uiT("dagen")}</strong> {uiT("niet gereageerd op je laatste mail — stuur eventueel een vriendelijke herinnering.")} </p>
               )}
               <AiMailForm
                 verstuur={mailCustomer}
@@ -416,7 +403,7 @@ export default async function QuoteRequestDetailPage({
                 suggestie={
                   stilDagen != null
                     ? {
-                        label: "✨ Schrijf herinnering",
+                        label: uiT("✨ Schrijf herinnering"),
                         instructie: `De klant heeft ${stilDagen} dagen niet gereageerd op ons vorige bericht. Schrijf een korte, vriendelijke opvolging: verwijs naar ons eerdere bericht, vraag of het nog speelt en of we ergens mee kunnen helpen — niet pusherig.`,
                       }
                     : undefined
@@ -428,7 +415,7 @@ export default async function QuoteRequestDetailPage({
           {req.status === "accepted" && req.contactId && (
             <Card>
               <CardHeader>
-                <CardTitle>Volgende stap</CardTitle>
+                <CardTitle>{uiT("Volgende stap")}</CardTitle>
               </CardHeader>
               <CardContent>
                 <LinkButton
@@ -436,11 +423,9 @@ export default async function QuoteRequestDetailPage({
                   variant="primary"
                   className="w-full"
                 >
-                  + Offerte opstellen
-                </LinkButton>
+                  {uiT("+ Offerte opstellen")} </LinkButton>
                 <p className="mt-2 text-xs text-muted">
-                  Opent de wizard met dit contact én de aangevraagde producten alvast ingevuld.
-                </p>
+                  {uiT("Opent de wizard met dit contact én de aangevraagde producten alvast ingevuld.")} </p>
               </CardContent>
             </Card>
           )}

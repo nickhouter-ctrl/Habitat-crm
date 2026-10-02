@@ -1,3 +1,5 @@
+import { datumTaal } from "@/lib/i18n/server";
+import { tekst as uiTranslation } from '@/lib/i18n/server';
 import { and, count, desc, eq, gte, inArray, isNotNull, ne, notInArray, sql } from "drizzle-orm";
 import Link from "next/link";
 import { AlertTriangle, CheckCircle2, Clock, TrendingUp, Wallet, LayoutDashboard, ShoppingCart, Activity } from "lucide-react";
@@ -39,7 +41,10 @@ import { reorderShortagesToDrafts } from "../bestellen/actions";
 import { approveProforma } from "../inkooporders/actions";
 import { markPickedUp, setDeliveryStatus } from "../leveringen/actions";
 
-export const metadata = { title: "Dashboard" };
+export async function generateMetadata() {
+  const uiT = await uiTranslation();
+  return { title: uiT("Dashboard") };
+}
 // Cold start mag tot 60s, ruim voor de eerste Holded-fetch; warm is dit 1–2s.
 export const maxDuration = 60;
 
@@ -66,6 +71,8 @@ const ACTIVITY_LABEL: Record<string, string> = {
 };
 
 export default async function DashboardPage() {
+  const uiDateLocale = await datumTaal();
+  const uiT = await uiTranslation();
   const t0 = Date.now();
   const now = new Date();
   const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0, 10);
@@ -400,9 +407,9 @@ export default async function DashboardPage() {
   return (
     <>
       <PageHeader
-        title="Dashboard"
-        subtitle="Overzicht van de pijplijn, facturen en activiteit"
-        actions={<LinkButton href="/contacts/new">Nieuw contact</LinkButton>}
+        title={uiT("Dashboard")}
+        subtitle={uiT("Overzicht van de pijplijn, facturen en activiteit")}
+        actions={<LinkButton href="/contacts/new">{uiT("Nieuw contact")}</LinkButton>}
       />
 
       <TabsRoot
@@ -412,20 +419,20 @@ export default async function DashboardPage() {
       >
       {/* KPI's — altijd zichtbaar onder de tabbalk */}
       <div className="order-1 mb-6 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
-        <StatTile label="Omzet deze maand" value={formatEUR(revenueMonth)} hint={marginPctMonth != null ? `${marginPctMonth}% marge · ex. BTW` : "ex. BTW"} tone="success" icon={<TrendingUp className="size-5" />} />
-        <StatTile label="Openstaande facturen" value={docAgg.outstandingN} hint={formatEUR(docAgg.outstandingV)} tone="warning" icon={<Clock className="size-5" />} />
-        <StatTile label="Vervallen facturen" value={docAgg.overdueN} hint={formatEUR(docAgg.overdueV)} tone="danger" icon={<AlertTriangle className="size-5" />} />
-        <StatTile label="Geaccepteerde offertes" value={acceptedN} hint="klaar om te factureren" tone="accent" icon={<CheckCircle2 className="size-5" />} />
-        <StatTile label="Totale omzet" value={formatEUR(revenueAll)} hint={marginPctAll != null ? `${marginPctAll}% marge · dit jaar` : "ex. BTW · dit jaar"} tone="info" icon={<Wallet className="size-5" />} />
+        <StatTile label={uiT("Omzet deze maand")} value={formatEUR(revenueMonth)} hint={marginPctMonth != null ? uiT("{v0}% marge · ex. BTW", { v0: marginPctMonth }) : uiT("ex. BTW")} tone="success" icon={<TrendingUp className="size-5" />} />
+        <StatTile label={uiT("Openstaande facturen")} value={docAgg.outstandingN} hint={formatEUR(docAgg.outstandingV)} tone="warning" icon={<Clock className="size-5" />} />
+        <StatTile label={uiT("Vervallen facturen")} value={docAgg.overdueN} hint={formatEUR(docAgg.overdueV)} tone="danger" icon={<AlertTriangle className="size-5" />} />
+        <StatTile label={uiT("Geaccepteerde offertes")} value={acceptedN} hint={uiT("klaar om te factureren")} tone="accent" icon={<CheckCircle2 className="size-5" />} />
+        <StatTile label={uiT("Totale omzet")} value={formatEUR(revenueAll)} hint={marginPctAll != null ? uiT("{v0}% marge · dit jaar", { v0: marginPctAll }) : uiT("ex. BTW · dit jaar")} tone="info" icon={<Wallet className="size-5" />} />
       </div>
 
         <TabsBar
           className="order-2"
           tabs={[
-            { id: "vandaag", label: "Vandaag", icon: <LayoutDashboard /> },
-            { id: "verkoop", label: "Verkoop", icon: <TrendingUp /> },
-            { id: "inkoop", label: "Inkoop", icon: <ShoppingCart /> },
-            { id: "activiteit", label: "Activiteit", icon: <Activity /> },
+            { id: "vandaag", label: uiT("Vandaag"), icon: <LayoutDashboard /> },
+            { id: "verkoop", label: uiT("Verkoop"), icon: <TrendingUp /> },
+            { id: "inkoop", label: uiT("Inkoop"), icon: <ShoppingCart /> },
+            { id: "activiteit", label: uiT("Activiteit"), icon: <Activity /> },
           ]}
         />
 
@@ -433,24 +440,23 @@ export default async function DashboardPage() {
         <TabPanel id="vandaag" className="order-3">
       <details className="mb-6 -mt-3">
         <summary className="cursor-pointer select-none text-xs text-muted transition-colors hover:text-foreground">
-          Meer cijfers — inkoop, projecten, contacten
-        </summary>
+          {uiT("Meer cijfers — inkoop, projecten, contacten")} </summary>
         <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
           <StatTile
-            label="Totale inkoop"
+            label={uiT("Totale inkoop")}
             value={formatEUR(totalPurchase)}
             hint={
               unpushedPurchase > 0
-                ? `ex. BTW · Holded ${formatEUR(holdedExpensesYTD)} + ${purchaseAgg.n} PO's`
-                : "ex. BTW · uit Holded"
+                ? uiT("ex. BTW · Holded {v0} + {v1} PO's", { v0: formatEUR(holdedExpensesYTD), v1: purchaseAgg.n })
+                : uiT("ex. BTW · uit Holded")
             }
           />
-          <StatTile label="Inkooporders onderweg" value={openPurchaseOrders.length} hint="aankomende voorraad" />
-          <StatTile label="Actieve projecten" value={activeProjectsAgg?.n ?? 0} hint="lopende klussen" />
-          <StatTile label="Contacten" value={contactsTotal.n} />
-          <StatTile label="Onder voorraaddrempel" value={productsAgg.lowStock} hint="producten" />
-          <StatTile label="Producten zonder foto" value={productsAgg.stockNoPhoto} />
-          <StatTile label="Producten zonder barcode" value={productsAgg.noBarcode} />
+          <StatTile label={uiT("Inkooporders onderweg")} value={openPurchaseOrders.length} hint={uiT("aankomende voorraad")} />
+          <StatTile label={uiT("Actieve projecten")} value={activeProjectsAgg?.n ?? 0} hint={uiT("lopende klussen")} />
+          <StatTile label={uiT("Contacten")} value={contactsTotal.n} />
+          <StatTile label={uiT("Onder voorraaddrempel")} value={productsAgg.lowStock} hint={uiT("producten")} />
+          <StatTile label={uiT("Producten zonder foto")} value={productsAgg.stockNoPhoto} />
+          <StatTile label={uiT("Producten zonder barcode")} value={productsAgg.noBarcode} />
         </div>
       </details>
 
@@ -462,25 +468,22 @@ export default async function DashboardPage() {
         <Card className="border-amber-300 bg-amber-50/50 lg:flex-1 lg:min-w-0">
           <CardHeader>
             <CardTitle>
-              🚪 {doorOrientationN} factu{doorOrientationN === 1 ? "ur" : "ren"} — draairichting kiezen
-            </CardTitle>
+              🚪 {doorOrientationN} {uiT(doorOrientationN === 1 ? "factuur" : "facturen")} {uiT("— draairichting kiezen")} </CardTitle>
             <LinkButton href="/draairichtingen" className="text-xs">
-              → Toewijzen
-            </LinkButton>
+              {uiT("→ Toewijzen")} </LinkButton>
           </CardHeader>
           <CardContent>
             <p className="mb-3 text-sm text-muted">
-              Bij deze deur-facturen moet je nog per regel de draairichting (S1–S4) en het aantal per richting opgeven.
-            </p>
+              {uiT("Bij deze deur-facturen moet je nog per regel de draairichting (S1–S4) en het aantal per richting opgeven.")} </p>
             <ul className="grid max-h-72 gap-1.5 overflow-y-auto text-sm">
               {doorOrientationDocs.map((d) => (
                 <li key={d.id} className="flex items-center justify-between gap-2 rounded-md bg-background px-3 py-1.5">
                   <Link href={`/draairichtingen`} className="truncate font-medium hover:underline">
-                    {d.docNumber ?? "(geen nr.)"}
+                    {d.docNumber ?? uiT("(geen nr.)")}
                     {d.projectName && <span className="ml-1 font-normal text-muted">· {d.projectName}</span>}
                   </Link>
                   <span className="shrink-0 rounded bg-amber-100 px-1.5 py-0.5 text-xs font-medium text-amber-800 tabular-nums">
-                    {d.units} {d.units === 1 ? "deur" : "deuren"}
+                    {d.units} {d.units === 1 ? uiT("deur") : uiT("deuren")}
                   </span>
                 </li>
               ))}
@@ -493,17 +496,13 @@ export default async function DashboardPage() {
         <Card className="border-blue-200 bg-blue-50/40 lg:flex-1 lg:min-w-0">
           <CardHeader>
             <CardTitle>
-              🧾 {toSettle.length} offerte{toSettle.length === 1 ? "" : "s"} nog af te rekenen — deels gefactureerd
-            </CardTitle>
+              🧾 {toSettle.length} {uiT(toSettle.length === 1 ? "offerte" : "offertes")} {uiT("nog af te rekenen — deels gefactureerd")} </CardTitle>
             <LinkButton href="/quotes" className="text-xs">
-              Alle offertes
-            </LinkButton>
+              {uiT("Alle offertes")} </LinkButton>
           </CardHeader>
           <CardContent>
             <p className="mb-3 text-sm text-muted">
-              Hier is al een (deel)factuur van gemaakt, maar nog niet het volledige bedrag. Maak de
-              eindafrekening.
-            </p>
+              {uiT("Hier is al een (deel)factuur van gemaakt, maar nog niet het volledige bedrag. Maak de eindafrekening.")} </p>
             <ul className="grid max-h-72 gap-1.5 overflow-y-auto text-sm">
               {toSettle.map((e) => (
                 <li
@@ -512,14 +511,14 @@ export default async function DashboardPage() {
                 >
                   <span className="min-w-0 truncate">
                     <Link href={`/documents/${e.id}`} className="font-medium hover:underline">
-                      {e.docNumber ?? "(offerte)"}
+                      {e.docNumber ?? uiT("(offerte)")}
                     </Link>{" "}
                     <span className="text-muted">{e.contactName ?? e.title ?? ""}</span>
                   </span>
                   <span className="shrink-0 text-xs tabular-nums text-muted">
-                    {formatEUR(e.invoiced)} van {formatEUR(e.totalEur)} ·{" "}
+                    {formatEUR(e.invoiced)} {uiT("van")} {formatEUR(e.totalEur)} ·{" "}
                     <span className="rounded bg-blue-100 px-1.5 py-0.5 font-medium text-blue-800">
-                      nog {formatEUR(e.rest)}
+                      {uiT("nog")} {formatEUR(e.rest)}
                     </span>
                   </span>
                 </li>
@@ -533,19 +532,15 @@ export default async function DashboardPage() {
         <Card className="border-red-200 bg-red-50/40 lg:flex-1 lg:min-w-0">
           <CardHeader>
             <CardTitle>
-              🛒 {toOrder.length} product{toOrder.length === 1 ? "" : "en"} bijbestellen — te weinig vrije voorraad
-            </CardTitle>
+              🛒 {toOrder.length} {uiT(toOrder.length === 1 ? "product" : "producten")} {uiT("bijbestellen — te weinig vrije voorraad")} </CardTitle>
             <form action={reorderShortagesToDrafts}>
-              <SubmitButton size="sm" className="text-xs" pendingLabel="Bezig…">
-                → Bestellen
-              </SubmitButton>
+              <SubmitButton size="sm" className="text-xs" pendingLabel={uiT("Bezig…")}>
+                {uiT("→ Bestellen")} </SubmitButton>
             </form>
           </CardHeader>
           <CardContent>
             <p className="mb-3 text-sm text-muted">
-              Onder 0 op voorraad óf gereserveerd boven de voorraad. Eén klik zet het tekort als
-              concept-bestelbon per leverancier klaar.
-            </p>
+              {uiT("Onder 0 op voorraad óf gereserveerd boven de voorraad. Eén klik zet het tekort als concept-bestelbon per leverancier klaar.")} </p>
             <ul className="grid max-h-72 gap-1.5 overflow-y-auto text-sm">
               {toOrder.map((p) => (
                 <li
@@ -558,11 +553,11 @@ export default async function DashboardPage() {
                   </span>
                   <span className="shrink-0 text-xs tabular-nums">
                     <span className="text-muted">
-                      {p.reserved > 0 ? `${p.reserved} geres. · ` : ""}
-                      <span className={p.stock < 0 ? "text-danger" : ""}>{p.stock} voorr.</span>
+                      {p.reserved > 0 ? uiT("{v0} geres. · ", { v0: p.reserved }) : ""}
+                      <span className={p.stock < 0 ? "text-danger" : ""}>{p.stock} {uiT("voorr.")}</span>
                     </span>{" "}
                     <span className="rounded bg-red-100 px-1.5 py-0.5 font-medium text-red-800">
-                      bestel {Math.ceil(p.need)}
+                      {uiT("bestel")} {Math.ceil(p.need)}
                     </span>
                   </span>
                 </li>
@@ -582,23 +577,22 @@ export default async function DashboardPage() {
       <div className="mb-6 grid gap-4 lg:grid-cols-2">
         <Card>
           <CardHeader>
-            <CardTitle>Open offertes{openOffertes.length > 0 ? ` (${openOffertes.length})` : ""}</CardTitle>
+            <CardTitle>{uiT("Open offertes")}{openOffertes.length > 0 ? ` (${openOffertes.length})` : ""}</CardTitle>
             <Link href="/quotes" className="text-xs text-accent hover:underline">
-              Alle offertes
-            </Link>
+              {uiT("Alle offertes")} </Link>
           </CardHeader>
           {openOffertes.length === 0 ? (
             <CardContent>
-              <p className="text-sm text-muted">Geen openstaande offertes.</p>
+              <p className="text-sm text-muted">{uiT("Geen openstaande offertes.")}</p>
             </CardContent>
           ) : (
             <Table wrapperClassName="max-h-80 overflow-y-auto">
               <THead>
                 <tr>
-                  <Th>Nr.</Th>
-                  <Th>Klant</Th>
-                  <Th className="text-right">Bedrag</Th>
-                  <Th className="text-right">Open</Th>
+                  <Th>{uiT("Nr.")}</Th>
+                  <Th>{uiT("Klant")}</Th>
+                  <Th className="text-right">{uiT("Bedrag")}</Th>
+                  <Th className="text-right">{uiT("Open")}</Th>
                 </tr>
               </THead>
               <TBody>
@@ -610,12 +604,12 @@ export default async function DashboardPage() {
                     <Tr key={o.id}>
                       <Td>
                         <Link href={`/documents/${o.id}`} className="font-medium hover:underline">
-                          {o.docNumber ?? "(offerte)"}
+                          {o.docNumber ?? uiT("(offerte)")}
                         </Link>
                       </Td>
                       <Td className="text-muted">{o.contactName ?? o.title ?? "—"}</Td>
                       <Td className="text-right tabular-nums">{formatEUR(o.totalEur)}</Td>
-                      <Td className="text-right text-muted">{days != null ? `${days}d` : "—"}</Td>
+                      <Td className="text-right text-muted">{days != null ? uiT("{v0}d", { v0: days }) : "—"}</Td>
                     </Tr>
                   );
                 })}
@@ -627,24 +621,23 @@ export default async function DashboardPage() {
         <Card>
           <CardHeader>
             <CardTitle>
-              Openstaande facturen{openSalesInvoices.length > 0 ? ` (${openSalesInvoices.length})` : ""}
+              {uiT("Openstaande facturen")}{openSalesInvoices.length > 0 ? ` (${openSalesInvoices.length})` : ""}
             </CardTitle>
             <Link href="/invoices" className="text-xs text-accent hover:underline">
-              Alle facturen
-            </Link>
+              {uiT("Alle facturen")} </Link>
           </CardHeader>
           {openSalesInvoices.length === 0 ? (
             <CardContent>
-              <p className="text-sm text-muted">Geen openstaande facturen.</p>
+              <p className="text-sm text-muted">{uiT("Geen openstaande facturen.")}</p>
             </CardContent>
           ) : (
             <Table wrapperClassName="max-h-80 overflow-y-auto">
               <THead>
                 <tr>
-                  <Th>Nr.</Th>
-                  <Th>Klant</Th>
-                  <Th>Vervalt</Th>
-                  <Th className="text-right">Open</Th>
+                  <Th>{uiT("Nr.")}</Th>
+                  <Th>{uiT("Klant")}</Th>
+                  <Th>{uiT("Vervalt")}</Th>
+                  <Th className="text-right">{uiT("Open")}</Th>
                 </tr>
               </THead>
               <TBody>
@@ -655,13 +648,13 @@ export default async function DashboardPage() {
                     <Tr key={inv.id}>
                       <Td>
                         <Link href={`/documents/${inv.id}`} className="font-medium hover:underline">
-                          {inv.docNumber ?? "(factuur)"}
+                          {inv.docNumber ?? uiT("(factuur)")}
                         </Link>
                       </Td>
                       <Td className="text-muted">{inv.contactName ?? "—"}</Td>
                       <Td className={overdue ? "font-medium text-danger" : "text-muted"}>
-                        {inv.dueDate ? formatDate(inv.dueDate) : "—"}
-                        {overdue ? " · vervallen" : ""}
+                        {inv.dueDate ? formatDate(inv.dueDate, uiDateLocale) : "—"}
+                        {overdue ? uiT(" · vervallen") : ""}
                       </Td>
                       <Td className="text-right font-medium tabular-nums">{formatEUR(open)}</Td>
                     </Tr>
@@ -677,14 +670,13 @@ export default async function DashboardPage() {
       <div className="mb-6 grid gap-4 lg:grid-cols-2">
         <Card>
           <CardHeader>
-            <CardTitle>Te plannen leveringen{toPlan.length > 0 ? ` (${toPlan.length})` : ""}</CardTitle>
+            <CardTitle>{uiT("Te plannen leveringen")}{toPlan.length > 0 ? ` (${toPlan.length})` : ""}</CardTitle>
             <Link href="/leveringen" className="text-xs text-accent hover:underline">
-              Inplannen →
-            </Link>
+              {uiT("Inplannen →")} </Link>
           </CardHeader>
           {toPlan.length === 0 ? (
             <CardContent>
-              <p className="text-sm text-muted">Geen leveringen te plannen.</p>
+              <p className="text-sm text-muted">{uiT("Geen leveringen te plannen.")}</p>
             </CardContent>
           ) : (
             <ul className="max-h-96 divide-y overflow-y-auto text-sm">
@@ -692,7 +684,7 @@ export default async function DashboardPage() {
                 <li key={d.id} className="flex items-center justify-between gap-2 px-5 py-2.5">
                   <span className="min-w-0">
                     <Link href={`/documents/${d.id}`} className="font-medium hover:underline">
-                      {d.docNumber ?? "(factuur)"}
+                      {d.docNumber ?? uiT("(factuur)")}
                     </Link>{" "}
                     <span className="text-muted">{d.contactName ?? ""}</span>
                     {(d.projectName || d.title) && (
@@ -709,12 +701,10 @@ export default async function DashboardPage() {
                         className="text-xs text-muted"
                         pendingLabel="…"
                       >
-                        Afgehaald
-                      </SubmitButton>
+                        {uiT("Afgehaald")} </SubmitButton>
                     </form>
                     <Link href="/leveringen" className="text-xs font-medium text-accent hover:underline">
-                      Plannen →
-                    </Link>
+                      {uiT("Plannen →")} </Link>
                   </span>
                 </li>
               ))}
@@ -725,28 +715,28 @@ export default async function DashboardPage() {
         <Card>
           <CardHeader>
             <CardTitle>
-              Geplande leveringen{plannedDeliveries.length > 0 ? ` (${plannedDeliveries.length})` : ""}
+              {uiT("Geplande leveringen")}{plannedDeliveries.length > 0 ? ` (${plannedDeliveries.length})` : ""}
             </CardTitle>
           </CardHeader>
           {plannedDeliveries.length === 0 ? (
             <CardContent>
-              <p className="text-sm text-muted">Nog niets ingepland.</p>
+              <p className="text-sm text-muted">{uiT("Nog niets ingepland.")}</p>
             </CardContent>
           ) : (
             <Table wrapperClassName="max-h-96 overflow-y-auto">
               <THead>
                 <tr>
-                  <Th>Datum</Th>
-                  <Th>Factuur</Th>
-                  <Th>Klant</Th>
-                  <Th className="text-right">Status</Th>
+                  <Th>{uiT("Datum")}</Th>
+                  <Th>{uiT("Factuur")}</Th>
+                  <Th>{uiT("Klant")}</Th>
+                  <Th className="text-right">{uiT("Status")}</Th>
                 </tr>
               </THead>
               <TBody>
                 {plannedDeliveries.map((d) => (
                   <Tr key={d.id}>
                     <Td className="font-medium tabular-nums">
-                      {d.plannedDate ? formatDate(d.plannedDate) : "—"}
+                      {d.plannedDate ? formatDate(d.plannedDate, uiDateLocale) : "—"}
                     </Td>
                     <Td>
                       {d.docId ? (
@@ -759,24 +749,23 @@ export default async function DashboardPage() {
                     </Td>
                     <Td className="text-muted">
                       {d.contactName ?? "—"}
-                      {d.notifiedAt ? " · ✉ gemeld" : ""}
+                      {d.notifiedAt ? uiT(" · ✉ gemeld") : ""}
                     </Td>
                     <Td className="text-right">
                       <div className="flex items-center justify-end gap-1.5">
                         <span className="text-xs text-muted">
                           {d.method === "ophalen"
-                            ? "🤝 ophalen"
+                            ? uiT("🤝 ophalen")
                             : d.method === "plaatsen"
-                              ? "🔧 plaatsen"
-                              : "🚚 leveren"}
+                              ? uiT("🔧 plaatsen")
+                              : uiT("🚚 leveren")}
                         </span>
                         <Badge tone={d.status === "onderweg" ? "info" : "neutral"}>
-                          {d.status === "onderweg" ? "Onderweg" : "Gepland"}
+                          {d.status === "onderweg" ? uiT("Onderweg") : uiT("Gepland")}
                         </Badge>
                         <form action={setDeliveryStatus.bind(null, d.id, "geleverd")}>
                           <SubmitButton size="sm" variant="ghost" className="text-muted" pendingLabel="…">
-                            Geleverd
-                          </SubmitButton>
+                            {uiT("Geleverd")} </SubmitButton>
                         </form>
                       </div>
                     </Td>
@@ -791,8 +780,8 @@ export default async function DashboardPage() {
       <div className="mt-6 grid gap-4 lg:grid-cols-2">
         <Card>
           <CardHeader>
-            <CardTitle>Omzet per maand</CardTitle>
-            <span className="text-xs text-muted">facturen · ex. BTW</span>
+            <CardTitle>{uiT("Omzet per maand")}</CardTitle>
+            <span className="text-xs text-muted">{uiT("facturen · ex. BTW")}</span>
           </CardHeader>
           <CardContent>
             <MonthlyAmountChart data={revSeries} />
@@ -800,8 +789,8 @@ export default async function DashboardPage() {
         </Card>
         <Card>
           <CardHeader>
-            <CardTitle>Offerte-waarde per maand</CardTitle>
-            <span className="text-xs text-muted">uitgebracht · ex. BTW</span>
+            <CardTitle>{uiT("Offerte-waarde per maand")}</CardTitle>
+            <span className="text-xs text-muted">{uiT("uitgebracht · ex. BTW")}</span>
           </CardHeader>
           <CardContent>
             <MonthlyAmountChart data={estSeries} color="#a98a4b" />
@@ -811,14 +800,14 @@ export default async function DashboardPage() {
 
       <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-4">
         <StatTile
-          label="Offerte-conversie"
+          label={uiT("Offerte-conversie")}
           value={`${convPct}%`}
-          hint={`${estConv?.accepted ?? 0} van ${estConv?.total ?? 0} geaccepteerd`}
+          hint={uiT("{v0} van {v1} geaccepteerd", { v0: estConv?.accepted ?? 0, v1: estConv?.total ?? 0 })}
         />
         <StatTile
-          label="Geaccepteerde offerte-omzet"
+          label={uiT("Geaccepteerde offerte-omzet")}
           value={formatEUR(acceptedOfferteValue)}
-          hint="ex. BTW"
+          hint={uiT("ex. BTW")}
         />
       </div>
 
@@ -829,20 +818,19 @@ export default async function DashboardPage() {
       {openPurchaseOrders.length > 0 && (
         <Card className="mt-6">
           <CardHeader>
-            <CardTitle>Inkooporders onderweg</CardTitle>
+            <CardTitle>{uiT("Inkooporders onderweg")}</CardTitle>
             <Link href="/inkooporders" className="text-xs text-accent hover:underline">
-              Alle inkooporders
-            </Link>
+              {uiT("Alle inkooporders")} </Link>
           </CardHeader>
           <Table wrapperClassName="max-h-80 overflow-y-auto">
             <THead>
               <tr>
-                <Th>Leverancier</Th>
-                <Th>Referentie</Th>
-                <Th>Verwacht</Th>
-                <Th className="text-right">Regels</Th>
-                <Th className="text-right">Totaal</Th>
-                <Th>Status</Th>
+                <Th>{uiT("Leverancier")}</Th>
+                <Th>{uiT("Referentie")}</Th>
+                <Th>{uiT("Verwacht")}</Th>
+                <Th className="text-right">{uiT("Regels")}</Th>
+                <Th className="text-right">{uiT("Totaal")}</Th>
+                <Th>{uiT("Status")}</Th>
               </tr>
             </THead>
             <TBody>
@@ -856,7 +844,7 @@ export default async function DashboardPage() {
                   <Td className="text-muted">{po.reference ?? "—"}</Td>
                   <Td className="text-muted">
                     {po.expectedDate
-                      ? new Date(po.expectedDate).toLocaleDateString("nl-NL", {
+                      ? new Date(po.expectedDate).toLocaleDateString(uiDateLocale, {
                           day: "numeric",
                           month: "short",
                           year: "numeric",
@@ -866,7 +854,7 @@ export default async function DashboardPage() {
                   <Td className="text-right tabular-nums text-muted">{po.items?.length ?? 0}</Td>
                   <Td className="text-right tabular-nums">{formatMoney(po.total, po.currency)}</Td>
                   <Td>
-                    <Badge tone={PO_STATUS_META[po.status].tone}>{PO_STATUS_META[po.status].label}</Badge>
+                    <Badge tone={PO_STATUS_META[po.status].tone}>{uiT(PO_STATUS_META[po.status].label)}</Badge>
                   </Td>
                 </Tr>
               ))}
@@ -878,17 +866,16 @@ export default async function DashboardPage() {
       {proformas.length > 0 && (
         <Card className="mt-6">
           <CardHeader>
-            <CardTitle>Proforma&apos;s ter goedkeuring</CardTitle>
+            <CardTitle>{uiT("Proforma's ter goedkeuring")}</CardTitle>
             <Link href="/inkooporders" className="text-xs text-accent hover:underline">
-              Alle inkooporders
-            </Link>
+              {uiT("Alle inkooporders")} </Link>
           </CardHeader>
           <Table wrapperClassName="max-h-80 overflow-y-auto">
             <THead>
               <tr>
-                <Th>Leverancier</Th>
-                <Th>Referentie</Th>
-                <Th className="text-right">Bedrag</Th>
+                <Th>{uiT("Leverancier")}</Th>
+                <Th>{uiT("Referentie")}</Th>
+                <Th className="text-right">{uiT("Bedrag")}</Th>
                 <Th />
               </tr>
             </THead>
@@ -913,8 +900,7 @@ export default async function DashboardPage() {
                         type="submit"
                         className="rounded-md bg-accent/10 px-2.5 py-1 text-xs font-medium text-accent hover:bg-accent/20"
                       >
-                        Goedkeuren
-                      </button>
+                        {uiT("Goedkeuren")} </button>
                     </form>
                   </Td>
                 </Tr>
@@ -931,16 +917,16 @@ export default async function DashboardPage() {
       <div className="mt-6 grid gap-4 lg:grid-cols-2">
         <Card>
           <CardHeader>
-            <CardTitle>Recente activiteit</CardTitle>
+            <CardTitle>{uiT("Recente activiteit")}</CardTitle>
           </CardHeader>
           <CardContent>
             {recentActivity.length === 0 ? (
-              <EmptyState title="Nog geen activiteit" />
+              <EmptyState title={uiT("Nog geen activiteit")} />
             ) : (
               <ol className="max-h-80 space-y-3 overflow-y-auto pr-1">
                 {recentActivity.map((a) => {
                   const link = a.document
-                    ? { href: `/documents/${a.document.id}`, label: `${documentKindMeta[a.document.kind]} ${a.document.docNumber ?? ""}`.trim() }
+                    ? { href: `/documents/${a.document.id}`, label: `${uiT(documentKindMeta[a.document.kind])} ${a.document.docNumber ?? ""}`.trim() }
                     : a.contact
                       ? { href: `/contacts/${a.contact.id}`, label: a.contact.name }
                       : null;
@@ -951,7 +937,7 @@ export default async function DashboardPage() {
                           {ACTIVITY_LABEL[a.type] ?? a.type}
                         </span>
                         <span>·</span>
-                        <span>{formatDate(a.createdAt)}</span>
+                        <span>{formatDate(a.createdAt, uiDateLocale)}</span>
                         {a.author?.name && (
                           <>
                             <span>·</span>
@@ -981,22 +967,21 @@ export default async function DashboardPage() {
 
         <Card>
           <CardHeader>
-            <CardTitle>Recente projecten</CardTitle>
+            <CardTitle>{uiT("Recente projecten")}</CardTitle>
             <Link href="/projects" className="text-xs text-accent hover:underline">
-              Alles bekijken
-            </Link>
+              {uiT("Alles bekijken")} </Link>
           </CardHeader>
           {recentProjects.length === 0 ? (
             <CardContent>
-              <EmptyState title="Nog geen projecten" />
+              <EmptyState title={uiT("Nog geen projecten")} />
             </CardContent>
           ) : (
             <Table wrapperClassName="max-h-80 overflow-y-auto">
               <THead>
                 <tr>
-                  <Th>Project</Th>
-                  <Th>Klant</Th>
-                  <Th className="text-right">Status</Th>
+                  <Th>{uiT("Project")}</Th>
+                  <Th>{uiT("Klant")}</Th>
+                  <Th className="text-right">{uiT("Status")}</Th>
                 </tr>
               </THead>
               <TBody>
@@ -1010,7 +995,7 @@ export default async function DashboardPage() {
                     <Td className="text-muted">{p.contact?.name ?? "—"}</Td>
                     <Td className="text-right">
                       <Badge tone={p.status === "active" ? "success" : "neutral"}>
-                        {p.status === "active" ? "Actief" : "Gearchiveerd"}
+                        {p.status === "active" ? uiT("Actief") : uiT("Gearchiveerd")}
                       </Badge>
                     </Td>
                   </Tr>

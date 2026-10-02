@@ -1,3 +1,5 @@
+import { datumTaal } from "@/lib/i18n/server";
+import { tekst as uiTranslation } from '@/lib/i18n/server';
 /**
  * Shipments-overzicht: alle PO's gegroepeerd, met landed cost per shipment.
  * Per PO toon: aantal gelinkte mails + bijlagen per categorie + totaal kosten.
@@ -12,7 +14,10 @@ import { emailInbox, mailAttachments, purchaseOrders } from "@/lib/db/schema";
 import { CATEGORIES } from "@/lib/email-attachments";
 import { cn, formatEUR } from "@/lib/utils";
 
-export const metadata = { title: "Shipments" };
+export async function generateMetadata() {
+  const uiT = await uiTranslation();
+  return { title: uiT("Shipments") };
+}
 export const dynamic = "force-dynamic";
 
 const CATEGORY_ICONS: Record<string, string> = {
@@ -29,13 +34,15 @@ const CATEGORY_ICONS: Record<string, string> = {
   "other": "📎",
 };
 
-function formatDate(d: Date | string | null): string {
+function formatDate(d: Date | string | null, uiDateLocale = "nl-NL"): string {
   if (!d) return "—";
   const date = typeof d === "string" ? new Date(d) : d;
-  return date.toLocaleDateString("nl-NL", { day: "2-digit", month: "short", year: "numeric" });
+  return date.toLocaleDateString(uiDateLocale, { day: "2-digit", month: "short", year: "numeric" });
 }
 
 export default async function ShipmentsPage() {
+  const uiDateLocale = await datumTaal();
+  const uiT = await uiTranslation();
   // Haal alle PO's + gegroepeerde bijlage-statistieken
   const data = await db.execute<{
     po_id: string;
@@ -87,8 +94,8 @@ export default async function ShipmentsPage() {
   return (
     <>
       <PageHeader
-        title="Shipments overzicht"
-        subtitle={`${rows.length} PO's totaal · ${totals.posWithMails} met gelinkte facturen · ${totals.totalAttachments} bijlagen`}
+        title={uiT("Shipments overzicht")}
+        subtitle={uiT("{v0} PO's totaal · {v1} met gelinkte facturen · {v2} bijlagen", { v0: rows.length, v1: totals.posWithMails, v2: totals.totalAttachments })}
       />
 
       {/* Quick stats */}
@@ -96,43 +103,43 @@ export default async function ShipmentsPage() {
         <Card className="p-4">
           <div className="flex items-center gap-2 text-sm text-muted">
             <Package className="h-4 w-4" />
-            <span>PO's met facturen</span>
+            <span>{uiT("PO's met facturen")}</span>
           </div>
           <p className="mt-1 text-2xl font-semibold">{totals.posWithMails}</p>
-          <p className="text-xs text-muted">Volledig of deels gelinkt</p>
+          <p className="text-xs text-muted">{uiT("Volledig of deels gelinkt")}</p>
         </Card>
         <Card className="p-4">
           <div className="flex items-center gap-2 text-sm text-muted">
             <AlertCircle className="h-4 w-4 text-warning" />
-            <span>PO's zonder facturen</span>
+            <span>{uiT("PO's zonder facturen")}</span>
           </div>
           <p className="mt-1 text-2xl font-semibold">{totals.posWithoutMails}</p>
-          <p className="text-xs text-muted">Te linken via /inbox</p>
+          <p className="text-xs text-muted">{uiT("Te linken via /inbox")}</p>
         </Card>
         <Card className="p-4">
           <div className="flex items-center gap-2 text-sm text-muted">
             <FileText className="h-4 w-4" />
-            <span>Totaal bijlagen</span>
+            <span>{uiT("Totaal bijlagen")}</span>
           </div>
           <p className="mt-1 text-2xl font-semibold">{totals.totalAttachments}</p>
-          <p className="text-xs text-muted">In archief gekoppeld</p>
+          <p className="text-xs text-muted">{uiT("In archief gekoppeld")}</p>
         </Card>
       </div>
 
       {rows.length === 0 ? (
-        <EmptyState title="Geen shipments" description="Importeer eerst PO's via Holded-sync of maak handmatig PO's aan." />
+        <EmptyState title={uiT("Geen shipments")} description={uiT("Importeer eerst PO's via Holded-sync of maak handmatig PO's aan.")} />
       ) : (
         <Card>
           <Table>
             <THead>
               <tr>
-                <Th>Datum</Th>
-                <Th>Leverancier · referentie</Th>
-                <Th>Status</Th>
-                <Th>PO-totaal</Th>
-                <Th>Facturen</Th>
-                <Th>Categorie-breakdown</Th>
-                <Th className="text-right">Landed extra</Th>
+                <Th>{uiT("Datum")}</Th>
+                <Th>{uiT("Leverancier · referentie")}</Th>
+                <Th>{uiT("Status")}</Th>
+                <Th>{uiT("PO-totaal")}</Th>
+                <Th>{uiT("Facturen")}</Th>
+                <Th>{uiT("Categorie-breakdown")}</Th>
+                <Th className="text-right">{uiT("Landed extra")}</Th>
               </tr>
             </THead>
             <TBody>
@@ -152,7 +159,7 @@ export default async function ShipmentsPage() {
                 return (
                   <Tr key={r.po_id}>
                     <Td className="whitespace-nowrap text-xs text-muted">
-                      {formatDate(r.order_date)}
+                      {formatDate(r.order_date, uiDateLocale)}
                     </Td>
                     <Td className="max-w-[18rem]">
                       <Link
@@ -176,8 +183,7 @@ export default async function ShipmentsPage() {
                     <Td className="text-center text-xs">
                       {Number(r.n_mails) > 0 ? (
                         <span className="rounded-md bg-success/10 px-2 py-0.5 text-success">
-                          {r.n_mails} mail · {r.n_attachments} bestand
-                        </span>
+                          {r.n_mails} {uiT("mail ·")} {r.n_attachments} {uiT("bestand")} </span>
                       ) : (
                         <span className="text-muted">—</span>
                       )}

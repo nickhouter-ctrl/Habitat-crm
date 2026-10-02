@@ -1,3 +1,5 @@
+import { datumTaal } from "@/lib/i18n/server";
+import { tekst as uiTranslation } from '@/lib/i18n/server';
 /**
  * De prospectlijst, gemaakt voor duizenden rijen.
  *
@@ -19,7 +21,10 @@ import { PromoteButtons } from "./promote-buttons";
 import { promoteProspect } from "./actions";
 
 export const dynamic = "force-dynamic";
-export const metadata = { title: "Prospects" };
+export async function generateMetadata() {
+  const uiT = await uiTranslation();
+  return { title: uiT("Prospects") };
+}
 
 const PER_PAGINA = 50;
 
@@ -40,6 +45,8 @@ export default async function ProspectsPage({
 }: {
   searchParams: Promise<Record<string, string | undefined>>;
 }) {
+  const uiDateLocale = await datumTaal();
+  const uiT = await uiTranslation();
   const sp = await searchParams;
   const q = (sp.q ?? "").trim();
   const st = sp.st ?? "alle";
@@ -99,43 +106,41 @@ export default async function ProspectsPage({
   return (
     <>
       <PageHeader
-        title="Prospects"
-        subtitle="Bedrijven om te benaderen — apart van je contactenlijst"
+        title={uiT("Prospects")}
+        subtitle={uiT("Bedrijven om te benaderen — apart van je contactenlijst")}
         actions={
           <div className="flex items-center gap-3">
             <Link href="/leads/import" className="text-sm underline">
-              Lijst importeren
-            </Link>
+              {uiT("Lijst importeren")} </Link>
             <Link href="/leads" className="text-sm underline">
-              Campagnes
-            </Link>
+              {uiT("Campagnes")} </Link>
           </div>
         }
       />
 
       <div className="mb-5 grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <StatTile label="In deze selectie" value={String(totaal)} />
-        <StatTile label="Met e-mail" value={String(metEmail)} hint="mailbaar" tone={metEmail > 0 ? "info" : "neutral"} />
-        <StatTile label="Zonder e-mail" value={String(totaal - metEmail)} hint="alleen telefonisch" />
-        <StatTile label="Pagina" value={`${pagina}`} hint={`${van}–${tot} van ${totaal}`} />
+        <StatTile label={uiT("In deze selectie")} value={String(totaal)} />
+        <StatTile label={uiT("Met e-mail")} value={String(metEmail)} hint={uiT("mailbaar")} tone={metEmail > 0 ? "info" : "neutral"} />
+        <StatTile label={uiT("Zonder e-mail")} value={String(totaal - metEmail)} hint={uiT("alleen telefonisch")} />
+        <StatTile label={uiT("Pagina")} value={`${pagina}`} hint={uiT("{v0}–{v1} van {v2}", { v0: van, v1: tot, v2: totaal })} />
       </div>
 
       <Card className="overflow-hidden">
         <CardHeader className="flex flex-wrap items-center justify-between gap-3">
-          <CardTitle>Lijst</CardTitle>
+          <CardTitle>{uiT("Lijst")}</CardTitle>
           <form method="get" className="flex flex-wrap items-center gap-2">
-            <Input name="q" defaultValue={q} placeholder="Zoek op naam, e-mail, plaats of branche" className="h-8 w-64 text-sm" />
-            <Input name="prov" defaultValue={prov} placeholder="Provincie" className="h-8 w-32 text-sm" />
+            <Input name="q" defaultValue={q} placeholder={uiT("Zoek op naam, e-mail, plaats of branche")} className="h-8 w-64 text-sm" />
+            <Input name="prov" defaultValue={prov} placeholder={uiT("Provincie")} className="h-8 w-32 text-sm" />
             <Select name="st" defaultValue={st} className="h-8 text-sm">
-              <option value="alle">Alle statussen</option>
+              <option value="alle">{uiT("Alle statussen")}</option>
               {Object.entries(STATUS).map(([v, s]) => (
                 <option key={v} value={v}>
-                  {s.label}
+                  {uiT(s.label)}
                 </option>
               ))}
             </Select>
             <Select name="cat" defaultValue={cat} className="h-8 text-sm">
-              <option value="alle">Alle categorieën</option>
+              <option value="alle">{uiT("Alle categorieën")}</option>
               {CATEGORIEEN.map((c) => (
                 <option key={c} value={c}>
                   {c}
@@ -143,45 +148,42 @@ export default async function ProspectsPage({
               ))}
             </Select>
             <Select name="ef" defaultValue={ef} className="h-8 text-sm">
-              <option value="alle">Met en zonder e-mail</option>
-              <option value="met">Met e-mail</option>
-              <option value="geen">Zonder e-mail</option>
+              <option value="alle">{uiT("Met en zonder e-mail")}</option>
+              <option value="met">{uiT("Met e-mail")}</option>
+              <option value="geen">{uiT("Zonder e-mail")}</option>
             </Select>
             <Select name="imp" defaultValue={imp} className="h-8 text-sm">
-              <option value="alle">Alle herkomsten</option>
-              <option value="geen">Niet geïmporteerd</option>
+              <option value="alle">{uiT("Alle herkomsten")}</option>
+              <option value="geen">{uiT("Niet geïmporteerd")}</option>
               {batches.map((b) => (
                 <option key={b.id} value={b.id}>
-                  {b.label}
+                  {uiT(b.label)}
                 </option>
               ))}
             </Select>
             <Button type="submit" variant="secondary" size="sm">
-              Filter
-            </Button>
+              {uiT("Filter")} </Button>
           </form>
         </CardHeader>
 
         {zichtbaar.length === 0 ? (
           <CardContent>
             <p className="py-8 text-center text-sm text-muted">
-              Geen prospects in deze selectie.{" "}
+              {uiT("Geen prospects in deze selectie.")}{" "}
               <Link href="/leads/import" className="underline">
-                Importeer een lijst
-              </Link>{" "}
-              of pas de filters aan.
-            </p>
+                {uiT("Importeer een lijst")} </Link>{" "}
+              {uiT("of pas de filters aan.")} </p>
           </CardContent>
         ) : (
           <Table>
             <THead>
               <tr>
-                <Th>Bedrijf</Th>
-                <Th>E-mail</Th>
-                <Th>Plaats</Th>
-                <Th>Branche</Th>
-                <Th>Status</Th>
-                <Th>Laatst gemaild</Th>
+                <Th>{uiT("Bedrijf")}</Th>
+                <Th>{uiT("E-mail")}</Th>
+                <Th>{uiT("Plaats")}</Th>
+                <Th>{uiT("Branche")}</Th>
+                <Th>{uiT("Status")}</Th>
+                <Th>{uiT("Laatst gemaild")}</Th>
                 <Th />
               </tr>
             </THead>
@@ -199,25 +201,23 @@ export default async function ProspectsPage({
                       <span className="block text-xs text-muted">{r.tags.join(" · ")}</span>
                     )}
                   </Td>
-                  <Td>{r.email ?? <span className="text-xs text-muted">geen e-mail</span>}</Td>
+                  <Td>{r.email ?? <span className="text-xs text-muted">{uiT("geen e-mail")}</span>}</Td>
                   <Td className="text-muted">{[r.postalCode, r.city].filter(Boolean).join(" ") || "—"}</Td>
                   <Td className="text-muted">{r.sector ?? r.category}</Td>
                   <Td>
                     <Badge tone={STATUS[r.status]?.tone ?? "neutral"}>{STATUS[r.status]?.label ?? r.status}</Badge>
                   </Td>
-                  <Td className="text-muted">{r.lastEmailedAt ? formatDate(r.lastEmailedAt) : "—"}</Td>
+                  <Td className="text-muted">{r.lastEmailedAt ? formatDate(r.lastEmailedAt, uiDateLocale) : "—"}</Td>
                   <Td className="whitespace-nowrap text-right">
                     {r.contactId ? (
                       <Link href={`/contacts/${r.contactId}`} className="text-xs text-accent hover:underline">
-                        Contact openen
-                      </Link>
+                        {uiT("Contact openen")} </Link>
                     ) : (
                       <PromoteButtons id={r.id} naam={r.companyName} action={promoteProspect} />
                     )}
                     <form action={deleteProspect.bind(null, r.id)} className="mt-1">
                       <button type="submit" className="text-xs text-muted hover:text-danger hover:underline">
-                        Verwijderen
-                      </button>
+                        {uiT("Verwijderen")} </button>
                     </form>
                   </Td>
                 </Tr>
@@ -229,18 +229,16 @@ export default async function ProspectsPage({
         {(pagina > 1 || heeftVolgende) && (
           <CardContent className="flex items-center justify-between border-t bg-background/50">
             <span className="text-xs text-muted">
-              {van}–{tot} van {totaal}
+              {van}–{tot} {uiT("van")} {totaal}
             </span>
             <div className="flex gap-2">
               {pagina > 1 && (
                 <Link href={href({ p: pagina - 1 })} className="rounded-md border px-3 py-1.5 text-sm hover:border-accent">
-                  ← Vorige
-                </Link>
+                  {uiT("← Vorige")} </Link>
               )}
               {heeftVolgende && (
                 <Link href={href({ p: pagina + 1 })} className="rounded-md border px-3 py-1.5 text-sm hover:border-accent">
-                  Volgende →
-                </Link>
+                  {uiT("Volgende →")} </Link>
               )}
             </div>
           </CardContent>

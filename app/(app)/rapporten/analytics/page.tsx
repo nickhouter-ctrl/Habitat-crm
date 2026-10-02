@@ -1,3 +1,4 @@
+import { tekst as uiTranslation } from '@/lib/i18n/server';
 import type { ReactNode } from "react";
 import { Activity } from "lucide-react";
 import Link from "next/link";
@@ -30,7 +31,10 @@ import {
   type GaRow,
 } from "@/lib/analytics";
 
-export const metadata = { title: "Analytics" };
+export async function generateMetadata() {
+  const uiT = await uiTranslation();
+  return { title: uiT("Analytics") };
+}
 
 const nf = (n: number) => Math.round(n).toLocaleString("nl-NL");
 const pf = (n: number) => `${(n * 100).toFixed(1)}%`;
@@ -64,6 +68,7 @@ export default async function AnalyticsPage({
 }: {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
+  const uiT = await uiTranslation();
   const sp = await searchParams;
   const datum = typeof sp.datum === "string" ? sp.datum : undefined;
   const single = Boolean(datum);
@@ -71,11 +76,11 @@ export default async function AnalyticsPage({
   if (!gaConfigured()) {
     return (
       <>
-        <PageHeader title="Analytics" subtitle="Google Analytics (GA4)" />
+        <PageHeader title={uiT("Analytics")} subtitle={uiT("Google Analytics (GA4)")} />
         <EmptyState
           icon={<Activity />}
-          title="Koppeling nog niet geconfigureerd"
-          description="Zet de env-variabele GA_PROPERTY_ID in Vercel (en zorg dat het OAuth-token de Analytics-scope heeft). Daarna verschijnen hier je bezoekerscijfers."
+          title={uiT("Koppeling nog niet geconfigureerd")}
+          description={uiT("Zet de env-variabele GA_PROPERTY_ID in Vercel (en zorg dat het OAuth-token de Analytics-scope heeft). Daarna verschijnen hier je bezoekerscijfers.")}
         />
       </>
     );
@@ -111,8 +116,8 @@ export default async function AnalyticsPage({
       {/* 60s is genoeg: de GA4-data komt uit een 5-min-cache, alleen realtime is vers. */}
       <AutoRefresh seconds={60} />
       <PageHeader
-        title="Analytics"
-        subtitle={data ? `Google Analytics (GA4) · ${periodeLabel}` : "Google Analytics (GA4)"}
+        title={uiT("Analytics")}
+        subtitle={data ? uiT("Google Analytics (GA4) · {v0}", { v0: periodeLabel }) : uiT("Google Analytics (GA4)")}
         actions={
           <div className="flex items-center overflow-hidden rounded-md border border-border text-sm">
             {DAY_TABS.map((tab) => (
@@ -126,7 +131,7 @@ export default async function AnalyticsPage({
                     : "text-muted hover:bg-background",
                 )}
               >
-                {tab.label}
+                {uiT(tab.label)}
               </Link>
             ))}
             {RANGE_TABS.map((per) => (
@@ -140,7 +145,7 @@ export default async function AnalyticsPage({
                     : "text-muted hover:bg-background",
                 )}
               >
-                {per.label}
+                {uiT(per.label)}
               </Link>
             ))}
           </div>
@@ -150,11 +155,10 @@ export default async function AnalyticsPage({
       {single && (
         <div className="mb-5 flex items-center gap-3 text-sm">
           <Link href="/rapporten/analytics" className="text-accent hover:underline">
-            ← Terug naar maandoverzicht
-          </Link>
+            {uiT("← Terug naar maandoverzicht")} </Link>
           {customDay && (
             <span className="rounded-md bg-accent/10 px-2 py-0.5 text-xs font-medium text-accent">
-              Dagoverzicht · {periodeLabel}
+              {uiT("Dagoverzicht ·")} {periodeLabel}
             </span>
           )}
         </div>
@@ -167,24 +171,23 @@ export default async function AnalyticsPage({
             <span className="absolute inline-flex size-full animate-ping rounded-full bg-success opacity-75" />
             <span className="relative inline-flex size-2.5 rounded-full bg-success" />
           </span>
-          Live · nu actief (laatste 30 min)
-        </div>
+          {uiT("Live · nu actief (laatste 30 min)")} </div>
         {rtError ? (
           <p className="mt-2 text-sm text-danger">{rtError}</p>
         ) : (
           <div className="mt-3 flex flex-wrap items-start gap-x-10 gap-y-4">
             <div>
               <p className="text-4xl font-semibold tabular-nums">{nf(realtime?.activeUsers ?? 0)}</p>
-              <p className="text-xs text-muted">actieve bezoekers</p>
+              <p className="text-xs text-muted">{uiT("actieve bezoekers")}</p>
             </div>
             {realtime && (realtime.byCountry.length > 0 || realtime.byCity.length > 0 || realtime.byPage.length > 0) ? (
               <div className="grid flex-1 gap-x-8 gap-y-4 sm:grid-cols-3">
-                <RealtimeList title="Land" rows={realtime.byCountry} />
-                <RealtimeList title="Stad" rows={realtime.byCity} />
-                <RealtimeList title="Pagina" rows={realtime.byPage} />
+                <RealtimeList title={uiT("Land")} rows={realtime.byCountry} />
+                <RealtimeList title={uiT("Stad")} rows={realtime.byCity} />
+                <RealtimeList title={uiT("Pagina")} rows={realtime.byPage} />
               </div>
             ) : (
-              <p className="self-center text-sm text-muted">Geen actieve bezoekers op dit moment.</p>
+              <p className="self-center text-sm text-muted">{uiT("Geen actieve bezoekers op dit moment.")}</p>
             )}
           </div>
         )}
@@ -192,15 +195,15 @@ export default async function AnalyticsPage({
 
       {error && (
         <Card className="mb-5 border-danger/30 bg-danger/5 p-4 text-sm text-danger">
-          Kon de data niet ophalen: {error}
+          {uiT("Kon de data niet ophalen:")} {error}
         </Card>
       )}
 
       {data && !t && (
         <EmptyState
           icon={<Activity />}
-          title="Meten is actief — 28-daagse cijfers volgen"
-          description="Google Analytics meet nu (zie de live-teller). Deze sectie toont 28 dagen geleden t/m gisteren, maar het meten is vandaag gestart én GA4-standaardrapporten lopen ~1 dag achter — dus vanaf morgen vullen de cijfers, grafiek en tabellen zich hier vanzelf."
+          title={uiT("Meten is actief — 28-daagse cijfers volgen")}
+          description={uiT("Google Analytics meet nu (zie de live-teller). Deze sectie toont 28 dagen geleden t/m gisteren, maar het meten is vandaag gestart én GA4-standaardrapporten lopen ~1 dag achter — dus vanaf morgen vullen de cijfers, grafiek en tabellen zich hier vanzelf.")}
         />
       )}
 
@@ -226,16 +229,16 @@ export default async function AnalyticsPage({
 
           {/* Engagement KPI's */}
           <div className="mb-5 grid grid-cols-2 gap-3 sm:grid-cols-3">
-            <StatTile label="Bouncepercentage" value={pf(data.engagement.bounceRate)} tone="neutral" />
-            <StatTile label="Betrokken sessies" value={nf(data.engagement.engagedSessions)} tone="neutral" />
-            <StatTile label="Weergaven / sessie" value={data.engagement.viewsPerSession.toFixed(1)} tone="neutral" />
+            <StatTile label={uiT("Bouncepercentage")} value={pf(data.engagement.bounceRate)} tone="neutral" />
+            <StatTile label={uiT("Betrokken sessies")} value={nf(data.engagement.engagedSessions)} tone="neutral" />
+            <StatTile label={uiT("Weergaven / sessie")} value={data.engagement.viewsPerSession.toFixed(1)} tone="neutral" />
           </div>
 
           {/* Trend */}
           {data.trend.length > 0 && (
             <Card className="mb-5">
               <CardHeader>
-                <CardTitle>{single ? "Bezoekers per uur" : "Bezoekers per dag"}</CardTitle>
+                <CardTitle>{single ? uiT("Bezoekers per uur") : uiT("Bezoekers per dag")}</CardTitle>
               </CardHeader>
               <CardContent>
                 <VisitorsAreaChart
@@ -243,98 +246,98 @@ export default async function AnalyticsPage({
                   drillBase={single ? undefined : "/rapporten/analytics?datum="}
                 />
                 {!single && (
-                  <p className="mt-2 text-xs text-muted">Tip: klik op een dag in de grafiek voor het volledige dagoverzicht.</p>
+                  <p className="mt-2 text-xs text-muted">{uiT("Tip: klik op een dag in de grafiek voor het volledige dagoverzicht.")}</p>
                 )}
               </CardContent>
             </Card>
           )}
 
           {/* ── Leads & conversies ── */}
-          <SectionTitle>Leads &amp; conversies</SectionTitle>
+          <SectionTitle>{uiT("Leads & conversies")}</SectionTitle>
           <div className="mb-2 grid grid-cols-2 gap-3 sm:grid-cols-4">
             {(() => {
               const d = deltaHint(data.leads.generateLead, data.leads.prevGenerateLead);
               const keyTotal = data.leads.generateLead + data.leads.contactClick;
               return [
-                <StatTile key="lead" label="Leads (formulier)" value={nf(data.leads.generateLead)} hint={d.hint} tone={d.tone} />,
-                <StatTile key="cc" label="Contactkliks" value={nf(data.leads.contactClick)} hint="telefoon · e-mail · WhatsApp" tone="neutral" />,
-                <StatTile key="cr" label="Conversieratio" value={t.sessions ? pf(data.leads.generateLead / t.sessions) : "—"} tone="neutral" />,
-                <StatTile key="kt" label="Sleutelgebeurtenissen" value={nf(keyTotal)} tone="neutral" />,
+                <StatTile key="lead" label={uiT("Leads (formulier)")} value={nf(data.leads.generateLead)} hint={d.hint} tone={d.tone} />,
+                <StatTile key="cc" label={uiT("Contactkliks")} value={nf(data.leads.contactClick)} hint={uiT("telefoon · e-mail · WhatsApp")} tone="neutral" />,
+                <StatTile key="cr" label={uiT("Conversieratio")} value={t.sessions ? pf(data.leads.generateLead / t.sessions) : "—"} tone="neutral" />,
+                <StatTile key="kt" label={uiT("Sleutelgebeurtenissen")} value={nf(keyTotal)} tone="neutral" />,
               ];
             })()}
           </div>
-          <p className="mb-5 text-xs text-muted">Leads = ingevulde contact-/offerteformulieren. Contactkliks = klikken op telefoon, e-mail of WhatsApp.</p>
+          <p className="mb-5 text-xs text-muted">{uiT("Leads = ingevulde contact-/offerteformulieren. Contactkliks = klikken op telefoon, e-mail of WhatsApp.")}</p>
 
           {data.leadsTrend.some((d) => d.value > 0) && (
             <Card className="mb-5">
               <CardHeader>
-                <CardTitle>Leads per dag</CardTitle>
+                <CardTitle>{uiT("Leads per dag")}</CardTitle>
               </CardHeader>
               <CardContent>
-                <VisitorsAreaChart data={data.leadsTrend} valueLabel="Leads" />
+                <VisitorsAreaChart data={data.leadsTrend} valueLabel={uiT("Leads")} />
               </CardContent>
             </Card>
           )}
 
           {/* ── Geografie ── */}
-          <SectionTitle>Waar je bezoekers vandaan komen</SectionTitle>
+          <SectionTitle>{uiT("Waar je bezoekers vandaan komen")}</SectionTitle>
           <div className="mb-5 grid gap-5 lg:grid-cols-3">
             <Card className="lg:col-span-2">
               <CardHeader>
-                <CardTitle>Landenkaart</CardTitle>
+                <CardTitle>{uiT("Landenkaart")}</CardTitle>
               </CardHeader>
               <CardContent>
                 {data.countries.length === 0 ? (
-                  <p className="py-2 text-sm text-muted">Nog geen data.</p>
+                  <p className="py-2 text-sm text-muted">{uiT("Nog geen data.")}</p>
                 ) : (
                   <WorldMap data={data.countries} />
                 )}
               </CardContent>
             </Card>
-            <GaTable title="Top landen" keyLabel="Land" valueLabel="Bezoekers" rows={data.countries} />
+            <GaTable title={uiT("Top landen")} keyLabel={uiT("Land")} valueLabel={uiT("Bezoekers")} rows={data.countries} />
           </div>
           <div className="mb-5 grid gap-5 lg:grid-cols-2">
-            <GaTable title="Top steden" keyLabel="Stad" valueLabel="Bezoekers" rows={data.cities} />
-            <ChartCard title="Nieuw vs terugkerend" rows={data.newVsReturning} />
+            <GaTable title={uiT("Top steden")} keyLabel={uiT("Stad")} valueLabel={uiT("Bezoekers")} rows={data.cities} />
+            <ChartCard title={uiT("Nieuw vs terugkerend")} rows={data.newVsReturning} />
           </div>
 
           {/* ── Acquisitie ── */}
-          <SectionTitle>Hoe ze binnenkomen</SectionTitle>
+          <SectionTitle>{uiT("Hoe ze binnenkomen")}</SectionTitle>
           <div className="mb-5 grid gap-5 lg:grid-cols-2">
-            <ChartCard title="Kanalen (verkeersbron)" rows={data.channels} />
-            <ChartCard title="Apparaten" rows={data.devices} />
+            <ChartCard title={uiT("Kanalen (verkeersbron)")} rows={data.channels} />
+            <ChartCard title={uiT("Apparaten")} rows={data.devices} />
           </div>
           <div className="mb-5 grid gap-5 lg:grid-cols-2">
-            <GaTable title="Verkeersbronnen" keyLabel="Bron / medium" valueLabel="Sessies" rows={data.sources} />
-            <GaTable title="Landingspagina's" keyLabel="Pagina" valueLabel="Sessies" rows={data.landingPages} />
+            <GaTable title={uiT("Verkeersbronnen")} keyLabel={uiT("Bron / medium")} valueLabel={uiT("Sessies")} rows={data.sources} />
+            <GaTable title={uiT("Landingspagina's")} keyLabel={uiT("Pagina")} valueLabel={uiT("Sessies")} rows={data.landingPages} />
           </div>
           <div className="mb-5">
-            <GaTable title="Campagnes (UTM)" keyLabel="Campagne" valueLabel="Sessies" rows={data.campaigns} />
+            <GaTable title={uiT("Campagnes (UTM)")} keyLabel={uiT("Campagne")} valueLabel={uiT("Sessies")} rows={data.campaigns} />
           </div>
 
           {/* ── Techniek & timing ── */}
-          <SectionTitle>Techniek &amp; timing</SectionTitle>
+          <SectionTitle>{uiT("Techniek & timing")}</SectionTitle>
           {data.byHour.some((d) => d.value > 0) && (
             <Card className="mb-5">
               <CardHeader>
-                <CardTitle>Wanneer bezoekers actief zijn (per uur)</CardTitle>
+                <CardTitle>{uiT("Wanneer bezoekers actief zijn (per uur)")}</CardTitle>
               </CardHeader>
               <CardContent>
-                <VisitorsAreaChart data={data.byHour} valueLabel="Sessies" />
+                <VisitorsAreaChart data={data.byHour} valueLabel={uiT("Sessies")} />
               </CardContent>
             </Card>
           )}
           <div className="mb-5 grid gap-5 lg:grid-cols-3">
-            <GaTable title="Browsers" keyLabel="Browser" valueLabel="Bezoekers" rows={data.browsers} />
-            <GaTable title="Besturingssystemen" keyLabel="OS" valueLabel="Bezoekers" rows={data.operatingSystems} />
-            <GaTable title="Talen" keyLabel="Taal" valueLabel="Bezoekers" rows={data.languages} />
+            <GaTable title={uiT("Browsers")} keyLabel={uiT("Browser")} valueLabel={uiT("Bezoekers")} rows={data.browsers} />
+            <GaTable title={uiT("Besturingssystemen")} keyLabel={uiT("OS")} valueLabel={uiT("Bezoekers")} rows={data.operatingSystems} />
+            <GaTable title={uiT("Talen")} keyLabel={uiT("Taal")} valueLabel={uiT("Bezoekers")} rows={data.languages} />
           </div>
 
           {/* ── Gedrag ── */}
-          <SectionTitle>Gedrag op de site</SectionTitle>
+          <SectionTitle>{uiT("Gedrag op de site")}</SectionTitle>
           <div className="grid gap-5 lg:grid-cols-2">
-            <GaTable title="Top pagina's" keyLabel="Pagina" valueLabel="Weergaven" rows={data.topPages} />
-            <GaTable title="Gebeurtenissen" keyLabel="Event" valueLabel="Aantal" rows={data.events} />
+            <GaTable title={uiT("Top pagina's")} keyLabel={uiT("Pagina")} valueLabel={uiT("Weergaven")} rows={data.topPages} />
+            <GaTable title={uiT("Gebeurtenissen")} keyLabel={uiT("Event")} valueLabel={uiT("Aantal")} rows={data.events} />
           </div>
         </>
       )}
@@ -342,7 +345,8 @@ export default async function AnalyticsPage({
   );
 }
 
-function ChartCard({ title, rows }: { title: string; rows: GaRow[] }) {
+async function ChartCard({ title, rows }: { title: string; rows: GaRow[] }) {
+  const uiT = await uiTranslation();
   return (
     <Card>
       <CardHeader>
@@ -350,16 +354,17 @@ function ChartCard({ title, rows }: { title: string; rows: GaRow[] }) {
       </CardHeader>
       <CardContent>
         {rows.length === 0 ? (
-          <p className="py-2 text-sm text-muted">Nog geen data.</p>
+          <p className="py-2 text-sm text-muted">{uiT("Nog geen data.")}</p>
         ) : (
-          <BreakdownBars data={rows.map((r) => ({ name: r.label || "(onbekend)", value: r.value }))} />
+          <BreakdownBars data={rows.map((r) => ({ name: r.label || uiT("(onbekend)"), value: r.value }))} />
         )}
       </CardContent>
     </Card>
   );
 }
 
-function RealtimeList({ title, rows }: { title: string; rows: GaRow[] }) {
+async function RealtimeList({ title, rows }: { title: string; rows: GaRow[] }) {
+
   if (rows.length === 0) return null;
   return (
     <div className="min-w-0">
@@ -380,7 +385,7 @@ function SectionTitle({ children }: { children: ReactNode }) {
   return <h2 className="mb-3 mt-9 text-xs font-semibold uppercase tracking-[0.16em] text-muted">{children}</h2>;
 }
 
-function GaTable({
+async function GaTable({
   title,
   keyLabel,
   valueLabel,
@@ -391,6 +396,7 @@ function GaTable({
   valueLabel: string;
   rows: GaRow[];
 }) {
+  const uiT = await uiTranslation();
   return (
     <Card>
       <CardHeader>
@@ -398,7 +404,7 @@ function GaTable({
       </CardHeader>
       <CardContent>
         {rows.length === 0 ? (
-          <p className="py-2 text-sm text-muted">Nog geen data in deze periode.</p>
+          <p className="py-2 text-sm text-muted">{uiT("Nog geen data in deze periode.")}</p>
         ) : (
           <Table>
             <THead>
@@ -410,7 +416,7 @@ function GaTable({
             <TBody>
               {rows.map((r, i) => (
                 <Tr key={`${r.label}-${i}`}>
-                  <Td className="max-w-[22rem] truncate">{r.label || "(onbekend)"}</Td>
+                  <Td className="max-w-[22rem] truncate">{r.label || uiT("(onbekend)")}</Td>
                   <Td className="text-right tabular-nums">{nf(r.value)}</Td>
                 </Tr>
               ))}

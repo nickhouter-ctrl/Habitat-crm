@@ -1,3 +1,4 @@
+import { tekst as uiTranslation } from '@/lib/i18n/server';
 import { eq } from "drizzle-orm";
 import Link from "next/link";
 import { notFound } from "next/navigation";
@@ -9,7 +10,10 @@ import { properties } from "@/lib/db/schema";
 import { getPropertyFormOptions } from "../../../_options";
 import { updateProperty } from "../../actions";
 
-export const metadata = { title: "Pand bewerken" };
+export async function generateMetadata() {
+  const uiT = await uiTranslation();
+  return { title: uiT("Pand bewerken") };
+}
 
 export default async function EditPropertyPage({
   params,
@@ -18,6 +22,7 @@ export default async function EditPropertyPage({
   params: Promise<{ id: string }>;
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
+  const uiT = await uiTranslation();
   const { id } = await params;
   const sp = await searchParams;
 
@@ -32,25 +37,23 @@ export default async function EditPropertyPage({
   return (
     <>
       <PageHeader
-        title="Pand bewerken"
+        title={uiT("Pand bewerken")}
         subtitle={property.title}
         actions={
           <Link href={`/properties/${id}`} className="text-sm text-muted hover:underline">
-            ← Terug
-          </Link>
+            {uiT("← Terug")} </Link>
         }
       />
       {sp.error === "validation" && (
         <p className="mb-4 max-w-2xl rounded-md bg-red-50 px-3 py-2 text-sm text-danger">
-          Controleer de gegevens (titel verplicht).
-        </p>
+          {uiT("Controleer de gegevens (titel verplicht).")} </p>
       )}
       <PropertyForm
         action={update}
         property={property}
         contacts={options.contacts}
         users={options.users}
-        submitLabel="Wijzigingen opslaan"
+        submitLabel={uiT("Wijzigingen opslaan")}
       />
     </>
   );

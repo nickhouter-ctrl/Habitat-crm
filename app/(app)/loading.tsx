@@ -1,3 +1,6 @@
+"use client";
+import { useT } from "@/components/taal-provider";
+
 /**
  * Gedeelde laad-skeleton voor de hele authenticated app. Next.js toont dit
  * direct als Suspense-fallback zodra je op een link klikt, terwijl de echte
@@ -9,8 +12,9 @@ function Bar({ className = "" }: { className?: string }) {
 }
 
 export default function AppLoading() {
+  const t = useT();
   return (
-    <div aria-busy="true" aria-label="Laden…">
+    <div aria-busy="true" aria-label={t("Laden…")}>
       {/* Page header */}
       <div className="mb-6 flex items-center justify-between gap-4">
         <div className="space-y-2">

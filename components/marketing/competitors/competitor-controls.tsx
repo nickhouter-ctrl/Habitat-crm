@@ -1,4 +1,5 @@
 "use client";
+import { useT as useUiTranslation } from '@/components/taal-provider';
 
 /**
  * Clientonderdelen van het concurrentendashboard: het toevoegformulier
@@ -20,6 +21,7 @@ const SEGMENT_LABELS: Record<string, string> = {
 
 /** Formulier om een concurrent te volgen (Meta Page-ID uit de Ad Library-URL). */
 export function AddCompetitorForm() {
+  const uiT = useUiTranslation();
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
   const [open, setOpen] = useState(false);
@@ -28,8 +30,7 @@ export function AddCompetitorForm() {
     return (
       <Button type="button" onClick={() => setOpen(true)}>
         <Plus className="mr-1.5 size-4" aria-hidden />
-        Concurrent volgen
-      </Button>
+        {uiT("Concurrent volgen")} </Button>
     );
   }
 
@@ -46,13 +47,13 @@ export function AddCompetitorForm() {
         });
       }}
     >
-      <Field label="Naam" htmlFor="comp-name">
-        <Input id="comp-name" name="name" required maxLength={120} placeholder="Bijv. Piedras Levante" />
+      <Field label={uiT("Naam")} htmlFor="comp-name">
+        <Input id="comp-name" name="name" required maxLength={120} placeholder={uiT("Bijv. Piedras Levante")} />
       </Field>
       <Field
-        label="Meta Page-ID"
+        label={uiT("Meta Page-ID")}
         htmlFor="comp-page-id"
-        hint="Uit de Ad Library-URL: parameter view_all_page_id"
+        hint={uiT("Uit de Ad Library-URL: parameter view_all_page_id")}
       >
         <Input
           id="comp-page-id"
@@ -60,15 +61,15 @@ export function AddCompetitorForm() {
           required
           inputMode="numeric"
           pattern="\d{3,20}"
-          placeholder="Bijv. 103265471234567"
+          placeholder={uiT("Bijv. 103265471234567")}
         />
       </Field>
-      <Field label="Website (optioneel)" htmlFor="comp-website">
-        <Input id="comp-website" name="website" type="url" placeholder="https://…" />
+      <Field label={uiT("Website (optioneel)")} htmlFor="comp-website">
+        <Input id="comp-website" name="website" type="url" placeholder={uiT("https://…")} />
       </Field>
-      <Field label="Segment" htmlFor="comp-segment">
+      <Field label={uiT("Segment")} htmlFor="comp-segment">
         <Select id="comp-segment" name="segment" defaultValue="">
-          <option value="">— Kies segment —</option>
+          <option value="">{uiT("— Kies segment —")}</option>
           {Object.entries(SEGMENT_LABELS).map(([value, label]) => (
             <option key={value} value={value}>
               {label}
@@ -76,16 +77,15 @@ export function AddCompetitorForm() {
           ))}
         </Select>
       </Field>
-      <Field label="Notities (optioneel)" htmlFor="comp-notes" className="sm:col-span-2">
+      <Field label={uiT("Notities (optioneel)")} htmlFor="comp-notes" className="sm:col-span-2">
         <Textarea id="comp-notes" name="notes" rows={2} maxLength={2000} />
       </Field>
       <div className="flex items-center gap-2 sm:col-span-2">
         <Button type="submit" disabled={pending}>
-          {pending ? "Bezig met opslaan…" : "Volgen"}
+          {pending ? uiT("Bezig met opslaan…") : uiT("Volgen")}
         </Button>
         <Button type="button" variant="secondary" onClick={() => setOpen(false)}>
-          Annuleren
-        </Button>
+          {uiT("Annuleren")} </Button>
         <p aria-live="polite" className="text-xs text-danger">
           {error}
         </p>
@@ -96,6 +96,7 @@ export function AddCompetitorForm() {
 
 /** Handmatige trigger van de wekelijkse pull, met zichtbare uitkomst. */
 export function CompetitorSyncButton() {
+  const uiT = useUiTranslation();
   const router = useRouter();
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
@@ -134,7 +135,7 @@ export function CompetitorSyncButton() {
     <span className="flex items-center gap-2">
       <Button type="button" variant="secondary" disabled={busy} onClick={sync}>
         <RefreshCw className={busy ? "mr-1.5 size-4 animate-spin" : "mr-1.5 size-4"} aria-hidden />
-        {busy ? "Archief wordt opgehaald…" : "Nu synchroniseren"}
+        {busy ? uiT("Archief wordt opgehaald…") : uiT("Nu synchroniseren")}
       </Button>
       <span aria-live="polite" className="text-xs text-muted">
         {message}

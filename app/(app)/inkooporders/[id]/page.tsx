@@ -1,3 +1,5 @@
+import { datumTaal } from "@/lib/i18n/server";
+import { tekst as uiTranslation } from '@/lib/i18n/server';
 import { and, asc, desc, eq, ilike, inArray, isNotNull, sql } from "drizzle-orm";
 import Link from "next/link";
 import { notFound } from "next/navigation";
@@ -60,9 +62,9 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
   return { title: po ? `${po.supplier}${po.reference ? ` · ${po.reference}` : ""}` : "Inkooporder" };
 }
 
-const fmtDate = (d: string | Date | null) =>
+const fmtDate = (d: string | Date | null, uiDateLocale = "nl-NL") =>
   d
-    ? new Date(d).toLocaleDateString("nl-NL", { day: "numeric", month: "long", year: "numeric" })
+    ? new Date(d).toLocaleDateString(uiDateLocale, { day: "numeric", month: "long", year: "numeric" })
     : "—";
 
 export default async function PurchaseOrderPage({
@@ -72,6 +74,8 @@ export default async function PurchaseOrderPage({
   params: Promise<{ id: string }>;
   searchParams: Promise<{ verdeel?: string }>;
 }) {
+  const uiDateLocale = await datumTaal();
+  const uiT = await uiTranslation();
   const { id } = await params;
   // ?verdeel=1: een bestaande verdeling aanpassen — dan het formulier tonen
   // (voorgevuld) in plaats van de kaart "Verdeeld over projecten".
@@ -193,7 +197,7 @@ export default async function PurchaseOrderPage({
 
   const Action = ({ status, label, variant = "secondary" }: { status: Parameters<typeof setPurchaseOrderStatus>[1]; label: string; variant?: "primary" | "secondary" }) => (
     <form action={setPurchaseOrderStatus.bind(null, id, status)}>
-      <SubmitButton variant={variant} size="sm" pendingLabel="Bezig…">
+      <SubmitButton variant={variant} size="sm" pendingLabel={uiT("Bezig…")}>
         {label}
       </SubmitButton>
     </form>
@@ -205,20 +209,20 @@ export default async function PurchaseOrderPage({
         title={
           <span className="flex items-center gap-2">
             {po.supplier}
-            {po.kind === "invoice" && <Badge tone="neutral">Factuur / bon</Badge>}
+            {po.kind === "invoice" && <Badge tone="neutral">{uiT("Factuur / bon")}</Badge>}
             <Badge tone={meta.tone}>{meta.label}</Badge>
           </span>
         }
         subtitle={
           <span>
-            {po.reference ? `Referentie ${po.reference}` : ""}
+            {po.reference ? uiT("Referentie {v0}", { v0: po.reference }) : ""}
             {keuring?.decidedAt && (
               <span className="text-muted">
                 {po.reference ? " · " : ""}
-                {keuring.status === "approved" || keuring.status === "superseded" ? "goedgekeurd" : keuring.status} door{" "}
-                {keuring.door ?? keuring.doorEmail ?? "onbekend"} op{" "}
-                {keuring.decidedAt.toLocaleDateString("nl-NL", { day: "numeric", month: "short", year: "numeric" })}
-                {keuring.decidedVia === "mail" ? " (via de knop in de melding)" : ""}
+                {keuring.status === "approved" || keuring.status === "superseded" ? uiT("goedgekeurd") : keuring.status} {uiT("door")}{" "}
+                {keuring.door ?? keuring.doorEmail ?? uiT("onbekend")} {uiT("op")}{" "}
+                {keuring.decidedAt.toLocaleDateString(uiDateLocale, { day: "numeric", month: "short", year: "numeric" })}
+                {keuring.decidedVia === "mail" ? uiT(" (via de knop in de melding)") : ""}
               </span>
             )}
           </span>
@@ -226,11 +230,9 @@ export default async function PurchaseOrderPage({
         actions={
           <>
             <LinkButton href="/inkooporders" variant="ghost">
-              ← Overzicht
-            </LinkButton>
+              {uiT("← Overzicht")} </LinkButton>
             <LinkButton href={`/inkooporders/${id}/edit`} variant="secondary">
-              Bewerken
-            </LinkButton>
+              {uiT("Bewerken")} </LinkButton>
           </>
         }
       />
@@ -242,20 +244,19 @@ export default async function PurchaseOrderPage({
           // alsof er iets stuk is; dit vertelt wat er aan de hand is.
           <Card>
             <CardHeader>
-              <CardTitle>Bedrag</CardTitle>
-              <span className="text-xs text-muted">geen regels op deze factuur — alleen een totaal</span>
+              <CardTitle>{uiT("Bedrag")}</CardTitle>
+              <span className="text-xs text-muted">{uiT("geen regels op deze factuur — alleen een totaal")}</span>
             </CardHeader>
             <CardContent className="space-y-3">
               <div className="flex flex-wrap items-end justify-between gap-4">
                 <div>
                   <p className="text-3xl font-semibold tabular-nums">{formatMoney(po.total, po.currency)}</p>
                   <p className="text-sm text-muted">
-                    incl. btw · {formatMoney(exVat.amount, po.currency)} ex. btw
-                    {exVat.vatUnknown && <span className="ml-1 text-warning">(btw niet uitgelezen)</span>}
+                    {uiT("incl. btw ·")} {formatMoney(exVat.amount, po.currency)} {uiT("ex. btw")} {exVat.vatUnknown && <span className="ml-1 text-warning">{uiT("(btw niet uitgelezen)")}</span>}
                   </p>
                 </div>
                 {attachments.length > 0 && (
-                  <p className="text-sm text-muted">De regels staan op de bijlage hiernaast.</p>
+                  <p className="text-sm text-muted">{uiT("De regels staan op de bijlage hiernaast.")}</p>
                 )}
               </div>
             </CardContent>
@@ -265,12 +266,12 @@ export default async function PurchaseOrderPage({
           <Table>
             <THead>
               <tr>
-                <Th>Product</Th>
+                <Th>{uiT("Product")}</Th>
                 <Th>SKU</Th>
-                <Th className="text-right">Aantal</Th>
-                <Th className="text-right">Stukprijs</Th>
-                <Th className="text-right">Regeltotaal</Th>
-                <Th className="text-right">Voorraad nu</Th>
+                <Th className="text-right">{uiT("Aantal")}</Th>
+                <Th className="text-right">{uiT("Stukprijs")}</Th>
+                <Th className="text-right">{uiT("Regeltotaal")}</Th>
+                <Th className="text-right">{uiT("Voorraad nu")}</Th>
               </tr>
             </THead>
             <TBody>
@@ -290,9 +291,9 @@ export default async function PurchaseOrderPage({
                         <form action={makeProduct}>
                           <button
                             className={buttonClass({ variant: "secondary", size: "sm" })}
-                            title={`Maak product met SKU ${predictedSku}`}
+                            title={uiT("Maak product met SKU {v0}", { v0: predictedSku ?? "" })}
                           >
-                            + Maak product ({predictedSku})
+                            {uiT("+ Maak product (")}{predictedSku})
                           </button>
                         </form>
                       </div>
@@ -300,12 +301,12 @@ export default async function PurchaseOrderPage({
                     {it.note && <span className="block text-xs text-muted">{it.note}</span>}
                   </Td>
                   <Td className="text-muted">{it.sku ?? "—"}</Td>
-                  <Td className="text-right tabular-nums">{Number(it.units).toLocaleString("nl-NL")}</Td>
+                  <Td className="text-right tabular-nums">{Number(it.units).toLocaleString(uiDateLocale)}</Td>
                   <Td className="text-right tabular-nums">{formatMoney(it.unitPrice, po.currency)}</Td>
                   <Td className="text-right tabular-nums">{formatMoney(poLineTotal(it), po.currency)}</Td>
                   <Td className="text-right tabular-nums text-muted">
                     {it.productId && stockById.has(it.productId)
-                      ? Number(stockById.get(it.productId) ?? 0).toLocaleString("nl-NL")
+                      ? Number(stockById.get(it.productId) ?? 0).toLocaleString(uiDateLocale)
                       : "—"}
                   </Td>
                 </Tr>
@@ -313,16 +314,14 @@ export default async function PurchaseOrderPage({
               })}
               <Tr>
                 <Td className="text-muted" colSpan={4}>
-                  Ex. btw
-                  {/* Staat de btw niet op de bon, dan is het hier in één keuze te
+                  {uiT("Ex. btw")} {/* Staat de btw niet op de bon, dan is het hier in één keuze te
                       zeggen. Eerder wees deze regel naar Bewerken, maar daar
                       moest je het subtotaal zelf uitrekenen — en de al geboekte
                       werfregels bleven op het oude bedrag staan. */}
                   {exVat.vatUnknown && (
                     <form action={btwActie} className="mt-1.5 flex flex-wrap items-center gap-2">
                       <span className="text-xs text-warning">
-                        btw staat niet op de bon — kies wat erop zit:
-                      </span>
+                        {uiT("btw staat niet op de bon — kies wat erop zit:")} </span>
                       <Select name="btw" defaultValue="geen" className="h-8 w-auto py-0 text-xs">
                         {BTW_KEUZES.map((k) => (
                           <option key={k.key} value={k.key}>
@@ -330,9 +329,8 @@ export default async function PurchaseOrderPage({
                           </option>
                         ))}
                       </Select>
-                      <SubmitButton size="sm" variant="secondary" pendingLabel="Bezig…">
-                        Vastleggen
-                      </SubmitButton>
+                      <SubmitButton size="sm" variant="secondary" pendingLabel={uiT("Bezig…")}>
+                        {uiT("Vastleggen")} </SubmitButton>
                     </form>
                   )}
                 </Td>
@@ -343,15 +341,15 @@ export default async function PurchaseOrderPage({
               </Tr>
               <Tr>
                 <Td className="font-semibold" colSpan={4}>
-                  Totaal{" "}
+                  {uiT("Totaal")}{" "}
                   <span className="text-xs font-normal text-muted">
                     {/* "incl. btw" beweren terwijl er 0 btw op staat is gewoon
                         onwaar; dan liever zeggen dat er geen btw op zit. */}
                     {Number(po.tax) > 0
-                      ? `incl. ${formatMoney(po.tax, po.currency)} btw`
+                      ? uiT("incl. {v0} btw", { v0: formatMoney(po.tax, po.currency) })
                       : po.subtotal != null
-                        ? "geen btw"
-                        : "incl. btw"}
+                        ? uiT("geen btw")
+                        : uiT("incl. btw")}
                   </span>
                 </Td>
                 <Td className="text-right font-semibold tabular-nums">
@@ -367,10 +365,9 @@ export default async function PurchaseOrderPage({
         {po.projectId == null && verdeling.length > 0 && !verdeelBewerken ? (
           <Card>
             <CardHeader>
-              <CardTitle>Verdeeld over projecten</CardTitle>
+              <CardTitle>{uiT("Verdeeld over projecten")}</CardTitle>
               <span className="text-xs text-muted">
-                bij het goedkeuren per werf geboekt — de order zelf blijft bewust ongekoppeld, anders telt het bedrag dubbel
-              </span>
+                {uiT("bij het goedkeuren per werf geboekt — de order zelf blijft bewust ongekoppeld, anders telt het bedrag dubbel")} </span>
             </CardHeader>
             <CardContent className="space-y-1.5 text-sm">
               {verdeling.map((r) => (
@@ -378,40 +375,36 @@ export default async function PurchaseOrderPage({
                   <span>
                     {r.projectId ? (
                       <Link href={`/projects/${r.projectId}`} className="font-medium hover:underline">
-                        {r.projectNaam ?? "project"}
+                        {r.projectNaam ?? uiT("project")}
                       </Link>
                     ) : (
-                      <span className="text-muted">zonder project</span>
+                      <span className="text-muted">{uiT("zonder project")}</span>
                     )}
                     <span className="ml-1.5 text-xs text-muted">
-                      {r.soort === "uren" ? `${r.uren} uur arbeid${r.datum ? ` · ${r.datum}` : ""}` : "materiaal"}
+                      {r.soort === "uren" ? uiT("{v0} uur arbeid{v1}", { v0: r.uren ?? 0, v1: r.datum ? ` · ${r.datum}` : "" }) : uiT("materiaal")}
                     </span>
                   </span>
                   <span className="tabular-nums font-medium">{formatMoney(r.bedrag, "EUR")}</span>
                 </div>
               ))}
               <div className="flex items-baseline justify-between px-3 pt-1 text-sm font-semibold">
-                <span>Samen</span>
+                <span>{uiT("Samen")}</span>
                 <span className="tabular-nums">{formatMoney(verdeling.reduce((s, r) => s + (r.bedrag ?? 0), 0), "EUR")}</span>
               </div>
               <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
                 <p className="text-xs text-muted">
-                  Klopt een bedrag of datum niet? Pas de regel aan op het project zelf (kaart Uren / arbeid of Kosten) —
-                  daar staan ze als losse regels met deze inkooporder als bron.
-                </p>
+                  {uiT("Klopt een bedrag of datum niet? Pas de regel aan op het project zelf (kaart Uren / arbeid of Kosten) — daar staan ze als losse regels met deze inkooporder als bron.")} </p>
                 <LinkButton href={`/inkooporders/${id}?verdeel=1`} size="sm" variant="secondary">
-                  Verdeling aanpassen
-                </LinkButton>
+                  {uiT("Verdeling aanpassen")} </LinkButton>
               </div>
             </CardContent>
           </Card>
         ) : (
         <Card>
           <CardHeader>
-            <CardTitle>Bij welk project hoort deze factuur?</CardTitle>
+            <CardTitle>{uiT("Bij welk project hoort deze factuur?")}</CardTitle>
             <span className="text-xs text-muted">
-              bepaalt waar de kosten landen — materiaal telt als inkoop, uren als arbeid
-            </span>
+              {uiT("bepaalt waar de kosten landen — materiaal telt als inkoop, uren als arbeid")} </span>
           </CardHeader>
           <CardContent>
             <PurchaseProjectLink
@@ -455,15 +448,15 @@ export default async function PurchaseOrderPage({
         <div className="space-y-5">
           <Card>
             <CardHeader>
-              <CardTitle>Gegevens</CardTitle>
+              <CardTitle>{uiT("Gegevens")}</CardTitle>
             </CardHeader>
             <CardContent className="space-y-2 text-sm">
-              <Row label="Leverancier" value={po.supplier} />
-              <Row label="Referentie" value={po.reference ?? "—"} />
-              <Row label="Besteld" value={fmtDate(po.orderDate)} />
-              <Row label="Verwacht binnen" value={fmtDate(po.expectedDate)} />
-              <Row label="Valuta" value={po.currency} />
-              <Row label="Voorraad bijgewerkt" value={po.stockAppliedAt ? fmtDate(po.stockAppliedAt) : "Nee"} />
+              <Row label={uiT("Leverancier")} value={po.supplier} />
+              <Row label={uiT("Referentie")} value={po.reference ?? "—"} />
+              <Row label={uiT("Besteld")} value={fmtDate(po.orderDate, uiDateLocale)} />
+              <Row label={uiT("Verwacht binnen")} value={fmtDate(po.expectedDate, uiDateLocale)} />
+              <Row label={uiT("Valuta")} value={po.currency} />
+              <Row label={uiT("Voorraad bijgewerkt")} value={po.stockAppliedAt ? fmtDate(po.stockAppliedAt, uiDateLocale) : "Nee"} />
               {po.notes && <p className="whitespace-pre-line border-t pt-2 text-muted">{po.notes}</p>}
             </CardContent>
           </Card>
@@ -471,7 +464,7 @@ export default async function PurchaseOrderPage({
           {attachments.length > 0 && (
             <Card>
               <CardHeader>
-                <CardTitle>Bijlagen</CardTitle>
+                <CardTitle>{uiT("Bijlagen")}</CardTitle>
               </CardHeader>
               <CardContent className="space-y-1.5 text-sm">
                 {attachments.map((a) => (
@@ -484,15 +477,14 @@ export default async function PurchaseOrderPage({
                       <span className="truncate text-muted">{a.name}</span>
                     )}
                     {a.size != null && (
-                      <span className="shrink-0 text-xs text-muted">{Math.round(a.size / 1024)} kB</span>
+                      <span className="shrink-0 text-xs text-muted">{Math.round(a.size / 1024)} {uiT("kB")}</span>
                     )}
                   </div>
                 ))}
                 {attachments.some((a) => /\.(xlsx|xls|xlsm)$/i.test(a.name)) && (
                   <form action={regeneratePurchaseOrderPdfs.bind(null, id)} className="pt-1.5">
                     <button className={buttonClass({ variant: "secondary", size: "sm" })}>
-                      Nette PDF (opnieuw) maken
-                    </button>
+                      {uiT("Nette PDF (opnieuw) maken")} </button>
                   </form>
                 )}
               </CardContent>
@@ -501,21 +493,20 @@ export default async function PurchaseOrderPage({
 
           <Card>
             <CardHeader>
-              <CardTitle>Status</CardTitle>
+              <CardTitle>{uiT("Status")}</CardTitle>
             </CardHeader>
             <CardContent className="space-y-2">
               <div className="flex flex-wrap gap-2">
-                {po.status !== "ordered" && <Action status="ordered" label="Besteld" />}
-                {po.status !== "in_transit" && <Action status="in_transit" label="Onderweg" />}
+                {po.status !== "ordered" && <Action status="ordered" label={uiT("Besteld")} />}
+                {po.status !== "in_transit" && <Action status="in_transit" label={uiT("Onderweg")} />}
                 {po.status !== "received" && (
-                  <Action status="received" label="Ontvangen + voorraad bij" variant="primary" />
+                  <Action status="received" label={uiT("Ontvangen + voorraad bij")} variant="primary" />
                 )}
-                {po.status !== "cancelled" && <Action status="cancelled" label="Annuleren" />}
+                {po.status !== "cancelled" && <Action status="cancelled" label={uiT("Annuleren")} />}
               </div>
               {!po.stockAppliedAt && (
                 <p className="text-xs text-muted">
-                  Bij ‘Ontvangen’ worden de aantallen van gekoppelde producten bij de voorraad opgeteld.
-                </p>
+                  {uiT("Bij ‘Ontvangen’ worden de aantallen van gekoppelde producten bij de voorraad opgeteld.")} </p>
               )}
             </CardContent>
           </Card>
@@ -524,11 +515,10 @@ export default async function PurchaseOrderPage({
             <CardContent className="pt-5">
               <form action={remove}>
                 <ConfirmSubmit
-                  message={`Inkooporder ${po.supplier} definitief verwijderen?`}
+                  message={uiT("Inkooporder {v0} definitief verwijderen?", { v0: po.supplier })}
                   className="rounded-md px-3 py-2 text-sm font-medium text-danger transition-colors hover:bg-danger/10"
                 >
-                  Bestelling verwijderen
-                </ConfirmSubmit>
+                  {uiT("Bestelling verwijderen")} </ConfirmSubmit>
               </form>
             </CardContent>
           </Card>

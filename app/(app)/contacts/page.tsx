@@ -1,3 +1,5 @@
+import { datumTaal } from "@/lib/i18n/server";
+import { tekst as uiTranslation } from '@/lib/i18n/server';
 import { and, desc, eq, ilike, isNotNull, isNull, or, sql } from "drizzle-orm";
 import { Search } from "lucide-react";
 import Link from "next/link";
@@ -25,7 +27,10 @@ import { SyncHoldedButton } from "@/components/sync-holded-button";
 import { AanmeldlinkKnop } from "./aanmeldlink-knop";
 import { contactTypeMeta, leadStageMeta } from "../_meta";
 
-export const metadata = { title: "Contacten" };
+export async function generateMetadata() {
+  const uiT = await uiTranslation();
+  return { title: uiT("Contacten") };
+}
 
 const TYPE_TABS = [
   { key: "", label: "Alle" },
@@ -48,6 +53,8 @@ export default async function ContactsPage({
 }: {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
+  const uiDateLocale = await datumTaal();
+  const uiT = await uiTranslation();
   const params = await searchParams;
   const q = typeof params.q === "string" ? params.q.trim() : "";
   const typeParam = typeof params.type === "string" ? params.type : "";
@@ -110,23 +117,23 @@ export default async function ContactsPage({
   return (
     <>
       <PageHeader
-        title="Contacten"
-        subtitle={`${rows.length} ${rows.length === 1 ? "contact" : "contacten"}`}
+        title={uiT("Contacten")}
+        subtitle={`${rows.length} ${rows.length === 1 ? uiT("contact") : uiT("contacten")}`}
         actions={
           <>
             <AanmeldlinkKnop />
             <SyncHoldedButton />
-            <LinkButton href="/contacts/new">Nieuw contact</LinkButton>
+            <LinkButton href="/contacts/new">{uiT("Nieuw contact")}</LinkButton>
           </>
         }
       />
 
       <div className="mb-5 grid grid-cols-2 gap-3 sm:grid-cols-5">
-        <StatTile label="Contacten" value={kengetallen.totaal} />
-        <StatTile label="Klanten" value={kengetallen.klanten} />
-        <StatTile label="Leads" value={kengetallen.leads} hint="nog geen klant" />
-        <StatTile label="Zakelijk" value={kengetallen.zakelijk} hint="aan een bedrijf gekoppeld" />
-        <StatTile label="Nieuw deze maand" value={kengetallen.nieuwDezeMaand} />
+        <StatTile label={uiT("Contacten")} value={kengetallen.totaal} />
+        <StatTile label={uiT("Klanten")} value={kengetallen.klanten} />
+        <StatTile label={uiT("Leads")} value={kengetallen.leads} hint={uiT("nog geen klant")} />
+        <StatTile label={uiT("Zakelijk")} value={kengetallen.zakelijk} hint={uiT("aan een bedrijf gekoppeld")} />
+        <StatTile label={uiT("Nieuw deze maand")} value={kengetallen.nieuwDezeMaand} />
       </div>
 
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
@@ -143,7 +150,7 @@ export default async function ContactsPage({
                     : "text-muted hover:bg-surface hover:text-foreground",
                 )}
               >
-                {t.label}
+                {uiT(t.label)}
               </Link>
             ))}
           </div>
@@ -160,7 +167,7 @@ export default async function ContactsPage({
                     : "text-muted hover:bg-surface hover:text-foreground",
                 )}
               >
-                {t.label}
+                {uiT(t.label)}
               </Link>
             ))}
             {/* Wie we op een beurs hebben gesproken wil je als groep kunnen
@@ -174,8 +181,7 @@ export default async function ContactsPage({
                   : "text-muted hover:bg-surface hover:text-foreground",
               )}
             >
-              Van de beurs
-            </Link>
+              {uiT("Van de beurs")} </Link>
           </div>
         </div>
         <form className="relative" action="/contacts">
@@ -186,7 +192,7 @@ export default async function ContactsPage({
           <Input
             name="q"
             defaultValue={q}
-            placeholder="Zoek op naam of e-mail…"
+            placeholder={uiT("Zoek op naam of e-mail…")}
             className="w-64 pl-8"
           />
         </form>
@@ -194,25 +200,25 @@ export default async function ContactsPage({
 
       {rows.length === 0 ? (
         <EmptyState
-          title={q || typeFilter ? "Geen contacten gevonden" : "Nog geen contacten"}
+          title={q || typeFilter ? uiT("Geen contacten gevonden") : uiT("Nog geen contacten")}
           description={
             q || typeFilter
-              ? "Pas je zoekopdracht of filter aan."
-              : "Voeg het eerste contact toe of synchroniseer met Holded."
+              ? uiT("Pas je zoekopdracht of filter aan.")
+              : uiT("Voeg het eerste contact toe of synchroniseer met Holded.")
           }
-          action={<LinkButton href="/contacts/new">Nieuw contact</LinkButton>}
+          action={<LinkButton href="/contacts/new">{uiT("Nieuw contact")}</LinkButton>}
         />
       ) : (
         <Card className="overflow-hidden">
           <Table>
             <THead>
               <tr>
-                <Th>Naam</Th>
-                <Th>Type / fase</Th>
-                <Th>Bedrijf</Th>
-                <Th>Contact</Th>
-                <Th>Eigenaar</Th>
-                <Th>Bijgewerkt</Th>
+                <Th>{uiT("Naam")}</Th>
+                <Th>{uiT("Type / fase")}</Th>
+                <Th>{uiT("Bedrijf")}</Th>
+                <Th>{uiT("Contact")}</Th>
+                <Th>{uiT("Eigenaar")}</Th>
+                <Th>{uiT("Bijgewerkt")}</Th>
               </tr>
             </THead>
             <TBody>
@@ -230,8 +236,7 @@ export default async function ContactsPage({
                     )}
                     {c.source?.startsWith("beurs:") && (
                       <Badge tone="accent" className="mt-1">
-                        Beurs
-                        {(() => {
+                        {uiT("Beurs")} {(() => {
                           const rol = (c.tags ?? []).find((t) => t.startsWith("rol:"));
                           return rol ? ` · ${rolLabel(rol.slice(4))}` : "";
                         })()}
@@ -241,11 +246,11 @@ export default async function ContactsPage({
                   <Td>
                     {c.type === "lead" ? (
                       <Badge tone={leadStageMeta[c.stage].tone}>
-                        {leadStageMeta[c.stage].label}
+                        {uiT(leadStageMeta[c.stage].label)}
                       </Badge>
                     ) : (
                       <Badge tone={contactTypeMeta[c.type].tone}>
-                        {contactTypeMeta[c.type].label}
+                        {uiT(contactTypeMeta[c.type].label)}
                       </Badge>
                     )}
                   </Td>
@@ -254,7 +259,7 @@ export default async function ContactsPage({
                     {c.email ?? c.mobile ?? c.phone ?? "—"}
                   </Td>
                   <Td className="text-muted">{c.owner?.name ?? "—"}</Td>
-                  <Td className="text-muted">{formatDate(c.updatedAt)}</Td>
+                  <Td className="text-muted">{formatDate(c.updatedAt, uiDateLocale)}</Td>
                 </Tr>
               ))}
             </TBody>

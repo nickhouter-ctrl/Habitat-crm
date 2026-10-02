@@ -1,3 +1,5 @@
+import { datumTaal } from "@/lib/i18n/server";
+import { tekst as uiTranslation } from '@/lib/i18n/server';
 import { and, desc, eq, inArray, or } from "drizzle-orm";
 import {
   Bell,
@@ -98,6 +100,8 @@ export default async function ContactDetailPage({
   params: Promise<{ id: string }>;
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
+  const uiDateLocale = await datumTaal();
+  const uiT = await uiTranslation();
   const { id } = await params;
   const sp = await searchParams;
   const ik = await huidigeToegangOfNull();
@@ -217,13 +221,13 @@ export default async function ContactDetailPage({
   const margeTotalLines = marginItems.length;
 
   const ALLE_TABS = [
-    { key: "overzicht", label: "Overzicht" },
-    { key: "offertes", label: "Offertes" },
-    { key: "facturen", label: "Facturen" },
-    { key: "pakbonnen", label: "Pakbonnen" },
-    { key: "projecten", label: "Projecten" },
-    { key: "kozijnen", label: "Kozijnen" },
-    { key: "archief", label: "Archief" },
+    { key: "overzicht", label: uiT("Overzicht") },
+    { key: "offertes", label: uiT("Offertes") },
+    { key: "facturen", label: uiT("Facturen") },
+    { key: "pakbonnen", label: uiT("Pakbonnen") },
+    { key: "projecten", label: uiT("Projecten") },
+    { key: "kozijnen", label: uiT("Kozijnen") },
+    { key: "archief", label: uiT("Archief") },
   ] as const;
   type Tab = (typeof ALLE_TABS)[number]["key"];
   // Wie geen bedragen mag zien, houdt het overzicht: gegevens, notities en
@@ -299,15 +303,15 @@ export default async function ContactDetailPage({
             {contact.name}
             {contact.type === "lead" ? (
               <Badge tone={leadStageMeta[contact.stage].tone}>
-                {leadStageMeta[contact.stage].label}
+                {uiT(leadStageMeta[contact.stage].label)}
               </Badge>
             ) : (
               <Badge tone={contactTypeMeta[contact.type].tone}>
-                {contactTypeMeta[contact.type].label}
+                {uiT(contactTypeMeta[contact.type].label)}
               </Badge>
             )}
             <Badge tone={isZakelijk ? "info" : "neutral"}>
-              {isZakelijk ? "Zakelijk" : "Particulier"}
+              {isZakelijk ? uiT("Zakelijk") : uiT("Particulier")}
             </Badge>
           </span>
         }
@@ -319,27 +323,24 @@ export default async function ContactDetailPage({
                 {contact.company.name}
               </Link>
             ) : (
-              "Geen bedrijf"
+              uiT("Geen bedrijf")
             )}
           </>
         }
         actions={
           <>
             <Link href="/contacts" className="text-sm text-muted hover:underline">
-              ← Contacten
-            </Link>
-            <Link href="#online-toegang" className="text-sm underline">Online toegang</Link>
-            {ik?.magModule('aanvragen') && <LinkButton href={`/opvolging/${id}`} variant="secondary">Opvolging</LinkButton>}
+              {uiT("← Contacten")} </Link>
+            <Link href="#online-toegang" className="text-sm underline">{uiT("Online toegang")}</Link>
+            {ik?.magModule('aanvragen') && <LinkButton href={`/opvolging/${id}`} variant="secondary">{uiT("Opvolging")}</LinkButton>}
             <LinkButton href={`/contacts/${id}/edit`} variant="secondary">
-              Bewerken
-            </LinkButton>
+              {uiT("Bewerken")} </LinkButton>
             <form action={deleteContact.bind(null, id)} className="contents">
               <ConfirmSubmit
-                message={`Contact "${contact.name}" definitief verwijderen?`}
+                message={uiT("Contact \"{v0}\" definitief verwijderen?", { v0: contact.name })}
                 className="rounded-md px-3 py-2 text-sm font-medium text-danger transition-colors hover:bg-danger/10"
               >
-                Verwijderen
-              </ConfirmSubmit>
+                {uiT("Verwijderen")} </ConfirmSubmit>
             </form>
           </>
         }
@@ -349,29 +350,27 @@ export default async function ContactDetailPage({
 
       {sp.verwijderen === "facturen" && (
         <p className="mb-4 rounded-md bg-warning/10 px-3 py-2 text-sm text-warning">
-          Dit contact kan niet verwijderd worden — er hangen nog verstuurde of betaalde
-          facturen aan. Verwijder of ontkoppel die eerst.
-        </p>
+          {uiT("Dit contact kan niet verwijderd worden — er hangen nog verstuurde of betaalde facturen aan. Verwijder of ontkoppel die eerst.")} </p>
       )}
 
       {magBedragen && tab !== "kozijnen" && <div className="mb-4 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
-        <StatTile label="Totale omzet" value={formatEUR(omzet)} hint="gefactureerd, incl. BTW" tone="success" />
-        <StatTile label="Openstaand" value={formatEUR(openstaand)} hint="te ontvangen" tone={openstaand > 0 ? "warning" : "neutral"} />
+        <StatTile label={uiT("Totale omzet")} value={formatEUR(omzet)} hint={uiT("gefactureerd, incl. BTW")} tone="success" />
+        <StatTile label={uiT("Openstaand")} value={formatEUR(openstaand)} hint={uiT("te ontvangen")} tone={openstaand > 0 ? "warning" : "neutral"} />
         {margeCosted > 0 && (
           <StatTile
-            label="Marge (intern)"
+            label={uiT("Marge (intern)")}
             value={`${formatEUR(klantMarge)}${klantMargePct != null ? ` · ${klantMargePct}%` : ""}`}
             hint={
               margeCosted < margeTotalLines
-                ? `over ${margeCosted}/${margeTotalLines} regels met kostprijs`
-                : "verdiend op deze klant"
+                ? uiT("over {v0}/{v1} regels met kostprijs", { v0: margeCosted, v1: margeTotalLines })
+                : uiT("verdiend op deze klant")
             }
             tone={klantMarge <= 0 ? "danger" : klantMargePct != null && klantMargePct < 15 ? "warning" : "neutral"}
           />
         )}
-        <StatTile label="Totaal geoffreerd" value={formatEUR(geoffreerd)} hint="lopende offertes" />
-        <StatTile label="Offertes" value={String(estimates.length)} hint={`${invoicedEstimateIds.size} gefactureerd`} />
-        <StatTile label="Conversie" value={`${conversie}%`} hint="offerte → factuur" tone="info" />
+        <StatTile label={uiT("Totaal geoffreerd")} value={formatEUR(geoffreerd)} hint={uiT("lopende offertes")} />
+        <StatTile label={uiT("Offertes")} value={String(estimates.length)} hint={uiT("{v0} gefactureerd", { v0: invoicedEstimateIds.size })} />
+        <StatTile label={uiT("Conversie")} value={`${conversie}%`} hint={uiT("offerte → factuur")} tone="info" />
       </div>}
 
       <div className="mb-4 flex flex-wrap gap-1 border-b">
@@ -397,7 +396,7 @@ export default async function ContactDetailPage({
                   : "border-transparent text-muted hover:text-foreground",
               )}
             >
-              {t.label}
+              {uiT(t.label)}
               {cnt > 0 ? ` (${cnt})` : ""}
             </Link>
           );
@@ -406,42 +405,41 @@ export default async function ContactDetailPage({
 
       {hasWindows && tab === "overzicht" && (
         <Card className="mb-5">
-          <CardHeader><CardTitle>Kozijnen · Habitat One Windows</CardTitle><Link href={tabHref("kozijnen")} className="text-sm text-accent hover:underline">Bekijk kozijnendashboard →</Link></CardHeader>
+          <CardHeader><CardTitle>{uiT("Kozijnen · Habitat One Windows")}</CardTitle><Link href={tabHref("kozijnen")} className="text-sm text-accent hover:underline">{uiT("Bekijk kozijnendashboard →")}</Link></CardHeader>
           <CardContent>
             <div className="grid gap-4 sm:grid-cols-3 text-sm">
-              <div><p className="text-muted">Orderwaarde excl. btw</p><strong>{formatEUR(windowsReport.totals.dealer)}</strong><p className="text-xs text-muted">{windowsReport.totals.orders} orders · {windowsReport.totals.elements} kozijnen</p></div>
-              <div><p className="text-muted">Open offertes excl. btw</p><strong>{formatEUR(windowsReport.quotes.openValue)}</strong><p className="text-xs text-muted">{windowsReport.quotes.open} offertes · laatste versies</p></div>
-              <div><p className="text-muted">Openstaande Windows-facturen incl. btw</p><strong>{formatEUR(windowsReport.totals.open)}</strong><p className="text-xs text-muted">Betaald: {formatEUR(windowsReport.totals.paidGross)}</p></div>
+              <div><p className="text-muted">{uiT("Orderwaarde excl. btw")}</p><strong>{formatEUR(windowsReport.totals.dealer)}</strong><p className="text-xs text-muted">{windowsReport.totals.orders} {uiT("orders ·")} {windowsReport.totals.elements} {uiT("kozijnen")}</p></div>
+              <div><p className="text-muted">{uiT("Open offertes excl. btw")}</p><strong>{formatEUR(windowsReport.quotes.openValue)}</strong><p className="text-xs text-muted">{windowsReport.quotes.open} {uiT("offertes · laatste versies")}</p></div>
+              <div><p className="text-muted">{uiT("Openstaande Windows-facturen incl. btw")}</p><strong>{formatEUR(windowsReport.totals.open)}</strong><p className="text-xs text-muted">{uiT("Betaald:")} {formatEUR(windowsReport.totals.paidGross)}</p></div>
             </div>
-            <p className="mt-3 text-xs text-muted">Windows-overzicht. Facturen die ook in het CRM staan zijn dezelfde facturen; tel beide overzichten niet bij elkaar op.</p>
+            <p className="mt-3 text-xs text-muted">{uiT("Windows-overzicht. Facturen die ook in het CRM staan zijn dezelfde facturen; tel beide overzichten niet bij elkaar op.")}</p>
           </CardContent>
         </Card>
       )}
       {tab === "kozijnen" && (hasWindows ? <div className="space-y-4">
-        <div className="flex flex-wrap gap-3">{windowsReport.dealers.map(d => <LinkButton key={d.id} href={windowsPortalHref(`/admin/dealers/${d.id}`)} variant="secondary" target="_blank" rel="noreferrer" prefetch={false}>Windows-dashboard · {d.companyName || d.email}</LinkButton>)}</div>
+        <div className="flex flex-wrap gap-3">{windowsReport.dealers.map(d => <LinkButton key={d.id} href={windowsPortalHref(`/admin/dealers/${d.id}`)} variant="secondary" target="_blank" rel="noreferrer" prefetch={false}>{uiT("Windows-dashboard ·")} {d.companyName || d.email}</LinkButton>)}</div>
         <WindowsOverview report={windowsReport} scoped />
-      </div> : <Card className="p-5 text-sm text-muted">Aan dit CRM-contact is geen Windows-account gekoppeld.</Card>)}
+      </div> : <Card className="p-5 text-sm text-muted">{uiT("Aan dit CRM-contact is geen Windows-account gekoppeld.")}</Card>)}
 
       {tab === "offertes" && (
         <Card className="overflow-hidden">
           <CardHeader>
-            <CardTitle>Offertes</CardTitle>
+            <CardTitle>{uiT("Offertes")}</CardTitle>
             <LinkButton href={`/documents/new?kind=estimate&contactId=${contact.id}`} variant="secondary" size="sm">
-              Nieuwe offerte
-            </LinkButton>
+              {uiT("Nieuwe offerte")} </LinkButton>
           </CardHeader>
           {offertesList.length === 0 ? (
             <CardContent>
-              <p className="text-sm text-muted">Geen offertes voor deze klant.</p>
+              <p className="text-sm text-muted">{uiT("Geen offertes voor deze klant.")}</p>
             </CardContent>
           ) : (
             <Table>
               <THead>
                 <tr>
-                  <Th>Nr.</Th>
-                  <Th>Status</Th>
-                  <Th>Datum</Th>
-                  <Th className="text-right">Totaal</Th>
+                  <Th>{uiT("Nr.")}</Th>
+                  <Th>{uiT("Status")}</Th>
+                  <Th>{uiT("Datum")}</Th>
+                  <Th className="text-right">{uiT("Totaal")}</Th>
                 </tr>
               </THead>
               <TBody>
@@ -449,15 +447,15 @@ export default async function ContactDetailPage({
                   <Tr key={doc.id}>
                     <Td className="font-medium">
                       <Link href={`/documents/${doc.id}`} className="hover:underline">
-                        {doc.docNumber ?? "(geen nr.)"}
+                        {doc.docNumber ?? uiT("(geen nr.)")}
                       </Link>
                     </Td>
                     <Td>
                       <Badge tone={documentStatusMeta[doc.status].tone}>
-                        {documentStatusMeta[doc.status].label}
+                        {uiT(documentStatusMeta[doc.status].label)}
                       </Badge>
                     </Td>
-                    <Td className="text-muted">{formatDate(doc.issueDate)}</Td>
+                    <Td className="text-muted">{formatDate(doc.issueDate, uiDateLocale)}</Td>
                     <Td className="text-right tabular-nums">{formatEUR(doc.totalEur)}</Td>
                   </Tr>
                 ))}
@@ -470,30 +468,29 @@ export default async function ContactDetailPage({
       {tab === "facturen" && (
         <Card className="overflow-hidden">
           <CardHeader>
-            <CardTitle>Facturen</CardTitle>
+            <CardTitle>{uiT("Facturen")}</CardTitle>
             <span className="flex flex-wrap items-center gap-2">
               {hasOpenInvoices && contact.email && (
                 <AccountReminderButton contactId={contact.id} />
               )}
               <LinkButton href={`/documents/new?kind=invoice&contactId=${contact.id}`} variant="secondary" size="sm">
-                Nieuwe factuur
-              </LinkButton>
+                {uiT("Nieuwe factuur")} </LinkButton>
             </span>
           </CardHeader>
           {facturenList.length === 0 ? (
             <CardContent>
-              <p className="text-sm text-muted">Geen facturen voor deze klant.</p>
+              <p className="text-sm text-muted">{uiT("Geen facturen voor deze klant.")}</p>
             </CardContent>
           ) : (
             <Table>
               <THead>
                 <tr>
-                  <Th>Nr.</Th>
-                  <Th>Type</Th>
-                  <Th>Status</Th>
-                  <Th>Datum</Th>
-                  <Th className="text-right">Totaal</Th>
-                  <Th className="text-right">Betaald</Th>
+                  <Th>{uiT("Nr.")}</Th>
+                  <Th>{uiT("Type")}</Th>
+                  <Th>{uiT("Status")}</Th>
+                  <Th>{uiT("Datum")}</Th>
+                  <Th className="text-right">{uiT("Totaal")}</Th>
+                  <Th className="text-right">{uiT("Betaald")}</Th>
                   <Th />
                 </tr>
               </THead>
@@ -502,16 +499,16 @@ export default async function ContactDetailPage({
                   <Tr key={doc.id}>
                     <Td className="font-medium">
                       <Link href={`/documents/${doc.id}`} className="hover:underline">
-                        {doc.docNumber ?? "(geen nr.)"}
+                        {doc.docNumber ?? uiT("(geen nr.)")}
                       </Link>
                     </Td>
-                    <Td>{documentKindMeta[doc.kind]}</Td>
+                    <Td>{uiT(documentKindMeta[doc.kind])}</Td>
                     <Td>
                       <Badge tone={documentStatusMeta[doc.status].tone}>
-                        {documentStatusMeta[doc.status].label}
+                        {uiT(documentStatusMeta[doc.status].label)}
                       </Badge>
                     </Td>
-                    <Td className="text-muted">{formatDate(doc.issueDate)}</Td>
+                    <Td className="text-muted">{formatDate(doc.issueDate, uiDateLocale)}</Td>
                     <Td className="text-right tabular-nums">{formatEUR(doc.totalEur)}</Td>
                     <Td className="text-right tabular-nums text-muted">{formatEUR(doc.paidEur)}</Td>
                     <Td className="text-right">
@@ -534,20 +531,20 @@ export default async function ContactDetailPage({
       {tab === "pakbonnen" && (
         <Card className="overflow-hidden">
           <CardHeader>
-            <CardTitle>Pakbonnen</CardTitle>
+            <CardTitle>{uiT("Pakbonnen")}</CardTitle>
           </CardHeader>
           {pakbonnenList.length === 0 ? (
             <CardContent>
-              <p className="text-sm text-muted">Geen pakbonnen voor deze klant.</p>
+              <p className="text-sm text-muted">{uiT("Geen pakbonnen voor deze klant.")}</p>
             </CardContent>
           ) : (
             <Table>
               <THead>
                 <tr>
-                  <Th>Nr.</Th>
-                  <Th>Status</Th>
-                  <Th>Datum</Th>
-                  <Th className="text-right">Afgeleverd</Th>
+                  <Th>{uiT("Nr.")}</Th>
+                  <Th>{uiT("Status")}</Th>
+                  <Th>{uiT("Datum")}</Th>
+                  <Th className="text-right">{uiT("Afgeleverd")}</Th>
                 </tr>
               </THead>
               <TBody>
@@ -555,17 +552,17 @@ export default async function ContactDetailPage({
                   <Tr key={doc.id}>
                     <Td className="font-medium">
                       <Link href={`/documents/${doc.id}`} className="hover:underline">
-                        {doc.docNumber ?? "(geen nr.)"}
+                        {doc.docNumber ?? uiT("(geen nr.)")}
                       </Link>
                     </Td>
                     <Td>
                       <Badge tone={documentStatusMeta[doc.status].tone}>
-                        {documentStatusMeta[doc.status].label}
+                        {uiT(documentStatusMeta[doc.status].label)}
                       </Badge>
                     </Td>
-                    <Td className="text-muted">{formatDate(doc.issueDate)}</Td>
+                    <Td className="text-muted">{formatDate(doc.issueDate, uiDateLocale)}</Td>
                     <Td className="text-right text-muted">
-                      {doc.stockAppliedAt ? formatDate(doc.stockAppliedAt) : "—"}
+                      {doc.stockAppliedAt ? formatDate(doc.stockAppliedAt, uiDateLocale) : "—"}
                     </Td>
                   </Tr>
                 ))}
@@ -578,14 +575,13 @@ export default async function ContactDetailPage({
       {tab === "projecten" && (
         <Card className="overflow-hidden">
           <CardHeader>
-            <CardTitle>Projecten</CardTitle>
+            <CardTitle>{uiT("Projecten")}</CardTitle>
             <LinkButton href="/projects/new" variant="secondary" size="sm">
-              Nieuw project
-            </LinkButton>
+              {uiT("Nieuw project")} </LinkButton>
           </CardHeader>
           {relatedProjects.length === 0 ? (
             <CardContent>
-              <p className="text-sm text-muted">Geen gekoppelde projecten.</p>
+              <p className="text-sm text-muted">{uiT("Geen gekoppelde projecten.")}</p>
             </CardContent>
           ) : (
             <div className="divide-y">
@@ -614,27 +610,26 @@ export default async function ContactDetailPage({
                       <span className="font-medium">{p.name}</span>
                       {p.code ? <span className="text-xs text-muted">{p.code}</span> : null}
                       <Badge tone={p.status === "active" ? "success" : "neutral"}>
-                        {p.status === "active" ? "Actief" : "Gearchiveerd"}
+                        {p.status === "active" ? uiT("Actief") : uiT("Gearchiveerd")}
                       </Badge>
                       <span className="ml-auto text-xs text-muted">
-                        {visibleDocs.length} doc{visibleDocs.length === 1 ? "" : "en"}
+                        {visibleDocs.length} {uiT(visibleDocs.length === 1 ? "document" : "documenten")}
                       </span>
                     </summary>
                     <div className="space-y-3 bg-background/40 px-5 pb-4 pt-1">
                       {visibleDocs.length > 0 && (
                         <div>
                           <p className="mb-1 text-xs font-medium uppercase tracking-wide text-muted">
-                            Documenten
-                          </p>
+                            {uiT("Documenten")} </p>
                           <ul className="space-y-1 text-sm">
                             {visibleDocs.map((d) => (
                               <li key={d.id} className="flex flex-wrap items-center gap-2">
                                 <Link href={`/documents/${d.id}`} className="font-medium hover:underline">
-                                  {d.docNumber ?? documentKindMeta[d.kind]}
+                                  {d.docNumber ?? uiT(documentKindMeta[d.kind])}
                                 </Link>
-                                <span className="text-muted">{documentKindMeta[d.kind]}</span>
+                                <span className="text-muted">{uiT(documentKindMeta[d.kind])}</span>
                                 <Badge tone={documentStatusMeta[d.status].tone}>
-                                  {documentStatusMeta[d.status].label}
+                                  {uiT(documentStatusMeta[d.status].label)}
                                 </Badge>
                                 <span className="ml-auto tabular-nums">{formatEUR(d.totalEur)}</span>
                               </li>
@@ -645,8 +640,7 @@ export default async function ContactDetailPage({
                       {prods.length > 0 && (
                         <div>
                           <p className="mb-1 text-xs font-medium uppercase tracking-wide text-muted">
-                            Producten (verkocht)
-                          </p>
+                            {uiT("Producten (verkocht)")} </p>
                           <ul className="space-y-0.5 text-sm">
                             {prods.map((pr, i) => (
                               <li key={i} className="flex justify-between gap-2">
@@ -661,8 +655,7 @@ export default async function ContactDetailPage({
                         href={`/projects/${p.id}`}
                         className="inline-block text-sm font-medium text-accent hover:underline"
                       >
-                        Open project →
-                      </Link>
+                        {uiT("Open project →")} </Link>
                     </div>
                   </details>
                 );
@@ -676,52 +669,46 @@ export default async function ContactDetailPage({
         <div className="space-y-4">
           <Card>
             <CardHeader>
-              <CardTitle>Openstaand</CardTitle>
+              <CardTitle>{uiT("Openstaand")}</CardTitle>
               {hasOpenInvoices && contact.email && <AccountReminderButton contactId={contact.id} />}
             </CardHeader>
             <CardContent>
               {hasOpenInvoices ? (
                 <p className="text-sm">
-                  <strong>{openInvoices.length}</strong> openstaande factu
-                  {openInvoices.length === 1 ? "ur" : "ren"} · totaal{" "}
-                  <strong>{formatEUR(openstaand)}</strong> incl. btw.
-                  {!contact.email && (
-                    <span className="text-danger"> Geen e-mailadres bekend.</span>
+                  <strong>{openInvoices.length}</strong> {uiT(openInvoices.length === 1 ? "openstaande factuur" : "openstaande facturen")} {uiT("· totaal")}{" "}
+                  <strong>{formatEUR(openstaand)}</strong> {uiT("incl. btw.")} {!contact.email && (
+                    <span className="text-danger"> {uiT("Geen e-mailadres bekend.")}</span>
                   )}
                 </p>
               ) : (
-                <p className="text-sm text-muted">Geen openstaande facturen. 🎉</p>
+                <p className="text-sm text-muted">{uiT("Geen openstaande facturen. 🎉")}</p>
               )}
             </CardContent>
           </Card>
 
           <Card>
             <CardHeader>
-              <CardTitle>Tevredenheid &amp; review</CardTitle>
+              <CardTitle>{uiT("Tevredenheid & review")}</CardTitle>
             </CardHeader>
             <CardContent className="space-y-2">
               <p className="text-sm text-muted">
-                Vraag de klant om een Google-review. (Automatisch ±3 weken na levering zodra de
-                review-mails aanstaan.)
-              </p>
+                {uiT("Vraag de klant om een Google-review. (Automatisch ±3 weken na levering zodra de review-mails aanstaan.)")} </p>
               {contact.email ? (
                 <ReviewRequestButton contactId={contact.id} />
               ) : (
-                <p className="text-sm text-danger">Geen e-mailadres bekend.</p>
+                <p className="text-sm text-danger">{uiT("Geen e-mailadres bekend.")}</p>
               )}
             </CardContent>
           </Card>
 
           <Card>
             <CardHeader>
-              <CardTitle>Verstuurde e-mails</CardTitle>
+              <CardTitle>{uiT("Verstuurde e-mails")}</CardTitle>
             </CardHeader>
             <CardContent>
               {sentMails.length === 0 ? (
                 <p className="text-sm text-muted">
-                  Nog geen e-mails verstuurd vanuit het CRM. Eerder verstuurde herinneringen vind je
-                  in de tijdlijn onder Overzicht.
-                </p>
+                  {uiT("Nog geen e-mails verstuurd vanuit het CRM. Eerder verstuurde herinneringen vind je in de tijdlijn onder Overzicht.")} </p>
               ) : (
                 <ol className="space-y-2">
                   {sentMails.map((m) => (
@@ -733,23 +720,22 @@ export default async function ContactDetailPage({
                         <span className="flex items-center gap-2">
                           <Badge tone={m.kind === "review" ? "accent" : "warning"}>
                             {m.kind === "review"
-                              ? "Review"
+                              ? uiT("Review")
                               : m.kind === "document"
-                                ? "Document"
-                                : "Herinnering"}
+                                ? uiT("Document")
+                                : uiT("Herinnering")}
                           </Badge>
                           <span className="truncate font-medium">{m.subject}</span>
                         </span>
                         <span className="mt-0.5 block text-xs text-muted">
-                          {formatDate(m.createdAt)} · naar {m.toEmail ?? "—"}
+                          {formatDate(m.createdAt, uiDateLocale)} {uiT("· naar")} {m.toEmail ?? "—"}
                         </span>
                       </span>
                       <Link
                         href={`/sent-mail/${m.id}`}
                         className="shrink-0 text-xs font-medium text-accent hover:underline"
                       >
-                        Bekijk mail →
-                      </Link>
+                        {uiT("Bekijk mail →")} </Link>
                     </li>
                   ))}
                 </ol>
@@ -759,22 +745,22 @@ export default async function ContactDetailPage({
 
           <Card>
             <CardHeader>
-              <CardTitle>Alle facturen &amp; creditnota&apos;s</CardTitle>
+              <CardTitle>{uiT("Alle facturen & creditnota's")}</CardTitle>
             </CardHeader>
             {facturenList.length === 0 ? (
               <CardContent>
-                <p className="text-sm text-muted">Nog geen facturen.</p>
+                <p className="text-sm text-muted">{uiT("Nog geen facturen.")}</p>
               </CardContent>
             ) : (
               <Table>
                 <THead>
                   <tr>
-                    <Th>Nr.</Th>
-                    <Th>Type</Th>
-                    <Th>Status</Th>
-                    <Th>Datum</Th>
-                    <Th className="text-right">Totaal</Th>
-                    <Th className="text-right">Betaald</Th>
+                    <Th>{uiT("Nr.")}</Th>
+                    <Th>{uiT("Type")}</Th>
+                    <Th>{uiT("Status")}</Th>
+                    <Th>{uiT("Datum")}</Th>
+                    <Th className="text-right">{uiT("Totaal")}</Th>
+                    <Th className="text-right">{uiT("Betaald")}</Th>
                   </tr>
                 </THead>
                 <TBody>
@@ -782,16 +768,16 @@ export default async function ContactDetailPage({
                     <Tr key={doc.id}>
                       <Td className="font-medium">
                         <Link href={`/documents/${doc.id}`} className="hover:underline">
-                          {doc.docNumber ?? "(geen nr.)"}
+                          {doc.docNumber ?? uiT("(geen nr.)")}
                         </Link>
                       </Td>
-                      <Td>{documentKindMeta[doc.kind]}</Td>
+                      <Td>{uiT(documentKindMeta[doc.kind])}</Td>
                       <Td>
                         <Badge tone={documentStatusMeta[doc.status].tone}>
-                          {documentStatusMeta[doc.status].label}
+                          {uiT(documentStatusMeta[doc.status].label)}
                         </Badge>
                       </Td>
-                      <Td className="text-muted">{formatDate(doc.issueDate)}</Td>
+                      <Td className="text-muted">{formatDate(doc.issueDate, uiDateLocale)}</Td>
                       <Td className="text-right tabular-nums">{formatEUR(doc.totalEur)}</Td>
                       <Td className="text-right tabular-nums text-muted">{formatEUR(doc.paidEur)}</Td>
                     </Tr>
@@ -809,7 +795,7 @@ export default async function ContactDetailPage({
         <div className="space-y-4">
           <Card>
             <CardHeader>
-              <CardTitle>Gegevens</CardTitle>
+              <CardTitle>{uiT("Gegevens")}</CardTitle>
             </CardHeader>
             <CardContent className="space-y-2.5">
               {contact.email ? (
@@ -829,20 +815,20 @@ export default async function ContactDetailPage({
                 <InfoRow icon={MapPin}>{addressParts.join(", ")}</InfoRow>
               )}
               <dl className="grid grid-cols-2 gap-x-3 gap-y-1.5 pt-2 text-sm">
-                <dt className="text-muted">Eigenaar</dt>
+                <dt className="text-muted">{uiT("Eigenaar")}</dt>
                 <dd>{contact.owner?.name ?? "—"}</dd>
-                <dt className="text-muted">Taal</dt>
+                <dt className="text-muted">{uiT("Taal")}</dt>
                 <dd>
                   {contact.preferredLanguage
-                    ? languageMeta[contact.preferredLanguage]
+                    ? uiT(languageMeta[contact.preferredLanguage])
                     : "—"}
                 </dd>
-                <dt className="text-muted">Bron</dt>
+                <dt className="text-muted">{uiT("Bron")}</dt>
                 <dd>{contact.source ?? "—"}</dd>
-                <dt className="text-muted">Laatste contact</dt>
-                <dd>{formatDate(contact.lastContactedAt)}</dd>
-                <dt className="text-muted">Aangemaakt</dt>
-                <dd>{formatDate(contact.createdAt)}</dd>
+                <dt className="text-muted">{uiT("Laatste contact")}</dt>
+                <dd>{formatDate(contact.lastContactedAt, uiDateLocale)}</dd>
+                <dt className="text-muted">{uiT("Aangemaakt")}</dt>
+                <dd>{formatDate(contact.createdAt, uiDateLocale)}</dd>
               </dl>
               {contact.tags && contact.tags.length > 0 && (
                 <div className="flex flex-wrap gap-1 pt-1">
@@ -857,7 +843,7 @@ export default async function ContactDetailPage({
           {contact.notes && (
             <Card>
               <CardHeader>
-                <CardTitle>Notitie</CardTitle>
+                <CardTitle>{uiT("Notitie")}</CardTitle>
               </CardHeader>
               <CardContent className="whitespace-pre-wrap text-sm">
                 {contact.notes}
@@ -867,20 +853,20 @@ export default async function ContactDetailPage({
 
           <Card>
             <CardHeader>
-              <CardTitle>Holded</CardTitle>
+              <CardTitle>{uiT("Holded")}</CardTitle>
             </CardHeader>
             <CardContent className="text-sm">
               {holdedMap ? (
                 <dl className="grid grid-cols-2 gap-x-3 gap-y-1.5">
-                  <dt className="text-muted">Holded-id</dt>
+                  <dt className="text-muted">{uiT("Holded-id")}</dt>
                   <dd className="font-mono text-xs">{holdedMap.holdedId}</dd>
-                  <dt className="text-muted">Laatste sync</dt>
-                  <dd>{formatDate(holdedMap.lastSyncedAt)}</dd>
-                  <dt className="text-muted">Richting</dt>
+                  <dt className="text-muted">{uiT("Laatste sync")}</dt>
+                  <dd>{formatDate(holdedMap.lastSyncedAt, uiDateLocale)}</dd>
+                  <dt className="text-muted">{uiT("Richting")}</dt>
                   <dd>{holdedMap.lastSyncDirection ?? "—"}</dd>
                 </dl>
               ) : (
-                <p className="text-muted">Nog niet gekoppeld aan Holded.</p>
+                <p className="text-muted">{uiT("Nog niet gekoppeld aan Holded.")}</p>
               )}
             </CardContent>
           </Card>
@@ -891,18 +877,17 @@ export default async function ContactDetailPage({
           {(contact.aiDossier || dossierConfigured()) && (
             <Card>
               <CardHeader>
-                <CardTitle>🤖 Dossier</CardTitle>
+                <CardTitle>{uiT("🤖 Dossier")}</CardTitle>
                 <div className="flex items-center gap-2">
                   {contact.aiDossierAt && (
                     <span className="text-xs text-muted">
-                      bijgewerkt {formatDate(contact.aiDossierAt)}
+                      {uiT("bijgewerkt")} {formatDate(contact.aiDossierAt, uiDateLocale)}
                     </span>
                   )}
                   {dossierConfigured() && (
                     <form action={verversContactDossier.bind(null, contact.id)}>
-                      <SubmitButton size="sm" variant="secondary" pendingLabel="AI leest alles…">
-                        Ververs
-                      </SubmitButton>
+                      <SubmitButton size="sm" variant="secondary" pendingLabel={uiT("AI leest alles…")}>
+                        {uiT("Ververs")} </SubmitButton>
                     </form>
                   )}
                 </div>
@@ -912,10 +897,7 @@ export default async function ContactDetailPage({
                   <DossierTekst tekst={contact.aiDossier} />
                 ) : (
                   <p className="text-sm text-muted">
-                    Nog geen dossier — klik op Ververs en de AI vat alle feiten over deze klant
-                    samen (projecten, offertes, mails, betalingen). Alleen feiten uit het CRM,
-                    niets verzonnen.
-                  </p>
+                    {uiT("Nog geen dossier — klik op Ververs en de AI vat alle feiten over deze klant samen (projecten, offertes, mails, betalingen). Alleen feiten uit het CRM, niets verzonnen.")} </p>
                 )}
               </CardContent>
             </Card>
@@ -923,23 +905,22 @@ export default async function ContactDetailPage({
 
           <Card>
             <CardHeader>
-              <CardTitle>Tijdlijn</CardTitle>
+              <CardTitle>{uiT("Tijdlijn")}</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
               <form action={submitNote} className="space-y-2">
                 <Textarea
                   name="body"
-                  placeholder="Notitie toevoegen (gesprek, afspraak, …)"
+                  placeholder={uiT("Notitie toevoegen (gesprek, afspraak, …)")}
                   required
                   className="min-h-20"
                 />
                 <Button type="submit" size="sm">
-                  Notitie toevoegen
-                </Button>
+                  {uiT("Notitie toevoegen")} </Button>
               </form>
 
               {timeline.length === 0 ? (
-                <EmptyState title="Nog geen activiteiten" />
+                <EmptyState title={uiT("Nog geen activiteiten")} />
               ) : (
                 <ol className="space-y-3">
                   {timeline.map((a) => {
@@ -947,16 +928,16 @@ export default async function ContactDetailPage({
                     const isReminder =
                       a.type === "email" && /herinner|aanmaning/i.test(subject);
                     const meta = isReminder
-                      ? { label: "Betaalherinnering", Icon: Bell, tone: "bg-amber-500/10 text-amber-600" }
+                      ? { label: uiT("Betaalherinnering"), Icon: Bell, tone: "bg-amber-500/10 text-amber-600" }
                       : a.type === "email"
-                        ? { label: "E-mail", Icon: Mail, tone: "bg-blue-500/10 text-blue-600" }
+                        ? { label: uiT("E-mail"), Icon: Mail, tone: "bg-blue-500/10 text-blue-600" }
                         : a.type === "call"
-                          ? { label: "Telefoon", Icon: Phone, tone: "bg-muted/40 text-muted" }
+                          ? { label: uiT("Telefoon"), Icon: Phone, tone: "bg-muted/40 text-muted" }
                           : a.type === "meeting"
-                            ? { label: "Afspraak", Icon: CalendarClock, tone: "bg-muted/40 text-muted" }
+                            ? { label: uiT("Afspraak"), Icon: CalendarClock, tone: "bg-muted/40 text-muted" }
                             : a.type === "task"
-                              ? { label: "Taak", Icon: CalendarClock, tone: "bg-muted/40 text-muted" }
-                              : { label: "Notitie", Icon: StickyNote, tone: "bg-muted/40 text-muted" };
+                              ? { label: uiT("Taak"), Icon: CalendarClock, tone: "bg-muted/40 text-muted" }
+                              : { label: uiT("Notitie"), Icon: StickyNote, tone: "bg-muted/40 text-muted" };
                     const Icon = meta.Icon;
                     return (
                       <li key={a.id} className="flex gap-3">
@@ -970,9 +951,9 @@ export default async function ContactDetailPage({
                         </span>
                         <div className="min-w-0 flex-1">
                           <div className="flex flex-wrap items-center gap-x-2 text-xs text-muted">
-                            <span className="font-medium text-foreground">{meta.label}</span>
+                            <span className="font-medium text-foreground">{uiT(meta.label)}</span>
                             <span>·</span>
-                            <span>{formatDate(a.createdAt)}</span>
+                            <span>{formatDate(a.createdAt, uiDateLocale)}</span>
                             {a.author?.name && (
                               <>
                                 <span>·</span>
@@ -989,8 +970,7 @@ export default async function ContactDetailPage({
                               href={`/documents/${a.documentId}`}
                               className="mt-0.5 inline-flex items-center gap-1 text-xs text-accent hover:underline"
                             >
-                              <FileText className="size-3" /> Bekijk document
-                            </Link>
+                              <FileText className="size-3" /> {uiT("Bekijk document")} </Link>
                           )}
                         </div>
                       </li>

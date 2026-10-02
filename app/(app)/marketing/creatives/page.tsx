@@ -1,3 +1,4 @@
+import { tekst as uiTranslation } from '@/lib/i18n/server';
 /**
  * Overzicht van creatives (brief §7): alle specs met status en voorbeeld.
  * De hoofdactie per rij is "Dupliceer en pas aan" (§3.5) — bewerken van een
@@ -14,7 +15,10 @@ import { creativeSpecSchema } from "@/lib/creatives/schema";
 import { validateSpecCopy } from "@/lib/creatives/validate";
 import { cn } from "@/lib/utils";
 
-export const metadata = { title: "Creatives" };
+export async function generateMetadata() {
+  const uiT = await uiTranslation();
+  return { title: uiT("Creatives") };
+}
 
 const STATUS_META: Record<string, { label: string; tone: BadgeTone }> = {
   draft: { label: "Concept", tone: "neutral" },
@@ -29,6 +33,7 @@ export default async function CreativesPage({
 }: {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
+  const uiT = await uiTranslation();
   const params = await searchParams;
   const status = typeof params.status === "string" ? params.status : "";
   const setId = typeof params.set === "string" ? params.set : "";
@@ -58,14 +63,13 @@ export default async function CreativesPage({
   return (
     <>
       <PageHeader
-        title="Creatives"
-        subtitle={`${rows.length} spec${rows.length === 1 ? "" : "s"} — de spec is de waarheid, de PNG een afgeleide`}
+        title={uiT("Creatives")}
+        subtitle={uiT("{n} creative(s) — het ontwerp is de bron, de PNG wordt daaruit gemaakt", { n: rows.length })}
         actions={
           <div className="flex gap-2">
             <LinkButton href="/marketing/creatives/carousel" variant="secondary">
-              Carrousel met AI
-            </LinkButton>
-            <LinkButton href="/marketing/creatives/new">Nieuwe creative</LinkButton>
+              {uiT("Carrousel met AI")} </LinkButton>
+            <LinkButton href="/marketing/creatives/new">{uiT("Nieuwe creative")}</LinkButton>
           </div>
         }
       />
@@ -79,7 +83,7 @@ export default async function CreativesPage({
         />
       ))}
 
-      <nav aria-label="Filter op status" className="mb-4 flex flex-wrap gap-1">
+      <nav aria-label={uiT("Filter op status")} className="mb-4 flex flex-wrap gap-1">
         {[["", "Alle"], ...Object.entries(STATUS_META).map(([k, v]) => [k, v.label])].map(
           ([value, label]) => (
             <Link
@@ -101,14 +105,14 @@ export default async function CreativesPage({
 
       {rows.length === 0 ? (
         <EmptyState
-          title={status ? "Geen creatives met deze status" : "Nog geen creatives"}
-          description="Maak een creative vanuit de beeldbibliotheek of met de knop hierboven."
-          action={<LinkButton href="/marketing/creatives/new">Nieuwe creative</LinkButton>}
+          title={status ? uiT("Geen creatives met deze status") : uiT("Nog geen creatives")}
+          description={uiT("Maak een creative vanuit de beeldbibliotheek of met de knop hierboven.")}
+          action={<LinkButton href="/marketing/creatives/new">{uiT("Nieuwe creative")}</LinkButton>}
         />
       ) : (
         <ul
           className="grid list-none grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4"
-          aria-label="Creatives"
+          aria-label={uiT("Creatives")}
         >
           {rows.map((spec) => {
             const meta = STATUS_META[spec.status] ?? STATUS_META.draft;
@@ -119,12 +123,12 @@ export default async function CreativesPage({
                   <Link
                     href={`/marketing/creatives/${spec.id}`}
                     className="block focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent"
-                    aria-label={`Bekijk creative "${headline}"`}
+                    aria-label={uiT("Bekijk creative \"{v0}\"", { v0: headline })}
                   >
                     {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img
                       src={`/api/creatives/render?id=${spec.id}`}
-                      alt={`Voorbeeld: ${headline}`}
+                      alt={uiT("Voorbeeld: {v0}", { v0: headline })}
                       loading="lazy"
                       className="aspect-square w-full bg-background object-contain"
                     />
@@ -137,13 +141,12 @@ export default async function CreativesPage({
                       {spec.template} · {spec.format} · {spec.locale.toUpperCase()} · {spec.palette}
                     </p>
                     <div className="flex items-center justify-between gap-2">
-                      <Badge tone={meta.tone}>{meta.label}</Badge>
+                      <Badge tone={meta.tone}>{uiT(meta.label)}</Badge>
                       <Link
                         href={`/marketing/creatives/new?from=${spec.id}`}
                         className="font-medium text-accent hover:underline"
                       >
-                        Dupliceer en pas aan
-                      </Link>
+                        {uiT("Dupliceer en pas aan")} </Link>
                     </div>
                   </div>
                 </Card>
@@ -163,6 +166,7 @@ export default async function CreativesPage({
  * de layoutvalidatie zakt.
  */
 async function SetApproval({ setId, fout, aantal }: { setId: string; fout: string; aantal: string }) {
+  const uiT = await uiTranslation();
   const drafts = await db
     .select()
     .from(creativeSpecs)
@@ -191,8 +195,7 @@ async function SetApproval({ setId, fout, aantal }: { setId: string; fout: strin
   if (drafts.length === 0) {
     return (
       <Card className="mb-4 border-green-300 bg-green-50 p-3 text-sm" role="status">
-        Deze set is volledig goedgekeurd — klaar om te publiceren via een campagne.
-      </Card>
+        {uiT("Deze set is volledig goedgekeurd — klaar om te publiceren via een campagne.")} </Card>
     );
   }
 
@@ -206,8 +209,8 @@ async function SetApproval({ setId, fout, aantal }: { setId: string; fout: strin
     <Card className="mb-4 border-accent/40 bg-accent/5 p-4 text-sm" role="status">
       <p className="font-medium">
         {drafts.some((d) => d.carouselOrder != null)
-          ? `Carrouselset met ${drafts.length} kaartjes. Loop ze hieronder na en keur ze daarna hier in één keer goed.`
-          : `Set met ${drafts.length} openstaand${drafts.length === 1 ? " concept" : "e concepten"} (beelden × formaten × talen). Loop ze hieronder na en keur ze daarna hier in één keer goed.`}
+          ? uiT("Carrouselset met {v0} kaartjes. Loop ze hieronder na en keur ze daarna hier in één keer goed.", { v0: drafts.length })
+          : uiT(drafts.length === 1 ? "Set met {n} openstaand concept. Controleer het concept en keur het hier goed." : "Set met {n} openstaande concepten (beelden × formaten × talen). Controleer ze en keur ze hier samen goed.", { n: drafts.length })}
       </p>
       {fout && FOUT[fout] && (
         <p className="mt-2 rounded-md border border-red-300 bg-red-50 px-3 py-2 text-red-900" role="alert">
@@ -217,15 +220,13 @@ async function SetApproval({ setId, fout, aantal }: { setId: string; fout: strin
       {problems.size > 0 && (
         <div className="mt-2 space-y-1 rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-amber-900" role="alert">
           <p className="font-medium">
-            Deze set kan nog niet goedgekeurd worden — dit past niet:
-          </p>
+            {uiT("Deze set kan nog niet goedgekeurd worden — dit past niet:")} </p>
           <ul className="list-disc pl-5">
             {[...problems.entries()].map(([key, { count, exampleId }]) => (
               <li key={key}>
-                {count}× {key}{" "}
+                {count}{uiT("×")} {key}{" "}
                 <Link href={`/marketing/creatives/${exampleId}`} className="font-medium underline">
-                  bekijk voorbeeld
-                </Link>
+                  {uiT("bekijk voorbeeld")} </Link>
               </li>
             ))}
           </ul>
@@ -234,17 +235,16 @@ async function SetApproval({ setId, fout, aantal }: { setId: string; fout: strin
       <form action={approveCreativeSet} className="mt-3 space-y-2">
         <input type="hidden" name="setId" value={setId} />
         {[
-          { name: "check-prijs", label: "De genoemde prijs klopt met de actuele prijslijst" },
-          { name: "check-taal", label: "De tekst leest natuurlijk in álle talen (geen kromme vertaling)" },
-          { name: "check-claim", label: "Elke claim in beeld en tekst wordt waargemaakt" },
+          { name: "check-prijs", label: uiT("De genoemde prijs klopt met de actuele prijslijst") },
+          { name: "check-taal", label: uiT("De tekst leest natuurlijk in álle talen (geen kromme vertaling)") },
+          { name: "check-claim", label: uiT("Elke claim in beeld en tekst wordt waargemaakt") },
         ].map((item) => (
           <label key={item.name} className="flex items-center gap-2">
-            <input type="checkbox" name={item.name} className="size-4" /> {item.label}
+            <input type="checkbox" name={item.name} className="size-4" /> {uiT(item.label)}
           </label>
         ))}
         <button type="submit" className={buttonClass()}>
-          Keur alle {drafts.length} concepten goed
-        </button>
+          {uiT("Keur alle")} {drafts.length} {uiT("concepten goed")} </button>
       </form>
     </Card>
   );

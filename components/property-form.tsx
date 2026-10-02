@@ -1,3 +1,4 @@
+import { tekst as uiTranslation } from '@/lib/i18n/server';
 import {
   Button,
   Card,
@@ -13,7 +14,7 @@ import { propertyStatusMeta, propertyTypeMeta } from "@/app/(app)/_meta";
 
 type Option = { id: string; name: string };
 
-export function PropertyForm({
+export async function PropertyForm({
   action,
   property,
   contacts,
@@ -42,44 +43,45 @@ export function PropertyForm({
   users: Option[];
   submitLabel?: string;
 }) {
+  const uiT = await uiTranslation();
   return (
     <Card className="max-w-2xl">
       <CardContent>
         <form action={action} className="space-y-5">
           <div className="grid gap-4 sm:grid-cols-[1fr_auto]">
-            <Field label="Titel" htmlFor="title">
+            <Field label={uiT("Titel")} htmlFor="title">
               <Input
                 id="title"
                 name="title"
                 defaultValue={property?.title ?? ""}
                 required
-                placeholder="bv. Villa Montgó — Xàbia"
+                placeholder={uiT("bv. Villa Montgó — Xàbia")}
               />
             </Field>
-            <Field label="Referentie" htmlFor="reference">
+            <Field label={uiT("Referentie")} htmlFor="reference">
               <Input
                 id="reference"
                 name="reference"
                 defaultValue={property?.reference ?? ""}
-                placeholder="HAB-001"
+                placeholder={uiT("HAB-001")}
                 className="w-32"
               />
             </Field>
           </div>
 
           <div className="grid gap-4 sm:grid-cols-2">
-            <Field label="Type" htmlFor="type">
+            <Field label={uiT("Type")} htmlFor="type">
               <Select id="type" name="type" defaultValue={property?.type ?? "villa"}>
                 {(
                   Object.keys(propertyTypeMeta) as Array<keyof typeof propertyTypeMeta>
                 ).map((k) => (
                   <option key={k} value={k}>
-                    {propertyTypeMeta[k]}
+                    {uiT(propertyTypeMeta[k])}
                   </option>
                 ))}
               </Select>
             </Field>
-            <Field label="Status" htmlFor="status">
+            <Field label={uiT("Status")} htmlFor="status">
               <Select
                 id="status"
                 name="status"
@@ -91,7 +93,7 @@ export function PropertyForm({
                   >
                 ).map((k) => (
                   <option key={k} value={k}>
-                    {propertyStatusMeta[k].label}
+                    {uiT(propertyStatusMeta[k].label)}
                   </option>
                 ))}
               </Select>
@@ -99,7 +101,7 @@ export function PropertyForm({
           </div>
 
           <div className="grid gap-4 sm:grid-cols-2">
-            <Field label="Vraagprijs (€)" htmlFor="priceEur">
+            <Field label={uiT("Vraagprijs (€)")} htmlFor="priceEur">
               <Input
                 id="priceEur"
                 name="priceEur"
@@ -109,45 +111,45 @@ export function PropertyForm({
                 defaultValue={property?.priceEur ?? ""}
               />
             </Field>
-            <Field label="Locatie" htmlFor="location">
+            <Field label={uiT("Locatie")} htmlFor="location">
               <Input
                 id="location"
                 name="location"
                 defaultValue={property?.location ?? ""}
-                placeholder="Xàbia — Montgó"
+                placeholder={uiT("Xàbia — Montgó")}
               />
             </Field>
           </div>
 
           <div className="grid gap-4 sm:grid-cols-4">
-            <Field label="Slaapkamers" htmlFor="bedrooms">
+            <Field label={uiT("Slaapkamers")} htmlFor="bedrooms">
               <Input id="bedrooms" name="bedrooms" type="number" min="0" defaultValue={property?.bedrooms ?? ""} />
             </Field>
-            <Field label="Badkamers" htmlFor="bathrooms">
+            <Field label={uiT("Badkamers")} htmlFor="bathrooms">
               <Input id="bathrooms" name="bathrooms" type="number" min="0" defaultValue={property?.bathrooms ?? ""} />
             </Field>
-            <Field label="Bebouwd (m²)" htmlFor="builtSqm">
+            <Field label={uiT("Bebouwd (m²)")} htmlFor="builtSqm">
               <Input id="builtSqm" name="builtSqm" type="number" min="0" defaultValue={property?.builtSqm ?? ""} />
             </Field>
-            <Field label="Perceel (m²)" htmlFor="plotSqm">
+            <Field label={uiT("Perceel (m²)")} htmlFor="plotSqm">
               <Input id="plotSqm" name="plotSqm" type="number" min="0" defaultValue={property?.plotSqm ?? ""} />
             </Field>
           </div>
 
           <div className="grid gap-4 sm:grid-cols-2">
-            <Field label="Eigenaar (contact)" hint="typ een naam">
+            <Field label={uiT("Eigenaar (contact)")} hint={uiT("typ een naam")}>
               {/* Zoekveld, geen uitklaplijst: er staan honderden contacten in. */}
               <Combobox
                 name="ownerContactId"
                 defaultValue={property?.ownerContactId ?? ""}
                 clearable
-                placeholder="Zoek een contact…"
+                placeholder={uiT("Zoek een contact…")}
                 options={contacts.map((c) => ({ value: c.id, label: c.name }))}
               />
             </Field>
-            <Field label="Verantwoordelijke" htmlFor="ownerId">
+            <Field label={uiT("Verantwoordelijke")} htmlFor="ownerId">
               <Select id="ownerId" name="ownerId" defaultValue={property?.ownerId ?? ""}>
-                <option value="">— ik —</option>
+                <option value="">{uiT("— ik —")}</option>
                 {users.map((u) => (
                   <option key={u.id} value={u.id}>
                     {u.name}
@@ -157,7 +159,7 @@ export function PropertyForm({
             </Field>
           </div>
 
-          <Field label="Omschrijving" htmlFor="description">
+          <Field label={uiT("Omschrijving")} htmlFor="description">
             <Textarea
               id="description"
               name="description"
@@ -172,8 +174,7 @@ export function PropertyForm({
               defaultChecked={property?.isPublished ?? false}
               className="size-4 rounded border-border"
             />
-            Gepubliceerd (zichtbaar op de website)
-          </label>
+            {uiT("Gepubliceerd (zichtbaar op de website)")} </label>
 
           <div className="pt-1">
             <Button type="submit">{submitLabel}</Button>

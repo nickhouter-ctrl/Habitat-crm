@@ -1,3 +1,5 @@
+import { datumTaal } from "@/lib/i18n/server";
+import { tekst as uiTranslation } from '@/lib/i18n/server';
 /**
  * Alles van één leverancier of bouwer bij elkaar: facturen, wat er nog
  * openstaat, op welke werven het geboekt is en — bij eigen ploeg — de uren.
@@ -55,6 +57,8 @@ export async function generateMetadata({ params }: { params: Promise<{ key: stri
 }
 
 export default async function LeverancierPage({ params }: { params: Promise<{ key: string }> }) {
+  const uiDateLocale = await datumTaal();
+  const uiT = await uiTranslation();
   const { key } = await params;
 
   const facturen = await db.execute<Factuur>(sql`
@@ -110,52 +114,50 @@ export default async function LeverancierPage({ params }: { params: Promise<{ ke
         title={
           <span className="flex flex-wrap items-center gap-2">
             {naam}
-            {gewerkteUren > 0 && <Badge tone="accent">eigen ploeg</Badge>}
-            {vasteLast && <Badge tone="neutral">vaste last{vasteLast.note ? ` · ${vasteLast.note}` : ""}</Badge>}
+            {gewerkteUren > 0 && <Badge tone="accent">{uiT("eigen ploeg")}</Badge>}
+            {vasteLast && <Badge tone="neutral">{uiT("vaste last")}{vasteLast.note ? ` · ${vasteLast.note}` : ""}</Badge>}
           </span>
         }
-        subtitle={`${facturen.length} ${facturen.length === 1 ? "factuur" : "facturen"} in de administratie`}
+        subtitle={uiT("{v0} {v1} in de administratie", { v0: facturen.length, v1: facturen.length === 1 ? "factuur" : "facturen" })}
         actions={
           <LinkButton href="/leveranciers" variant="ghost">
-            ← Alle leveranciers
-          </LinkButton>
+            {uiT("← Alle leveranciers")} </LinkButton>
         }
       />
 
       {ploegkaart && (
         <Card className="mb-5">
           <CardContent className="py-3 text-sm">
-            {ploegkaart.name} hoort bij de eigen ploeg.{" "}
+            {ploegkaart.name} {uiT("hoort bij de eigen ploeg.")}{" "}
             <Link href={`/ploeg/${ploegkaart.id}`} className="text-accent hover:underline">
-              Naar zijn ploegpagina
-            </Link>{" "}
-            <span className="text-muted">— daar staan zijn uren per werf, zijn tarieven en zijn facturen bij elkaar.</span>
+              {uiT("Naar zijn ploegpagina")} </Link>{" "}
+            <span className="text-muted">{uiT("— daar staan zijn uren per werf, zijn tarieven en zijn facturen bij elkaar.")}</span>
           </CardContent>
         </Card>
       )}
 
       <div className="mb-5 grid grid-cols-2 gap-3 sm:grid-cols-3">
-        <StatTile label="Ingekocht (ex. btw)" value={formatEUR(totaalEx)} />
+        <StatTile label={uiT("Ingekocht (ex. btw)")} value={formatEUR(totaalEx)} />
         <StatTile
-          label="Uren geboekt"
-          value={gewerkteUren > 0 ? gewerkteUren.toLocaleString("nl-NL") : "—"}
-          hint={gewerkteUren > 0 ? `${formatEUR(Number(uren?.kosten ?? 0))} arbeidskost` : "geen urenregels"}
+          label={uiT("Uren geboekt")}
+          value={gewerkteUren > 0 ? gewerkteUren.toLocaleString(uiDateLocale) : "—"}
+          hint={gewerkteUren > 0 ? uiT("{v0} arbeidskost", { v0: formatEUR(Number(uren?.kosten ?? 0)) }) : uiT("geen urenregels")}
         />
-        <StatTile label="Werven" value={perProject.filter((p) => p.project_id).length} />
+        <StatTile label={uiT("Werven")} value={perProject.filter((p) => p.project_id).length} />
       </div>
 
       <div className="grid gap-5 lg:grid-cols-[1fr_20rem]">
         <Card className="overflow-hidden">
           <CardHeader>
-            <CardTitle>Facturen</CardTitle>
+            <CardTitle>{uiT("Facturen")}</CardTitle>
           </CardHeader>
           <Table>
             <THead>
               <tr>
-                <Th>Referentie</Th>
-                <Th>Datum</Th>
-                <Th>Project</Th>
-                <Th className="text-right">Ex. btw</Th>
+                <Th>{uiT("Referentie")}</Th>
+                <Th>{uiT("Datum")}</Th>
+                <Th>{uiT("Project")}</Th>
+                <Th className="text-right">{uiT("Ex. btw")}</Th>
               </tr>
             </THead>
             <TBody>
@@ -165,11 +167,11 @@ export default async function LeverancierPage({ params }: { params: Promise<{ ke
                     <Link href={`/inkooporders/${f.id}`} className="font-medium hover:underline">
                       {f.reference ?? "—"}
                     </Link>
-                    {f.count_as_labor && <span className="block text-xs text-muted">geboekt als uren</span>}
+                    {f.count_as_labor && <span className="block text-xs text-muted">{uiT("geboekt als uren")}</span>}
                   </Td>
                   <Td className="whitespace-nowrap text-muted">
                     {f.order_date
-                      ? new Date(f.order_date).toLocaleDateString("nl-NL", { day: "numeric", month: "short", year: "numeric" })
+                      ? new Date(f.order_date).toLocaleDateString(uiDateLocale, { day: "numeric", month: "short", year: "numeric" })
                       : "—"}
                   </Td>
                   <Td>
@@ -190,8 +192,8 @@ export default async function LeverancierPage({ params }: { params: Promise<{ ke
 
         <Card>
           <CardHeader>
-            <CardTitle>Verdeeld over werven</CardTitle>
-            <span className="text-xs text-muted">waar het geld naartoe ging</span>
+            <CardTitle>{uiT("Verdeeld over werven")}</CardTitle>
+            <span className="text-xs text-muted">{uiT("waar het geld naartoe ging")}</span>
           </CardHeader>
           <CardContent className="space-y-2 text-sm">
             {perProject.map((p) => (
@@ -202,7 +204,7 @@ export default async function LeverancierPage({ params }: { params: Promise<{ ke
                       {p.naam}
                     </Link>
                   ) : (
-                    <span className="text-muted">geen project</span>
+                    <span className="text-muted">{uiT("geen project")}</span>
                   )}
                   <span className="ml-1 text-xs text-muted">({p.n})</span>
                 </span>

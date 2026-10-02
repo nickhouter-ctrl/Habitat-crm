@@ -8,6 +8,7 @@
  * opslaan maakt de server het contact aan en zet de afspraak in de agenda; de
  * link naar dat contact verschijnt meteen in de rij.
  */
+import { useT } from "@/components/taal-provider";
 import { useState, useTransition } from "react";
 import Link from "next/link";
 
@@ -53,6 +54,7 @@ export function BelFormulier({
   action: (formData: FormData) => Promise<BelResultaat>;
   labels: BelLabels;
 }) {
+  const t = useT();
   const [bezig, start] = useTransition();
   const [uitkomst, setUitkomst] = useState("");
   const [note, setNote] = useState("");
@@ -108,7 +110,7 @@ export function BelFormulier({
           value={uitkomst}
           onChange={(e) => setUitkomst(e.target.value)}
           className="h-8 w-36 text-sm"
-          aria-label={`Uitkomst gesprek ${bedrijf}`}
+          aria-label={t("Uitkomst gesprek {bedrijf}", { bedrijf })}
         >
           <option value="">{labels.uitkomst}</option>
           {SLEUTELS.map((v) => (

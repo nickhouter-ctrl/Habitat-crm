@@ -1,4 +1,5 @@
 "use client";
+import { useT as useUiTranslation } from '@/components/taal-provider';
 
 import { useCallback, useEffect, useState } from "react";
 
@@ -14,6 +15,7 @@ import {
 
 /** Uitleveren: kies een openstaande pakbon, scan de regels af, markeer afgeleverd. */
 export function DeliverPicking() {
+  const uiT = useUiTranslation();
   const [notes, setNotes] = useState<OpenDeliveryNote[] | null>(null);
   const [current, setCurrent] = useState<DeliveryNoteForPicking | null>(null);
   const [scanned, setScanned] = useState<Record<number, number>>({});
@@ -96,11 +98,10 @@ export function DeliverPicking() {
     return (
       <div className="space-y-3">
         {notes === null ? (
-          <p className="text-sm text-muted">Laden…</p>
+          <p className="text-sm text-muted">{uiT("Laden…")}</p>
         ) : notes.length === 0 ? (
           <div className="rounded-lg border p-4 text-sm text-muted">
-            Geen openstaande pakbonnen om uit te leveren.
-          </div>
+            {uiT("Geen openstaande pakbonnen om uit te leveren.")} </div>
         ) : (
           notes.map((n) => (
             <button
@@ -111,11 +112,11 @@ export function DeliverPicking() {
               className="flex w-full items-center justify-between rounded-lg border p-4 text-left transition-colors hover:bg-background disabled:opacity-50"
             >
               <span>
-                <span className="font-medium">{n.number ?? "Pakbon"}</span>
+                <span className="font-medium">{n.number ?? uiT("Pakbon")}</span>
                 <span className="block text-sm text-muted">{n.contact ?? "—"}</span>
               </span>
               <span className="text-sm text-muted">
-                {n.lineCount} regel{n.lineCount === 1 ? "" : "s"}
+                {n.lineCount} {uiT(n.lineCount === 1 ? "regel" : "regels")}
               </span>
             </button>
           ))
@@ -133,7 +134,7 @@ export function DeliverPicking() {
     <div className="space-y-4">
       <div className="flex items-center justify-between gap-2 rounded-lg border bg-surface px-3 py-2">
         <div>
-          <p className="font-medium">{current.number ?? "Pakbon"}</p>
+          <p className="font-medium">{current.number ?? uiT("Pakbon")}</p>
           <p className="text-sm text-muted">{current.contact ?? "—"}</p>
         </div>
         <div className="text-right">
@@ -141,8 +142,7 @@ export function DeliverPicking() {
             {done}/{total}
           </p>
           <button type="button" onClick={backToList} className="text-xs text-muted hover:underline">
-            ← andere pakbon
-          </button>
+            {uiT("← andere pakbon")} </button>
         </div>
       </div>
 
@@ -177,7 +177,7 @@ export function DeliverPicking() {
                   {l.name}
                 </span>
                 {!l.barcode && !l.sku && (
-                  <span className="block text-xs text-amber-600">geen barcode — handmatig afvinken</span>
+                  <span className="block text-xs text-amber-600">{uiT("geen barcode — handmatig afvinken")}</span>
                 )}
               </span>
               <span className="flex items-center gap-1.5">
@@ -205,7 +205,7 @@ export function DeliverPicking() {
       </ul>
 
       <Button onClick={markDelivered} disabled={busy} className="w-full">
-        {allDone ? "Markeer afgeleverd" : `Markeer afgeleverd (${done}/${total} gescand)`}
+        {allDone ? uiT("Markeer afgeleverd") : uiT("Markeer afgeleverd ({v0}/{v1} gescand)", { v0: done, v1: total })}
       </Button>
     </div>
   );

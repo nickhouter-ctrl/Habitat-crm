@@ -1,4 +1,5 @@
 "use client";
+import { useT as useUiTranslation } from '@/components/taal-provider';
 
 /**
  * Inkoopfactuur aan een werf hangen — in twee stappen: welk project, en telt het
@@ -62,6 +63,7 @@ export function PurchaseProjectLink({
   /** Bestaande verdeling om aan te passen; zet het formulier meteen in verdeel-stand. */
   initialSplit?: SplitRow[];
 }) {
+  const uiT = useUiTranslation();
   const [kind, setKind] = useState<"material" | "labor">(current.countAsLabor ? "labor" : "material");
   const [wijzigen, setWijzigen] = useState(!current.projectId);
   // De namen die anderen gebruiken zijn zoekbaar én zichtbaar: wie een
@@ -117,12 +119,12 @@ export function PurchaseProjectLink({
     return (
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <p className="text-lg font-semibold">{current.projectName ?? "Onbekend project"}</p>
+          <p className="text-lg font-semibold">{current.projectName ?? uiT("Onbekend project")}</p>
           <p className="mt-1 flex items-center gap-2 text-sm text-muted">
             <Badge tone={current.countAsLabor ? "accent" : "neutral"}>
-              {current.countAsLabor ? "telt als uren / arbeid" : "telt als materiaalkost"}
+              {current.countAsLabor ? uiT("telt als uren / arbeid") : uiT("telt als materiaalkost")}
             </Badge>
-            {current.countAsLabor && current.hours ? <span>{current.hours} uur geboekt</span> : null}
+            {current.countAsLabor && current.hours ? <span>{current.hours} {uiT("uur geboekt")}</span> : null}
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -131,13 +133,11 @@ export function PurchaseProjectLink({
             onClick={() => setWijzigen(true)}
             className="rounded-md border bg-surface px-3 py-2 text-sm font-medium shadow-sm transition-colors hover:bg-background"
           >
-            Wijzigen
-          </button>
+            {uiT("Wijzigen")} </button>
           <form action={linkAsMaterial}>
             <input type="hidden" name="projectId" value="" />
             <SubmitButton size="sm" variant="ghost" pendingLabel="…">
-              Ontkoppelen
-            </SubmitButton>
+              {uiT("Ontkoppelen")} </SubmitButton>
           </form>
         </div>
       </div>
@@ -153,8 +153,8 @@ export function PurchaseProjectLink({
           className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-accent/30 bg-accent/5 p-3"
         >
           <p className="text-sm">
-            Gelezen op de factuur: <strong>{suggestion.kind === "labor" ? "uren / arbeid" : "materiaal"}</strong>
-            {suggestion.hours ? ` (${suggestion.hours} uur)` : ""} voor <strong>{suggestion.projectName}</strong>.
+            {uiT("Gelezen op de factuur:")} <strong>{suggestion.kind === "labor" ? uiT("uren / arbeid") : uiT("materiaal")}</strong>
+            {suggestion.hours ? uiT(" ({v0} uur)", { v0: suggestion.hours }) : ""} {uiT("voor")} <strong>{suggestion.projectName}</strong>.
           </p>
           <input type="hidden" name="projectId" value={suggestion.projectId} />
           {suggestion.kind === "labor" && (
@@ -164,20 +164,19 @@ export function PurchaseProjectLink({
             </>
           )}
           <SubmitButton size="sm" variant="primary" pendingLabel="…">
-            Klopt, koppelen
-          </SubmitButton>
+            {uiT("Klopt, koppelen")} </SubmitButton>
         </form>
       )}
 
       <form action={meerdereWerven ? verdeel : kind === "labor" ? linkAsHours : linkAsMaterial} className="space-y-4">
         <div>
-          <label className="mb-1.5 block text-sm font-medium">1 · Welk project?</label>
+          <label className="mb-1.5 block text-sm font-medium">{uiT("1 · Welk project?")}</label>
           {!meerdereWerven && (
             <Combobox
               name="projectId"
               defaultValue={current.projectId ?? suggestion?.projectId ?? ""}
               clearable
-              placeholder="Zoek een werf…"
+              placeholder={uiT("Zoek een werf…")}
               options={opties}
               menuClassName="w-full"
             />
@@ -190,7 +189,7 @@ export function PurchaseProjectLink({
               onChange={(e) => setMeerdereWerven(e.target.checked)}
             />
             <span>
-              Deze factuur loopt over <strong>meerdere werven</strong>
+              {uiT("Deze factuur loopt over")} <strong>{uiT("meerdere werven")}</strong>
             </span>
           </label>
           {meerdereWerven && (
@@ -201,21 +200,21 @@ export function PurchaseProjectLink({
                     name={`split_${i}_projectId`}
                     defaultValue={r.projectId ?? ""}
                     clearable
-                    placeholder="Zoek een werf…"
+                    placeholder={uiT("Zoek een werf…")}
                     options={opties}
                     menuClassName="w-full"
                   />
                   <Input
                     name={`split_${i}_hours`}
                     inputMode="decimal"
-                    placeholder="uren"
+                    placeholder={uiT("uren")}
                     className="text-right"
                     defaultValue={r.hours != null ? String(r.hours) : ""}
                   />
                   <Input
                     name={`split_${i}_amount`}
                     inputMode="decimal"
-                    placeholder="bedrag ex. btw"
+                    placeholder={uiT("bedrag ex. btw")}
                     className="text-right"
                     defaultValue={r.amount != null ? String(r.amount).replace(".", ",") : ""}
                   />
@@ -226,19 +225,15 @@ export function PurchaseProjectLink({
                 onClick={() => setRijen((rs) => [...rs, leegRij()])}
                 className="text-xs text-accent hover:underline"
               >
-                + werf toevoegen
-              </button>
+                {uiT("+ werf toevoegen")} </button>
               <p className="text-xs text-muted">
-                Bedrag leeg laten mag: dan wordt € {amountExVat.toFixed(2).replace(".", ",")} ex btw over de werven
-                verdeeld naar rato van de uren. De inkooporder zelf blijft bij een verdeling ongekoppeld — anders telt
-                het bedrag dubbel.
-              </p>
+                {uiT("Bedrag leeg laten mag: dan wordt €")} {amountExVat.toFixed(2).replace(".", ",")} {uiT("ex btw over de werven verdeeld naar rato van de uren. De inkooporder zelf blijft bij een verdeling ongekoppeld — anders telt het bedrag dubbel.")} </p>
             </div>
           )}
         </div>
 
         <div>
-          <span className="mb-1.5 block text-sm font-medium">2 · Hoe telt deze factuur mee?</span>
+          <span className="mb-1.5 block text-sm font-medium">{uiT("2 · Hoe telt deze factuur mee?")}</span>
           <div className="grid gap-3 sm:grid-cols-2">
             <Keuze
               actief={kind === "material"}
@@ -260,34 +255,32 @@ export function PurchaseProjectLink({
         {kind === "labor" && (
           <div className="space-y-3 rounded-lg border bg-background/50 p-3">
             <div>
-              <label className="mb-1.5 block text-sm font-medium">Wie heeft deze uren gemaakt?</label>
+              <label className="mb-1.5 block text-sm font-medium">{uiT("Wie heeft deze uren gemaakt?")}</label>
               <Combobox
                 name="workerId"
                 defaultValue={workerId}
                 clearable
-                placeholder="Zoek in de ploeg…"
+                placeholder={uiT("Zoek in de ploeg…")}
                 options={werkerOpties}
                 menuClassName="w-full"
                 onSelect={(v) => kiesArbeider(v)}
               />
               <p className="mt-1 text-xs text-muted">
                 {workerId
-                  ? "De uren komen onder zijn naam op het project te staan."
-                  : "Zonder naam blijft de urenregel losse tekst en telt hij niet mee in zijn urenoverzicht."}
+                  ? uiT("De uren komen onder zijn naam op het project te staan.")
+                  : uiT("Zonder naam blijft de urenregel losse tekst en telt hij niet mee in zijn urenoverzicht.")}
               </p>
             </div>
             {meerdereWerven && (
               <p className="text-xs text-muted">
-                De uren vul je hierboven per werf in; het uurtarief volgt uit bedrag ÷ uren
-                {tarief > 0 ? ` (of uit zijn ploegkaart: € ${tarief}/u)` : ""}.
+                {uiT("De uren vul je hierboven per werf in; het uurtarief volgt uit bedrag ÷ uren")} {tarief > 0 ? uiT(" (of uit zijn ploegkaart: € {v0}/u)", { v0: tarief }) : ""}.
               </p>
             )}
             {!meerdereWerven && (
             <div className="flex flex-wrap items-end gap-3">
               <div className="w-32">
                 <label className="mb-1.5 block text-sm font-medium" htmlFor="po-hours">
-                  Aantal uren
-                </label>
+                  {uiT("Aantal uren")} </label>
                 <Input
                   id="po-hours"
                   name="hours"
@@ -300,15 +293,15 @@ export function PurchaseProjectLink({
                     setUren(e.target.value);
                     setZelfGetypt(true);
                   }}
-                  placeholder="bijv. 94,5"
+                  placeholder={uiT("bijv. 94,5")}
                 />
               </div>
               <p className="flex-1 text-xs text-muted">
                 {berekendUitTarief
-                  ? `Berekend: € ${amountExVat.toFixed(2)} ex btw ÷ € ${tarief}/u van zijn ploegkaart. Noemt de factuur andere uren, typ ze er dan overheen.`
+                  ? uiT("Berekend: € {v0} ex btw ÷ € {v1}/u van zijn ploegkaart. Noemt de factuur andere uren, typ ze er dan overheen.", { v0: amountExVat.toFixed(2), v1: tarief })
                   : workerId && tarief <= 0
-                    ? "Op zijn ploegkaart staat geen uurtarief, dus de uren zijn niet te berekenen. Vul ze zelf in — anders komt het hele bedrag als één post van 1 uur op het project."
-                    : "Het uurtarief volgt uit bedrag ÷ uren."}
+                    ? uiT("Op zijn ploegkaart staat geen uurtarief, dus de uren zijn niet te berekenen. Vul ze zelf in — anders komt het hele bedrag als één post van 1 uur op het project.")
+                    : uiT("Het uurtarief volgt uit bedrag ÷ uren.")}
               </p>
             </div>
             )}
@@ -316,10 +309,8 @@ export function PurchaseProjectLink({
             <label className="flex items-start gap-2 text-sm">
               <input type="checkbox" name="alreadyLogged" className="mt-0.5 size-4" />
               <span>
-                De uren staan al op het project
-                <span className="block text-xs text-muted">
-                  bijvoorbeeld via het urenportaal ingevuld — dan alleen koppelen, geen tweede urenregel maken
-                </span>
+                {uiT("De uren staan al op het project")} <span className="block text-xs text-muted">
+                  {uiT("bijvoorbeeld via het urenportaal ingevuld — dan alleen koppelen, geen tweede urenregel maken")} </span>
               </span>
             </label>
             )}
@@ -327,14 +318,14 @@ export function PurchaseProjectLink({
         )}
 
         <div className="flex flex-wrap items-center gap-3">
-          <SubmitButton variant="primary" pendingLabel={meerdereWerven ? "Verdelen…" : "Koppelen…"}>
+          <SubmitButton variant="primary" pendingLabel={meerdereWerven ? uiT("Verdelen…") : uiT("Koppelen…")}>
             {meerdereWerven
               ? kind === "labor"
-                ? "Verdelen als uren"
-                : "Verdelen als materiaal"
+                ? uiT("Verdelen als uren")
+                : uiT("Verdelen als materiaal")
               : kind === "labor"
-                ? "Koppelen als uren"
-                : "Koppelen als materiaal"}
+                ? uiT("Koppelen als uren")
+                : uiT("Koppelen als materiaal")}
           </SubmitButton>
           {current.projectId && (
             <button
@@ -342,8 +333,7 @@ export function PurchaseProjectLink({
               onClick={() => setWijzigen(false)}
               className="text-sm text-muted transition-colors hover:text-foreground"
             >
-              Annuleren
-            </button>
+              {uiT("Annuleren")} </button>
           )}
         </div>
       </form>

@@ -1,3 +1,4 @@
+import { tekst as uiTranslation } from '@/lib/i18n/server';
 import Link from "next/link";
 
 import { Combobox } from "@/components/combobox";
@@ -28,7 +29,10 @@ import { formatEUR } from "@/lib/utils";
 import { FileText, Table2 } from "lucide-react";
 import { mailDistributeurPrijslijst } from "./actions";
 
-export const metadata = { title: "Prijzen verkooppunten" };
+export async function generateMetadata() {
+  const uiT = await uiTranslation();
+  return { title: uiT("Prijzen verkooppunten") };
+}
 export const dynamic = "force-dynamic";
 
 /**
@@ -45,6 +49,7 @@ export default async function DistributeurPrijzenPage({
 }: {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
+  const uiT = await uiTranslation();
   const sp = await searchParams;
   const serieParam = typeof sp.serie === "string" ? sp.serie : "";
   const sent = sp.sent === "1";
@@ -65,19 +70,17 @@ export default async function DistributeurPrijzenPage({
   return (
     <>
       <PageHeader
-        title="Prijzen verkooppunten"
-        subtitle="Flexibel Stone — voor winkels en showrooms die doorverkopen"
+        title={uiT("Prijzen verkooppunten")}
+        subtitle={uiT("Flexibel Stone — voor winkels en showrooms die doorverkopen")}
         actions={
           <Link href="/prijslijst" className="text-sm text-accent hover:underline">
-            Prijslijst verkoop
-          </Link>
+            {uiT("Prijslijst verkoop")} </Link>
         }
       />
 
       {sent && (
         <p className="mb-5 rounded-lg bg-success/10 px-4 py-3 text-sm text-success">
-          De prijslijst is verstuurd.
-        </p>
+          {uiT("De prijslijst is verstuurd.")} </p>
       )}
       {fout && <p className="mb-5 rounded-lg bg-danger/10 px-4 py-3 text-sm text-danger">{fout}</p>}
 
@@ -86,19 +89,16 @@ export default async function DistributeurPrijzenPage({
         <CardContent className="grid gap-6 sm:grid-cols-[auto_auto_minmax(0,1fr)] sm:items-center">
           <div>
             <p className="font-display text-4xl font-semibold tabular-nums text-accent">−{KORTING_VERKOOPPUNT}%</p>
-            <p className="mt-1 text-sm font-medium">Inkoop verkooppunt</p>
+            <p className="mt-1 text-sm font-medium">{uiT("Inkoop verkooppunt")}</p>
           </div>
           <div className="sm:border-l sm:pl-6">
             <p className="font-display text-4xl font-semibold tabular-nums">−{KORTING_SHOWROOM}%</p>
-            <p className="mt-1 text-sm font-medium">Eigen showroom</p>
+            <p className="mt-1 text-sm font-medium">{uiT("Eigen showroom")}</p>
           </div>
           <p className="max-w-prose text-sm leading-relaxed text-muted sm:border-l sm:pl-6">
-            De adviesprijs ligt vast — overal dezelfde, ook bij ons. Daardoor staat de marge van het
-            verkooppunt vast en valt er niets te onderhandelen. Showroommateriaal is om te tonen, niet
-            om door te verkopen. Losse projectprijzen voor architecten en bouwbedrijven staan bij{" "}
+            {uiT("De adviesprijs ligt vast — overal dezelfde, ook bij ons. Daardoor staat de marge van het verkooppunt vast en valt er niets te onderhandelen. Showroommateriaal is om te tonen, niet om door te verkopen. Losse projectprijzen voor architecten en bouwbedrijven staan bij")}{" "}
             <Link href="/prijslijst" className="text-accent hover:underline">
-              Prijslijst verkoop
-            </Link>
+              {uiT("Prijslijst verkoop")} </Link>
             .
           </p>
         </CardContent>
@@ -110,8 +110,8 @@ export default async function DistributeurPrijzenPage({
       <TabsRoot defaultTab="prijzen" ids={["prijzen", "document"]}>
         <TabsBar
           tabs={[
-            { id: "prijzen", label: "Prijzen", icon: <Table2 />, badge: aantalMaten },
-            { id: "document", label: "Document versturen", icon: <FileText /> },
+            { id: "prijzen", label: uiT("Prijzen"), icon: <Table2 />, badge: aantalMaten },
+            { id: "document", label: uiT("Document versturen"), icon: <FileText /> },
           ]}
         />
 
@@ -120,17 +120,16 @@ export default async function DistributeurPrijzenPage({
         <Card>
           <CardHeader className="flex-wrap">
             <div>
-              <CardTitle>{serie || "Alle series"}</CardTitle>
+              <CardTitle>{serie || uiT("Alle series")}</CardTitle>
               <p className="mt-0.5 text-xs text-muted">
-                {zichtbaar.length} {zichtbaar.length === 1 ? "paneel" : "panelen"} · {aantalMaten}{" "}
-                {aantalMaten === 1 ? "maat" : "maten"} · bedragen ex. btw
-              </p>
+                {zichtbaar.length} {zichtbaar.length === 1 ? uiT("paneel") : uiT("panelen")} · {aantalMaten}{" "}
+                {aantalMaten === 1 ? uiT("maat") : uiT("maten")} {uiT("· bedragen ex. btw")} </p>
             </div>
             {/* Negentig series in een rij knoppen werd een muur; een keuzelijst is
                 rustiger en op een smal scherm ook nog bruikbaar. */}
             <form method="GET" action="/prijslijst/distributeur" className="flex items-end gap-2">
               <Select name="serie" defaultValue={serie} className="min-w-52">
-                <option value="">Alle series</option>
+                <option value="">{uiT("Alle series")}</option>
                 {series.map((s) => (
                   <option key={s} value={s}>
                     {s}
@@ -138,18 +137,17 @@ export default async function DistributeurPrijzenPage({
                 ))}
               </Select>
               <Button type="submit" variant="secondary">
-                Toon
-              </Button>
+                {uiT("Toon")} </Button>
             </form>
           </CardHeader>
           <CardContent className="p-0">
             <Table wrapperClassName="max-h-[68vh] overflow-y-auto">
               <THead className="sticky top-0 z-10 bg-surface">
                 <tr>
-                  <Th>Maat</Th>
-                  <Th className="text-right">Adviesprijs</Th>
-                  <Th className="text-right">Verkooppunt −{KORTING_VERKOOPPUNT}%</Th>
-                  <Th className="text-right">Showroom −{KORTING_SHOWROOM}%</Th>
+                  <Th>{uiT("Maat")}</Th>
+                  <Th className="text-right">{uiT("Adviesprijs")}</Th>
+                  <Th className="text-right">{uiT("Verkooppunt −")}{KORTING_VERKOOPPUNT}%</Th>
+                  <Th className="text-right">{uiT("Showroom −")}{KORTING_SHOWROOM}%</Th>
                 </tr>
               </THead>
               <TBody>
@@ -167,13 +165,12 @@ export default async function DistributeurPrijzenPage({
                           {m.dim}
                           {m.inStock && (
                             <Badge tone="neutral" className="ml-2">
-                              voorraad
-                            </Badge>
+                              {uiT("voorraad")} </Badge>
                           )}
                         </Td>
                         <Td className="whitespace-nowrap text-right tabular-nums text-muted">
                           {formatEUR(m.adviesEx)}
-                          <span className="ml-2 text-xs opacity-70">{formatEUR(m.adviesIncl)} incl.</span>
+                          <span className="ml-2 text-xs opacity-70">{formatEUR(m.adviesIncl)} {uiT("incl.")}</span>
                         </Td>
                         <Td className="text-right tabular-nums font-semibold">{formatEUR(m.verkooppunt)}</Td>
                         <Td className="text-right tabular-nums text-muted">{formatEUR(m.showroom)}</Td>
@@ -192,17 +189,16 @@ export default async function DistributeurPrijzenPage({
         <Card className="mb-5">
           <CardHeader>
             <div>
-              <CardTitle>Het document</CardTitle>
+              <CardTitle>{uiT("Het document")}</CardTitle>
               <p className="mt-0.5 text-xs text-muted">
-                Met foto&apos;s, in de huisstijl. Dit stuur je na de beurs mee.
-              </p>
+                {uiT("Met foto's, in de huisstijl. Dit stuur je na de beurs mee.")} </p>
             </div>
           </CardHeader>
           <CardContent className="space-y-5">
             <form method="GET" action="/prijslijst/distributeur/pdf" className="flex flex-wrap items-end gap-4" target="_blank">
-              <Field label="Serie" htmlFor="d-serie">
+              <Field label={uiT("Serie")} htmlFor="d-serie">
                 <Select id="d-serie" name="serie" defaultValue={serie} className="min-w-52">
-                  <option value="">Volledige collectie</option>
+                  <option value="">{uiT("Volledige collectie")}</option>
                   {series.map((s) => (
                     <option key={s} value={s}>
                       {s}
@@ -210,7 +206,7 @@ export default async function DistributeurPrijzenPage({
                   ))}
                 </Select>
               </Field>
-              <Field label="Taal" htmlFor="d-taal">
+              <Field label={uiT("Taal")} htmlFor="d-taal">
                 <Select id="d-taal" name="taal" defaultValue="es">
                   <option value="es">Español</option>
                   <option value="en">English</option>
@@ -218,20 +214,19 @@ export default async function DistributeurPrijzenPage({
                   <option value="de">Deutsch</option>
                 </Select>
               </Field>
-              <Button type="submit">Download</Button>
+              <Button type="submit">{uiT("Download")}</Button>
             </form>
 
             <details className="group border-t pt-4">
               <summary className="cursor-pointer text-sm font-medium text-accent [&::-webkit-details-marker]:hidden">
-                Of mail hem direct naar een klant
-              </summary>
+                {uiT("Of mail hem direct naar een klant")} </summary>
               <form action={mailDistributeurPrijslijst} className="mt-4 grid max-w-3xl gap-4 sm:grid-cols-2">
-                <Field label="Klant" htmlFor="m-contact" hint="Alleen contacten met e-mailadres">
-                  <Combobox name="contactId" options={klantOpties} placeholder="Zoek klant…" />
+                <Field label={uiT("Klant")} htmlFor="m-contact" hint={uiT("Alleen contacten met e-mailadres")}>
+                  <Combobox name="contactId" options={klantOpties} placeholder={uiT("Zoek klant…")} />
                 </Field>
-                <Field label="Taal" htmlFor="m-taal" hint="Leeg = de taal van het contact">
+                <Field label={uiT("Taal")} htmlFor="m-taal" hint={uiT("Leeg = de taal van het contact")}>
                   <Select id="m-taal" name="taal" defaultValue="">
-                    <option value="">Taal van het contact</option>
+                    <option value="">{uiT("Taal van het contact")}</option>
                     <option value="es">Español</option>
                     <option value="en">English</option>
                     <option value="nl">Nederlands</option>
@@ -240,18 +235,18 @@ export default async function DistributeurPrijzenPage({
                 </Field>
                 <input type="hidden" name="serie" value={serie} />
                 <div className="sm:col-span-2">
-                  <Field label="Bericht" htmlFor="m-bericht" hint="Optioneel">
+                  <Field label={uiT("Bericht")} htmlFor="m-bericht" hint={uiT("Optioneel")}>
                     <textarea
                       id="m-bericht"
                       name="bericht"
                       rows={3}
                       className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
-                      placeholder="Leuk je te spreken op de beurs. Hierbij onze prijzen…"
+                      placeholder={uiT("Leuk je te spreken op de beurs. Hierbij onze prijzen…")}
                     />
                   </Field>
                 </div>
                 <div className="sm:col-span-2">
-                  <SubmitButton pendingLabel="Versturen…">Verstuur per e-mail</SubmitButton>
+                  <SubmitButton pendingLabel={uiT("Versturen…")}>{uiT("Verstuur per e-mail")}</SubmitButton>
                 </div>
               </form>
             </details>

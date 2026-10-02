@@ -1,4 +1,5 @@
 "use client";
+import { useT as useUiTranslation } from '@/components/taal-provider';
 
 /**
  * Concurrent zoeken op naam in het EU-advertentiearchief (U8). Twee smaken:
@@ -37,6 +38,7 @@ export function CompetitorSearch({
   competitorId?: string;
   prefill?: string;
 }) {
+  const uiT = useUiTranslation();
   const [query, setQuery] = useState(prefill ?? "");
   const [hits, setHits] = useState<PageHit[] | null>(null);
   const [message, setMessage] = useState<string | null>(null);
@@ -91,9 +93,7 @@ export function CompetitorSearch({
   if (!hasToken) {
     return (
       <p className="text-xs text-muted">
-        Zoeken op naam vereist een Ad Library-token (META_ADS_ARCHIVE_TOKEN, zie .env.example).
-        Tot die tijd kan een page-id alleen handmatig gekoppeld worden.
-      </p>
+        {uiT("Zoeken op naam vereist een Ad Library-token (META_ADS_ARCHIVE_TOKEN, zie .env.example). Tot die tijd kan een page-id alleen handmatig gekoppeld worden.")} </p>
     );
   }
 
@@ -107,18 +107,17 @@ export function CompetitorSearch({
         }}
       >
         <label className="sr-only" htmlFor={`competitor-search-${competitorId ?? "new"}`}>
-          Concurrent zoeken op naam
-        </label>
+          {uiT("Concurrent zoeken op naam")} </label>
         <Input
           id={`competitor-search-${competitorId ?? "new"}`}
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          placeholder="Concurrent zoeken op naam, bv. Azulejos Jávea"
+          placeholder={uiT("Concurrent zoeken op naam, bv. Azulejos Jávea")}
           className="w-72"
         />
         <Button type="submit" variant="secondary" size="sm" disabled={searching || pending}>
           <Search className="mr-1.5 size-3.5" aria-hidden />
-          {searching ? "Zoeken…" : competitorId ? "Zoek page-ID" : "Zoeken"}
+          {searching ? uiT("Zoeken…") : competitorId ? uiT("Zoek page-ID") : uiT("Zoeken")}
         </Button>
       </form>
 
@@ -129,12 +128,11 @@ export function CompetitorSearch({
               <span>
                 <span className="font-medium">{hit.pageName}</span>{" "}
                 <span className="text-xs text-muted">
-                  · page-id {hit.pageId} · {hit.adCount}{" "}
-                  {hit.adCount === 1 ? "advertentie" : "advertenties"} in het archief
-                </span>
+                  {uiT("· page-id")} {hit.pageId} · {hit.adCount}{" "}
+                  {hit.adCount === 1 ? uiT("advertentie") : uiT("advertenties")} {uiT("in het archief")} </span>
               </span>
               <Button type="button" size="sm" disabled={pending} onClick={() => pick(hit)}>
-                {competitorId ? "Koppelen" : "Volgen"}
+                {competitorId ? uiT("Koppelen") : uiT("Volgen")}
               </Button>
             </li>
           ))}

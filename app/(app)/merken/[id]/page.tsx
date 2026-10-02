@@ -1,3 +1,4 @@
+import { tekst as uiTranslation } from '@/lib/i18n/server';
 import { asc, eq, sql } from "drizzle-orm";
 import Link from "next/link";
 import { notFound } from "next/navigation";
@@ -32,6 +33,7 @@ export default async function MerkPage({
   params: Promise<{ id: string }>;
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
+  const uiT = await uiTranslation();
   const { id } = await params;
   const sp = await searchParams;
   const merk = await db.query.brands.findFirst({ where: eq(brands.id, id) });
@@ -65,41 +67,38 @@ export default async function MerkPage({
             {merk.name}
           </span>
         }
-        subtitle={`${aantalProducten} producten · ${aantalUitvoeringen} uitvoeringen`}
+        subtitle={uiT("{v0} producten · {v1} uitvoeringen", { v0: aantalProducten, v1: aantalUitvoeringen })}
         actions={
           <LinkButton href="/merken" variant="ghost">
-            ← Merken
-          </LinkButton>
+            {uiT("← Merken")} </LinkButton>
         }
       />
 
-      {sp.saved && <p className="rounded-md bg-success/10 px-3 py-2 text-sm text-success">Opgeslagen.</p>}
+      {sp.saved && <p className="rounded-md bg-success/10 px-3 py-2 text-sm text-success">{uiT("Opgeslagen.")}</p>}
       {sp.error === "upload" && (
         <p className="rounded-md bg-danger/10 px-3 py-2 text-sm text-danger">
-          Het logo is niet opgeslagen. Gebruik SVG, PNG, JPG of WebP, maximaal 25 MB.
-        </p>
+          {uiT("Het logo is niet opgeslagen. Gebruik SVG, PNG, JPG of WebP, maximaal 25 MB.")} </p>
       )}
       {sp.error === "inuse" && (
         <p className="rounded-md bg-danger/10 px-3 py-2 text-sm text-danger">
-          Dit merk kan niet weg: er hangen nog {aantalProducten} producten aan. Koppel die eerst los.
-        </p>
+          {uiT("Dit merk kan niet weg: er hangen nog")} {aantalProducten} {uiT("producten aan. Koppel die eerst los.")} </p>
       )}
 
       <div className="grid gap-5 lg:grid-cols-[1fr_20rem]">
         <Card>
           <CardHeader>
-            <CardTitle>Gegevens</CardTitle>
+            <CardTitle>{uiT("Gegevens")}</CardTitle>
           </CardHeader>
           <CardContent>
-            <BrandForm brand={merk} action={updateBrand.bind(null, id)} submitLabel="Opslaan" />
+            <BrandForm brand={merk} action={updateBrand.bind(null, id)} submitLabel={uiT("Opslaan")} />
           </CardContent>
         </Card>
 
         <div className="space-y-5">
           <Card>
             <CardHeader>
-              <CardTitle>Logo</CardTitle>
-              <span className="text-xs text-muted">verschijnt bij de producten van dit merk</span>
+              <CardTitle>{uiT("Logo")}</CardTitle>
+              <span className="text-xs text-muted">{uiT("verschijnt bij de producten van dit merk")}</span>
             </CardHeader>
             <CardContent className="space-y-3">
               {merk.logoUrl ? (
@@ -108,22 +107,21 @@ export default async function MerkPage({
                   <img src={merk.logoUrl} alt={merk.name} className="h-12 w-auto max-w-full object-contain" />
                 </div>
               ) : (
-                <p className="text-sm text-muted">Nog geen logo.</p>
+                <p className="text-sm text-muted">{uiT("Nog geen logo.")}</p>
               )}
               <form action={uploadBrandLogoAction.bind(null, id)} className="space-y-2">
                 <Input type="file" name="logo" accept="image/svg+xml,image/png,image/jpeg,image/webp,image/avif" required />
-                <SubmitButton variant="secondary" size="sm" pendingLabel="Bezig…">
-                  {merk.logoUrl ? "Logo vervangen" : "Logo uploaden"}
+                <SubmitButton variant="secondary" size="sm" pendingLabel={uiT("Bezig…")}>
+                  {merk.logoUrl ? uiT("Logo vervangen") : uiT("Logo uploaden")}
                 </SubmitButton>
               </form>
               {merk.logoUrl && (
                 <form action={removeBrandLogo.bind(null, id)}>
                   <ConfirmSubmit
-                    message="Logo verwijderen?"
+                    message={uiT("Logo verwijderen?")}
                     className="text-sm text-muted underline underline-offset-2 hover:text-ink"
                   >
-                    Logo verwijderen
-                  </ConfirmSubmit>
+                    {uiT("Logo verwijderen")} </ConfirmSubmit>
                 </form>
               )}
             </CardContent>
@@ -132,7 +130,7 @@ export default async function MerkPage({
           {recent.length > 0 && (
             <Card>
               <CardHeader>
-                <CardTitle>Producten</CardTitle>
+                <CardTitle>{uiT("Producten")}</CardTitle>
               </CardHeader>
               <CardContent className="space-y-1.5 text-sm">
                 {recent.map((p) => (
@@ -148,8 +146,7 @@ export default async function MerkPage({
                     href={`/products?merk=${id}`}
                     className="block pt-1 text-xs text-muted underline underline-offset-2"
                   >
-                    alle {aantalProducten} producten
-                  </Link>
+                    {uiT("alle")} {aantalProducten} {uiT("producten")} </Link>
                 )}
               </CardContent>
             </Card>
@@ -159,11 +156,10 @@ export default async function MerkPage({
             <CardContent className="pt-5">
               <form action={deleteBrand.bind(null, id)}>
                 <ConfirmSubmit
-                  message={`Merk ${merk.name} verwijderen?`}
+                  message={uiT("Merk {v0} verwijderen?", { v0: merk.name })}
                   className="rounded-md px-3 py-2 text-sm font-medium text-danger transition-colors hover:bg-danger/10"
                 >
-                  Merk verwijderen
-                </ConfirmSubmit>
+                  {uiT("Merk verwijderen")} </ConfirmSubmit>
               </form>
             </CardContent>
           </Card>

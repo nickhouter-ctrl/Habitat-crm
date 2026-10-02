@@ -1,3 +1,4 @@
+import { tekst as uiTranslation } from '@/lib/i18n/server';
 import { asc, sql } from "drizzle-orm";
 import { Trash2 } from "lucide-react";
 
@@ -23,10 +24,14 @@ import {
   deleteCollection,
 } from "../actions";
 
-export const metadata = { title: "Catalogus — beheer" };
+export async function generateMetadata() {
+  const uiT = await uiTranslation();
+  return { title: uiT("Catalogus — beheer") };
+}
 export const dynamic = "force-dynamic";
 
 export default async function CatalogManagePage() {
+  const uiT = await uiTranslation();
   const collections = await db
     .select()
     .from(catalogCollections)
@@ -45,23 +50,23 @@ export default async function CatalogManagePage() {
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Catalogus — beheer"
-        subtitle="Collecties, producten en kleuren (varianten) beheren."
-        actions={<LinkButton href="/samplecatalogus" variant="secondary">← Terug</LinkButton>}
+        title={uiT("Catalogus — beheer")}
+        subtitle={uiT("Collecties, producten en kleuren (varianten) beheren.")}
+        actions={<LinkButton href="/samplecatalogus" variant="secondary">{uiT("← Terug")}</LinkButton>}
       />
 
       <div className="grid gap-6 lg:grid-cols-3">
         {/* nieuwe collectie */}
         <Card>
           <CardHeader>
-            <CardTitle>Nieuwe collectie (serie)</CardTitle>
+            <CardTitle>{uiT("Nieuwe collectie (serie)")}</CardTitle>
           </CardHeader>
           <CardContent>
             <form action={createCollection} className="space-y-3">
-              <Field name="nameEn" label="Naam (EN)" required placeholder="3D Big Panel Series" />
-              <Field name="nameCn" label="Naam (CN)" />
-              <Field name="sortOrder" label="Sortering" placeholder="0" />
-              <SubmitButton size="sm">Toevoegen</SubmitButton>
+              <Field name="nameEn" label={uiT("Naam (EN)")} required placeholder={uiT("3D Big Panel Series")} />
+              <Field name="nameCn" label={uiT("Naam (CN)")} />
+              <Field name="sortOrder" label={uiT("Sortering")} placeholder="0" />
+              <SubmitButton size="sm">{uiT("Toevoegen")}</SubmitButton>
             </form>
           </CardContent>
         </Card>
@@ -69,15 +74,15 @@ export default async function CatalogManagePage() {
         {/* nieuw product */}
         <Card>
           <CardHeader>
-            <CardTitle>Nieuw product (item)</CardTitle>
+            <CardTitle>{uiT("Nieuw product (item)")}</CardTitle>
           </CardHeader>
           <CardContent>
             <form action={createCatalogProduct} className="space-y-3">
-              <SelectField name="collectionId" label="Collectie" options={collections} />
-              <Field name="nameEn" label="Naam (EN)" required placeholder="Travertine" />
-              <Field name="nameCn" label="Naam (CN)" />
-              <Field name="sortOrder" label="Sortering" placeholder="0" />
-              <SubmitButton size="sm">Toevoegen</SubmitButton>
+              <SelectField name="collectionId" label={uiT("Collectie")} options={collections} />
+              <Field name="nameEn" label={uiT("Naam (EN)")} required placeholder={uiT("Travertine")} />
+              <Field name="nameCn" label={uiT("Naam (CN)")} />
+              <Field name="sortOrder" label={uiT("Sortering")} placeholder="0" />
+              <SubmitButton size="sm">{uiT("Toevoegen")}</SubmitButton>
             </form>
           </CardContent>
         </Card>
@@ -85,20 +90,20 @@ export default async function CatalogManagePage() {
         {/* nieuwe variant */}
         <Card>
           <CardHeader>
-            <CardTitle>Nieuwe kleur (variant)</CardTitle>
+            <CardTitle>{uiT("Nieuwe kleur (variant)")}</CardTitle>
           </CardHeader>
           <CardContent>
             <form action={createVariant} className="space-y-3">
               <SelectField
                 name="productId"
-                label="Product"
+                label={uiT("Product")}
                 options={productRows.map((p) => ({ id: p.id, nameEn: p.nameEn }))}
               />
-              <Field name="colorNameEn" label="Kleur (EN)" required placeholder="Pure White" />
-              <Field name="colorNameCn" label="Kleur (CN)" />
-              <Field name="imageUrl" label="Foto-URL" />
-              <p className="text-xs text-muted">SKU wordt automatisch toegekend (MS-###).</p>
-              <SubmitButton size="sm">Toevoegen</SubmitButton>
+              <Field name="colorNameEn" label={uiT("Kleur (EN)")} required placeholder={uiT("Pure White")} />
+              <Field name="colorNameCn" label={uiT("Kleur (CN)")} />
+              <Field name="imageUrl" label={uiT("Foto-URL")} />
+              <p className="text-xs text-muted">{uiT("SKU wordt automatisch toegekend (MS-###).")}</p>
+              <SubmitButton size="sm">{uiT("Toevoegen")}</SubmitButton>
             </form>
           </CardContent>
         </Card>
@@ -119,7 +124,7 @@ export default async function CatalogManagePage() {
                   <input type="hidden" name="id" value={c.id} />
                   <ConfirmSubmit
                     className={buttonClass({ variant: "ghost", size: "sm" })}
-                    message={`Collectie "${c.nameEn}" en alle producten/varianten erin verwijderen?`}
+                    message={uiT("Collectie \"{v0}\" en alle producten/varianten erin verwijderen?", { v0: c.nameEn })}
                   >
                     <Trash2 className="h-4 w-4" />
                   </ConfirmSubmit>
@@ -127,20 +132,20 @@ export default async function CatalogManagePage() {
               </CardHeader>
               <CardContent>
                 {prods.length === 0 ? (
-                  <p className="text-sm text-muted">Nog geen producten.</p>
+                  <p className="text-sm text-muted">{uiT("Nog geen producten.")}</p>
                 ) : (
                   <ul className="divide-y divide-border">
                     {prods.map((p) => (
                       <li key={p.id} className="flex items-center justify-between py-2">
                         <span className="text-sm">
                           {p.nameEn}{" "}
-                          <span className="text-xs text-muted">({p.variants} kleuren)</span>
+                          <span className="text-xs text-muted">({p.variants} {uiT("kleuren)")}</span>
                         </span>
                         <form action={deleteCatalogProduct}>
                           <input type="hidden" name="id" value={p.id} />
                           <ConfirmSubmit
                             className={buttonClass({ variant: "ghost", size: "sm" })}
-                            message={`Product "${p.nameEn}" verwijderen?`}
+                            message={uiT("Product \"{v0}\" verwijderen?", { v0: p.nameEn })}
                           >
                             <Trash2 className="h-3.5 w-3.5" />
                           </ConfirmSubmit>
@@ -177,7 +182,7 @@ function Field({
   );
 }
 
-function SelectField({
+async function SelectField({
   name,
   label,
   options,
@@ -186,6 +191,7 @@ function SelectField({
   label: string;
   options: { id: string; nameEn: string }[];
 }) {
+  const uiT = await uiTranslation();
   return (
     <label className="block">
       <span className="mb-1 block text-xs font-medium text-muted">{label}</span>
@@ -194,7 +200,7 @@ function SelectField({
         required
         className="h-10 w-full rounded-md border border-border bg-background px-3 text-sm"
       >
-        <option value="">— kies —</option>
+        <option value="">{uiT("— kies —")}</option>
         {options.map((o) => (
           <option key={o.id} value={o.id}>
             {o.nameEn}

@@ -1,3 +1,5 @@
+import { datumTaal } from "@/lib/i18n/server";
+import { tekst as uiTranslation } from '@/lib/i18n/server';
 import { and, asc, eq, gte, isNull } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import Link from "next/link";
@@ -29,10 +31,13 @@ import {
   deleteTask,
 } from "./actions";
 
-export const metadata = { title: "Agenda" };
+export async function generateMetadata() {
+  const uiT = await uiTranslation();
+  return { title: uiT("Agenda") };
+}
 
-const DAY_FMT = new Intl.DateTimeFormat("nl-NL", { weekday: "long", day: "numeric", month: "long" });
-const TIME_FMT = new Intl.DateTimeFormat("nl-NL", { hour: "2-digit", minute: "2-digit" });
+
+
 
 type ApptRow = {
   id: string;
@@ -61,6 +66,9 @@ type Item =
   | { kind: "task"; at: Date; data: TaskRow };
 
 export default async function AgendaPage() {
+  const uiDateLocale = await datumTaal();
+  const DAY_FMT = new Intl.DateTimeFormat(uiDateLocale, { weekday: "long", day: "numeric", month: "long" });
+  const uiT = await uiTranslation();
   const startOfToday = new Date();
   startOfToday.setHours(0, 0, 0, 0);
   const todayStr = new Date().toLocaleDateString("sv-SE"); // YYYY-MM-DD (lokale dag)
@@ -126,36 +134,36 @@ export default async function AgendaPage() {
   return (
     <>
       <PageHeader
-        title="Agenda"
-        subtitle={`${apptRows.length} afspra${apptRows.length === 1 ? "ak" : "ken"} · ${taskRows.length} open ta${taskRows.length === 1 ? "ak" : "ken"}`}
+        title={uiT("Agenda")}
+        subtitle={`${apptRows.length} ${uiT(apptRows.length === 1 ? "afspraak" : "afspraken")} · ${taskRows.length} ${uiT(taskRows.length === 1 ? "open taak" : "open taken")}`}
       />
 
       {/* Snel toevoegen */}
       <div className="mb-6 grid gap-4 md:grid-cols-2">
         <Card>
           <CardHeader>
-            <CardTitle>Nieuwe afspraak</CardTitle>
+            <CardTitle>{uiT("Nieuwe afspraak")}</CardTitle>
           </CardHeader>
           <CardContent>
             <form action={createAppointment} className="space-y-3">
-              <Field label="Titel" htmlFor="appt-title">
-                <Input id="appt-title" name="title" required placeholder="bv. Showroombezoek Jan de Vries" />
+              <Field label={uiT("Titel")} htmlFor="appt-title">
+                <Input id="appt-title" name="title" required placeholder={uiT("bv. Showroombezoek Jan de Vries")} />
               </Field>
               <div className="grid grid-cols-2 gap-3">
-                <Field label="Datum" htmlFor="appt-date">
+                <Field label={uiT("Datum")} htmlFor="appt-date">
                   <Input id="appt-date" name="date" type="date" required defaultValue={todayStr} />
                 </Field>
-                <Field label="Tijd" htmlFor="appt-time">
+                <Field label={uiT("Tijd")} htmlFor="appt-time">
                   <Input id="appt-time" name="time" type="time" defaultValue="09:00" />
                 </Field>
               </div>
               <div className="grid grid-cols-2 gap-3">
-                <Field label="Locatie" htmlFor="appt-loc">
-                  <Input id="appt-loc" name="location" placeholder="bv. Showroom Jávea" />
+                <Field label={uiT("Locatie")} htmlFor="appt-loc">
+                  <Input id="appt-loc" name="location" placeholder={uiT("bv. Showroom Jávea")} />
                 </Field>
-                <Field label="Toewijzen aan" htmlFor="appt-assignee" hint="leeg = van de zaak">
+                <Field label={uiT("Toewijzen aan")} htmlFor="appt-assignee" hint={uiT("leeg = van de zaak")}>
                   <Select id="appt-assignee" name="assigneeId" defaultValue="">
-                    <option value="">— Niemand in het bijzonder —</option>
+                    <option value="">{uiT("— Niemand in het bijzonder —")}</option>
                     {teamleden.map((u) => (
                       <option key={u.id} value={u.id}>
                         {u.name ?? u.email}
@@ -164,35 +172,35 @@ export default async function AgendaPage() {
                   </Select>
                 </Field>
               </div>
-              <Field label="Notitie" htmlFor="appt-notes">
+              <Field label={uiT("Notitie")} htmlFor="appt-notes">
                 <Textarea id="appt-notes" name="notes" rows={2} />
               </Field>
-              <SubmitButton pendingLabel="Toevoegen…">Afspraak toevoegen</SubmitButton>
+              <SubmitButton pendingLabel={uiT("Toevoegen…")}>{uiT("Afspraak toevoegen")}</SubmitButton>
             </form>
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader>
-            <CardTitle>Nieuwe taak</CardTitle>
+            <CardTitle>{uiT("Nieuwe taak")}</CardTitle>
           </CardHeader>
           <CardContent>
             <form action={createTask} className="space-y-3">
-              <Field label="Taak" htmlFor="task-subject">
-                <Input id="task-subject" name="subject" required placeholder="bv. Klant terugbellen over offerte" />
+              <Field label={uiT("Taak")} htmlFor="task-subject">
+                <Input id="task-subject" name="subject" required placeholder={uiT("bv. Klant terugbellen over offerte")} />
               </Field>
               <div className="grid grid-cols-2 gap-3">
-                <Field label="Deadline (optioneel)" htmlFor="task-date">
+                <Field label={uiT("Deadline (optioneel)")} htmlFor="task-date">
                   <Input id="task-date" name="date" type="date" />
                 </Field>
-                <Field label="Tijd" htmlFor="task-time">
+                <Field label={uiT("Tijd")} htmlFor="task-time">
                   <Input id="task-time" name="time" type="time" />
                 </Field>
               </div>
               <div className="grid grid-cols-2 gap-3">
-                <Field label="Toewijzen aan" htmlFor="task-assignee" hint="leeg = jezelf">
+                <Field label={uiT("Toewijzen aan")} htmlFor="task-assignee" hint={uiT("leeg = jezelf")}>
                   <Select id="task-assignee" name="assigneeId" defaultValue="">
-                    <option value="">— Mijzelf —</option>
+                    <option value="">{uiT("— Mijzelf —")}</option>
                     {teamleden.map((u) => (
                       <option key={u.id} value={u.id}>
                         {u.name ?? u.email}
@@ -200,18 +208,18 @@ export default async function AgendaPage() {
                     ))}
                   </Select>
                 </Field>
-                <Field label="Prioriteit" htmlFor="task-priority">
+                <Field label={uiT("Prioriteit")} htmlFor="task-priority">
                   <Select id="task-priority" name="priority" defaultValue="middel">
-                    <option value="hoog">Hoog</option>
-                    <option value="middel">Middel</option>
-                    <option value="laag">Laag</option>
+                    <option value="hoog">{uiT("Hoog")}</option>
+                    <option value="middel">{uiT("Middel")}</option>
+                    <option value="laag">{uiT("Laag")}</option>
                   </Select>
                 </Field>
               </div>
-              <Field label="Toelichting" htmlFor="task-body">
+              <Field label={uiT("Toelichting")} htmlFor="task-body">
                 <Textarea id="task-body" name="body" rows={2} />
               </Field>
-              <SubmitButton pendingLabel="Toevoegen…">Taak toevoegen</SubmitButton>
+              <SubmitButton pendingLabel={uiT("Toevoegen…")}>{uiT("Taak toevoegen")}</SubmitButton>
             </form>
           </CardContent>
         </Card>
@@ -219,14 +227,14 @@ export default async function AgendaPage() {
 
       {isEmpty ? (
         <EmptyState
-          title="Niks gepland"
-          description="Voeg hierboven een afspraak of taak toe — taken met een deadline verschijnen automatisch in de tijdlijn."
+          title={uiT("Niks gepland")}
+          description={uiT("Voeg hierboven een afspraak of taak toe — taken met een deadline verschijnen automatisch in de tijdlijn.")}
         />
       ) : (
         <div className="max-w-3xl space-y-6">
           {overdueTasks.length > 0 && (
             <div>
-              <h2 className="mb-2 text-sm font-semibold text-danger">Te laat</h2>
+              <h2 className="mb-2 text-sm font-semibold text-danger">{uiT("Te laat")}</h2>
               <div className="space-y-2">
                 {overdueTasks.map((t) => (
                   <TaskCard key={t.id} task={t} overdue />
@@ -254,7 +262,7 @@ export default async function AgendaPage() {
 
           {undatedTasks.length > 0 && (
             <div>
-              <h2 className="mb-2 text-sm font-semibold text-muted">Taken zonder datum</h2>
+              <h2 className="mb-2 text-sm font-semibold text-muted">{uiT("Taken zonder datum")}</h2>
               <div className="space-y-2">
                 {undatedTasks.map((t) => (
                   <TaskCard key={t.id} task={t} />
@@ -268,7 +276,10 @@ export default async function AgendaPage() {
   );
 }
 
-function ApptCard({ appt: a }: { appt: ApptRow }) {
+async function ApptCard({ appt: a }: { appt: ApptRow }) {
+  const uiDateLocale = await datumTaal();
+  const TIME_FMT = new Intl.DateTimeFormat(uiDateLocale, { hour: "2-digit", minute: "2-digit" });
+  const uiT = await uiTranslation();
   return (
     <Card className="flex items-start gap-4 p-4">
       <div className="flex shrink-0 flex-col items-center gap-1.5">
@@ -281,7 +292,7 @@ function ApptCard({ appt: a }: { appt: ApptRow }) {
             variant="ghost"
             pendingLabel="…"
             className="size-6 rounded-full border p-0 text-xs hover:bg-success/10 hover:text-success"
-            title="Afronden"
+            title={uiT("Afronden")}
           >
             ✓
           </SubmitButton>
@@ -290,7 +301,7 @@ function ApptCard({ appt: a }: { appt: ApptRow }) {
       <div className="min-w-0 flex-1">
         <div className="flex items-start justify-between gap-2">
           <p className="font-medium">{a.title}</p>
-          <Badge tone="info">Afspraak</Badge>
+          <Badge tone="info">{uiT("Afspraak")}</Badge>
         </div>
         {a.location && <p className="text-xs text-muted">{a.location}</p>}
         {a.notes && <p className="mt-1 whitespace-pre-line text-sm">{a.notes}</p>}
@@ -298,7 +309,7 @@ function ApptCard({ appt: a }: { appt: ApptRow }) {
           {a.assigneeName && <span className="font-medium text-foreground/80">👤 {a.assigneeName}</span>}
           {a.contactId && (
             <Link href={`/contacts/${a.contactId}`} className="text-accent hover:underline">
-              {a.contactName ?? "contact"}
+              {a.contactName ?? uiT("contact")}
             </Link>
           )}
           {a.contactPhone && (
@@ -307,9 +318,8 @@ function ApptCard({ appt: a }: { appt: ApptRow }) {
             </a>
           )}
           <form action={deleteAppointment.bind(null, a.id)} className="ml-auto">
-            <ConfirmSubmit message="Afspraak verwijderen?" className="text-muted hover:text-danger" pendingLabel="…">
-              Verwijderen
-            </ConfirmSubmit>
+            <ConfirmSubmit message={uiT("Afspraak verwijderen?")} className="text-muted hover:text-danger" pendingLabel="…">
+              {uiT("Verwijderen")} </ConfirmSubmit>
           </form>
         </div>
       </div>
@@ -317,7 +327,11 @@ function ApptCard({ appt: a }: { appt: ApptRow }) {
   );
 }
 
-function TaskCard({ task: t, overdue = false }: { task: TaskRow; overdue?: boolean }) {
+async function TaskCard({ task: t, overdue = false }: { task: TaskRow; overdue?: boolean }) {
+  const uiDateLocale = await datumTaal();
+  const DAY_FMT = new Intl.DateTimeFormat(uiDateLocale, { weekday: "long", day: "numeric", month: "long" });
+  const TIME_FMT = new Intl.DateTimeFormat(uiDateLocale, { hour: "2-digit", minute: "2-digit" });
+  const uiT = await uiTranslation();
   return (
     <Card className={`flex items-start gap-3 p-4 ${overdue ? "border-danger/40" : ""}`}>
       <form action={completeTask.bind(null, t.id)} className="pt-0.5">
@@ -326,7 +340,7 @@ function TaskCard({ task: t, overdue = false }: { task: TaskRow; overdue?: boole
           variant="ghost"
           pendingLabel="…"
           className="size-6 rounded-full border p-0 text-xs hover:bg-success/10 hover:text-success"
-          title="Afronden"
+          title={uiT("Afronden")}
         >
           ✓
         </SubmitButton>
@@ -335,9 +349,9 @@ function TaskCard({ task: t, overdue = false }: { task: TaskRow; overdue?: boole
         <div className="flex items-start justify-between gap-2">
           <p className="font-medium">{t.subject}</p>
           <span className="flex shrink-0 items-center gap-1.5">
-            {t.priority === "hoog" && <Badge tone="danger">Hoog</Badge>}
-            {t.priority === "laag" && <Badge tone="neutral">Laag</Badge>}
-            <Badge tone={overdue ? "danger" : "warning"}>Taak</Badge>
+            {t.priority === "hoog" && <Badge tone="danger">{uiT("Hoog")}</Badge>}
+            {t.priority === "laag" && <Badge tone="neutral">{uiT("Laag")}</Badge>}
+            <Badge tone={overdue ? "danger" : "warning"}>{uiT("Taak")}</Badge>
           </span>
         </div>
         {t.body && <p className="mt-0.5 whitespace-pre-line text-sm text-muted">{t.body}</p>}
@@ -350,13 +364,12 @@ function TaskCard({ task: t, overdue = false }: { task: TaskRow; overdue?: boole
           )}
           {t.contactId && (
             <Link href={`/contacts/${t.contactId}`} className="text-accent hover:underline">
-              {t.contactName ?? "contact"}
+              {t.contactName ?? uiT("contact")}
             </Link>
           )}
           <form action={deleteTask.bind(null, t.id)} className="ml-auto">
-            <ConfirmSubmit message="Taak verwijderen?" className="text-muted hover:text-danger" pendingLabel="…">
-              Verwijderen
-            </ConfirmSubmit>
+            <ConfirmSubmit message={uiT("Taak verwijderen?")} className="text-muted hover:text-danger" pendingLabel="…">
+              {uiT("Verwijderen")} </ConfirmSubmit>
           </form>
         </div>
       </div>

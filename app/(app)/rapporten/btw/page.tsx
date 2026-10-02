@@ -1,3 +1,4 @@
+import { tekst as uiTranslation } from '@/lib/i18n/server';
 import { and, inArray, isNotNull, sql } from "drizzle-orm";
 import Link from "next/link";
 
@@ -8,7 +9,10 @@ import { documents } from "@/lib/db/schema";
 import { vatByMonth } from "@/lib/holded/accounting";
 import { formatEUR } from "@/lib/utils";
 
-export const metadata = { title: "BTW · Rapporten" };
+export async function generateMetadata() {
+  const uiT = await uiTranslation();
+  return { title: uiT("BTW · Rapporten") };
+}
 export const dynamic = "force-dynamic";
 
 const MONTHS_NL = ["jan", "feb", "mrt", "apr", "mei", "jun", "jul", "aug", "sep", "okt", "nov", "dec"];
@@ -17,6 +21,7 @@ const qOf = (m: number) => Math.floor((m - 1) / 3) + 1;
 type Row = { key: string; label: string; output: number; input: number };
 
 export default async function BtwPage({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
+  const uiT = await uiTranslation();
   const sp = await searchParams;
   const periode: "maand" | "kwartaal" = sp.periode === "maand" ? "maand" : "kwartaal";
 
@@ -88,47 +93,44 @@ export default async function BtwPage({ searchParams }: { searchParams: Promise<
   return (
     <>
       <PageHeader
-        title="BTW-overzicht"
+        title={uiT("BTW-overzicht")}
         subtitle={
           useHolded
-            ? "Uit de Holded-boekhouding (IVA repercutido 477 − IVA soportado 472) · af te dragen per periode"
-            : "Btw op je eigen facturen (Holded niet beschikbaar — inkoop-btw ontbreekt)"
+            ? uiT("Uit de Holded-boekhouding (IVA repercutido 477 − IVA soportado 472) · af te dragen per periode")
+            : uiT("Btw op je eigen facturen (Holded niet beschikbaar — inkoop-btw ontbreekt)")
         }
       />
       <ReportsNav active="/rapporten/btw" />
 
       {holdedError && !holdedHasData && (
         <div className="mb-4 rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900">
-          Holded-boekhouding niet bereikbaar ({holdedError}) — toont btw op je eigen facturen (zonder inkoop-btw).
-        </div>
+          {uiT("Holded-boekhouding niet bereikbaar (")}{holdedError}{uiT(") — toont btw op je eigen facturen (zonder inkoop-btw).")} </div>
       )}
 
       <Card>
         <CardHeader>
-          <CardTitle>Af te dragen btw</CardTitle>
+          <CardTitle>{uiT("Af te dragen btw")}</CardTitle>
           <div className="flex gap-1 text-sm">
             <Link
               href="/rapporten/btw?periode=kwartaal"
               className={`rounded-md px-2.5 py-1 font-medium ${periode === "kwartaal" ? "bg-accent/10 text-accent" : "text-muted hover:text-foreground"}`}
             >
-              Per kwartaal
-            </Link>
+              {uiT("Per kwartaal")} </Link>
             <Link
               href="/rapporten/btw?periode=maand"
               className={`rounded-md px-2.5 py-1 font-medium ${periode === "maand" ? "bg-accent/10 text-accent" : "text-muted hover:text-foreground"}`}
             >
-              Per maand
-            </Link>
+              {uiT("Per maand")} </Link>
           </div>
         </CardHeader>
         <CardContent className="p-0">
           <Table>
             <THead>
               <tr>
-                <Th>Periode</Th>
-                <Th className="text-right">Btw op omzet</Th>
-                <Th className="text-right">Btw op inkoop</Th>
-                <Th className="text-right">Af te dragen</Th>
+                <Th>{uiT("Periode")}</Th>
+                <Th className="text-right">{uiT("Btw op omzet")}</Th>
+                <Th className="text-right">{uiT("Btw op inkoop")}</Th>
+                <Th className="text-right">{uiT("Af te dragen")}</Th>
               </tr>
             </THead>
             <TBody>
@@ -152,8 +154,8 @@ export default async function BtwPage({ searchParams }: { searchParams: Promise<
 
       <p className="mt-4 text-xs text-muted">
         {useHolded
-          ? "Btw op omzet = IVA repercutido (verkoop), btw op inkoop = IVA soportado (inkoop). Af te dragen = omzet-btw − inkoop-btw. Een negatief bedrag betekent terug te vorderen."
-          : "Btw op omzet = totaal − subtotaal van verstuurde/betaalde facturen (minus creditnota's). Koppel Holded om ook de inkoop-btw te zien."}
+          ? uiT("Btw op omzet = IVA repercutido (verkoop), btw op inkoop = IVA soportado (inkoop). Af te dragen = omzet-btw − inkoop-btw. Een negatief bedrag betekent terug te vorderen.")
+          : uiT("Btw op omzet = totaal − subtotaal van verstuurde/betaalde facturen (minus creditnota's). Koppel Holded om ook de inkoop-btw te zien.")}
       </p>
     </>
   );

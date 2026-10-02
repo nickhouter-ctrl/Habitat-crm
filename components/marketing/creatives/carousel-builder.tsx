@@ -1,4 +1,5 @@
 "use client";
+import { useT as useUiTranslation } from '@/components/taal-provider';
 
 /**
  * AI-carrouselbouwer: kies 2–10 beelden uit de bibliotheek, laat de AI de
@@ -56,6 +57,7 @@ export function CarouselBuilder({
   limitsByTemplate: Record<TemplateName, CopyLimits>;
   aiEnabled: boolean;
 }) {
+  const uiT = useUiTranslation();
   const router = useRouter();
   const [pickerOpen, setPickerOpen] = useState(false);
   /** Geselecteerde beelden, in kaartvolgorde. */
@@ -165,7 +167,7 @@ export function CarouselBuilder({
     <div className="space-y-4">
       <Card className="space-y-3 p-4">
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-          <Field label="Taal" htmlFor="car-locale">
+          <Field label={uiT("Taal")} htmlFor="car-locale">
             <select
               id="car-locale"
               value={locale}
@@ -179,7 +181,7 @@ export function CarouselBuilder({
               ))}
             </select>
           </Field>
-          <Field label="Invalshoek" htmlFor="car-angle">
+          <Field label={uiT("Invalshoek")} htmlFor="car-angle">
             <select
               id="car-angle"
               value={angle}
@@ -193,7 +195,7 @@ export function CarouselBuilder({
               ))}
             </select>
           </Field>
-          <Field label="Sjabloon (kaartopmaak)" htmlFor="car-template">
+          <Field label={uiT("Sjabloon (kaartopmaak)")} htmlFor="car-template">
             <select
               id="car-template"
               value={template}
@@ -202,12 +204,12 @@ export function CarouselBuilder({
             >
               {templates.map((t) => (
                 <option key={t.name} value={t.name}>
-                  {t.label}
+                  {uiT(t.label)}
                 </option>
               ))}
             </select>
           </Field>
-          <Field label="Palet" htmlFor="car-palette">
+          <Field label={uiT("Palet")} htmlFor="car-palette">
             <select
               id="car-palette"
               value={palette}
@@ -223,7 +225,7 @@ export function CarouselBuilder({
           </Field>
         </div>
         <Field
-          label="Onderwerp of thema (optioneel — geeft de AI richting)"
+          label={uiT("Onderwerp of thema (optioneel — geeft de AI richting)")}
           htmlFor="car-subject"
         >
           <Input
@@ -231,30 +233,25 @@ export function CarouselBuilder({
             value={subject}
             onChange={(e) => setSubject(e.target.value)}
             maxLength={300}
-            placeholder="bv. renovatie van een villa in Jávea, van ruwbouw tot oplevering"
+            placeholder={uiT("bv. renovatie van een villa in Jávea, van ruwbouw tot oplevering")}
           />
         </Field>
         <p className="text-xs text-muted">
-          Formaat staat vast op 1080×1080 (vierkant) — dat toont Meta voor carrouselkaartjes op
-          álle plekken, ook mobiel op Instagram en Facebook.
-        </p>
+          {uiT("Formaat staat vast op 1080×1080 (vierkant) — dat toont Meta voor carrouselkaartjes op álle plekken, ook mobiel op Instagram en Facebook.")} </p>
       </Card>
 
       <Card className="space-y-3 p-4">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <h2 className="font-semibold">
-            Kaartjes ({ids.length}/10{ids.length < 2 ? " — kies er minstens 2" : ""})
+            {uiT("Kaartjes (")}{ids.length}/10{ids.length < 2 ? uiT(" — kies er minstens 2") : ""})
           </h2>
           <button type="button" onClick={() => setPickerOpen(true)} className={buttonClass({ variant: "secondary" })}>
-            <Images className="size-4" aria-hidden /> Kies beelden
-          </button>
+            <Images className="size-4" aria-hidden /> {uiT("Kies beelden")} </button>
         </div>
 
         {ids.length === 0 ? (
           <p className="rounded-md border border-dashed border-border p-6 text-center text-sm text-muted">
-            Nog geen beelden gekozen. Kies 2–10 beelden — de AI bepaalt daarna de sterkste
-            verhaalvolgorde en schrijft alle teksten.
-          </p>
+            {uiT("Nog geen beelden gekozen. Kies 2–10 beelden — de AI bepaalt daarna de sterkste verhaalvolgorde en schrijft alle teksten.")} </p>
         ) : (
           <ol className="grid list-none gap-3 sm:grid-cols-2 lg:grid-cols-3">
             {ids.map((id, index) => {
@@ -273,8 +270,7 @@ export function CarouselBuilder({
                         />
                       ) : (
                         <span className="flex aspect-square w-full items-center justify-center rounded bg-background text-xs text-muted">
-                          geen opslag
-                        </span>
+                          {uiT("geen opslag")} </span>
                       )}
                       <span className="absolute left-1.5 top-1.5 flex size-6 items-center justify-center rounded-full bg-accent text-xs font-bold text-white">
                         {index + 1}
@@ -284,7 +280,7 @@ export function CarouselBuilder({
                           type="button"
                           onClick={() => move(index, -1)}
                           disabled={index === 0}
-                          aria-label="Kaart naar voren"
+                          aria-label={uiT("Kaart naar voren")}
                           className="rounded bg-background/85 p-1 disabled:opacity-40"
                         >
                           <ArrowUp className="size-3.5" aria-hidden />
@@ -293,7 +289,7 @@ export function CarouselBuilder({
                           type="button"
                           onClick={() => move(index, 1)}
                           disabled={index === ids.length - 1}
-                          aria-label="Kaart naar achteren"
+                          aria-label={uiT("Kaart naar achteren")}
                           className="rounded bg-background/85 p-1 disabled:opacity-40"
                         >
                           <ArrowDown className="size-3.5" aria-hidden />
@@ -301,7 +297,7 @@ export function CarouselBuilder({
                         <button
                           type="button"
                           onClick={() => remove(id)}
-                          aria-label="Kaart verwijderen"
+                          aria-label={uiT("Kaart verwijderen")}
                           className="rounded bg-background/85 p-1"
                         >
                           <X className="size-3.5" aria-hidden />
@@ -309,7 +305,7 @@ export function CarouselBuilder({
                       </span>
                     </div>
                     <Field
-                      label={`Kop (${copy.headline.length}/${limits.headline})`}
+                      label={uiT("Kop ({v0}/{v1})", { v0: copy.headline.length, v1: limits.headline })}
                       htmlFor={`card-h-${id}`}
                     >
                       <Input
@@ -321,7 +317,7 @@ export function CarouselBuilder({
                       />
                     </Field>
                     <Field
-                      label={`Subregel (${copy.subline.length}/${limits.subline})`}
+                      label={uiT("Subregel ({v0}/{v1})", { v0: copy.subline.length, v1: limits.subline })}
                       htmlFor={`card-s-${id}`}
                     >
                       <Input
@@ -344,18 +340,18 @@ export function CarouselBuilder({
             onClick={generateStory}
             disabled={!!busy || !aiEnabled}
             className={buttonClass({ variant: storyDone ? "secondary" : "primary" })}
-            title={aiEnabled ? undefined : "AI is niet beschikbaar (geen ANTHROPIC_API_KEY)"}
+            title={aiEnabled ? undefined : uiT("AI is niet beschikbaar (geen ANTHROPIC_API_KEY)")}
           >
             <Sparkles className="size-4" aria-hidden />
-            {storyDone ? "Laat AI een nieuw verhaal schrijven" : "Laat AI het verhaal schrijven"}
+            {storyDone ? uiT("Laat AI een nieuw verhaal schrijven") : uiT("Laat AI het verhaal schrijven")}
           </button>
         )}
       </Card>
 
       {(storyDone || message) && (
         <Card className="space-y-3 p-4">
-          <h2 className="font-semibold">Advertentietekst en naam</h2>
-          <Field label={`Advertentietekst boven de carrousel (${message.length}/500)`} htmlFor="car-message">
+          <h2 className="font-semibold">{uiT("Advertentietekst en naam")}</h2>
+          <Field label={uiT("Advertentietekst boven de carrousel ({v0}/500)", { v0: message.length })} htmlFor="car-message">
             <textarea
               id="car-message"
               value={message}
@@ -365,7 +361,7 @@ export function CarouselBuilder({
               className="w-full rounded-md border border-border bg-background px-2.5 py-1.5 text-sm"
             />
           </Field>
-          <Field label="Interne naam" htmlFor="car-name">
+          <Field label={uiT("Interne naam")} htmlFor="car-name">
             <Input
               id="car-name"
               value={name}
@@ -391,12 +387,9 @@ export function CarouselBuilder({
         disabled={!!busy || ids.length < 2}
         className={buttonClass()}
       >
-        Maak {ids.length >= 2 ? `${ids.length} kaartconcepten` : "concepten"} aan
-      </button>
+        {uiT("Maak")} {ids.length >= 2 ? uiT("{v0} kaartconcepten", { v0: ids.length }) : uiT("concepten")} {uiT("aan")} </button>
       <p className="text-xs text-muted">
-        De kaartjes worden als concepten aangemaakt; daarna keur je ze op de Creatives-pagina in
-        één keer goed en publiceer je de carrousel gepauzeerd via een campagne.
-      </p>
+        {uiT("De kaartjes worden als concepten aangemaakt; daarna keur je ze op de Creatives-pagina in één keer goed en publiceer je de carrousel gepauzeerd via een campagne.")} </p>
 
       <AssetPickerModal
         open={pickerOpen}

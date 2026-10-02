@@ -1,3 +1,4 @@
+import { tekst as uiTranslation } from '@/lib/i18n/server';
 import type { ReactNode } from "react";
 import { Building2, Phone, Navigation, MousePointerClick, MessageSquare, CalendarCheck } from "lucide-react";
 
@@ -17,7 +18,10 @@ import {
   type GbpTotals,
 } from "@/lib/businessprofile";
 
-export const metadata = { title: "Bedrijfsprofiel" };
+export async function generateMetadata() {
+  const uiT = await uiTranslation();
+  return { title: uiT("Bedrijfsprofiel") };
+}
 
 const nf = (n: number) => Math.round(n).toLocaleString("nl-NL");
 
@@ -31,14 +35,15 @@ function deltaHint(cur: number, prev: number | undefined): { hint?: string; tone
 }
 
 export default async function BusinessProfilePage() {
+  const uiT = await uiTranslation();
   if (!gbpConfigured()) {
     return (
       <>
-        <PageHeader title="Bedrijfsprofiel" subtitle="Google Business Profile" />
+        <PageHeader title={uiT("Bedrijfsprofiel")} subtitle={uiT("Google Business Profile")} />
         <EmptyState
           icon={<Building2 />}
-          title="Koppeling nog niet geconfigureerd"
-          description="Zet de env-variabele GBP_LOCATION_ID in Vercel (en zorg dat het OAuth-token de business.manage-scope heeft). Daarna verschijnen hier je gesprekken, routes, websiteklikken en vertoningen."
+          title={uiT("Koppeling nog niet geconfigureerd")}
+          description={uiT("Zet de env-variabele GBP_LOCATION_ID in Vercel (en zorg dat het OAuth-token de business.manage-scope heeft). Daarna verschijnen hier je gesprekken, routes, websiteklikken en vertoningen.")}
         />
       </>
     );
@@ -58,21 +63,21 @@ export default async function BusinessProfilePage() {
   return (
     <>
       <PageHeader
-        title="Bedrijfsprofiel"
-        subtitle={data ? `Google Business Profile · ${data.range.start} t/m ${data.range.end}` : "Google Business Profile"}
+        title={uiT("Bedrijfsprofiel")}
+        subtitle={data ? uiT("Google Business Profile · {v0} t/m {v1}", { v0: data.range.start, v1: data.range.end }) : uiT("Google Business Profile")}
       />
 
       {error && (
         <Card className="mb-5 border-danger/30 bg-danger/5 p-4 text-sm text-danger">
-          Kon de data niet ophalen: {error}
+          {uiT("Kon de data niet ophalen:")} {error}
         </Card>
       )}
 
       {data && !t && (
         <EmptyState
           icon={<Building2 />}
-          title="Nog geen interacties gemeten"
-          description="Je bedrijfsprofiel is gekoppeld, maar er zijn nog geen interacties (of de data loopt ~2-3 dagen achter). Zodra mensen je profiel vinden in Google Zoeken/Maps vullen de cijfers en grafieken zich hier vanzelf."
+          title={uiT("Nog geen interacties gemeten")}
+          description={uiT("Je bedrijfsprofiel is gekoppeld, maar er zijn nog geen interacties (of de data loopt ~2-3 dagen achter). Zodra mensen je profiel vinden in Google Zoeken/Maps vullen de cijfers en grafieken zich hier vanzelf.")}
         />
       )}
 
@@ -100,7 +105,7 @@ export default async function BusinessProfilePage() {
           {data.trend.length > 0 && (
             <Card className="mb-5">
               <CardHeader>
-                <CardTitle>Profiel-interacties per dag</CardTitle>
+                <CardTitle>{uiT("Profiel-interacties per dag")}</CardTitle>
               </CardHeader>
               <CardContent>
                 <VisitorsAreaChart data={data.trend} />
@@ -111,11 +116,11 @@ export default async function BusinessProfilePage() {
           {/* Vertoningen: hoe klanten je vonden */}
           <Card>
             <CardHeader>
-              <CardTitle>Hoe klanten je vonden (vertoningen)</CardTitle>
+              <CardTitle>{uiT("Hoe klanten je vonden (vertoningen)")}</CardTitle>
             </CardHeader>
             <CardContent>
               {t.impressionsSearch + t.impressionsMaps === 0 ? (
-                <p className="py-2 text-sm text-muted">Nog geen vertoningen.</p>
+                <p className="py-2 text-sm text-muted">{uiT("Nog geen vertoningen.")}</p>
               ) : (
                 <BreakdownBars
                   data={[

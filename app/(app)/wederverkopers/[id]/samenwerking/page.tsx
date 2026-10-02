@@ -1,3 +1,4 @@
+import { tekst as uiTranslation } from '@/lib/i18n/server';
 import { tekst } from '@/lib/i18n/server';
 import { and, desc, eq, inArray, or } from 'drizzle-orm';
 import { z } from 'zod';
@@ -11,7 +12,10 @@ import { formatEUR } from '@/lib/utils';
 import { documentFileUrl } from '@/lib/storage';
 import { partnerContractDocument, partnerContractTemplate } from '@/lib/partner-contract';
 import { ContractForm, SignedForm, ActivationForm } from './forms';
-export const metadata={title:'Verkooppuntovereenkomst'};
+export async function generateMetadata() {
+  const uiT = await uiTranslation();
+  return {title:uiT("Verkooppuntovereenkomst")};
+}
 export default async function Page({params}:{params:Promise<{id:string}>}){
  const t=await tekst();
  const access=await requireModuleRead('producten');const{id}=await params;if(!z.string().uuid().safeParse(id).success)notFound();

@@ -1,4 +1,5 @@
 "use client";
+import { useT as useUiTranslation } from '@/components/taal-provider';
 
 /**
  * Creative-editor (brief §7): asset, sjabloon, formaat, palet en taal kiezen;
@@ -129,6 +130,7 @@ export function CreativeEditor({
   /** Is er een ANTHROPIC_API_KEY? Zo niet, geen AI-knop. */
   aiEnabled?: boolean;
 }) {
+  const uiT = useUiTranslation();
   // Multi-select (U6): het eerste beeld stuurt de preview en het losse concept;
   // "Maak set" genereert per gekozen beeld × formaat × taal.
   const [assetIds, setAssetIds] = useState<string[]>(
@@ -316,7 +318,7 @@ export function CreativeEditor({
         <Card className="p-4">
           <div className="flex items-center justify-between gap-3">
             <Label>
-              Beeld{assetIds.length > 1 ? `en (${assetIds.length})` : ""}
+              {uiT("Beeld")}{assetIds.length > 1 ? uiT("en ({v0})", { v0: assetIds.length }) : ""}
             </Label>
             <button
               type="button"
@@ -324,24 +326,20 @@ export function CreativeEditor({
               disabled={assets.length === 0}
               className={buttonClass({ variant: "secondary", size: "sm" })}
             >
-              Kies beeld(en)
-            </button>
+              {uiT("Kies beeld(en)")} </button>
           </div>
           {assets.length === 0 ? (
             <p className="mt-2 text-sm text-muted">
-              De bibliotheek is leeg — vul hem eerst via{" "}
+              {uiT("De bibliotheek is leeg — vul hem eerst via")}{" "}
               <Link href="/marketing/assets" className="text-accent underline">
-                Beeldbibliotheek
-              </Link>
+                {uiT("Beeldbibliotheek")} </Link>
               .
             </p>
           ) : selectedAssets.length === 0 ? (
             <p className="mt-2 text-sm text-muted">
-              Nog geen beeld gekozen. Het eerste gekozen beeld stuurt de preview; met meerdere
-              beelden maakt &ldquo;Maak set&rdquo; een set per beeld.
-            </p>
+              {uiT("Nog geen beeld gekozen. Het eerste gekozen beeld stuurt de preview; met meerdere beelden maakt “Maak set” een set per beeld.")} </p>
           ) : (
-            <ul className="mt-2 flex list-none gap-2 overflow-x-auto pb-1" aria-label="Gekozen beelden">
+            <ul className="mt-2 flex list-none gap-2 overflow-x-auto pb-1" aria-label={uiT("Gekozen beelden")}>
               {selectedAssets.map((a, i) => (
                 <li key={a.id} className="relative shrink-0">
                   <span
@@ -349,25 +347,23 @@ export function CreativeEditor({
                       "block overflow-hidden rounded-md border-2",
                       i === 0 ? "border-accent" : "border-border",
                     )}
-                    title={i === 0 ? `${a.label} (preview-beeld)` : a.label}
+                    title={i === 0 ? uiT("{v0} (preview-beeld)", { v0: a.label }) : a.label}
                   >
                     {a.url ? (
                       // eslint-disable-next-line @next/next/no-img-element
                       <img src={a.url} alt={a.label} className="size-20 object-cover" loading="lazy" />
                     ) : (
                       <span className="flex size-20 items-center justify-center text-[10px] text-muted">
-                        geen opslag
-                      </span>
+                        {uiT("geen opslag")} </span>
                     )}
                   </span>
                   <button
                     type="button"
                     onClick={() => setAssetIds((prev) => prev.filter((id) => id !== a.id))}
-                    aria-label={`Verwijder ${a.label} uit de selectie`}
+                    aria-label={uiT("Verwijder {v0} uit de selectie", { v0: a.label })}
                     className="absolute -right-1.5 -top-1.5 flex size-5 items-center justify-center rounded-full border bg-surface text-muted shadow-sm hover:text-foreground"
                   >
-                    ×
-                  </button>
+                    {uiT("×")} </button>
                 </li>
               ))}
             </ul>
@@ -386,7 +382,7 @@ export function CreativeEditor({
 
         {/* ------------------------- product / categorie / hoek / taal (U2) */}
         <Card className="grid gap-4 p-4 sm:grid-cols-2 lg:grid-cols-4">
-          <Field label="Product (optioneel)" htmlFor="ce-product">
+          <Field label={uiT("Product (optioneel)")} htmlFor="ce-product">
             <select
               id="ce-product"
               value={productId}
@@ -399,7 +395,7 @@ export function CreativeEditor({
               }}
               className="h-9 w-full rounded-md border border-border bg-background px-2 text-sm"
             >
-              <option value="">Geen product</option>
+              <option value="">{uiT("Geen product")}</option>
               {products.map((p) => (
                 <option key={p.id} value={p.id}>
                   {p.name}
@@ -408,9 +404,9 @@ export function CreativeEditor({
             </select>
           </Field>
           <Field
-            label="Categorie"
+            label={uiT("Categorie")}
             htmlFor="ce-category"
-            hint="Categorie volstaat voor prefill — een product is niet verplicht."
+            hint={uiT("Categorie volstaat voor prefill — een product is niet verplicht.")}
           >
             <select
               id="ce-category"
@@ -418,7 +414,7 @@ export function CreativeEditor({
               onChange={(e) => setCategory(e.target.value)}
               className="h-9 w-full rounded-md border border-border bg-background px-2 text-sm"
             >
-              <option value="">Geen categorie</option>
+              <option value="">{uiT("Geen categorie")}</option>
               {TAXONOMY.map((group) => (
                 <optgroup key={group.group} label={group.group}>
                   {group.subcategories.map((sub) => (
@@ -430,14 +426,14 @@ export function CreativeEditor({
               ))}
             </select>
           </Field>
-          <Field label="Invalshoek" htmlFor="ce-angle" hint="Bepaalt welke tekstblokken voorinvullen.">
+          <Field label={uiT("Invalshoek")} htmlFor="ce-angle" hint={uiT("Bepaalt welke tekstblokken voorinvullen.")}>
             <select
               id="ce-angle"
               value={angle}
               onChange={(e) => setAngle(e.target.value)}
               className="h-9 w-full rounded-md border border-border bg-background px-2 text-sm"
             >
-              <option value="">Geen hoek</option>
+              <option value="">{uiT("Geen hoek")}</option>
               {Object.entries(ANGLE_LABELS).map(([value, label]) => (
                 <option key={value} value={value}>
                   {label}
@@ -445,7 +441,7 @@ export function CreativeEditor({
               ))}
             </select>
           </Field>
-          <Field label="Taal" htmlFor="ce-locale">
+          <Field label={uiT("Taal")} htmlFor="ce-locale">
             <select
               id="ce-locale"
               value={locale}
@@ -470,7 +466,7 @@ export function CreativeEditor({
             </p>
           )}
           <fieldset>
-            <legend className="text-sm font-medium">Sjabloon</legend>
+            <legend className="text-sm font-medium">{uiT("Sjabloon")}</legend>
             <div className="mt-2 flex flex-wrap gap-2">
               {TEMPLATE_NAMES.map((name) => (
                 <button
@@ -478,7 +474,7 @@ export function CreativeEditor({
                   type="button"
                   onClick={() => setTemplate(name)}
                   aria-pressed={template === name}
-                  title={TEMPLATES[name].label}
+                  title={uiT(TEMPLATES[name].label)}
                   className={cn(
                     "rounded-md border px-3 py-1.5 text-sm capitalize transition-colors",
                     template === name
@@ -492,7 +488,7 @@ export function CreativeEditor({
             </div>
           </fieldset>
           <fieldset>
-            <legend className="text-sm font-medium">Formaat</legend>
+            <legend className="text-sm font-medium">{uiT("Formaat")}</legend>
             <div className="mt-2 flex flex-wrap gap-2">
               {FORMAT_NAMES.map((name) => (
                 <button
@@ -507,13 +503,13 @@ export function CreativeEditor({
                       : "border-border text-muted hover:text-foreground",
                   )}
                 >
-                  {FORMATS[name].label} ({name})
+                  {uiT(FORMATS[name].label)} ({name})
                 </button>
               ))}
             </div>
           </fieldset>
           <fieldset>
-            <legend className="text-sm font-medium">Palet</legend>
+            <legend className="text-sm font-medium">{uiT("Palet")}</legend>
             <div className="mt-2 flex flex-wrap gap-2">
               {PALETTE_NAMES.map((name) => {
                 const p = PALETTES[name];
@@ -554,11 +550,10 @@ export function CreativeEditor({
               type="button"
               onClick={() => applySuggestion(true)}
               disabled={!angle}
-              title={angle ? undefined : "Kies eerst een invalshoek"}
+              title={angle ? undefined : uiT("Kies eerst een invalshoek")}
               className={buttonClass({ variant: "secondary", size: "sm" })}
             >
-              Vul automatisch
-            </button>
+              {uiT("Vul automatisch")} </button>
             <button
               type="button"
               onClick={() => {
@@ -568,10 +563,9 @@ export function CreativeEditor({
               }}
               disabled={!angle}
               className={buttonClass({ variant: "ghost", size: "sm" })}
-              title="Volgend tekstblok uit dezelfde invalshoek"
+              title={uiT("Volgend tekstblok uit dezelfde invalshoek")}
             >
-              Andere variant
-            </button>
+              {uiT("Andere variant")} </button>
             {aiEnabled && (
               <button
                 type="button"
@@ -580,13 +574,11 @@ export function CreativeEditor({
                 className={buttonClass({ variant: "secondary", size: "sm" })}
               >
                 <Sparkles className="size-3.5" aria-hidden />
-                {aiBusy ? "Genereren…" : "Genereer met AI"}
+                {aiBusy ? uiT("Genereren…") : uiT("Genereer met AI")}
               </button>
             )}
             <span className="text-xs text-muted">
-              Vult vanuit de vastgelegde tekstblokken{aiEnabled ? " of laat AI schrijven" : ""} —
-              alles blijft aanpasbaar.
-            </span>
+              {uiT("Vult vanuit de vastgelegde tekstblokken")}{aiEnabled ? uiT(" of laat AI schrijven") : ""} {uiT("— alles blijft aanpasbaar.")} </span>
           </div>
           {aiError && (
             <Card className="border-amber-300 bg-amber-50 p-3 text-sm" role="alert">
@@ -617,20 +609,19 @@ export function CreativeEditor({
         <div aria-live="polite" className="space-y-2">
           {issues.length > 0 && (
             <Card className="border-amber-300 bg-amber-50 p-3 text-sm">
-              <p className="font-medium">Deze spec past nog niet binnen de layoutgaranties:</p>
+              <p className="font-medium">{uiT("Deze spec past nog niet binnen de layoutgaranties:")}</p>
               <ul className="mt-1 list-disc pl-5">
                 {issues.map((issue) => (
                   <li key={issue.role}>{issue.message}</li>
                 ))}
               </ul>
               <p className="mt-1 text-xs text-muted">
-                Opslaan als concept kan wél; goedkeuren pas als alles past.
-              </p>
+                {uiT("Opslaan als concept kan wél; goedkeuren pas als alles past.")} </p>
             </Card>
           )}
           {actionState.error && (
             <Card className="border-red-300 bg-red-50 p-3 text-sm" role="alert">
-              <p className="font-medium">{actionState.error}</p>
+              <p className="font-medium">{uiT(actionState.error ?? "")}</p>
               {actionState.fieldErrors && (
                 <ul className="mt-1 list-disc pl-5">
                   {Object.entries(actionState.fieldErrors).map(([field, errors]) => (
@@ -650,28 +641,25 @@ export function CreativeEditor({
             formAction={saveAction}
             disabled={pending || assetIds.length === 0 || !copy.headline}
             className={buttonClass({ variant: "secondary" })}
-            title={assetIds.length > 1 ? "Slaat één concept op met het eerste (preview-)beeld" : undefined}
+            title={assetIds.length > 1 ? uiT("Slaat één concept op met het eerste (preview-)beeld") : undefined}
           >
-            {savePending ? "Opslaan…" : "Opslaan als concept"}
+            {savePending ? uiT("Opslaan…") : uiT("Opslaan als concept")}
           </button>
           <button
             type="submit"
             formAction={setActionFn}
             disabled={pending || assetIds.length === 0 || !copy.headline}
             className={buttonClass()}
-            title={`${assetIds.length || 1} beeld(en) × ${FORMAT_NAMES.length} formaten × 4 talen als aparte concepten`}
+            title={uiT("{v0} beeld(en) × {v1} formaten × 4 talen als aparte concepten", { v0: assetIds.length || 1, v1: FORMAT_NAMES.length })}
           >
-            {setPending ? "Set maken…" : `Maak set (${setSize || 12} concepten)`}
+            {setPending ? uiT("Set maken…") : uiT("Maak set ({v0} concepten)", { v0: setSize || 12 })}
           </button>
           {(assetIds.length === 0 || !copy.headline) && (
-            <p className="text-xs text-muted">Kies minstens één beeld en vul een kop in.</p>
+            <p className="text-xs text-muted">{uiT("Kies minstens één beeld en vul een kop in.")}</p>
           )}
           {!angle && assetIds.length > 0 && !!copy.headline && (
             <p className="text-xs font-medium text-amber-700" role="status">
-              ⚠ Geen invalshoek gekozen — &ldquo;Maak set&rdquo; geeft alle vier de talen dan
-              deze zelfde tekst. Kies een invalshoek om per taal de juiste tekstblokken te
-              gebruiken.
-            </p>
+              {uiT("⚠ Geen invalshoek gekozen — “Maak set” geeft alle vier de talen dan deze zelfde tekst. Kies een invalshoek om per taal de juiste tekstblokken te gebruiken.")} </p>
           )}
         </div>
       </div>
@@ -680,9 +668,9 @@ export function CreativeEditor({
       <div className="lg:sticky lg:top-4 lg:self-start">
         <Card className="p-4">
           <div className="mb-2 flex items-center justify-between">
-            <Label>Live preview</Label>
+            <Label>{uiT("Live preview")}</Label>
             <Badge tone="neutral">
-              {formatMeta.label} · {format}
+              {uiT(formatMeta.label)} · {format}
             </Badge>
           </div>
           <div
@@ -693,21 +681,19 @@ export function CreativeEditor({
               // eslint-disable-next-line @next/next/no-img-element
               <img
                 src={shownPreviewUrl}
-                alt={`Preview van de creative: ${copy.headline}`}
+                alt={uiT("Preview van de creative: {v0}", { v0: copy.headline })}
                 className={cn("size-full object-contain transition-opacity", previewStale && "opacity-60")}
               />
             ) : (
               <p className="flex h-full items-center justify-center p-6 text-center text-sm text-muted">
                 {asset?.url
-                  ? "Vul een kop in voor de preview."
-                  : "Kies een beeld voor de preview."}
+                  ? uiT("Vul een kop in voor de preview.")
+                  : uiT("Kies een beeld voor de preview.")}
               </p>
             )}
           </div>
           <p className="mt-2 text-xs text-muted">
-            De preview komt uit exact hetzelfde endpoint als de export — wat je ziet is wat er
-            naar Meta gaat.
-          </p>
+            {uiT("De preview komt uit exact hetzelfde endpoint als de export — wat je ziet is wat er naar Meta gaat.")} </p>
         </Card>
       </div>
     </form>
@@ -741,6 +727,7 @@ function CopyInput({
   shrinkScale?: 1 | 0.88 | 0.78 | null;
   onChange: (value: string) => void;
 }) {
+  const uiT = useUiTranslation();
   const len = value.length;
   const shrinkable = shrinkScale !== undefined;
   const hardLimit = shrinkable ? Math.floor(limit / 0.78) : limit;
@@ -769,8 +756,8 @@ function CopyInput({
         <Label htmlFor={id}>{label}</Label>
         <span id={`${id}-teller`} className={cn("text-xs tabular-nums", counterClass)} aria-live="polite">
           {len}/{shrinkable ? limit : hardLimit}
-          {shrinks && ` — wordt verkleind naar ${Math.round((shrinkScale ?? 0.78) * 100)}%`}
-          {over && " — past niet, ook niet verkleind"}
+          {shrinks && uiT(" — wordt verkleind naar {pct}%", { pct: Math.round((shrinkScale ?? 0.78) * 100) })}
+          {over && uiT(" — past niet, ook niet verkleind")}
         </span>
       </div>
       {multiline ? (

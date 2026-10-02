@@ -1,3 +1,4 @@
+import { tekst as uiTranslation } from '@/lib/i18n/server';
 import { and, asc, eq, gt, isNotNull, sql } from "drizzle-orm";
 
 import {
@@ -22,7 +23,10 @@ import { db } from "@/lib/db";
 import { products } from "@/lib/db/schema";
 import { formatEUR } from "@/lib/utils";
 
-export const metadata = { title: "Inkoop-aandacht" };
+export async function generateMetadata() {
+  const uiT = await uiTranslation();
+  return { title: uiT("Inkoop-aandacht") };
+}
 export const dynamic = "force-dynamic";
 
 // Drempel: onder deze verkoopmarge is de inkoop relatief te duur. Omdat de
@@ -32,6 +36,7 @@ const WARN_PCT = 40;
 const URGENT_PCT = 25;
 
 export default async function InkoopMargePage() {
+  const uiT = await uiTranslation();
   const rows = await db
     .select({
       sku: products.sku,
@@ -65,42 +70,41 @@ export default async function InkoopMargePage() {
   return (
     <>
       <PageHeader
-        title="Inkoop-aandacht"
-        subtitle="Producten met een krappe verkoopmarge — de inkoopprijs is hoog t.o.v. de marktprijs. Onderhandel een betere deal of overweeg te stoppen met inkopen."
+        title={uiT("Inkoop-aandacht")}
+        subtitle={uiT("Producten met een krappe verkoopmarge — de inkoopprijs is hoog t.o.v. de marktprijs. Onderhandel een betere deal of overweeg te stoppen met inkopen.")}
         actions={
           <LinkButton href="/rapporten" variant="secondary">
-            ← Rapporten
-          </LinkButton>
+            {uiT("← Rapporten")} </LinkButton>
         }
       />
       <ReportsNav active="/rapporten/inkoop-marge" />
 
       <div className="mb-5 grid grid-cols-2 gap-3 sm:grid-cols-3">
-        <StatTile label={`Marge onder ${WARN_PCT}%`} value={rows.length} hint="producten met krappe marge" tone="warning" />
-        <StatTile label={`Marge onder ${URGENT_PCT}%`} value={urgent.length} hint="urgent — actie nodig" tone="danger" />
-        <StatTile label="Voorraadwaarde hierin" value={formatEUR(stockValue)} hint="kapitaal in krappe producten · kostprijs" />
+        <StatTile label={uiT("Marge onder {v0}%", { v0: WARN_PCT })} value={rows.length} hint={uiT("producten met krappe marge")} tone="warning" />
+        <StatTile label={uiT("Marge onder {v0}%", { v0: URGENT_PCT })} value={urgent.length} hint={uiT("urgent — actie nodig")} tone="danger" />
+        <StatTile label={uiT("Voorraadwaarde hierin")} value={formatEUR(stockValue)} hint={uiT("kapitaal in krappe producten · kostprijs")} />
       </div>
 
       <Card>
         <CardHeader>
-          <CardTitle>Krappe marge — inkoop te duur</CardTitle>
-          <span className="text-xs text-muted">oplopende marge · verkoopprijs ex BTW</span>
+          <CardTitle>{uiT("Krappe marge — inkoop te duur")}</CardTitle>
+          <span className="text-xs text-muted">{uiT("oplopende marge · verkoopprijs ex BTW")}</span>
         </CardHeader>
         {rows.length === 0 ? (
           <CardContent>
-            <EmptyState title="Niets te zien ✓" description={`Geen actieve producten met marge onder ${WARN_PCT}%.`} />
+            <EmptyState title={uiT("Niets te zien ✓")} description={uiT("Geen actieve producten met marge onder {v0}%.", { v0: WARN_PCT })} />
           </CardContent>
         ) : (
           <Table wrapperClassName="max-h-[70vh] overflow-y-auto">
             <THead>
               <tr>
-                <Th>Product</Th>
-                <Th>Categorie</Th>
-                <Th className="text-right">Voorraad</Th>
-                <Th className="text-right">Inkoop</Th>
-                <Th className="text-right">Kostprijs</Th>
-                <Th className="text-right">Verkoop</Th>
-                <Th className="text-right">Marge</Th>
+                <Th>{uiT("Product")}</Th>
+                <Th>{uiT("Categorie")}</Th>
+                <Th className="text-right">{uiT("Voorraad")}</Th>
+                <Th className="text-right">{uiT("Inkoop")}</Th>
+                <Th className="text-right">{uiT("Kostprijs")}</Th>
+                <Th className="text-right">{uiT("Verkoop")}</Th>
+                <Th className="text-right">{uiT("Marge")}</Th>
               </tr>
             </THead>
             <TBody>

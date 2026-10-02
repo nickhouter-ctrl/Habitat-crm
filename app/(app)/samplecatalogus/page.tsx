@@ -1,3 +1,4 @@
+import { tekst as uiTranslation } from '@/lib/i18n/server';
 import { and, asc, eq, ilike, inArray, isNotNull, or, sql } from "drizzle-orm";
 import { Search, QrCode } from "lucide-react";
 import Link from "next/link";
@@ -25,7 +26,10 @@ import { catalogCollections, catalogProducts, catalogVariants, products } from "
 import { displaySku } from "@/lib/catalog";
 import { cn, formatEUR } from "@/lib/utils";
 
-export const metadata = { title: "Samplecatalogus" };
+export async function generateMetadata() {
+  const uiT = await uiTranslation();
+  return { title: uiT("Samplecatalogus") };
+}
 export const dynamic = "force-dynamic";
 
 const STATUS_LABEL: Record<string, string> = {
@@ -39,6 +43,7 @@ export default async function SampleCatalogPage({
 }: {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
+  const uiT = await uiTranslation();
   const params = await searchParams;
   const q = typeof params.q === "string" ? params.q.trim() : "";
   const collection = typeof params.collection === "string" ? params.collection.trim() : "";
@@ -130,28 +135,27 @@ export default async function SampleCatalogPage({
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Samplecatalogus"
-        subtitle="Referentiecatalogus — telt niet mee in voorraad. Scan een label of zoek op SKU."
+        title={uiT("Samplecatalogus")}
+        subtitle={uiT("Referentiecatalogus — telt niet mee in voorraad. Scan een label of zoek op SKU.")}
         actions={
           <div className="flex gap-2">
             <LinkButton href="/samplecatalogus/match" variant="secondary">
-              Koppelen
-            </LinkButton>
-            <LinkButton href="/samplecatalogus/beheer">Beheer</LinkButton>
+              {uiT("Koppelen")} </LinkButton>
+            <LinkButton href="/samplecatalogus/beheer">{uiT("Beheer")}</LinkButton>
           </div>
         }
       />
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <StatTile label="Varianten" value={String(agg?.total ?? 0)} tone="neutral" />
-        <StatTile label="Met sample" value={String(agg?.withSample ?? 0)} tone="success" />
-        <StatTile label="In assortiment" value={String(agg?.inRange ?? 0)} tone="info" />
-        <StatTile label="Prijs bekend" value={String(agg?.priced ?? 0)} tone="warning" />
+        <StatTile label={uiT("Varianten")} value={String(agg?.total ?? 0)} tone="neutral" />
+        <StatTile label={uiT("Met sample")} value={String(agg?.withSample ?? 0)} tone="success" />
+        <StatTile label={uiT("In assortiment")} value={String(agg?.inRange ?? 0)} tone="info" />
+        <StatTile label={uiT("Prijs bekend")} value={String(agg?.priced ?? 0)} tone="warning" />
       </div>
 
       {groups.length > 0 && (
         <div className="flex flex-wrap gap-2">
-          <GroupTab label="Alle" active={!group} group="" />
+          <GroupTab label={uiT("Alle")} active={!group} group="" />
           {groups.map((g) => (
             <GroupTab key={g} label={g} active={group === g} group={g} />
           ))}
@@ -163,13 +167,12 @@ export default async function SampleCatalogPage({
           {group && <input type="hidden" name="group" value={group} />}
           <div className="flex-1">
             <label className="mb-1 flex items-center gap-1.5 text-xs font-medium text-muted">
-              <QrCode className="h-3.5 w-3.5" /> Scan label of zoek (SKU, kleur, product)
-            </label>
+              <QrCode className="h-3.5 w-3.5" /> {uiT("Scan label of zoek (SKU, kleur, product)")} </label>
             <Input
               name="q"
               defaultValue={q}
               autoFocus
-              placeholder="Scan of typ een SKU…"
+              placeholder={uiT("Scan of typ een SKU…")}
             />
           </div>
           <select
@@ -177,7 +180,7 @@ export default async function SampleCatalogPage({
             defaultValue={collection}
             className="h-10 rounded-md border border-border bg-background px-3 text-sm"
           >
-            <option value="">Alle collecties</option>
+            <option value="">{uiT("Alle collecties")}</option>
             {collections.map((c) => (
               <option key={c.id} value={c.id}>
                 {c.nameEn}
@@ -185,39 +188,35 @@ export default async function SampleCatalogPage({
             ))}
           </select>
           <button type="submit" className={buttonClass()}>
-            <Search className="h-4 w-4" /> Zoek
-          </button>
+            <Search className="h-4 w-4" /> {uiT("Zoek")} </button>
         </form>
         <div className="mt-3 flex flex-wrap gap-2 text-xs">
           <FilterChip param="sample" active={onlySample} q={q} collection={collection} group={group}>
-            Alleen met sample
-          </FilterChip>
+            {uiT("Alleen met sample")} </FilterChip>
           <FilterChip param="range" active={onlyRange} q={q} collection={collection} group={group}>
-            In assortiment
-          </FilterChip>
+            {uiT("In assortiment")} </FilterChip>
           <FilterChip param="priced" active={onlyPriced} q={q} collection={collection} group={group}>
-            Prijs bekend
-          </FilterChip>
+            {uiT("Prijs bekend")} </FilterChip>
         </div>
       </Card>
 
       {rows.length === 0 ? (
         <EmptyState
           icon={<Search className="h-6 w-6" />}
-          title="Niets gevonden"
-          description="Pas je zoekopdracht of filters aan, of voeg samples toe via Beheer."
+          title={uiT("Niets gevonden")}
+          description={uiT("Pas je zoekopdracht of filters aan, of voeg samples toe via Beheer.")}
         />
       ) : (
         <Card className="overflow-hidden">
           <Table>
             <THead>
               <Tr>
-                <Th>Product · kleur</Th>
-                <Th>Collectie</Th>
+                <Th>{uiT("Product · kleur")}</Th>
+                <Th>{uiT("Collectie")}</Th>
                 <Th>SKU</Th>
-                <Th>Maten</Th>
-                <Th>Prijs</Th>
-                <Th>Status</Th>
+                <Th>{uiT("Maten")}</Th>
+                <Th>{uiT("Prijs")}</Th>
+                <Th>{uiT("Status")}</Th>
               </Tr>
             </THead>
             <TBody>
@@ -258,20 +257,19 @@ export default async function SampleCatalogPage({
                     <span className="font-mono text-xs">{displaySku(r)}</span>
                   </Td>
                   <Td className="text-sm">
-                    <span className="text-muted">{r.sizes} mt</span>
+                    <span className="text-muted">{r.sizes} {uiT("mt")}</span>
                     {(r.prodStock != null ? Number(r.prodStock) : 0) > 0 ? (
                       <span className="ml-1 text-xs font-medium text-success">
-                        · {Number(r.prodStock)} op vrd
-                      </span>
+                        · {Number(r.prodStock)} {uiT("op vrd")} </span>
                     ) : null}
                   </Td>
                   <Td className="text-sm">
-                    {r.salePrice ? formatEUR(r.salePrice) : <span className="text-muted">op aanvraag</span>}
+                    {r.salePrice ? formatEUR(r.salePrice) : <span className="text-muted">{uiT("op aanvraag")}</span>}
                   </Td>
                   <Td>
                     <div className="flex flex-wrap gap-1">
-                      {r.hasSample && <Badge tone="success">Sample</Badge>}
-                      {r.inRange && <Badge tone="info">Assortiment</Badge>}
+                      {r.hasSample && <Badge tone="success">{uiT("Sample")}</Badge>}
+                      {r.inRange && <Badge tone="info">{uiT("Assortiment")}</Badge>}
                       {!r.hasSample && !r.inRange && (
                         <Badge tone="neutral">{STATUS_LABEL[r.status] ?? r.status}</Badge>
                       )}
@@ -283,13 +281,13 @@ export default async function SampleCatalogPage({
                     <Td colSpan={6} className="p-0">
                       <div className="mx-3 mb-2 overflow-hidden rounded-md border border-border/60 bg-muted/15 text-[11px]">
                         <div className="grid grid-cols-[1.2fr_1.4fr_0.7fr_1fr_1fr_1fr_1.1fr] gap-x-2 border-b border-border bg-background/60 px-3 py-1 font-medium text-muted">
-                          <span>Afmeting</span>
+                          <span>{uiT("Afmeting")}</span>
                           <span>SKU</span>
-                          <span className="text-right">Voorraad</span>
-                          <span className="text-right">Verkoop</span>
-                          <span className="text-right">Inkoop</span>
-                          <span className="text-right">Kostprijs</span>
-                          <span className="text-right">Marge</span>
+                          <span className="text-right">{uiT("Voorraad")}</span>
+                          <span className="text-right">{uiT("Verkoop")}</span>
+                          <span className="text-right">{uiT("Inkoop")}</span>
+                          <span className="text-right">{uiT("Kostprijs")}</span>
+                          <span className="text-right">{uiT("Marge")}</span>
                         </div>
                         {sizeRows.map((s, i) => {
                           const st = s.stockQty ?? 0;

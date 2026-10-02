@@ -1,3 +1,5 @@
+import { datumTaal } from "@/lib/i18n/server";
+import { tekst as uiTranslation } from '@/lib/i18n/server';
 import { desc } from "drizzle-orm";
 import Link from "next/link";
 
@@ -20,9 +22,14 @@ import { properties } from "@/lib/db/schema";
 import { formatDate, formatEUR } from "@/lib/utils";
 import { propertyStatusMeta, propertyTypeMeta } from "../_meta";
 
-export const metadata = { title: "Panden" };
+export async function generateMetadata() {
+  const uiT = await uiTranslation();
+  return { title: uiT("Panden") };
+}
 
 export default async function PropertiesPage() {
+  const uiDateLocale = await datumTaal();
+  const uiT = await uiTranslation();
   const rows = await db.query.properties.findMany({
     orderBy: desc(properties.updatedAt),
     limit: 200,
@@ -40,35 +47,35 @@ export default async function PropertiesPage() {
   return (
     <>
       <PageHeader
-        title="Panden"
-        subtitle="Vastgoed te koop — villa's, appartementen, bouwgrond en renovatieprojecten"
-        actions={<LinkButton href="/properties/new">Nieuw pand</LinkButton>}
+        title={uiT("Panden")}
+        subtitle={uiT("Vastgoed te koop — villa's, appartementen, bouwgrond en renovatieprojecten")}
+        actions={<LinkButton href="/properties/new">{uiT("Nieuw pand")}</LinkButton>}
       />
 
       <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-3">
-        <StatTile label="Totaal" value={rows.length} />
-        <StatTile label="Beschikbaar" value={available} />
-        <StatTile label="Vraagprijs (beschikbaar)" value={formatEUR(portfolioValue)} />
+        <StatTile label={uiT("Totaal")} value={rows.length} />
+        <StatTile label={uiT("Beschikbaar")} value={available} />
+        <StatTile label={uiT("Vraagprijs (beschikbaar)")} value={formatEUR(portfolioValue)} />
       </div>
 
       {rows.length === 0 ? (
         <EmptyState
-          title="Nog geen panden"
-          description="Voeg vastgoed toe dat Habitat One in de verkoop heeft."
+          title={uiT("Nog geen panden")}
+          description={uiT("Voeg vastgoed toe dat Habitat One in de verkoop heeft.")}
         />
       ) : (
         <Card className="overflow-hidden">
           <Table>
             <THead>
               <tr>
-                <Th>Pand</Th>
-                <Th>Type</Th>
-                <Th>Status</Th>
-                <Th>Locatie</Th>
-                <Th className="text-right">Slaapk.</Th>
-                <Th className="text-right">m²</Th>
-                <Th className="text-right">Vraagprijs</Th>
-                <Th>Bijgewerkt</Th>
+                <Th>{uiT("Pand")}</Th>
+                <Th>{uiT("Type")}</Th>
+                <Th>{uiT("Status")}</Th>
+                <Th>{uiT("Locatie")}</Th>
+                <Th className="text-right">{uiT("Slaapk.")}</Th>
+                <Th className="text-right">{uiT("m²")}</Th>
+                <Th className="text-right">{uiT("Vraagprijs")}</Th>
+                <Th>{uiT("Bijgewerkt")}</Th>
               </tr>
             </THead>
             <TBody>
@@ -82,17 +89,17 @@ export default async function PropertiesPage() {
                       <span className="block text-xs text-muted">{p.reference}</span>
                     )}
                   </Td>
-                  <Td className="text-muted">{propertyTypeMeta[p.type]}</Td>
+                  <Td className="text-muted">{uiT(propertyTypeMeta[p.type])}</Td>
                   <Td>
                     <Badge tone={propertyStatusMeta[p.status].tone}>
-                      {propertyStatusMeta[p.status].label}
+                      {uiT(propertyStatusMeta[p.status].label)}
                     </Badge>
                   </Td>
                   <Td className="text-muted">{p.location ?? "—"}</Td>
                   <Td className="text-right tabular-nums">{p.bedrooms ?? "—"}</Td>
                   <Td className="text-right tabular-nums">{p.builtSqm ?? "—"}</Td>
                   <Td className="text-right tabular-nums">{formatEUR(p.priceEur)}</Td>
-                  <Td className="text-muted">{formatDate(p.updatedAt)}</Td>
+                  <Td className="text-muted">{formatDate(p.updatedAt, uiDateLocale)}</Td>
                 </Tr>
               ))}
             </TBody>

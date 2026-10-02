@@ -1,3 +1,5 @@
+import { datumTaal } from "@/lib/i18n/server";
+import { tekst as uiTranslation } from '@/lib/i18n/server';
 import { and, asc, eq, ilike, isNotNull, isNull, lt, ne, or, sql } from "drizzle-orm";
 import { Search } from "lucide-react";
 import Link from "next/link";
@@ -31,13 +33,18 @@ import { cn, formatEUR } from "@/lib/utils";
 import { getProductCollections, listBrands } from "../_options";
 import { Gs1ExcelDownload } from "./gs1-download";
 
-export const metadata = { title: "Producten" };
+export async function generateMetadata() {
+  const uiT = await uiTranslation();
+  return { title: uiT("Producten") };
+}
 
 export default async function ProductsPage({
   searchParams,
 }: {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
+  const uiDateLocale = await datumTaal();
+  const uiT = await uiTranslation();
   const params = await searchParams;
   const q = typeof params.q === "string" ? params.q.trim() : "";
   const collectionParam =
@@ -208,10 +215,10 @@ export default async function ProductsPage({
   return (
     <>
       <PageHeader
-        title="Producten"
-        subtitle={`${rows.length} ${rows.length === 1 ? "product" : "producten"}${
-          noBarcode ? " zonder barcode" : ""
-        }${noPhoto ? " zonder foto" : ""}${lowStock ? " onder voorraaddrempel" : ""}${collection ? ` in ${collection}` : ""}${q ? ` voor "${q}"` : ""}`}
+        title={uiT("Producten")}
+        subtitle={`${rows.length} ${rows.length === 1 ? uiT("product") : uiT("producten")}${
+          noBarcode ? uiT(" zonder barcode") : ""
+        }${noPhoto ? uiT(" zonder foto") : ""}${lowStock ? uiT(" onder voorraaddrempel") : ""}${collection ? uiT(" in {v0}", { v0: collection }) : ""}${q ? uiT(" voor \"{v0}\"", { v0: q }) : ""}`}
         actions={
           <>
             {(() => {
@@ -222,37 +229,33 @@ export default async function ProductsPage({
               return (
                 <>
                   <a href={`/products/export${qs}`} className={buttonClass({ variant: "secondary" })} download>
-                    Excel downloaden
-                  </a>
+                    {uiT("Excel downloaden")} </a>
                   <Gs1ExcelDownload />
                   <LinkButton href="/products/pdf" variant="primary" target="_blank">
-                    📄 PDF-overzicht
-                  </LinkButton>
+                    {uiT("📄 PDF-overzicht")} </LinkButton>
                   <LinkButton href={`/print-labels${qs}`} variant="secondary">
-                    Labels printen
-                  </LinkButton>
+                    {uiT("Labels printen")} </LinkButton>
                   <LinkButton href="/products/afboeken" variant="secondary">
-                    Voorraad afboeken
-                  </LinkButton>
+                    {uiT("Voorraad afboeken")} </LinkButton>
                 </>
               );
             })()}
-            <LinkButton href="/products/new">Nieuw product</LinkButton>
+            <LinkButton href="/products/new">{uiT("Nieuw product")}</LinkButton>
           </>
         }
       />
 
       <div className="mb-5 grid grid-cols-2 gap-3 sm:grid-cols-5">
-        <StatTile label="Producten (totaal)" value={agg.n} />
-        <StatTile label="Voorraadwaarde (kostprijs)" value={formatEUR(agg.stockCostValue)} hint="kostprijs × voorraad" />
-        <StatTile label="Voorraadwaarde (verkoop)" value={formatEUR(agg.stockSaleValue)} hint="verkoopprijs × voorraad" />
+        <StatTile label={uiT("Producten (totaal)")} value={agg.n} />
+        <StatTile label={uiT("Voorraadwaarde (kostprijs)")} value={formatEUR(agg.stockCostValue)} hint={uiT("kostprijs × voorraad")} />
+        <StatTile label={uiT("Voorraadwaarde (verkoop)")} value={formatEUR(agg.stockSaleValue)} hint={uiT("verkoopprijs × voorraad")} />
         <StatTile
-          label="Totale marge (voorraad)"
+          label={uiT("Totale marge (voorraad)")}
           value={formatEUR(totalMargin)}
-          hint={totalMarginPct != null ? `${totalMarginPct}% · verkoop − kostprijs` : "verkoop − kostprijs"}
+          hint={totalMarginPct != null ? uiT("{v0}% · verkoop − kostprijs", { v0: totalMarginPct }) : uiT("verkoop − kostprijs")}
         />
         <Link href="/products?nofoto=1" className="block">
-          <StatTile label="Zonder foto" value={agg.noPhoto} hint="actieve producten · ontbreekt op de site" />
+          <StatTile label={uiT("Zonder foto")} value={agg.noPhoto} hint={uiT("actieve producten · ontbreekt op de site")} />
         </Link>
       </div>
 
@@ -268,8 +271,7 @@ export default async function ProductsPage({
                 : "text-muted hover:bg-surface hover:text-foreground",
             )}
           >
-            Alle
-          </Link>
+            {uiT("Alle")} </Link>
           {allCollections.map((col) => (
             <Link
               key={col}
@@ -329,20 +331,20 @@ export default async function ProductsPage({
             {collection && <input type="hidden" name="collection" value={collection} />}
             {view !== "op-voorraad" && <input type="hidden" name="view" value={view} />}
             <Search className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted" />
-            <Input name="q" defaultValue={q} placeholder="Zoek op naam, categorie of SKU…" className="w-64 pl-8" />
+            <Input name="q" defaultValue={q} placeholder={uiT("Zoek op naam, categorie of SKU…")} className="w-64 pl-8" />
           </form>
         </div>
       </div>
 
       {rows.length === 0 ? (
         <EmptyState
-          title={q ? "Geen producten gevonden" : "Nog geen producten"}
+          title={q ? uiT("Geen producten gevonden") : uiT("Nog geen producten")}
           description={
             q
-              ? "Pas je zoekopdracht aan."
-              : "Voeg producten/materialen toe — bv. een categorie 'Magic Stone' met daaronder de varianten. Later worden ze gesynct vanuit Holded."
+              ? uiT("Pas je zoekopdracht aan.")
+              : uiT("Voeg producten/materialen toe — bv. een categorie 'Magic Stone' met daaronder de varianten. Later worden ze gesynct vanuit Holded.")
           }
-          action={<LinkButton href="/products/new">Nieuw product</LinkButton>}
+          action={<LinkButton href="/products/new">{uiT("Nieuw product")}</LinkButton>}
         />
       ) : (
         <div className="space-y-5">
@@ -355,11 +357,11 @@ export default async function ProductsPage({
               <Table>
                 <THead>
                   <tr>
-                    <Th>Naam</Th>
-                    <Th>Site</Th>
-                    <Th>Omschrijving</Th>
+                    <Th>{uiT("Naam")}</Th>
+                    <Th>{uiT("Site")}</Th>
+                    <Th>{uiT("Omschrijving")}</Th>
                     <Th>SKU</Th>
-                    <Th className="text-right">Voorraad</Th>
+                    <Th className="text-right">{uiT("Voorraad")}</Th>
                     <Th className="text-right">
                       <Link
                         href={onderwegHref}
@@ -367,18 +369,18 @@ export default async function ProductsPage({
                           "inline-flex items-center gap-0.5 hover:text-foreground",
                           sortByOnderweg && "text-accent",
                         )}
-                        title={sortByOnderweg ? "Klik om sortering uit te zetten" : "Sorteer op aantal onderweg"}
+                        title={sortByOnderweg ? uiT("Klik om sortering uit te zetten") : uiT("Sorteer op aantal onderweg")}
                       >
-                        Onderweg {sortByOnderweg ? "↓" : "↕"}
+                        {uiT("Onderweg")} {sortByOnderweg ? "↓" : "↕"}
                       </Link>
                     </Th>
-                    <Th>Eenh.</Th>
-                    <Th className="text-right">Verkoop (ex.)</Th>
-                    <Th className="text-right">BTW</Th>
-                    <Th className="text-right" title="Inkoopprijs leverancier (ex. overhead)">Inkoop</Th>
-                    <Th className="text-right" title="Kostprijs incl. landed-cost (Allpack + Teresa + vracht + douane)">Kostprijs</Th>
-                    <Th className="text-right" title="Marge € en % — % is tegelijk de maximale korting voor break-even">Marge / max. korting</Th>
-                    <Th>Status</Th>
+                    <Th>{uiT("Eenh.")}</Th>
+                    <Th className="text-right">{uiT("Verkoop (ex.)")}</Th>
+                    <Th className="text-right">{uiT("BTW")}</Th>
+                    <Th className="text-right" title={uiT("Inkoopprijs leverancier (ex. overhead)")}>{uiT("Inkoop")}</Th>
+                    <Th className="text-right" title={uiT("Kostprijs incl. landed-cost (Allpack + Teresa + vracht + douane)")}>{uiT("Kostprijs")}</Th>
+                    <Th className="text-right" title={uiT("Marge € en % — % is tegelijk de maximale korting voor break-even")}>{uiT("Marge / max. korting")}</Th>
+                    <Th>{uiT("Status")}</Th>
                   </tr>
                 </THead>
                 <TBody>
@@ -459,7 +461,7 @@ export default async function ProductsPage({
                               />
                             ) : (
                               <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded border border-dashed border-border text-[9px] text-muted">
-                                {p.isActive ? "geen" : "—"}
+                                {p.isActive ? uiT("geen") : "—"}
                               </span>
                             )}
                             <span className="min-w-0">
@@ -484,9 +486,9 @@ export default async function ProductsPage({
                         </Td>
                         <Td className="whitespace-nowrap text-xs">
                           {p.websiteProductId ? (
-                            <Badge tone="success" className="text-[10px]">✓ op site</Badge>
+                            <Badge tone="success" className="text-[10px]">{uiT("✓ op site")}</Badge>
                           ) : p.pushToWebsite ? (
-                            <Badge tone="info" className="text-[10px]">klaargezet</Badge>
+                            <Badge tone="info" className="text-[10px]">{uiT("klaargezet")}</Badge>
                           ) : (
                             <span className="text-muted">—</span>
                           )}
@@ -512,7 +514,7 @@ export default async function ProductsPage({
                             dispStock != null && dispStock <= 0 && "font-medium text-danger",
                           )}
                         >
-                          {dispStock != null ? dispStock.toLocaleString("nl-NL") : "—"}
+                          {dispStock != null ? dispStock.toLocaleString(uiDateLocale) : "—"}
                           {(() => {
                             const reserved = reservedByProduct.get(p.id) ?? 0;
                             if (reserved <= 0) return null;
@@ -520,12 +522,11 @@ export default async function ProductsPage({
                             return (
                               <span
                                 className="block text-[10px] font-normal text-warning"
-                                title="Gereserveerd in geaccepteerde offertes · vrij = fysiek − gereserveerd"
+                                title={uiT("Gereserveerd in geaccepteerde offertes · vrij = fysiek − gereserveerd")}
                               >
-                                {reserved.toLocaleString("nl-NL")} geres. ·{" "}
+                                {reserved.toLocaleString(uiDateLocale)} {uiT("geres. ·")}{" "}
                                 <span className={cn(free < 0 && "font-semibold text-danger")}>
-                                  {free.toLocaleString("nl-NL")} vrij
-                                </span>
+                                  {free.toLocaleString(uiDateLocale)} {uiT("vrij")} </span>
                               </span>
                             );
                           })()}
@@ -535,10 +536,9 @@ export default async function ProductsPage({
                             return (
                               <span
                                 className="mt-0.5 block text-[10px] font-medium text-amber-600"
-                                title="Het totaal klopt; voor deze verkochte stuks moet nog gekozen worden welke draairichting verkocht is."
+                                title={uiT("Het totaal klopt; voor deze verkochte stuks moet nog gekozen worden welke draairichting verkocht is.")}
                               >
-                                ⚠ {open.toLocaleString("nl-NL")} verkocht · draairichting nog kiezen
-                              </span>
+                                ⚠ {open.toLocaleString(uiDateLocale)} {uiT("verkocht · draairichting nog kiezen")} </span>
                             );
                           })()}
                         </Td>
@@ -546,7 +546,7 @@ export default async function ProductsPage({
                           {(() => {
                             const oo = onOrderByProduct.get(p.id);
                             return oo && oo.qty > 0 ? (
-                              <span className="font-medium text-accent">+{oo.qty.toLocaleString("nl-NL")}</span>
+                              <span className="font-medium text-accent">+{oo.qty.toLocaleString(uiDateLocale)}</span>
                             ) : (
                               <span className="text-muted">—</span>
                             );
@@ -560,7 +560,7 @@ export default async function ProductsPage({
                             <>
                               {dispPrice != null ? formatEUR(dispPrice) : "—"}
                               {!single && pricePerM2 != null && (
-                                <span className="block text-xs text-muted">{formatEUR(pricePerM2)}/m²</span>
+                                <span className="block text-xs text-muted">{formatEUR(pricePerM2)}{uiT("/m²")}</span>
                               )}
                             </>
                           )}
@@ -593,9 +593,9 @@ export default async function ProductsPage({
                         </Td>
                         <Td>
                           {p.isActive ? (
-                            <Badge tone="success">Actief</Badge>
+                            <Badge tone="success">{uiT("Actief")}</Badge>
                           ) : (
-                            <Badge tone="neutral">Inactief</Badge>
+                            <Badge tone="neutral">{uiT("Inactief")}</Badge>
                           )}
                         </Td>
                       </Tr>
@@ -607,22 +607,21 @@ export default async function ProductsPage({
                             <details className="group mx-3 mb-2 overflow-hidden rounded-md border border-border/60 bg-muted/15 text-[11px]">
                               <summary className="flex cursor-pointer select-none items-center gap-1.5 px-3 py-1.5 font-medium text-muted transition-colors hover:bg-background/60 hover:text-foreground">
                                 <span className="inline-block transition-transform group-open:rotate-90">▸</span>
-                                {sizeRowsDisp.length} uitvoeringen
-                                {(() => {
+                                {sizeRowsDisp.length} {uiT("uitvoeringen")} {(() => {
                                   const totaal = sizeRowsDisp.reduce((sum, s) => sum + (s.stockQty ?? 0), 0);
                                   return totaal > 0 ? (
-                                    <span className="font-normal text-success">· voorraad {totaal.toLocaleString("nl-NL")}</span>
+                                    <span className="font-normal text-success">{uiT("· voorraad")} {totaal.toLocaleString(uiDateLocale)}</span>
                                   ) : null;
                                 })()}
                               </summary>
                               <div className="grid grid-cols-[1.2fr_1.4fr_0.7fr_1fr_1fr_1fr_1.1fr] gap-x-2 border-y border-border bg-background/60 px-3 py-1 font-medium text-muted">
-                                <span>Afmeting</span>
+                                <span>{uiT("Afmeting")}</span>
                                 <span>SKU</span>
-                                <span className="text-right">Voorraad</span>
-                                <span className="text-right">Verkoop</span>
-                                <span className="text-right">Inkoop</span>
-                                <span className="text-right">Kostprijs</span>
-                                <span className="text-right">Marge</span>
+                                <span className="text-right">{uiT("Voorraad")}</span>
+                                <span className="text-right">{uiT("Verkoop")}</span>
+                                <span className="text-right">{uiT("Inkoop")}</span>
+                                <span className="text-right">{uiT("Kostprijs")}</span>
+                                <span className="text-right">{uiT("Marge")}</span>
                               </div>
                               {sizeRowsDisp.map((s, i) => {
                                 const st = s.stockQty ?? 0;

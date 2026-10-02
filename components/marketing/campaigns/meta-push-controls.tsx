@@ -1,4 +1,5 @@
 "use client";
+import { useT as useUiTranslation } from '@/components/taal-provider';
 
 /**
  * Meta-koppeling voor een campagne of advertentieset zonder meta_id (U5):
@@ -29,6 +30,7 @@ export function MetaPushControls({
   /** Bijv. "Zet campagne in Meta" / "Zet advertentieset in Meta". */
   pushLabel: string;
 }) {
+  const uiT = useUiTranslation();
   const [pushError, setPushError] = useState<string | null>(null);
   const [pushing, startPush] = useTransition();
   const [linkState, linkAction, linking] = useActionState<CampaignActionState, FormData>(
@@ -52,7 +54,7 @@ export function MetaPushControls({
       <div className="flex flex-wrap items-center gap-2">
         <Button type="button" size="sm" disabled={pushing || linking} onClick={push}>
           <Send className="mr-1.5 size-3.5" aria-hidden />
-          {pushing ? "Bezig met aanmaken…" : `${pushLabel} (gepauzeerd)`}
+          {pushing ? uiT("Bezig met aanmaken…") : uiT("{v0} (gepauzeerd)", { v0: pushLabel })}
         </Button>
         <Button
           type="button"
@@ -62,8 +64,7 @@ export function MetaPushControls({
           aria-expanded={showLink}
         >
           <Link2 className="mr-1.5 size-3.5" aria-hidden />
-          Bestaand Meta-id koppelen
-        </Button>
+          {uiT("Bestaand Meta-id koppelen")} </Button>
       </div>
 
       {showLink && (
@@ -72,18 +73,17 @@ export function MetaPushControls({
           <input type="hidden" name="localId" value={localId} />
           <input type="hidden" name="campaignId" value={campaignId} />
           <label className="sr-only" htmlFor={`meta-id-${localId}`}>
-            Meta-id
-          </label>
+            {uiT("Meta-id")} </label>
           <Input
             id={`meta-id-${localId}`}
             name="metaId"
             required
             inputMode="numeric"
-            placeholder="Id uit Ads Manager, bv. 120210123456789"
+            placeholder={uiT("Id uit Ads Manager, bv. 120210123456789")}
             className="w-64"
           />
           <Button type="submit" size="sm" variant="secondary" disabled={linking}>
-            {linking ? "Controleren bij Meta…" : "Koppelen"}
+            {linking ? uiT("Controleren bij Meta…") : uiT("Koppelen")}
           </Button>
         </form>
       )}

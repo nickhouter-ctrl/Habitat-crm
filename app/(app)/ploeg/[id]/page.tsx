@@ -1,3 +1,5 @@
+import { datumTaal } from "@/lib/i18n/server";
+import { tekst as uiTranslation } from '@/lib/i18n/server';
 /**
  * Alles van één arbeider op één pagina: zijn gegevens, waar hij gewerkt heeft,
  * wat dat kostte en welke facturen er op zijn naam staan.
@@ -50,6 +52,8 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
 }
 
 export default async function WorkerPage({ params }: { params: Promise<{ id: string }> }) {
+  const uiDateLocale = await datumTaal();
+  const uiT = await uiTranslation();
   const { id } = await params;
   const worker = await db.query.workers.findFirst({ where: eq(workers.id, id) });
   if (!worker) notFound();
@@ -72,29 +76,25 @@ export default async function WorkerPage({ params }: { params: Promise<{ id: str
         subtitle={[worker.role, worker.active ? null : "inactief"].filter(Boolean).join(" · ") || undefined}
         actions={
           <Link href="/ploeg" className="text-sm text-accent hover:underline">
-            ← Hele ploeg
-          </Link>
+            {uiT("← Hele ploeg")} </Link>
         }
       />
 
       <div className="mb-5 grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <StatTile label="Uren geboekt" value={uren.toLocaleString("nl-NL")} hint="goedgekeurd" />
-        <StatTile label="Arbeidskost" value={formatEUR(kost)} hint="ex. btw" />
-        <StatTile label="Werven" value={String(perWerf.length)} hint="waar hij gewerkt heeft" />
-        <StatTile label="Laatst gewerkt" value={laatst ? formatDate(laatst) : "—"} />
+        <StatTile label={uiT("Uren geboekt")} value={uren.toLocaleString(uiDateLocale)} hint={uiT("goedgekeurd")} />
+        <StatTile label={uiT("Arbeidskost")} value={formatEUR(kost)} hint={uiT("ex. btw")} />
+        <StatTile label={uiT("Werven")} value={String(perWerf.length)} hint={uiT("waar hij gewerkt heeft")} />
+        <StatTile label={uiT("Laatst gewerkt")} value={laatst ? formatDate(laatst, uiDateLocale) : "—"} />
       </div>
 
       {wachtend.length > 0 && (
         <Card className="mb-5 border-warning/40 bg-warning/5">
           <CardContent className="py-4 text-sm">
             <span className="font-medium">
-              {wachtend.length} urenregel{wachtend.length === 1 ? "" : "s"} uit het urenportaal wacht
-              nog op goedkeuring
-            </span>
+              {wachtend.length} {uiT(wachtend.length === 1 ? "urenregel" : "urenregels")} {uiT("uit het urenportaal wacht nog op goedkeuring")} </span>
             <span className="text-muted">
               {" "}
-              — die tellen nog niet mee in de cijfers hierboven. Goedkeuren doe je op de projectpagina.
-            </span>
+              {uiT("— die tellen nog niet mee in de cijfers hierboven. Goedkeuren doe je op de projectpagina.")} </span>
           </CardContent>
         </Card>
       )}
@@ -103,28 +103,27 @@ export default async function WorkerPage({ params }: { params: Promise<{ id: str
         <div className="space-y-5">
           <Card>
             <CardHeader>
-              <CardTitle>Gegevens</CardTitle>
+              <CardTitle>{uiT("Gegevens")}</CardTitle>
               <span className="text-xs text-muted">
-een tweede tarief is optioneel; bij het boeken van uren kies je welke geldt
-              </span>
+{uiT("een tweede tarief is optioneel; bij het boeken van uren kies je welke geldt")} </span>
             </CardHeader>
             <CardContent>
               <form action={updateWorker.bind(null, worker.id)} className="space-y-3">
-                <Field label="Naam">
+                <Field label={uiT("Naam")}>
                   <Input name="name" defaultValue={worker.name} required />
                 </Field>
-                <Field label="Functie">
-                  <Input name="role" defaultValue={worker.role ?? ""} placeholder="bijv. tegelzetter" />
+                <Field label={uiT("Functie")}>
+                  <Input name="role" defaultValue={worker.role ?? ""} placeholder={uiT("bijv. tegelzetter")} />
                 </Field>
                 <div className="grid gap-3 sm:grid-cols-2">
-                  <Field label="Uurtarief (€/u)" hint="ex. btw">
+                  <Field label={uiT("Uurtarief (€/u)")} hint={uiT("ex. btw")}>
                     <Input
                       name="hourlyCostEur"
                       inputMode="decimal"
                       defaultValue={moneyForInput(worker.hourlyCostEur)}
                     />
                   </Field>
-                  <Field label="Tweede tarief (€/u)" hint="optioneel — een afwijkend tarief dat soms geldt">
+                  <Field label={uiT("Tweede tarief (€/u)")} hint={uiT("optioneel — een afwijkend tarief dat soms geldt")}>
                     <Input
                       name="hourlyCostCashEur"
                       inputMode="decimal"
@@ -132,24 +131,24 @@ een tweede tarief is optioneel; bij het boeken van uren kies je welke geldt
                     />
                   </Field>
                 </div>
-                <Field label="Taal urenportaal">
+                <Field label={uiT("Taal urenportaal")}>
                   <Select name="portalLang" defaultValue={worker.portalLang ?? "es"}>
                     <option value="es">Español</option>
                     <option value="nl">Nederlands</option>
                     <option value="en">English</option>
                   </Select>
                 </Field>
-                <Field label="Notities">
-                  <Textarea name="notes" rows={3} defaultValue={worker.notes ?? ""} placeholder="optioneel" />
+                <Field label={uiT("Notities")}>
+                  <Textarea name="notes" rows={3} defaultValue={worker.notes ?? ""} placeholder={uiT("optioneel")} />
                 </Field>
                 <div className="flex flex-wrap items-center gap-3">
-                  <SubmitButton pendingLabel="Opslaan…">Opslaan</SubmitButton>
+                  <SubmitButton pendingLabel={uiT("Opslaan…")}>{uiT("Opslaan")}</SubmitButton>
                   <button
                     type="submit"
                     formAction={toggleWorkerActive.bind(null, worker.id, !worker.active)}
                     className="text-xs text-muted underline-offset-2 hover:underline"
                   >
-                    {worker.active ? "Op inactief zetten" : "Heractiveren"}
+                    {worker.active ? uiT("Op inactief zetten") : uiT("Heractiveren")}
                   </button>
                 </div>
               </form>
@@ -158,12 +157,12 @@ een tweede tarief is optioneel; bij het boeken van uren kies je welke geldt
 
           <Card>
             <CardHeader>
-              <CardTitle>Per werf</CardTitle>
-              <span className="text-xs text-muted">waar zijn uren naartoe gingen</span>
+              <CardTitle>{uiT("Per werf")}</CardTitle>
+              <span className="text-xs text-muted">{uiT("waar zijn uren naartoe gingen")}</span>
             </CardHeader>
             {perWerf.length === 0 ? (
               <CardContent>
-                <p className="text-sm text-muted">Nog geen uren geboekt.</p>
+                <p className="text-sm text-muted">{uiT("Nog geen uren geboekt.")}</p>
               </CardContent>
             ) : (
               <div className="divide-y">
@@ -175,11 +174,10 @@ een tweede tarief is optioneel; bij het boeken van uren kies je welke geldt
                           {p.project}
                         </Link>
                       ) : (
-                        <span className="text-muted">zonder werf</span>
+                        <span className="text-muted">{uiT("zonder werf")}</span>
                       )}
                       <span className="ml-1.5 text-xs text-muted">
-                        {Number(p.uren).toLocaleString("nl-NL")} uur
-                        {p.laatst ? ` · tot ${formatDate(p.laatst)}` : ""}
+                        {Number(p.uren).toLocaleString(uiDateLocale)} {uiT("uur")} {p.laatst ? uiT(" · tot {v0}", { v0: formatDate(p.laatst, uiDateLocale) }) : ""}
                       </span>
                     </span>
                     <span className="shrink-0 text-right font-medium tabular-nums">
@@ -195,32 +193,32 @@ een tweede tarief is optioneel; bij het boeken van uren kies je welke geldt
         <div className="space-y-5">
           <Card className="overflow-hidden">
             <CardHeader>
-              <CardTitle>Urenregels</CardTitle>
-              <span className="text-xs text-muted">nieuwste eerst</span>
+              <CardTitle>{uiT("Urenregels")}</CardTitle>
+              <span className="text-xs text-muted">{uiT("nieuwste eerst")}</span>
             </CardHeader>
             {regels.length === 0 ? (
               <CardContent>
                 <EmptyState
-                  title="Nog geen uren"
-                  description="Uren boek je op de projectpagina, of de arbeider vult ze zelf in via het urenportaal."
+                  title={uiT("Nog geen uren")}
+                  description={uiT("Uren boek je op de projectpagina, of de arbeider vult ze zelf in via het urenportaal.")}
                 />
               </CardContent>
             ) : (
               <Table>
                 <THead>
                   <Tr>
-                    <Th>Datum</Th>
-                    <Th>Werf</Th>
-                    <Th className="text-right">Uren</Th>
-                    <Th className="text-right">Tarief</Th>
-                    <Th className="text-right">Kost</Th>
+                    <Th>{uiT("Datum")}</Th>
+                    <Th>{uiT("Werf")}</Th>
+                    <Th className="text-right">{uiT("Uren")}</Th>
+                    <Th className="text-right">{uiT("Tarief")}</Th>
+                    <Th className="text-right">{uiT("Kost")}</Th>
                     <Th></Th>
                   </Tr>
                 </THead>
                 <TBody>
                   {regels.map((r) => (
                     <Tr key={r.id} className={r.wacht_op_akkoord ? "opacity-60" : ""}>
-                      <Td className="whitespace-nowrap">{formatDate(r.date)}</Td>
+                      <Td className="whitespace-nowrap">{formatDate(r.date, uiDateLocale)}</Td>
                       <Td>
                         {r.project_id ? (
                           <Link href={`/projects/${r.project_id}`} className="hover:underline">
@@ -243,13 +241,13 @@ een tweede tarief is optioneel; bij het boeken van uren kies je welke geldt
                           r.note && <span className="block text-xs text-muted">{r.note}</span>
                         )}
                       </Td>
-                      <Td className="text-right tabular-nums">{Number(r.hours).toLocaleString("nl-NL")}</Td>
+                      <Td className="text-right tabular-nums">{Number(r.hours).toLocaleString(uiDateLocale)}</Td>
                       <Td className="text-right tabular-nums text-muted">{formatEUR(Number(r.hourly_cost_eur))}</Td>
                       <Td className="text-right tabular-nums font-medium">{formatEUR(Number(r.kost))}</Td>
                       <Td className="whitespace-nowrap text-xs">
-                        {r.wacht_op_akkoord && <Badge tone="warning">wacht op akkoord</Badge>}
+                        {r.wacht_op_akkoord && <Badge tone="warning">{uiT("wacht op akkoord")}</Badge>}
                         {r.zelf_geboekt && !r.wacht_op_akkoord && (
-                          <span className="text-muted">via portaal</span>
+                          <span className="text-muted">{uiT("via portaal")}</span>
                         )}
                       </Td>
                     </Tr>
@@ -261,21 +259,21 @@ een tweede tarief is optioneel; bij het boeken van uren kies je welke geldt
 
           <Card className="overflow-hidden">
             <CardHeader>
-              <CardTitle>Facturen op zijn naam</CardTitle>
-              <span className="text-xs text-muted">uit de inkoop</span>
+              <CardTitle>{uiT("Facturen op zijn naam")}</CardTitle>
+              <span className="text-xs text-muted">{uiT("uit de inkoop")}</span>
             </CardHeader>
             {facturen.length === 0 ? (
               <CardContent>
-                <p className="text-sm text-muted">Geen facturen in de inkoop op deze naam.</p>
+                <p className="text-sm text-muted">{uiT("Geen facturen in de inkoop op deze naam.")}</p>
               </CardContent>
             ) : (
               <Table>
                 <THead>
                   <Tr>
-                    <Th>Referentie</Th>
-                    <Th>Datum</Th>
-                    <Th>Werf</Th>
-                    <Th className="text-right">Ex. btw</Th>
+                    <Th>{uiT("Referentie")}</Th>
+                    <Th>{uiT("Datum")}</Th>
+                    <Th>{uiT("Werf")}</Th>
+                    <Th className="text-right">{uiT("Ex. btw")}</Th>
                   </Tr>
                 </THead>
                 <TBody>
@@ -283,12 +281,12 @@ een tweede tarief is optioneel; bij het boeken van uren kies je welke geldt
                     <Tr key={f.id}>
                       <Td>
                         <Link href={`/inkooporders/${f.id}`} className="text-accent hover:underline">
-                          {f.reference ?? "zonder referentie"}
+                          {f.reference ?? uiT("zonder referentie")}
                         </Link>
-                        {f.count_as_labor && <span className="block text-xs text-muted">geboekt als uren</span>}
+                        {f.count_as_labor && <span className="block text-xs text-muted">{uiT("geboekt als uren")}</span>}
                       </Td>
                       <Td className="whitespace-nowrap text-muted">
-                        {f.order_date ? formatDate(f.order_date) : "—"}
+                        {f.order_date ? formatDate(f.order_date, uiDateLocale) : "—"}
                       </Td>
                       <Td className="text-muted">{f.project ?? "—"}</Td>
                       <Td className="text-right tabular-nums">{formatEUR(Number(f.ex_btw))}</Td>

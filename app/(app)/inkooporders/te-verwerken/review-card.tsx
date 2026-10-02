@@ -1,4 +1,5 @@
 "use client";
+import { useT as useUiTranslation } from '@/components/taal-provider';
 
 /**
  * Eén factuur in de wachtrij: wat de AI ervan maakte, wat er aan mankeert, en de
@@ -84,6 +85,7 @@ export function ReviewCard({
   /** `aliassen` = de namen die leveranciers zelf voor deze werf gebruiken. */
   projects: { id: string; name: string; aliassen?: string[] }[];
 }) {
+  const uiT = useUiTranslation();
   const [kind, setKind] = useState<"labor" | "material" | "">(data.kind ?? "");
   const [split, setSplit] = useState(data.lines.length > 1);
   const [extraRegels, setExtraRegels] = useState(0);
@@ -113,26 +115,26 @@ export function ReviewCard({
       <div className="mb-3 flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
           <p className="flex flex-wrap items-center gap-2 font-medium">
-            {data.supplier ?? <span className="text-warning">(leverancier onbekend)</span>}
+            {data.supplier ?? <span className="text-warning">{uiT("(leverancier onbekend)")}</span>}
             <Badge tone={verdict.tone}>{verdict.label}</Badge>
-            {data.wachtDagen >= 7 && <Badge tone="danger">wacht {data.wachtDagen} dagen</Badge>}
+            {data.wachtDagen >= 7 && <Badge tone="danger">{uiT("wacht")} {data.wachtDagen} {uiT("dagen")}</Badge>}
             {data.twijfel && (
               <span title={data.twijfel.redenen.join(" · ")}>
-                <Badge tone="neutral">waarschijnlijk geen factuur</Badge>
+                <Badge tone="neutral">{uiT("waarschijnlijk geen factuur")}</Badge>
               </span>
             )}
           </p>
           <p className="text-xs text-muted">
-            {data.reference ?? "geen referentie"}
+            {data.reference ?? uiT("geen referentie")}
             {data.invoiceDate ? ` · ${data.invoiceDate}` : ""} · {data.attachmentName}
           </p>
         </div>
         <div className="text-right">
           <p className="text-lg font-semibold tabular-nums">{data.total != null ? formatEUR(data.total) : "—"}</p>
-          {data.subtotal != null && <p className="text-xs text-muted">ex. btw {formatEUR(data.subtotal)}</p>}
+          {data.subtotal != null && <p className="text-xs text-muted">{uiT("ex. btw")} {formatEUR(data.subtotal)}</p>}
           {data.currency && data.currency !== "EUR" && data.totalOriginal != null && (
             <p className="text-xs text-muted">
-              {data.currency} {data.totalOriginal.toFixed(2)} · koers {data.fxRate?.toFixed(4)}
+              {data.currency} {data.totalOriginal.toFixed(2)} {uiT("· koers")} {data.fxRate?.toFixed(4)}
             </p>
           )}
         </div>
@@ -141,7 +143,7 @@ export function ReviewCard({
       {/* Het oordeel */}
       <div className="mb-3 grid gap-2 sm:grid-cols-2">
         <div className="rounded-md bg-surface/50 p-2.5 text-xs">
-          <p className="mb-1 font-medium text-muted">Gelezen van de factuur</p>
+          <p className="mb-1 font-medium text-muted">{uiT("Gelezen van de factuur")}</p>
           {gelezen.length === 0 ? (
             <p className="text-muted">—</p>
           ) : (
@@ -157,9 +159,9 @@ export function ReviewCard({
           )}
         </div>
         <div className={`rounded-md p-2.5 text-xs ${gefaald.length ? "bg-warning/10" : "bg-surface/50"}`}>
-          <p className="mb-1 font-medium text-muted">Wat ontbreekt of opvalt</p>
+          <p className="mb-1 font-medium text-muted">{uiT("Wat ontbreekt of opvalt")}</p>
           {gefaald.length === 0 ? (
-            <p className="text-success">Niets — alles staat erop.</p>
+            <p className="text-success">{uiT("Niets — alles staat erop.")}</p>
           ) : (
             <ul className="space-y-0.5">
               {gefaald.map((c) => (
@@ -175,8 +177,7 @@ export function ReviewCard({
           {data.duplicateOfPoId && (
             <p className="mt-1.5">
               <a href={`/inkooporders/${data.duplicateOfPoId}`} className="text-accent hover:underline">
-                → bekijk de bestaande inkooporder
-              </a>
+                {uiT("→ bekijk de bestaande inkooporder")} </a>
             </p>
           )}
         </div>
@@ -184,21 +185,20 @@ export function ReviewCard({
 
       <p className="mb-3 text-xs">
         <a href={`/api/archief/${data.attachmentId}`} target="_blank" rel="noopener noreferrer" className="text-accent hover:underline">
-          Factuur openen (PDF)
-        </a>
+          {uiT("Factuur openen (PDF)")} </a>
       </p>
 
       {/* Goedkeuren, met correctie */}
       {!rejecting && (
         <form action={approveReviewAction.bind(null, data.id)} className="space-y-3 border-t pt-3">
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-            <Field label="Leverancier" htmlFor={`sup-${data.id}`}>
+            <Field label={uiT("Leverancier")} htmlFor={`sup-${data.id}`}>
               <Input id={`sup-${data.id}`} name="supplier" defaultValue={data.supplier ?? ""} />
             </Field>
-            <Field label="Referentie" htmlFor={`ref-${data.id}`}>
+            <Field label={uiT("Referentie")} htmlFor={`ref-${data.id}`}>
               <Input id={`ref-${data.id}`} name="reference" defaultValue={data.reference ?? ""} />
             </Field>
-            <Field label="Totaal (incl. btw)" htmlFor={`tot-${data.id}`}>
+            <Field label={uiT("Totaal (incl. btw)")} htmlFor={`tot-${data.id}`}>
               <Input
                 id={`tot-${data.id}`}
                 name="total"
@@ -207,7 +207,7 @@ export function ReviewCard({
                 defaultValue={data.total != null ? String(data.total).replace(".", ",") : ""}
               />
             </Field>
-            <Field label="Ex. btw" htmlFor={`sub-${data.id}`} hint="leeg = gelijk aan totaal">
+            <Field label={uiT("Ex. btw")} htmlFor={`sub-${data.id}`} hint={uiT("leeg = gelijk aan totaal")}>
               <Input
                 id={`sub-${data.id}`}
                 name="subtotal"
@@ -219,31 +219,31 @@ export function ReviewCard({
           </div>
 
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-            <Field label="Soort" htmlFor={`kind-${data.id}`}>
+            <Field label={uiT("Soort")} htmlFor={`kind-${data.id}`}>
               <Select
                 id={`kind-${data.id}`}
                 name="kind"
                 value={kind}
                 onChange={(e) => setKind(e.target.value as typeof kind)}
               >
-                <option value="">— kies —</option>
-                <option value="labor">Uren / arbeid</option>
-                <option value="material">Materiaal / inkoop</option>
+                <option value="">{uiT("— kies —")}</option>
+                <option value="labor">{uiT("Uren / arbeid")}</option>
+                <option value="material">{uiT("Materiaal / inkoop")}</option>
               </Select>
             </Field>
 
             {!split && (
               <>
                 <Field
-                  label="Project"
+                  label={uiT("Project")}
                   htmlFor={`proj-${data.id}`}
-                  hint={data.projectId ? "herkend op de factuur" : "staat niet op de factuur — kies zelf"}
+                  hint={data.projectId ? uiT("herkend op de factuur") : uiT("staat niet op de factuur — kies zelf")}
                 >
                   <Combobox
                     name="projectId"
                     defaultValue={data.projectId ?? ""}
                     clearable
-                    placeholder="Zoek een werf…"
+                    placeholder={uiT("Zoek een werf…")}
                     options={projectOpties}
                     menuClassName="w-72"
                   />
@@ -252,14 +252,14 @@ export function ReviewCard({
                       leverancier niet meer om een werfreferentie. */}
                   <label className="mt-1.5 flex items-center gap-2 text-xs text-muted">
                     <input type="checkbox" name="overhead" defaultChecked={data.overhead} />
-                    <span>Algemene kosten (energie, telefoon, verzekering — hoort bij geen project)</span>
+                    <span>{uiT("Algemene kosten (energie, telefoon, verzekering — hoort bij geen project)")}</span>
                   </label>
                 </Field>
                 {kind === "labor" && (
                   <Field
-                    label="Uren"
+                    label={uiT("Uren")}
                     htmlFor={`hrs-${data.id}`}
-                    hint={urenAfgeleid ?? "bepaalt het uurtarief"}
+                    hint={urenAfgeleid ?? uiT("bepaalt het uurtarief")}
                   >
                     <Input
                       id={`hrs-${data.id}`}
@@ -279,8 +279,8 @@ export function ReviewCard({
             <label className="flex items-center gap-2 text-xs">
               <input type="checkbox" checked={split} onChange={(e) => setSplit(e.target.checked)} />
               <span>
-                Deze factuur loopt over <strong>meerdere werven</strong>
-                {data.lines.length > 1 ? ` — de AI zag ${data.lines.length} werven` : ""}
+                {uiT("Deze factuur loopt over")} <strong>{uiT("meerdere werven")}</strong>
+                {data.lines.length > 1 ? uiT(" — de AI zag {v0} werven", { v0: data.lines.length }) : ""}
               </span>
             </label>
             {split && (
@@ -302,25 +302,25 @@ export function ReviewCard({
                       name={`split_${i}_projectId`}
                       defaultValue={l.projectId ?? ""}
                       clearable
-                      placeholder="Zoek een werf…"
+                      placeholder={uiT("Zoek een werf…")}
                       options={projectOpties}
                       menuClassName="w-72"
                     />
                     <Input
                       name={`split_${i}_hours`}
                       inputMode="decimal"
-                      placeholder="uren"
+                      placeholder={uiT("uren")}
                       className="text-right"
                       defaultValue={l.hours != null ? String(l.hours) : ""}
                     />
                     <Input
                       name={`split_${i}_amount`}
                       inputMode="decimal"
-                      placeholder="bedrag ex. btw (optioneel)"
+                      placeholder={uiT("bedrag ex. btw (optioneel)")}
                       className="text-right"
                       defaultValue={l.amount != null ? String(l.amount).replace(".", ",") : ""}
                     />
-                    {l.projectHint && <p className="text-xs text-muted sm:col-span-3">op de factuur: {l.projectHint}</p>}
+                    {l.projectHint && <p className="text-xs text-muted sm:col-span-3">{uiT("op de factuur:")} {l.projectHint}</p>}
                   </div>
                 ))}
                 <button
@@ -328,13 +328,10 @@ export function ReviewCard({
                   onClick={() => setExtraRegels((n) => n + 1)}
                   className="text-xs text-accent hover:underline"
                 >
-                  + werf toevoegen
-                </button>
+                  {uiT("+ werf toevoegen")} </button>
                 <p className="text-xs text-muted">
-                  Bedrag leeg laten mag: dan wordt {data.subtotal != null ? formatEUR(data.subtotal) : "het bedrag ex. btw"}{" "}
-                  over de werven verdeeld naar rato van de uren. Vul je ze wél in, dan horen ze samen op dat bedrag uit te
-                  komen. De inkooporder zelf blijft bij een verdeling ongekoppeld — anders telt het bedrag dubbel.
-                </p>
+                  {uiT("Bedrag leeg laten mag: dan wordt")} {data.subtotal != null ? formatEUR(data.subtotal) : uiT("het bedrag ex. btw")}{" "}
+                  {uiT("over de werven verdeeld naar rato van de uren. Vul je ze wél in, dan horen ze samen op dat bedrag uit te komen. De inkooporder zelf blijft bij een verdeling ongekoppeld — anders telt het bedrag dubbel.")} </p>
               </div>
             )}
           </div>
@@ -342,24 +339,20 @@ export function ReviewCard({
           {kind === "labor" && (
             <label className="flex items-center gap-2 text-xs text-muted">
               <input type="checkbox" name="hoursAlreadyLogged" />
-              <span>Deze uren staan al via het portaal op het project — geen nieuwe urenregel maken</span>
+              <span>{uiT("Deze uren staan al via het portaal op het project — geen nieuwe urenregel maken")}</span>
             </label>
           )}
 
           {!split && !data.projectId && (
             <p className="text-xs text-warning">
-              Er staat geen werf of project op deze factuur. Kies er hierboven zelf een, anders komen deze kosten op geen
-              enkel project terecht.
-            </p>
+              {uiT("Er staat geen werf of project op deze factuur. Kies er hierboven zelf een, anders komen deze kosten op geen enkel project terecht.")} </p>
           )}
 
           <div className="flex flex-wrap items-center gap-2">
-            <SubmitButton variant="primary" pendingLabel="Goedkeuren…">
-              Goedkeuren
-            </SubmitButton>
+            <SubmitButton variant="primary" pendingLabel={uiT("Goedkeuren…")}>
+              {uiT("Goedkeuren")} </SubmitButton>
             <button type="button" onClick={() => setRejecting(true)} className={buttonClass({ variant: "secondary" })}>
-              Afkeuren
-            </button>
+              {uiT("Afkeuren")} </button>
             <span className="flex-1" />
             {data.siblings.map((s) => (
               <SubmitButton
@@ -367,11 +360,11 @@ export function ReviewCard({
                 variant="ghost"
                 size="sm"
                 className="text-muted"
-                pendingLabel="Koppelen…"
+                pendingLabel={uiT("Koppelen…")}
                 formAction={attachToSiblingAction.bind(null, data.id, s.id)}
-                title="Dit is geen eigen factuur maar een specificatie (bv. urenverantwoording) — de PDF komt als bijlage op de inkooporder van die factuur"
+                title={uiT("Dit is geen eigen factuur maar een specificatie (bv. urenverantwoording) — de PDF komt als bijlage op de inkooporder van die factuur")}
               >
-                Bijlage bij {s.label}
+                {uiT("Bijlage bij")} {s.label}
               </SubmitButton>
             ))}
             <IgnoreButton reviewId={data.id} />
@@ -382,9 +375,9 @@ export function ReviewCard({
       {/* Afkeuren, met de mail naar de leverancier erbij */}
       {rejecting && (
         <form action={rejectReviewAction.bind(null, data.id)} className="space-y-3 border-t pt-3">
-          <p className="text-sm font-medium">Afkeuren</p>
+          <p className="text-sm font-medium">{uiT("Afkeuren")}</p>
 
-          <Field label="Interne reden" htmlFor={`why-${data.id}`} hint="komt in het logboek, niet in de mail">
+          <Field label={uiT("Interne reden")} htmlFor={`why-${data.id}`} hint={uiT("komt in het logboek, niet in de mail")}>
             <Textarea
               id={`why-${data.id}`}
               name="reason"
@@ -400,18 +393,16 @@ export function ReviewCard({
 
           <label className="flex items-center gap-2 text-sm">
             <input type="checkbox" name="sendMail" checked={sendMail} onChange={(e) => setSendMail(e.target.checked)} />
-            <span>Terugsturen naar de leverancier met de vraag om aanpassing</span>
+            <span>{uiT("Terugsturen naar de leverancier met de vraag om aanpassing")}</span>
           </label>
 
           {sendMail && (
             <div className="space-y-3 rounded-md bg-surface/50 p-3">
               {data.emailCandidates.length === 0 ? (
                 <p className="text-xs text-warning">
-                  We kennen geen e-mailadres van deze leverancier. Vul er zelf een in, of keur alleen intern af en mail
-                  zelf.
-                </p>
+                  {uiT("We kennen geen e-mailadres van deze leverancier. Vul er zelf een in, of keur alleen intern af en mail zelf.")} </p>
               ) : null}
-              <Field label="Aan" htmlFor={`to-${data.id}`}>
+              <Field label={uiT("Aan")} htmlFor={`to-${data.id}`}>
                 <Select
                   id={`to-${data.id}`}
                   name="mailTo"
@@ -421,38 +412,33 @@ export function ReviewCard({
                   {data.emailCandidates.map((c) => (
                     <option key={c.email} value={c.email}>
                       {c.email} — {c.source}
-                      {c.uncertain ? " ⚠ mogelijk de doorstuurder" : ""}
+                      {c.uncertain ? uiT(" ⚠ mogelijk de doorstuurder") : ""}
                     </option>
                   ))}
-                  <option value="">— zelf invullen —</option>
+                  <option value="">{uiT("— zelf invullen —")}</option>
                 </Select>
               </Field>
               {mailTo === "" && (
-                <Field label="E-mailadres" htmlFor={`toManual-${data.id}`}>
-                  <Input id={`toManual-${data.id}`} name="mailTo" type="email" placeholder="leverancier@example.es" />
+                <Field label={uiT("E-mailadres")} htmlFor={`toManual-${data.id}`}>
+                  <Input id={`toManual-${data.id}`} name="mailTo" type="email" placeholder={uiT("leverancier@example.es")} />
                 </Field>
               )}
               {gekozen?.uncertain && (
                 <p className="rounded-md bg-warning/10 p-2 text-xs text-warning">
-                  Dit adres lijkt van de partij die de factuur alleen dóórstuurde, niet van de leverancier zelf. Controleer
-                  het voordat je verstuurt — anders krijgt de verkeerde partij dit bericht.
-                </p>
+                  {uiT("Dit adres lijkt van de partij die de factuur alleen dóórstuurde, niet van de leverancier zelf. Controleer het voordat je verstuurt — anders krijgt de verkeerde partij dit bericht.")} </p>
               )}
-              <Field label="Onderwerp" htmlFor={`subj-${data.id}`}>
+              <Field label={uiT("Onderwerp")} htmlFor={`subj-${data.id}`}>
                 <Input id={`subj-${data.id}`} name="mailSubject" defaultValue={data.draft?.subject ?? ""} />
               </Field>
-              <Field label="Bericht" htmlFor={`body-${data.id}`} hint="pas aan wat je wilt — dit gaat er letterlijk uit">
+              <Field label={uiT("Bericht")} htmlFor={`body-${data.id}`} hint={uiT("pas aan wat je wilt — dit gaat er letterlijk uit")}>
                 <Textarea id={`body-${data.id}`} name="mailBody" rows={12} defaultValue={data.draft?.text ?? ""} />
               </Field>
               <label className="flex items-center gap-2 text-xs text-muted">
                 <input type="checkbox" name="attachInvoice" />
-                <span>De originele factuur als bijlage meesturen</span>
+                <span>{uiT("De originele factuur als bijlage meesturen")}</span>
               </label>
               <p className="text-xs text-muted">
-                Gaat als antwoord in dezelfde mailthread, vanaf purchase@habitat-one.com met jouw naam erbij. Het antwoord
-                van de leverancier — met de gecorrigeerde factuur — komt daar dus meteen weer binnen en belandt terug in
-                deze wachtrij.
-              </p>
+                {uiT("Gaat als antwoord in dezelfde mailthread, vanaf purchase@habitat-one.com met jouw naam erbij. Het antwoord van de leverancier — met de gecorrigeerde factuur — komt daar dus meteen weer binnen en belandt terug in deze wachtrij.")} </p>
             </div>
           )}
 
@@ -462,18 +448,17 @@ export function ReviewCard({
                 ongeluk). Vandaar nu een expliciete bevestiging mét het adres. */}
             <SubmitButton
               variant="primary"
-              pendingLabel="Bezig…"
+              pendingLabel={uiT("Bezig…")}
               onClick={(e) => {
-                if (sendMail && !window.confirm(`Dit verstuurt direct een mail naar ${mailTo || "de leverancier"}. Doorgaan?`)) {
+                if (sendMail && !window.confirm(uiT("Dit verstuurt direct een mail naar {v0}. Doorgaan?", { v0: mailTo || "de leverancier" }))) {
                   e.preventDefault();
                 }
               }}
             >
-              {sendMail ? "Afkeuren en versturen" : "Alleen afkeuren"}
+              {sendMail ? uiT("Afkeuren en versturen") : uiT("Alleen afkeuren")}
             </SubmitButton>
             <button type="button" onClick={() => setRejecting(false)} className={buttonClass({ variant: "ghost" })}>
-              Terug
-            </button>
+              {uiT("Terug")} </button>
           </div>
         </form>
       )}
@@ -494,11 +479,11 @@ const NEGEER_REDENEN = [
 ] as const;
 
 function IgnoreButton({ reviewId }: { reviewId: string }) {
+  const uiT = useUiTranslation();
   return (
     <details className="relative">
-      <summary className="cursor-pointer list-none rounded-md px-2 py-1 text-sm text-muted hover:text-foreground" title="Geen te-betalen post">
-        Negeren…
-      </summary>
+      <summary className="cursor-pointer list-none rounded-md px-2 py-1 text-sm text-muted hover:text-foreground" title={uiT("Geen te-betalen post")}>
+        {uiT("Negeren…")} </summary>
       <div className="absolute right-0 z-20 mt-1 w-56 rounded-md border border-border bg-surface p-1 shadow-lg">
         {NEGEER_REDENEN.map(([label, reden]) => (
           <SubmitButton

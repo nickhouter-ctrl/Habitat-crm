@@ -1,3 +1,5 @@
+import { datumTaal } from "@/lib/i18n/server";
+import { tekst as uiTranslation } from '@/lib/i18n/server';
 import { eq } from "drizzle-orm";
 
 import { Card, CardContent, CardHeader, CardTitle, Field, Select } from "@/components/ui";
@@ -19,6 +21,8 @@ import { setVerzendtempo } from "./actions";
  * hier wat elke keuze betekent in dagen én in risico, en kiest een mens.
  */
 export async function Verzendtempo({ teGaan }: { teGaan: number }) {
+  const uiDateLocale = await datumTaal();
+  const uiT = await uiTranslation();
   const [inst] = await db.select().from(bulkMailSettings).where(eq(bulkMailSettings.id, "default"));
   const nu = new Date();
   const huidig = dagCap(inst?.warmupStartedAt ?? null, nu, inst?.dailyCapOverride ?? null);
@@ -34,11 +38,7 @@ export async function Verzendtempo({ teGaan }: { teGaan: number }) {
       </CardHeader>
       <CardContent className="space-y-3 text-sm">
         <p className="text-muted">
-          Standaard bouwt het tempo zichzelf op: {WARMUP_STAPPEN.join(" · ")} per dag. Dat is niet omdat de software
-          niet sneller kan — er past ruim 10.000 per dag in het venster — maar omdat Gmail en Outlook kijken naar
-          hoeveel een domein gewend is te sturen. En dit is hetzelfde domein waar jullie offertes en facturen vandaan
-          komen: raakt de reputatie beschadigd, dan komen die in de spammap.
-        </p>
+          {uiT("Standaard bouwt het tempo zichzelf op:")} {WARMUP_STAPPEN.join(" · ")} {uiT("per dag. Dat is niet omdat de software niet sneller kan — er past ruim 10.000 per dag in het venster — maar omdat Gmail en Outlook kijken naar hoeveel een domein gewend is te sturen. En dit is hetzelfde domein waar jullie offertes en facturen vandaan komen: raakt de reputatie beschadigd, dan komen die in de spammap.")} </p>
 
         <form action={setVerzendtempo} className="space-y-3 rounded-lg border bg-background/50 p-3">
           <Field
@@ -59,7 +59,7 @@ export async function Verzendtempo({ teGaan }: { teGaan: number }) {
             <input type="checkbox" name="opnieuwOpwarmen" />
             {t("Opwarmschema opnieuw beginnen (na een lange pauze of een slechte ronde)")}
           </label>
-          <SubmitButton size="sm" variant="secondary" pendingLabel="Bezig…">
+          <SubmitButton size="sm" variant="secondary" pendingLabel={uiT("Bezig…")}>
             {t("Tempo instellen")}
           </SubmitButton>
         </form>
@@ -73,10 +73,9 @@ export async function Verzendtempo({ teGaan }: { teGaan: number }) {
           </dd>
           <dt>{t("Nog te versturen")}</dt>
           <dd className="tabular-nums">
-            {teGaan} — ongeveer {dagen(huidig)} verzenddagen
-          </dd>
+            {teGaan} {uiT("— ongeveer")} {dagen(huidig)} {uiT("verzenddagen")} </dd>
           <dt>{t("Opwarmen begon")}</dt>
-          <dd>{inst?.warmupStartedAt ? inst.warmupStartedAt.toLocaleDateString("nl-NL") : "nog niet verstuurd"}</dd>
+          <dd>{inst?.warmupStartedAt ? inst.warmupStartedAt.toLocaleDateString(uiDateLocale) : uiT("nog niet verstuurd")}</dd>
         </dl>
       </CardContent>
     </Card>

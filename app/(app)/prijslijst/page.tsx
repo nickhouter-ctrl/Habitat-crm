@@ -1,3 +1,4 @@
+import { tekst as uiTranslation } from '@/lib/i18n/server';
 import { sql } from "drizzle-orm";
 import Link from "next/link";
 import {
@@ -17,13 +18,17 @@ import { db } from "@/lib/db";
 import { contacts, products } from "@/lib/db/schema";
 import { mailPricelist } from "./actions";
 
-export const metadata = { title: "Prijslijst verkoop" };
+export async function generateMetadata() {
+  const uiT = await uiTranslation();
+  return { title: uiT("Prijslijst verkoop") };
+}
 
 export default async function PrijslijstPage({
   searchParams,
 }: {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
+  const uiT = await uiTranslation();
   const sp = await searchParams;
   const sent = sp.sent === "1";
   const error = typeof sp.error === "string" ? sp.error : null;
@@ -56,12 +61,11 @@ export default async function PrijslijstPage({
 
   return (
     <>
-      <PageHeader title="Prijslijst verkoop" subtitle="Download of mail een huisstijl-prijslijst per collectie of categorie." />
+      <PageHeader title={uiT("Prijslijst verkoop")} subtitle={uiT("Download of mail een huisstijl-prijslijst per collectie of categorie.")} />
 
       {sent && (
         <p className="mb-4 max-w-2xl rounded-md bg-green-50 px-3 py-2 text-sm text-success">
-          ✅ Prijslijst is per e-mail verzonden.
-        </p>
+          {uiT("✅ Prijslijst is per e-mail verzonden.")} </p>
       )}
       {error && (
         <p className="mb-4 max-w-2xl rounded-md bg-red-50 px-3 py-2 text-sm text-danger">
@@ -72,42 +76,42 @@ export default async function PrijslijstPage({
       <div className="grid max-w-5xl gap-5 lg:grid-cols-2">
         <Card>
           <CardHeader>
-            <CardTitle>📥 Downloaden / printen</CardTitle>
+            <CardTitle>{uiT("📥 Downloaden / printen")}</CardTitle>
           </CardHeader>
           <CardContent>
             <form method="GET" action="/prijslijst/pdf" className="space-y-4" target="_blank">
               <FiltersInputs collections={collections.map((c) => c.name!).filter(Boolean)} categories={categories.map((c) => c.name!).filter(Boolean)} />
-              <Field label="Titel (optioneel)" htmlFor="title">
-                <Input id="title" name="title" placeholder="Prijslijst Verkoop 2026" />
+              <Field label={uiT("Titel (optioneel)")} htmlFor="title">
+                <Input id="title" name="title" placeholder={uiT("Prijslijst Verkoop 2026")} />
               </Field>
-              <Button type="submit">Download PDF</Button>
+              <Button type="submit">{uiT("Download PDF")}</Button>
             </form>
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader>
-            <CardTitle>📧 Naar klant mailen</CardTitle>
+            <CardTitle>{uiT("📧 Naar klant mailen")}</CardTitle>
           </CardHeader>
           <CardContent>
             <form action={mailPricelist} className="space-y-4">
               <FiltersInputs collections={collections.map((c) => c.name!).filter(Boolean)} categories={categories.map((c) => c.name!).filter(Boolean)} />
-              <Field label="Klant" htmlFor="contactId" hint="Alleen contacten met e-mailadres">
-                <Combobox name="contactId" options={contactOptions} placeholder="Zoek klant…" />
+              <Field label={uiT("Klant")} htmlFor="contactId" hint={uiT("Alleen contacten met e-mailadres")}>
+                <Combobox name="contactId" options={contactOptions} placeholder={uiT("Zoek klant…")} />
               </Field>
-              <Field label="Onderwerp" htmlFor="subject">
+              <Field label={uiT("Onderwerp")} htmlFor="subject">
                 <Input id="subject" name="subject" defaultValue="Habitat One — Prijslijst verkoop" />
               </Field>
-              <Field label="Bericht (optioneel)" htmlFor="message">
+              <Field label={uiT("Bericht (optioneel)")} htmlFor="message">
                 <textarea
                   id="message"
                   name="message"
                   rows={3}
                   className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
-                  placeholder="Beste …, hierbij onze prijslijst. …"
+                  placeholder={uiT("Beste …, hierbij onze prijslijst. …")}
                 />
               </Field>
-              <SubmitButton pendingLabel="Versturen…">Verstuur per e-mail</SubmitButton>
+              <SubmitButton pendingLabel={uiT("Versturen…")}>{uiT("Verstuur per e-mail")}</SubmitButton>
             </form>
           </CardContent>
         </Card>
@@ -115,48 +119,41 @@ export default async function PrijslijstPage({
 
       <Card className="mt-5 max-w-5xl border-[#e8dfd0] bg-[#fdfaf5]">
         <CardHeader>
-          <CardTitle>🏬 Flexibel Stone — prijzen voor verkooppunten</CardTitle>
+          <CardTitle>{uiT("🏬 Flexibel Stone — prijzen voor verkooppunten")}</CardTitle>
         </CardHeader>
         <CardContent>
           <p className="mb-4 max-w-2xl text-sm text-muted">
-            Voor winkels en showrooms die doorverkopen: 50% onder de vaste adviesprijs, en 70% korting
-            op materiaal voor hun eigen showroom. Een ander niveau dan de B2B-prijs hierboven, die voor
-            architecten en bouwbedrijven is.
-          </p>
+            {uiT("Voor winkels en showrooms die doorverkopen: 50% onder de vaste adviesprijs, en 70% korting op materiaal voor hun eigen showroom. Een ander niveau dan de B2B-prijs hierboven, die voor architecten en bouwbedrijven is.")} </p>
           <Link href="/prijslijst/distributeur" className="text-sm font-medium text-accent hover:underline">
-            Bekijk en verstuur de lijst →
-          </Link>
+            {uiT("Bekijk en verstuur de lijst →")} </Link>
         </CardContent>
       </Card>
 
       <Card className="mt-5 max-w-5xl border-[#e8dfd0] bg-[#fdfaf5]">
         <CardHeader>
-          <CardTitle>🧱 Flexibel Stone — groothandelbrochure</CardTitle>
+          <CardTitle>{uiT("🧱 Flexibel Stone — groothandelbrochure")}</CardTitle>
         </CardHeader>
         <CardContent>
           <p className="mb-4 max-w-2xl text-sm text-muted">
-            Gebrande prijsbrochure voor groothandelklanten: per wandpaneel jouw inkoop bij Habitat en de
-            adviesprijs voor de consument (ex/incl btw, ook per m²). Geldig bij afname per halve of hele
-            container; alle prijzen ex btw.
-          </p>
+            {uiT("Gebrande prijsbrochure voor groothandelklanten: per wandpaneel jouw inkoop bij Habitat en de adviesprijs voor de consument (ex/incl btw, ook per m²). Geldig bij afname per halve of hele container; alle prijzen ex btw.")} </p>
           <form method="GET" action="/prijslijst/groothandel/pdf" className="flex flex-wrap items-end gap-4" target="_blank">
-            <Field label="Serie" htmlFor="gh-category">
+            <Field label={uiT("Serie")} htmlFor="gh-category">
               <Select id="gh-category" name="category" defaultValue="">
-                <option value="">— Volledige collectie —</option>
+                <option value="">{uiT("— Volledige collectie —")}</option>
                 {wandpaneelSeries.map((c) => (
                   <option key={c.name} value={c.name!}>{c.name}</option>
                 ))}
               </Select>
             </Field>
-            <Field label="Taal van de PDF" htmlFor="gh-lang">
+            <Field label={uiT("Taal van de PDF")} htmlFor="gh-lang">
               <Select id="gh-lang" name="lang" defaultValue="nl">
-                <option value="nl">🇳🇱 Nederlands</option>
-                <option value="de">🇩🇪 Duits (Deutsch)</option>
-                <option value="en">🇬🇧 Engels (English)</option>
-                <option value="es">🇪🇸 Spaans (Español)</option>
+                <option value="nl">{uiT("🇳🇱 Nederlands")}</option>
+                <option value="de">{uiT("🇩🇪 Duits (Deutsch)")}</option>
+                <option value="en">{uiT("🇬🇧 Engels (English)")}</option>
+                <option value="es">{uiT("🇪🇸 Spaans (Español)")}</option>
               </Select>
             </Field>
-            <Button type="submit">Download brochure</Button>
+            <Button type="submit">{uiT("Download brochure")}</Button>
           </form>
         </CardContent>
       </Card>
@@ -164,34 +161,35 @@ export default async function PrijslijstPage({
   );
 }
 
-function FiltersInputs({ collections, categories }: { collections: string[]; categories: string[] }) {
+async function FiltersInputs({ collections, categories }: { collections: string[]; categories: string[] }) {
+  const uiT = await uiTranslation();
   return (
     <>
-      <Field label="Doelgroep / prijsniveau" htmlFor="audience">
+      <Field label={uiT("Doelgroep / prijsniveau")} htmlFor="audience">
         <Select id="audience" name="audience" defaultValue="particulier">
-          <option value="particulier">👤 Particulier — showroomprijs</option>
-          <option value="trade">🔨 Aannemer / architect — B2B-prijs</option>
+          <option value="particulier">{uiT("👤 Particulier — showroomprijs")}</option>
+          <option value="trade">{uiT("🔨 Aannemer / architect — B2B-prijs")}</option>
         </Select>
       </Field>
-      <Field label="Taal van de PDF" htmlFor="lang">
+      <Field label={uiT("Taal van de PDF")} htmlFor="lang">
         <Select id="lang" name="lang" defaultValue="nl">
-          <option value="nl">🇳🇱 Nederlands</option>
-          <option value="de">🇩🇪 Duits (Deutsch)</option>
-          <option value="en">🇬🇧 Engels (English)</option>
-          <option value="es">🇪🇸 Spaans (Español)</option>
+          <option value="nl">{uiT("🇳🇱 Nederlands")}</option>
+          <option value="de">{uiT("🇩🇪 Duits (Deutsch)")}</option>
+          <option value="en">{uiT("🇬🇧 Engels (English)")}</option>
+          <option value="es">{uiT("🇪🇸 Spaans (Español)")}</option>
         </Select>
       </Field>
-      <Field label="Collectie" htmlFor="collection">
+      <Field label={uiT("Collectie")} htmlFor="collection">
         <Select id="collection" name="collection" defaultValue="">
-          <option value="">— Alle collecties —</option>
+          <option value="">{uiT("— Alle collecties —")}</option>
           {collections.map((c) => (
             <option key={c} value={c}>{c}</option>
           ))}
         </Select>
       </Field>
-      <Field label="Categorie" htmlFor="category">
+      <Field label={uiT("Categorie")} htmlFor="category">
         <Select id="category" name="category" defaultValue="">
-          <option value="">— Alle categorieën —</option>
+          <option value="">{uiT("— Alle categorieën —")}</option>
           {categories.map((c) => (
             <option key={c} value={c}>{c}</option>
           ))}
@@ -199,16 +197,13 @@ function FiltersInputs({ collections, categories }: { collections: string[]; cat
       </Field>
       <label className="flex items-center gap-2 text-sm">
         <input type="checkbox" name="onlyActive" defaultChecked className="size-4 rounded border-border" />
-        Alleen actieve producten
-      </label>
+        {uiT("Alleen actieve producten")} </label>
       <label className="flex items-center gap-2 text-sm">
         <input type="checkbox" name="onlyWithPrice" defaultChecked className="size-4 rounded border-border" />
-        Alleen producten met verkoopprijs
-      </label>
+        {uiT("Alleen producten met verkoopprijs")} </label>
       <label className="flex items-center gap-2 text-sm">
         <input type="checkbox" name="onlyInStock" className="size-4 rounded border-border" />
-        Alleen producten op voorraad
-      </label>
+        {uiT("Alleen producten op voorraad")} </label>
     </>
   );
 }

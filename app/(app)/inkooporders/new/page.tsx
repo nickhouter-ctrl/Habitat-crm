@@ -1,3 +1,4 @@
+import { tekst as uiTranslation } from '@/lib/i18n/server';
 import { asc, eq, ne } from "drizzle-orm";
 
 import { Card, PageHeader } from "@/components/ui";
@@ -7,9 +8,13 @@ import { products, projects, workers } from "@/lib/db/schema";
 import { supplierNameOptions } from "@/lib/supplier-options";
 import { createPurchaseOrder } from "../actions";
 
-export const metadata = { title: "Inkoop toevoegen" };
+export async function generateMetadata() {
+  const uiT = await uiTranslation();
+  return { title: uiT("Inkoop toevoegen") };
+}
 
 export default async function NewPurchaseOrderPage() {
+  const uiT = await uiTranslation();
   const [productOptions, suppliers, projectRows, workerRows] = await Promise.all([
     db
       .select({ id: products.id, name: products.name, sku: products.sku })
@@ -35,7 +40,7 @@ export default async function NewPurchaseOrderPage() {
 
   return (
     <>
-      <PageHeader title="Inkoop toevoegen" subtitle="Bestelling, of een binnengekomen factuur/bon (werknemer, materialen…) met de PDF eronder." />
+      <PageHeader title={uiT("Inkoop toevoegen")} subtitle={uiT("Bestelling, of een binnengekomen factuur/bon (werknemer, materialen…) met de PDF eronder.")} />
       <Card className="p-5">
         <PurchaseOrderForm
           products={productOptions}

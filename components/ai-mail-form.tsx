@@ -1,4 +1,5 @@
 "use client";
+import { useT as useUiTranslation } from '@/components/taal-provider';
 
 /**
  * Mailformulier met AI-concept: de medewerker typt (optioneel) kort wat 'ie
@@ -59,6 +60,7 @@ export function AiMailForm({
    *  { label: "✨ Schrijf herinnering", instructie: "..." }. */
   suggestie?: { label: string; instructie: string };
 }) {
+  const uiT = useUiTranslation();
   const [subject, setSubject] = useState(defaultSubject);
   const [message, setMessage] = useState(initialBody);
   const [gekozen, setGekozen] = useState<Set<string>>(new Set(initialAttachments));
@@ -108,15 +110,15 @@ export function AiMailForm({
         required
         value={message}
         onChange={(e) => { setMessage(e.target.value); setSaved(false); }}
-        placeholder={placeholder ?? "Bijv. een extra vraag aan de klant…"}
+        placeholder={placeholder ?? uiT("Bijv. een extra vraag aan de klant…")}
       />
       {saveDraft && <div className="flex flex-wrap items-center gap-3 text-xs">
         <button type="button" disabled={saving} className="rounded-md border border-border px-3 py-2 hover:bg-background-soft disabled:opacity-50"
           onClick={() => { setSaveError(false); startSaving(async () => { try { await saveDraft(message, subject, [...gekozen]); setSaved(true); } catch { setSaveError(true); } }); }}>
-          {saving ? "Opslaan…" : "Concept opslaan"}
+          {saving ? uiT("Opslaan…") : uiT("Concept opslaan")}
         </button>
-        {saved && <span className="text-success">Concept opgeslagen in het CRM</span>}
-        {saveError && <span className="text-warning">Opslaan mislukt; je tekst staat nog in dit veld.</span>}
+        {saved && <span className="text-success">{uiT("Concept opgeslagen in het CRM")}</span>}
+        {saveError && <span className="text-warning">{uiT("Opslaan mislukt; je tekst staat nog in dit veld.")}</span>}
       </div>}
       {aiBeschikbaar && (
         <>
@@ -127,7 +129,7 @@ export function AiMailForm({
               disabled={bezig}
               className="w-full rounded-md border border-accent/40 bg-accent/10 px-3 py-2 text-sm font-medium text-accent transition-colors hover:bg-accent/20 disabled:opacity-60"
             >
-              {bezig ? "AI schrijft…" : "✨ Schrijf met AI"}
+              {bezig ? uiT("AI schrijft…") : uiT("✨ Schrijf met AI")}
             </button>
             {suggestie && (
               <button
@@ -136,26 +138,22 @@ export function AiMailForm({
                 disabled={bezig}
                 className="w-full rounded-md border border-warning/40 bg-warning/10 px-3 py-2 text-sm font-medium text-warning transition-colors hover:bg-warning/20 disabled:opacity-60"
               >
-                {bezig ? "AI schrijft…" : suggestie.label}
+                {bezig ? uiT("AI schrijft…") : uiT(suggestie.label)}
               </button>
             )}
           </div>
           {fout && (
             <p className="rounded-md bg-warning/10 px-3 py-2 text-xs text-warning">
-              AI-concept lukte even niet — probeer opnieuw of schrijf zelf.
-            </p>
+              {uiT("AI-concept lukte even niet — probeer opnieuw of schrijf zelf.")} </p>
           )}
           <p className="text-xs text-muted">
-            Tip: typ eerst in het kort wat je wilt zeggen (of laat leeg) en klik ✨ — de AI maakt er
-            een nette mail van in de taal van de klant. Vraag je om een brochure mee te sturen, dan
-            vinkt de AI die hieronder aan. Je kunt alles nog aanpassen vóór het versturen.
-          </p>
+            {uiT("Tip: typ eerst in het kort wat je wilt zeggen (of laat leeg) en klik ✨ — de AI maakt er een nette mail van in de taal van de klant. Vraag je om een brochure mee te sturen, dan vinkt de AI die hieronder aan. Je kunt alles nog aanpassen vóór het versturen.")} </p>
         </>
       )}
       {bijlagen.length > 0 && (
         <details className="rounded-md border border-border" open={gekozen.size > 0}>
           <summary className="cursor-pointer px-3 py-2 text-xs font-medium text-muted hover:text-foreground">
-            📎 Bijlagen uit catalogi{gekozen.size > 0 ? ` (${gekozen.size} gekozen · ${formatSize(totaalBytes)})` : ""}
+            {uiT("📎 Bijlagen uit catalogi")}{gekozen.size > 0 ? uiT(" ({v0} gekozen · {v1})", { v0: gekozen.size, v1: formatSize(totaalBytes) }) : ""}
           </summary>
           <div className="max-h-52 space-y-1 overflow-y-auto px-3 pb-2">
             {bijlagen.map((b) => (
@@ -180,17 +178,16 @@ export function AiMailForm({
       )}
       {teGroot && (
         <p className="rounded-md bg-warning/10 px-3 py-2 text-xs text-warning">
-          Bijlagen samen groter dan 20 MB — dat past niet in één mail. Kies er minder.
-        </p>
+          {uiT("Bijlagen samen groter dan 20 MB — dat past niet in één mail. Kies er minder.")} </p>
       )}
       {[...gekozen].map((path) => (
         <input key={path} type="hidden" name="bijlage" value={path} />
       ))}
       {/* Conditionele spread: een expliciete `disabled` zou anders de eigen
           pending-disable van SubmitButton overschrijven. */}
-      <SubmitButton variant="secondary" className="w-full" pendingLabel="Versturen…" {...(teGroot ? { disabled: true } : {})}>
-        Versturen naar {toEmail}
-        {gekozen.size > 0 ? ` (+${gekozen.size} bijlage${gekozen.size === 1 ? "" : "n"})` : ""}
+      <SubmitButton variant="secondary" className="w-full" pendingLabel={uiT("Versturen…")} {...(teGroot ? { disabled: true } : {})}>
+        {uiT("Versturen naar")} {toEmail}
+        {gekozen.size > 0 ? uiT(" (+{v0} bijlage{v1})", { v0: gekozen.size, v1: gekozen.size === 1 ? "" : "n" }) : ""}
       </SubmitButton>
     </form>
   );

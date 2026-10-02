@@ -1,4 +1,5 @@
 "use client";
+import { useT as useUiTranslation } from '@/components/taal-provider';
 
 /**
  * Waarschuwing in stap 2 van de offerte-wizard: verschijnt zodra er ná de
@@ -10,6 +11,7 @@
 import { useEffect, useState } from "react";
 
 export function OngerekendeWijzigingen({ formId }: { formId: string }) {
+  const uiT = useUiTranslation();
   const [gewijzigd, setGewijzigd] = useState(false);
 
   useEffect(() => {
@@ -23,10 +25,9 @@ export function OngerekendeWijzigingen({ formId }: { formId: string }) {
   if (!gewijzigd) return null;
   return (
     <div className="sticky top-2 z-20 flex flex-wrap items-center justify-between gap-3 rounded-md border border-warning/50 bg-warning/15 px-3 py-2 text-sm font-medium shadow-md backdrop-blur">
-      <span>⚠ Gewijzigde invoer is nog niet doorgerekend — de bedragen hieronder zijn van de vorige berekening.</span>
+      <span>{uiT("⚠ Gewijzigde invoer is nog niet doorgerekend — de bedragen hieronder zijn van de vorige berekening.")}</span>
       <button type="submit" className="rounded-md bg-foreground px-3 py-1.5 text-sm font-semibold text-background hover:opacity-90">
-        Nu herrekenen
-      </button>
+        {uiT("Nu herrekenen")} </button>
     </div>
   );
 }

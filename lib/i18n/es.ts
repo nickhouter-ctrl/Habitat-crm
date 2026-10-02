@@ -4,9 +4,11 @@
  * utilizable en lugar de mostrar nombres de claves.
  */
 import type { Dictionary } from "@/lib/i18n";
+import { crmEs } from './crm';
 import { workflowEs } from './workflow';
 
 export const es: Dictionary = {
+  ...crmEs,
   ...workflowEs,
   // ── navegación y grupos ───────────────────────────────────────────────────
   Start: "Inicio",

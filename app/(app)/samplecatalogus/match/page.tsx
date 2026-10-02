@@ -1,3 +1,4 @@
+import { tekst as uiTranslation } from '@/lib/i18n/server';
 import { asc, eq, isNotNull, isNull } from "drizzle-orm";
 
 import { SubmitButton } from "@/components/submit-button";
@@ -15,7 +16,10 @@ import { catalogCollections, catalogProducts, catalogVariants, products } from "
 import { matchVariant } from "../actions";
 import { MatchSearch } from "./match-search";
 
-export const metadata = { title: "Catalogus koppelen" };
+export async function generateMetadata() {
+  const uiT = await uiTranslation();
+  return { title: uiT("Catalogus koppelen") };
+}
 export const dynamic = "force-dynamic";
 
 function tokens(s: string): string[] {
@@ -31,6 +35,7 @@ export default async function MatchPage({
 }: {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
+  const uiT = await uiTranslation();
   const sp = await searchParams;
   const focus = typeof sp.variant === "string" ? sp.variant : "";
 
@@ -85,23 +90,23 @@ export default async function MatchPage({
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Catalogus koppelen"
-        subtitle="Koppel catalogusvarianten aan bestaande producten. Bestaande SKU wordt overgenomen; bestaande SKU's worden nooit gewijzigd."
-        actions={<LinkButton href="/samplecatalogus" variant="secondary">← Terug</LinkButton>}
+        title={uiT("Catalogus koppelen")}
+        subtitle={uiT("Koppel catalogusvarianten aan bestaande producten. Bestaande SKU wordt overgenomen; bestaande SKU's worden nooit gewijzigd.")}
+        actions={<LinkButton href="/samplecatalogus" variant="secondary">{uiT("← Terug")}</LinkButton>}
       />
 
       <div className="grid grid-cols-3 gap-3">
-        <StatTile label="Totaal varianten" value={String(total)} tone="neutral" />
-        <StatTile label="Gekoppeld" value={String(matched)} tone="success" />
+        <StatTile label={uiT("Totaal varianten")} value={String(total)} tone="neutral" />
+        <StatTile label={uiT("Gekoppeld")} value={String(matched)} tone="success" />
         <StatTile
-          label="Nog te koppelen"
+          label={uiT("Nog te koppelen")}
           value={String(total - matched)}
           tone="warning"
         />
       </div>
 
       {unmatched.length === 0 ? (
-        <EmptyState title="Niets te koppelen" description="Alle varianten zijn gekoppeld." />
+        <EmptyState title={uiT("Niets te koppelen")} description={uiT("Alle varianten zijn gekoppeld.")} />
       ) : (
         <div className="space-y-3">
           {unmatched.map((v) => {
@@ -121,7 +126,7 @@ export default async function MatchPage({
 
                   <div className="flex flex-col items-stretch gap-1.5 md:w-80">
                     {suggestions.length === 0 ? (
-                      <span className="text-xs text-muted">Geen automatische suggestie.</span>
+                      <span className="text-xs text-muted">{uiT("Geen automatische suggestie.")}</span>
                     ) : (
                       suggestions.map(({ c, score }) => (
                         <form
@@ -135,10 +140,9 @@ export default async function MatchPage({
                             {c.name} <span className="font-mono text-muted">{c.sku}</span>
                           </span>
                           <div className="flex shrink-0 items-center gap-1">
-                            <Badge tone={score >= 2 ? "success" : "neutral"}>{score}×</Badge>
+                            <Badge tone={score >= 2 ? "success" : "neutral"}>{score}{uiT("×")}</Badge>
                             <SubmitButton size="sm" variant="secondary">
-                              Koppel
-                            </SubmitButton>
+                              {uiT("Koppel")} </SubmitButton>
                           </div>
                         </form>
                       ))

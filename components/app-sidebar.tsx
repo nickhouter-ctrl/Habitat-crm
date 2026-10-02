@@ -1,4 +1,5 @@
 "use client";
+import { useT as useUiTranslation } from '@/components/taal-provider';
 
 import {
   ChevronRight,
@@ -243,6 +244,7 @@ export function AppSidebar({
   /** Per nav-href een teller; toont een badge als > 0. */
   badges?: Record<string, number>;
 }) {
+  const uiT = useUiTranslation();
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
   const t = useT();
@@ -363,7 +365,7 @@ export function AppSidebar({
         <div className="px-4 py-4">
           <Image
             src="/brand/habitat-one-logo.png"
-            alt="Habitat One"
+            alt={uiT("Habitat One")}
             width={1000}
             height={560}
             priority
@@ -378,7 +380,7 @@ export function AppSidebar({
         <Link href="/" className="flex shrink-0 items-center">
           <Image
             src="/brand/habitat-one-logo.png"
-            alt="Habitat One"
+            alt={uiT("Habitat One")}
             width={1000}
             height={560}
             priority
@@ -404,7 +406,7 @@ export function AppSidebar({
             <div className="flex items-center justify-between border-b px-4 py-3">
               <Image
                 src="/brand/habitat-one-logo.png"
-                alt="Habitat One"
+                alt={uiT("Habitat One")}
                 width={1000}
                 height={560}
                 className="h-8 w-auto"

@@ -1,4 +1,6 @@
 "use client";
+import { useDateLocale } from "@/components/taal-provider";
+import { useT as useUiTranslation } from '@/components/taal-provider';
 
 import { AlertTriangle, Plus, Trash2, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
@@ -133,6 +135,8 @@ export function LineItemsEditor({
   /** Server-action: km showroom → exacte coördinaten van een gekozen suggestie. */
   onDistanceCoords?: (lng: number, lat: number) => Promise<number | null>;
 }) {
+  const uiDateLocale = useDateLocale();
+  const uiT = useUiTranslation();
   const [rows, setRows] = useState<Row[]>(() =>
     initialItems && initialItems.length > 0
       ? initialItems.map((it) => ({
@@ -500,7 +504,7 @@ export function LineItemsEditor({
 
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div className="flex items-center gap-3">
-          <h3 className="text-sm font-semibold">Regels</h3>
+          <h3 className="text-sm font-semibold">{uiT("Regels")}</h3>
           <div className="flex items-center overflow-hidden rounded-md border border-border text-xs">
             <button
               type="button"
@@ -509,10 +513,9 @@ export function LineItemsEditor({
                 "px-3 py-1.5",
                 audience === "particulier" ? "bg-accent/15 font-medium text-accent" : "hover:bg-background-soft",
               )}
-              title="Showroom-prijzen voor particulieren"
+              title={uiT("Showroom-prijzen voor particulieren")}
             >
-              👤 Particulier
-            </button>
+              {uiT("👤 Particulier")} </button>
             <button
               type="button"
               onClick={() => setAudience("aannemer")}
@@ -520,24 +523,20 @@ export function LineItemsEditor({
                 "border-l border-border px-3 py-1.5",
                 audience === "aannemer" ? "bg-accent/15 font-medium text-accent" : "hover:bg-background-soft",
               )}
-              title="Aannemers-/architectenprijs (~20% lager)"
+              title={uiT("Aannemers-/architectenprijs (~20% lager)")}
             >
-              🔨 Aannemer
-            </button>
+              {uiT("🔨 Aannemer")} </button>
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           {products.length > 0 && (
             <Button type="button" size="sm" onClick={openPicker}>
-              <Plus className="size-4" /> Product uit catalogus
-            </Button>
+              <Plus className="size-4" /> {uiT("Product uit catalogus")} </Button>
           )}
           <Button type="button" variant="secondary" size="sm" onClick={() => setKozijnOpen(true)}>
-            <Plus className="size-4" /> Kozijn (import)
-          </Button>
+            <Plus className="size-4" /> {uiT("Kozijn (import)")} </Button>
           <Button type="button" variant="secondary" size="sm" onClick={addRow}>
-            <Plus className="size-4" /> Lege regel
-          </Button>
+            <Plus className="size-4" /> {uiT("Lege regel")} </Button>
         </div>
       </div>
 
@@ -545,13 +544,13 @@ export function LineItemsEditor({
         <table className="w-full min-w-[920px] text-sm">
           <thead className="text-left text-xs uppercase tracking-wide text-muted">
             <tr>
-              <th className="px-1 py-1.5">Omschrijving</th>
-              <th className="w-36 px-1 py-1.5">Categorie</th>
-              <th className="w-16 px-1 py-1.5 text-right">Aantal</th>
-              <th className="w-24 px-1 py-1.5 text-right">Prijs (ex.)</th>
-              <th className="w-20 px-1 py-1.5 text-right">Korting%</th>
-              <th className="w-20 px-1 py-1.5 text-right">BTW%</th>
-              <th className="w-28 px-1 py-1.5 text-right">Netto</th>
+              <th className="px-1 py-1.5">{uiT("Omschrijving")}</th>
+              <th className="w-36 px-1 py-1.5">{uiT("Categorie")}</th>
+              <th className="w-16 px-1 py-1.5 text-right">{uiT("Aantal")}</th>
+              <th className="w-24 px-1 py-1.5 text-right">{uiT("Prijs (ex.)")}</th>
+              <th className="w-20 px-1 py-1.5 text-right">{uiT("Korting%")}</th>
+              <th className="w-20 px-1 py-1.5 text-right">{uiT("BTW%")}</th>
+              <th className="w-28 px-1 py-1.5 text-right">{uiT("Netto")}</th>
               <th className="w-8 px-1 py-1.5" />
             </tr>
           </thead>
@@ -567,19 +566,19 @@ export function LineItemsEditor({
                     <Input
                       value={r.name}
                       onChange={(e) => patchRow(i, { name: e.target.value, productId: "" })}
-                      placeholder="Artikel of werkzaamheid"
+                      placeholder={uiT("Artikel of werkzaamheid")}
                       className="mb-1"
                     />
                     <Input
                       value={r.description}
                       onChange={(e) => patchRow(i, { description: e.target.value })}
-                      placeholder="Extra omschrijving (optioneel)"
+                      placeholder={uiT("Extra omschrijving (optioneel)")}
                       className="text-xs"
                     />
                     <Input
                       value={r.phase}
                       onChange={(e) => patchRow(i, { phase: e.target.value })}
-                      placeholder="Fase (optioneel, bv. 1 — Sloop)"
+                      placeholder={uiT("Fase (optioneel, bv. 1 — Sloop)")}
                       className="mt-1 text-xs"
                       list="doc-phase-suggestions"
                     />
@@ -591,10 +590,10 @@ export function LineItemsEditor({
                         )}
                       >
                         {(loss || low) && <AlertTriangle className="size-3 shrink-0" />}
-                        Kostprijs {formatEUR(m.cost)} · marge {m.pct.toFixed(0)}%
-                        {loss && " — verlies!"}
+                        {uiT("Kostprijs")} {formatEUR(m.cost)} {uiT("· marge")} {m.pct.toFixed(0)}%
+                        {loss && uiT(" — verlies!")}
                         {(loss || low) &&
-                          ` · max. korting zonder verlies: ${m.breakEvenDiscount.toFixed(0)}%`}
+                          uiT(" · max. korting zonder verlies: {v0}%", { v0: m.breakEvenDiscount.toFixed(0) })}
                       </p>
                     )}
                   </td>
@@ -602,7 +601,7 @@ export function LineItemsEditor({
                     <Select value={r.category} onChange={(e) => setCategory(i, e.target.value)}>
                       {LINE_CATEGORIES.map((c) => (
                         <option key={c.value} value={c.value}>
-                          {c.label} ({c.vat}%)
+                          {uiT(c.label)} ({c.vat}%)
                         </option>
                       ))}
                     </Select>
@@ -624,7 +623,7 @@ export function LineItemsEditor({
                     <Input
                       type="number"
                       step="any"
-                      title="Negatief bedrag mag — bijv. een aanbetaling/korting (reeds betaald −€1.000)"
+                      title={uiT("Negatief bedrag mag — bijv. een aanbetaling/korting (reeds betaald −€1.000)")}
                       value={r.price}
                       onChange={(e) => patchRow(i, { price: e.target.value })}
                       onBlur={(e) =>
@@ -672,7 +671,7 @@ export function LineItemsEditor({
                     <button
                       type="button"
                       onClick={() => removeRow(i)}
-                      title="Regel verwijderen"
+                      title={uiT("Regel verwijderen")}
                       className={cn(
                         "rounded p-1 text-muted transition-colors hover:bg-background hover:text-danger",
                         rows.length <= 1 && "invisible",
@@ -690,24 +689,22 @@ export function LineItemsEditor({
 
       {anyLoss && (
         <p className="flex items-center gap-1.5 rounded-md bg-danger/10 px-3 py-2 text-sm font-medium text-danger">
-          <AlertTriangle className="size-4" /> Eén of meer regels staan onder de kostprijs — controleer de korting.
-        </p>
+          <AlertTriangle className="size-4" /> {uiT("Eén of meer regels staan onder de kostprijs — controleer de korting.")} </p>
       )}
 
       {onDistance && (
         <div className="space-y-2.5 rounded-md border border-border bg-background-soft px-3 py-3">
-          <p className="text-xs font-medium text-muted">🚚 Bezorgkosten</p>
+          <p className="text-xs font-medium text-muted">{uiT("🚚 Bezorgkosten")}</p>
           <div>
             <label htmlFor="leveradres" className="block text-[11px] text-muted">
-              Leveradres — typ het volledige adres mét huisnummer; kies de juiste plaats uit de lijst
-            </label>
+              {uiT("Leveradres — typ het volledige adres mét huisnummer; kies de juiste plaats uit de lijst")} </label>
             <div className="flex gap-2">
               <div className="relative flex-1">
                 <Input
                   id="leveradres"
                   value={deliveryAddress}
                   onChange={(e) => onAddressChange(e.target.value)}
-                  placeholder="bv. Avenida de Alicante 5, Jávea"
+                  placeholder={uiT("bv. Avenida de Alicante 5, Jávea")}
                   autoComplete="off"
                 />
                 {suggestions.length > 0 && (
@@ -728,12 +725,12 @@ export function LineItemsEditor({
                 )}
               </div>
               <Button type="button" size="sm" onClick={calcAndAdd} disabled={calcBusy}>
-                {calcBusy ? "Berekenen…" : "Bereken & voeg toe"}
+                {calcBusy ? uiT("Berekenen…") : uiT("Bereken & voeg toe")}
               </Button>
             </div>
             {anchorLabel && (
               <p className="text-[11px] text-success">
-                📍 Afstand berekend t.o.v. <strong>{anchorLabel}</strong>{" "}
+                {uiT("📍 Afstand berekend t.o.v.")} <strong>{anchorLabel}</strong>{" "}
                 <button
                   type="button"
                   onClick={() => {
@@ -742,14 +739,13 @@ export function LineItemsEditor({
                   }}
                   className="text-muted underline"
                 >
-                  wissen
-                </button>
+                  {uiT("wissen")} </button>
               </p>
             )}
           </div>
           <div className="flex flex-wrap items-end gap-3">
             <div>
-              <label className="block text-[11px] text-muted">Afstand (km, enkele reis)</label>
+              <label className="block text-[11px] text-muted">{uiT("Afstand (km, enkele reis)")}</label>
               <Input
                 type="number"
                 step="0.1"
@@ -760,10 +756,9 @@ export function LineItemsEditor({
               />
             </div>
             <span className="mb-1 text-sm text-muted">
-              Bezorgkosten: <strong className="text-foreground">{formatEUR(deliveryFee)}</strong>
+              {uiT("Bezorgkosten:")} <strong className="text-foreground">{formatEUR(deliveryFee)}</strong>
               <span className="block text-[11px]">
-                €2,50/km tot 25 km, daarna €1,80 · enkele reis · min. €50
-              </span>
+                {uiT("€2,50/km tot 25 km, daarna €1,80 · enkele reis · min. €50")} </span>
             </span>
             <Button
               type="button"
@@ -772,8 +767,7 @@ export function LineItemsEditor({
               onClick={() => setDeliveryLine(Number(deliveryKm) || 0)}
               className="mb-0.5"
             >
-              Bijwerken
-            </Button>
+              {uiT("Bijwerken")} </Button>
           </div>
           {calcMsg && <p className="text-xs text-warning">{calcMsg}</p>}
         </div>
@@ -781,15 +775,15 @@ export function LineItemsEditor({
 
       <div className="ml-auto w-full max-w-xs space-y-1 border-t pt-3 text-sm">
         <div className="flex justify-between">
-          <span className="text-muted">Subtotaal</span>
+          <span className="text-muted">{uiT("Subtotaal")}</span>
           <span className="tabular-nums">{formatEUR(totals.subtotal)}</span>
         </div>
         <div className="flex justify-between">
-          <span className="text-muted">BTW</span>
+          <span className="text-muted">{uiT("BTW")}</span>
           <span className="tabular-nums">{formatEUR(totals.tax)}</span>
         </div>
         <div className="flex justify-between border-t pt-1 font-semibold">
-          <span>Totaal</span>
+          <span>{uiT("Totaal")}</span>
           <span className="tabular-nums">{formatEUR(totals.total)}</span>
         </div>
         {costedCount > 0 && (
@@ -802,9 +796,9 @@ export function LineItemsEditor({
                   ? "text-warning"
                   : "text-muted",
             )}
-            title="Interne brutomarge — niet zichtbaar voor de klant"
+            title={uiT("Interne brutomarge — niet zichtbaar voor de klant")}
           >
-            <span>Marge (intern){costedCount < productLineCount ? ` · ${costedCount}/${productLineCount} regels` : ""}</span>
+            <span>{uiT("Marge (intern)")}{costedCount < productLineCount ? uiT(" · {v0}/{v1} regels", { v0: costedCount, v1: productLineCount }) : ""}</span>
             <span className="tabular-nums font-medium">
               {formatEUR(totalMargin)}
               {totalMarginPct != null ? ` · ${totalMarginPct.toFixed(0)}%` : ""}
@@ -823,23 +817,23 @@ export function LineItemsEditor({
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between border-b px-5 py-3">
-              <h3 className="font-semibold">Kozijn op maat — importberekening</h3>
+              <h3 className="font-semibold">{uiT("Kozijn op maat — importberekening")}</h3>
               <button type="button" onClick={() => setKozijnOpen(false)} className="text-muted hover:text-foreground">
                 <X className="size-4" />
               </button>
             </div>
             <div className="space-y-3 px-5 py-4">
               <div>
-                <label className="mb-1 block text-xs font-medium text-muted">Omschrijving</label>
+                <label className="mb-1 block text-xs font-medium text-muted">{uiT("Omschrijving")}</label>
                 <Input
                   value={koz.name}
                   onChange={(e) => setKoz((k) => ({ ...k, name: e.target.value }))}
-                  placeholder="Bv. Kozijn schuifpui 3000×2100"
+                  placeholder={uiT("Bv. Kozijn schuifpui 3000×2100")}
                 />
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="mb-1 block text-xs font-medium text-muted">Aantal</label>
+                  <label className="mb-1 block text-xs font-medium text-muted">{uiT("Aantal")}</label>
                   <Input
                     type="number"
                     min="1"
@@ -848,7 +842,7 @@ export function LineItemsEditor({
                   />
                 </div>
                 <div>
-                  <label className="mb-1 block text-xs font-medium text-muted">Leveranciersprijs (p/st, ex. btw)</label>
+                  <label className="mb-1 block text-xs font-medium text-muted">{uiT("Leveranciersprijs (p/st, ex. btw)")}</label>
                   <div className="flex gap-1.5">
                     <Select
                       value={koz.currency}
@@ -872,7 +866,7 @@ export function LineItemsEditor({
               <div className="grid grid-cols-2 gap-3">
                 {kozIsUsd && (
                   <div>
-                    <label className="mb-1 block text-xs font-medium text-muted">Koers USD → EUR</label>
+                    <label className="mb-1 block text-xs font-medium text-muted">{uiT("Koers USD → EUR")}</label>
                     <Input
                       type="number"
                       inputMode="decimal"
@@ -884,7 +878,7 @@ export function LineItemsEditor({
                   </div>
                 )}
                 <div className={kozIsUsd ? "" : "col-span-2"}>
-                  <label className="mb-1 block text-xs font-medium text-muted">Marge (% op kostprijs)</label>
+                  <label className="mb-1 block text-xs font-medium text-muted">{uiT("Marge (% op kostprijs)")}</label>
                   <Input
                     type="number"
                     inputMode="decimal"
@@ -897,40 +891,40 @@ export function LineItemsEditor({
 
               <div className="rounded-md border border-border bg-background-soft px-4 py-3 text-sm">
                 <div className="flex justify-between text-muted">
-                  <span>Leveranciersprijs{kozIsUsd ? " (USD)" : ""}</span>
+                  <span>{uiT("Leveranciersprijs")}{kozIsUsd ? uiT(" (USD)") : ""}</span>
                   <span className="tabular-nums">
-                    {kozIsUsd ? `$ ${kozSupplier.toLocaleString("nl-NL", { minimumFractionDigits: 2 })}` : formatEUR(kozSupplier)}
+                    {kozIsUsd ? `$ ${kozSupplier.toLocaleString(uiDateLocale, { minimumFractionDigits: 2 })}` : formatEUR(kozSupplier)}
                   </span>
                 </div>
                 {kozIsUsd && (
                   <div className="flex justify-between text-muted">
-                    <span>× koers {kozRate.toLocaleString("nl-NL", { maximumFractionDigits: 4 })} → EUR</span>
+                    <span>{uiT("× koers")} {kozRate.toLocaleString(uiDateLocale, { maximumFractionDigits: 4 })} {uiT("→ EUR")}</span>
                     <span className="tabular-nums">{formatEUR(kozSupplierEur)}</span>
                   </div>
                 )}
                 <div className="flex justify-between text-muted">
-                  <span>+ {KOZIJN_HANDLING_PCT}% handling</span>
+                  <span>+ {KOZIJN_HANDLING_PCT}{uiT("% handling")}</span>
                   <span className="tabular-nums">{formatEUR(round2(kozSupplierEur * (KOZIJN_HANDLING_PCT / 100)))}</span>
                 </div>
                 <div className="flex justify-between text-muted">
-                  <span>+ {KOZIJN_IMPORT_PCT}% invoer</span>
+                  <span>+ {KOZIJN_IMPORT_PCT}{uiT("% invoer")}</span>
                   <span className="tabular-nums">{formatEUR(round2(kozSupplierEur * (KOZIJN_IMPORT_PCT / 100)))}</span>
                 </div>
                 <div className="mt-1 flex justify-between border-t border-border pt-1 font-medium">
-                  <span>Kostprijs (×{KOZIJN_COST_FACTOR.toLocaleString("nl-NL")})</span>
+                  <span>{uiT("Kostprijs (×")}{KOZIJN_COST_FACTOR.toLocaleString(uiDateLocale)})</span>
                   <span className="tabular-nums">{formatEUR(kozCost)}</span>
                 </div>
                 <div className="flex justify-between text-muted">
-                  <span>+ marge {kozMargin}%</span>
+                  <span>{uiT("+ marge")} {kozMargin}%</span>
                   <span className="tabular-nums">{formatEUR(round2(kozSale - kozCost))}</span>
                 </div>
                 <div className="mt-1 flex justify-between border-t border-border pt-1 text-base font-semibold text-accent">
-                  <span>Verkoopprijs p/st</span>
+                  <span>{uiT("Verkoopprijs p/st")}</span>
                   <span className="tabular-nums">{formatEUR(kozSale)}</span>
                 </div>
                 {kozUnits > 1 && (
                   <div className="flex justify-between text-xs text-muted">
-                    <span>× {kozUnits} stuks</span>
+                    <span>{uiT("×")} {kozUnits} {uiT("stuks")}</span>
                     <span className="tabular-nums">{formatEUR(round2(kozSale * kozUnits))}</span>
                   </div>
                 )}
@@ -938,11 +932,9 @@ export function LineItemsEditor({
             </div>
             <div className="flex items-center justify-end gap-2 border-t px-5 py-3">
               <Button type="button" variant="secondary" size="sm" onClick={() => setKozijnOpen(false)}>
-                Annuleren
-              </Button>
+                {uiT("Annuleren")} </Button>
               <Button type="button" size="sm" onClick={addKozijn} disabled={kozSupplier <= 0}>
-                <Plus className="size-4" /> Toevoegen
-              </Button>
+                <Plus className="size-4" /> {uiT("Toevoegen")} </Button>
             </div>
           </div>
         </div>
@@ -959,16 +951,16 @@ export function LineItemsEditor({
           >
             <div className="flex items-center justify-between border-b px-5 py-3">
               <h3 className="text-sm font-semibold">
-                Product uit catalogus —{" "}
+                {uiT("Product uit catalogus —")}{" "}
                 <span className="text-muted">
-                  {audience === "aannemer" ? "aannemersprijs" : "showroomprijs"}
+                  {audience === "aannemer" ? uiT("aannemersprijs") : uiT("showroomprijs")}
                 </span>
               </h3>
               <button
                 type="button"
                 onClick={() => setPickerOpen(false)}
                 className="rounded p-1 text-muted hover:text-foreground"
-                title="Sluiten"
+                title={uiT("Sluiten")}
               >
                 <X className="size-5" />
               </button>
@@ -979,7 +971,7 @@ export function LineItemsEditor({
                 autoFocus
                 value={pickerQuery}
                 onChange={(e) => setPickerQuery(e.target.value)}
-                placeholder="Zoek op naam of SKU…"
+                placeholder={uiT("Zoek op naam of SKU…")}
                 className="min-w-48 flex-1"
               />
               <Select value={pickerCol} onChange={(e) => setPickerCol(e.target.value)} className="w-56">
@@ -988,13 +980,13 @@ export function LineItemsEditor({
                     {c}
                   </option>
                 ))}
-                <option value="all">Alle producten ({products.length})</option>
+                <option value="all">{uiT("Alle producten (")}{products.length})</option>
               </Select>
             </div>
 
             <div className="min-h-0 flex-1 overflow-y-auto">
               {pickerProducts.length === 0 ? (
-                <p className="px-5 py-10 text-center text-sm text-muted">Geen producten gevonden.</p>
+                <p className="px-5 py-10 text-center text-sm text-muted">{uiT("Geen producten gevonden.")}</p>
               ) : (
                 <ul>
                   {pickerGroups.map((g) => (
@@ -1038,7 +1030,7 @@ export function LineItemsEditor({
                                     {price ? (
                                       formatEUR(price)
                                     ) : vanaf != null ? (
-                                      <span className="text-muted">vanaf {formatEUR(vanaf)}</span>
+                                      <span className="text-muted">{uiT("vanaf")} {formatEUR(vanaf)}</span>
                                     ) : (
                                       "—"
                                     )}
@@ -1055,11 +1047,11 @@ export function LineItemsEditor({
                                   >
                                     {hasSizes
                                       ? toonMaten
-                                        ? `${maten.totaal} uitvoeringen ↑`
-                                        : `${maten.totaal} uitvoeringen ↓`
+                                        ? uiT("{v0} uitvoeringen ↑", { v0: maten.totaal })
+                                        : uiT("{v0} uitvoeringen ↓", { v0: maten.totaal })
                                       : added
-                                        ? "✓ toegevoegd"
-                                        : "+ toevoegen"}
+                                        ? uiT("✓ toegevoegd")
+                                        : uiT("+ toevoegen")}
                                   </span>
                                 </span>
                               </button>
@@ -1067,8 +1059,7 @@ export function LineItemsEditor({
                                 <ul className="max-h-72 overflow-y-auto border-t bg-background/40 pl-8">
                                   {maten.gefilterd && (
                                     <li className="px-5 py-1 text-xs text-muted">
-                                      {maten.zichtbaar.length} van {maten.totaal} uitvoeringen passen bij
-                                      &quot;{pickerQuery.trim()}&quot;
+                                      {maten.zichtbaar.length} {uiT("van")} {maten.totaal} {uiT("uitvoeringen passen bij \"")}{pickerQuery.trim()}&quot;
                                     </li>
                                   )}
                                   {maten.zichtbaar.map((s) =>
@@ -1100,9 +1091,9 @@ export function LineItemsEditor({
                                                   <span>{inStock ? "●" : "○"}</span>
                                                   {inStock
                                                     ? qty != null
-                                                      ? `${qty.toLocaleString("nl-NL")} op voorraad`
-                                                      : "op voorraad"
-                                                    : "niet op voorraad"}
+                                                      ? uiT("{v0} op voorraad", { v0: qty.toLocaleString(uiDateLocale) })
+                                                      : uiT("op voorraad")
+                                                    : uiT("niet op voorraad")}
                                                 </span>
                                               );
                                             })()}
@@ -1112,8 +1103,7 @@ export function LineItemsEditor({
                                               {s.priceEur != null ? formatEUR(s.priceEur) : "—"}
                                             </span>
                                             <span className="rounded bg-accent/10 px-2 py-0.5 font-medium text-accent">
-                                              + toevoegen
-                                            </span>
+                                              {uiT("+ toevoegen")} </span>
                                           </span>
                                         </button>
                                       </li>
@@ -1134,12 +1124,11 @@ export function LineItemsEditor({
             <div className="flex items-center justify-between border-t px-5 py-3">
               <span className="text-xs text-muted">
                 {addedIds.size > 0
-                  ? `${addedIds.size} product${addedIds.size === 1 ? "" : "en"} toegevoegd`
-                  : "Klik op een product om toe te voegen"}
+                  ? uiT(addedIds.size === 1 ? "{n} product toegevoegd" : "{n} producten toegevoegd", { n: addedIds.size })
+                  : uiT("Klik op een product om toe te voegen")}
               </span>
               <Button type="button" onClick={() => setPickerOpen(false)}>
-                Klaar
-              </Button>
+                {uiT("Klaar")} </Button>
             </div>
           </div>
         </div>

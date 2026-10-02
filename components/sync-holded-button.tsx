@@ -1,4 +1,5 @@
 "use client";
+import { useT as useUiTranslation } from '@/components/taal-provider';
 
 import { RefreshCw } from "lucide-react";
 import { useState, useTransition } from "react";
@@ -8,6 +9,7 @@ import { syncHoldedNow } from "@/lib/holded/actions";
 import { cn } from "@/lib/utils";
 
 export function SyncHoldedButton({ className }: { className?: string }) {
+  const uiT = useUiTranslation();
   const [pending, startTransition] = useTransition();
   const [message, setMessage] = useState<string | null>(null);
   const [ok, setOk] = useState(true);
@@ -32,7 +34,7 @@ export function SyncHoldedButton({ className }: { className?: string }) {
         className={buttonClass({ variant: "secondary", className })}
       >
         <RefreshCw className={cn("size-4", pending && "animate-spin")} />
-        {pending ? "Synchroniseren…" : "Sync Holded"}
+        {pending ? uiT("Synchroniseren…") : uiT("Sync Holded")}
       </button>
     </div>
   );

@@ -1,4 +1,5 @@
 "use client";
+import { useT as useUiTranslation } from '@/components/taal-provider';
 
 /**
  * Formulier voor een advertentieset (brief §7): naam, taal + doelgroep-as
@@ -44,6 +45,7 @@ export function AdSetForm({
   /** Optioneel: sluit een inline-editor na opslaan (client-side). */
   onDone?: () => void;
 }) {
+  const uiT = useUiTranslation();
   const [state, action, pending] = useActionState<CampaignActionState, FormData>(
     saveAdSet,
     {},
@@ -58,27 +60,27 @@ export function AdSetForm({
       {initial?.id && <input type="hidden" name="adSetId" value={initial.id} />}
 
       <div className="grid gap-4 sm:grid-cols-2">
-        <Field label="Naam" htmlFor="as-name">
+        <Field label={uiT("Naam")} htmlFor="as-name">
           <Input id="as-name" name="name" required defaultValue={initial?.name ?? ""} />
         </Field>
         <div className="grid grid-cols-2 gap-4">
-          <Field label="Taal" htmlFor="as-locale">
+          <Field label={uiT("Taal")} htmlFor="as-locale">
             <select
               id="as-locale"
               name="locale"
               defaultValue={initial?.locale ?? "es"}
               className="h-9 w-full rounded-md border border-border bg-background px-2 text-sm"
             >
-              <option value="es">Spaans</option>
+              <option value="es">{uiT("Spaans")}</option>
               <option value="nl">Nederlands</option>
-              <option value="en">Engels</option>
-              <option value="de">Duits</option>
+              <option value="en">{uiT("Engels")}</option>
+              <option value="de">{uiT("Duits")}</option>
             </select>
           </Field>
           <Field
-            label="Doelgroep-as"
+            label={uiT("Doelgroep-as")}
             htmlFor="as-segment"
-            hint="Lokaal of expat — hierlangs leert de leerlaag."
+            hint={uiT("Lokaal of expat — hierlangs leert de leerlaag.")}
           >
             <select
               id="as-segment"
@@ -88,19 +90,18 @@ export function AdSetForm({
               className="h-9 w-full rounded-md border border-border bg-background px-2 text-sm"
             >
               <option value="" disabled>
-                Kies…
-              </option>
-              <option value="local_es">Lokaal (Spaans)</option>
-              <option value="expat_nl">Expat NL</option>
-              <option value="expat_en">Expat EN</option>
-              <option value="expat_de">Expat DE</option>
+                {uiT("Kies…")} </option>
+              <option value="local_es">{uiT("Lokaal (Spaans)")}</option>
+              <option value="expat_nl">{uiT("Expat NL")}</option>
+              <option value="expat_en">{uiT("Expat EN")}</option>
+              <option value="expat_de">{uiT("Expat DE")}</option>
             </select>
           </Field>
         </div>
       </div>
 
       <div className="grid gap-4 sm:grid-cols-3">
-        <Field label="Budgetvorm" htmlFor="as-budget-type">
+        <Field label={uiT("Budgetvorm")} htmlFor="as-budget-type">
           <select
             id="as-budget-type"
             name="budgetType"
@@ -108,12 +109,12 @@ export function AdSetForm({
             onChange={(e) => setBudgetType(e.target.value)}
             className="h-9 w-full rounded-md border border-border bg-background px-2 text-sm"
           >
-            <option value="daily">Dagbudget</option>
-            <option value="lifetime">Looptijdbudget (lifetime)</option>
+            <option value="daily">{uiT("Dagbudget")}</option>
+            <option value="lifetime">{uiT("Looptijdbudget (lifetime)")}</option>
           </select>
         </Field>
         <Field
-          label={budgetType === "daily" ? "Budget per dag (€)" : "Budget totale looptijd (€)"}
+          label={budgetType === "daily" ? uiT("Budget per dag (€)") : uiT("Budget totale looptijd (€)")}
           htmlFor="as-budget"
         >
           <Input
@@ -126,7 +127,7 @@ export function AdSetForm({
           />
         </Field>
         <div className="grid grid-cols-2 gap-4">
-          <Field label="Start (Madrid-tijd)" htmlFor="as-start">
+          <Field label={uiT("Start (Madrid-tijd)")} htmlFor="as-start">
             <Input
               id="as-start"
               name="startTime"
@@ -135,9 +136,9 @@ export function AdSetForm({
             />
           </Field>
           <Field
-            label="Einde (Madrid-tijd)"
+            label={uiT("Einde (Madrid-tijd)")}
             htmlFor="as-end"
-            hint={budgetType === "lifetime" ? "Verplicht bij een looptijdbudget." : undefined}
+            hint={budgetType === "lifetime" ? uiT("Verplicht bij een looptijdbudget.") : undefined}
           >
             <Input
               id="as-end"
@@ -160,19 +161,16 @@ export function AdSetForm({
               onChange={(e) => setDaypartEnabled(e.target.checked)}
               className="size-4"
             />
-            Dagdelen (alleen op vaste tijden tonen)
-          </label>
+            {uiT("Dagdelen (alleen op vaste tijden tonen)")} </label>
         </legend>
         {daypartEnabled ? (
           <div className="mt-2 space-y-3">
             {budgetType !== "lifetime" && (
               <p className="rounded bg-amber-50 px-2 py-1.5 text-xs text-warning" role="alert">
-                Dagdelen vereisen een looptijdbudget — zet de budgetvorm op
-                &ldquo;Looptijdbudget&rdquo;, anders weigert Meta de advertentieset.
-              </p>
+                {uiT("Dagdelen vereisen een looptijdbudget — zet de budgetvorm op “Looptijdbudget”, anders weigert Meta de advertentieset.")} </p>
             )}
             <div className="flex flex-wrap items-center gap-3">
-              <span className="text-sm">Dagen:</span>
+              <span className="text-sm">{uiT("Dagen:")}</span>
               {DAYS.map((d) => (
                 <label key={d.value} className="flex items-center gap-1 text-sm">
                   <input
@@ -184,12 +182,12 @@ export function AdSetForm({
                     }
                     className="size-4"
                   />
-                  {d.label}
+                  {uiT(d.label)}
                 </label>
               ))}
             </div>
             <div className="flex items-center gap-2 text-sm">
-              <label htmlFor="as-dp-start">Van</label>
+              <label htmlFor="as-dp-start">{uiT("Van")}</label>
               <select
                 id="as-dp-start"
                 name="daypartStart"
@@ -202,7 +200,7 @@ export function AdSetForm({
                   </option>
                 ))}
               </select>
-              <label htmlFor="as-dp-end">tot</label>
+              <label htmlFor="as-dp-end">{uiT("tot")}</label>
               <select
                 id="as-dp-end"
                 name="daypartEnd"
@@ -215,19 +213,18 @@ export function AdSetForm({
                   </option>
                 ))}
               </select>
-              <span className="text-xs text-muted">(Madrid-tijd)</span>
+              <span className="text-xs text-muted">{uiT("(Madrid-tijd)")}</span>
             </div>
           </div>
         ) : (
           <p className="mt-1 text-xs text-muted">
-            Uit: de advertenties draaien de hele dag binnen de looptijd.
-          </p>
+            {uiT("Uit: de advertenties draaien de hele dag binnen de looptijd.")} </p>
         )}
       </fieldset>
 
       {state.error && (
         <Card className="border-red-300 bg-red-50 p-3 text-sm" role="alert">
-          <p className="font-medium">{state.error}</p>
+          <p className="font-medium">{uiT(state.error ?? "")}</p>
           {state.errors && state.errors.length > 0 && (
             <ul className="mt-1 list-disc pl-5">
               {state.errors.map((e) => (
@@ -240,17 +237,14 @@ export function AdSetForm({
 
       <div className="flex items-center gap-3">
         <button type="submit" disabled={pending} className={buttonClass()}>
-          {pending ? "Opslaan…" : initial?.id ? "Wijzigingen opslaan" : "Advertentieset aanmaken"}
+          {pending ? uiT("Opslaan…") : initial?.id ? uiT("Wijzigingen opslaan") : uiT("Advertentieset aanmaken")}
         </button>
         {onDone && (
           <button type="button" onClick={onDone} className={buttonClass({ variant: "ghost" })}>
-            Annuleer
-          </button>
+            {uiT("Annuleer")} </button>
         )}
         <p className="text-xs text-muted">
-          Tijden zijn Europe/Madrid; Meta rekent in de tijdzone van het advertentie-account —
-          controleer die in Business Manager.
-        </p>
+          {uiT("Tijden zijn Europe/Madrid; Meta rekent in de tijdzone van het advertentie-account — controleer die in Business Manager.")} </p>
       </div>
     </form>
   );

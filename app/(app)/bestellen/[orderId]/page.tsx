@@ -1,3 +1,5 @@
+import { datumTaal } from "@/lib/i18n/server";
+import { tekst as uiTranslation } from '@/lib/i18n/server';
 import { asc, eq } from "drizzle-orm";
 import { FileDown, Mail, Send, Trash2, Undo2 } from "lucide-react";
 import { notFound } from "next/navigation";
@@ -25,7 +27,10 @@ import { supplierOrderItems, supplierOrders } from "@/lib/db/schema";
 import { formatDate } from "@/lib/utils";
 import { deleteOrder, markOrderSent, reopenOrder } from "../actions";
 
-export const metadata = { title: "Bestelbon" };
+export async function generateMetadata() {
+  const uiT = await uiTranslation();
+  return { title: uiT("Bestelbon") };
+}
 export const dynamic = "force-dynamic";
 
 const UNIT_LABEL: Record<string, string> = { stuk: "stuk", doos: "doos", m2: "m²" };
@@ -35,6 +40,8 @@ export default async function OrderDetailPage({
 }: {
   params: Promise<{ orderId: string }>;
 }) {
+  const uiDateLocale = await datumTaal();
+  const uiT = await uiTranslation();
   const { orderId } = await params;
   const order = await db.query.supplierOrders.findFirst({
     where: eq(supplierOrders.id, orderId),
@@ -61,13 +68,12 @@ export default async function OrderDetailPage({
   return (
     <div className="space-y-6">
       <PageHeader
-        title={`Bestelbon — ${order.supplierName}`}
-        subtitle={`Nr. ${orderNo} · ${formatDate(order.createdAt)}`}
+        title={uiT("Bestelbon — {v0}", { v0: order.supplierName })}
+        subtitle={uiT("Nr. {v0} · {v1}", { v0: orderNo, v1: formatDate(order.createdAt, uiDateLocale) })}
         actions={
           <div className="flex gap-2">
             <LinkButton href="/bestellen" variant="secondary">
-              ← Terug
-            </LinkButton>
+              {uiT("← Terug")} </LinkButton>
             <a
               href={`/bestellen/${order.id}/pdf`}
               target="_blank"
@@ -81,29 +87,29 @@ export default async function OrderDetailPage({
       />
 
       <div className="flex items-center gap-3">
-        <Badge tone={isSent ? "info" : "neutral"}>{isSent ? "Verstuurd" : "Concept"}</Badge>
+        <Badge tone={isSent ? "info" : "neutral"}>{isSent ? uiT("Verstuurd") : uiT("Concept")}</Badge>
         {order.supplierEmail ? (
           <span className="text-sm text-muted">{order.supplierEmail}</span>
         ) : (
-          <span className="text-sm text-warning">Geen leverancier-e-mail ingevuld</span>
+          <span className="text-sm text-warning">{uiT("Geen leverancier-e-mail ingevuld")}</span>
         )}
         {isSent && order.sentAt ? (
-          <span className="text-sm text-muted">verstuurd {formatDate(order.sentAt)}</span>
+          <span className="text-sm text-muted">{uiT("verstuurd")} {formatDate(order.sentAt, uiDateLocale)}</span>
         ) : null}
       </div>
 
       <Card>
         <CardHeader>
-          <CardTitle>Regels ({items.length})</CardTitle>
+          <CardTitle>{uiT("Regels (")}{items.length})</CardTitle>
         </CardHeader>
         <CardContent className="p-0">
           <Table>
             <THead>
               <Tr>
                 <Th>SKU</Th>
-                <Th>Omschrijving</Th>
-                <Th>Maat</Th>
-                <Th>Aantal</Th>
+                <Th>{uiT("Omschrijving")}</Th>
+                <Th>{uiT("Maat")}</Th>
+                <Th>{uiT("Aantal")}</Th>
               </Tr>
             </THead>
             <TBody>
@@ -125,29 +131,25 @@ export default async function OrderDetailPage({
       {/* e-mail preview */}
       <Card>
         <CardHeader>
-          <CardTitle>E-mail naar leverancier</CardTitle>
+          <CardTitle>{uiT("E-mail naar leverancier")}</CardTitle>
         </CardHeader>
         <CardContent className="space-y-3">
           <p className="text-xs text-muted">
-            Controleer de tekst, download de PDF en hang die als bijlage. Niets wordt
-            automatisch verstuurd.
-          </p>
+            {uiT("Controleer de tekst, download de PDF en hang die als bijlage. Niets wordt automatisch verstuurd.")} </p>
           <div className="rounded-md border border-border bg-muted/30 p-3">
-            <p className="text-xs font-semibold">Onderwerp: {subject}</p>
+            <p className="text-xs font-semibold">{uiT("Onderwerp:")} {subject}</p>
             <pre className="mt-2 whitespace-pre-wrap font-sans text-xs text-foreground">{body}</pre>
           </div>
           <div className="flex flex-wrap gap-2">
             <a href={mailto} className={buttonClass()}>
-              <Mail className="h-4 w-4" /> Open in mailprogramma
-            </a>
+              <Mail className="h-4 w-4" /> {uiT("Open in mailprogramma")} </a>
             <a
               href={`/bestellen/${order.id}/pdf`}
               target="_blank"
               rel="noreferrer"
               className={buttonClass({ variant: "secondary" })}
             >
-              <FileDown className="h-4 w-4" /> Download PDF voor bijlage
-            </a>
+              <FileDown className="h-4 w-4" /> {uiT("Download PDF voor bijlage")} </a>
           </div>
         </CardContent>
       </Card>
@@ -158,28 +160,25 @@ export default async function OrderDetailPage({
           <form action={reopenOrder}>
             <input type="hidden" name="id" value={order.id} />
             <button type="submit" className={buttonClass({ variant: "secondary" })}>
-              <Undo2 className="h-4 w-4" /> Terug naar concept
-            </button>
+              <Undo2 className="h-4 w-4" /> {uiT("Terug naar concept")} </button>
           </form>
         ) : (
           <form action={markOrderSent}>
             <input type="hidden" name="id" value={order.id} />
             <ConfirmSubmit
               className={buttonClass()}
-              message={`Bestelbon voor ${order.supplierName} als verstuurd markeren?`}
+              message={uiT("Bestelbon voor {v0} als verstuurd markeren?", { v0: order.supplierName })}
             >
-              <Send className="h-4 w-4" /> Markeer als verstuurd
-            </ConfirmSubmit>
+              <Send className="h-4 w-4" /> {uiT("Markeer als verstuurd")} </ConfirmSubmit>
           </form>
         )}
         <form action={deleteOrder}>
           <input type="hidden" name="id" value={order.id} />
           <ConfirmSubmit
             className={buttonClass({ variant: "ghost" })}
-            message="Deze bestelbon verwijderen?"
+            message={uiT("Deze bestelbon verwijderen?")}
           >
-            <Trash2 className="h-4 w-4" /> Verwijderen
-          </ConfirmSubmit>
+            <Trash2 className="h-4 w-4" /> {uiT("Verwijderen")} </ConfirmSubmit>
         </form>
       </div>
     </div>
