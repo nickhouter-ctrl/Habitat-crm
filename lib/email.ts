@@ -10,6 +10,13 @@ export interface EmailAttachment {
   /** Raw bytes — wordt voor Resend base64-encoded. */
   content: Buffer | Uint8Array;
   contentType?: string;
+  /**
+   * Content-ID voor een beeld dát in de mail zelf staat (`<img src="cid:…">`).
+   * Zonder dit komt zo'n beeld onderaan als losse bijlage te hangen en ziet de
+   * ontvanger een mail die naar plaatjes verwijst die hij niet ziet.
+   */
+  cid?: string;
+  contentDisposition?: "inline" | "attachment";
 }
 
 import { nickFrederiqueCc, withMandatoryBcc, type MailCopyPolicy } from "@/lib/mail-bcc";
@@ -142,6 +149,9 @@ export async function sendEmail(input: {
         filename: a.filename,
         content: Buffer.from(a.content).toString("base64"),
         ...(a.contentType ? { content_type: a.contentType } : {}),
+        // Resend noemt het content_id; zonder dit valt een inline beeld terug
+        // op een gewone bijlage, wat lelijk is maar niets breekt.
+        ...(a.cid ? { content_id: a.cid } : {}),
       }));
     }
     const res = await fetch("https://api.resend.com/emails", {

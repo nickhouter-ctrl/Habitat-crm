@@ -326,7 +326,7 @@ export async function sendMail(args: {
   /** Vaste bedrijfs-BCC overslaan — alleen voor interne mail met een
    *  persoonlijke inloglink erin. Zie lib/email.ts. */
   noCompanyBcc?: boolean;
-  attachments?: { filename: string; content: Buffer | Uint8Array; contentType?: string }[];
+  attachments?: { filename: string; content: Buffer | Uint8Array; contentType?: string; cid?: string; contentDisposition?: "inline" | "attachment" }[];
 }): Promise<{ messageId: string }> {
   const account = args.account ?? getCreds();
   const t = createSmtpTransporter(account);
@@ -346,6 +346,8 @@ export async function sendMail(args: {
       filename: a.filename,
       content: Buffer.from(a.content),
       contentType: a.contentType,
+      // cid = het beeld staat ín de mail (<img src="cid:…">), niet eronder.
+      ...(a.cid ? { cid: a.cid, contentDisposition: a.contentDisposition ?? "inline" as const } : {}),
     })),
   });
   return { messageId: info.messageId };
