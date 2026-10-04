@@ -30,7 +30,7 @@ describe('verzending: autorisatie en dubbele klik',()=>{
    const attachment={filename:'showroom.jpg',content:Buffer.from('image')};m.attachments.mockResolvedValue([attachment]);m.claim.mockResolvedValue([draft]);m.mail.mockResolvedValue({sent:true,messageId:'provider-id'});
    expect((await sendDraft({},form())).success).toBeTruthy();
    expect(m.attachments).toHaveBeenCalledWith('reseller');expect(m.mail).toHaveBeenCalledTimes(1);
-   expect(m.mail).toHaveBeenCalledWith(expect.objectContaining({text:'Hola Ana / Hi Ana — handmatig aangepast',attachments:[attachment],fromUser:{name:'Hans'},to:draft.toEmail,copyPolicy:'nick-frederique'}));
+   expect(m.mail).toHaveBeenCalledWith(expect.objectContaining({text:'Hola Ana / Hi Ana — handmatig aangepast',attachments:[attachment],fromUser:{name:'Hans'},to:draft.toEmail,copyPolicy:'team',afzenderEmail:'hi@example.com'}));
    expect(m.set).toHaveBeenCalledWith(expect.objectContaining({status:'sent',messageId:'provider-id'}));
  });
  it('weigert een oud verkooppuntvoorstel nadat de klant interesse heeft afgewezen',async()=>{

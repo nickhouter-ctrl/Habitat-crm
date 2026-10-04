@@ -6,7 +6,7 @@ import { ImapFlow, type MailboxLockObject, type FetchMessageObject } from "imapf
 import { simpleParser, type ParsedMail, type AddressObject } from "mailparser";
 import nodemailer, { type Transporter } from "nodemailer";
 
-import { nickFrederiqueCc, withMandatoryBcc, type MailCopyPolicy } from "@/lib/mail-bcc";
+import { copyPolicyCc, withMandatoryBcc, type MailCopyPolicy } from "@/lib/mail-bcc";
 
 const HOST_IMAP = "imap.gmail.com";
 const HOST_SMTP = "smtp.gmail.com";
@@ -311,6 +311,8 @@ export async function sendMail(args: {
   to: string;
   bcc?: string;
   copyPolicy?: MailCopyPolicy;
+  /** Adres van de afzender; komt bij `"team"` in de zichtbare CC. */
+  afzenderEmail?: string | null;
   /** Verstuur vanaf een ander postvak (bv. purchase@) i.p.v. het hoofdaccount. */
   account?: MailAccount;
   /** Naam in de From-header; standaard "Habitat One". */
@@ -335,7 +337,7 @@ export async function sendMail(args: {
   const info = await t.sendMail({
     from: `${args.fromName?.trim() || "Habitat One"} <${account.user}>`,
     to: args.to,
-    cc: args.copyPolicy ? nickFrederiqueCc(args.to) : undefined,
+    cc: args.copyPolicy ? copyPolicyCc(args.copyPolicy, args.to, args.afzenderEmail) : undefined,
     bcc: args.copyPolicy ? undefined : args.noCompanyBcc ? args.bcc : withMandatoryBcc(args.bcc, args.to, args.interneMelding),
     subject: args.subject,
     text: args.text,

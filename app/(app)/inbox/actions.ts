@@ -228,7 +228,9 @@ export async function replyToMail(emailId: string, formData: FormData) {
 
   const me = await db.query.users.findFirst({
     where: eq(users.id, user.id),
-    columns: { name: true, phone: true },
+    // Ook het adres: dat komt in de zichtbare CC te staan, zodat het antwoord
+    // van de klant bij degene terechtkomt die de mail stuurde.
+    columns: { name: true, phone: true, email: true },
   });
 
   const bijlagePaden = formData.getAll("bijlage").map((v) => String(v));
@@ -255,7 +257,11 @@ export async function replyToMail(emailId: string, formData: FormData) {
     sentHtml = opgemaakt.html; sentText = opgemaakt.text;
     const res = await sendEmail({
       to: mail.fromEmail,
-      copyPolicy: fair ? "nick-frederique" : undefined,
+      // Iedereen die opvolgt in de zichtbare CC, met degene die verstuurt erbij:
+      // antwoordt de klant met "allen beantwoorden", dan komt dat rechtstreeks
+      // bij hem binnen en niet alleen in het gedeelde postvak.
+      copyPolicy: fair ? "team" : undefined,
+      afzenderEmail: me?.email ?? null,
       subject,
       html: opgemaakt.html,
       text: opgemaakt.text,

@@ -4,13 +4,49 @@
  */
 export const COMPANY_INBOX = "hi@habitat-one.com";
 
-/** Beursmails: alleen deze twee collega's krijgen een zichtbare kopie. */
+/** Beursmails: deze twee collega's krijgen een zichtbare kopie. */
 export const NICK_FREDERIQUE = ["nick@habitat-one.com", "frederique@habitat-one.com"] as const;
-export type MailCopyPolicy = "nick-frederique";
 
+/**
+ * Wie er zichtbaar in de CC staat van persoonlijke klantmail.
+ *
+ * `"nick-frederique"` was de oorspronkelijke afspraak voor beursmail.
+ * `"team"` is breder: iedereen die klantcontact opvolgt, plús degene die de
+ * mail verstuurt. Dat laatste is de kern — antwoordt de klant met "allen
+ * beantwoorden", dan komt dat antwoord rechtstreeks bij de afzender binnen en
+ * niet alleen in het gedeelde postvak.
+ */
+export type MailCopyPolicy = "nick-frederique" | "team";
+
+/** De adressen uit `to` — ook in de vorm `Naam <adres>`. */
+function adressenUit(waarde: string): Set<string> {
+  return new Set(waarde.split(",").map((a) => (a.match(/<([^<>]+)>/)?.[1] ?? a).trim().toLowerCase()));
+}
+
+/**
+ * De zichtbare kopie bij een kopieafspraak. `afzender` is het adres van degene
+ * die op versturen drukte; die hoort erbij, ook als hij niet in de vaste lijst
+ * staat (Hans, Elles).
+ */
+export function copyPolicyCc(policy: MailCopyPolicy, to: string, afzender?: string | null): string | undefined {
+  const direct = adressenUit(to);
+  const lijst = policy === "team" ? [...TEAM_CC, ...(afzender ? [afzender.trim()] : [])] : [...NICK_FREDERIQUE];
+  const gezien = new Set<string>();
+  return (
+    lijst
+      .filter((a) => {
+        const laag = a.toLowerCase();
+        if (!a || direct.has(laag) || gezien.has(laag)) return false;
+        gezien.add(laag);
+        return true;
+      })
+      .join(", ") || undefined
+  );
+}
+
+/** Oude naam, nog in gebruik op plekken die alleen die twee willen. */
 export function nickFrederiqueCc(to: string): string | undefined {
-  const direct = new Set(to.split(",").map(a => (a.match(/<([^<>]+)>/)?.[1] ?? a).trim().toLowerCase()));
-  return NICK_FREDERIQUE.filter(a => !direct.has(a)).join(", ") || undefined;
+  return copyPolicyCc("nick-frederique", to);
 }
 
 /**
@@ -52,6 +88,9 @@ export const TEAM_BCC = (process.env.EMAIL_BCC_TEAM?.trim() || "mourad.h@habitat
   .split(",")
   .map((a) => a.trim())
   .filter(Boolean);
+
+/** Alle adressen in de zichtbare kopie bij `"team"`, in een vaste volgorde. */
+export const TEAM_CC = [...NICK_FREDERIQUE, ...TEAM_BCC];
 
 /**
  * Ontvangers van INTERNE meldingen (accountaanvragen, offerte-aanvragen,

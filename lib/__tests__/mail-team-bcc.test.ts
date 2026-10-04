@@ -9,7 +9,7 @@
  */
 import { describe, expect, it } from "vitest";
 
-import { ALWAYS_BCC, TEAM_BCC, withMandatoryBcc } from "@/lib/mail-bcc";
+import { ALWAYS_BCC, TEAM_BCC, TEAM_CC, copyPolicyCc, withMandatoryBcc } from "@/lib/mail-bcc";
 
 const adressen = (v: string | undefined) => (v ?? "").split(",").map((a) => a.trim().toLowerCase()).filter(Boolean);
 
@@ -47,5 +47,29 @@ describe("interne controlemail", () => {
     for (const adres of ALWAYS_BCC) {
       if (adres.toLowerCase() !== "iemand@habitat-one.com") expect(bcc).toContain(adres.toLowerCase());
     }
+  });
+});
+
+describe("zichtbare kopie bij klantmail", () => {
+  it("zet het hele opvolgteam plus de afzender in de CC", () => {
+    const cc = adressen(copyPolicyCc("team", "klant@voorbeeld.es", "hans@habitat-one.com"));
+    for (const adres of TEAM_CC) expect(cc).toContain(adres.toLowerCase());
+    expect(cc).toContain("hans@habitat-one.com");
+  });
+
+  it("dubbelt de afzender niet als hij al in het team zit", () => {
+    const cc = adressen(copyPolicyCc("team", "klant@voorbeeld.es", TEAM_CC[0]));
+    expect(cc.filter((a) => a === TEAM_CC[0].toLowerCase())).toHaveLength(1);
+  });
+
+  it("zet de klant zelf nooit in de kopie", () => {
+    const cc = adressen(copyPolicyCc("team", `Nick <${TEAM_CC[0]}>`, null));
+    expect(cc).not.toContain(TEAM_CC[0].toLowerCase());
+  });
+
+  it("houdt de oude beursafspraak bij die twee", () => {
+    const cc = adressen(copyPolicyCc("nick-frederique", "klant@voorbeeld.es", "teresa@habitat-one.com"));
+    expect(cc).toHaveLength(2);
+    expect(cc).not.toContain("teresa@habitat-one.com");
   });
 });
