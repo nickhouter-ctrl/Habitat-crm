@@ -8,12 +8,13 @@ import { db } from "@/lib/db";
 import { projectBudgetLines, projectPhases, projects } from "@/lib/db/schema";
 import { getPdfContact, pdfDateStamp, phaseKey, sumAmountEur, type ClientPdf } from "@/lib/pdf-shared";
 import { renderReportPdf } from "@/lib/report-pdf";
+import { isLocale, maakT, type Locale } from "@/lib/i18n";
 import { formatEUR } from "@/lib/utils";
 
 /** Resultaat van {@link renderVoortgangPdf} — zie {@link ClientPdf}. */
 export type VoortgangPdf = ClientPdf;
 
-export async function renderVoortgangPdf(projectId: string): Promise<VoortgangPdf | null> {
+export async function renderVoortgangPdf(projectId: string, requestedLocale?: Locale): Promise<VoortgangPdf | null> {
   const project = await db.query.projects.findFirst({ where: eq(projects.id, projectId) });
   if (!project) return null;
 
@@ -22,6 +23,7 @@ export async function renderVoortgangPdf(projectId: string): Promise<VoortgangPd
     db.select().from(projectBudgetLines).where(eq(projectBudgetLines.projectId, projectId)),
     getPdfContact(project.contactId),
   ]);
+  const locale = requestedLocale ?? (isLocale(contact?.preferredLanguage) ? contact.preferredLanguage : "en"), t = maakT(locale);
   // Oudere projecten hebben soms alleen budgetregels: die fases tellen mee op
   // 0% — zelfde terugval als de voortgangskaart op het projectscherm.
   const bekend = new Set(faseRows.map((f) => f.name));
@@ -45,7 +47,7 @@ export async function renderVoortgangPdf(projectId: string): Promise<VoortgangPd
   const gereed = fases.filter((f) => f.progressPct >= 100).length;
   const bezig = fases.filter((f) => f.progressPct > 0 && f.progressPct < 100).length;
 
-  const status = (pct: number) => (pct >= 100 ? "Gereed" : pct > 0 ? "In uitvoering" : "Nog niet gestart");
+  const status = (pct: number) => t(pct >= 100 ? "Gereed" : pct > 0 ? "In uitvoering" : "Nog niet gestart");
 
   // Met een begroting tonen we het bedrag per fase (targetprijzen, ex btw —
   // dezelfde bedragen als op de begroting-PDF) en de gereedgekomen waarde.
@@ -54,13 +56,14 @@ export async function renderVoortgangPdf(projectId: string): Promise<VoortgangPd
 
   const buffer = await renderReportPdf({
     title: "Voortgang van uw project",
-    subtitle: [project.name, contact?.name ? `voor ${contact.name}` : null].filter(Boolean).join(" — "),
+    locale,
+    subtitle: [project.name, contact?.name ? t("voor {naam}", { naam: contact.name }) : null].filter(Boolean).join(" — "),
     generatedAt: new Date(),
     kpis: [
       { label: "Totale voortgang", value: `${totaalPct}%` },
-      { label: "Fases gereed", value: `${gereed} van ${fases.length}` },
+      { label: "Fases gereed", value: t("{n} van {totaal}", { n: gereed, totaal: fases.length }) },
       metBedragen
-        ? { label: "Waarde gereed", value: formatEUR(waardeGereed), hint: `van ${formatEUR(totaalGewicht)} excl. btw` }
+        ? { label: "Waarde gereed", value: formatEUR(waardeGereed), hint: t("van {bedrag} excl. btw", { bedrag: formatEUR(totaalGewicht) }) }
         : { label: "In uitvoering", value: String(bezig) },
     ],
     tables: [

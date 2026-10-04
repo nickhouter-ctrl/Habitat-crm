@@ -18,7 +18,8 @@ import { crmUrl } from "@/lib/crm-url";
 import { db } from "@/lib/db";
 import { contacts, emailInbox } from "@/lib/db/schema";
 import { brandedEmail, escapeHtml, sendEmail } from "@/lib/email";
-import { COMPANY_INBOX } from "@/lib/mail-bcc";
+import { NOTIFY_TO, NOTIFY_RECIPIENTS, systemMailAddresses } from "@/lib/mail-bcc";
+import { followupIncluded } from "@/lib/followup-selection";
 import { marketingMailbox } from "@/lib/mail-visibility";
 
 const APP_URL = crmUrl();
@@ -85,6 +86,7 @@ async function nieuweReacties(): Promise<Reactie[]> {
     .where(and(
       isNull(emailInbox.followupNotifiedAt),
       isNotNull(emailInbox.receivedAt),
+      followupIncluded,
       sql`${emailInbox.status} <> 'archived'`,
       // Alleen een antwoord op iets dat wíj stuurden.
       sql`exists (
@@ -112,7 +114,7 @@ export async function notifyFollowupReplies(): Promise<{ sent: boolean; count: n
   const groepen: { to: string; rijen: Reactie[]; alleen: boolean }[] = [];
   const teamRijen = prive ? rijen.filter((r) => r.mailboxUser !== prive) : rijen;
   const priveRijen = prive ? rijen.filter((r) => r.mailboxUser === prive) : [];
-  if (teamRijen.length) groepen.push({ to: COMPANY_INBOX, rijen: teamRijen, alleen: false });
+  if (teamRijen.length) groepen.push({ to: NOTIFY_TO, rijen: teamRijen, alleen: false });
   if (prive && priveRijen.length) groepen.push({ to: prive, rijen: priveRijen, alleen: true });
 
   const resultaten = await Promise.all(groepen.map(async (g) => {
@@ -123,7 +125,7 @@ export async function notifyFollowupReplies(): Promise<{ sent: boolean; count: n
       .filter((a) => a.toLowerCase() !== g.to.toLowerCase());
     return sendEmail({
       to: g.to,
-      bcc: g.alleen || !afzenders.length ? undefined : afzenders.join(", "),
+      bcc: g.alleen ? undefined : systemMailAddresses([...NOTIFY_RECIPIENTS.slice(1), ...afzenders].join(", ")),
       subject: aantal === 1
         ? `Reactie van ${g.rijen[0].contactNaam} — opvolgen`
         : `${aantal} klanten reageerden op onze mail — opvolgen`,
@@ -142,7 +144,7 @@ export async function notifyFollowupReplies(): Promise<{ sent: boolean; count: n
       ].join("\n"),
       // Een privépostvak blijft privé: geen bedrijfskopie van haar klantmail.
       noCompanyBcc: g.alleen,
-      interneMelding: g.alleen,
+      interneMelding: true,
     });
   }));
 

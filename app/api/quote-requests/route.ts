@@ -118,7 +118,7 @@ export async function POST(req: Request) {
     ];
     await sendMail({
       to: NOTIFY_TO,
-      copyPolicy: isFairSource(v.source) ? "nick-frederique" : undefined,
+      interneMelding: true,
       bcc: NOTIFY_RECIPIENTS.slice(1).join(", ") || undefined,
       replyTo: v.email,
       subject: `${kindLabel} — ${v.name}`,

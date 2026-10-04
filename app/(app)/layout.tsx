@@ -10,6 +10,7 @@ import { magAlles, startPadVoorRol } from "@/lib/auth/modules";
 import { verzamelNavBadges } from "@/lib/nav-badges";
 import { AppSidebar } from "@/components/app-sidebar";
 import { GlobalSearch } from "@/components/global-search";
+import { TeamNotifications } from "@/components/team-notifications";
 
 // The whole authenticated app is per-request (session + live data) — never
 // prerender it at build time.
@@ -37,7 +38,7 @@ export default async function AppLayout({
     }
   }
 
-  const badges = await verzamelNavBadges(toegang.rol, toegang.email);
+  const badges = await verzamelNavBadges(toegang.rol, toegang.email, toegang.id);
   const locale = isLocale(toegang.locale) ? toegang.locale : "nl";
 
   return (
@@ -49,6 +50,7 @@ export default async function AppLayout({
         {/* Desktop top-bar met globale zoekbalk (mobiel zit zoeken in de bovenbalk). */}
         <header className="sticky top-0 z-20 hidden h-14 items-center gap-4 border-b bg-surface/95 px-6 backdrop-blur lg:flex">
           <GlobalSearch className="w-full max-w-xl" />
+          <TeamNotifications unread={badges['/teamberichten'] ?? 0}/>
           {/* Taal bovenaan, niet weggestopt in Instellingen: wie het systeem
               niet in zijn eigen taal ziet, vindt dat menu juist niet. */}
           <TaalKeuze huidig={locale} zet={zetTaal} compact className="ml-auto" />

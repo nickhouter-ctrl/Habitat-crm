@@ -59,7 +59,7 @@ export default async function StartPage({
     db
       .select({
         id: activities.id,
-        subject: activities.subject,
+        subject: sql<string>`case when ${activities.subject} in ('Opvolging', 'Beursopvolging') then coalesce(nullif(trim(${activities.body}), ''), ${activities.subject}) else ${activities.subject} end`,
         dueAt: activities.dueAt,
         priority: activities.priority,
         authorId: activities.authorId,
@@ -71,6 +71,10 @@ export default async function StartPage({
         and(
           eq(activities.type, "task"),
           isNull(activities.completedAt),
+          sql`not (coalesce(${activities.subject}, '') in ('Opvolging', 'Beursopvolging') and (
+            exists (select 1 from partner_profiles p where p.contact_id = ${activities.contactId} and p.stage = 'stopped') or
+            exists (select 1 from contacts c where c.id = ${activities.contactId} and coalesce(c.tags, '{}'::text[]) @> array['opvolging:uitgesloten'])
+          ))`,
           or(
             eq(activities.assigneeId, userId),
             and(isNull(activities.assigneeId), eq(activities.authorId, userId)),
@@ -87,7 +91,7 @@ export default async function StartPage({
     allesZichtbaar
       ? db.select({ id: users.id, name: users.name, email: users.email }).from(users).orderBy(asc(users.name))
       : Promise.resolve([] as { id: string; name: string | null; email: string }[]),
-    verzamelNavBadges(ik?.rol, ik?.email),
+    verzamelNavBadges(ik?.rol, ik?.email, ik?.id),
     // Naam vers uit de DB: de JWT-sessie kan een oude naam cachen (30 dagen).
     db.select({ startPrefs: users.startPrefs, name: users.name }).from(users).where(eq(users.id, userId)).limit(1),
   ]);

@@ -1,6 +1,6 @@
 /**
  * Cron: weekcontrole van de administratie, elke maandagochtend per mail naar
- * Nick en Hans.
+ * de vaste groep medewerkers.
  *
  * Draait in de app zelf (Vercel cron) en niet in een chatsessie, zodat hij
  * blijft lopen zonder dat iemand ernaar omkijkt. De controles staan in
@@ -17,11 +17,12 @@ import { requireCron } from "@/lib/auth/require-cron";
 import { brandedEmail, escapeHtml, sendEmail } from "@/lib/email";
 import { syncSanitairPrijzen } from "@/lib/sanitair-prijzen";
 import { verzamelWeekcontrole } from "@/lib/weekcontrole";
+import { NOTIFY_RECIPIENTS } from "@/lib/mail-bcc";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
-const ONTVANGERS = ["nick@habitat-one.com", "hans@habitat-one.com", "frederique@habitat-one.com"];
+const ONTVANGERS = NOTIFY_RECIPIENTS;
 
 export async function GET(req: Request) {
   const denied = requireCron(req);

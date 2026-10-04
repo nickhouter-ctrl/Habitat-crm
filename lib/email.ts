@@ -19,7 +19,7 @@ export interface EmailAttachment {
   contentDisposition?: "inline" | "attachment";
 }
 
-import { copyPolicyCc, withMandatoryBcc, type MailCopyPolicy } from "@/lib/mail-bcc";
+import { copyPolicyCc, systemMailAddresses, withMandatoryBcc, type MailCopyPolicy } from "@/lib/mail-bcc";
 
 export async function sendEmail(input: {
   to: string;
@@ -66,11 +66,14 @@ export async function sendEmail(input: {
    */
   noCompanyBcc?: boolean;
   /**
-   * Interne controlemail (dagelijkse data-check, weekcontrole): wel de vaste
-   * bedrijfskopie, maar niet naar de bredere kring die klantmail meeleest.
+   * Systeemmelding: uitsluitend persoonlijke adressen van de vijf collega’s.
+   * hi@ wordt uit To, CC en BCC verwijderd; de afzender blijft het bedrijf.
    */
   interneMelding?: boolean;
 }): Promise<{ sent: boolean; reason?: string; messageId?: string }> {
+  const to = input.interneMelding ? systemMailAddresses(input.to) : input.to;
+  // Een persoonlijk bericht nooit stil naar een andere collega doorsturen.
+  if (!to) return { sent: false, reason: "system-recipient-not-allowed" };
   // Elke uitgaande mail krijgt een VERBORGEN kopie (BCC) naar het bedrijf
   // (EMAIL_BCC, anders NOTIFY_EMAIL of het verzendadres hi@habitat-one.com), zodat
   // je altijd meeleest zonder dat de klant het meeziet. Niet naar de ontvanger
@@ -79,12 +82,14 @@ export async function sendEmail(input: {
   // Persoonlijke meldingen (noCompanyBcc): óók geen standaardkopie naar hi@ — anders
   // lag er per keurder een exemplaar mét persoonlijke inloglink in het gedeelde postvak.
   const bccBase = [input.noCompanyBcc ? undefined : defaultBcc, input.bcc]
-    .filter((a): a is string => !!a && a.toLowerCase() !== input.to.toLowerCase())
+    .filter((a): a is string => !!a && a.toLowerCase() !== to.toLowerCase())
     .join(", ") || undefined;
   // Voeg de vaste bedrijfs-BCC (nick@) toe op ELK transport — ook Resend/stub, die
   // lib/gmail.ts overslaan. Op het Gmail-pad dedupliceert sendMail dit nog eens.
-  const bcc = input.copyPolicy ? undefined : input.noCompanyBcc ? bccBase : withMandatoryBcc(bccBase, input.to, input.interneMelding);
-  const cc = input.copyPolicy ? copyPolicyCc(input.copyPolicy, input.to, input.afzenderEmail) : undefined;
+  const rawBcc = input.copyPolicy ? undefined : input.noCompanyBcc ? bccBase : withMandatoryBcc(bccBase, to, input.interneMelding);
+  const rawCc = input.copyPolicy ? copyPolicyCc(input.copyPolicy, to, input.afzenderEmail) : undefined;
+  const bcc = input.interneMelding ? systemMailAddresses(rawBcc) : rawBcc;
+  const cc = input.interneMelding ? systemMailAddresses(rawCc) : rawCc;
 
   // Voorkeur: Gmail (verstuurt vanaf GMAIL_USER, bv. hi@habitat-one.com). Valt
   // terug op Resend; en als niets is ingesteld een stub, zodat de accept-link
@@ -108,9 +113,10 @@ export async function sendEmail(input: {
         if (input.fromUser?.name) fromName = `${input.fromUser.name.trim()} · Habitat One`;
       }
       const res = await sendMail({
-        to: input.to,
+        to,
         bcc,
         copyPolicy: input.copyPolicy,
+        afzenderEmail: input.afzenderEmail,
         noCompanyBcc: input.noCompanyBcc,
         interneMelding: input.interneMelding,
         account,
@@ -149,7 +155,7 @@ export async function sendEmail(input: {
       .filter(Boolean);
     const payload: Record<string, unknown> = {
       from,
-      to: input.to,
+      to,
       ...(bccLijst?.length ? { bcc: bccLijst } : {}),
       ...(cc ? { cc: cc.split(", ").filter(Boolean) } : {}),
       subject: input.subject,

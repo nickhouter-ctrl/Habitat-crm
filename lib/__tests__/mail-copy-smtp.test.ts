@@ -35,6 +35,28 @@ describe('vaste CC-afspraak op het SMTP-pad', () => {
     expect(args.bcc).toContain('hi@habitat-one.com');
     expect(args.bcc).toContain('hans@habitat-one.com');
   });
+  it('filtert systeemmeldingen op beide SMTP-ingangen, ook bij oude env en displaynamen', async () => {
+    vi.stubEnv('EMAIL_BCC', 'HI@habitat-one.com, outsider@example.com, hans@habitat-one.com');
+    for (const send of [sendEmail, sendMail]) {
+      await send({ to: 'Info <HI@habitat-one.com>, Nick <NICK@habitat-one.com>', subject: 'Agenda', html: '<p>Taak</p>', bcc: 'hi@habitat-one.com, outsider@example.com, mourad.h@habitat-one.com', interneMelding: true });
+      const args = m.send.mock.calls.at(-1)![0];
+      expect(args.to).toBe('Nick <NICK@habitat-one.com>');
+      expect(args.bcc).toContain('mourad.h@habitat-one.com');
+      expect(args.bcc).not.toContain('hi@');
+      expect(args.bcc).not.toContain('outsider');
+      expect(args.bcc).not.toContain('nick@');
+      expect(args.from).toContain('<hi@habitat-one.com>');
+    }
+  });
+  it('weigert een persoonlijke systeemmelding zonder toegestane ontvanger en stuurt niet door', async () => {
+    expect(await sendEmail({ to: 'hi@habitat-one.com', subject: 'Privé', html: '<p>Bericht</p>', interneMelding: true, noCompanyBcc: true })).toMatchObject({ sent: false, reason: 'system-recipient-not-allowed' });
+    await expect(sendMail({ to: 'outsider@example.com', subject: 'Privé', interneMelding: true })).rejects.toThrow('system-recipient-not-allowed');
+    expect(m.send).not.toHaveBeenCalled();
+  });
+  it('behoudt een privébericht uitsluitend voor zijn verantwoordelijke', async () => {
+    await sendEmail({ to: 'teresa@habitat-one.com', subject: 'Taak', html: '<p>Privé</p>', noCompanyBcc: true, interneMelding: true });
+    expect(m.send).toHaveBeenCalledWith(expect.objectContaining({ to: 'teresa@habitat-one.com', cc: undefined, bcc: undefined }));
+  });
 });
 
 describe('herkomst van beursmails', () => {

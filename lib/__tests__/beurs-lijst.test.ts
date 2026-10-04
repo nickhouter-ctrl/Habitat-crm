@@ -112,6 +112,24 @@ describe("sorteren", () => {
 });
 
 describe("download", () => {
+  it("translates headers, roles and countries while preserving customer notes", () => {
+    const rows = verdichtTotContacten([gesprek({ naam: "Carlos", land: "NL", bericht: "kop\nGraag de prijzen", tags: ["rol:architect", "wil:prijzen", "beurs:qr"] })]);
+    const en = beursCsv(rows, "en"), es = beursCsv(rows, "es");
+    expect(en).toContain('"Name";"Company"');
+    expect(en).toContain('"Netherlands"');
+    expect(en).toContain('"Prices"');
+    expect(es).toContain('"Nombre";"Empresa"');
+    expect(es).toContain('"Países Bajos"');
+    expect(es).toContain('"Precios"');
+    expect(en).toContain('"Graag de prijzen"');
+    expect(es).toContain('"Graag de prijzen"');
+  });
+  it("does not execute spreadsheet formulas from customer input", () => {
+    const csv = beursCsv(verdichtTotContacten([gesprek({ naam: "=1+1", bedrijf: "\t@SUM(1)", bericht: "kop\n+cmd" })]));
+    expect(csv).toContain('"\'=1+1"');
+    expect(csv).toContain('"\'\t@SUM(1)"');
+    expect(csv).toContain('"\'+cmd"');
+  });
   it("levert een bestand dat Excel in het Spaans meteen goed opent", () => {
     const csv = beursCsv(
       verdichtTotContacten([gesprek({ naam: "Carlos", bedrijf: "Estudio Bonet", bericht: 'kop\nZegt: "mooi"' })]),

@@ -6,6 +6,7 @@ import { afterAll, expect, it, vi } from 'vitest';
 const m = vi.hoisted(() => ({ current: null as unknown, guard: vi.fn() }));
 vi.mock('@/lib/i18n/server', async () => ({ tekst: async () => (await import('@/lib/i18n')).maakT('nl') }));
 vi.mock('server-only', () => ({}));
+vi.mock('@/lib/staff-notifications',()=>({sendQueuedStaffNotification:vi.fn().mockResolvedValue(false)}));
 vi.mock('next/cache', () => ({ revalidatePath: vi.fn() }));
 vi.mock('@/lib/auth/guards', () => ({ requireModule: m.guard }));
 vi.mock('@/lib/db', async () => {

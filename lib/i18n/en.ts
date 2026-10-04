@@ -1,3 +1,4 @@
+import { reportEnglish } from "./report-labels";
 /**
  * English. Key = the Dutch source text; a missing key falls back to Dutch, so
  * an untranslated screen stays usable instead of showing key names.
@@ -7,7 +8,11 @@ import { crmEn } from './crm';
 import { workflowEn } from './workflow';
 import { dealerPricingEn } from './dealer-pricing';
 
+import { teamWorkflowEn } from "./team-workflow";
+
 export const en: Dictionary = {
+  ...reportEnglish,
+  ...teamWorkflowEn,
   ...dealerPricingEn,
   ...crmEn,
   ...workflowEn,

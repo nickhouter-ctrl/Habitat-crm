@@ -1,3 +1,5 @@
+import { huidigeTaal } from "@/lib/i18n/server";
+import { isLocale, maakT } from "@/lib/i18n";
 import { getReportsData } from "@/lib/reports-data";
 import { renderReportPdf, type ReportTable } from "@/lib/report-pdf";
 import { formatEUR } from "@/lib/utils";
@@ -5,9 +7,11 @@ import { weigerRoute } from "@/lib/auth/guards";
 
 export const dynamic = "force-dynamic";
 
-export async function GET() {
+export async function GET(req: Request) {
   const nee = await weigerRoute("rapporten");
   if (nee) return nee;
+  const lang = new URL(req.url).searchParams.get("lang");
+  const locale = isLocale(lang) ? lang : await huidigeTaal(), t = maakT(locale);
 
   const d = await getReportsData();
 
@@ -19,14 +23,14 @@ export async function GET() {
     {
       label: "Bruto-resultaat",
       value: formatEUR(d.totalRev - d.totalPur),
-      hint: d.grossMargin != null ? `${d.grossMargin}% van omzet` : undefined,
+      hint: d.grossMargin != null ? `${d.grossMargin}% ${t("van omzet")}` : undefined,
     },
     { label: "Open facturen", value: String(d.openInvoicesCount), hint: formatEUR(d.openInvoicesTotal) },
     { label: "Kostprijs verkocht", value: formatEUR(d.cogs12), hint: "COGS · 12 mnd" },
     {
       label: "Brutowinst",
       value: formatEUR(d.grossProfit12),
-      hint: d.marginPct12 != null ? `${d.marginPct12}% marge` : undefined,
+      hint: d.marginPct12 != null ? `${d.marginPct12}% ${t("marge")}` : undefined,
     },
     { label: "Gem. marge", value: d.marginPct12 != null ? `${d.marginPct12}%` : "—", hint: "winst / omzet" },
     { label: "Vervallen facturen", value: formatEUR(vervallen), hint: "te laat · incl. BTW" },
@@ -34,10 +38,10 @@ export async function GET() {
 
   const cashflowLabel = (label: string) =>
     label === "vervallen"
-      ? "Vervallen"
+      ? t("Vervallen")
       : label === "deze wk"
-        ? "Deze week"
-        : `Over ${label.replace("+", "").replace(" wk", " weken")}`;
+        ? t("Deze week")
+        : t("Over {n} weken", {n: label.replace("+", "").replace(" wk", "")});
 
   const tables: ReportTable[] = [
     {
@@ -75,7 +79,7 @@ export async function GET() {
           p.name,
           formatEUR(p.revenue),
           formatEUR(p.profit),
-          !p.hasCost || mp == null ? "n.v.t." : `${mp}%`,
+          !p.hasCost || mp == null ? t("n.v.t.") : `${mp}%`,
         ];
       }),
       emptyText: "Nog geen verkochte producten met kostprijs.",
@@ -126,6 +130,7 @@ export async function GET() {
   ];
 
   const buf = await renderReportPdf({
+    locale,
     title: "Financieel overzicht",
     subtitle: "Alle bedragen ex. BTW tenzij vermeld · laatste 12 maanden · inkoop uit Holded-grootboek",
     generatedAt: new Date(),

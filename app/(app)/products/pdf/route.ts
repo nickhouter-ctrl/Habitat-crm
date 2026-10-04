@@ -1,3 +1,5 @@
+import { huidigeTaal } from "@/lib/i18n/server";
+import { isLocale, maakT } from "@/lib/i18n";
 import { sql } from "drizzle-orm";
 
 import { db } from "@/lib/db";
@@ -15,9 +17,11 @@ function rowsOf<T = Record<string, unknown>>(res: unknown): T[] {
 const num = (v: unknown) => Number(v ?? 0);
 const pct = (sale: number, margin: number) => (sale > 0 ? Math.round((margin / sale) * 100) : null);
 
-export async function GET() {
+export async function GET(req: Request) {
   const nee = await weigerRoute("producten");
   if (nee) return nee;
+  const lang = new URL(req.url).searchParams.get("lang");
+  const locale = isLocale(lang) ? lang : await huidigeTaal(), t = maakT(locale);
 
   const [overallRes, byCollectionRes, topValueRes, lowStockRes] = await Promise.all([
     // Identieke definitie als de Producten-pagina: totaal = alle producten,
@@ -74,7 +78,7 @@ export async function GET() {
     {
       label: "Totale marge (voorraad)",
       value: formatEUR(margin),
-      hint: marginPct != null ? `${marginPct}% · verkoop − kostprijs` : undefined,
+      hint: marginPct != null ? `${marginPct}% · ${t("verkoop − kostprijs")}` : undefined,
     },
     { label: "Lage voorraad", value: String(num(o.low_stock)), hint: "onder de drempel" },
     { label: "Te bestellen", value: String(num(o.to_order)), hint: "niet op voorraad" },
@@ -102,7 +106,7 @@ export async function GET() {
         const sv = num(c.sale_val);
         const mp = pct(sv, sv - cv);
         return [
-          String(c.collection ?? "Overig"),
+          String(c.collection ?? t("Overig")),
           String(num(c.n)),
           formatEUR(cv),
           formatEUR(sv),
@@ -148,6 +152,7 @@ export async function GET() {
   ];
 
   const buf = await renderReportPdf({
+    locale,
     title: "Productoverzicht",
     subtitle: "Voorraad, waarde en marge · momentopname",
     generatedAt: new Date(),

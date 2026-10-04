@@ -41,7 +41,7 @@ describe('melding dat een klant op onze opvolgmail reageerde', () => {
   it('zet degene die de opvolgmail verstuurde in de kopie', async () => {
     m.select.mockResolvedValue([reactie({ afzender: 'mourad.h@habitat-one.com' })]);
     await notifyFollowupReplies();
-    expect(m.mail.mock.calls[0][0].bcc).toBe('mourad.h@habitat-one.com');
+    expect(m.mail.mock.calls[0][0].bcc).toContain('mourad.h@habitat-one.com');
   });
 
   it('houdt een reactie in het privépostvak bij die ene persoon', async () => {
@@ -51,7 +51,7 @@ describe('melding dat een klant op onze opvolgmail reageerde', () => {
     ]);
     await notifyFollowupReplies();
     expect(m.mail).toHaveBeenCalledTimes(2);
-    const team = m.mail.mock.calls.find(c => c[0].to === 'hi@habitat-one.com')![0];
+    const team = m.mail.mock.calls.find(c => c[0].to === 'nick@habitat-one.com')![0];
     const prive = m.mail.mock.calls.find(c => c[0].to === 'teresa@habitat-one.com')![0];
     expect(team.html).not.toContain('Marta Gil');
     expect(prive.html).toContain('Marta Gil');

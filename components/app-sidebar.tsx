@@ -16,6 +16,7 @@ import {
   LineChart,
   LogOut,
   Mail,
+  MessageSquare,
   Megaphone,
   Menu,
   PackageCheck,
@@ -77,7 +78,7 @@ type Groepstand = Record<string, boolean>;
  * (klanten en verkoop). De rest wacht tot je hem nodig hebt. Zodra je zelf iets
  * klapt telt alleen jouw keuze nog.
  */
-const STANDAARD_OPEN: Groepstand = { klanten: true, verkoop: true };
+const STANDAARD_OPEN: Groepstand = {};
 let standCache: Groepstand | null = null;
 const luisteraars = new Set<() => void>();
 
@@ -127,6 +128,8 @@ const NAV_GROUPS: { id: string; label: string | null; items: NavItem[] }[] = [
       { href: "/assistent", label: "Assistent", icon: FileCheck },
       { href: "/inbox", label: "Mail-inbox", icon: Mail },
       { href: "/agenda", label: "Agenda", icon: CalendarDays },
+      { href: "/opvolging", label: "Opvolging", icon: Send },
+      { href: "/teamberichten", label: "Teamberichten", icon: MessageSquare },
       { href: "/scan", label: "Scannen", icon: ScanLine },
     ],
   },
@@ -138,7 +141,6 @@ const NAV_GROUPS: { id: string; label: string | null; items: NavItem[] }[] = [
     items: [
       { href: "/contacts", label: "Contacten", icon: Users },
       { href: "/beurs/contacten", label: "Beurscontacten", icon: Users },
-      { href: "/opvolging", label: "Opvolging", icon: Send },
       { href: "/wederverkopers", label: "Verkooppunten", icon: Store },
       { href: "/aanvragen", label: "Aanvragen", icon: Inbox },
       { href: "/beurs", label: "Beursstand", icon: QrCode, exact: true },

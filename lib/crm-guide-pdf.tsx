@@ -1,0 +1,10 @@
+import path from 'node:path';
+import { Document, Font, Page, StyleSheet, Text, View, renderToBuffer } from '@react-pdf/renderer';
+import { crmGuide } from './crm-guide';
+import type { Locale } from './i18n';
+Font.register({family:'SoraGuide',fonts:[{src:path.join(process.cwd(),'public/fonts/sora/Sora-Regular.ttf')},{src:path.join(process.cwd(),'public/fonts/sora/Sora-SemiBold.ttf'),fontWeight:600}]});
+const styles=StyleSheet.create({page:{padding:42,paddingBottom:50,fontFamily:'SoraGuide',fontSize:10,color:'#2a2520',backgroundColor:'#fff'},brand:{fontSize:9,fontWeight:600,color:'#b6552d',letterSpacing:2,marginBottom:14},title:{fontSize:23,fontWeight:600,lineHeight:1.25,marginBottom:12},intro:{fontSize:10,lineHeight:1.6,color:'#7a6f63',marginBottom:18},section:{marginBottom:20},heading:{fontSize:12,fontWeight:600,marginBottom:5},where:{fontSize:8,color:'#b6552d',marginBottom:7},step:{fontSize:9.5,lineHeight:1.55,marginBottom:4},hint:{fontSize:8.5,lineHeight:1.5,padding:9,backgroundColor:'#f8f4ee',marginTop:5,color:'#6b5d4f'},footer:{position:'absolute',left:42,right:42,bottom:25,fontSize:7,color:'#7a6f63',flexDirection:'row',justifyContent:'space-between'}});
+export async function renderCrmGuide(locale:Locale){
+ const data=crmGuide[locale];
+ return renderToBuffer(<Document title={data.title} author="Habitat One"><>{[0,1,2].map(group=><Page key={group} size="A4" style={styles.page}><Text style={styles.brand}>HABITAT CRM</Text><Text style={styles.title}>{data.groups[group]}</Text><Text style={styles.intro}>{group===0?data.intro:data.title}</Text>{data.sections.slice(group*3,group*3+3).map(section=><View key={section.title} style={styles.section} wrap={false}><Text style={styles.heading}>{section.title}</Text><Text style={styles.where}>{section.where.replaceAll("→", ">") }</Text>{section.steps.map((step,index)=><Text key={index} style={styles.step}>{index+1}. {step}</Text>)}<Text style={styles.hint}>{section.hint}</Text></View>)}<View style={styles.footer} fixed><Text>crm.habitat-one.com · {locale.toUpperCase()}</Text><Text>{group+1} / 3</Text></View></Page>)}</></Document>);
+}

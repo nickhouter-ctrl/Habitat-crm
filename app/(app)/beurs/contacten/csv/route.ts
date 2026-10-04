@@ -1,6 +1,8 @@
 import { weigerRoute } from "@/lib/auth/guards";
 import { ROLLEN } from "@/lib/beurs";
 import { haalBeursGesprekken } from "@/lib/beurs-data";
+import { isLocale } from "@/lib/i18n";
+import { huidigeTaal } from "@/lib/i18n/server";
 import {
   type BeursRichting,
   type BeursSortering,
@@ -24,6 +26,8 @@ export async function GET(req: Request) {
   if (weiger) return weiger;
 
   const sp = new URL(req.url).searchParams;
+  const lang = sp.get("lang");
+  const locale = isLocale(lang) ? lang : await huidigeTaal();
   const rolParam = sp.get("rol") ?? "";
   const rol = ROLLEN.some((r) => r.key === rolParam) ? rolParam : "";
   const invoerParam = sp.get("invoer") ?? "";
@@ -42,7 +46,7 @@ export async function GET(req: Request) {
     dir,
   );
 
-  return new Response(beursCsv(rijen), {
+  return new Response(beursCsv(rijen, locale), {
     headers: {
       "content-type": "text/csv; charset=utf-8",
       "content-disposition": `attachment; filename="${beursCsvNaam()}"`,

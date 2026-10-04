@@ -36,6 +36,7 @@ export type ModuleKey =
   | "broadcast"
   | "assistent"
   | "agenda"
+  | "teamberichten"
   | "advertenties"
   // afgeschermd
   | "projects"
@@ -87,6 +88,7 @@ export const MODULES: ModuleDef[] = [
   { key: "broadcast", label: "Broadcast", paths: ["/broadcast"] },
   { key: "assistent", label: "Assistent", paths: ["/assistent"] },
   { key: "agenda", label: "Agenda", paths: ["/agenda"] },
+  { key: "teamberichten", label: "Teamberichten", paths: ["/teamberichten"] },
   { key: "advertenties", label: "Advertenties", paths: ["/marketing"] },
 
   { key: "projects", label: "Projecten", paths: ["/projects", "/ploeg", "/deals"] },
@@ -143,6 +145,7 @@ export const ROLE_MODULES: Record<Role, readonly ModuleKey[] | "*"> = {
     "broadcast",
     "assistent",
     "agenda",
+    "teamberichten",
   ],
 };
 

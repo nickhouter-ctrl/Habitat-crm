@@ -4,6 +4,7 @@ export const FOLLOWUP_MAILS = {
   custom: 'Eigen mail / AI-concept',
 } as const;
 export type FollowupMailKind = keyof typeof FOLLOWUP_MAILS;
+export const CUSTOM_STONE_SOURCE = 'crm:flexible-stone-custom-v1';
 
 const SOURCES = {
   professional: 'crm:professional-display-v1',

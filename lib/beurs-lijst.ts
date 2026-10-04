@@ -9,6 +9,7 @@
  */
 import { BEURS, interesseLabel, rolOmschrijving } from "@/lib/beurs";
 import { landNaam } from "@/lib/landen";
+import { dateLocale, maakT, type Locale } from "@/lib/i18n";
 
 export interface BeursGesprek {
   aanvraagId: string;
@@ -194,24 +195,29 @@ export function sorteerBeursContacten(
 }
 
 /** Regels voor het CSV-bestand — dezelfde kolommen als op het scherm. */
-export function beursCsv(rijen: BeursContact[]): string {
-  const kop = ["Naam", "Bedrijf", "Soort", "E-mail", "Telefoon", "Plaats", "Land", "Taal", "Wil", "Waar het over ging", "Zelf ingevuld", "Gesprekken", "Wanneer"];
-  const veld = (v: string) => `"${v.replace(/"/g, '""')}"`;
+export function beursCsv(rijen: BeursContact[], locale: Locale = "nl"): string {
+  const t = maakT(locale);
+  const kop = ["Naam", "Bedrijf", "Soort", "E-mail", "Telefoon", "Plaats", "Land", "Taal", "Wil", "Waar het over ging", "Zelf ingevuld", "Gesprekken", "Wanneer"].map(k => t(k));
+  // Excel may evaluate a quoted cell as a formula. Export customer input as text.
+  const veld = (v: string) => {
+    const safe = /^\s*[=+@-]/.test(v) ? `'${v}` : v;
+    return `"${safe.replace(/"/g, '""')}"`;
+  };
   const datum = (d: Date | null) =>
-    d ? d.toLocaleString("nl-NL", { timeZone: "Europe/Madrid", day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" }) : "";
+    d ? d.toLocaleString(dateLocale(locale), { timeZone: "Europe/Madrid", day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" }) : "";
   const regels = rijen.map((r) =>
     [
       r.naam,
       r.bedrijf ?? "",
-      rolOmschrijving(r.rol ?? "anders", r.rolAnders),
+      rolOmschrijving(r.rol ?? "anders", r.rolAnders, locale),
       r.email,
       r.telefoon ?? "",
       r.plaats ?? "",
-      r.land ? landNaam(r.land) : "",
+      r.land ? landNaam(r.land, locale) : "",
       r.taal ?? "",
-      r.interesses.map((k) => interesseLabel(k)).join(", "),
+      r.interesses.map((k) => interesseLabel(k, locale)).join(", "),
       r.wens.replace(/\n/g, " · "),
-      r.zelfIngevuld ? "ja" : "nee",
+      r.zelfIngevuld ? {nl:"ja",en:"yes",es:"sí"}[locale] : {nl:"nee",en:"no",es:"no"}[locale],
       String(r.gesprekken),
       datum(r.wanneer),
     ]

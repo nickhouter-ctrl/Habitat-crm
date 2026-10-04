@@ -38,6 +38,7 @@ type OfferteDoc = NonNullable<Awaited<ReturnType<typeof loadByToken>>>;
 async function notifyTeam(subject: string, html: string, attachments?: { filename: string; content: Uint8Array }[]) {
   await sendEmail({
     to: NOTIFY_TO,
+      interneMelding: true,
     bcc: NOTIFY_RECIPIENTS.slice(1).join(", ") || undefined,
     subject,
     html,

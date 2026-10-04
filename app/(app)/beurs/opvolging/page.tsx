@@ -1,20 +1,22 @@
 import { tekst as uiTranslation } from '@/lib/i18n/server';
 import { tekst, datumTaal } from '@/lib/i18n/server';
 import Link from 'next/link';
-import { and, desc, eq, inArray, isNotNull, or, sql } from 'drizzle-orm';
+import { and, desc, eq, inArray, sql } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import { contacts, companies, partnerProfiles, partnerMessages, quoteRequests, emailInbox, users } from '@/lib/db/schema';
 import { requireModuleRead } from '@/lib/auth/guards';
 import { mailZichtbaarVoor } from '@/lib/mail-visibility';
 import { partnerMailVisible } from '@/lib/partner-context';
-import { conversationState, INTEREST, STAGES } from '@/lib/partners';
+import { conversationState } from '@/lib/partners';
 import { followupSources } from '@/lib/followup-source';
-import { hasResellerInterest, recommendedFollowupMail } from '@/lib/followup-mail';
+import { hasResellerInterest } from '@/lib/followup-mail';
 import { FOLLOWUP_SORTS, followupCompleted, laatsteReactie, sortFollowup, type FollowupSort } from '@/lib/followup-checklist';
 import { latestFollowupCompletions } from '@/lib/followup-checklist-data';
 import { PageHeader, Card, CardContent, StatTile, LinkButton, Badge } from '@/components/ui';
 import { SyncButton } from './forms';
 import { FollowupCheck } from './check';
+import { followupEligible } from '@/lib/followup-selection';
+import { FollowupExclude } from './exclude';
 import { FollowupLive } from './live';
 
 export async function generateMetadata() {
@@ -47,12 +49,7 @@ export default async function Page({ searchParams }: {
     .leftJoin(companies, eq(companies.id, contacts.companyId))
     .leftJoin(partnerProfiles, eq(partnerProfiles.contactId, contacts.id))
     .leftJoin(users, eq(users.id, partnerProfiles.ownerId))
-    .where(or(
-      isNotNull(partnerProfiles.contactId),
-      inArray(contacts.type, ['lead', 'reseller']),
-      sql`coalesce(${contacts.tags}, '{}'::text[]) @> array['rol:wederverkoper']`,
-      inArray(contacts.id, db.select({ id: quoteRequests.contactId }).from(quoteRequests)),
-    )).orderBy(contacts.name);
+.where(followupEligible).orderBy(contacts.name);
 
   const canMail = access.magModule('inbox');
   const [sources, completions, [sent, incoming]] = await Promise.all([
@@ -95,7 +92,7 @@ export default async function Page({ searchParams }: {
     (!groep || groep==='reseller' && r.interested || groep==='professional' && !r.interested),
   );
   const visible = sortFollowup(scoped.filter(r =>
-    filter === 'all' || filter === 'open' && !r.completed || filter === 'completed' && r.completed ||
+    filter === 'all' || filter === 'open' && !r.completed && (r.state!=='Wachten op klant'||!!r.profile?.nextAction) || filter === 'completed' && r.completed ||
     filter === 'due' && r.due || filter === 'reply' && !r.completed && r.state === 'Antwoord nodig' ||
     filter === 'interested' && r.interested || filter === 'new' && !r.completed && !r.out || filter === 'active' && r.profile?.active,
   ), sort, direction === 'desc');
@@ -103,24 +100,20 @@ export default async function Page({ searchParams }: {
 
   return <div className="space-y-6">
     <FollowupLive />
-    <PageHeader title={t("Opvolging")} subtitle={t("Mails, afspraken en de volgende stap voor iedere klant.")}
+    <PageHeader title={t("Opvolging")} subtitle={t("Concrete aanvragen, open acties en klantreacties die opvolging nodig hebben.")}
       actions={<>
         <LinkButton href="/contacts" variant="secondary">{t("Contact kiezen")}</LinkButton>
         {access.magModule('producten') && <LinkButton href="/wederverkopers">{t("Verkooppunten")}</LinkButton>}
       </>} />
     <div className="grid gap-3 sm:grid-cols-4">
-      <Link href={href({filter:'open'})}><StatTile label={t("Nog opvolgen")} value={scoped.filter(r => !r.completed).length} /></Link>
+      <Link href={href({filter:'open'})}><StatTile label={t("Nog opvolgen")} value={scoped.filter(r => !r.completed && (r.state!=='Wachten op klant'||!!r.profile?.nextAction)).length} /></Link>
       <Link href={href({filter:'reply'})}><StatTile label={t("Antwoord nodig")} value={scoped.filter(r => !r.completed && r.state === 'Antwoord nodig').length} /></Link>
       <Link href={href({filter:'due'})}><StatTile label={t("Nu opvolgen")} value={scoped.filter(r => r.due).length} /></Link>
       <Link href={href({filter:'completed'})}><StatTile label={t("Afgehandeld")} value={scoped.filter(r => r.completed).length} /></Link>
     </div>
-    <div className="flex flex-wrap gap-2" aria-label={t("Kies herkomst")}>
-      <LinkButton href={href({bron:''})} variant={bron?'secondary':'primary'}>{t("Alle kanalen")}</LinkButton>
-      <LinkButton href={href({bron:'beurs'})} variant={bron==='beurs'?'primary':'secondary'}>{t("Beurscontacten opvolgen")}</LinkButton>
-    </div>
     <Card><CardContent>
       <div className="flex flex-wrap items-start justify-between gap-4">
-        <form key={`${q}|${filter}|${bron}|${groep}|${sort}|${direction}`} action="/opvolging" className="grid w-full gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        <form key={`${q}|${filter}|${bron}|${groep}|${sort}|${direction}`} action="/opvolging" className="grid w-full gap-3 sm:grid-cols-2">
           <label className="grid min-w-0 gap-1 text-xs font-medium text-muted">{t("Zoeken")} <input aria-label={t("Zoek bedrijf of contact")} name="q" defaultValue={q} maxLength={200} placeholder={t("Zoek bedrijf of contact…")} className={`${input} min-w-0 max-w-full`} />
           </label>
           <label className="grid min-w-0 gap-1 text-xs font-medium text-muted">{t("Opvolgstatus")} <select aria-label={t("Filter")} name="filter" defaultValue={filter} className={input}>
@@ -128,6 +121,7 @@ export default async function Page({ searchParams }: {
               .map(([v, l]) => <option key={v} value={v}>{t(l)}</option>)}
           </select>
           </label>
+          <details className="sm:col-span-2"><summary className="cursor-pointer text-sm text-muted">{t("Meer filters & sorteren")}</summary><div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
           <label className="grid min-w-0 gap-1 text-xs font-medium text-muted">{t("Herkomst")} <select aria-label={t("Herkomst")} name="bron" defaultValue={bron} className={input}>
             <option value="">{t("Alle herkomsten")}</option><option value="beurs">{t("Beurs")}</option><option value="website">{t("Website")}</option>
             <option value="other">{t("Overige kanalen")}</option><option value="unknown">{t("Niet vastgelegd")}</option>
@@ -145,18 +139,20 @@ export default async function Page({ searchParams }: {
             <option value="asc">{t("Oplopend")}</option><option value="desc">{t("Aflopend")}</option>
           </select>
           </label>
+          </div></details>
           <button className="justify-self-start rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-accent-foreground">{t("Toepassen")}</button>
         </form>
         {canMail && access.heeftCap('schrijven') && <SyncButton />}
       </div>
-      <p className="mt-3 text-sm text-muted">{t("Open een naam om persoonlijk te mailen of een afspraak te plannen. Vink af als deze opvolging klaar is. Je kunt de klant terugvinden bij Afgehandeld en het vinkje weer uitzetten. Een nieuwe reactie of volgende opvolgdatum brengt de klant terug.")}</p>
-      <p className="mt-2 text-xs text-muted">{t("Afvinken verstuurt geen mail. Automatische informatie- en filmmails tellen niet als persoonlijke opvolging.")}</p>
+      <details className="mt-4 border-t pt-3"><summary className="cursor-pointer text-sm text-muted">{t("Zo werkt de opvolging")}</summary><div className="mt-3">      <p className="mt-3 text-sm text-muted">{t("Open een naam om persoonlijk te mailen of een afspraak te plannen. Vink af als deze opvolging klaar is. Je kunt de klant terugvinden bij Afgehandeld en het vinkje weer uitzetten. Een nieuwe reactie of volgende opvolgdatum brengt de klant terug.")}</p>
+      <p className="mt-2 text-xs text-muted">{t("Na een bevestigde persoonlijke mail wordt de huidige opvolging automatisch afgevinkt. Gebruik ‘Uit werklijst halen’ voor contacten die geen opvolging nodig hebben.")}</p>
       <p className="mt-2 text-xs text-muted">{t('Gesprekken worden automatisch bijgewerkt.')}</p>
+</div></details>
     </CardContent></Card>
     <Card><div className="border-b px-5 py-3 text-sm text-muted">{visible.length} {t("van")} {scoped.length} {t("contacten")}{bron==='beurs'?t(" van de beurs"):''}</div><div className="overflow-x-auto"><table className="w-full text-left text-sm">
       <thead className="border-b bg-background text-foreground"><tr>
         <th className="px-5 py-3 font-medium">{t("Afgehandeld")}</th>
-        {['Contact / bedrijf', 'Interesse & fase', 'Gesprek', 'Volgende stap'].map(label => <th className="px-5 py-3 font-medium" key={label}>{t(label)}</th>)}
+        {['Contact / bedrijf', 'Gesprek', 'Volgende stap'].map(label => <th className="px-5 py-3 font-medium" key={label}>{t(label)}</th>)}
       </tr></thead>
       <tbody>{visible.map(r => <tr className="border-b last:border-0 hover:bg-background/60" key={r.contact.id}>
         <td className="px-5 py-4">{access.heeftCap('schrijven') ? <FollowupCheck key={`${r.completion?.id??'new'}:${r.completed}`} contactId={r.contact.id} name={r.contact.name} completed={r.completed} eventId={r.completion?.id??''}/> : r.completed?t("Ja"):t("Nee")}</td>
@@ -164,12 +160,7 @@ export default async function Page({ searchParams }: {
           <Link className="font-semibold underline-offset-4 hover:underline" href={`/opvolging/${r.contact.id}`}>{r.contact.name}</Link>
           <p className="text-muted">{r.company ?? r.contact.email}</p>
           <p className="mt-1 text-xs text-muted">{r.origins.map(o => t(o.label)).join(' · ')}</p>
-          <p className="mt-1 text-xs">{t("Mailvoorstel:")} {t(({reseller:'verkooppunt',professional:'zakelijke klant',custom:'eigen mail'})[recommendedFollowupMail(r.contact,r.profile)])}</p>
-        </td>
-        <td className="px-5 py-4">
-          {t(INTEREST[(r.profile?.interest ?? (r.interested ? "interested" : "unknown")) as keyof typeof INTEREST])}
-          <p className="text-muted">{t(STAGES[(r.profile?.stage ?? "new") as keyof typeof STAGES])}</p>
-        </td>
+        {access.heeftCap('schrijven')&&<FollowupExclude id={r.contact.id}/>}</td>
         <td className="px-5 py-4">
           {canMail ? <Badge className="whitespace-nowrap" tone={r.state === 'Antwoord nodig' ? 'warning' : 'neutral'}>{t(r.state)}</Badge> : '—'}
           {r.out && <p className="mt-1 text-xs text-muted">{t("Gemaild")} {new Date(r.out).toLocaleDateString(dateLocale)}</p>}

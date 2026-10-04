@@ -1,14 +1,16 @@
+import { isLocale } from "@/lib/i18n";
 import { renderBudgetPdf } from "@/lib/budget-pdf";
 import { weigerRoute } from "@/lib/auth/guards";
 
 export const dynamic = "force-dynamic";
 
-export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> }) {
+export async function GET(req: Request, ctx: { params: Promise<{ id: string }> }) {
   const nee = await weigerRoute("projects");
   if (nee) return nee;
 
   const { id } = await ctx.params;
-  const pdf = await renderBudgetPdf(id);
+  const lang = new URL(req.url).searchParams.get("lang");
+  const pdf = await renderBudgetPdf(id, isLocale(lang) ? lang : undefined);
   if (!pdf) return new Response("Not found", { status: 404 });
 
   return new Response(new Uint8Array(pdf.buffer), {

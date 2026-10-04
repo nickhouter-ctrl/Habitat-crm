@@ -1,4 +1,5 @@
 "use server";
+import { NOTIFY_TO, NOTIFY_RECIPIENTS } from "@/lib/mail-bcc";
 
 import { revalidatePath } from "next/cache";
 import { headers } from "next/headers";
@@ -6,7 +7,6 @@ import { and, eq, isNotNull, sql } from "drizzle-orm";
 
 import { db } from "@/lib/db";
 import { timeEntries } from "@/lib/db/schema";
-import { COMPANY } from "@/lib/company";
 import { sendEmail } from "@/lib/email";
 import { portalLinkForToken, portalT } from "@/lib/worker-portal";
 
@@ -83,7 +83,9 @@ export async function logHours(
       )
       .join("");
     await sendEmail({
-      to: COMPANY.email,
+      to: NOTIFY_TO,
+      bcc: NOTIFY_RECIPIENTS.slice(1).join(", "),
+      interneMelding: true,
       subject: `⏱ Uren te controleren — ${who}: ${hours}u op ${project.name}`,
       html: `<p>Er zijn nieuwe uren ingevuld via het urenportaal. Ze tellen pas mee na goedkeuring.</p><table>${rows}</table><p><a href="${projectUrl}">Controleren en goedkeuren →</a></p>`,
       text: `Nieuwe portaal-uren: ${who} — ${hours}u op ${date} (${project.name}). Goedkeuren: ${projectUrl}`,

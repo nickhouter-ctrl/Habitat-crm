@@ -62,10 +62,11 @@ describe('passend voorstel zonder beroepen te veranderen',()=>{
   });
 });
 describe('daadwerkelijke meegebundelde mailbijlagen',()=>{
-  it.each([['professional',3],['reseller',4],['custom',2]] as const)('%s heeft beide technische sheets en precies de passende ontwerpen',async(kind,count)=>{
+  it('voegt technische sheets alleen bij eigen mail toe na expliciete selectie',async()=>{expect(await followupAttachments('custom')).toEqual([]);expect(await followupAttachments('custom',true)).toHaveLength(2);});
+  it.each([['professional',3],['reseller',4],['custom',0]] as const)('%s heeft beide technische sheets en precies de passende ontwerpen',async(kind,count)=>{
     const attachments=await followupAttachments(kind);
     expect(attachments).toHaveLength(count);
-    expect(attachments.filter(a=>a.contentType==='application/pdf')).toHaveLength(2);
+    expect(attachments.filter(a=>a.contentType==='application/pdf')).toHaveLength(kind==='custom'?0:2);
     for(const attachment of attachments){
       expect(attachment.content.length).toBeGreaterThan(1000);
       if(attachment.contentType==='image/jpeg')expect([...attachment.content.subarray(0,3)]).toEqual([255,216,255]);

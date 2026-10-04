@@ -1,3 +1,4 @@
+import { reportSpanish } from "./report-labels";
 /**
  * Español. La clave es el texto neerlandés original; si falta una clave se
  * muestra el neerlandés, de modo que una pantalla sin traducir sigue siendo
@@ -8,7 +9,11 @@ import { crmEs } from './crm';
 import { workflowEs } from './workflow';
 import { dealerPricingEs } from './dealer-pricing';
 
+import { teamWorkflowEs } from "./team-workflow";
+
 export const es: Dictionary = {
+  ...reportSpanish,
+  ...teamWorkflowEs,
   ...dealerPricingEs,
   ...crmEs,
   ...workflowEs,

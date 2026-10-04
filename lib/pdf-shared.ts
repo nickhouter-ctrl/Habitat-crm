@@ -57,11 +57,11 @@ export function pdfDateStamp(): string {
  */
 export async function getPdfContact(
   contactId: string | null | undefined,
-): Promise<{ name: string | null; email: string | null } | null> {
+): Promise<{ name: string | null; email: string | null; preferredLanguage: string | null } | null> {
   if (!contactId) return null;
   const c = await db.query.contacts.findFirst({
     where: eq(contacts.id, contactId),
-    columns: { name: true, email: true },
+    columns: { name: true, email: true, preferredLanguage: true },
   });
   return c ?? null;
 }

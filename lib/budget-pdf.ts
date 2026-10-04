@@ -15,6 +15,7 @@ import {
   type ClientPdf,
 } from "@/lib/pdf-shared";
 import { renderReportPdf, type ReportTable } from "@/lib/report-pdf";
+import { isLocale, maakT, dateLocale, type Locale } from "@/lib/i18n";
 import { formatEUR } from "@/lib/utils";
 
 const CAT_LABEL: Record<string, string> = {
@@ -28,7 +29,7 @@ const CAT_LABEL: Record<string, string> = {
 /** Resultaat van {@link renderBudgetPdf} — zie {@link ClientPdf}. */
 export type BudgetPdf = ClientPdf;
 
-export async function renderBudgetPdf(projectId: string): Promise<BudgetPdf | null> {
+export async function renderBudgetPdf(projectId: string, requestedLocale?: Locale): Promise<BudgetPdf | null> {
   const project = await db.query.projects.findFirst({ where: eq(projects.id, projectId) });
   if (!project) return null;
 
@@ -41,6 +42,8 @@ export async function renderBudgetPdf(projectId: string): Promise<BudgetPdf | nu
     db.select().from(projectPhases).where(eq(projectPhases.projectId, projectId)).orderBy(asc(projectPhases.sortOrder)),
   ]);
 
+  const c = await getPdfContact(project.contactId);
+  const locale = requestedLocale ?? (isLocale(c?.preferredLanguage) ? c.preferredLanguage : "en"), t = maakT(locale);
   const phaseNames = phaseRows.map((p) => p.name);
   const linesOf = (key: string) => lines.filter((l) => phaseKey(l.phase) === key);
 
@@ -48,9 +51,9 @@ export async function renderBudgetPdf(projectId: string): Promise<BudgetPdf | nu
     const sub: string[] = [];
     if (l.section) sub.push(l.section);
     if (l.quantity && l.unitPriceEur)
-      sub.push(`${amountEur(l.quantity).toLocaleString("nl-NL")} × ${formatEUR(l.unitPriceEur)}`);
-    else sub.push(CAT_LABEL[l.category] ?? l.category);
-    if (l.isStelpost) sub.push("stelpost");
+      sub.push(`${amountEur(l.quantity).toLocaleString(dateLocale(locale))} × ${formatEUR(l.unitPriceEur)}`);
+    else sub.push(t(CAT_LABEL[l.category] ?? l.category));
+    if (l.isStelpost) sub.push(t("stelpost"));
     return `${l.description}  ·  ${sub.join(" · ")}`;
   };
 
@@ -60,7 +63,7 @@ export async function renderBudgetPdf(projectId: string): Promise<BudgetPdf | nu
     const hasPrices = subtotal > 0;
     // Prijs alleen tonen als die er is; anders is de regel pure uitleg (bestek).
     const rows = grp.map((l) => [lineLabel(l), amountEur(l.amountEur) > 0 ? formatEUR(l.amountEur) : ""]);
-    if (hasPrices) rows.push(["Subtotaal", formatEUR(subtotal)]);
+    if (hasPrices) rows.push([t("Subtotaal"), formatEUR(subtotal)]);
     tables.push({
       title,
       subtitle,
@@ -86,9 +89,9 @@ export async function renderBudgetPdf(projectId: string): Promise<BudgetPdf | nu
   // Met regelprijzen: subtotaal (+onvoorzien). Geen regelprijzen maar wél een
   // afgesproken aanneemprijs: toon die als totaal. Anders: geen totaalblok (puur bestek).
   if (base > 0) {
-    const totalRows: string[][] = [["Subtotaal werkzaamheden", formatEUR(base)]];
-    if (contingency > 0) totalRows.push([`Onvoorzien (${pct}%)`, formatEUR(contingency)]);
-    totalRows.push(["Totaal (excl. BTW)", formatEUR(base + contingency)]);
+    const totalRows: string[][] = [[t("Subtotaal werkzaamheden"), formatEUR(base)]];
+    if (contingency > 0) totalRows.push([t("Onvoorzien ({pct}%)", { pct }), formatEUR(contingency)]);
+    totalRows.push([t("Totaal (excl. BTW)"), formatEUR(base + contingency)]);
     tables.push({
       title: "Totaal",
       columns: amountTableColumns(),
@@ -99,7 +102,7 @@ export async function renderBudgetPdf(projectId: string): Promise<BudgetPdf | nu
     tables.push({
       title: "Totaal",
       columns: amountTableColumns(),
-      rows: [["Aanneemsom (excl. BTW)", formatEUR(contract)]],
+      rows: [[t("Aanneemsom (excl. BTW)"), formatEUR(contract)]],
       emphasizeRow: () => true,
     });
   }
@@ -130,13 +133,13 @@ export async function renderBudgetPdf(projectId: string): Promise<BudgetPdf | nu
     rows: [],
   });
 
-  const subtitleBits = ["Begroting per fase", "alle bedragen excl. BTW"];
-  const c = await getPdfContact(project.contactId);
+  const subtitleBits = [t("Begroting per fase"), t("alle bedragen excl. BTW")];
   if (c?.name) subtitleBits.unshift(c.name);
   const contactEmail = c?.email ?? null;
 
   const buffer = await renderReportPdf({
-    title: `Begroting — ${project.name}`,
+    title: `${t("Begroting")} — ${project.name}`,
+    locale,
     subtitle: subtitleBits.join(" · "),
     generatedAt: new Date(),
     kpis: [],

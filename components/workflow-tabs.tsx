@@ -1,0 +1,6 @@
+"use client";
+import { useState } from 'react';
+export function WorkflowTabs({id,label,tabs,initial}:{id:string;label:string;tabs:{key:string;label:string;content:React.ReactNode}[];initial?:string}){
+ const [active,setActive]=useState(initial??tabs[0]?.key);
+ return <div><div role="tablist" aria-label={label} className="mb-5 flex gap-1 overflow-x-auto border-b">{tabs.map((tab,index)=><button key={tab.key} id={`${id}-tab-${tab.key}`} role="tab" aria-selected={active===tab.key} aria-controls={`${id}-panel-${tab.key}`} tabIndex={active===tab.key?0:-1} onClick={()=>setActive(tab.key)} onKeyDown={e=>{let target=index;if(e.key==='ArrowRight')target=(index+1)%tabs.length;else if(e.key==='ArrowLeft')target=(index-1+tabs.length)%tabs.length;else if(e.key==='Home')target=0;else if(e.key==='End')target=tabs.length-1;else return;e.preventDefault();setActive(tabs[target].key);document.getElementById(`${id}-tab-${tabs[target].key}`)?.focus();}} className={`shrink-0 border-b-2 px-4 py-3 text-sm font-medium ${active===tab.key?'border-accent text-accent':'border-transparent text-muted hover:text-foreground'}`}>{tab.label}</button>)}</div>{tabs.map(tab=><div key={tab.key} id={`${id}-panel-${tab.key}`} role="tabpanel" aria-labelledby={`${id}-tab-${tab.key}`} hidden={active!==tab.key}>{tab.content}</div>)}</div>;
+}

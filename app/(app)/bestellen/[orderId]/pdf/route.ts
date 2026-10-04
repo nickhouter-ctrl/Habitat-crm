@@ -1,3 +1,5 @@
+import { huidigeTaal } from "@/lib/i18n/server";
+import { isLocale, dateLocale } from "@/lib/i18n";
 import { NextResponse } from "next/server";
 import { asc, eq, inArray } from "drizzle-orm";
 
@@ -9,7 +11,7 @@ import { weigerRoute } from "@/lib/auth/guards";
 export const maxDuration = 30;
 
 export async function GET(
-  _req: Request,
+  req: Request,
   { params }: { params: Promise<{ orderId: string }> },
 ) {
   const nee = await weigerRoute("inkoop");
@@ -47,9 +49,13 @@ export async function GET(
   const imgByProduct = new Map(prodImgs.map((r) => [r.id, r.image]));
   const imgByVariant = new Map(varImgs.map((r) => [r.id, r.image]));
 
+  const requested = new URL(req.url).searchParams.get("lang");
+  const language = await huidigeTaal();
+  const locale = isLocale(requested) ? requested : language === "nl" ? "en" : language;
   const pdf = await renderSupplierOrderPdf({
+    locale,
     orderNumber: order.id.slice(0, 8).toUpperCase(),
-    dateLabel: new Date(order.createdAt).toLocaleDateString("en-GB", {
+    dateLabel: new Date(order.createdAt).toLocaleDateString(dateLocale(locale), {
       day: "2-digit",
       month: "short",
       year: "numeric",

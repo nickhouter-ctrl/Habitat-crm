@@ -17,6 +17,8 @@ import {
 } from "@react-pdf/renderer";
 
 import { COMPANY } from "@/lib/company";
+import { dateLocale, maakT, type Locale } from "@/lib/i18n";
+import { localizeReportInput } from "@/lib/report-localization";
 
 const FONT_DIR = path.join(process.cwd(), "public", "fonts", "sora");
 Font.register({
@@ -58,6 +60,7 @@ export type ReportTable = {
   emptyText?: string;
 };
 export type ReportPdfInput = {
+  locale?: Locale;
   title: string;
   subtitle?: string;
   generatedAt: Date;
@@ -162,7 +165,7 @@ const s = StyleSheet.create({
   footerText: { fontSize: 7, color: COMPANY.muted, letterSpacing: 0.2 },
 });
 
-function Table({ table }: { table: ReportTable }) {
+function Table({ table, t }: { table: ReportTable; t: ReturnType<typeof maakT> }) {
   // Geen regels én geen emptyText → puur een tekst-sectie (titel + uitleg), zonder
   // tabel-koprij. Zo rendert een fase die alleen uit uitleg bestaat netjes.
   const showGrid = table.rows.length > 0 || table.emptyText != null;
@@ -181,7 +184,7 @@ function Table({ table }: { table: ReportTable }) {
         ))}
       </View>
       {table.rows.length === 0 ? (
-        <Text style={s.empty}>{table.emptyText ?? "Geen gegevens."}</Text>
+        <Text style={s.empty}>{table.emptyText ?? t("Geen gegevens.")}</Text>
       ) : (
         table.rows.map((row, ri) => {
           const emph = table.emphasizeRow?.(ri) ?? false;
@@ -218,7 +221,9 @@ function Table({ table }: { table: ReportTable }) {
 }
 
 export async function renderReportPdf(input: ReportPdfInput): Promise<Buffer> {
-  const dateStr = new Intl.DateTimeFormat("nl-NL", {
+  const locale = input.locale ?? 'nl', t = maakT(locale);
+  input = localizeReportInput(input, locale);
+  const dateStr = new Intl.DateTimeFormat(dateLocale(locale), {
     day: "numeric",
     month: "long",
     year: "numeric",
@@ -237,7 +242,7 @@ export async function renderReportPdf(input: ReportPdfInput): Promise<Buffer> {
             <Text style={s.tagline}>{COMPANY.tagline}</Text>
           </View>
           <View style={s.headerRight}>
-            <Text style={s.headerKicker}>Overzicht</Text>
+            <Text style={s.headerKicker}>{t("Overzicht")}</Text>
             <Text style={s.headerDate}>{dateStr}</Text>
           </View>
         </View>
@@ -261,8 +266,8 @@ export async function renderReportPdf(input: ReportPdfInput): Promise<Buffer> {
           </View>
         )}
 
-        {input.tables.map((t, i) => (
-          <Table key={i} table={t} />
+        {input.tables.map((table, i) => (
+          <Table key={i} table={table} t={t} />
         ))}
 
         <View style={s.footer} fixed>

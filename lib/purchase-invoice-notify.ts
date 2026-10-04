@@ -225,6 +225,7 @@ export async function notifyNewInvoiceReviews(reviewIds: string[]): Promise<{ se
         // collega met jouw link inloggen en stond zijn goedkeuring op jouw naam.
         // Iedere keurder krijgt zijn eigen exemplaar, dus er gaat niets verloren.
         noCompanyBcc: true,
+        interneMelding: true,
       }),
     ),
   );
@@ -310,7 +311,8 @@ export async function runPurchaseInvoiceDigest(): Promise<{
         subject: `${regels.length} inkoopfactu${regels.length === 1 ? "ur" : "ren"} te keuren${oud.length ? ` · ${oud.length} langer dan een week` : ""}`,
         html: htmlVoor(o.userId, o.loginToken),
         text,
-        noCompanyBcc: true, // persoonlijke inloglink — zie notifyNewInvoiceReviews
+        noCompanyBcc: true,
+        interneMelding: true, // persoonlijke inloglink — zie notifyNewInvoiceReviews
       }),
     ),
   );

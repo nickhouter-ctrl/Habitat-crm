@@ -1,6 +1,7 @@
 import 'server-only';
 import { and, desc, eq, inArray, sql } from 'drizzle-orm';
 import { db } from '@/lib/db';
+import { followupEligible } from './followup-selection';
 import { activities } from '@/lib/db/schema';
 import { FOLLOWUP_DONE, FOLLOWUP_REOPENED } from '@/lib/followup-checklist';
 import { isMarketingGebruiker, mailZichtbaarVoorSql, marketingMailbox } from '@/lib/mail-visibility';
@@ -52,20 +53,17 @@ export async function telAntwoordNodig(userEmail?: string | null): Promise<numbe
     )
     select count(*)::int as n
     from laatste_in i
-    join contacts c on c.id = i.contact_id
-    left join partner_profiles p on p.contact_id = c.id
-    left join laatste_uit u on u.contact_id = c.id
-    left join laatste_vink v on v.contact_id = c.id
+    join contacts on contacts.id = i.contact_id
+    left join partner_profiles on partner_profiles.contact_id = contacts.id
+    left join laatste_uit u on u.contact_id = contacts.id
+    left join laatste_vink v on v.contact_id = contacts.id
     where (u.sent_at is null or i.received_at > u.sent_at)
       and (v.subject is distinct from ${FOLLOWUP_DONE}
         or i.received_at > v.created_at
-        or (p.next_action_on is not null
-          and p.next_action_on > (v.created_at at time zone 'Europe/Madrid')::date
-          and p.next_action_on <= (now() at time zone 'Europe/Madrid')::date))
-      and (p.contact_id is not null
-        or c.type in ('lead', 'reseller')
-        or coalesce(c.tags, '{}'::text[]) @> array['rol:wederverkoper']
-        or exists (select 1 from quote_requests q where q.contact_id = c.id))
+        or (partner_profiles.next_action_on is not null
+          and partner_profiles.next_action_on > (v.created_at at time zone 'Europe/Madrid')::date
+          and partner_profiles.next_action_on <= (now() at time zone 'Europe/Madrid')::date))
+      and ${followupEligible}
   `);
   return rijen[0]?.n ?? 0;
 }

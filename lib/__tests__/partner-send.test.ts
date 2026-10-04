@@ -1,12 +1,13 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-const m=vi.hoisted(()=>({guard:vi.fn(),select:vi.fn(),claim:vi.fn(),mail:vi.fn(),attachments:vi.fn(),insert:vi.fn(),bewaard:vi.fn(),set:vi.fn(),context:vi.fn(),ai:vi.fn()}));
+const m=vi.hoisted(()=>({guard:vi.fn(),select:vi.fn(),claim:vi.fn(),transaction:vi.fn(),mail:vi.fn(),attachments:vi.fn(),insert:vi.fn(),bewaard:vi.fn(),set:vi.fn(),context:vi.fn(),ai:vi.fn()}));
 vi.mock('@/lib/i18n/server', async () => ({ tekst: async () => (await import('@/lib/i18n')).maakT('nl') }));
 vi.mock('server-only',()=>({}));
 vi.mock('next/cache',()=>({revalidatePath:vi.fn()}));
 vi.mock('@/lib/auth/guards',()=>({requireModule:m.guard}));
-vi.mock('@/lib/db',()=>({db:{select:()=>({from:()=>({where:m.select})}),insert:()=>({values:(v:unknown)=>{m.insert(v);return{returning:m.bewaard};}}),update:()=>({set:(values:unknown)=>{m.set(values);return{where:()=>({returning:m.claim})};}})}}));
+vi.mock('@/lib/db',()=>({db:{transaction:m.transaction,select:()=>({from:()=>({where:m.select})}),insert:()=>({values:(v:unknown)=>{m.insert(v);return{returning:m.bewaard};}}),update:()=>({set:(values:unknown)=>{m.set(values);return{where:()=>({returning:m.claim})};}})}}));
 vi.mock('@/lib/email',()=>({sendEmail:m.mail,persoonlijkeMail:(body:string)=>({html:body,text:body})}));
 vi.mock('@/lib/followup-mail-attachments',()=>({followupAttachments:m.attachments}));
+vi.mock('@/lib/followup-mail-completion',()=>({completeFollowupAfterMail:vi.fn()}));
 vi.mock('@/lib/sent-email',()=>({recordSentEmail:vi.fn()}));
 vi.mock('@/lib/partner-context',()=>({partnerContext:m.context,partnerMailVisible:vi.fn()}));
 vi.mock('@/lib/partner-mail-sync',()=>({syncPartnerSent:vi.fn()}));
@@ -17,7 +18,7 @@ const id='00000000-0000-4000-8000-000000000001';
 const date=new Date('2026-09-30T12:00:00Z');
 const draft={id,contactId:id,status:'draft',updatedAt:date,toEmail:'test@example.com',subject:'Test',body:'Test',mailboxUser:'hi@example.com'};
 function form(){const f=new FormData();f.set('id',id);f.set('updatedAt',date.toISOString());f.set('confirm','on');return f;}
-beforeEach(()=>{vi.resetAllMocks();vi.stubEnv('GMAIL_USER','hi@example.com');m.guard.mockResolvedValue({id,name:'Test',email:'hi@example.com'});m.attachments.mockResolvedValue([]);m.bewaard.mockResolvedValue([{...draft,id:'00000000-0000-4000-8000-0000000000bb'}]);});
+beforeEach(()=>{vi.resetAllMocks();m.transaction.mockImplementation(async fn=>fn({select:()=>({from:()=>({where:()=>({for:async()=>[]})})}),update:()=>({set:(v:unknown)=>{m.set(v);return{where:async()=>[]};}})}));vi.stubEnv('GMAIL_USER','hi@example.com');m.guard.mockResolvedValue({id,name:'Test',email:'hi@example.com'});m.attachments.mockResolvedValue([]);m.bewaard.mockResolvedValue([{...draft,id:'00000000-0000-4000-8000-0000000000bb'}]);});
 describe('verzending: autorisatie en dubbele klik',()=>{
  it('weigert vóór databank- of mailtoegang bij ontbrekende rechten',async()=>{m.guard.mockRejectedValue(new Error('Geen toegang'));await expect(sendDraft({},form())).rejects.toThrow('Geen toegang');expect(m.select).not.toHaveBeenCalled();expect(m.mail).not.toHaveBeenCalled();});
  it('verstuurd concept wordt nooit opnieuw verzonden',async()=>{m.select.mockResolvedValueOnce([{...draft,status:'sent'}]);expect((await sendDraft({},form())).error).toBeTruthy();expect(m.mail).not.toHaveBeenCalled();});
@@ -29,7 +30,7 @@ describe('verzending: autorisatie en dubbele klik',()=>{
    m.select.mockResolvedValueOnce([{...draft,source:followupMailSource('reseller'),body:'Hola Ana / Hi Ana — handmatig aangepast'}]).mockResolvedValueOnce([{id,email:draft.toEmail,source:'beurs:360-cevisama-2026',tags:['rol:architect']}]).mockResolvedValueOnce([]).mockResolvedValueOnce([{interest:'interested'}]);
    const attachment={filename:'showroom.jpg',content:Buffer.from('image')};m.attachments.mockResolvedValue([attachment]);m.claim.mockResolvedValue([draft]);m.mail.mockResolvedValue({sent:true,messageId:'provider-id'});
    expect((await sendDraft({},form())).success).toBeTruthy();
-   expect(m.attachments).toHaveBeenCalledWith('reseller');expect(m.mail).toHaveBeenCalledTimes(1);
+   expect(m.attachments).toHaveBeenCalledWith('reseller',true);expect(m.mail).toHaveBeenCalledTimes(1);
    expect(m.mail).toHaveBeenCalledWith(expect.objectContaining({text:'Hola Ana / Hi Ana — handmatig aangepast',attachments:[attachment],fromUser:{name:'Hans'},to:draft.toEmail,copyPolicy:'team',afzenderEmail:'hi@example.com'}));
    expect(m.set).toHaveBeenCalledWith(expect.objectContaining({status:'sent',messageId:'provider-id'}));
  });

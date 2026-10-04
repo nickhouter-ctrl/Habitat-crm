@@ -77,4 +77,13 @@ describe("sendEmail via Resend", () => {
     expect(payloads[0].cc).toEqual(["frederique@habitat-one.com"]);
     expect(payloads[0]).not.toHaveProperty("bcc");
   });
+  it("laat hi en andere adressen uit systeemmeldingen op het Resend-pad", async () => {
+    process.env.EMAIL_BCC = 'hi@habitat-one.com, outsider@example.com';
+    const result = await sendEmail({ to: 'HI@habitat-one.com, hans@habitat-one.com', subject: 'Systeem', html: '<p>Controle</p>', bcc: 'hi@habitat-one.com, mourad.h@habitat-one.com, outsider@example.com', interneMelding: true });
+    expect(result.sent).toBe(true);
+    expect(payloads[0].to).toBe('hans@habitat-one.com');
+    expect(payloads[0].bcc).toEqual(expect.arrayContaining(['mourad.h@habitat-one.com', 'nick@habitat-one.com', 'frederique@habitat-one.com']));
+    expect(payloads[0].bcc).not.toContain('hi@habitat-one.com');
+    expect(payloads[0].bcc).not.toContain('outsider@example.com');
+  });
 });

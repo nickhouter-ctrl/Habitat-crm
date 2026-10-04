@@ -6,7 +6,7 @@ import { ImapFlow, type MailboxLockObject, type FetchMessageObject } from "imapf
 import { simpleParser, type ParsedMail, type AddressObject } from "mailparser";
 import nodemailer, { type Transporter } from "nodemailer";
 
-import { copyPolicyCc, withMandatoryBcc, type MailCopyPolicy } from "@/lib/mail-bcc";
+import { copyPolicyCc, systemMailAddresses, withMandatoryBcc, type MailCopyPolicy } from "@/lib/mail-bcc";
 
 const HOST_IMAP = "imap.gmail.com";
 const HOST_SMTP = "smtp.gmail.com";
@@ -332,13 +332,17 @@ export async function sendMail(args: {
   interneMelding?: boolean;
   attachments?: { filename: string; content: Buffer | Uint8Array; contentType?: string; cid?: string; contentDisposition?: "inline" | "attachment" }[];
 }): Promise<{ messageId: string }> {
+  const to = args.interneMelding ? systemMailAddresses(args.to) : args.to;
+  if (!to) throw new Error("system-recipient-not-allowed");
+  const rawCc = args.copyPolicy ? copyPolicyCc(args.copyPolicy, to, args.afzenderEmail) : undefined;
+  const rawBcc = args.copyPolicy ? undefined : args.noCompanyBcc ? args.bcc : withMandatoryBcc(args.bcc, to, args.interneMelding);
   const account = args.account ?? getCreds();
   const t = createSmtpTransporter(account);
   const info = await t.sendMail({
     from: `${args.fromName?.trim() || "Habitat One"} <${account.user}>`,
-    to: args.to,
-    cc: args.copyPolicy ? copyPolicyCc(args.copyPolicy, args.to, args.afzenderEmail) : undefined,
-    bcc: args.copyPolicy ? undefined : args.noCompanyBcc ? args.bcc : withMandatoryBcc(args.bcc, args.to, args.interneMelding),
+    to,
+    cc: args.interneMelding ? systemMailAddresses(rawCc) : rawCc,
+    bcc: args.interneMelding ? systemMailAddresses(rawBcc) : rawBcc,
     subject: args.subject,
     text: args.text,
     html: args.html,

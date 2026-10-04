@@ -7,6 +7,30 @@ export const COMPANY_INBOX = "hi@habitat-one.com";
 /** Beursmails: deze twee collega's krijgen een zichtbare kopie. */
 export const NICK_FREDERIQUE = ["nick@habitat-one.com", "frederique@habitat-one.com"] as const;
 
+/** Systeemmeldingen gaan uitsluitend naar deze vijf persoonlijke adressen. */
+export const SYSTEM_MAIL_RECIPIENTS = [
+  ...NICK_FREDERIQUE,
+  "hans@habitat-one.com",
+  "teresa@habitat-one.com",
+  "mourad.h@habitat-one.com",
+] as const;
+
+export function isSystemMailRecipient(address: string): boolean {
+  const email = (address.match(/<([^<>]+)>/)?.[1] ?? address).trim().toLowerCase();
+  return SYSTEM_MAIL_RECIPIENTS.some(allowed => allowed === email);
+}
+
+/** Ook displaynamen en expliciete kopieën worden gefilterd. */
+export function systemMailAddresses(addresses: string | undefined): string | undefined {
+  const seen = new Set<string>();
+  return addresses?.split(",").map(address => address.trim()).filter(address => {
+    const email = (address.match(/<([^<>]+)>/)?.[1] ?? address).trim().toLowerCase();
+    if (!isSystemMailRecipient(address) || seen.has(email)) return false;
+    seen.add(email);
+    return true;
+  }).join(", ") || undefined;
+}
+
 /**
  * Wie er zichtbaar in de CC staat van persoonlijke klantmail.
  *
@@ -93,40 +117,31 @@ export const TEAM_BCC = (process.env.EMAIL_BCC_TEAM?.trim() || "mourad.h@habitat
 export const TEAM_CC = [...NICK_FREDERIQUE, ...TEAM_BCC];
 
 /**
- * Ontvangers van INTERNE meldingen (accountaanvragen, offerte-aanvragen,
- * team-notificaties): standaard hi@ + nick@, zodat beide de melding krijgen.
- * Te overschrijven via env NOTIFY_EMAILS (komma-gescheiden) of NOTIFY_EMAIL
- * (enkel adres). Als `to` wordt hier het EERSTE adres gebruikt; de rest komt
- * via de vaste BCC binnen (nick@ zit sowieso in ALWAYS_BCC).
+ * Algemene systeemmeldingen gaan naar de vijf genoemde collega’s. Oudere env-
+ * instellingen kunnen hi@ of andere ontvangers niet opnieuw toevoegen.
+ * Persoonlijke taakmails gebruiken uitsluitend hun eigen ontvanger.
  */
-export const NOTIFY_RECIPIENTS = (
-  process.env.NOTIFY_EMAILS?.trim() ||
-  process.env.NOTIFY_EMAIL?.trim() ||
-  "hi@habitat-one.com, nick@habitat-one.com, frederique@habitat-one.com"
-)
-  .split(",")
-  .map((a) => a.trim())
-  .filter(Boolean);
+export const NOTIFY_RECIPIENTS = [...SYSTEM_MAIL_RECIPIENTS];
 
 /** Primair meldingsadres (To). De overige ontvangers lopen via de vaste BCC. */
-export const NOTIFY_TO = NOTIFY_RECIPIENTS[0] ?? "hi@habitat-one.com";
+export const NOTIFY_TO = NOTIFY_RECIPIENTS[0];
 
 /**
  * Voegt de vaste BCC toe aan een eventueel bestaande BCC en dedupliceert
  * (case-insensitive). Laat de directe ontvanger (`to`) nooit als BCC staan.
  *
- * `interneMelding` houdt de bredere kring (TEAM_BCC) erbuiten: de dagelijkse
- * data-check en de weekcontrole zijn kantoorwerk, geen klantcontact.
+ * Bij systeemmeldingen mogen uitsluitend de vijf persoonlijke adressen mee.
+ * Klantcorrespondentie behoudt de bestaande bedrijfs- en teamkopieën.
  */
 export function withMandatoryBcc(existing: string | undefined, to: string, interneMelding = false): string | undefined {
   const seen = new Set<string>();
   const out: string[] = [];
-  const toLower = to.toLowerCase();
+  const direct = adressenUit(to);
   for (const addr of [...(existing?.split(",") ?? []), ...ALWAYS_BCC, ...(interneMelding ? [] : TEAM_BCC)]) {
     const a = addr.trim();
     if (!a) continue;
     const low = a.toLowerCase();
-    if (low === toLower || seen.has(low)) continue;
+    if (direct.has(low) || seen.has(low) || (interneMelding && !isSystemMailRecipient(a))) continue;
     seen.add(low);
     out.push(a);
   }

@@ -16,7 +16,7 @@ vi.mock('@/lib/db', () => ({ db: { select: () => ({ from: (table: unknown) => {
   return builder;
 } }) } }));
 
-import { emailInbox } from '@/lib/db/schema';
+import { appointments, emailInbox } from '@/lib/db/schema';
 import { PARTNER_DIRECTION } from '@/lib/partners';
 import { partnerContext } from '@/lib/partner-context';
 
@@ -31,6 +31,13 @@ afterEach(() => {
 });
 
 describe('persoonlijke mailcontext met zichtbaarheidsgrenzen', () => {
+  it('gebruikt voor eigen mail de vastgelegde klantvraag en afspraak op locatie zonder standaard panelenverkoop',async()=>{
+    m.results=[[{contact:{id:'00000000-0000-4000-8000-000000000001',name:'Ana',type:'customer',notes:'Afspraak bij klant in Bloemendaal'},profile:{nextAction:'Afspraak plannen',nextActionOn:'2026-10-12'}}],[],[],[],[{title:'Bij klant',startsAt:new Date('2026-10-12T10:00:00Z'),location:'Bloemendaal',status:'scheduled'}]];
+    const context=await partnerContext('ana@example.com','nick@example.com',{contactId:'00000000-0000-4000-8000-000000000001',includePartnerRules:false});
+    expect(context).not.toContain('Habitat One levert Flexible Stone panelen');
+    const data=JSON.parse(context.split('CRM-brongegevens: ')[1]);expect(data.afspraken[0].location).toBe('Bloemendaal');expect(data.volgendeOpvolgdatum).toBe('2026-10-12');
+    expect(m.queries.find(q=>q.table===appointments)?.limit).toBe(5);
+  });
   it('haalt reacties alleen van de klant en uit toegestane postvakken op', async () => {
     m.results = [[{ contact: { id: 'contact-1', name: 'Ana', type: 'architect', tags: ['wil:stalen'] }, profile: null }], [], [], [{ subject: 'Ons project', body: 'x'.repeat(3500), receivedAt: new Date('2026-10-01') }]];
     const context = await partnerContext(' ANA@example.com ', 'nick@example.com');

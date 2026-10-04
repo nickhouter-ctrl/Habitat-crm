@@ -95,7 +95,7 @@ export async function runDataHealth(): Promise<{ ok: boolean; findings: Finding[
   const aiSummary = await summarize(findings);
   const html = buildHtml(findings, aiSummary);
   const text = findings.map((f) => `• ${f.label}: ${f.count}${f.detail ? ` (${f.detail})` : ""}`).join("\n");
-  // Zelfde ontvangers als de andere team-meldingen (hi@, nick@, frederique@) —
+  // Dezelfde vijf persoonlijke ontvangers als de andere team-meldingen —
   // één centrale lijst in lib/mail-bcc.ts in plaats van hier een eigen adres.
   const res = await sendEmail({
     to: NOTIFY_TO,
@@ -103,8 +103,7 @@ export async function runDataHealth(): Promise<{ ok: boolean; findings: Finding[
     subject: `Habitat — dagelijkse data-check (${findings.length} ${findings.length === 1 ? "punt" : "punten"})`,
     html,
     text,
-    // Kantoorwerk, geen klantcontact: niet naar de bredere kring die de
-    // klantmail meeleest.
+    // Systeemmelding: geen kopie naar het gedeelde hi@-postvak.
     interneMelding: true,
   });
   return { ok: true, findings, emailed: res.sent };

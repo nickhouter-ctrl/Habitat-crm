@@ -41,11 +41,11 @@ describe("interne controlemail", () => {
     for (const adres of TEAM_BCC) expect(bcc).not.toContain(adres.toLowerCase());
   });
 
-  it("houdt wel de vaste bedrijfskopie", () => {
+  it("houdt persoonlijke kantoorkopieën, zonder hi", () => {
     const bcc = adressen(withMandatoryBcc(undefined, "iemand@habitat-one.com", true));
     expect(bcc.length).toBeGreaterThan(0);
     for (const adres of ALWAYS_BCC) {
-      if (adres.toLowerCase() !== "iemand@habitat-one.com") expect(bcc).toContain(adres.toLowerCase());
+      if (adres.toLowerCase() !== "iemand@habitat-one.com" && adres.toLowerCase() !== "hi@habitat-one.com") expect(bcc).toContain(adres.toLowerCase());
     }
   });
 });

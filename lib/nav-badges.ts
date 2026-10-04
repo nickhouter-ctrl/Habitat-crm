@@ -12,18 +12,18 @@ import { and, count, eq, isNull, sql } from "drizzle-orm";
 import { magPad } from "@/lib/auth/modules";
 import { voorstelZichtbaarVoor, mailZichtbaarVoor } from "@/lib/mail-visibility";
 import { db } from "@/lib/db";
-import { emailInbox, inboxSuggestions, purchaseInvoiceReviews, quoteRequests } from "@/lib/db/schema";
+import { emailInbox, inboxSuggestions, purchaseInvoiceReviews, quoteRequests, staffMessages } from "@/lib/db/schema";
 import { openVoorstellenFilter } from "@/lib/assistant/achterhaald";
 import { telAntwoordNodig } from "@/lib/followup-checklist-data";
 import { gewoneAanvragen } from "@/lib/aanvraag-selectie";
 
-export async function verzamelNavBadges(rol?: string, userEmail?: string | null): Promise<Record<string, number>> {
+export async function verzamelNavBadges(rol?: string, userEmail?: string | null, userId?: string): Promise<Record<string, number>> {
   // Een teller op een menu-item dat iemand niet mag zien, hoeft niet geteld te
   // worden. Voor de bestaande rollen verandert er niets.
   const mag = (pad: string) => rol === undefined || magPad(rol, pad);
   const nul = [{ value: 0 }];
 
-  const [[pending], [inboxNew], [teKeuren], [suggestions], antwoordNodig] = await Promise.all([
+  const [[pending], [inboxNew], [teKeuren], [suggestions], antwoordNodig, [teamUnread]] = await Promise.all([
     mag("/aanvragen")
       ? db.select({ value: count() }).from(quoteRequests).where(and(gewoneAanvragen, eq(quoteRequests.status, "pending")))
       : nul,
@@ -46,6 +46,7 @@ export async function verzamelNavBadges(rol?: string, userEmail?: string | null)
       : nul,
     // Klanten die op onze opvolgmail reageerden en nog op antwoord wachten.
     mag("/opvolging") ? telAntwoordNodig(userEmail) : 0,
+    mag("/teamberichten") && userId ? db.select({value:count()}).from(staffMessages).where(and(eq(staffMessages.recipientId,userId),isNull(staffMessages.readAt))) : nul,
   ]);
   return {
     "/assistent": suggestions?.value ?? 0,
@@ -53,5 +54,6 @@ export async function verzamelNavBadges(rol?: string, userEmail?: string | null)
     "/inbox": inboxNew?.value ?? 0,
     "/inkooporders/te-verwerken": teKeuren?.value ?? 0,
     "/opvolging": antwoordNodig,
+    "/teamberichten": teamUnread?.value ?? 0,
   };
 }

@@ -270,6 +270,39 @@ export const verificationTokens = pgTable(
   (t) => [primaryKey({ columns: [t.identifier, t.token] })],
 );
 
+/** Privé teamberichten: alleen afzender en ontvanger lezen de inhoud. */
+export const staffMessages = pgTable("staff_messages", {
+  id: uuid().primaryKey().defaultRandom(),
+  senderId: uuid().notNull().references(() => users.id, { onDelete: "cascade" }),
+  recipientId: uuid().notNull().references(() => users.id, { onDelete: "cascade" }),
+  contactId: uuid().references((): AnyPgColumn => contacts.id, { onDelete: "set null" }),
+  taskId: uuid().references((): AnyPgColumn => activities.id, { onDelete: "set null" }),
+  subject: text().notNull(),
+  body: text().notNull(),
+  readAt: timestamp({ withTimezone: true }),
+  ...timestamps,
+}, t => [index("staff_messages_recipient_idx").on(t.recipientId, t.readAt), index("staff_messages_sender_idx").on(t.senderId, t.createdAt)]).enableRLS();
+
+/** Duurzame e-mailmeldingen. Een unieke gebeurtenis wordt één keer geclaimd.
+ * Een onzekere SMTP-uitkomst wordt nooit blind opnieuw verzonden. */
+export const staffNotifications = pgTable("staff_notifications", {
+  id: uuid().primaryKey().defaultRandom(),
+  eventKey: text().notNull().unique(),
+  userId: uuid().notNull().references(() => users.id, { onDelete: "cascade" }),
+  kind: text().$type<"followup_assignment" | "task_assignment" | "appointment_assignment" | "team_message" | "daily_agenda">().notNull(),
+  entityId: uuid(),
+  day: date(),
+  actorId: uuid().references(() => users.id, { onDelete: "set null" }),
+  status: text().notNull().default("pending"),
+  availableAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
+  claimedAt: timestamp({ withTimezone: true }),
+  sentAt: timestamp({ withTimezone: true }),
+  lastError: text(),
+  ...timestamps,
+}, t => [index("staff_notifications_pending_idx").on(t.status, t.availableAt),
+  check("staff_notifications_kind_check", sql`${t.kind} in ('followup_assignment','task_assignment','appointment_assignment','team_message','daily_agenda')`),
+  check("staff_notifications_status_check", sql`${t.status} in ('pending','sending','sent','skipped','unknown')`)]).enableRLS();
+
 /* ----------------------------------------------------------------- companies */
 
 export const companies = pgTable(

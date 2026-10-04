@@ -13,6 +13,7 @@ import {
   renderToBuffer,
 } from "@react-pdf/renderer";
 
+import { maakT, type Locale } from "@/lib/i18n";
 import { COMPANY } from "@/lib/company";
 
 const FONT_DIR = path.join(process.cwd(), "public", "fonts", "sora");
@@ -53,6 +54,7 @@ const s = StyleSheet.create({
 });
 
 export type SupplierOrderPdfData = {
+  locale?: Locale;
   orderNumber: string;
   dateLabel: string;
   supplierName: string;
@@ -72,8 +74,9 @@ export type SupplierOrderPdfData = {
 const UNIT_LABEL: Record<string, string> = { stuk: "pcs", doos: "box", m2: "m²" };
 
 function SupplierOrderDoc({ data }: { data: SupplierOrderPdfData }) {
+  const t = maakT(data.locale ?? "en");
   return (
-    <Document title={`Purchase Order ${data.orderNumber}`}>
+    <Document title={`${t("Inkooporder")} ${data.orderNumber}`}>
       <Page size="A4" style={s.page}>
         <View style={s.rowBetween}>
           <View>
@@ -89,7 +92,7 @@ function SupplierOrderDoc({ data }: { data: SupplierOrderPdfData }) {
             </Text>
           </View>
           <View style={{ alignItems: "flex-end" }}>
-            <Text style={s.h1}>Purchase Order</Text>
+            <Text style={s.h1}>{t("Inkooporder")}</Text>
             <Text style={s.small}>No. {data.orderNumber}</Text>
             <Text style={s.small}>{data.dateLabel}</Text>
           </View>
@@ -97,13 +100,13 @@ function SupplierOrderDoc({ data }: { data: SupplierOrderPdfData }) {
 
         <View style={[s.rowBetween, s.block]}>
           <View style={{ width: "60%" }}>
-            <Text style={s.label}>Supplier</Text>
+            <Text style={s.label}>{t("Leverancier")}</Text>
             <Text style={{ fontSize: 11, fontWeight: 600 }}>{data.supplierName}</Text>
             {data.supplierEmail ? <Text style={s.small}>{data.supplierEmail}</Text> : null}
           </View>
           {data.customerRef ? (
             <View style={{ alignItems: "flex-end" }}>
-              <Text style={s.label}>Reference</Text>
+              <Text style={s.label}>{t("Referentie")}</Text>
               <Text>{data.customerRef}</Text>
             </View>
           ) : null}
@@ -112,12 +115,14 @@ function SupplierOrderDoc({ data }: { data: SupplierOrderPdfData }) {
         <View style={s.th}>
           <Text style={[s.cPhoto, s.thText]}> </Text>
           <Text style={[s.cSku, s.thText]}>SKU</Text>
-          <Text style={[s.cDesc, s.thText]}>Description</Text>
-          <Text style={[s.cQty, s.thText]}>Quantity</Text>
+          <Text style={[s.cDesc, s.thText]}>{t("Beschrijving")}</Text>
+          <Text style={[s.cQty, s.thText]}>{t("Aantal")}</Text>
         </View>
         {data.items.map((it, i) => (
           <View style={s.tr} key={i} wrap={false}>
             <View style={s.cPhoto}>
+              {/* PDF Image has no HTML alt attribute. */}
+              {/* eslint-disable-next-line jsx-a11y/alt-text */}
               {it.image ? <Image src={it.image} style={s.photo} /> : <View style={s.photoEmpty} />}
             </View>
             <Text style={s.cSku}>{it.sku}</Text>
@@ -126,7 +131,7 @@ function SupplierOrderDoc({ data }: { data: SupplierOrderPdfData }) {
               {it.size ? `  ·  ${it.size}` : ""}
             </Text>
             <Text style={s.cQty}>
-              {it.qty} {UNIT_LABEL[it.unit] ?? it.unit}
+              {it.qty} {data.locale==='es'?({stuk:"uds.",doos:"caja",m2:"m²"}[it.unit]??it.unit):data.locale==='nl'?it.unit:UNIT_LABEL[it.unit]??it.unit}
             </Text>
           </View>
         ))}

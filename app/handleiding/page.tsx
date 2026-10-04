@@ -1,66 +1,12 @@
-import type { Metadata } from "next";
-import Link from "next/link";
-
-import { auth } from "@/auth";
-import { crmUrl } from "@/lib/crm-url";
-
-import { handleidingHtml } from "./handleiding-html";
-
-/**
- * Handboek voor het CRM — bedoeld om als link te delen met het team. De route
- * staat op de publieke lijst in `auth.config.ts` zodat WhatsApp/mail-scrapers
- * de metadata (titel + deelkaart uit `opengraph-image.tsx`) kunnen lezen, maar
- * de INHOUD is alleen voor ingelogde gebruikers: zonder sessie toont de pagina
- * een inlog-verwijzing in plaats van het handboek. Achter de proxy zetten zou
- * de deelkaart breken (de scraper wordt dan naar /login gestuurd).
- */
-export const metadata: Metadata = {
-  metadataBase: new URL(crmUrl()),
-  title: "Handboek",
-  description:
-    "Zo werken we met het Habitat CRM: het dagelijkse ritme, de tien belangrijkste taken stap voor stap, en waar je alles vindt.",
-  openGraph: {
-    title: "Habitat CRM Handboek",
-    description:
-      "Zo werken we met het Habitat CRM: het dagelijkse ritme, de tien belangrijkste taken stap voor stap, en waar je alles vindt.",
-    url: "/handleiding",
-    siteName: "Habitat One",
-    locale: "nl_NL",
-    type: "article",
-  },
-  twitter: {
-    card: "summary_large_image",
-    title: "Habitat CRM Handboek",
-    description:
-      "Het dagelijkse ritme, de tien belangrijkste taken stap voor stap, en waar je alles vindt.",
-  },
-  robots: { index: false, follow: false }, // deelbaar via de link, maar niet voor zoekmachines
-};
-
-export default async function HandleidingPage() {
-  const session = await auth();
-
-  // Interne spelregels (marges, kortingen) — alleen voor ingelogde gebruikers.
-  if (!session?.user) {
-    return (
-      <main className="mx-auto flex min-h-dvh max-w-md flex-col items-center justify-center gap-4 px-6 text-center">
-        <p className="text-xs font-semibold uppercase tracking-[0.2em] text-[#a98a4b]">
-          Habitat One
-        </p>
-        <h1 className="text-2xl font-bold">CRM Handboek</h1>
-        <p className="text-muted">
-          Dit handboek is alleen voor het team. Log in en je komt hier direct terug.
-        </p>
-        <Link
-          href="/login?callbackUrl=%2Fhandleiding"
-          className="rounded-lg bg-accent px-5 py-2.5 font-medium text-accent-foreground"
-        >
-          Inloggen
-        </Link>
-      </main>
-    );
-  }
-
-  // Statische huisstijl-HTML uit hetzelfde bestand als de rest van dit segment.
-  return <div dangerouslySetInnerHTML={{ __html: handleidingHtml }} />;
+import type { Metadata } from 'next';
+import Link from 'next/link';
+import { auth } from '@/auth';
+import { huidigeTaal } from '@/lib/i18n/server';
+import { isLocale, LOCALE_LABEL } from '@/lib/i18n';
+import { crmGuide } from '@/lib/crm-guide';
+export const metadata:Metadata={title:'CRM guide',robots:{index:false,follow:false}};
+export default async function HandleidingPage({searchParams}:{searchParams:Promise<Record<string,string|string[]|undefined>>}){
+ const session=await auth(),sp=await searchParams,locale=isLocale(sp.lang)?sp.lang:await huidigeTaal(),data=crmGuide[locale];
+ if(!session?.user)return <main className="mx-auto flex min-h-dvh max-w-md flex-col items-center justify-center gap-4 px-6 text-center"><h1 className="text-2xl font-semibold">{data.title}</h1><Link href="/login?callbackUrl=%2Fhandleiding" className="rounded-lg bg-accent px-5 py-3 text-accent-foreground">{locale==='es'?'Iniciar sesión':locale==='en'?'Sign in':'Inloggen'}</Link></main>;
+ return <main className="mx-auto max-w-4xl space-y-6 px-5 py-8 sm:py-12"><div className="flex flex-wrap items-center justify-between gap-3"><Link href="/" className="text-sm text-accent">← {data.back}</Link><nav aria-label="Language" className="flex gap-2">{(['nl','en','es'] as const).map(lang=><Link href={`/handleiding?lang=${lang}`} key={lang} aria-current={lang===locale?'page':undefined} className={`rounded-lg border px-3 py-2 text-sm ${lang===locale?'bg-accent text-accent-foreground':'bg-surface'}`}>{LOCALE_LABEL[lang]}</Link>)}</nav></div><header className="rounded-2xl border bg-surface p-6 sm:p-8"><p className="mb-3 text-xs font-semibold tracking-widest text-accent">HABITAT CRM</p><h1 className="mb-4 text-3xl font-semibold">{data.title}</h1><p className="max-w-2xl text-muted">{data.intro}</p><a href={`/docs/crm-quick-guide-${locale}.pdf`} download className="mt-5 inline-block rounded-lg bg-accent px-4 py-3 text-sm font-semibold text-accent-foreground">{data.download}</a></header>{[0,1,2].map(group=><section key={group}><h2 className="mb-3 text-lg font-semibold">{data.groups[group]}</h2><div className="space-y-3">{data.sections.slice(group*3,group*3+3).map(item=><details key={item.title} className="rounded-xl border bg-surface p-5" open={group===0&&item===data.sections[0]}><summary className="cursor-pointer font-semibold">{item.title}</summary><p className="mt-3 text-xs font-medium text-accent">{item.where}</p><ol className="mt-3 list-decimal space-y-2 pl-5 text-sm leading-6">{item.steps.map(step=><li key={step}>{step}</li>)}</ol><p className="mt-4 rounded-lg bg-background p-3 text-sm leading-6 text-muted">{item.hint}</p></details>)}</div></section>)}<p className="text-center text-sm text-muted">{data.footer}</p></main>;
 }

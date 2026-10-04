@@ -1,3 +1,5 @@
+import { huidigeTaal } from "@/lib/i18n/server";
+import { isLocale, maakT, dateLocale, type Locale } from "@/lib/i18n";
 import ExcelJS from "exceljs";
 import { and, asc, eq, ilike, or } from "drizzle-orm";
 
@@ -35,7 +37,7 @@ const COL_WIDTHS = [22, 22, 42, 16, 9, 9, 13, 12, 13, 11, 10, 14, ...DISCOUNTS.f
 
 function safeSheetName(name: string, used: Set<string>): string {
   let n = (name || "Overig").replace(/[\\/?*[\]:]/g, "-").slice(0, 31) || "Overig";
-  let base = n;
+  const base = n;
   let i = 2;
   while (used.has(n.toLowerCase())) n = `${base.slice(0, 28)} ${i++}`;
   used.add(n.toLowerCase());
@@ -63,21 +65,22 @@ function rowValues(p: Product): (string | number | null)[] {
   ];
 }
 
-function buildSheet(wb: ExcelJS.Workbook, sheetName: string, titleSuffix: string, rows: Product[], usedNames: Set<string>) {
+function buildSheet(wb: ExcelJS.Workbook, sheetName: string, titleSuffix: string, rows: Product[], usedNames: Set<string>, locale: Locale) {
+  const t = maakT(locale);
   const ws = wb.addWorksheet(safeSheetName(sheetName, usedNames), {
     views: [{ state: "frozen", xSplit: 4, ySplit: 3 }],
     pageSetup: { fitToPage: true, fitToWidth: 1, orientation: "landscape" },
   });
   ws.mergeCells(1, 1, 1, LAST_COL);
   const titleCell = ws.getCell(1, 1);
-  titleCell.value = `${COMPANY.wordmark1 ?? "HABITAT"} ${COMPANY.wordmark2 ?? "ONE"} — Prijslijst & kortingsstaffel — ${titleSuffix}`;
+  titleCell.value = `${COMPANY.wordmark1 ?? "HABITAT"} ${COMPANY.wordmark2 ?? "ONE"} — ${t("Prijslijst & kortingsstaffel")} — ${titleSuffix}`;
   titleCell.font = { bold: true, size: 16, color: { argb: BROWN } };
   ws.getRow(1).height = 24;
   ws.mergeCells(2, 1, 2, LAST_COL);
-  ws.getCell(2, 1).value = `${rows.length} producten · ${new Date().toLocaleDateString("nl-NL", { day: "numeric", month: "long", year: "numeric" })} · "Marge %" = winst als % van de verkoopprijs = de maximale korting voor break-even`;
+  ws.getCell(2, 1).value = t("{n} producten · {datum} · Marge = winst als percentage van de verkoopprijs. Maximale korting voor break-even.", { n: rows.length, datum: new Date().toLocaleDateString(dateLocale(locale), { day: "numeric", month: "long", year: "numeric" }) });
   ws.getCell(2, 1).font = { italic: true, size: 10, color: { argb: "FF6B7280" } };
 
-  const headerRow = ws.addRow(HEADER); // row 3
+  const headerRow = ws.addRow(HEADER.map(label => { const discount = label.match(/^(Prijs|Winst) −(\d+)%$/); return discount ? t(discount[1] === "Prijs" ? "Prijs −{pct}%" : "Winst −{pct}%", { pct: discount[2] }) : t(label); })); // row 3
   headerRow.eachCell((cell) => {
     cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: BROWN } };
     cell.font = { bold: true, color: { argb: "FFFFFFFF" }, size: 10 };
@@ -149,6 +152,8 @@ export async function GET(req: Request) {
   if (nee) return nee;
 
   const url = new URL(req.url);
+  const lang = url.searchParams.get("lang");
+  const locale = isLocale(lang) ? lang : await huidigeTaal(), t = maakT(locale);
   const collection = (url.searchParams.get("collection") ?? "").trim();
   const q = (url.searchParams.get("q") ?? "").trim();
 
@@ -174,10 +179,10 @@ export async function GET(req: Request) {
   const used = new Set<string>();
   // One overview sheet with everything (unless a single collection is already filtered).
   if (byCollection.size > 1) {
-    buildSheet(wb, "Alle producten", `alle producten${q ? ` · zoek "${q}"` : ""}`, rows, used);
+    buildSheet(wb, t("Alle producten"), t("Alle producten"), rows, used, locale);
   }
   for (const [coll, prods] of [...byCollection.entries()].sort()) {
-    buildSheet(wb, coll, coll + (q ? ` · zoek "${q}"` : ""), prods, used);
+    buildSheet(wb, coll, coll + (q ? ` · zoek "${q}"` : ""), prods, used, locale);
   }
 
   const ab = await wb.xlsx.writeBuffer();

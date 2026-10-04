@@ -70,6 +70,7 @@ export async function POST(req: Request) {
     const kindLabel = v.kind === "zakelijk" ? "zakelijk" : "particulier";
     await sendMail({
       to: NOTIFY_TO,
+      interneMelding: true,
       bcc: NOTIFY_RECIPIENTS.slice(1).join(", ") || undefined,
       replyTo: v.email,
       subject: `${v.source === "windows" ? "Aanvraag kozijnensysteem" : "Nieuwe accountaanvraag"} — accepteer of weiger (${v.name})`,
