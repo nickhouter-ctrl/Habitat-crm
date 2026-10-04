@@ -313,6 +313,18 @@ export async function runImapPoll(budgetTotaalMs = 48_000): Promise<ImapPollResu
     }
   }
 
+  // Een klant die antwoordt op onze opvolgmail komt automatisch terug op
+  // /opvolging, maar dat ziet niemand zonder die pagina te openen. Eén mail per
+  // ronde met wie er reageerde en waarop. Faalt die melding, dan faalt de poll
+  // niet: de reacties staan al in de inbox en op de opvolglijst.
+  try {
+    const { notifyFollowupReplies } = await import("@/lib/followup-reply-notify");
+    const r = await notifyFollowupReplies();
+    if (r.count > 0) console.log(`opvolging: ${r.count} reactie(s) gemeld (verstuurd: ${r.sent})`);
+  } catch (e) {
+    console.error("Melding klantreacties mislukt:", e instanceof Error ? e.message : e);
+  }
+
   return {
     ok: errors.length === 0,
     ...totals,

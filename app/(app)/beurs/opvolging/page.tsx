@@ -1,7 +1,7 @@
 import { tekst as uiTranslation } from '@/lib/i18n/server';
 import { tekst, datumTaal } from '@/lib/i18n/server';
 import Link from 'next/link';
-import { and, eq, inArray, isNotNull, or, sql } from 'drizzle-orm';
+import { and, desc, eq, inArray, isNotNull, or, sql } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import { contacts, companies, partnerProfiles, partnerMessages, quoteRequests, emailInbox, users } from '@/lib/db/schema';
 import { requireModuleRead } from '@/lib/auth/guards';
@@ -63,21 +63,32 @@ export default async function Page({ searchParams }: {
       db.select({ contactId: partnerMessages.contactId, at: sql<Date>`max(${partnerMessages.sentAt})` })
         .from(partnerMessages).where(and(eq(partnerMessages.status, 'sent'), eq(partnerMessages.personal, true), partnerMailVisible(access.email)))
         .groupBy(partnerMessages.contactId),
-      db.select({ email: emailInbox.fromEmail, at: sql<Date>`max(${emailInbox.receivedAt})` })
-        .from(emailInbox).where(mailZichtbaarVoor(access.email)).groupBy(emailInbox.fromEmail),
+      // Niet alleen wannéér er iets binnenkwam, maar ook wát: op de lijst wil je
+      // zien waar de klant op reageerde zonder het dossier te openen.
+      db.selectDistinctOn([emailInbox.fromEmail], {
+        email: emailInbox.fromEmail,
+        at: emailInbox.receivedAt,
+        subject: emailInbox.subject,
+        tekst: sql<string | null>`left(regexp_replace(coalesce(${emailInbox.bodyText}, ''), '\\s+', ' ', 'g'), 200)`,
+      }).from(emailInbox).where(mailZichtbaarVoor(access.email))
+        .orderBy(emailInbox.fromEmail, desc(emailInbox.receivedAt)),
     ]) : Promise.resolve([[], []] as const),
   ]);
   const today = new Date().toLocaleDateString('sv-SE', { timeZone: 'Europe/Madrid' });
   const data = rows.map(r => {
     const out = sent.find(m => m.contactId === r.contact.id)?.at;
-    const inc = incoming.filter(m => m.email?.trim().toLowerCase() === r.contact.email?.trim().toLowerCase())
-      .map(m => m.at).filter(Boolean).sort((a, b) => +new Date(b) - +new Date(a))[0];
+    const reacties = incoming
+      .flatMap(m => m.at && m.email?.trim().toLowerCase() === r.contact.email?.trim().toLowerCase()
+        ? [{ ...m, at: m.at }] : [])
+      .sort((a, b) => b.at.getTime() - a.at.getTime());
+    const reactie = reacties[0];
+    const inc = reactie?.at ?? null;
     const completion = completions.find(e => e.contactId === r.contact.id);
-    const completed = followupCompleted(completion, inc ? new Date(inc) : null, r.profile?.nextActionOn, today);
+    const completed = followupCompleted(completion, inc, r.profile?.nextActionOn, today);
     return {
-      ...r, out, completion, completed,
+      ...r, out, completion, completed, reactie,
       origins: followupSources(r.contact.source, sources.filter(m => m.contactId === r.contact.id).map(m => m.source)),
-      state: conversationState(inc ? new Date(inc) : null, out ? new Date(out) : null),
+      state: conversationState(inc, out ? new Date(out) : null),
       due: !completed && !!r.profile?.nextActionOn && r.profile.nextActionOn <= today,
       interested: hasResellerInterest(r.contact,r.profile),
     };
@@ -166,6 +177,13 @@ export default async function Page({ searchParams }: {
         <td className="px-5 py-4">
           {canMail ? <Badge className="whitespace-nowrap" tone={r.state === 'Antwoord nodig' ? 'warning' : 'neutral'}>{t(r.state)}</Badge> : '—'}
           {r.out && <p className="mt-1 text-xs text-muted">{t("Gemaild")} {new Date(r.out).toLocaleDateString(dateLocale)}</p>}
+          {/* Wát de klant terugschreef, zodat je op de lijst al ziet waar het
+              over gaat en niet eerst het dossier hoeft te openen. */}
+          {canMail && r.state === 'Antwoord nodig' && r.reactie && <div className="mt-2 max-w-sm rounded-lg border border-warning/30 bg-warning/5 p-2">
+            <p className="text-xs font-medium">{t("Antwoord")} {new Date(r.reactie.at).toLocaleString(dateLocale, { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}</p>
+            {r.reactie.subject && <p className="mt-0.5 line-clamp-1 text-xs text-muted">{r.reactie.subject}</p>}
+            {r.reactie.tekst?.trim() && <p className="mt-1 line-clamp-3 text-xs text-muted">{r.reactie.tekst.trim()}</p>}
+          </div>}
         </td>
         <td className="px-5 py-4">
           <p className={r.due ? 'font-medium text-warning' : ''}>{r.profile?.nextAction ?? t("Nog bepalen")}</p>

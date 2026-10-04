@@ -267,6 +267,7 @@ export const en: Dictionary = {
   "Bedrijven die de campagnemail hebben gekregen — met telefoonnummer, op volgorde van langst geleden": "Companies that received the campaign email — with phone number, oldest first",
   "Naar campagnes": "To campaigns",
   "Gemaild": "Emailed",
+  "Antwoord": "Reply",
   "bedrijven met een verstuurde mail": "companies that were sent an email",
   "Met telefoonnummer": "With phone number",
   "direct te bellen": "ready to call",

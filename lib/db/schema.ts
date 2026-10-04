@@ -2239,6 +2239,13 @@ export const emailInbox = pgTable(
     status: text().notNull().default("new"),
     /** Gelezen in de gedeelde CRM-mailbox, los van verdere afhandeling. */
     readAt: timestamp({ withTimezone: true }),
+    /**
+     * Gezet zodra er een teammelding is uitgegaan dat een klant antwoordde op
+     * onze opvolgmail. Zonder deze stempel zou elke poll-ronde dezelfde reactie
+     * opnieuw melden; hij wordt gezet of de mail nu aankwam of niet — liever een
+     * gemiste melding dan elke tien minuten hetzelfde bericht.
+     */
+    followupNotifiedAt: timestamp({ withTimezone: true }),
     linkedPurchaseOrderId: uuid().references(() => purchaseOrders.id, { onDelete: "set null" }),
     linkedQuoteRequestId: uuid().references(() => quoteRequests.id, { onDelete: "set null" }),
     notes: text(),
