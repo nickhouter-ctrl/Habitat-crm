@@ -3,7 +3,7 @@ import Link from "next/link";
 import { Calculator, FileText, Layers3, Table2 } from "lucide-react";
 import { TabPanel, TabsBar, TabsRoot } from "@/components/tabs";
 import { Badge, Button, Card, CardContent, CardHeader, CardTitle, Field, LinkButton, Select, StatTile, Table, THead, TBody, Th, Td, Tr } from "@/components/ui";
-import type { DistributeurItem, DistributeurMaat } from "@/lib/distributeur-catalogus";
+import type { DistributeurItem } from "@/lib/distributeur-catalogus";
 import { DEALER_STAFFELS, KORTING_SHOWROOM, MIN_MARGE_SHOWROOM, MIN_MARGE_VERKOOPPUNT, brutomarge, distributeurPrijzen, staffelMetId } from "@/lib/distributeur-prijzen";
 import type { prijsVoorstelInvoer } from "@/lib/distributeur-invoer";
 import type { z } from "zod";
@@ -16,15 +16,11 @@ export function volumeLabel(s: typeof DEALER_STAFFELS[number]) {
   return s.totM2 == null ? `${n(s.vanafM2)}+ m²` : `${n(s.vanafM2)}–<${n(s.totM2)} m²`;
 }
 const pct = (v: number | null | undefined) => v == null ? "—" : `${v.toLocaleString("nl-NL", { maximumFractionDigits: 1 })}%`;
-function Prijs({ ex, incl, m, t }: { ex: number | null; incl: number | null; m: DistributeurMaat; t: T }) {
-  if (ex == null) return <span className="text-xs text-muted">{t("Op aanvraag")}</span>;
-  return <div className="space-y-1 whitespace-nowrap text-right text-xs tabular-nums">
-    <p className="text-sm font-semibold text-foreground">{formatEUR(ex)} <span className="text-[10px] font-normal text-muted">{t("ex. btw")}</span></p>
-    <p className="text-muted">{formatEUR(incl)} {t("incl. btw")}</p>
-    {m.areaM2 && <div className="border-t border-border/50 pt-1 text-muted">
-      <p>{formatEUR(ex / m.areaM2)}/m² {t("ex. btw")}</p>
-      <p>{formatEUR((incl ?? 0) / m.areaM2)}/m² {t("incl. btw")}</p>
-    </div>}
+function Prijs({ ex, incl, t }: { ex: number | null; incl: number | null; t: T }) {
+  if (ex == null) return <p className="text-right text-sm font-medium text-muted">{t("Op aanvraag")}</p>;
+  return <div className="ml-auto max-w-[200px] space-y-1 whitespace-nowrap text-xs tabular-nums">
+    <div className="flex items-baseline justify-between gap-3"><span className="text-muted">{t("ex. btw")}</span><span className="text-base font-semibold text-foreground">{formatEUR(ex)}</span></div>
+    <div className="flex items-baseline justify-between gap-3"><span className="text-muted">{t("incl. btw")}</span><span className="text-sm text-foreground/80">{formatEUR(incl)}</span></div>
   </div>;
 }
 
@@ -90,14 +86,18 @@ export function DealerPricing({ items, series, invoer, t, mailForm }: {
 
       <TabPanel id="prijzen">
         <Card><CardHeader><div><CardTitle>{invoer.serie || t("Alle series")}</CardTitle><p className="mt-1 text-xs text-muted">{t("Per paneel én per m², exclusief en inclusief de artikel-btw.")}</p></div><Badge tone="accent">{volumeLabel(staffel)} · {pct(staffel.kortingPct)}</Badge></CardHeader>
-          <Table wrapperClassName="max-h-[70vh] overflow-y-auto"><THead className="sticky top-0 z-10 bg-surface"><tr><Th>{t("Paneel / maat")}</Th><Th className="text-right">{t("Adviesprijs")}</Th><Th className="text-right">{t("Verkooppunt")}</Th><Th className="text-right">{t("Showroom")}</Th></tr></THead>
-            <TBody>{zichtbaar.map(item => <Fragment key={item.id}><Tr className="bg-background/60"><Td colSpan={4}><Link href={`/products/${item.id}/edit`} className="font-semibold hover:underline">{item.naam}</Link><span className="ml-2 text-xs text-muted">{item.sku}</span></Td></Tr>
-              {item.maten.map((m,i) => <Tr key={`${item.id}-${i}`}><Td><p className="whitespace-nowrap font-medium">{m.dim}</p><p className="mt-1 text-xs text-muted">{m.areaM2?.toLocaleString("nl-NL")} m² · {m.sku}</p>{m.inStock && <Badge className="mt-2" tone="success">{t("Voorraad")}</Badge>}</Td>
-                <Td><Prijs ex={m.adviesEx} incl={m.adviesIncl} m={m} t={t}/></Td>
-                <Td><Prijs ex={m.verkooppunt} incl={m.verkooppuntIncl} m={m} t={t}/>{m.dealer.begrensd && <p className="mt-2 text-right text-xs text-warning">{t("Korting begrensd")} · {pct(m.dealer.kortingPct)}</p>}</Td>
-                <Td><Prijs ex={m.showroom} incl={m.showroomIncl} m={m} t={t}/>{m.display.begrensd && <p className="mt-2 text-right text-xs text-warning">{t("Korting begrensd")} · {pct(m.display.kortingPct)}</p>}</Td></Tr>)}
+          <Table className="min-w-[1000px] table-fixed" wrapperClassName="max-h-[70vh] overflow-y-auto"><THead className="sticky top-0 z-10 bg-surface"><tr><Th className="w-[28%]">{t("Paneel / maat")}</Th><Th className="w-[12%]">{t("Eenheid")}</Th><Th className="w-[20%] text-right">{t("Adviesverkoopprijs")}</Th><Th className="w-[20%] text-right">{t("Inkoopprijs verkooppunt")}<span className="mt-1 block normal-case font-normal tracking-normal text-accent">{t("Doelkorting {n}%",{n:pct(staffel.kortingPct).replace("%","")})}</span></Th><Th className="w-[20%] text-right">{t("Showroom")}<span className="mt-1 block normal-case font-normal tracking-normal text-muted">{t("Maximaal {n}% korting",{n:KORTING_SHOWROOM})}</span></Th></tr></THead>
+            <TBody>{zichtbaar.map(item => <Fragment key={item.id}><Tr className="bg-accent/5"><Td colSpan={5}><div className="flex flex-wrap items-baseline justify-between gap-2"><Link href={`/products/${item.id}/edit`} className="font-semibold text-foreground hover:underline">{item.naam}</Link><span className="text-xs text-muted">{item.sku}</span></div></Td></Tr>
+              {item.maten.map((m,i) => <Fragment key={`${item.id}-${i}`}><Tr><Td rowSpan={m.areaM2 ? 2 : 1} className="border-r border-border/50 align-top"><p className="whitespace-nowrap font-semibold text-foreground">{m.dim}</p><p className="mt-1 text-xs text-muted">{m.areaM2 != null && `${m.areaM2.toLocaleString("nl-NL")} m² · `}{m.sku}</p>{m.inStock && <Badge className="mt-2" tone="success">{t("Voorraad")}</Badge>}{(m.verkooppunt == null || m.showroom == null) && <p className="mt-3 max-w-[230px] text-xs leading-relaxed text-warning">{m.kostEx == null ? t("Kostprijs voor deze maat controleren") : t("Prijs past niet binnen de margegrens")}</p>}</Td>
+                <Td className="text-xs font-medium text-foreground/80">{t("Per paneel")}</Td>
+                <Td><Prijs ex={m.adviesEx} incl={m.adviesIncl} t={t}/></Td>
+                <Td rowSpan={m.verkooppunt == null && m.areaM2 ? 2 : 1}><Prijs ex={m.verkooppunt} incl={m.verkooppuntIncl} t={t}/>{m.dealer.begrensd && <p className="mt-2 text-right text-xs text-warning">{t("Werkelijke korting")} · {pct(m.dealer.kortingPct)}</p>}</Td>
+                <Td rowSpan={m.showroom == null && m.areaM2 ? 2 : 1}><Prijs ex={m.showroom} incl={m.showroomIncl} t={t}/>{m.display.begrensd && <p className="mt-2 text-right text-xs text-warning">{t("Werkelijke korting")} · {pct(m.display.kortingPct)}</p>}</Td></Tr>
+                {m.areaM2 && <Tr className="bg-background"><Td className="text-xs font-medium text-muted">{t("Per m²")}</Td><Td><Prijs ex={m.adviesEx/m.areaM2} incl={m.adviesIncl/m.areaM2} t={t}/></Td>{m.verkooppunt != null && <Td><Prijs ex={m.verkooppunt/m.areaM2} incl={m.verkooppuntIncl != null ? m.verkooppuntIncl/m.areaM2 : null} t={t}/></Td>}{m.showroom != null && <Td><Prijs ex={m.showroom/m.areaM2} incl={m.showroomIncl != null ? m.showroomIncl/m.areaM2 : null} t={t}/></Td>}</Tr>}
+              </Fragment>)}
             </Fragment>)}</TBody>
           </Table>
+          <CardContent><p className="text-xs leading-relaxed text-muted">{t("De jaarstaffel geldt voor de inkoopprijs van het verkooppunt. Showroompanelen hebben een afzonderlijke korting. Bij een begrensde prijs staat de werkelijke korting vermeld.")}</p></CardContent>
         </Card>
       </TabPanel>
 

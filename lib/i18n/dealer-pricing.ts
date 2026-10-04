@@ -1,5 +1,15 @@
 /** Prijsvoorstellen en interne margeanalyse, in alle CRM-talen. */
 const rows: [string,string,string][] = [
+['Per paneel','Per panel','Por panel'],
+['Per m²','Per square metre','Por m²'],
+['Adviesverkoopprijs','Recommended retail price','Precio de venta recomendado'],
+['Inkoopprijs verkooppunt','Retail partner purchase price','Precio de compra del punto de venta'],
+['Doelkorting {n}%','Target discount {n}%','Descuento objetivo {n}%'],
+['Maximaal {n}% korting','Up to {n}% discount','Hasta un {n}% de descuento'],
+['Werkelijke korting','Actual discount','Descuento real'],
+['Kostprijs voor deze maat controleren','Check the cost price for this size','Comprobar el coste de esta medida'],
+['Prijs past niet binnen de margegrens','Price does not meet the minimum margin','El precio no cumple el margen mínimo'],
+['De jaarstaffel geldt voor de inkoopprijs van het verkooppunt. Showroompanelen hebben een afzonderlijke korting. Bij een begrensde prijs staat de werkelijke korting vermeld.','The annual tier applies to the retail partner purchase price. Showroom panels have a separate discount. Capped prices show the actual discount.','El tramo anual se aplica al precio de compra del punto de venta. Los paneles de exposición tienen un descuento aparte. Los precios limitados indican el descuento real.'],
 ['Op aanvraag','On request','A consultar'],
 ['Kosten per maat','Size-specific costs','Costes por medida'],
 ['Kosten basismaat','Base size costs','Costes de la medida base'],
