@@ -70,9 +70,8 @@ export function followupProposal(kind: Exclude<FollowupMailKind, 'custom'>, cont
   const introEn = context.isFair
     ? `It was a pleasure to welcome you to our Habitat One stand at Feria Hábitat${enDate ? ` on ${enDate}` : ''}. Thank you for your interest and enthusiasm!`
     : 'Thank you for your interest in Habitat One’s Flexible Stone panels. We’d love to explore how we can work together.';
-  const company=context.company?.trim();
-  const identity=(value:string)=>value.normalize('NFD').replace(/\p{M}/gu,'').replace(/[^\p{L}\p{N}]/gu,'').toLowerCase();
-  const personalCompany=company&&identity(company)!==identity(name)?company:'';
+  const proposalEs = 'Nos gustaría preparar una propuesta que creemos que se adapta mejor a vuestro negocio.';
+  const proposalEn = 'We’d be happy to prepare a proposal that we believe best suits your business.';
   const interests={stalen:{es:'muestras',en:'samples'},prijzen:{es:'precios',en:'pricing'},content:{es:'imágenes y documentación',en:'images and product information'},showroom:{es:'una visita a nuestro showroom en Jávea',en:'a visit to our showroom in Jávea'}};
   const selected=Object.entries(interests).filter(([key])=>context.interests?.includes(key)).map(([,value])=>value);
   const interestEs=selected.length?`\n\nNos habéis indicado vuestro interés en ${selected.map(i=>i.es).join(', ')}. Nos gustaría comentar qué necesitáis y cómo podemos ayudaros.`:'';
@@ -87,6 +86,6 @@ export function followupProposal(kind: Exclude<FollowupMailKind, 'custom'>, cont
     subject: kind === 'professional'
       ? 'Una idea flexible para vuestros proyectos / A flexible idea for your projects'
       : 'Una idea flexible para vuestra tienda / A flexible idea for your shop or showroom',
-    body: `${es.replace(introEs,`${introEs}${personalCompany?`\n\nPensando en ${personalCompany}, nos gustaría preparar una propuesta adaptada a vuestro negocio.`:''}${interestEs}`)}\n\nAquí tenéis los vídeos y las fichas técnicas:\n${link}\n\nUn cordial saludo,\n${signature}\n\n──────── English ────────\n\n${en.replace(introEn,`${introEn}${personalCompany?`\n\nWith ${personalCompany} in mind, we’d love to put together a proposal tailored to your business.`:''}${interestEn}`)}\n\nYou can find our videos and technical data sheets here:\n${link}\n\nWarm regards,\n${signature}`,
+    body: `${es.replace(introEs,`${introEs}\n\n${proposalEs}${interestEs}`)}\n\nAquí tenéis los vídeos y las fichas técnicas:\n${link}\n\nUn cordial saludo,\n${signature}\n\n──────── English ────────\n\n${en.replace(introEn,`${introEn}\n\n${proposalEn}${interestEn}`)}\n\nYou can find our videos and technical data sheets here:\n${link}\n\nWarm regards,\n${signature}`,
   };
 }
