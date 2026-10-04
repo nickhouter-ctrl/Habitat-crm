@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { DEALER_STAFFELS, brutomarge, distributeurPrijzen, staffelVoorVolume, veiligePrijs } from "@/lib/distributeur-prijzen";
+import { DEALER_STAFFELS, brutomarge, distributeurPrijzen, margeVerkooppunt, staffelVoorVolume, veiligePrijs } from "@/lib/distributeur-prijzen";
 import { catalogusItems, type CatalogusPaneel } from "@/lib/distributeur-catalogus";
 import { prijsVoorstelInvoer } from "@/lib/distributeur-invoer";
 
@@ -38,6 +38,15 @@ describe("verkooppuntstaffels",()=>{
    const limited=distributeurPrijzen(100,40,{staffelId:"volume-max"})!;
    expect(limited.verkooppunt).toBe(61.54);expect(limited.dealer.begrensd).toBe(true);
    expect(limited.dealer.margePct!).toBeGreaterThanOrEqual(35);
+ });
+ it("shows the retailer contribution from the actual purchase price before VAT and own costs",()=>{
+   const start=distributeurPrijzen(100,20)!;
+   expect(margeVerkooppunt(start)).toBe(35);
+   expect(brutomarge(start.adviesEx,start.verkooppunt!).pct).toBe(35);
+   const capped=distributeurPrijzen(100,40,{staffelId:"volume-max"})!;
+   expect(margeVerkooppunt(capped)).toBe(38.46);
+   expect(brutomarge(capped.adviesEx,capped.verkooppunt!).pct).toBeCloseTo(38.46);
+   expect(margeVerkooppunt(distributeurPrijzen(100)!)).toBeNull();
  });
  it("never quotes without usable costs or above the recommended price",()=>{
    for(const c of [null,0,-1,NaN,Infinity])expect(distributeurPrijzen(100,c)!.verkooppunt).toBeNull();
