@@ -112,7 +112,7 @@ export const MODULES: ModuleDef[] = [
       "/print-labels",
     ],
   },
-  { key: "prijzen", label: "Prijzen", paths: ["/prijzenboek", "/prijslijst", "/catalogi"] },
+  { key: "prijzen", label: "Prijzen", paths: ["/prijzenboek", "/prijslijst", "/catalogi", "/wederverkopers/prijzen"] },
   { key: "calculator", label: "Calculator", paths: ["/calculator"] },
   { key: "commissies", label: "Commissies", paths: ["/commissies"] },
   { key: "dashboard", label: "Dashboard", paths: ["/dashboard"] },

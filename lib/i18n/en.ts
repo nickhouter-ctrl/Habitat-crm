@@ -5,8 +5,10 @@
 import type { Dictionary } from "@/lib/i18n";
 import { crmEn } from './crm';
 import { workflowEn } from './workflow';
+import { dealerPricingEn } from './dealer-pricing';
 
 export const en: Dictionary = {
+  ...dealerPricingEn,
   ...crmEn,
   ...workflowEn,
   // ── navigatie en groepen ──────────────────────────────────────────────────

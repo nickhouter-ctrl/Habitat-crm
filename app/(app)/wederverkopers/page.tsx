@@ -51,6 +51,10 @@ export default async function VerkooppuntenPage({ searchParams }: {
   return <div className="space-y-6">
     <PageHeader title={t("Verkooppunten")} subtitle={t("Van interesse naar een officiële samenwerking. Contract, presentatie en afname per klant.")}
       actions={access.magModule('aanvragen') && <LinkButton href="/opvolging">{t("Opvolging")}</LinkButton>} />
+    <nav aria-label={t("Verkooppunten")} className="flex gap-6 border-b pb-3 text-sm">
+      <Link aria-current="page" href="/wederverkopers" className="font-semibold text-accent">{t("Verkooppunten")}</Link>
+      {access.magModule('prijzen') && <Link href="/wederverkopers/prijzen" className="text-muted hover:text-foreground">{t("Staffels & marges")}</Link>}
+    </nav>
     <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
       <Link href="/wederverkopers?status=candidate"><StatTile label={t("Kandidaten")} value={resellers.filter(candidate).length} /></Link>
       <Link href="/wederverkopers?status=active"><StatTile label={t("Officieel")} value={resellers.filter(r => r.profile?.active).length} /></Link>
