@@ -19,6 +19,10 @@ const nextConfig: NextConfig = {
   // PDF fonts are read from public/fonts at runtime — trace them into the bundle.
   outputFileTracingIncludes: {
     "/**/*": ["./public/fonts/**/*", "./public/docs/flexible-stone-technical-data-sheet*.pdf", "./public/mail/followup/*.jpg"],
+    // Sharp's native addon needs libvips beside it on Linux. The addon alone
+    // can be traced without its shared library when imported by PDF actions.
+    "/wederverkopers/prijzen": ["./node_modules/sharp/**/*", "./node_modules/@img/sharp-*/**/*"],
+    "/prijslijst/distributeur/pdf": ["./node_modules/sharp/**/*", "./node_modules/@img/sharp-*/**/*"],
   },
   // De handtekening-generator is één los HTML-bestand in public/. Zo houdt het
   // personeel een korte link en blijft het bestand gewoon te openen en te

@@ -1,4 +1,3 @@
-import sharp from "sharp";
 import type { DistributeurItem } from "@/lib/distributeur-catalogus";
 
 /** Alleen onze productasset-hosts; geen redirects naar willekeurige netwerken.
@@ -18,6 +17,9 @@ async function thumbnail(raw: string): Promise<string | null> {
   const url = assetUrl(raw);
   if (!url) return null;
   try {
+    // Load only while generating thumbnails: a missing image dependency must
+    // never prevent opening the pricing page or reading its margin controls.
+    const { default: sharp } = await import("sharp");
     const response = await fetch(url, { redirect: "error", signal: AbortSignal.timeout(15000) });
     if (!response.ok || !response.body || !/^image\/(jpeg|png|webp)/i.test(response.headers.get("content-type") ?? "")) return null;
     const maxBytes = 8_000_000;
