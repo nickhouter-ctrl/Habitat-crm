@@ -67,6 +67,8 @@ export async function GET(req: Request) {
     subject: `Weekcontrole: ${data.signalen.length} signa${data.signalen.length === 1 ? "al" : "len"}${hoog ? ` · ${hoog} urgent` : ""}`,
     html,
     text,
+    // Zelfde reden als bij de dagelijkse data-check: interne controle.
+    interneMelding: true,
   });
 
   return NextResponse.json({ ok: true, signalen: data.signalen.length, urgent: hoog, sent: res.sent });

@@ -38,6 +38,22 @@ export const ALWAYS_BCC = (() => {
 })();
 
 /**
+ * De bredere kring die klantcorrespondentie meeleest: Mourad en Teresa krijgen
+ * een kopie van wat er naar klanten uitgaat, zodat zij meekijken en kunnen
+ * antwoorden.
+ *
+ * Bewust náást ALWAYS_BCC en niet erin: interne controlemails (de dagelijkse
+ * data-check, de weekcontrole) gaan niet naar deze kring — dat is werk van
+ * kantoor, geen klantcontact. Die mails vragen om `interneMelding`.
+ *
+ * Aan te passen via env EMAIL_BCC_TEAM (komma-gescheiden).
+ */
+export const TEAM_BCC = (process.env.EMAIL_BCC_TEAM?.trim() || "mourad.h@habitat-one.com, teresa@habitat-one.com")
+  .split(",")
+  .map((a) => a.trim())
+  .filter(Boolean);
+
+/**
  * Ontvangers van INTERNE meldingen (accountaanvragen, offerte-aanvragen,
  * team-notificaties): standaard hi@ + nick@, zodat beide de melding krijgen.
  * Te overschrijven via env NOTIFY_EMAILS (komma-gescheiden) of NOTIFY_EMAIL
@@ -59,12 +75,15 @@ export const NOTIFY_TO = NOTIFY_RECIPIENTS[0] ?? "hi@habitat-one.com";
 /**
  * Voegt de vaste BCC toe aan een eventueel bestaande BCC en dedupliceert
  * (case-insensitive). Laat de directe ontvanger (`to`) nooit als BCC staan.
+ *
+ * `interneMelding` houdt de bredere kring (TEAM_BCC) erbuiten: de dagelijkse
+ * data-check en de weekcontrole zijn kantoorwerk, geen klantcontact.
  */
-export function withMandatoryBcc(existing: string | undefined, to: string): string | undefined {
+export function withMandatoryBcc(existing: string | undefined, to: string, interneMelding = false): string | undefined {
   const seen = new Set<string>();
   const out: string[] = [];
   const toLower = to.toLowerCase();
-  for (const addr of [...(existing?.split(",") ?? []), ...ALWAYS_BCC]) {
+  for (const addr of [...(existing?.split(",") ?? []), ...ALWAYS_BCC, ...(interneMelding ? [] : TEAM_BCC)]) {
     const a = addr.trim();
     if (!a) continue;
     const low = a.toLowerCase();

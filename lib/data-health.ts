@@ -103,6 +103,9 @@ export async function runDataHealth(): Promise<{ ok: boolean; findings: Finding[
     subject: `Habitat — dagelijkse data-check (${findings.length} ${findings.length === 1 ? "punt" : "punten"})`,
     html,
     text,
+    // Kantoorwerk, geen klantcontact: niet naar de bredere kring die de
+    // klantmail meeleest.
+    interneMelding: true,
   });
   return { ok: true, findings, emailed: res.sent };
 }

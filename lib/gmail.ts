@@ -326,6 +326,8 @@ export async function sendMail(args: {
   /** Vaste bedrijfs-BCC overslaan — alleen voor interne mail met een
    *  persoonlijke inloglink erin. Zie lib/email.ts. */
   noCompanyBcc?: boolean;
+  /** Interne controlemail: niet naar de bredere kring (zie lib/mail-bcc.ts). */
+  interneMelding?: boolean;
   attachments?: { filename: string; content: Buffer | Uint8Array; contentType?: string; cid?: string; contentDisposition?: "inline" | "attachment" }[];
 }): Promise<{ messageId: string }> {
   const account = args.account ?? getCreds();
@@ -334,7 +336,7 @@ export async function sendMail(args: {
     from: `${args.fromName?.trim() || "Habitat One"} <${account.user}>`,
     to: args.to,
     cc: args.copyPolicy ? nickFrederiqueCc(args.to) : undefined,
-    bcc: args.copyPolicy ? undefined : args.noCompanyBcc ? args.bcc : withMandatoryBcc(args.bcc, args.to),
+    bcc: args.copyPolicy ? undefined : args.noCompanyBcc ? args.bcc : withMandatoryBcc(args.bcc, args.to, args.interneMelding),
     subject: args.subject,
     text: args.text,
     html: args.html,

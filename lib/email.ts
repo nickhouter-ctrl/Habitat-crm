@@ -59,6 +59,11 @@ export async function sendEmail(input: {
    * daar is meelezen juist het punt.
    */
   noCompanyBcc?: boolean;
+  /**
+   * Interne controlemail (dagelijkse data-check, weekcontrole): wel de vaste
+   * bedrijfskopie, maar niet naar de bredere kring die klantmail meeleest.
+   */
+  interneMelding?: boolean;
 }): Promise<{ sent: boolean; reason?: string; messageId?: string }> {
   // Elke uitgaande mail krijgt een VERBORGEN kopie (BCC) naar het bedrijf
   // (EMAIL_BCC, anders NOTIFY_EMAIL of het verzendadres hi@habitat-one.com), zodat
@@ -72,7 +77,7 @@ export async function sendEmail(input: {
     .join(", ") || undefined;
   // Voeg de vaste bedrijfs-BCC (nick@) toe op ELK transport — ook Resend/stub, die
   // lib/gmail.ts overslaan. Op het Gmail-pad dedupliceert sendMail dit nog eens.
-  const bcc = input.copyPolicy ? undefined : input.noCompanyBcc ? bccBase : withMandatoryBcc(bccBase, input.to);
+  const bcc = input.copyPolicy ? undefined : input.noCompanyBcc ? bccBase : withMandatoryBcc(bccBase, input.to, input.interneMelding);
   const cc = input.copyPolicy ? nickFrederiqueCc(input.to) : undefined;
 
   // Voorkeur: Gmail (verstuurt vanaf GMAIL_USER, bv. hi@habitat-one.com). Valt
@@ -101,6 +106,7 @@ export async function sendEmail(input: {
         bcc,
         copyPolicy: input.copyPolicy,
         noCompanyBcc: input.noCompanyBcc,
+        interneMelding: input.interneMelding,
         account,
         fromName,
         replyTo: input.replyTo,
