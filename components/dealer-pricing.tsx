@@ -2,7 +2,7 @@ import { Fragment, type ReactNode } from "react";
 import Link from "next/link";
 import { Calculator, FileText, Layers3, Table2 } from "lucide-react";
 import { TabPanel, TabsBar, TabsRoot } from "@/components/tabs";
-import { Badge, Button, Card, CardContent, CardHeader, CardTitle, Field, LinkButton, Select, StatTile, Table, THead, TBody, Th, Td, Tr } from "@/components/ui";
+import { Badge, Button, Card, CardContent, CardHeader, CardTitle, Field, LinkButton, Select, Table, THead, TBody, Th, Td, Tr } from "@/components/ui";
 import type { DistributeurItem } from "@/lib/distributeur-catalogus";
 import { DEALER_STAFFELS, KORTING_SHOWROOM, MIN_MARGE_SHOWROOM, MIN_MARGE_VERKOOPPUNT, brutomarge, distributeurPrijzen, staffelMetId, type VeiligePrijs } from "@/lib/distributeur-prijzen";
 import type { prijsVoorstelInvoer } from "@/lib/distributeur-invoer";
@@ -24,21 +24,19 @@ function Prijs({ ex, incl, t }: { ex: number | null; incl: number | null; t: T }
   </div>;
 }
 
-function InternBedrag({ bedrag, area, t, accent = false }: { bedrag: number; area: number | null; t: T; accent?: boolean }) {
-  return <div className="text-right tabular-nums">
-    <p className={`text-base font-semibold ${accent ? "text-accent" : "text-foreground"}`}>{formatEUR(bedrag)}</p>
-    <p className="text-xs text-muted">{t("Per paneel")}</p>
-    {area != null && <p className="mt-1 text-xs text-muted">{formatEUR(bedrag / area)} / m²</p>}
+function InternBedrag({ bedrag, label, accent = false }: { bedrag: number; label: string; accent?: boolean }) {
+  return <div className="flex items-baseline justify-between gap-3 text-xs tabular-nums">
+    <span className="text-muted">{label}</span><span className={`whitespace-nowrap text-base font-semibold ${accent ? "text-accent" : "text-foreground"}`}>{formatEUR(bedrag)}</span>
   </div>;
 }
 
-function MargePrijs({ prijs, area, t }: { prijs: VeiligePrijs; area: number | null; t: T }) {
-  if (prijs.ex == null || prijs.bijdrage == null) return <div className="space-y-1"><p className="font-medium text-muted">{t("Op aanvraag")}</p><p className="text-xs text-muted">{t("Marge nog niet berekend")}</p></div>;
-  return <div>
-    <div className="flex items-start justify-between gap-3"><p className="pt-1 text-xs text-muted">{t("Onze verkoopprijs")}</p><InternBedrag bedrag={prijs.ex} area={area} t={t}/></div>
-    <div className="mt-3 flex items-start justify-between gap-3 border-t border-border/60 pt-3"><p className="pt-1 text-xs font-medium text-foreground">{t("Wij houden over")}</p><InternBedrag bedrag={prijs.bijdrage} area={area} t={t} accent/></div>
-    <p className="mt-3 flex flex-wrap items-baseline justify-between gap-2 text-xs"><span className="text-muted">{t("Onze brutomarge")}</span><span className="font-semibold tabular-nums text-foreground">{pct(prijs.margePct)}</span></p>
-    {prijs.begrensd && <p className="mt-1 text-xs text-warning">{t("Werkelijke korting")} · {pct(prijs.kortingPct)}</p>}
+function MargePrijs({ prijs, divisor, t, toonKorting = false }: { prijs: VeiligePrijs; divisor: number; t: T; toonKorting?: boolean }) {
+  if (prijs.ex == null || prijs.bijdrage == null) return <div className="space-y-1 text-right"><p className="text-sm font-medium text-muted">{t("Op aanvraag")}</p><p className="text-xs text-muted">{t("Marge nog niet berekend")}</p></div>;
+  return <div className="ml-auto max-w-[200px] space-y-2">
+    <InternBedrag bedrag={prijs.ex/divisor} label={t("Onze verkoopprijs")}/>
+    <InternBedrag bedrag={prijs.bijdrage/divisor} label={t("Wij houden over")} accent/>
+    <p className="flex items-baseline justify-between gap-3 text-xs"><span className="text-muted">{t("Onze brutomarge")}</span><span className="font-semibold tabular-nums text-foreground">{pct(prijs.margePct)}</span></p>
+    {toonKorting && prijs.begrensd && <p className="text-right text-xs text-warning">{t("Werkelijke korting")} · {pct(prijs.kortingPct)}</p>}
   </div>;
 }
 
@@ -47,9 +45,6 @@ export function DealerPricing({ items, series, invoer, t, mailForm }: {
 }) {
   const staffel = staffelMetId(invoer.staffel);
   const zichtbaar = invoer.serie ? items.filter(i => i.groep === invoer.serie) : items;
-  const maten = zichtbaar.flatMap(i => i.maten);
-  const opAanvraag = maten.filter(m => m.verkooppunt == null).length;
-  const showroomBegrensd = maten.filter(m => m.display.begrensd && m.showroom != null).length;
   const voorTransport = invoer.extra === 0;
   const query = new URLSearchParams({ staffel: staffel.id, extra: String(invoer.extra), serie: invoer.serie });
   const pdf = `/prijslijst/distributeur/pdf?${query}`;
@@ -119,27 +114,30 @@ export function DealerPricing({ items, series, invoer, t, mailForm }: {
       </TabPanel>
 
       <TabPanel id="marge">
-        <div className="grid gap-3 sm:grid-cols-3"><StatTile label={t("Prijzen berekend")} value={maten.length-opAanvraag} hint={t("maten binnen de gekozen selectie")}/><StatTile label={t("Showroomkorting begrensd")} value={showroomBegrensd} hint={t("om de ondergrens te bewaken")}/><StatTile label={t("Kostprijs eerst controleren")} value={opAanvraag} hint={t("maten op aanvraag")}/></div>
-        <Card><CardHeader className="flex-wrap"><div><CardTitle>{t("Wat houden wij per maat over?")}</CardTitle><p className="mt-1 text-xs text-muted">{t("Intern overzicht. Kostprijzen en onze bijdrage komen niet in het verkooppuntdocument.")}</p></div><Badge tone="accent">{volumeLabel(staffel)} · {pct(staffel.kortingPct)}</Badge></CardHeader>
-          <CardContent className="border-b"><p className="text-sm font-medium">{t("Alle bedragen hieronder zijn exclusief btw.")}</p><p className="mt-1 text-xs leading-relaxed text-muted">{t("Wij houden over = onze verkoopprijs min de meegenomen kosten. Dit bedrag betaalt nog onze vaste bedrijfskosten; het is geen nettowinst.")}</p></CardContent>
-          <Table className="min-w-[1120px] table-fixed" wrapperClassName="max-h-[70vh] overflow-y-auto"><THead className="sticky top-0 z-10 bg-surface"><tr><Th className="w-[22%]">{t("Paneel / maat")}</Th><Th className="w-[19%]">{t("Onze kosten")}<span className="mt-1 block normal-case font-normal tracking-normal text-muted">{t("Inclusief ingevulde extra kosten")}</span></Th><Th className="w-[23%]">{t("Verkoop aan verkooppunt")}<span className="mt-1 block normal-case font-normal tracking-normal text-accent">{t("Doelkorting {n}%",{n:pct(staffel.kortingPct).replace("%","")})}</span></Th><Th className="w-[23%]">{t("Verkoop voor showroom")}<span className="mt-1 block normal-case font-normal tracking-normal text-muted">{t("Maximaal {n}% korting",{n:KORTING_SHOWROOM})}</span></Th><Th className="w-[13%]">{t("Extra kostenruimte")}<span className="mt-1 block normal-case font-normal tracking-normal text-muted">{t("Bovenop ingevulde kosten")}</span></Th></tr></THead>
+        <Card><CardHeader><div><CardTitle>{invoer.serie || t("Alle series")}</CardTitle><p className="mt-1 text-xs text-muted">{t("Per paneel én per m². Kosten, verkoopprijs en onze bijdrage exclusief btw.")}</p></div><Badge tone="accent">{volumeLabel(staffel)} · {pct(staffel.kortingPct)}</Badge></CardHeader>
+          <Table className="min-w-[1000px] table-fixed" wrapperClassName="max-h-[70vh] overflow-y-auto"><THead className="sticky top-0 z-10 bg-surface"><tr><Th className="w-[28%]">{t("Paneel / maat")}</Th><Th className="w-[12%]">{t("Eenheid")}</Th><Th className="w-[20%] text-right">{t("Onze kosten")}<span className="mt-1 block normal-case font-normal tracking-normal text-muted">{t("Inclusief ingevulde extra kosten")}</span></Th><Th className="w-[20%] text-right">{t("Verkooppunt")}<span className="mt-1 block normal-case font-normal tracking-normal text-accent">{t("Doelkorting {n}%",{n:pct(staffel.kortingPct).replace("%","")})}</span></Th><Th className="w-[20%] text-right">{t("Showroom")}<span className="mt-1 block normal-case font-normal tracking-normal text-muted">{t("Maximaal {n}% korting",{n:KORTING_SHOWROOM})}</span></Th></tr></THead>
             <TBody>{zichtbaar.map(item => <Fragment key={item.id}><Tr className="bg-accent/5"><Td colSpan={5}><div className="flex flex-wrap items-baseline justify-between gap-2"><Link className="font-semibold text-foreground hover:underline" href={`/products/${item.id}/edit`}>{item.naam}</Link><span className="text-xs text-muted">{item.sku}</span></div></Td></Tr>{item.maten.map((m,i) => {
               const budget = m.verkooppunt != null && m.kostEx != null && m.areaM2 ? Math.max(0,(m.verkooppunt * (1-MIN_MARGE_VERKOOPPUNT/100) - m.kostEx)/m.areaM2) : null;
               const oud = m.kostEx != null ? brutomarge(m.adviesEx*.3,m.kostEx) : null;
               const raming = m.kostenbron === "raming" && m.geraamdeKost != null ? distributeurPrijzen(m.adviesEx,m.geraamdeKost+m.extraKost,{staffelId:staffel.id},m.vatRate) : null;
-              return <Tr key={`${item.id}-${i}`}><Td className="align-top"><p className="font-semibold text-foreground">{m.dim}</p><p className="mt-1 text-xs text-muted">{m.areaM2 != null && `${m.areaM2.toLocaleString("nl-NL")} m² · `}{m.sku}</p>{m.kostEx == null && <p className="mt-3 text-xs leading-relaxed text-warning">{t("Voor deze maat eerst de eigen kostprijs vastleggen.")}</p>}</Td>
-                <Td className="align-top"><div className="flex items-start justify-between gap-3"><p className="pt-1 text-xs text-muted">{m.kostEx != null ? t("Meegenomen kosten") : m.geraamdeKost != null ? t("Onbevestigde raming") : t("Nog niet berekend")}</p>{m.kostEx != null ? <InternBedrag bedrag={m.kostEx} area={m.areaM2} t={t}/> : m.geraamdeKost != null ? <InternBedrag bedrag={m.geraamdeKost+m.extraKost} area={m.areaM2} t={t}/> : <p className="pt-1 text-xs font-medium text-warning">{t("Kostprijs ontbreekt")}</p>}</div>
-                  <p className={`mt-3 text-xs ${["raming","ontbreekt","conservatief"].includes(m.kostenbron)?"text-warning":"text-muted"}`}>{bron[m.kostenbron]}</p><Link className="mt-1 block text-xs text-accent hover:underline" href={`/products/${item.id}/edit`}>{t("Kosten controleren")}</Link>
-                  {m.kostEx != null && <details className="mt-3 text-xs text-muted"><summary className="cursor-pointer hover:text-foreground">{t("Kostenopbouw")}</summary><p className="mt-2">{t("Geregistreerde kostprijs")}: {formatEUR(m.geregistreerdeKost)}</p><p className="mt-1">{t("Ingevulde extra kosten")}: {formatEUR(m.extraKost)}</p></details>}
-                  {raming && <details className="mt-3 text-xs text-warning"><summary className="cursor-pointer">{t("Indicatie bij deze raming")}</summary><p className="mt-2 leading-relaxed">{t("Geen offerteprijs. Bij de geraamde kosten zouden wij {bedrag} per paneel overhouden bij doorverkoop.",{bedrag:formatEUR(raming.dealer.bijdrage)})}</p></details>}
-                </Td>
-                <Td className="align-top"><MargePrijs prijs={m.dealer} area={m.areaM2} t={t}/>{m.verkooppunt != null && <details className="mt-3 text-xs text-muted"><summary className="cursor-pointer hover:text-foreground">{t("Marge van het verkooppunt")}</summary><p className="mt-2 leading-relaxed">{t("Bij doorverkoop tegen adviesprijs: {bedrag} per paneel ({marge}% brutomarge).",{bedrag:formatEUR(m.adviesEx-m.verkooppunt),marge:pct((m.adviesEx-m.verkooppunt)/m.adviesEx*100).replace("%","")})}</p></details>}</Td>
-                <Td className="align-top"><MargePrijs prijs={m.display} area={m.areaM2} t={t}/>{oud && <details className="mt-3 text-xs text-muted"><summary className="cursor-pointer hover:text-foreground">{t("Vergelijk met 70% korting")}</summary><p className={`mt-2 leading-relaxed ${oud.eur<0?"text-danger":""}`}>{t("Bij 70% korting houden wij {bedrag} per paneel over, vóór vaste bedrijfskosten.",{bedrag:formatEUR(oud.eur)})}</p></details>}</Td>
-                <Td className="align-top">{budget != null ? <><p className="text-base font-semibold tabular-nums text-foreground">{formatEUR(budget)} / m²</p><p className="mt-2 text-xs leading-relaxed text-muted">{t("Bij dezelfde dealerprijs blijft minimaal {n}% brutomarge over.",{n:MIN_MARGE_VERKOOPPUNT})}</p></> : <p className="text-xs text-muted">{t("Nog niet berekend")}</p>}</Td>
-              </Tr>;
+              const kosten = m.kostEx ?? (m.geraamdeKost != null ? m.geraamdeKost+m.extraKost : null);
+              return <Fragment key={`${item.id}-${i}`}><Tr><Td rowSpan={m.areaM2 ? 2 : 1} className="border-r border-border/50 align-top"><p className="whitespace-nowrap font-semibold text-foreground">{m.dim}</p><p className="mt-1 text-xs text-muted">{m.areaM2 != null && `${m.areaM2.toLocaleString("nl-NL")} m² · `}{m.sku}</p>{m.inStock && <Badge className="mt-2" tone="success">{t("Voorraad")}</Badge>}{m.kostEx == null && <p className="mt-3 max-w-[230px] text-xs leading-relaxed text-warning">{t("Voor deze maat eerst de eigen kostprijs vastleggen.")}</p>}
+                  <details className="mt-3 text-xs text-muted"><summary className="cursor-pointer hover:text-foreground">{t("Kosten & toelichting")}</summary><div className="mt-2 space-y-2 leading-relaxed"><p className={["raming","ontbreekt","conservatief"].includes(m.kostenbron)?"text-warning":""}>{bron[m.kostenbron]}</p><Link className="block text-accent hover:underline" href={`/products/${item.id}/edit`}>{t("Kosten controleren")}</Link>
+                    {m.kostEx != null && <><p>{t("Geregistreerde kostprijs")}: {formatEUR(m.geregistreerdeKost)}</p><p>{t("Ingevulde extra kosten")}: {formatEUR(m.extraKost)}</p></>}
+                    {budget != null && <p>{t("Extra kostenruimte")}: {formatEUR(budget)} / m². {t("Bij dezelfde dealerprijs blijft minimaal {n}% brutomarge over.",{n:MIN_MARGE_VERKOOPPUNT})}</p>}
+                    {m.verkooppunt != null && <p>{t("Marge van het verkooppunt")}. {t("Bij doorverkoop tegen adviesprijs: {bedrag} per paneel ({marge}% brutomarge).",{bedrag:formatEUR(m.adviesEx-m.verkooppunt),marge:pct((m.adviesEx-m.verkooppunt)/m.adviesEx*100).replace("%","")})}</p>}
+                    {oud && <p className={oud.eur<0?"text-danger":""}>{t("Bij 70% korting houden wij {bedrag} per paneel over, vóór vaste bedrijfskosten.",{bedrag:formatEUR(oud.eur)})}</p>}
+                    {raming && <p className="text-warning">{t("Geen offerteprijs. Bij de geraamde kosten zouden wij {bedrag} per paneel overhouden bij doorverkoop.",{bedrag:formatEUR(raming.dealer.bijdrage)})}</p>}
+                  </div></details>
+                </Td><Td className="text-xs font-medium text-foreground/80">{t("Per paneel")}</Td>
+                <Td rowSpan={kosten == null && m.areaM2 ? 2 : 1}>{kosten != null ? <div className="ml-auto max-w-[200px] space-y-1">{m.kostEx == null && <p className="text-right text-xs text-warning">{t("Onbevestigde raming")}</p>}<InternBedrag bedrag={kosten} label={t("ex. btw")}/></div> : <p className="text-right text-xs text-warning">{t("Kostprijs ontbreekt")}</p>}</Td>
+                <Td rowSpan={m.verkooppunt == null && m.areaM2 ? 2 : 1}><MargePrijs prijs={m.dealer} divisor={1} t={t} toonKorting/></Td>
+                <Td rowSpan={m.showroom == null && m.areaM2 ? 2 : 1}><MargePrijs prijs={m.display} divisor={1} t={t} toonKorting/></Td></Tr>
+                {m.areaM2 && <Tr><Td className="text-xs font-medium text-muted">{t("Per m²")}</Td>{kosten != null && <Td><div className="ml-auto max-w-[200px] space-y-1">{m.kostEx == null && <p className="text-right text-xs text-warning">{t("Onbevestigde raming")}</p>}<InternBedrag bedrag={kosten/m.areaM2} label={t("ex. btw")}/></div></Td>}{m.verkooppunt != null && <Td><MargePrijs prijs={m.dealer} divisor={m.areaM2} t={t}/></Td>}{m.showroom != null && <Td><MargePrijs prijs={m.display} divisor={m.areaM2} t={t}/></Td>}</Tr>}
+              </Fragment>;
             })}</Fragment>)}</TBody>
           </Table>
-          <CardContent><p className="text-xs leading-relaxed text-muted">{t("Extra kostenruimte is de aanvulling per m² die nog mogelijk is bij dezelfde dealerprijs, tot onze margegrens van {n}%. Vul de werkelijke kosten bovenaan in om de prijzen opnieuw te berekenen.",{n:MIN_MARGE_VERKOOPPUNT})}</p><p className="mt-2 text-xs leading-relaxed text-muted">{t("Brutomarge = (verkoopprijs − meegenomen kosten) / verkoopprijs. De bijdrage betaalt nog lonen, huur, marketing en andere overhead. Raming per m² wordt alleen intern getoond; een andere maat krijgt pas een inkoopprijs na registratie van de eigen kosten.")}</p></CardContent>
+          <CardContent><p className="text-xs leading-relaxed text-muted">{t("Intern overzicht. Kostprijzen en onze bijdrage komen niet in het verkooppuntdocument.")} {t("Wij houden over = onze verkoopprijs min de meegenomen kosten. Dit bedrag betaalt nog onze vaste bedrijfskosten; het is geen nettowinst.")}</p><p className="mt-2 text-xs leading-relaxed text-muted">{t("Extra kostenruimte is de aanvulling per m² die nog mogelijk is bij dezelfde dealerprijs, tot onze margegrens van {n}%. Vul de werkelijke kosten bovenaan in om de prijzen opnieuw te berekenen.",{n:MIN_MARGE_VERKOOPPUNT})}</p></CardContent>
         </Card>
       </TabPanel>
 

@@ -8,7 +8,6 @@ import { DEALER_STAFFELS, KORTING_SHOWROOM, margeVerkooppunt, staffelMetId, type
 import { dealerPdfImages } from "@/lib/dealer-pdf-images";
 
 const FONT_DIR = path.join(process.cwd(), "public/fonts/sora");
-const LOGO = path.join(process.cwd(), "public/brand/habitat-one-logo.png");
 Font.register({ family: "Sora", fonts: [
   {src:path.join(FONT_DIR,"Sora-Regular.ttf"),fontWeight:400},
   {src:path.join(FONT_DIR,"Sora-SemiBold.ttf"),fontWeight:600},
@@ -58,7 +57,7 @@ const s = StyleSheet.create({
   page:{fontFamily:"Sora",fontSize:9,color:COMPANY.charcoal,backgroundColor:"#fdfaf5",paddingHorizontal:40,paddingTop:30,paddingBottom:60},
   pricePage:{paddingHorizontal:32,paddingTop:24,paddingBottom:74},
   header:{flexDirection:"row",justifyContent:"space-between",alignItems:"center",borderBottomWidth:1,borderBottomColor:COMPANY.gold,paddingBottom:12,marginBottom:20},
-  logo:{width:96,height:43,objectFit:"contain"},eyebrow:{fontSize:7,color:COMPANY.terracotta,letterSpacing:1.1,textTransform:"uppercase"},
+  wordmark:{width:190,height:43,justifyContent:"center"},brand:{fontSize:12,fontWeight:600,color:COMPANY.brown,letterSpacing:2},eyebrow:{fontSize:7,color:COMPANY.terracotta,letterSpacing:1.1,textTransform:"uppercase"},
   title:{fontSize:34,fontWeight:600,color:COMPANY.brown,letterSpacing:-1,marginTop:10},subtitle:{fontSize:11,color:COMPANY.muted,marginTop:9},
   intro:{fontSize:9.5,lineHeight:1.65,marginTop:16,marginBottom:20},h2:{fontSize:13,fontWeight:600,color:COMPANY.brown,marginBottom:10},
   summary:{flexDirection:"row",backgroundColor:COMPANY.sand,padding:14,marginBottom:22},summaryHalf:{width:"50%",paddingRight:12},summaryLabel:{fontSize:8,color:COMPANY.muted,marginBottom:5},summaryValue:{fontSize:18,fontWeight:600,color:COMPANY.brown},
@@ -114,13 +113,14 @@ function SizePrices({m,t,taal}:{m:DistributeurMaat;t:Copy;taal:PrijslijstTaal}){
     </View>
   </View>;
 }
-function Footer({t,prices=false}:{t:Copy;prices?:boolean}){return <><View style={[s.footer,prices?s.priceFooter:{}]} fixed>{prices&&<Text style={s.marginNote}>{t.marginNote}</Text>}<Text>{COMPANY.legalName} · {COMPANY.website} · {COMPANY.email}</Text><Text>{t.footer}</Text></View><Text style={{position:"absolute",bottom:10,right:40,width:50,height:12,fontSize:6.5,textAlign:"right",color:COMPANY.muted}} render={({pageNumber,totalPages})=>`${pageNumber} / ${totalPages}`} fixed/></>;}
+function Wordmark({compact=false}:{compact?:boolean}){return <View style={[s.wordmark,compact?{height:26}:{}]}><Text style={s.brand}>FLEXIBLE STONE</Text></View>;}
+function Footer({t,prices=false}:{t:Copy;prices?:boolean}){return <><View style={[s.footer,prices?s.priceFooter:{}]} fixed>{prices&&<Text style={s.marginNote}>{t.marginNote}</Text>}<Text>{t.title}</Text><Text>{t.footer}</Text></View><Text style={{position:"absolute",bottom:10,right:40,width:50,height:12,fontSize:6.5,textAlign:"right",color:COMPANY.muted}} render={({pageNumber,totalPages})=>`${pageNumber} / ${totalPages}`} fixed/></>;}
 function Prijslijst({items,ondertitel,taal,opties}:{items:DistributeurItem[];ondertitel:string;taal:PrijslijstTaal;opties:PrijsOpties}){
   const t=DEALER_DOCUMENT_TEXT[taal],staffel=staffelMetId(opties.staffelId),date=new Date().toLocaleDateString(taal);
   const groepen=new Map<string,DistributeurItem[]>();for(const i of items)groepen.set(i.groep,[...(groepen.get(i.groep)??[]),i]);
-  return <Document title={`${t.label} · ${ondertitel}`} author={COMPANY.name}>
+  return <Document title={`${t.label} · ${ondertitel}`} author={t.title}>
     <Page size="A4" style={s.page}>
-      <View style={s.header}><PdfImage src={LOGO} style={s.logo}/><Text style={s.eyebrow}>{date}</Text></View>
+      <View style={s.header}><Wordmark/><Text style={s.eyebrow}>{date}</Text></View>
       <Text style={s.eyebrow}>{t.label}</Text><Text style={s.title}>{t.title}</Text><Text style={s.subtitle}>{t.subtitle}</Text><Text style={s.intro}>{t.intro}</Text>
       <View style={s.summary}><View style={s.summaryHalf}><Text style={s.summaryLabel}>{t.selected}</Text><Text style={s.summaryValue}>{percent(staffel.kortingPct,taal)}</Text><Text style={s.small}>{volume(staffel,taal)}</Text></View><View style={s.summaryHalf}><Text style={s.summaryLabel}>{t.maximum}</Text><Text style={s.summaryValue}>≤{KORTING_SHOWROOM}%</Text><Text style={s.small}>{t.selection}: {ondertitel}</Text></View></View>
       <View style={[s.row,{backgroundColor:COMPANY.sand}]}><Text style={[s.volume,s.head]}>{t.annual}</Text><Text style={[s.discount,s.head]}>{t.discount}</Text></View>
@@ -131,7 +131,7 @@ function Prijslijst({items,ondertitel,taal,opties}:{items:DistributeurItem[];ond
       <Footer t={t}/>
     </Page>
     <Page size="A4" style={s.page}>
-      <View style={s.header}><PdfImage src={LOGO} style={s.logo}/><Text style={s.eyebrow}>{t.label}</Text></View>
+      <View style={s.header}><Wordmark/><Text style={s.eyebrow}>{t.label}</Text></View>
       <Text style={[s.h2,{fontSize:22,marginTop:8}]}>{t.terms}</Text>
       {t.rules.map((rule,i)=><View key={i} style={s.rule} wrap={false}><Text style={s.ruleNumber}>{String(i+1).padStart(2,"0")}</Text><Text style={s.ruleText}>{rule}</Text></View>)}
       <View style={s.note} wrap={false}><Text style={s.h2}>{t.sampleTitle}</Text><Text style={{fontSize:9,lineHeight:1.65}}>{t.sampleText}</Text></View>
@@ -140,7 +140,7 @@ function Prijslijst({items,ondertitel,taal,opties}:{items:DistributeurItem[];ond
     {/* Local series flows plus bounded product blocks keep large catalogues
         quick to paginate and prevent a five-size product overflowing a page. */}
     {[...groepen].map(([groep,panelen])=><Page key={groep} size="A4" orientation="landscape" style={[s.page,s.pricePage]}>
-      <View style={s.priceHeader} fixed><View style={s.brandRow}><PdfImage src={LOGO} style={{width:58,height:26,objectFit:"contain"}}/><Text style={s.eyebrow}>{t.label} · {date}</Text></View><View style={s.seriesRow}><Text style={s.group}>{groep}</Text><Text style={s.selected}>{t.selected}: {volume(staffel,taal)} · {percent(staffel.kortingPct,taal)}</Text></View></View>
+      <View style={s.priceHeader} fixed><View style={s.brandRow}><Wordmark compact/><Text style={s.eyebrow}>{t.label} · {date}</Text></View><View style={s.seriesRow}><Text style={s.group}>{groep}</Text><Text style={s.selected}>{t.selected}: {volume(staffel,taal)} · {percent(staffel.kortingPct,taal)}</Text></View></View>
       {panelen.flatMap(it=>Array.from({length:Math.ceil(it.maten.length/3)},(_,block)=>({it,block,maten:it.maten.slice(block*3,block*3+3)}))).map(({it,block,maten})=><View key={`${it.id}-${block}`} style={s.product} wrap={false}>
         <View style={s.prodHead}>{it.imageUrl&&<PdfImage src={it.imageUrl} style={s.photo}/>}<View><Text style={s.name}>{it.naam.startsWith(`${it.groep} - `)?it.naam.slice(it.groep.length+3):it.naam}{block>0?` · ${t.continuation}`:""}</Text><Text style={s.sku}>{it.sku}</Text></View></View>
         <View style={s.th}><Text style={[s.dimHead,s.head]}>{t.size}</Text><Text style={[s.unitHead,s.head]}>{t.unit}</Text><Text style={[s.priceHead,s.head]}>{t.retail}</Text><View style={s.priceHead}><Text style={s.head}>{t.dealer}</Text><Text style={s.small}>{t.discount} {percent(staffel.kortingPct,taal)}</Text></View><Text style={[s.priceHead,s.head]}>{t.margin}</Text><View style={s.priceHead}><Text style={s.head}>{t.showroom}</Text><Text style={s.small}>≤{KORTING_SHOWROOM}%</Text></View></View>

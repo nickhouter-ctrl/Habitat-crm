@@ -1,5 +1,7 @@
 /** Prijsvoorstellen en interne margeanalyse, in alle CRM-talen. */
 const rows: [string,string,string][] = [
+['Per paneel én per m². Kosten, verkoopprijs en onze bijdrage exclusief btw.','Per panel and per m². Costs, selling price and our contribution excluding VAT.','Por panel y por m². Costes, precio de venta y nuestra contribución sin IVA.'],
+['Kosten & toelichting','Costs & details','Costes y detalles'],
 ['Onze verkoopprijs','Our selling price','Nuestro precio de venta'],
 ['Wij houden over','We retain','Nos queda'],
 ['Onze brutomarge','Our gross margin','Nuestro margen bruto'],
