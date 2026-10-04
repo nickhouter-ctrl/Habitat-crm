@@ -86,21 +86,21 @@ function Prijslijst({items,ondertitel,taal,opties}:{items:DistributeurItem[];ond
      <View style={s.note}><Text style={[s.h2,{fontSize:9}]}>{t.sampleTitle}</Text><Text style={[s.rule,{marginBottom:0}]}>{t.sampleText}</Text></View>
      <Footer t={t}/>
    </Page>
-   <Page size="A4" orientation="landscape" style={s.page}>
+   {/* Keep pagination local to each series. A single 303-product flow makes
+       React PDF repeatedly lay out the entire catalogue while splitting it. */}
+   {[...groepen].map(([groep,panelen])=><Page key={groep} size="A4" orientation="landscape" style={s.page}>
      <View style={s.header} fixed><PdfImage src={LOGO} style={{width:66,height:30,objectFit:"contain"}}/><Text style={s.eyebrow}>{t.label} · {date}</Text></View>
      <Text style={s.small}>{t.selected}: {volume(staffel,taal)} · {staffel.kortingPct.toLocaleString(taal)}% · {ondertitel}</Text>
-     {[...groepen].map(([groep,panelen])=><View key={groep}>
-       {panelen.map((it,index)=><View key={it.id} style={s.product} wrap={false}>
+     {panelen.map((it,index)=><View key={it.id} style={s.product} wrap={false}>
          {index===0&&<Text style={s.group}>{groep}</Text>}
          <View style={s.prodHead}>{it.imageUrl&&<PdfImage src={it.imageUrl} style={s.photo}/>}<View><Text style={s.name}>{it.naam.startsWith(`${it.groep} - `)?it.naam.slice(it.groep.length+3):it.naam}</Text><Text style={s.sku}>{it.sku}</Text></View></View>
          <View style={s.th}><Text style={[s.dim,s.head]}>{t.size}</Text><Text style={[s.price,s.head]}>{t.retail}</Text><Text style={[s.price,s.head]}>{t.dealer}</Text><Text style={[s.price,s.head]}>{t.showroom} · ≤60%</Text></View>
          {it.maten.map((m,i)=><View key={i} style={s.priceRow}><View style={s.dim}><Text style={s.strong}>{m.dim}</Text><Text style={s.small}>{m.areaM2?.toLocaleString(taal)} m² · {taal === "es" ? "IVA" : taal === "de" ? "MwSt." : taal === "nl" ? "btw" : "VAT"} {m.vatRate}%</Text>{m.inStock&&<Text style={s.stock}>{t.stock}</Text>}</View>
            <Amount ex={m.adviesEx} incl={m.adviesIncl} m={m} t={t} taal={taal}/><Amount ex={m.verkooppunt} incl={m.verkooppuntIncl} m={m} t={t} taal={taal} adjusted={m.dealer.begrensd}/><Amount ex={m.showroom} incl={m.showroomIncl} m={m} t={t} taal={taal} adjusted={m.display.begrensd}/>
          </View>)}
-       </View>)}
      </View>)}
      <Footer t={t}/>
-   </Page>
+   </Page>)}
  </Document>;
 }
 export async function renderDistributeurPrijslijst(args:{items:DistributeurItem[];ondertitel:string;taal?:PrijslijstTaal;opties?:PrijsOpties}):Promise<Buffer>{
