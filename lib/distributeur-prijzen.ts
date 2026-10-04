@@ -5,7 +5,9 @@ export const DEALER_STAFFELS = [
   { id: "groei", vanafM2: 500, totM2: 1000, kortingPct: 37.5 },
   { id: "partner", vanafM2: 1000, totM2: 2000, kortingPct: 40 },
   { id: "plus", vanafM2: 2000, totM2: 5000, kortingPct: 42.5 },
-  { id: "volume", vanafM2: 5000, totM2: null, kortingPct: 45 },
+  { id: "volume", vanafM2: 5000, totM2: 7500, kortingPct: 45 },
+  { id: "volume-plus", vanafM2: 7500, totM2: 10000, kortingPct: 47.5 },
+  { id: "volume-max", vanafM2: 10000, totM2: null, kortingPct: 50 },
 ] as const;
 export type DealerStaffelId = typeof DEALER_STAFFELS[number]["id"];
 export const KORTING_VERKOOPPUNT = 35;

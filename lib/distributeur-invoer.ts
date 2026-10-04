@@ -1,7 +1,7 @@
 import { z } from "zod";
-import { staffelMetId, type PrijsOpties } from "@/lib/distributeur-prijzen";
+import { DEALER_STAFFELS, staffelMetId, type PrijsOpties } from "@/lib/distributeur-prijzen";
 export const prijsVoorstelInvoer = z.object({
-  staffel: z.enum(["start", "groei", "partner", "plus", "volume"]).default("start"),
+  staffel: z.enum(DEALER_STAFFELS.map(staffel => staffel.id)).default("start"),
   extra: z.coerce.number().finite().min(0).max(1000).default(0),
   serie: z.string().trim().max(160).default(""),
 });

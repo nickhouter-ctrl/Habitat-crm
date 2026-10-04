@@ -49,7 +49,7 @@ export function DealerPricing({ items, series, invoer, t, mailForm }: {
           <p className="mt-2 max-w-prose text-sm leading-relaxed text-muted">{t("Elke maat heeft zijn eigen adviesprijs en kostprijs. De staffel geeft een doelkorting; de berekende paneelprijs bewaakt onze ondergrens.")}</p>
         </div>
         <div className="grid grid-cols-2 gap-5 md:border-l md:pl-6">
-          <div><p className="font-display text-3xl font-semibold text-accent">35–45%</p><p className="mt-1 text-xs text-muted">{t("Korting bij doorverkoop")}</p></div>
+          <div><p className="font-display text-3xl font-semibold text-accent">{DEALER_STAFFELS[0].kortingPct}–{DEALER_STAFFELS.at(-1)!.kortingPct}%</p><p className="mt-1 text-xs text-muted">{t("Korting bij doorverkoop")}</p></div>
           <div><p className="font-display text-3xl font-semibold">≤{KORTING_SHOWROOM}%</p><p className="mt-1 text-xs text-muted">{t("Eenmalig showroommateriaal")}</p></div>
           <p className="col-span-2 text-xs leading-relaxed text-muted">{t("Adviesprijzen zijn vrijblijvend. Bestaande contracten, productprijzen en offertes wijzigen niet automatisch.")}</p>
         </div>
