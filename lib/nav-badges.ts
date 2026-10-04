@@ -1,6 +1,7 @@
 /**
  * Badge-tellers voor de navigatie (zijbalk + starttegels): open aanvragen,
- * nieuwe mails en inkoopfacturen die op goedkeuring wachten.
+ * nieuwe mails, inkoopfacturen die op goedkeuring wachten en klanten die op
+ * onze opvolgmail reageerden.
  *
  * De vroegere "te betalen inkoop"-badge op /inkooporders is bewust weg:
  * betaalstatus van inkoop leeft alleen in Holded (keuze Nick 24-08-2026).
@@ -13,6 +14,7 @@ import { voorstelZichtbaarVoor, mailZichtbaarVoor } from "@/lib/mail-visibility"
 import { db } from "@/lib/db";
 import { emailInbox, inboxSuggestions, purchaseInvoiceReviews, quoteRequests } from "@/lib/db/schema";
 import { openVoorstellenFilter } from "@/lib/assistant/achterhaald";
+import { telAntwoordNodig } from "@/lib/followup-checklist-data";
 import { gewoneAanvragen } from "@/lib/aanvraag-selectie";
 
 export async function verzamelNavBadges(rol?: string, userEmail?: string | null): Promise<Record<string, number>> {
@@ -21,7 +23,7 @@ export async function verzamelNavBadges(rol?: string, userEmail?: string | null)
   const mag = (pad: string) => rol === undefined || magPad(rol, pad);
   const nul = [{ value: 0 }];
 
-  const [[pending], [inboxNew], [teKeuren], [suggestions]] = await Promise.all([
+  const [[pending], [inboxNew], [teKeuren], [suggestions], antwoordNodig] = await Promise.all([
     mag("/aanvragen")
       ? db.select({ value: count() }).from(quoteRequests).where(and(gewoneAanvragen, eq(quoteRequests.status, "pending")))
       : nul,
@@ -42,11 +44,14 @@ export async function verzamelNavBadges(rol?: string, userEmail?: string | null)
           .from(inboxSuggestions)
           .where(and(openVoorstellenFilter, voorstelZichtbaarVoor(userEmail)))
       : nul,
+    // Klanten die op onze opvolgmail reageerden en nog op antwoord wachten.
+    mag("/opvolging") ? telAntwoordNodig(userEmail) : 0,
   ]);
   return {
     "/assistent": suggestions?.value ?? 0,
     "/aanvragen": pending?.value ?? 0,
     "/inbox": inboxNew?.value ?? 0,
     "/inkooporders/te-verwerken": teKeuren?.value ?? 0,
+    "/opvolging": antwoordNodig,
   };
 }

@@ -16,6 +16,26 @@ export function followupCompleted(event: FollowupCompletion | undefined, incomin
   return !(nextActionOn && nextActionOn > completedOn && nextActionOn <= today);
 }
 
+/**
+ * De nieuwste binnengekomen mail van dit adres — de "reactie" waarop de
+ * opvolging opnieuw opengaat.
+ *
+ * Het adres moet er zijn. Vergeleken we zonder die controle, dan viel een
+ * contact zonder e-mailadres samen met een inboxregel zonder afzender
+ * (`undefined === undefined`), en stond zo'n contact onterecht op "Antwoord
+ * nodig" — acht van de zestien op de lijst bleken dat te zijn.
+ */
+export function laatsteReactie<T extends { email: string | null; at: Date | null }>(
+  adres: string | null | undefined,
+  inkomend: readonly T[],
+): (T & { at: Date }) | undefined {
+  const gezocht = adres?.trim().toLowerCase();
+  if (!gezocht) return undefined;
+  return inkomend
+    .flatMap((m) => (m.at && m.email?.trim().toLowerCase() === gezocht ? [{ ...m, at: m.at }] : []))
+    .sort((a, b) => b.at.getTime() - a.at.getTime())[0];
+}
+
 export const FOLLOWUP_SORTS = {
   priority: 'Prioriteit', name: 'Naam', company: 'Bedrijf', next: 'Opvolgdatum', last: 'Laatste persoonlijke mail',
 } as const;

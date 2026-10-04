@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { FOLLOWUP_DONE, FOLLOWUP_REOPENED, followupCompleted, sortFollowup, type FollowupWorkRow } from '../followup-checklist';
+import { FOLLOWUP_DONE, FOLLOWUP_REOPENED, followupCompleted, laatsteReactie, sortFollowup, type FollowupWorkRow } from '../followup-checklist';
 
 const event = { id: 'done', subject: FOLLOWUP_DONE, createdAt: new Date('2026-10-02T09:00:00Z') };
 describe('opvolging afvinken en opnieuw oppakken', () => {
@@ -44,5 +44,23 @@ describe('sorteerbare werklijst', () => {
   });
   it('laat de recentste persoonlijke mail eerst zien, zonder gemailde contacten te verzinnen', () => {
     expect(sortFollowup([row('zonder'), row('oud', { out: '2026-10-01' }), row('nieuw', { out: '2026-10-02' })], 'last', true).map(r => r.contact.id)).toEqual(['nieuw', 'oud', 'zonder']);
+  });
+});
+
+describe('welke binnengekomen mail als reactie geldt', () => {
+  const mail = (email: string | null, at: string | null) => ({ email, at: at ? new Date(at) : null });
+  it('pakt de nieuwste mail van dat adres, ongeacht de volgorde in de lijst', () => {
+    const r = laatsteReactie('Ana@Estudio.ES ', [mail('ana@estudio.es', '2026-10-01T10:00:00Z'), mail('ana@estudio.es', '2026-10-03T10:00:00Z')]);
+    expect(r?.at.toISOString()).toBe('2026-10-03T10:00:00.000Z');
+  });
+  it('koppelt een contact zonder e-mailadres nooit aan mail zonder afzender', () => {
+    // Dit was de fout achter een tegel die zestien klanten meldde waar er acht
+    // waren: undefined === undefined telde als een match.
+    expect(laatsteReactie(null, [mail(null, '2026-10-03T10:00:00Z')])).toBeUndefined();
+    expect(laatsteReactie('  ', [mail(null, '2026-10-03T10:00:00Z')])).toBeUndefined();
+  });
+  it('negeert mail van een ander adres en mail zonder ontvangstmoment', () => {
+    expect(laatsteReactie('ana@estudio.es', [mail('luis@obra.es', '2026-10-03T10:00:00Z')])).toBeUndefined();
+    expect(laatsteReactie('ana@estudio.es', [mail('ana@estudio.es', null)])).toBeUndefined();
   });
 });

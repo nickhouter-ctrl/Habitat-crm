@@ -10,7 +10,7 @@ import { partnerMailVisible } from '@/lib/partner-context';
 import { conversationState, INTEREST, STAGES } from '@/lib/partners';
 import { followupSources } from '@/lib/followup-source';
 import { hasResellerInterest, recommendedFollowupMail } from '@/lib/followup-mail';
-import { FOLLOWUP_SORTS, followupCompleted, sortFollowup, type FollowupSort } from '@/lib/followup-checklist';
+import { FOLLOWUP_SORTS, followupCompleted, laatsteReactie, sortFollowup, type FollowupSort } from '@/lib/followup-checklist';
 import { latestFollowupCompletions } from '@/lib/followup-checklist-data';
 import { PageHeader, Card, CardContent, StatTile, LinkButton, Badge } from '@/components/ui';
 import { SyncButton } from './forms';
@@ -77,11 +77,7 @@ export default async function Page({ searchParams }: {
   const today = new Date().toLocaleDateString('sv-SE', { timeZone: 'Europe/Madrid' });
   const data = rows.map(r => {
     const out = sent.find(m => m.contactId === r.contact.id)?.at;
-    const reacties = incoming
-      .flatMap(m => m.at && m.email?.trim().toLowerCase() === r.contact.email?.trim().toLowerCase()
-        ? [{ ...m, at: m.at }] : [])
-      .sort((a, b) => b.at.getTime() - a.at.getTime());
-    const reactie = reacties[0];
+    const reactie = laatsteReactie(r.contact.email, incoming);
     const inc = reactie?.at ?? null;
     const completion = completions.find(e => e.contactId === r.contact.id);
     const completed = followupCompleted(completion, inc, r.profile?.nextActionOn, today);
