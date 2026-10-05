@@ -4,7 +4,7 @@ import { and, eq, inArray } from "drizzle-orm";
 import { afterAll, expect, it, vi } from "vitest";
 vi.mock("server-only", () => ({}));
 import { db, pgClient } from "@/lib/db";
-import { activities, appointments, companies, contacts, deals, documents, emailInbox, projects, users } from "@/lib/db/schema";
+import { activities, appointments, companies, contacts, deals, documents, emailInbox, partnerMessages, projects, users } from "@/lib/db/schema";
 import { salesContactActivityFilter, salesTaskAccess, salesAppointmentAccess, salesMailFilter } from "../sales-scope";
 
 const enabled = process.env.SALES_SCOPE_DB_TEST === "1";
@@ -45,6 +45,35 @@ it.skipIf(!enabled)("keeps every customer visible while denying financial histor
         { id: theirs, messageId: theirs, fromEmail: "office@example.invalid", toEmail: "hi@example.invalid", subject: "Project update", mailboxUser: "hi@example.invalid" },
       ]);
       expect((await tx.select({ id: emailInbox.id }).from(emailInbox).where(and(inArray(emailInbox.id, [own, theirs]), salesMailFilter("sales", `${me}@example.invalid`)))).map(r => r.id)).toEqual([own]);
+      // Shared mail is visible only as an exact reply to this seller's own
+      // personal sales message, from the same customer and addressed to them.
+      const before = process.env.GMAIL_USER;
+      process.env.GMAIL_USER = 'hi@example.invalid';
+      try {
+        await tx.update(contacts).set({email:'client@example.invalid'}).where(eq(contacts.id,sale));
+        const ownMessage=`<${randomUUID()}@example.invalid>`, otherMessage=`<${randomUUID()}@example.invalid>`, draftMessage=`<${randomUUID()}@example.invalid>`, invoiceMessage=`<${randomUUID()}@example.invalid>`;
+        await tx.insert(partnerMessages).values([
+          {contactId:sale,authorId:me,status:'sent',source:'external-copy',personal:true,mailboxUser:`${me}@example.invalid`,toEmail:'client@example.invalid',subject:'Samples',body:'Sales reply',messageId:ownMessage},
+          {contactId:sale,authorId:other,status:'sent',mailboxUser:'hi@example.invalid',toEmail:'client@example.invalid',subject:'Other conversation',body:'Other reply',messageId:otherMessage},
+          {contactId:sale,authorId:me,status:'draft',mailboxUser:`${me}@example.invalid`,toEmail:'client@example.invalid',subject:'Draft',body:'Draft',messageId:draftMessage},
+          {contactId:sale,authorId:me,status:'sent',source:'inbox',personal:false,mailboxUser:'hi@example.invalid',toEmail:'client@example.invalid',subject:'Invoice',body:'Financial message',messageId:invoiceMessage},
+        ]);
+        const legitimate=randomUUID(), colleagueThread=randomUUID(), otherSender=randomUUID(), notAddressed=randomUUID(), substring=randomUUID(), draft=randomUUID(), financial=randomUUID(), privateMailbox=randomUUID();
+        const shared={fromEmail:'client@example.invalid',toEmail:`${me}@example.invalid`,subject:'Re: Samples',mailboxUser:'hi@example.invalid',referencesHeader:ownMessage};
+        await tx.insert(emailInbox).values([
+          { ...shared,id:legitimate,messageId:legitimate, referencesHeader:`<older@example.invalid> ${ownMessage}` },
+          { ...shared,id:colleagueThread,messageId:colleagueThread,referencesHeader:otherMessage },
+          { ...shared,id:otherSender,messageId:otherSender,fromEmail:'unrelated@example.invalid' },
+          { ...shared,id:notAddressed,messageId:notAddressed,toEmail:'hi@example.invalid' },
+          { ...shared,id:substring,messageId:substring,referencesHeader:`prefix${ownMessage}suffix` },
+          { ...shared,id:draft,messageId:draft,referencesHeader:draftMessage },
+          { ...shared,id:financial,messageId:financial,referencesHeader:invoiceMessage },
+          { ...shared,id:privateMailbox,messageId:privateMailbox,mailboxUser:'other-private@example.invalid' },
+        ]);
+        const ids=[legitimate,colleagueThread,otherSender,notAddressed,substring,draft,financial,privateMailbox];
+        expect((await tx.select({id:emailInbox.id}).from(emailInbox).where(and(inArray(emailInbox.id,ids),salesMailFilter('sales',`${me}@example.invalid`)))).map(r=>r.id)).toEqual([legitimate]);
+        expect(await tx.select({id:emailInbox.id}).from(emailInbox).where(and(inArray(emailInbox.id,ids),salesMailFilter('sales',null)))).toHaveLength(0);
+      } finally {if(before===undefined)delete process.env.GMAIL_USER;else process.env.GMAIL_USER=before;}
       throw rollback;
     });
   } catch (error) { if (error !== rollback) throw error; }

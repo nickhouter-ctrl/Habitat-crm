@@ -1,4 +1,4 @@
-import { and, isNull, sql, type SQL } from "drizzle-orm";
+import { and, isNull, or, sql, type SQL } from "drizzle-orm";
 import { activities, appointments, emailInbox } from "@/lib/db/schema";
 
 export function salesTaskFilter(role: string | undefined): SQL | undefined {
@@ -21,8 +21,25 @@ export function salesAppointmentAccess(role: string | undefined, userId: string)
   return role === "sales" ? sql`coalesce(${appointments.assigneeId}, ${appointments.createdBy}) = ${userId}::uuid` : undefined;
 }
 
-/** Shared hi/purchase mail can contain project updates. Only own mailbox here. */
+/** Own mailbox, plus customer replies addressed to this seller in their own sales thread. */
 export function salesMailFilter(role: string | undefined, email?: string | null): SQL | undefined {
   if (role !== "sales") return undefined;
-  return and(sql`lower(trim(${emailInbox.mailboxUser})) = ${email?.trim().toLowerCase() ?? ""}`, isNull(emailInbox.linkedPurchaseOrderId));
+  const seller = email?.trim().toLowerCase();
+  if (!seller) return sql`false`;
+  const office = process.env.GMAIL_USER?.trim().toLowerCase();
+  const ownThread = office ? sql`
+    lower(trim(${emailInbox.mailboxUser})) = ${office}
+    and ${seller} = any(regexp_split_to_array(lower(coalesce(${emailInbox.toEmail}, '') || ',' || coalesce(${emailInbox.ccEmail}, '')), '\\s*,\\s*'))
+    and exists (
+      select 1 from partner_messages pm
+      join users u on u.id = pm.author_id
+      join contacts c on c.id = pm.contact_id
+      where lower(trim(u.email)) = ${seller}
+        and pm.status = 'sent' and pm.personal
+        and pm.source in ('crm', 'crm:flexible-stone-custom-v1', 'crm:professional-display-v1', 'crm:reseller-display-v1', 'external-copy')
+        and lower(trim(c.email)) = lower(trim(${emailInbox.fromEmail}))
+        and pm.message_id is not null and pm.message_id <> ''
+        and pm.message_id = any(regexp_split_to_array(trim(coalesce(${emailInbox.referencesHeader}, '')), '\\s+'))
+    )` : undefined;
+  return and(or(sql`lower(trim(${emailInbox.mailboxUser})) = ${seller}`, ownThread), isNull(emailInbox.linkedPurchaseOrderId));
 }
