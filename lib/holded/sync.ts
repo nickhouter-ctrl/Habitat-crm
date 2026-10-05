@@ -27,6 +27,7 @@ import {
 } from "@/lib/db/schema";
 import { parsePoLineItems } from "@/lib/purchase-orders";
 import { normalizeDocItems } from "@/lib/documents";
+import { behoudLokaleRegelinfo } from "@/lib/holded/regels-behouden";
 import { syncProjectReceiptFromDocument } from "@/lib/project-receipts";
 
 import { holded, holdedListAll, HoldedError } from "./client";
@@ -364,9 +365,12 @@ export async function pullDocumentsFromHolded(
             : existing.status === "overdue" || existing.status === "paid" || existing.status === "partially_paid"
               ? existing.status
               : data.status;
+        // Holded kent geen productkoppeling of kostprijs per regel; die
+        // bewaren, anders telt een project na de sync geen eigen voorraad meer.
+        const items = behoudLokaleRegelinfo(normalizeDocItems(data.items), normalizeDocItems(existing.items));
         await db
           .update(documents)
-          .set({ ...data, status: nextStatus, contactId: contactId ?? existing.contactId })
+          .set({ ...data, items, status: nextStatus, contactId: contactId ?? existing.contactId })
           .where(eq(documents.id, existing.id));
         await upsertSyncMap({
           entityType: "document",
