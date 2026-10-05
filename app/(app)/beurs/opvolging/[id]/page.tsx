@@ -10,6 +10,7 @@ import { db } from '@/lib/db';
 import { contacts, companies, partnerProfiles, partnerMessages, quoteRequests, emailInbox, sentEmails, users, appointments, activities } from '@/lib/db/schema';
 import { salesMailFilter, salesAppointmentAccess } from '@/lib/auth/sales-scope';
 import { requireModuleRead } from '@/lib/auth/guards';
+import { listCatalogFiles } from '@/lib/storage';
 import { geenInkoopmail, mailZichtbaarVoor } from '@/lib/mail-visibility';
 import { partnerMailVisible } from '@/lib/partner-context';
 import { followupSource, followupSources } from '@/lib/followup-source';
@@ -61,6 +62,7 @@ export default async function Page({params,searchParams}:{params:Promise<{id:str
    ...incoming.map((m): Mailregel => ({ soort: 'in', op: m.receivedAt ?? m.createdAt, binnen: m })),
  ].sort((a, b) => b.op.getTime() - a.op.getTime());
  const resellerInterested=hasResellerInterest(c,p);
+ const bibliotheek=write&&canMail&&sp.actie==='mail'?(await listCatalogFiles()).map(f=>({path:f.path,name:f.name,size:f.size})):[];
  const mailContext={name:c.name,company:row.company??requests.find(r=>r.company)?.company,isFair:origins.some(o=>o.key==='beurs'),meetingDate:confirmedFairDate(c.tags),interests:(c.tags??[]).filter(t=>t.startsWith('wil:')).map(t=>t.slice(4))};
  const self=`/opvolging/${id}`;
  const modalHref=(modal:string)=>`${self}?actie=${modal}`;
@@ -75,7 +77,7 @@ export default async function Page({params,searchParams}:{params:Promise<{id:str
  <WorkflowTabs key={sp.tab==='mail'?'mail':'overview'} id="dossier" label={t("Klantdossier")} initial={sp.tab==='mail'?'mail':'overview'} tabs={[{key:'overview',label:t("Overzicht"),content:<div className="grid items-start gap-5 lg:grid-cols-[1.1fr_1fr]">{main}{requestsPanel}</div>},{key:'mail',label:t("Mailhistorie & concepten"),content:mailPanel},{key:'appointments',label:t("Afspraken"),content:meetingsPanel},{key:'history',label:t("Historie"),content:historyPanel}]}/>
  {resellerInterested&&access.magModule('verkooppunten')&&<details className="rounded-xl border bg-surface px-4 py-3"><summary className="cursor-pointer text-sm font-medium">{t("Verkooppuntafspraken")}</summary><div className="mt-3 flex flex-wrap gap-2"><LinkButton href={`/wederverkopers/${id}/samenwerking`} variant="secondary">{t("Contract, exclusiviteit & afname")}</LinkButton><LinkButton href={`/wederverkopers/${id}/presentatie`} variant="secondary">{t("Presentatiepakket & verrekening")}</LinkButton></div></details>}
  {write&&sp.actie==='profile'&&<WorkflowModal title={t("Relatie en volgende stap")} closeHref={self}><ProfileForm id={id} profile={p} users={team} interested={resellerInterested}/></WorkflowModal>}
- {write&&canMail&&sp.actie==='mail'&&<WorkflowModal title={t("Persoonlijke mail voorbereiden")} closeHref={`${self}?tab=mail`}><Compose id={id} context={mailContext} resellerInterested={resellerInterested}/></WorkflowModal>}
+ {write&&canMail&&sp.actie==='mail'&&<WorkflowModal title={t("Persoonlijke mail voorbereiden")} closeHref={`${self}?tab=mail`}><Compose id={id} bibliotheek={bibliotheek} context={mailContext} resellerInterested={resellerInterested}/></WorkflowModal>}
  {write&&access.magModule('agenda')&&sp.actie==='appointment'&&<WorkflowModal title={t("Afspraak plannen")} closeHref={self}><MeetingForm id={id}/></WorkflowModal>}
  </div>;
 }

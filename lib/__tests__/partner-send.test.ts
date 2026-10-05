@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-const m=vi.hoisted(()=>({guard:vi.fn(),select:vi.fn(),claim:vi.fn(),transaction:vi.fn(),mail:vi.fn(),attachments:vi.fn(),insert:vi.fn(),bewaard:vi.fn(),set:vi.fn(),context:vi.fn(),ai:vi.fn()}));
+const m=vi.hoisted(()=>({guard:vi.fn(),select:vi.fn(),claim:vi.fn(),transaction:vi.fn(),mail:vi.fn(),attachments:vi.fn(),insert:vi.fn(),bewaard:vi.fn(),set:vi.fn(),context:vi.fn(),ai:vi.fn(),keuze:vi.fn(),pdfs:vi.fn()}));
 vi.mock('@/lib/i18n/server', async () => ({ tekst: async () => (await import('@/lib/i18n')).maakT('nl') }));
 vi.mock('server-only',()=>({}));
 vi.mock('next/cache',()=>({revalidatePath:vi.fn()}));
@@ -12,13 +12,14 @@ vi.mock('@/lib/sent-email',()=>({recordSentEmail:vi.fn()}));
 vi.mock('@/lib/partner-context',()=>({partnerContext:m.context,partnerMailVisible:vi.fn()}));
 vi.mock('@/lib/partner-mail-sync',()=>({syncPartnerSent:vi.fn()}));
 vi.mock('@/lib/ai-reply',()=>({genereerMailAntwoord:m.ai}));
+vi.mock('@/lib/storage',()=>({catalogusKeuze:m.keuze,catalogusMailBijlagen:m.pdfs,signCatalogUpload:vi.fn()}));
 import { saveDraft, sendDraft, editDraft, generateDraft } from '../../app/(app)/beurs/opvolging/actions';
 import { followupMailSource } from '../followup-mail';
 const id='00000000-0000-4000-8000-000000000001';
 const date=new Date('2026-09-30T12:00:00Z');
 const draft={id,contactId:id,status:'draft',updatedAt:date,toEmail:'test@example.com',subject:'Test',body:'Test',mailboxUser:'hi@example.com'};
 function form(){const f=new FormData();f.set('id',id);f.set('updatedAt',date.toISOString());f.set('confirm','on');return f;}
-beforeEach(()=>{vi.resetAllMocks();m.transaction.mockImplementation(async fn=>fn({select:()=>({from:()=>({where:()=>({for:async()=>[]})})}),update:()=>({set:(v:unknown)=>{m.set(v);return{where:async()=>[]};}})}));vi.stubEnv('GMAIL_USER','hi@example.com');m.guard.mockResolvedValue({id,name:'Test',email:'hi@example.com'});m.attachments.mockResolvedValue([]);m.bewaard.mockResolvedValue([{...draft,id:'00000000-0000-4000-8000-0000000000bb'}]);});
+beforeEach(()=>{vi.resetAllMocks();m.transaction.mockImplementation(async fn=>fn({select:()=>({from:()=>({where:()=>({for:async()=>[]})})}),update:()=>({set:(v:unknown)=>{m.set(v);return{where:async()=>[]};}})}));vi.stubEnv('GMAIL_USER','hi@example.com');m.guard.mockResolvedValue({id,name:'Test',email:'hi@example.com'});m.attachments.mockResolvedValue([]);m.keuze.mockResolvedValue([]);m.pdfs.mockResolvedValue([]);m.bewaard.mockResolvedValue([{...draft,id:'00000000-0000-4000-8000-0000000000bb'}]);});
 describe('verzending: autorisatie en dubbele klik',()=>{
  it('weigert vóór databank- of mailtoegang bij ontbrekende rechten',async()=>{m.guard.mockRejectedValue(new Error('Geen toegang'));await expect(sendDraft({},form())).rejects.toThrow('Geen toegang');expect(m.select).not.toHaveBeenCalled();expect(m.mail).not.toHaveBeenCalled();});
  it('verstuurd concept wordt nooit opnieuw verzonden',async()=>{m.select.mockResolvedValueOnce([{...draft,status:'sent'}]);expect((await sendDraft({},form())).error).toBeTruthy();expect(m.mail).not.toHaveBeenCalled();});
@@ -96,5 +97,45 @@ describe('persoonlijk uitwerken met behoud van het juiste voorstel',()=>{
  });
  it('onbekende voorstelsoorten krijgen geen dossiergegevens of AI-toegang',async()=>{
    await expect(generateDraft(id,'','../../.env','Voorstel')).rejects.toThrow();expect(m.context).not.toHaveBeenCalled();expect(m.ai).not.toHaveBeenCalled();
+ });
+});
+
+const PRESENTATIE='Flexible-Stone-Distributor-Presentation.pdf';
+describe('PDF\'s uit de bibliotheek meesturen',()=>{
+ it('bewaart de gekozen PDF met zijn pad, zonder hem al op te halen',async()=>{
+   m.select.mockResolvedValueOnce([{id,email:draft.toEmail}]);
+   m.keuze.mockResolvedValue([{path:PRESENTATIE,name:PRESENTATIE,size:14_754_802}]);
+   const f=saveForm('custom');f.append('bijlage',PRESENTATIE);
+   const r=await saveDraft({},f);
+   expect(r.success).toBeTruthy();
+   expect(m.keuze).toHaveBeenCalledWith([PRESENTATIE]);
+   expect(m.insert).toHaveBeenCalledWith(expect.objectContaining({attachments:[{name:PRESENTATIE,size:14_754_802,catalogus:PRESENTATIE}]}));
+   expect(r.draft?.attachments).toEqual([PRESENTATIE]);
+   expect(m.pdfs).not.toHaveBeenCalled();
+ });
+ it('weigert bijlagen die samen te groot zijn voor één mail',async()=>{
+   m.select.mockResolvedValueOnce([{id,email:draft.toEmail}]);
+   m.keuze.mockResolvedValue([{path:'a.pdf',name:'a.pdf',size:10*1024*1024},{path:'b.pdf',name:'b.pdf',size:10*1024*1024}]);
+   const r=await saveDraft({},saveForm('custom'));
+   expect(r.error).toContain('18,0 MB');
+   expect(m.insert).not.toHaveBeenCalled();
+ });
+ it('haalt de gekozen PDF bij versturen op en stuurt hem mee',async()=>{
+   const metPdf={...draft,source:'followup:custom',attachments:[{name:PRESENTATIE,size:3,catalogus:PRESENTATIE}]};
+   m.select.mockResolvedValueOnce([metPdf]).mockResolvedValueOnce([{id,email:draft.toEmail}]).mockResolvedValueOnce([]).mockResolvedValueOnce([]);
+   m.pdfs.mockResolvedValue([{filename:PRESENTATIE,content:Buffer.from('pdf'),contentType:'application/pdf'}]);
+   m.claim.mockResolvedValue([metPdf]);m.mail.mockResolvedValue({sent:true});
+   expect((await sendDraft({},form())).success).toBeTruthy();
+   expect(m.pdfs).toHaveBeenCalledWith([PRESENTATIE]);
+   expect(m.mail).toHaveBeenCalledWith(expect.objectContaining({attachments:[expect.objectContaining({filename:PRESENTATIE})]}));
+ });
+ it('verstuurt niets als een gekozen PDF inmiddels uit de bibliotheek is verwijderd',async()=>{
+   const metPdf={...draft,source:'followup:custom',attachments:[{name:PRESENTATIE,size:3,catalogus:PRESENTATIE}]};
+   m.select.mockResolvedValueOnce([metPdf]).mockResolvedValueOnce([{id,email:draft.toEmail}]).mockResolvedValueOnce([]).mockResolvedValueOnce([]);
+   m.pdfs.mockResolvedValue([]);
+   const r=await sendDraft({},form());
+   expect(r.error).toContain('niet meer in de bibliotheek');
+   expect(m.claim).not.toHaveBeenCalled();
+   expect(m.mail).not.toHaveBeenCalled();
  });
 });

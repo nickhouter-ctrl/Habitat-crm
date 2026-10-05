@@ -487,6 +487,41 @@ export async function listCatalogFiles(): Promise<CatalogFile[]> {
     });
 }
 
+/**
+ * Signed upload-URL voor een catalogus-PDF: de browser zet het bestand
+ * rechtstreeks in de bibliotheek. Een presentatie van 15 MB past niet door een
+ * server action — Vercel kapt de body rond 4,5 MB af. Zelfde naam = vervangen,
+ * net als bij uploaden via Catalogi.
+ */
+export async function signCatalogUpload(
+  filename: string,
+  contentType?: string,
+): Promise<{ path: string; token: string; signedUrl: string; contentType: string }> {
+  if (!/\.pdf$/i.test(filename) || (contentType && contentType !== "application/pdf")) {
+    throw new Error("Alleen PDF-bestanden.");
+  }
+  await ensureCatalogBucket();
+  const path = safeName(filename).replace(/\.pdf$/i, "") + ".pdf";
+  const { data, error } = await supabase().storage.from(CATALOG_BUCKET).createSignedUploadUrl(path, { upsert: true });
+  if (error || !data) throw new Error(`Kon upload-URL niet aanmaken: ${error?.message ?? "onbekend"}`);
+  return { path, token: data.token, signedUrl: data.signedUrl, contentType: "application/pdf" };
+}
+
+/**
+ * Welke van de gekozen catalogus-PDF's echt in de bibliotheek staan, met hun
+ * grootte. Zonder ze te downloaden: bij het bewaren van een concept hoeft een
+ * presentatie van 15 MB nog niet binnengehaald te worden.
+ */
+export async function catalogusKeuze(paths: string[]): Promise<{ path: string; name: string; size: number }[]> {
+  const uniek = [...new Set(paths.filter(Boolean))];
+  if (uniek.length === 0) return [];
+  const bibliotheek = new Map((await listCatalogFiles()).map((f) => [f.path, f]));
+  return uniek.flatMap((p) => {
+    const f = bibliotheek.get(p);
+    return f ? [{ path: f.path, name: f.name, size: f.size }] : [];
+  });
+}
+
 /** Upload één catalogus-PDF. */
 export async function uploadCatalogFile(file: File): Promise<void> {
   if (!file || file.size === 0) throw new Error("Leeg bestand.");

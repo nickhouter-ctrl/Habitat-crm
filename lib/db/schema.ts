@@ -3639,7 +3639,8 @@ export const partnerMessages = pgTable("partner_messages", {
   mailboxUser: text().notNull(), toEmail: text().notNull(),
   subject: text().notNull(), body: text().notNull(), html: text(),
   messageId: text(), referencesHeader: text(),
-  attachments: jsonb().$type<Array<{ name: string; size: number }>>().notNull().default(sql`'[]'::jsonb`),
+  /** `catalogus` = pad in de PDF-bibliotheek (Catalogi); die wordt pas bij versturen opgehaald. */
+  attachments: jsonb().$type<Array<{ name: string; size: number; catalogus?: string }>>().notNull().default(sql`'[]'::jsonb`),
   authorId: uuid().references(() => users.id),
   sentAt: timestamp({ withTimezone: true }),
   ...timestamps,
