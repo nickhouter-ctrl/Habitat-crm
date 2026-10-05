@@ -2,12 +2,12 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const m = vi.hoisted(() => ({ select: vi.fn(), mail: vi.fn(), gemarkeerd: vi.fn(), postvak: vi.fn() }));
 vi.mock('server-only', () => ({}));
 vi.mock('@/lib/db', () => ({ db: {
-  select: () => ({ from: () => ({ innerJoin: () => ({ where: () => ({ orderBy: () => ({ limit: m.select }) }) }) }) }),
+  select: () => ({ from: () => ({ innerJoin: () => ({ leftJoin: () => ({ where: () => ({ orderBy: () => ({ limit: m.select }) }) }) }) }) }),
   update: () => ({ set: () => ({ where: (...a: unknown[]) => { m.gemarkeerd(...a); return Promise.resolve([]); } }) }),
 } }));
 vi.mock('@/lib/email', () => ({ sendEmail: m.mail, brandedEmail: (b: string) => b, escapeHtml: (s: string) => s }));
 vi.mock('@/lib/crm-url', () => ({ crmUrl: () => 'https://crm.test' }));
-vi.mock('@/lib/mail-visibility', () => ({ marketingMailbox: m.postvak, geenInkoopmail: () => undefined }));
+vi.mock('@/lib/mail-visibility', () => ({ marketingMailbox: m.postvak, geenInkoopmail: () => undefined, inkoopMailbox: () => null }));
 import { notifyFollowupReplies } from '../followup-reply-notify';
 
 const reactie = (over: Record<string, unknown> = {}) => ({

@@ -12,14 +12,14 @@
  * contact hoort waaraan wij eerder persoonlijk hebben gemaild, en die ná die
  * mail is ontvangen. Dus niet elke willekeurige mail in hi@.
  */
-import { and, desc, inArray, isNull, isNotNull, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, isNull, isNotNull, sql } from "drizzle-orm";
 
 import { crmUrl } from "@/lib/crm-url";
 import { db } from "@/lib/db";
-import { contacts, emailInbox } from "@/lib/db/schema";
+import { contacts, emailInbox, partnerProfiles } from "@/lib/db/schema";
 import { brandedEmail, escapeHtml, sendEmail } from "@/lib/email";
 import { NOTIFY_TO, NOTIFY_RECIPIENTS, systemMailAddresses } from "@/lib/mail-bcc";
-import { followupIncluded, followupNotInternal } from "@/lib/followup-selection";
+import { followupEligible } from "@/lib/followup-selection";
 import { geenInkoopmail, marketingMailbox } from "@/lib/mail-visibility";
 
 const APP_URL = crmUrl();
@@ -83,15 +83,17 @@ async function nieuweReacties(): Promise<Reactie[]> {
     })
     .from(emailInbox)
     .innerJoin(contacts, sql`lower(trim(${contacts.email})) = lower(trim(${emailInbox.fromEmail}))`)
+    .leftJoin(partnerProfiles, eq(partnerProfiles.contactId, contacts.id))
     .where(and(
       isNull(emailInbox.followupNotifiedAt),
       // Facturen in purchase@ zijn geen klantreactie, ook niet als het adres
       // bij een contact hoort dat wij eerder mailden.
       geenInkoopmail(),
-      // Een collega die op een teambericht antwoordt is geen klantreactie.
-      followupNotInternal,
+      // Alleen wie echt op de opvolglijst staat. Dezelfde regels als de
+      // lijst zelf — geen collega's, geen eigen bedrijven of leveranciers, niet
+      // wie is afgewezen — zodat "deze staat weer open" in de mail altijd klopt.
+      followupEligible,
       isNotNull(emailInbox.receivedAt),
-      followupIncluded,
       sql`${emailInbox.status} <> 'archived'`,
       // Alleen een antwoord op iets dat wíj stuurden.
       sql`exists (
