@@ -26,6 +26,7 @@ const SYSTEEM = new RegExp(
     // Accounts en het klantportaal
     "(?:je habitat one|tu cuenta de habitat one|dein habitat one|your habitat one)",
     "habitat windows\\s+—",
+    "(?:je inloglink|your login link|tu enlace de acceso)",
     // Rekeningoverzichten en reviewverzoeken
     "(?:overzicht van uw openstaande|overview of your outstanding|resumen de sus facturas|übersicht ihrer offenen)",
     "(?:tevreden\\?|happy with your purchase|¿contento con su compra)",

@@ -30,7 +30,7 @@ describe('onderscheid informatie en persoonlijke reactie',()=>{
      expect(isPersonalPartnerMail(s,'<draad>'),s).toBe(false);
  });
  it('account-, herinnerings- en reviewmails tellen niet mee',()=>{
-   for (const s of ['Tu cuenta de Habitat One está lista — crea tu contraseña','Je Habitat One-account is klaar — stel je wachtwoord in','Habitat Windows — stel je wachtwoord in','Recordatorio: su entrega está programada','Su enlace de acceso — portal del cliente Habitat One','Resumen de sus facturas pendientes','¿Contento con su compra? Una breve reseña nos ayudaría mucho','Hemos recibido su solicitud de presupuesto'])
+   for (const s of ['Tu cuenta de Habitat One está lista — crea tu contraseña','Je Habitat One-account is klaar — stel je wachtwoord in','Habitat Windows — stel je wachtwoord in','Recordatorio: su entrega está programada','Su enlace de acceso — portal del cliente Habitat One','Resumen de sus facturas pendientes','¿Contento con su compra? Una breve reseña nos ayudaría mucho','Hemos recibido su solicitud de presupuesto','Je inloglink voor het CRM'])
      expect(isPersonalPartnerMail(s),s).toBe(false);
  });
  it('interne meldingen aan collega\'s tellen niet mee',()=>{

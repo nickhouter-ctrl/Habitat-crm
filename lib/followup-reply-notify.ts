@@ -19,7 +19,7 @@ import { db } from "@/lib/db";
 import { contacts, emailInbox } from "@/lib/db/schema";
 import { brandedEmail, escapeHtml, sendEmail } from "@/lib/email";
 import { NOTIFY_TO, NOTIFY_RECIPIENTS, systemMailAddresses } from "@/lib/mail-bcc";
-import { followupIncluded } from "@/lib/followup-selection";
+import { followupIncluded, followupNotInternal } from "@/lib/followup-selection";
 import { geenInkoopmail, marketingMailbox } from "@/lib/mail-visibility";
 
 const APP_URL = crmUrl();
@@ -88,6 +88,8 @@ async function nieuweReacties(): Promise<Reactie[]> {
       // Facturen in purchase@ zijn geen klantreactie, ook niet als het adres
       // bij een contact hoort dat wij eerder mailden.
       geenInkoopmail(),
+      // Een collega die op een teambericht antwoordt is geen klantreactie.
+      followupNotInternal,
       isNotNull(emailInbox.receivedAt),
       followupIncluded,
       sql`${emailInbox.status} <> 'archived'`,
