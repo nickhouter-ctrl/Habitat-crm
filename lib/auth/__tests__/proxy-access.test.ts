@@ -1,13 +1,14 @@
 import { beforeEach, expect, it, vi } from "vitest";
 import { NextRequest } from "next/server";
 import type { NextAuthConfig } from "next-auth";
+import type { Role } from "@/lib/auth/modules";
 
 const mocks = vi.hoisted(() => ({ lookup: vi.fn(), config: undefined as NextAuthConfig | undefined }));
 vi.mock("next-auth", () => ({ default: (config: NextAuthConfig) => { mocks.config = config; return { auth: vi.fn() }; } }));
 vi.mock("@/lib/db", () => ({ db: { query: { users: { findFirst: mocks.lookup } } } }));
 import "@/proxy";
 
-const authorize = (path: string, role = "admin", loggedIn = true) => mocks.config!.callbacks!.authorized!({
+const authorize = (path: string, role: Role = "admin", loggedIn = true) => mocks.config!.callbacks!.authorized!({
   request: new NextRequest(`https://crm.example.invalid${path}`, { headers: { RSC: "1" } }),
   auth: loggedIn ? { user: { id: "70d2d5b8-042a-4afe-9ced-4b242dadcbaf", role }, expires: "2030-01-01" } : null,
 });

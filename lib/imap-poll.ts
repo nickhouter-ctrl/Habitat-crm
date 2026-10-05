@@ -16,6 +16,7 @@ import { emailInbox, emailSyncState, mailAttachments } from "@/lib/db/schema";
 import { storeMailAttachments } from "@/lib/email-attachments";
 import { fetchNewMails, getMailAccounts, type MailAccount, type ParsedEmail } from "@/lib/gmail";
 import { ALWAYS_BCC } from "@/lib/mail-bcc";
+import { recordExternalStaffReply } from "@/lib/external-staff-reply";
 
 export type ImapPollResult = {
   ok: boolean;
@@ -77,6 +78,7 @@ export async function ingestMails(mails: ParsedEmail[], mailboxUser?: string): P
 
   for (const m of mails) {
     try {
+      const staffReply = await recordExternalStaffReply(m, mailboxUser);
       const stil = !!m.fromEmail && STIL.test(m.fromEmail.trim().toLowerCase());
       const toPurchase =
         !!purchaseInbox && `${m.toEmail ?? ""} ${m.ccEmail ?? ""}`.toLowerCase().includes(purchaseInbox);
@@ -104,8 +106,8 @@ export async function ingestMails(mails: ParsedEmail[], mailboxUser?: string): P
             size: a.size,
             contentType: a.contentType,
           })),
-          status: stil ? "archived" : "new",
-          readAt: stil ? new Date() : null,
+          status: stil || staffReply ? "archived" : "new",
+          readAt: stil || staffReply ? new Date() : null,
           mailboxUser: mailboxUser?.trim().toLowerCase() ?? null,
         })
         .returning({ id: emailInbox.id });
@@ -146,7 +148,7 @@ export async function ingestMails(mails: ParsedEmail[], mailboxUser?: string): P
 
       // Queue invoices before shipment-reference linking: an existing PO
       // reference must not hide a new supplier invoice from approval.
-      if (row?.id) {
+      if (row?.id && !staffReply) {
         try {
           const r = await tryAutoCreatePurchaseInvoice(row.id);
           s.invoicesAutoCreated += r.created;

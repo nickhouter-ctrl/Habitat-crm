@@ -5,6 +5,7 @@
 import { ImapFlow, type MailboxLockObject, type FetchMessageObject } from "imapflow";
 import { simpleParser, type ParsedMail, type AddressObject } from "mailparser";
 import nodemailer, { type Transporter } from "nodemailer";
+import { gmailAuthenticatedSender } from "@/lib/mail-sender-auth";
 
 import { copyPolicyCc, systemMailAddresses, withMandatoryBcc, type MailCopyPolicy, type SystemMailScope } from "@/lib/mail-bcc";
 
@@ -120,6 +121,8 @@ export interface ParsedAttachment {
 }
 
 export interface ParsedEmail {
+  /** Verified DMARC alignment from Gmail's receiving server; never inferred from From alone. */
+  senderAuthenticated?: boolean;
   messageId: string;
   imapUid: number;
   threadId: string | null;
@@ -198,7 +201,8 @@ export async function fetchMailsByUid(uids: number[], account?: MailAccount): Pr
         messageId: clean(parsed.messageId ?? msg.envelope?.messageId) ?? `imap-uid-${msg.uid}`,
         imapUid: msg.uid ?? 0,
         threadId: null,
-        referencesHeader: null,
+        referencesHeader: clean([...(Array.isArray(parsed.references) ? parsed.references : [parsed.references]), parsed.inReplyTo].filter(Boolean).join(" ")),
+        senderAuthenticated: gmailAuthenticatedSender(parsed.from?.value?.[0]?.address, parsed.headerLines),
         fromEmail: joinAddresses(parsed.from),
         fromName: clean(parsed.from?.value?.[0]?.name ?? null),
         toEmail: joinAddresses(parsed.to),
@@ -284,8 +288,9 @@ export async function fetchNewMails(
         imapUid: msg.uid,
         threadId: msg.threadId ?? null,
         referencesHeader: clean(
-          Array.isArray(parsed.references) ? parsed.references.join(" ") : (parsed.references ?? null),
+          [...(Array.isArray(parsed.references) ? parsed.references : [parsed.references]), parsed.inReplyTo].filter(Boolean).join(" "),
         ),
+        senderAuthenticated: gmailAuthenticatedSender(parsed.from?.value?.[0]?.address, parsed.headerLines),
         fromEmail: clean(parsed.from?.value?.[0]?.address),
         fromName: clean(parsed.from?.value?.[0]?.name),
         toEmail: clean(joinAddresses(parsed.to)),
