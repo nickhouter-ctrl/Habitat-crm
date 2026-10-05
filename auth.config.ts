@@ -2,8 +2,8 @@ import { NextResponse } from "next/server";
 import type { NextAuthConfig } from "next-auth";
 
 /**
- * Edge-safe Auth.js config — no database, no Node-only deps. Used by `proxy.ts`
- * for route protection. The full config (Drizzle adapter + Credentials provider)
+ * Shared Auth.js config — no database, no Node-only deps. Used by `proxy.ts`
+ * for authentication. The full config (Drizzle adapter + Credentials provider)
  * lives in `auth.ts`.
  *
  * Twee taken:
@@ -11,11 +11,9 @@ import type { NextAuthConfig } from "next-auth";
  *  2. het pad doorgeven via de header `x-pathname`, want een layout weet zelf
  *     niet op welke URL hij staat.
  *
- * Bewust GEEN rolcontrole hier. De rol in de JWT kan tot een dag oud zijn
- * (`updateAge: 24h`), en dan zou iemand die net rechten kreeg alsnog worden
- * weggestuurd door een cookie. De grens ligt daarom op plekken die de rol uit
- * de database lezen: `app/(app)/layout.tsx` voor pagina's, `weigerRoute()` voor
- * routes zonder layout, en de guards in `lib/auth/guards.ts` voor acties.
+ * De JWT-rol kan oud zijn. Daarom voegt de Node.js Proxy een actuele DB-
+ * rolcontrole toe vóór pagina's/RSC worden geladen. De layout, `weigerRoute()`
+ * voor exports en de guards voor server actions controleren aanvullend.
  */
 export const authConfig = {
   pages: {
