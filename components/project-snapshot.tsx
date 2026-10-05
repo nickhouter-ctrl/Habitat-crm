@@ -4,6 +4,7 @@ import type { AdvanceCover } from "@/lib/project-financials";
 import type { projectProgress } from "@/lib/project-progress";
 import { formatDate, formatEUR } from "@/lib/utils";
 import { Badge, Card, CardContent, LinkButton } from "./ui";
+import { ProjectFundingSummary } from "./project-funding-summary";
 
 export async function ProjectSnapshot({ id, cover, progress, status, requestedOpen, outstandingInvoices, startDate, endDate }: {
   id: string; cover: AdvanceCover; progress: ReturnType<typeof projectProgress>; status: string;
@@ -16,16 +17,12 @@ export async function ProjectSnapshot({ id, cover, progress, status, requestedOp
   return <Card className="mb-5 overflow-hidden" data-project-snapshot>
     <div className="flex flex-wrap items-start justify-between gap-4 border-b bg-background/40 px-5 py-5">
       <div><p className="mb-2 text-xs font-medium uppercase tracking-wider text-muted">{t("Projectstand")}</p><Badge tone={status === "active" ? cover.tone : "neutral"}>{label}</Badge>
-        <p className="mt-3 max-w-2xl text-sm text-muted">{t("Voorschotruimte vergelijkt ontvangen klantgeld met het geboekte werk inclusief afgesproken opslag. Marge en winst staan in een apart tabblad.")}</p>
+        <p className="mt-3 max-w-2xl text-sm text-muted">{t("Hier zie je wat van het ontvangen klantgeld overblijft na aftrek van het geboekte werk tegen klantprijs. De kosten en hun omrekening staan bij Kosten en berekening.")}</p>
       </div>
       <LinkButton href="#voorschot-opvragen" variant={needsAdvance ? "primary" : "secondary"}>{t(requestedOpen > 0.01 ? "Bestaand voorschot opvolgen" : needsAdvance ? "Voorschot voorbereiden" : "Voorschotten bekijken")}</LinkButton>
     </div>
     <CardContent>
-      <div className="grid gap-5 sm:grid-cols-3">
-        <div><p className="text-xs text-muted">{t("Ontvangen van klant")}</p><p className="mt-1 text-2xl font-semibold tabular-nums">{formatEUR(cover.received)}</p><p className="mt-1 text-xs text-muted">{t("Alleen geboekte betalingen · ex. btw")}</p></div>
-        <div><p className="text-xs text-muted">{t("Geboekte uren en externe inkoop")}</p><p className="mt-1 text-2xl font-semibold tabular-nums">{formatEUR(cover.prefinanced)}</p><p className="mt-1 text-xs text-muted">{t("Geboekte kosten · ex. btw")}</p></div>
-        <div><p className="text-xs text-muted">{t("Voorschotruimte incl. opslag")}</p><p className={`mt-1 text-2xl font-semibold tabular-nums ${cover.saldo < 0 ? "text-danger" : cover.tone === "warning" ? "text-warning" : "text-success"}`}>{formatEUR(cover.saldo)}</p><p className="mt-1 text-xs text-muted">{cover.saldo < 0 ? t("Ontbreekt voor het geboekte werk · ex. btw") : t("Vooruit ontvangen voor volgend werk · ex. btw")}</p></div>
-      </div>
+      <ProjectFundingSummary cover={cover}/>
       <div className="mt-5 flex flex-wrap items-center justify-between gap-3 border-t pt-4 text-sm">
         <span>{progress.percent === null ? t("Voortgang nog niet vastgelegd") : `${t("Voortgang")} ${progress.percent}% · ${t("{done} van {total} fases afgerond", { done: progress.completed, total: progress.total })}`}{progress.current && <span className="ml-2 text-muted">· {progress.current}</span>}</span>
         <Link href="#planning" className="text-accent underline-offset-4 hover:underline">{t("Voortgang bijwerken")}</Link>

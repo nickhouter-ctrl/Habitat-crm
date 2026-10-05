@@ -17,10 +17,11 @@ import { and, asc, eq, inArray, isNotNull, sql } from "drizzle-orm";
 
 import { db } from "@/lib/db";
 import { commissionEntries, contacts, documents, projectCosts, projectExtras, projectPhases, projectPayments, projects, purchaseOrders, referrals, sentEmails, timeEntries } from "@/lib/db/schema";
-import { desc, like } from "drizzle-orm";
+import { like } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import { deriveProjectMargins } from "@/lib/project-financials";
 import { poExVat } from "@/lib/purchase-orders";
+import { loadProjectAdvanceRequests } from "@/lib/project-advance-requests";
 
 const SECRET = process.env.PORTAL_JWT_SECRET ?? process.env.AUTH_SECRET ?? "";
 const COOKIE = "klant_sessie";
@@ -265,23 +266,9 @@ export async function klantVoorschotten(projectId: string) {
     .from(projects)
     .where(eq(projects.id, projectId))
     .limit(1);
-  const rows = await db
-    .select({
-      id: sentEmails.id,
-      subject: sentEmails.subject,
-      datum: sentEmails.createdAt,
-      gevraagd: sentEmails.amountEur,
-      ontvangen: sql<number>`(
-        select coalesce(sum(pp.amount_eur), 0)::float8
-        from project_payments pp where pp.advance_request_id = ${sentEmails.id}
-      )`,
-    })
-    .from(sentEmails)
-    .where(and(eq(sentEmails.projectId, projectId), like(sentEmails.subject, "Voorschot: %")))
-    .orderBy(desc(sentEmails.createdAt))
-    .limit(20);
+  const rows = await loadProjectAdvanceRequests(projectId, 20);
   return rows.map((v) => {
-    const gevraagd = v.gevraagd != null ? Number(v.gevraagd) : 0;
+    const gevraagd = v.amountEur != null ? Number(v.amountEur) : 0;
     const ontvangen = Number(v.ontvangen);
     // "Voorschot: <projectnaam> <omschrijving>" → alleen de omschrijving tonen.
     let omschrijving = (v.subject ?? "").replace(/^Voorschot:\s*/i, "").trim();
@@ -291,7 +278,7 @@ export async function klantVoorschotten(projectId: string) {
     return {
       id: v.id,
       omschrijving,
-      datum: v.datum,
+      datum: v.createdAt,
       gevraagdEur: gevraagd,
       ontvangenEur: ontvangen,
       openEur: Math.max(0, Math.round((gevraagd - ontvangen) * 100) / 100),

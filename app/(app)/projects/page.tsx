@@ -497,17 +497,17 @@ export default async function ProjectsPage({
           <div className="rounded-xl border bg-surface px-4 py-4"><p className="text-xs text-muted">{uiT("Openstaande klantfacturen")}</p><p className="mt-1 text-xl font-semibold tabular-nums">{formatEUR(totals.outstanding)}</p><p className="mt-1 text-xs text-muted">{uiT("Nog niet ontvangen · ex. btw")}</p></div>
         </div>
         <Card className="overflow-hidden"><CardHeader><CardTitle>{uiT("Stand per project")}</CardTitle><span className="text-xs text-muted">{uiT("Ontvangsten en voorschotruimte · ex. btw")}</span></CardHeader><Table className="min-w-[850px]">
-          <THead><Tr><Th>{uiT("Project")}</Th><Th>{uiT("Voortgang")}</Th><Th className="text-right">{uiT("Ontvangen")}</Th><Th className="text-right">{uiT("Geboekte kosten")}</Th><Th className="text-right">{uiT("Voorschotruimte")}</Th><Th>{uiT("Volgende stap")}</Th></Tr></THead>
+          <THead><Tr><Th>{uiT("Project")}</Th><Th>{uiT("Voortgang")}</Th><Th className="text-right">{uiT("Ontvangen")}</Th><Th className="text-right">{uiT("Geboekt werk tegen klantprijs")}</Th><Th className="text-right">{uiT("Resterende voorschotruimte")}</Th><Th>{uiT("Volgende stap")}</Th></Tr></THead>
           <TBody>{rows.map(p=><Tr key={p.id}>
             <Td><Link href={`/projects/${p.id}`} className="font-semibold text-accent hover:underline">{p.name}</Link><p className="mt-1 text-xs text-muted">{p.contactName??uiT("Geen klant gekoppeld")}{p.ownerName?` · ${p.ownerName}`:''}</p><div className="mt-2">{statusBadge(p.status)}</div></Td>
             <Td>{p.progress.percent===null?<span className="text-xs text-muted">{uiT("Nog niet vastgelegd")}</span>:<><p className="text-sm font-semibold">{p.progress.percent}%</p><div role="progressbar" aria-label={uiT("Voortgang")} aria-valuenow={p.progress.percent} aria-valuemin={0} aria-valuemax={100} className="mt-2 h-1.5 w-24 overflow-hidden rounded-full bg-background"><div className="h-full bg-accent" style={{width:`${p.progress.percent}%`}}/></div><p className="mt-1 max-w-36 text-xs text-muted">{p.progress.current??uiT("Alle fases afgerond")}</p></>}</Td>
             <Td className="text-right tabular-nums">{formatEUR(p.cover.received)}</Td>
-            <Td className="text-right tabular-nums">{formatEUR(p.cover.prefinanced)}<p className="mt-1 text-xs text-muted">{uiT("uren + externe inkoop")}</p></Td>
+            <Td className="text-right tabular-nums">{formatEUR(p.cover.requiredRevenue)}<p className="mt-1 text-xs text-muted">{uiT("Incl. opslag en eigen producten")}</p></Td>
             <Td className="text-right"><p className={`font-semibold tabular-nums ${p.cover.saldo<0?'text-danger':p.cover.status==='bijna_op'?'text-warning':'text-success'}`}>{formatEUR(p.cover.saldo)}</p><p className="mt-1 text-xs text-muted">{uiT(p.cover.saldo<0?"tekort incl. opslag":"vooruit ontvangen incl. opslag")}</p></Td>
             <Td><Link href={`/projects/${p.id}#voorschot-opvragen`} className="inline-block text-sm font-medium text-accent hover:underline">{uiT(p.status!=='active'?"Betalingen controleren":p.cover.requiredRevenue<=0.01?"Voorschot plannen":p.cover.status==='voorgeschoten'?"Voorschot nodig":p.cover.status==='bijna_op'?"Nieuw voorschot voorbereiden":"Voldoende voorschotruimte")}</Link>{p.outstanding>0.01&&<p className="mt-2 text-xs text-warning">{uiT("{amount} facturen nog open",{amount:formatEUR(p.outstanding)})}</p>}</Td>
           </Tr>)}{!rows.length&&<Tr><Td colSpan={6}>{uiT("Geen projecten in deze weergave — maak er een aan met “Nieuw project”.")}</Td></Tr>}</TBody>
         </Table></Card>
-        <p className="text-xs leading-relaxed text-muted">{uiT("Voorschotruimte vergelijkt ontvangen klantgeld met het geboekte werk inclusief afgesproken opslag. Marge en winst staan in een apart tabblad.")}</p>
+        <p className="text-xs leading-relaxed text-muted">{uiT("Ontvangen − geboekt werk tegen klantprijs = resterende voorschotruimte.")} {uiT("Kosten en berekening bekijk je in het project. Marge en winst staan in hun eigen tabblad.")}</p>
       </TabPanel>
       <TabPanel id="resultaat">
       <Card className="overflow-hidden">

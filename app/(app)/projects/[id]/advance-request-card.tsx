@@ -8,18 +8,19 @@ import { tekst as uiTranslation } from '@/lib/i18n/server';
  * tekstvak staat gaat er letterlijk uit — hetzelfde stramien als het
  * afkeurscherm van de inkoopfacturen, waar dat zich bewijst.
  */
-import { and, desc, eq, inArray, like, sql } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import Link from "next/link";
 
 import { Card, CardContent, CardHeader, CardTitle, Field, Input, LinkButton, Textarea } from "@/components/ui";
 import { SubmitButton } from "@/components/submit-button";
 import { auth } from "@/auth";
 import { db } from "@/lib/db";
-import { companies, contacts, projectPayments, sentEmails, users } from "@/lib/db/schema";
+import { companies, contacts, users } from "@/lib/db/schema";
 import { buildAdvanceReminderEmail, buildAdvanceRequestEmail, buildAdvanceStatusEmail } from "@/lib/advance-request";
 import type { AdvanceCover } from "@/lib/project-financials";
 import { formatEUR } from "@/lib/utils";
 import { sendAdvanceRequest } from "../actions";
+import { loadProjectAdvanceRequests } from "@/lib/project-advance-requests";
 
 /**
  * De termijn uit het mailonderwerp vissen. Het onderwerp is
@@ -103,42 +104,12 @@ export async function AdvanceRequestCard({
       return row[0] ?? null;
     }),
     // Wat er eerder is opgevraagd — hier terug te vinden, niet alleen op de klantkaart.
-    db
-      .select({
-        id: sentEmails.id,
-        subject: sentEmails.subject,
-        toEmail: sentEmails.toEmail,
-        amountEur: sentEmails.amountEur,
-        createdAt: sentEmails.createdAt,
-      })
-      .from(sentEmails)
-      .where(and(eq(sentEmails.projectId, projectId), like(sentEmails.subject, "Voorschot: %")))
-      .orderBy(desc(sentEmails.createdAt))
-      .limit(10),
+    loadProjectAdvanceRequests(projectId),
   ]);
 
   // Wat er op elk verzoek al binnen is. Een klant betaalt een voorschot soms in
   // delen, dus "opgevraagd" zegt op zichzelf niets over wat er staat.
-  const ontvangenPerVerzoek = new Map<string, number>();
-  if (eerder.length > 0) {
-    const rijen = await db
-      .select({
-        advanceRequestId: projectPayments.advanceRequestId,
-        som: sql<number>`coalesce(sum(${projectPayments.amountEur}), 0)::float8`,
-      })
-      .from(projectPayments)
-      .where(
-        and(
-          eq(projectPayments.projectId, projectId),
-          inArray(
-            projectPayments.advanceRequestId,
-            eerder.map((e) => e.id),
-          ),
-        ),
-      )
-      .groupBy(projectPayments.advanceRequestId);
-    for (const r of rijen) if (r.advanceRequestId) ontvangenPerVerzoek.set(r.advanceRequestId, Number(r.som));
-  }
+  const ontvangenPerVerzoek = new Map(eerder.map(r => [r.id, Number(r.ontvangen)]));
 
   // De klant zoals de boekhouder hem in de brief wil: bij een vennootschap de
   // statutaire naam met NIF/CIF, anders de contactpersoon.
