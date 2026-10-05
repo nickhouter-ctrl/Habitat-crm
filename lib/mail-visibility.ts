@@ -59,3 +59,29 @@ export function mailZichtbaarVoorSql(email: string | null | undefined, alias = "
   if (!m || isMarketingGebruiker(email)) return undefined;
   return sql`${sql.raw(`${alias}.mailbox_user`)} is distinct from ${m}`;
 }
+
+/** Het inkooppostvak (purchase@), of null als dat niet is ingesteld. */
+export function inkoopMailbox(): string | null {
+  const u = process.env.GMAIL_PURCHASE_USER?.trim().toLowerCase();
+  return u || null;
+}
+
+/**
+ * Mail in het inkooppostvak telt nooit als klantreactie.
+ *
+ * Daar komen facturen van leveranciers en onderaannemers binnen. Hangt het
+ * afzenderadres toevallig aan een contact dat wij eerder mailden — zoals het
+ * adres waarmee Creadores de facturen van Abdelmjid doorstuurt — dan stond zo'n
+ * factuur op de opvolglijst als "Antwoord nodig". Facturen gaan naar Facturen
+ * keuren, niet naar Opvolging.
+ */
+export function geenInkoopmail(): SQL | undefined {
+  const p = inkoopMailbox();
+  return p ? sql`${emailInbox.mailboxUser} is distinct from ${p}` : undefined;
+}
+
+/** Zelfde regel voor ruwe SQL die `email_inbox` als `e` aliast. */
+export function geenInkoopmailSql(alias = "e"): SQL | undefined {
+  const p = inkoopMailbox();
+  return p ? sql`${sql.raw(`${alias}.mailbox_user`)} is distinct from ${p}` : undefined;
+}

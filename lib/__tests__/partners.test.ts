@@ -25,4 +25,24 @@ describe('onderscheid informatie en persoonlijke reactie',()=>{
  it('Engelse aanvulling telt niet als persoonlijke opvolging, ook met References',()=>{expect(isPersonalPartnerMail('English version · Our meeting on 28 September · Habitat One','<old>')).toBe(false);});
  it('een echt antwoord op die aanvulling telt wel mee',()=>{expect(isPersonalPartnerMail('Re: English version · Our meeting on 28 September · Habitat One','<reply>')).toBe(true);});
  it('de automatische beursbevestiging telt niet mee',()=>{expect(isPersonalPartnerMail('Un placer conocerte en 360 by Cevisama')).toBe(false);});
+ it('een verkoopfactuur telt in geen enkele taal als opvolging',()=>{
+   for (const s of ['Factura FAC-2026-0039 de Habitat One','Factuur F260021 van Habitat One','Invoice F260021 from Habitat One','Presupuesto P2026-0031 de Habitat One','Confirmación: presupuesto P2026-0031 aceptado'])
+     expect(isPersonalPartnerMail(s,'<draad>'),s).toBe(false);
+ });
+ it('account-, herinnerings- en reviewmails tellen niet mee',()=>{
+   for (const s of ['Tu cuenta de Habitat One está lista — crea tu contraseña','Je Habitat One-account is klaar — stel je wachtwoord in','Habitat Windows — stel je wachtwoord in','Recordatorio: su entrega está programada','Su enlace de acceso — portal del cliente Habitat One','Resumen de sus facturas pendientes','¿Contento con su compra? Una breve reseña nos ayudaría mucho','Hemos recibido su solicitud de presupuesto'])
+     expect(isPersonalPartnerMail(s),s).toBe(false);
+ });
+ it('interne meldingen aan collega\'s tellen niet mee',()=>{
+   expect(isPersonalPartnerMail('3 inkoopfacturen ter goedkeuring')).toBe(false);
+   expect(isPersonalPartnerMail('Bericht van Hans van Dalen: Afspraak plannen met Raul Martinez')).toBe(false);
+ });
+ it('een antwoord in een factuur- of offertedraad blijft persoonlijk',()=>{
+   expect(isPersonalPartnerMail('Re: Presupuesto P2026-0031 de Habitat One','<draad>')).toBe(true);
+   expect(isPersonalPartnerMail('RE: Factura FAC-2026-0039 de Habitat One')).toBe(true);
+ });
+ it('de showroommail en een gewone eerste mail blijven persoonlijk',()=>{
+   expect(isPersonalPartnerMail('Gracias por visitar nuestro stand en Valencia / Thank you for visiting our stand in Valencia')).toBe(true);
+   expect(isPersonalPartnerMail('Flexible Stone — samenwerking bespreken')).toBe(true);
+ });
 });

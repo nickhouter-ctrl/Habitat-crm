@@ -9,7 +9,7 @@ import { z } from 'zod';
 import { db } from '@/lib/db';
 import { contacts, companies, partnerProfiles, partnerMessages, quoteRequests, emailInbox, sentEmails, users, appointments, activities } from '@/lib/db/schema';
 import { requireModuleRead } from '@/lib/auth/guards';
-import { mailZichtbaarVoor } from '@/lib/mail-visibility';
+import { geenInkoopmail, mailZichtbaarVoor } from '@/lib/mail-visibility';
 import { partnerMailVisible } from '@/lib/partner-context';
 import { followupSource, followupSources } from '@/lib/followup-source';
 import { CUSTOM_STONE_SOURCE, confirmedFairDate, FOLLOWUP_MAILS, followupMailKind, hasResellerInterest } from '@/lib/followup-mail';
@@ -33,7 +33,7 @@ export default async function Page({params,searchParams}:{params:Promise<{id:str
  const {c,p}=row,write=access.heeftCap('schrijven'),canMail=access.magModule('inbox');
  const [team,requests,meetings,history,completionEvents]=await Promise.all([db.select({id:users.id,name:users.name}).from(users).where(inArray(users.role,['admin','agent','marketing'])),db.select().from(quoteRequests).where(eq(quoteRequests.contactId,id)).orderBy(desc(quoteRequests.createdAt)),db.select().from(appointments).where(eq(appointments.contactId,id)).orderBy(desc(appointments.startsAt)),db.select().from(activities).where(and(eq(activities.contactId,id),inArray(activities.subject,['Verkooppuntdossier bijgewerkt',FOLLOWUP_DONE,FOLLOWUP_REOPENED]))).orderBy(desc(activities.createdAt)).limit(20),latestFollowupCompletions([id])]);
  const outgoing=canMail?await db.select().from(partnerMessages).where(and(eq(partnerMessages.contactId,id),partnerMailVisible(access.email))).orderBy(desc(partnerMessages.createdAt)):[];
- const incoming=canMail&&c.email?await db.select().from(emailInbox).where(and(sql`lower(trim(${emailInbox.fromEmail}))=${c.email.trim().toLowerCase()}`,mailZichtbaarVoor(access.email))).orderBy(desc(emailInbox.receivedAt)).limit(100):[];
+ const incoming=canMail&&c.email?await db.select().from(emailInbox).where(and(sql`lower(trim(${emailInbox.fromEmail}))=${c.email.trim().toLowerCase()}`,mailZichtbaarVoor(access.email),geenInkoopmail())).orderBy(desc(emailInbox.receivedAt)).limit(100):[];
  const completion=completionEvents[0],completed=followupCompleted(completion,incoming[0]?.receivedAt??null,p?.nextActionOn,new Date().toLocaleDateString('sv-SE',{timeZone:'Europe/Madrid'}));
  // Oud CRM-archief alleen via expliciete contactkoppeling; geen privépostvak raden.
  const archived: (typeof sentEmails.$inferSelect)[] = [];

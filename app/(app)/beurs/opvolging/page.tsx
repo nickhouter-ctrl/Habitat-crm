@@ -5,7 +5,7 @@ import { and, desc, eq, inArray, sql } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import { contacts, companies, partnerProfiles, partnerMessages, quoteRequests, emailInbox, users } from '@/lib/db/schema';
 import { requireModuleRead } from '@/lib/auth/guards';
-import { mailZichtbaarVoor } from '@/lib/mail-visibility';
+import { geenInkoopmail, mailZichtbaarVoor } from '@/lib/mail-visibility';
 import { partnerMailVisible } from '@/lib/partner-context';
 import { conversationState } from '@/lib/partners';
 import { followupSources } from '@/lib/followup-source';
@@ -67,7 +67,7 @@ export default async function Page({ searchParams }: {
         at: emailInbox.receivedAt,
         subject: emailInbox.subject,
         tekst: sql<string | null>`left(regexp_replace(coalesce(${emailInbox.bodyText}, ''), '\\s+', ' ', 'g'), 200)`,
-      }).from(emailInbox).where(mailZichtbaarVoor(access.email))
+      }).from(emailInbox).where(and(mailZichtbaarVoor(access.email), geenInkoopmail()))
         .orderBy(emailInbox.fromEmail, desc(emailInbox.receivedAt)),
     ]) : Promise.resolve([[], []] as const),
   ]);

@@ -4,7 +4,7 @@ import { db } from '@/lib/db';
 import { followupEligible } from './followup-selection';
 import { activities } from '@/lib/db/schema';
 import { FOLLOWUP_DONE, FOLLOWUP_REOPENED } from '@/lib/followup-checklist';
-import { isMarketingGebruiker, mailZichtbaarVoorSql, marketingMailbox } from '@/lib/mail-visibility';
+import { geenInkoopmailSql, isMarketingGebruiker, mailZichtbaarVoorSql, marketingMailbox } from '@/lib/mail-visibility';
 
 export const followupCompletionFilter = and(eq(activities.type, 'note'), inArray(activities.subject, [FOLLOWUP_DONE, FOLLOWUP_REOPENED]));
 export async function latestFollowupCompletions(contactIds: string[]) {
@@ -31,6 +31,8 @@ export async function latestFollowupCompletions(contactIds: string[]) {
  */
 export async function telAntwoordNodig(userEmail?: string | null): Promise<number> {
   const zichtbaar = mailZichtbaarVoorSql(userEmail, 'e');
+  // Facturen in purchase@ zijn geen klantreactie — zie geenInkoopmail.
+  const inkoop = geenInkoopmailSql('e');
   // Dezelfde regel voor de UITGAANDE kant: ziet de teller een mail van Teresa
   // die de lijst verbergt, dan staat er "wachten op klant" tegenover een
   // cijfer dat iets anders beweert.
@@ -41,7 +43,7 @@ export async function telAntwoordNodig(userEmail?: string | null): Promise<numbe
       select distinct on (c.id) c.id as contact_id, e.received_at
       from email_inbox e
       join contacts c on c.email is not null and lower(trim(c.email)) = lower(trim(e.from_email))
-      where e.received_at is not null ${zichtbaar ? sql`and ${zichtbaar}` : sql``}
+      where e.received_at is not null ${zichtbaar ? sql`and ${zichtbaar}` : sql``} ${inkoop ? sql`and ${inkoop}` : sql``}
       order by c.id, e.received_at desc
     ), laatste_uit as (
       select contact_id, max(sent_at) as sent_at from partner_messages

@@ -7,7 +7,7 @@ vi.mock('@/lib/db', () => ({ db: {
 } }));
 vi.mock('@/lib/email', () => ({ sendEmail: m.mail, brandedEmail: (b: string) => b, escapeHtml: (s: string) => s }));
 vi.mock('@/lib/crm-url', () => ({ crmUrl: () => 'https://crm.test' }));
-vi.mock('@/lib/mail-visibility', () => ({ marketingMailbox: m.postvak }));
+vi.mock('@/lib/mail-visibility', () => ({ marketingMailbox: m.postvak, geenInkoopmail: () => undefined }));
 import { notifyFollowupReplies } from '../followup-reply-notify';
 
 const reactie = (over: Record<string, unknown> = {}) => ({
