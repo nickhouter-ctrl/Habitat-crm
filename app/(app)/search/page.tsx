@@ -1,5 +1,5 @@
 import { tekst as uiTranslation } from '@/lib/i18n/server';
-import { ilike, or } from "drizzle-orm";
+import { and, ilike, or } from "drizzle-orm";
 import { Search } from "lucide-react";
 import Link from "next/link";
 
@@ -60,10 +60,12 @@ export default async function SearchPage({
   const params = await searchParams;
   const q = typeof params.q === "string" ? params.q.trim() : "";
 
+  const ik = await huidigeToegangOfNull();
+  const sales=ik?.rol==='sales';
   const searchForm = (
     <form className="relative mb-6 max-w-md" action="/search">
       <Search className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted" />
-      <Input name="q" defaultValue={q} autoFocus placeholder={uiT("Zoek in contacten, projecten, panden, producten, documenten…")} className="pl-8" />
+      <Input name="q" defaultValue={q} autoFocus placeholder={sales?uiT("Zoek klanten en producten…"):uiT("Zoek in contacten, projecten, panden, producten, documenten…")} className="pl-8" />
     </form>
   );
 
@@ -79,14 +81,13 @@ export default async function SearchPage({
   const like = `%${q}%`;
   // Alleen zoeken waar iemand ook mag kijken — en die queries dus ook niet
   // uitvoeren. Zoeken is anders een achterdeur om het menu heen.
-  const ik = await huidigeToegangOfNull();
   const zoek = async <T,>(pad: string, uitvoeren: () => Promise<T[]>): Promise<T[]> =>
     ik?.magPad(pad) ? uitvoeren() : [];
 
   const [cs, prjs, ps, prs, docs] = await Promise.all([
     zoek("/contacts", () =>
       db.query.contacts.findMany({
-        where: or(ilike(contacts.name, like), ilike(contacts.email, like)),
+        where: and(or(ilike(contacts.name, like), ilike(contacts.email, like))),
         orderBy: contacts.name,
         limit: 12,
         columns: { id: true, name: true, email: true, type: true, stage: true },
@@ -106,7 +107,7 @@ export default async function SearchPage({
         columns: { id: true, title: true, reference: true, status: true, location: true },
       }),
     ),
-    zoek("/products", () =>
+    zoek(sales?"/voorraad":"/products", () =>
       db.query.products.findMany({
         where: or(ilike(products.name, like), ilike(products.sku, like), ilike(products.category, like), ilike(products.collection, like)),
         orderBy: products.name,
@@ -178,7 +179,7 @@ export default async function SearchPage({
 
           <ResultSection title={uiT("Producten")} count={prs.length}>
             {prs.map((p) => (
-              <Row key={p.id} href={`/products/${p.id}/edit`}>
+              <Row key={p.id} href={sales?`/voorraad?collection=&q=${encodeURIComponent(p.name)}`:`/products/${p.id}/edit`}>
                 <span className="font-medium">{p.name}</span>
                 <span className="text-xs text-muted">{[p.collection, p.category].filter(Boolean).join(" › ") || "—"}</span>
               </Row>

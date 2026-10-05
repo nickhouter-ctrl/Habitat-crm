@@ -50,7 +50,7 @@ export default async function AppLayout({
         {/* Desktop top-bar met globale zoekbalk (mobiel zit zoeken in de bovenbalk). */}
         <header className="sticky top-0 z-20 hidden h-14 items-center gap-4 border-b bg-surface/95 px-6 backdrop-blur lg:flex">
           <GlobalSearch className="w-full max-w-xl" />
-          <TeamNotifications unread={badges['/teamberichten'] ?? 0}/>
+          {toegang.magModule('teamberichten')&&<TeamNotifications unread={badges['/teamberichten'] ?? 0}/>}
           {/* Taal bovenaan, niet weggestopt in Instellingen: wie het systeem
               niet in zijn eigen taal ziet, vindt dat menu juist niet. */}
           <TaalKeuze huidig={locale} zet={zetTaal} compact className="ml-auto" />

@@ -10,6 +10,7 @@ import { alias } from "drizzle-orm/pg-core";
 
 import { huidigeToegangOfNull } from "@/lib/auth/access";
 import { datumTaal, tekst } from "@/lib/i18n/server";
+import { salesTaskFilter } from "@/lib/auth/sales-scope";
 import { magAlles } from "@/lib/auth/modules";
 import { DagtakenLijst } from "@/components/dagtaken-lijst";
 import { LinkButton } from "@/components/ui";
@@ -74,6 +75,7 @@ export default async function StartPage({
       .where(
         and(
           eq(activities.type, "task"),
+          salesTaskFilter(ik?.rol),
           isNull(activities.completedAt),
           sql`not (coalesce(${activities.subject}, '') in ('Opvolging', 'Beursopvolging') and (
             exists (select 1 from partner_profiles p where p.contact_id = ${activities.contactId} and p.stage = 'stopped') or

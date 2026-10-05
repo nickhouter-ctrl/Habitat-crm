@@ -43,11 +43,13 @@ export function ContactCreateForm({
   action,
   onSuggest,
   initial,
+  hideNotes = false,
   submitLabel = "Contact opslaan",
 }: {
   action: (formData: FormData) => void | Promise<void>;
   onSuggest: (query: string) => Promise<AddressSuggestion[]>;
   initial?: ContactFormInitial;
+  hideNotes?: boolean;
   submitLabel?: string;
 }) {
   const uiT = useUiTranslation();
@@ -127,7 +129,7 @@ export function ContactCreateForm({
     <form action={action} className="space-y-5">
       <input type="hidden" name="klanttype" value={type} />
 
-      <TabsRoot defaultTab="data" ids={["data","address","admin"]} param="form"><TabsBar tabs={[{id:"data",label:uiT("Contact")},{id:"address",label:uiT("Adres")},{id:"admin",label:uiT("Administratie")}]}/><TabPanel id="data"><Field label={uiT("Type klant")}>
+      <TabsRoot defaultTab="data" ids={hideNotes?["data","address"]:["data","address","admin"]} param="form"><TabsBar tabs={[{id:"data",label:uiT("Contact")},{id:"address",label:uiT("Adres")},...(!hideNotes?[{id:"admin",label:uiT("Administratie")}]:[])]}/><TabPanel id="data"><Field label={uiT("Type klant")}>
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
           {TYPES.map((t) => (
             <button
@@ -270,9 +272,9 @@ export function ContactCreateForm({
         </Select>
       </Field></TabPanel>
 
-      <TabPanel id="admin"><Field label={uiT("Notities")} htmlFor="notes">
+      {!hideNotes&&<TabPanel id="admin"><Field label={uiT("Notities")} htmlFor="notes">
         <Textarea id="notes" name="notes" defaultValue={initial?.notes ?? ""} />
-      </Field></TabPanel></TabsRoot>
+      </Field></TabPanel>}</TabsRoot>
 
       <div className="pt-1">
         <SubmitButton pendingLabel={uiT("Opslaan…")}>{submitLabel}</SubmitButton>

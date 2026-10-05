@@ -16,6 +16,7 @@ import { PageHeader, Card, CardContent, LinkButton, Badge } from '@/components/u
 import { ActionDialog } from '@/components/action-dialog';
 import { SyncButton } from './forms';
 import { FollowupCheck } from './check';
+import { salesMailFilter } from '@/lib/auth/sales-scope';
 import { followupEligible } from '@/lib/followup-selection';
 import { FollowupExclude } from './exclude';
 import { FollowupLive } from './live';
@@ -31,7 +32,7 @@ export default async function Page({ searchParams }: {
 }) {
 
  const t=await tekst(); const dateLocale=await datumTaal();
-  const access = await requireModuleRead('aanvragen');
+  const access = await requireModuleRead('klantopvolging');
   const params = await searchParams;
   const param = (key: string) => typeof params[key] === 'string' ? params[key] : '';
   const q = param('q').trim().slice(0, 200);
@@ -52,14 +53,14 @@ export default async function Page({ searchParams }: {
     .leftJoin(users, eq(users.id, partnerProfiles.ownerId))
 .where(followupEligible).orderBy(contacts.name);
 
-  const canMail = access.magModule('inbox');
+  const canMail = access.magModule('inbox') || access.rol==='sales';
   const [sources, completions, [sent, incoming]] = await Promise.all([
     db.select({ contactId: quoteRequests.contactId, source: quoteRequests.source }).from(quoteRequests)
       .where(inArray(quoteRequests.contactId, rows.map(r => r.contact.id))),
     latestFollowupCompletions(rows.map(r => r.contact.id)),
     canMail ? Promise.all([
       db.select({ contactId: partnerMessages.contactId, at: sql<Date>`max(${partnerMessages.sentAt})` })
-        .from(partnerMessages).where(and(eq(partnerMessages.status, 'sent'), eq(partnerMessages.personal, true), partnerMailVisible(access.email)))
+        .from(partnerMessages).where(and(eq(partnerMessages.status, 'sent'), eq(partnerMessages.personal, true), partnerMailVisible(access.email,access.rol,access.id)))
         .groupBy(partnerMessages.contactId),
       // Niet alleen wannéér er iets binnenkwam, maar ook wát: op de lijst wil je
       // zien waar de klant op reageerde zonder het dossier te openen.
@@ -68,7 +69,7 @@ export default async function Page({ searchParams }: {
         at: emailInbox.receivedAt,
         subject: emailInbox.subject,
         tekst: sql<string | null>`left(regexp_replace(coalesce(${emailInbox.bodyText}, ''), '\\s+', ' ', 'g'), 200)`,
-      }).from(emailInbox).where(and(mailZichtbaarVoor(access.email), geenInkoopmail()))
+      }).from(emailInbox).where(and(mailZichtbaarVoor(access.email), geenInkoopmail(),salesMailFilter(access.rol,access.email)))
         .orderBy(emailInbox.fromEmail, desc(emailInbox.receivedAt)),
     ]) : Promise.resolve([[], []] as const),
   ]);
@@ -104,7 +105,7 @@ export default async function Page({ searchParams }: {
     <PageHeader title={t("Opvolging")} subtitle={t("Concrete aanvragen, open acties en klantreacties die opvolging nodig hebben.")}
       actions={<>
         <LinkButton href="/contacts" variant="secondary">{t("Contact kiezen")}</LinkButton>
-        {access.magModule('producten') && <LinkButton href="/wederverkopers">{t("Verkooppunten")}</LinkButton>}
+        {access.magModule('verkooppunten') && <LinkButton href="/wederverkopers">{t("Verkooppunten")}</LinkButton>}
       </>} />
     <nav aria-label={t("Opvolgstatus")} className="flex gap-1 overflow-x-auto border-b">
       {([
@@ -145,7 +146,7 @@ export default async function Page({ searchParams }: {
           </div><button className="mt-4 rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-accent-foreground">{t("Toepassen")}</button></ActionDialog>
           <button className="rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-accent-foreground">{t("Toepassen")}</button>
         </form>
-        {canMail && access.heeftCap('schrijven') && <SyncButton />}
+        {canMail && access.heeftCap('schrijven') && access.magModule('inbox') && <SyncButton />}
       </div>
       <div className="mt-3"><ActionDialog title={t("Zo werkt de opvolging")}><p className="text-sm text-muted">{t("Open een naam om persoonlijk te mailen of een afspraak te plannen. Vink af als deze opvolging klaar is. Je kunt de klant terugvinden bij Afgehandeld en het vinkje weer uitzetten. Een nieuwe reactie of volgende opvolgdatum brengt de klant terug.")}</p>
       <p className="mt-2 text-xs text-muted">{t("Na een bevestigde persoonlijke mail wordt de huidige opvolging automatisch afgevinkt. Gebruik ‘Uit werklijst halen’ voor contacten die geen opvolging nodig hebben.")}</p>

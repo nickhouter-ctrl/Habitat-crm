@@ -1,4 +1,5 @@
 import { datumTaal } from "@/lib/i18n/server";
+import { requireModuleRead } from "@/lib/auth/guards";
 import { tekst as uiTranslation } from '@/lib/i18n/server';
 import { asc, eq } from "drizzle-orm";
 import { notFound } from "next/navigation";
@@ -46,6 +47,7 @@ export default async function BegrotingPage({
   params: Promise<{ id: string }>;
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
+  await requireModuleRead("projects");
   const uiDateLocale = await datumTaal();
   const uiT = await uiTranslation();
   const { id } = await params;

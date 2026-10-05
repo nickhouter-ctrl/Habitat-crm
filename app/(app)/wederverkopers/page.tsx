@@ -1,6 +1,6 @@
 import { tekst as uiTranslation } from '@/lib/i18n/server';
 import { tekst } from '@/lib/i18n/server';
-import { asc, eq, inArray, or, sql } from 'drizzle-orm';
+import { and, asc, eq, inArray, or, sql } from 'drizzle-orm';
 import Link from 'next/link';
 import { Badge, Card, CardContent, LinkButton, PageHeader, StatTile, TBody, Table, Td, Th, THead, Tr } from '@/components/ui';
 import { db } from '@/lib/db';
@@ -19,7 +19,7 @@ export default async function VerkooppuntenPage({ searchParams }: {
 }) {
 
  const t=await tekst();
-  const access = await requireModuleRead('producten');
+  const access = await requireModuleRead('verkooppunten');
   const s = await searchParams;
   const [resellers, summaryRows] = await Promise.all([
     db.select({ contact: contacts, company: companies.name, profile: partnerProfiles }).from(contacts)
@@ -30,7 +30,7 @@ export default async function VerkooppuntenPage({ searchParams }: {
         eq(partnerProfiles.active, true),
         inArray(partnerProfiles.interest, ['interested', 'candidate']),
         sql`coalesce(${contacts.tags}, '{}'::text[]) @> array['rol:wederverkoper'] and (${partnerProfiles.contactId} is null or ${partnerProfiles.interest} <> 'not_interested')`,
-      )).orderBy(asc(contacts.name)),
+       )).orderBy(asc(contacts.name)),
     db.select({
       resellerId: consignments.resellerId,
       inStoreValue: sql<number>`coalesce(sum((${consignments.qtyPlaced} - ${consignments.qtySold}) * coalesce(${products.dealerPriceEur}, ${products.priceEur} * 0.75, ${consignments.dealerPriceEur}, 0)), 0)::float8`,
@@ -50,10 +50,10 @@ export default async function VerkooppuntenPage({ searchParams }: {
 
   return <div className="space-y-6">
     <PageHeader title={t("Verkooppunten")} subtitle={t("Van interesse naar een officiële samenwerking. Contract, presentatie en afname per klant.")}
-      actions={access.magModule('aanvragen') && <LinkButton href="/opvolging">{t("Opvolging")}</LinkButton>} />
+      actions={access.magModule('klantopvolging') && <LinkButton href="/opvolging">{t("Opvolging")}</LinkButton>} />
     <nav aria-label={t("Verkooppunten")} className="flex gap-6 border-b pb-3 text-sm">
       <Link aria-current="page" href="/wederverkopers" className="font-semibold text-accent">{t("Verkooppunten")}</Link>
-      {access.magModule('prijzen') && <Link href="/wederverkopers/prijzen" className="text-muted hover:text-foreground">{t("Staffels & marges")}</Link>}
+      {access.magModule('verkoopprijzen') && <Link href="/wederverkopers/prijzen" className="text-muted hover:text-foreground">{t("Staffels & marges")}</Link>}
     </nav>
     <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
       <Link href="/wederverkopers?status=candidate"><StatTile label={t("Kandidaten")} value={resellers.filter(candidate).length} /></Link>
@@ -77,7 +77,7 @@ export default async function VerkooppuntenPage({ searchParams }: {
       {visible.length ? <Table><THead><tr><Th>{t("Contact / bedrijf")}</Th><Th>{t("Status")}</Th><Th>{t("Plaats")}</Th><Th className="text-right">{t("Beheer")}</Th></tr></THead>
         <TBody>{visible.map(r => <Tr key={r.contact.id}>
           <Td>
-            {access.magModule('aanvragen') ? <Link className="font-semibold hover:underline" href={`/opvolging/${r.contact.id}`}>{r.contact.name}</Link> : <span className="font-semibold">{r.contact.name}</span>}
+            {access.magModule('klantopvolging') ? <Link className="font-semibold hover:underline" href={`/opvolging/${r.contact.id}`}>{r.contact.name}</Link> : <span className="font-semibold">{r.contact.name}</span>}
             <p className="text-muted">{r.company ?? r.contact.email}</p>
           </Td>
           <Td>
@@ -93,7 +93,7 @@ export default async function VerkooppuntenPage({ searchParams }: {
         </Tr>)}</TBody></Table> : <div className="space-y-3 p-8">
         <p className="font-medium">{t("Geen verkooppunten bij dit filter.")}</p>
         <p className="text-sm text-muted">{t("Open een klantdossier en kies ‘Wil verkooppunt worden’ bij de interesse.")}</p>
-        {access.magModule('aanvragen') && <LinkButton href="/opvolging" variant="secondary">{t("Naar opvolging")}</LinkButton>}
+        {access.magModule('klantopvolging') && <LinkButton href="/opvolging" variant="secondary">{t("Naar opvolging")}</LinkButton>}
       </div>}
     </Card>
   </div>;

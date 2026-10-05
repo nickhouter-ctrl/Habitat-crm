@@ -176,6 +176,7 @@ const NAV_GROUPS: { id: string; label: string | null; items: NavItem[] }[] = [
     label: "Producten",
     items: [
       { href: "/scan", label: "Scannen", icon: ScanLine },
+      { href: "/voorraad", label: "Voorraad", icon: Boxes },
       { href: "/products", label: "Producten", icon: Boxes },
       { href: "/merken", label: "Merken", icon: Tag },
       { href: "/samples", label: "Samples", icon: Layers },

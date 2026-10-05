@@ -4,7 +4,7 @@ import { and, eq, inArray, ne, or, sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
-import { requireModule } from "@/lib/auth/guards";
+import { requireModule, requireCapability } from "@/lib/auth/guards";
 
 import { contactDisplayName } from "@/lib/contact-name";
 import { checkVatVies, type ViesResult } from "@/lib/vies";
@@ -211,7 +211,7 @@ export async function updateContact(id: string, formData: FormData) {
         province: v.province || "",
         country: "ES",
         companyId,
-        notes: v.notes || "",
+        ...(guardUser.role==='sales'?{}:{notes:v.notes||""}),
         updatedAt: new Date(),
       }),
     )
@@ -230,6 +230,7 @@ export async function addContactNote(contactId: string, body: string) {
 
   await db.insert(activities).values({
     type: "note",
+    subject:guardUser.role==='sales'?"Verkoopnotitie":null,
     body: text,
     contactId,
     authorId: guardUser.id,
@@ -244,6 +245,7 @@ export async function addContactNote(contactId: string, body: string) {
 
 export async function deleteContact(id: string) {
   const guardUser = await requireModule("contacts");
+  await requireCapability("bedragen");
 
   // Beschermd: niet verwijderen als er verstuurde/betaalde facturen aan hangen.
   const blocking = await db.query.documents.findFirst({
@@ -272,6 +274,7 @@ export async function deleteContact(id: string) {
 /** Ververs het AI-dossier op de contactkaart (knop "Ververs"). */
 export async function verversContactDossier(contactId: string) {
   await requireModule("contacts");
+  await requireCapability("bedragen");
   const { genereerContactDossier } = await import("@/lib/contact-dossier");
   await genereerContactDossier(contactId);
   revalidatePath(`/contacts/${contactId}`);

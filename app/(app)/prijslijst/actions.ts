@@ -13,7 +13,7 @@ import { renderPricelistPdf, type PricelistItem, type PricelistLocale } from "@/
 const LOCALES: PricelistLocale[] = ["nl", "de", "en", "es"];
 
 export async function mailPricelist(formData: FormData) {
-  await requireModule("prijzen");
+  const user=await requireModule("verkoopprijzen");
 
   const contactId = String(formData.get("contactId") ?? "");
   const subject = String(formData.get("subject") ?? "").trim() || "Prijslijst verkoop";

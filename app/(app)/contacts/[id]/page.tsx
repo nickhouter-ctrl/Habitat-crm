@@ -1,3 +1,4 @@
+import { salesContactActivityFilter } from "@/lib/auth/sales-scope";
 import { datumTaal } from "@/lib/i18n/server";
 import { ActionDialog } from "@/components/action-dialog";
 import { tekst as uiTranslation } from '@/lib/i18n/server';
@@ -54,7 +55,7 @@ import { ReminderButton } from "@/components/reminder-button";
 import { ReviewRequestButton } from "@/components/review-request-button";
 import { dossierConfigured } from "@/lib/contact-dossier";
 import { getWindowsReport } from "@/lib/windows-report";
-import { huidigeToegangOfNull } from "@/lib/auth/access";
+import { requireModuleRead } from "@/lib/auth/guards";
 import { WindowsOverview } from "@/components/windows-overview";
 import { windowsPortalHref } from "@/lib/windows-financials";
 import { addContactNote, deleteContact, verversContactDossier } from "../actions";
@@ -101,11 +102,11 @@ export default async function ContactDetailPage({
   params: Promise<{ id: string }>;
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
+  const ik = await requireModuleRead("contacts");
   const uiDateLocale = await datumTaal();
   const uiT = await uiTranslation();
   const { id } = await params;
   const sp = await searchParams;
-  const ik = await huidigeToegangOfNull();
   const magBedragen = ik?.heeftCap("bedragen") ?? false;
 
   const contact = await db.query.contacts.findFirst({
@@ -117,20 +118,20 @@ export default async function ContactDetailPage({
   });
   if (!contact) notFound();
 
-  const windowsReport = await getWindowsReport(id);
-  const hasWindows = windowsReport.dealers.length > 0;
+  const windowsReport = magBedragen ? await getWindowsReport(id) : null;
+  const hasWindows = (windowsReport?.dealers.length??0) > 0;
 
   const [relatedProjects, relatedDocs, timeline, holdedMap] = await Promise.all([
-    db.query.projects.findMany({
+    magBedragen ? db.query.projects.findMany({
       where: eq(projects.contactId, id),
       orderBy: desc(projects.updatedAt),
-    }),
-    db.query.documents.findMany({
+    }) : [],
+    magBedragen ? db.query.documents.findMany({
       where: eq(documents.contactId, id),
       orderBy: desc(documents.createdAt),
-    }),
+    }) : [],
     db.query.activities.findMany({
-      where: eq(activities.contactId, id),
+      where: and(eq(activities.contactId, id),salesContactActivityFilter(ik?.rol)),
       orderBy: desc(activities.createdAt),
       limit: 50,
       with: { author: { columns: { name: true } } },
@@ -246,11 +247,11 @@ export default async function ContactDetailPage({
   );
   const hasOpenInvoices = openInvoices.length > 0;
   // Verstuurde mails (herinneringen, aanmaningen, reviews) — met bewaarde inhoud.
-  const sentMails = await db.query.sentEmails.findMany({
+  const sentMails = magBedragen ? await db.query.sentEmails.findMany({
     where: eq(sentEmails.contactId, id),
     orderBy: desc(sentEmails.createdAt),
     limit: 50,
-  });
+  }) : [];
 
   // Documenten per project (voor de uitklapbare Projecten-tab).
   const projectIds = relatedProjects.map((p) => p.id);
@@ -330,23 +331,23 @@ export default async function ContactDetailPage({
         }
         actions={
           <>
-            {ik?.magModule('aanvragen') && <LinkButton href={`/opvolging/${id}`} variant="primary">{uiT("Opvolging")}</LinkButton>}
+            {ik?.magModule('klantopvolging') && <LinkButton href={`/opvolging/${id}`} variant="primary">{uiT("Opvolging")}</LinkButton>}
             <LinkButton href={`/contacts/${id}/edit`} variant="secondary">{uiT("Bewerken")}</LinkButton>
             <Link href="/contacts" className="text-sm text-muted hover:underline">
               {uiT("← Contacten")} </Link>
-            <Link href="#online-toegang" className="text-sm underline">{uiT("Online toegang")}</Link>
-            <form action={deleteContact.bind(null, id)} className="contents">
+            {ik?.magModule("klantaccounts")&&<Link href="#online-toegang" className="text-sm underline">{uiT("Online toegang")}</Link>}
+            {magBedragen&&<form action={deleteContact.bind(null, id)} className="contents">
               <ConfirmSubmit
                 message={uiT("Contact \"{v0}\" definitief verwijderen?", { v0: contact.name })}
                 className="rounded-md px-3 py-2 text-sm font-medium text-danger transition-colors hover:bg-danger/10"
               >
                 {uiT("Verwijderen")} </ConfirmSubmit>
-            </form>
+            </form>}
           </>
         }
       />
 
-      <ContactOnlineAccess contactId={id} email={contact.email} />
+      {ik?.magModule("klantaccounts")&&<ContactOnlineAccess contactId={id} email={contact.email} />}
 
       {sp.verwijderen === "facturen" && (
         <p className="mb-4 rounded-md bg-warning/10 px-3 py-2 text-sm text-warning">
@@ -403,7 +404,7 @@ export default async function ContactDetailPage({
         })}
       </div>
 
-      {hasWindows && tab === "overzicht" && (
+      {hasWindows && windowsReport && tab === "overzicht" && (
         <Card className="mb-5">
           <CardHeader><CardTitle>{uiT("Kozijnen · Habitat One Windows")}</CardTitle><Link href={tabHref("kozijnen")} className="text-sm text-accent hover:underline">{uiT("Bekijk kozijnendashboard →")}</Link></CardHeader>
           <CardContent>
@@ -416,7 +417,7 @@ export default async function ContactDetailPage({
           </CardContent>
         </Card>
       )}
-      {tab === "kozijnen" && (hasWindows ? <div className="space-y-4">
+      {tab === "kozijnen" && windowsReport && (hasWindows ? <div className="space-y-4">
         <div className="flex flex-wrap gap-3">{windowsReport.dealers.map(d => <LinkButton key={d.id} href={windowsPortalHref(`/admin/dealers/${d.id}`)} variant="secondary" target="_blank" rel="noreferrer" prefetch={false}>{uiT("Windows-dashboard ·")} {d.companyName || d.email}</LinkButton>)}</div>
         <WindowsOverview report={windowsReport} scoped />
       </div> : <Card className="p-5 text-sm text-muted">{uiT("Aan dit CRM-contact is geen Windows-account gekoppeld.")}</Card>)}
@@ -840,7 +841,7 @@ export default async function ContactDetailPage({
             </CardContent>
           </Card>
 
-          {contact.notes && (
+          {ik?.rol!=="sales" && contact.notes && (
             <Card>
               <CardHeader>
                 <CardTitle>{uiT("Notitie")}</CardTitle>
@@ -874,7 +875,7 @@ export default async function ContactDetailPage({
 
         {/* Right: timeline */}
         <div className="space-y-4 lg:col-span-2">
-          {(contact.aiDossier || dossierConfigured()) && (
+          {magBedragen && (contact.aiDossier || dossierConfigured()) && (
             <ActionDialog title={uiT("AI-dossier")} wide><Card>
               <CardHeader>
                 <CardTitle>{uiT("🤖 Dossier")}</CardTitle>

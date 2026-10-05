@@ -101,6 +101,7 @@ import {
 } from "../../documents/actions";
 import { stuurKlantportaalUitnodiging } from "@/app/klant/actions";
 import { aliassenVanProject } from "@/lib/project-aliases";
+import { requireModuleRead } from "@/lib/auth/guards";
 
 export async function generateMetadata() {
   const uiT = await uiTranslation();
@@ -129,6 +130,7 @@ export default async function ProjectDetailPage({
     kosten?: string;
   }>;
 }) {
+  await requireModuleRead("projects");
   const uiDateLocale = await datumTaal();
   const uiT = await uiTranslation();
   const { id } = await params;

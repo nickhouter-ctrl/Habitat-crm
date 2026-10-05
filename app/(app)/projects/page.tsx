@@ -1,4 +1,5 @@
 import { TabsRoot, TabsBar, TabPanel } from "@/components/tabs";
+import { requireModuleRead } from "@/lib/auth/guards";
 import { projectProgress } from "@/lib/project-progress";
 import { ActionDialog } from "@/components/action-dialog";
 import { tekst as uiTranslation } from '@/lib/i18n/server';
@@ -103,6 +104,7 @@ export default async function ProjectsPage({
 }: {
   searchParams: Promise<{ status?: string; funding?: string }>;
 }) {
+  await requireModuleRead("projects");
   const uiT = await uiTranslation();
   const { status, funding: fundingFilter } = await searchParams;
   const funding = await loadProjectFunding();

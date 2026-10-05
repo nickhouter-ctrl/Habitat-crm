@@ -1,7 +1,8 @@
+import { requireModuleRead } from "@/lib/auth/guards";
 import { TabsRoot, TabsBar, TabPanel } from "@/components/tabs";
 import { tekst as uiTranslation } from '@/lib/i18n/server';
 import { tekst, datumTaal } from '@/lib/i18n/server';
-import { asc, eq } from "drizzle-orm";
+import { and, asc, eq } from "drizzle-orm";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
@@ -37,10 +38,11 @@ export async function generateMetadata() {
 
 export default async function ResellerDetailPage({ params }: { params: Promise<{ id: string }> }) {
  const t=await tekst(); const dateLocale=await datumTaal();
+  const access=await requireModuleRead("verkooppunten");
   const { id } = await params;
-  const reseller = await db.query.contacts.findFirst({ where: eq(contacts.id, id) });
+  const reseller = await db.query.contacts.findFirst({ where: and(eq(contacts.id, id)) });
   if (!reseller) notFound();
-  const windowsDealers = (await getWindowsDealers()).filter(d => d.contactId === id);
+  const windowsDealers = (access.magModule("kozijnen")?await getWindowsDealers():[]).filter(d => d.contactId === id);
 
   const [rows, productRows] = await Promise.all([
     db.select().from(consignments).where(eq(consignments.resellerId, id)).orderBy(asc(consignments.productName)),
@@ -203,7 +205,7 @@ export default async function ResellerDetailPage({ params }: { params: Promise<{
               <CardTitle>{t("In consignatie")}</CardTitle>
               <span className="text-xs text-muted">{t("factuur = de producten die nu in de winkel liggen, tegen dealerprijs")}</span>
             </div>
-            {inStoreValue > 0 && (
+            {access.magModule("facturatie") && inStoreValue > 0 && (
               <form action={createResellerInvoice.bind(null, id)}>
                 <SubmitButton size="sm" variant="primary" pendingLabel={t("Aanmaken…")}>
                   {t("Factuur maken (")}{formatEUR(inStoreValue)})

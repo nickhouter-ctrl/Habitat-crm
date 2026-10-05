@@ -45,7 +45,7 @@ export async function verzamelNavBadges(rol?: string, userEmail?: string | null,
           .where(and(openVoorstellenFilter, voorstelZichtbaarVoor(userEmail)))
       : nul,
     // Klanten die op onze opvolgmail reageerden en nog op antwoord wachten.
-    mag("/opvolging") ? telAntwoordNodig(userEmail) : 0,
+    mag("/opvolging") ? rol === "sales" ? Promise.resolve(0) : telAntwoordNodig(userEmail) : 0,
     mag("/teamberichten") && userId ? db.select({value:count()}).from(staffMessages).where(and(eq(staffMessages.recipientId,userId),isNull(staffMessages.readAt))) : nul,
   ]);
   return {

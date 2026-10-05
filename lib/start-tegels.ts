@@ -114,6 +114,7 @@ export const START_TEGELS: StartTegel[] = [
   t("/voorschotten", "Voorschotten", "Aanbetalingen en voorschotverzoeken", HandCoins, "Facturatie & geld"),
   t("/commissies", "Commissies", "Commissie-afspraken en uitbetalingen", Percent, "Facturatie & geld"),
   // 6 — Producten & voorraad.
+  t("/voorraad", "Voorraad", "Beschikbare producten, samples en verkoopprijzen", Boxes, "Producten & voorraad"),
   t("/products", "Producten", "Catalogus, voorraad en prijzen", Boxes, "Producten & voorraad"),
   t("/scan", "Scannen", "Barcode scannen: voorraad af- of bijboeken", ScanLine, "Producten & voorraad"),
   t("/samples", "Samples", "Sample-voorraad en uitgiftes", Layers, "Producten & voorraad"),

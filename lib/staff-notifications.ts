@@ -5,6 +5,7 @@ import { activities, appointments, contacts, partnerProfiles, staffMessages, sta
 import { sendEmail } from "@/lib/email";
 import { agendaDateTime, agendaDay, shiftDay } from "@/lib/agenda-dates";
 import { madridDelen } from "@/lib/tz-madrid";
+import { salesTaskAccess, salesAppointmentAccess } from "@/lib/auth/sales-scope";
 import { magModule } from "@/lib/auth/modules";
 import { staffNotificationEmail, type StaffAgendaItem, type StaffMailContent } from "@/lib/staff-notification-email";
 
@@ -13,12 +14,14 @@ import { isSystemMailRecipient } from "@/lib/mail-bcc";
 const openFollowup = sql`not (coalesce(${activities.subject},'') in ('Opvolging','Beursopvolging') and exists (select 1 from partner_profiles p where p.contact_id = ${activities.contactId} and p.stage = 'stopped')) and not (coalesce(${activities.subject},'') in ('Opvolging','Beursopvolging') and exists (select 1 from contacts c where c.id=${activities.contactId} and coalesce(c.tags,'{}'::text[]) @> array['opvolging:uitgesloten']))`;
 
 export async function staffAgendaItems(userId: string, day: string): Promise<StaffAgendaItem[]> {
+  const [user] = await db.select({role:users.role}).from(users).where(eq(users.id,userId));
+  if(!user)return [];
   const start = agendaDateTime(day)!, end = agendaDateTime(shiftDay(day, 1))!;
   const [tasks, meetings] = await Promise.all([
     db.select({ id: activities.id, title: activities.subject, body: activities.body, at: activities.dueAt, contactId: activities.contactId, contactName: contacts.name }).from(activities)
-      .leftJoin(contacts, eq(activities.contactId, contacts.id)).where(and(eq(activities.type, "task"), isNull(activities.completedAt), sql`coalesce(${activities.assigneeId}, ${activities.authorId}) = ${userId}::uuid`, lt(activities.dueAt, end), openFollowup)).orderBy(asc(activities.dueAt)),
+      .leftJoin(contacts, eq(activities.contactId, contacts.id)).where(and(eq(activities.type, "task"), isNull(activities.completedAt), sql`coalesce(${activities.assigneeId}, ${activities.authorId}) = ${userId}::uuid`, lt(activities.dueAt, end), openFollowup,salesTaskAccess(user.role,userId))).orderBy(asc(activities.dueAt)),
     db.select({ id: appointments.id, title: appointments.title, body: appointments.notes, at: appointments.startsAt, contactId: appointments.contactId, contactName: contacts.name, location: appointments.location }).from(appointments)
-      .leftJoin(contacts, eq(appointments.contactId, contacts.id)).where(and(eq(appointments.status, "scheduled"), isNull(appointments.completedAt), sql`coalesce(${appointments.assigneeId}, ${appointments.createdBy}) = ${userId}::uuid`, sql`${appointments.startsAt} >= ${start.toISOString()}::timestamptz`, lt(appointments.startsAt, end))).orderBy(asc(appointments.startsAt)),
+      .leftJoin(contacts, eq(appointments.contactId, contacts.id)).where(and(eq(appointments.status, "scheduled"), isNull(appointments.completedAt), sql`coalesce(${appointments.assigneeId}, ${appointments.createdBy}) = ${userId}::uuid`, sql`${appointments.startsAt} >= ${start.toISOString()}::timestamptz`, lt(appointments.startsAt, end),salesAppointmentAccess(user.role,userId))).orderBy(asc(appointments.startsAt)),
   ]);
   return [...tasks.filter(t => t.at).map(t => ({ ...t, title: t.title ?? "", at: t.at!, kind: "task" as const, overdue: agendaDay(t.at!) < day })), ...meetings.map(t => ({ ...t, kind: "appointment" as const }))].sort((a,b) => a.at.getTime()-b.at.getTime());
 }
@@ -39,6 +42,8 @@ export async function queueDailyAgenda(now = new Date()) {
 }
 
 async function currentContent(n: typeof staffNotifications.$inferSelect): Promise<StaffMailContent | null> {
+  const [recipient] = await db.select({role:users.role}).from(users).where(eq(users.id,n.userId));
+  if(!recipient)return null;
   const [actor] = n.actorId ? await db.select({ name: users.name }).from(users).where(eq(users.id, n.actorId)) : [];
   if (n.kind === "daily_agenda") {
     if (!n.day || n.day !== agendaDay(new Date())) return null;
@@ -47,7 +52,7 @@ async function currentContent(n: typeof staffNotifications.$inferSelect): Promis
   }
   if (!n.entityId) return null;
   if (n.kind === "followup_assignment") {
-    const [p] = await db.select({ ownerId: partnerProfiles.ownerId, stage: partnerProfiles.stage, title: partnerProfiles.nextAction, day: partnerProfiles.nextActionOn, contactName: contacts.name,tags:contacts.tags }).from(partnerProfiles).innerJoin(contacts, eq(contacts.id, partnerProfiles.contactId)).where(eq(partnerProfiles.contactId, n.entityId));
+    const [p] = await db.select({ ownerId: partnerProfiles.ownerId, stage: partnerProfiles.stage, title: partnerProfiles.nextAction, day: partnerProfiles.nextActionOn, contactName: contacts.name,tags:contacts.tags }).from(partnerProfiles).innerJoin(contacts, eq(contacts.id, partnerProfiles.contactId)).where(and(eq(partnerProfiles.contactId, n.entityId)));
     return p && p.ownerId === n.userId && p.stage !== "stopped" && !p.tags?.includes("opvolging:uitgesloten") ? { kind: n.kind, actorName: actor?.name, title: p.title ?? undefined, at: p.day ? agendaDateTime(p.day, "17:00") : null, contactId: n.entityId, contactName: p.contactName } : null;
   }
   if (n.kind === "team_message") {
@@ -55,10 +60,10 @@ async function currentContent(n: typeof staffNotifications.$inferSelect): Promis
     return m && m.recipientId === n.userId ? { kind: n.kind, messageId: m.id, actorName: actor?.name, title: m.subject, body: m.body, at:m.at, contactId: m.contactId, contactName: m.contactName } : null;
   }
   if (n.kind === "task_assignment") {
-    const [t] = await db.select({ assigneeId: activities.assigneeId, authorId: activities.authorId, completedAt: activities.completedAt, title: activities.subject, body: activities.body, at: activities.dueAt, contactId: activities.contactId, contactName: contacts.name }).from(activities).leftJoin(contacts, eq(contacts.id, activities.contactId)).where(and(eq(activities.id, n.entityId), eq(activities.type, "task"), openFollowup));
+    const [t] = await db.select({ assigneeId: activities.assigneeId, authorId: activities.authorId, completedAt: activities.completedAt, title: activities.subject, body: activities.body, at: activities.dueAt, contactId: activities.contactId, contactName: contacts.name }).from(activities).leftJoin(contacts, eq(contacts.id, activities.contactId)).where(and(eq(activities.id, n.entityId), eq(activities.type, "task"), openFollowup,salesTaskAccess(recipient.role,n.userId)));
     return t && (t.assigneeId ?? t.authorId) === n.userId && !t.completedAt ? { kind: n.kind, actorName: actor?.name, title: t.title ?? undefined, body: t.body, at: t.at, contactId: t.contactId, contactName: t.contactName } : null;
   }
-  const [a] = await db.select({ assigneeId: appointments.assigneeId, status: appointments.status, completedAt: appointments.completedAt, title: appointments.title, body: appointments.notes, at: appointments.startsAt, contactId: appointments.contactId, contactName: contacts.name }).from(appointments).leftJoin(contacts, eq(contacts.id, appointments.contactId)).where(eq(appointments.id, n.entityId));
+  const [a] = await db.select({ assigneeId: appointments.assigneeId, status: appointments.status, completedAt: appointments.completedAt, title: appointments.title, body: appointments.notes, at: appointments.startsAt, contactId: appointments.contactId, contactName: contacts.name }).from(appointments).leftJoin(contacts, eq(contacts.id, appointments.contactId)).where(and(eq(appointments.id, n.entityId),salesAppointmentAccess(recipient.role,n.userId)));
   return a && a.assigneeId === n.userId && a.status === "scheduled" && !a.completedAt ? { kind: n.kind, actorName: actor?.name, title: a.title, body: a.body, at: a.at, contactId: a.contactId, contactName: a.contactName } : null;
 }
 
@@ -77,7 +82,7 @@ export async function deliverStaffNotifications(ids?: string[]) {
     try {
       const [recipient] = await db.select({ name: users.name, email: users.email, locale: users.locale, role: users.role }).from(users).where(eq(users.id, row.userId));
       const content = await currentContent(row);
-      const requiredModule = row.kind === "team_message" ? "teamberichten" : row.kind === "followup_assignment" ? "aanvragen" : "agenda";
+      const requiredModule = row.kind === "team_message" ? "teamberichten" : row.kind === "followup_assignment" ? "klantopvolging" : "agenda";
       if (!recipient || !isSystemMailRecipient(recipient.email) || !magModule(recipient.role, requiredModule) || !content) { await db.update(staffNotifications).set({ status: "skipped", updatedAt: new Date() }).where(eq(staffNotifications.id, row.id)); result.skipped++; continue; }
       const mail = staffNotificationEmail(content, recipient);
       smtpStarted = true;

@@ -15,7 +15,7 @@ function fail(e:unknown):Result{return{error:e instanceof InputError?e.message:e
 function refresh(id:string){revalidatePath(`/wederverkopers/${id}/samenwerking`);revalidatePath('/opvolging');revalidatePath(`/opvolging/${id}`);revalidatePath('/beurs/opvolging');revalidatePath('/wederverkopers');revalidatePath('/verkooppunten');}
 const optionalNumber=(min:number,max:number)=>z.union([z.literal(''),z.coerce.number().min(min).max(max)]);
 export async function createContract(_:Result,fd:FormData):Promise<Result>{
- const u=await requireModule('producten');
+ const u=await requireModule('verkooppunten');
  try{const raw=Object.fromEntries(fd);const details=raw.formMode==='guided'?contractDetailsInput.parse(raw):null;
  const d=z.object({contactId:z.string().uuid(),body:z.string().trim().min(100).max(50000),validFrom:dateInput,validUntil:dateInput,exclusive:z.string().optional(),latitude:optionalNumber(-90,90),longitude:optionalNumber(-180,180),radiusKm:optionalNumber(.01,1000),territoryTerms:z.string().trim().min(5).max(12000),legalReviewed:z.string().optional()}).parse({...raw,...(details?{territoryTerms:contractTerms(details)}:{})});
  if(details&&d.legalReviewed==='on'&&(!details.brandName||details.brandName==='[MERKNAAM]'))throw new InputError('Vul eerst de definitieve merknaam in. Zonder merknaam kun je wel als concept opslaan.');
@@ -27,7 +27,7 @@ export async function createContract(_:Result,fd:FormData):Promise<Result>{
  }catch(e){return fail(e);}
 }
 export async function registerSigned(_:Result,fd:FormData):Promise<Result>{
- const u=await requireModule('producten');
+ const u=await requireModule('verkooppunten');
  try{const d=z.object({id:z.string().uuid(),contactId:z.string().uuid(),habitatSigner:z.string().trim().min(3).max(200),partnerSigner:z.string().trim().min(3).max(200),signedOn:dateInput,confirm:z.literal('on')}).parse(Object.fromEntries(fd));
  const [c]=await db.select().from(partnerContracts).where(and(eq(partnerContracts.id,d.id),eq(partnerContracts.contactId,d.contactId)));if(!c||c.signedPath)throw new InputError('Contract niet gevonden of al ondertekend geregistreerd.');
  if(!c.legalReviewed)throw new InputError('Bewaar eerst een juridisch gecontroleerde versie.');
@@ -39,7 +39,7 @@ export async function registerSigned(_:Result,fd:FormData):Promise<Result>{
  }catch(e){return fail(e);}
 }
 export async function activatePartner(_:Result,fd:FormData):Promise<Result>{
- const u=await requireModule('producten');
+ const u=await requireModule('verkooppunten');
  try {const d=z.object({contactId:z.string().uuid(),contractId:z.string().uuid(),publicName:z.string().trim().min(2).max(200),publicAddress:z.string().trim().min(3).max(300),publicCity:z.string().trim().min(2).max(150),publicCountry:z.string().trim().min(2).max(100),publicEmail:z.union([z.string().email(),z.literal('')]),publicPhone:z.string().max(100),publicWebsite:z.union([z.string().url().refine(v=>new URL(v).protocol==='https:'),z.literal('')]),latitude:z.string().trim().min(1).transform(Number).pipe(z.number().min(-90).max(90)),longitude:z.string().trim().min(1).transform(Number).pipe(z.number().min(-180).max(180)),publish:z.string().optional(),confirm:z.literal('on')}).parse(Object.fromEntries(fd));
  await db.transaction(async tx=>{await tx.execute(sql`select pg_advisory_xact_lock(74621940)`);
  const [contract]=await tx.select().from(partnerContracts).where(and(eq(partnerContracts.id,d.contractId),eq(partnerContracts.contactId,d.contactId)));

@@ -1,3 +1,4 @@
+import { requireModuleRead } from "@/lib/auth/guards";
 import { ActionDialog } from "@/components/action-dialog";
 import { datumTaal } from "@/lib/i18n/server";
 import { tekst as uiTranslation } from '@/lib/i18n/server';
@@ -54,6 +55,7 @@ export default async function ContactsPage({
 }: {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
+  const access=await requireModuleRead("contacts");
   const uiDateLocale = await datumTaal();
   const uiT = await uiTranslation();
   const params = await searchParams;
@@ -122,8 +124,8 @@ export default async function ContactsPage({
         subtitle={`${rows.length} ${rows.length === 1 ? uiT("contact") : uiT("contacten")}`}
         actions={
           <>
-            <AanmeldlinkKnop />
-            <SyncHoldedButton />
+            {access.magModule("klantaccounts")&&<AanmeldlinkKnop />}
+            {access.magModule("inkoop")&&<SyncHoldedButton />}
             <LinkButton href="/contacts/new">{uiT("Nieuw contact")}</LinkButton>
           </>
         }

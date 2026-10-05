@@ -19,7 +19,7 @@ function refresh(id: string) {
   revalidatePath(`/wederverkopers/${id}`);
 }
 export async function savePresentation(_: Result, form: FormData): Promise<Result> {
-  const user = await requireModule("producten");
+  const user = await requireModule("verkooppunten");
   const parsed = presentationSchema.safeParse(Object.fromEntries(form));
   if (!parsed.success) return { error: parsed.error.issues[0].message };
   const d = parsed.data;
@@ -46,7 +46,7 @@ export async function savePresentation(_: Result, form: FormData): Promise<Resul
 }
 const bookingSchema = z.object({ contactId: z.string().uuid(), agreementId: z.string().uuid(), reference: z.string().trim().min(2).max(160), order: z.string(), amount: z.string(), note: z.string().trim().max(2000), confirmed: z.literal("on") });
 export async function bookRedemption(_: Result, form: FormData): Promise<Result> {
-  const user = await requireModule("producten");
+  const user = await requireModule("verkooppunten");
   const parsed = bookingSchema.safeParse(Object.fromEntries(form));
   if (!parsed.success) return { error: "Vul de referentie in en bevestig dat de korting al op de order/factuur is verwerkt." };
   const d = parsed.data;
@@ -72,7 +72,7 @@ export async function bookRedemption(_: Result, form: FormData): Promise<Result>
   } catch (e) { return resultError(e); }
 }
 export async function voidRedemption(_: Result, form: FormData): Promise<Result> {
-  const user = await requireModule("producten");
+  const user = await requireModule("verkooppunten");
   const parsed = z.object({ contactId: z.string().uuid(), agreementId: z.string().uuid(), entryId: z.string().uuid(), reason: z.string().trim().min(5).max(1000) }).safeParse(Object.fromEntries(form));
   if (!parsed.success) return { error: "Geef een reden voor de correctie (minimaal vijf tekens)." };
   const d = parsed.data;

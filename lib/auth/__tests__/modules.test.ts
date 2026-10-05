@@ -42,6 +42,23 @@ function padenUitBestanden(dir: string, prefix = ""): string[] {
 /** [id] en [...slug] zijn in de tabel niet interessant: de prefix bepaalt de module. */
 const naarUrl = (p: string) => p.replace(/\/\[[^\]]+\]/g, "/x");
 
+describe("verkoop en klantopvolging", () => {
+  it("houdt dagelijkse verkoopfuncties beschikbaar", () => {
+    for (const path of ["/", "/opvolging", "/opvolging/x", "/beurs/opvolging/x", "/wederverkopers/x", "/wederverkopers/x/samenwerking", "/wederverkopers/prijzen", "/voorraad", "/contacts", "/contacts/x", "/prijslijst/distributeur/pdf", "/agenda", "/settings"]) {
+      expect(magPad("sales", path), path).toBe(true);
+    }
+    expect(heeftCap("sales", "schrijven")).toBe(true);
+  });
+  it("weigert projecten, bedragen, omwegen en medewerkersbeheer", () => {
+    for (const path of ["/projects", "/projects/x", "/projects/x/export", "/documents/x/print", "/invoices", "/voorschotten", "/deals", "/properties", "/ploeg", "/inkooporders", "/bestellen", "/dashboard", "/rapporten", "/commissies", "/inbox/x", "/sent-mail/x/print", "/calculator", "/prijzenboek", "/assistent", "/products/x/edit", "/products/export", "/aanvragen/x", "/onbekend"]) {
+      expect(magPad("sales", path), path).toBe(false);
+    }
+    expect(heeftCap("sales", "bedragen")).toBe(false);
+    expect(heeftCap("sales", "teambeheer")).toBe(false);
+    expect(magAlles("sales")).toBe(false);
+  });
+});
+
 describe("moduletabel", () => {
   it("heeft een regel voor elk pad onder app/(app)", () => {
     const paden = [...new Set(padenUitBestanden(APP).map(naarUrl))].sort();

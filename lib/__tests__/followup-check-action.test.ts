@@ -49,7 +49,7 @@ describe('opvolgstatus bewaren', () => {
   it('legt afhandeling en de medewerker vast zonder beroep of fase te veranderen', async () => {
     m.select.mockResolvedValueOnce([{ id: contactId }]).mockResolvedValueOnce([]);
     expect((await setFollowupCompleted({}, form())).success).toBeTruthy();
-    expect(m.guard).toHaveBeenCalledWith('aanvragen'); expect(m.lock).toHaveBeenCalledWith('update');
+    expect(m.guard).toHaveBeenCalledWith('klantopvolging'); expect(m.lock).toHaveBeenCalledWith('update');
     expect(m.insert).toHaveBeenCalledWith(expect.objectContaining({ contactId, authorId, type: 'note', subject: FOLLOWUP_DONE, createdAt: expect.any(Date) }));
     expect(m.update).toHaveBeenCalledTimes(1); expect(m.update).toHaveBeenCalledWith(activities);
     expect(m.set).toHaveBeenCalledWith({ completedAt: expect.any(Date), updatedAt: expect.any(Date) });

@@ -1,4 +1,5 @@
 import { tekst as uiTranslation } from '@/lib/i18n/server';
+import { requireModuleRead } from "@/lib/auth/guards";
 import { asc } from "drizzle-orm";
 
 import {
@@ -22,6 +23,7 @@ export async function generateMetadata() {
 }
 
 export default async function NewProjectPage() {
+  await requireModuleRead("projects");
   const uiT = await uiTranslation();
   const [contactOpts, ownerOpts, propertyOpts] = await Promise.all([
     db.select({ id: contacts.id, name: contacts.name }).from(contacts).orderBy(asc(contacts.name)),

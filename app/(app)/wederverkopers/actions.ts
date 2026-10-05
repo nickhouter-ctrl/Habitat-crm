@@ -16,7 +16,7 @@ import { parseMoney } from "@/lib/parse-money";
 
 async function requireUser() {
   // Centrale guard: ingelogd én geen alleen-lezen (viewer) account.
-  return requireModule("producten");
+  return requireModule("verkooppunten");
 }
 
 function qtyOrNull(v?: string): number | null {
@@ -28,9 +28,9 @@ function qtyOrNull(v?: string): number | null {
 
 /** Markeer een bestaand contact als wederverkoper (type = reseller). */
 export async function markAsReseller(formData: FormData) {
-  await requireUser();
+  const user=await requireUser();
   const contactId = String(formData.get("contactId") ?? "").trim();
-  if (contactId.length !== 36) return;
+  if (!z.string().uuid().safeParse(contactId).success) return;
   await db.update(contacts).set({ type: "reseller", updatedAt: new Date() }).where(eq(contacts.id, contactId));
   revalidatePath("/wederverkopers");
   revalidatePath(`/wederverkopers/${contactId}`);
@@ -44,7 +44,7 @@ const placeSchema = z.object({
 
 /** Leg producten in consignatie bij een wederverkoper — haalt het van onze voorraad af. */
 export async function placeConsignment(resellerId: string, formData: FormData) {
-  await requireUser();
+  const user=await requireUser();
   const parsed = placeSchema.safeParse(Object.fromEntries(formData));
   if (!parsed.success) throw new Error(parsed.error.issues.map((i) => i.message).join(", "));
   const qty = qtyOrNull(parsed.data.qty);
@@ -94,7 +94,8 @@ export async function placeConsignment(resellerId: string, formData: FormData) {
  * dealerprijs. Opent meteen de factuur om te controleren/versturen.
  */
 export async function createResellerInvoice(resellerId: string) {
-  await requireUser();
+  const user=await requireUser();
+  await requireModule("facturatie");
   const reseller = await db.query.contacts.findFirst({ where: eq(contacts.id, resellerId) });
   if (!reseller) redirect("/wederverkopers");
 
@@ -155,10 +156,10 @@ export async function createResellerInvoice(resellerId: string) {
 
 /** Registreer een verkoop door de dealer (→ onze omzet tegen dealerprijs). */
 export async function recordConsignmentSale(resellerId: string, consignmentId: string, formData: FormData) {
-  await requireUser();
+  const user=await requireUser();
   const qty = qtyOrNull(String(formData.get("qty") ?? ""));
   if (qty == null || qty <= 0) throw new Error("Aantal moet groter dan 0 zijn.");
-  const row = await db.query.consignments.findFirst({ where: eq(consignments.id, consignmentId) });
+  const row = await db.query.consignments.findFirst({ where: and(eq(consignments.id, z.string().uuid().parse(consignmentId)),eq(consignments.resellerId,resellerId)) });
   if (!row) return;
   const left = Number(row.qtyPlaced) - Number(row.qtySold);
   if (qty > left) throw new Error(`Maar ${left} stuks in de winkel.`);
@@ -171,10 +172,10 @@ export async function recordConsignmentSale(resellerId: string, consignmentId: s
 
 /** Haal onverkochte consignatievoorraad terug (→ terug op onze voorraad). */
 export async function returnConsignment(resellerId: string, consignmentId: string, formData: FormData) {
-  await requireUser();
+  const user=await requireUser();
   const qty = qtyOrNull(String(formData.get("qty") ?? ""));
   if (qty == null || qty <= 0) throw new Error("Aantal moet groter dan 0 zijn.");
-  const row = await db.query.consignments.findFirst({ where: eq(consignments.id, consignmentId) });
+  const row = await db.query.consignments.findFirst({ where: and(eq(consignments.id, z.string().uuid().parse(consignmentId)),eq(consignments.resellerId,resellerId)) });
   if (!row) return;
   const left = Number(row.qtyPlaced) - Number(row.qtySold);
   if (qty > left) throw new Error(`Maar ${left} stuks in de winkel.`);

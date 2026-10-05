@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { and, eq, sql } from "drizzle-orm";
+import { salesTaskAccess, salesAppointmentAccess } from "@/lib/auth/sales-scope";
 import { requireModule } from "@/lib/auth/guards";
 import { z } from "zod";
 import { heeftCap } from "@/lib/auth/modules";
@@ -51,6 +52,7 @@ async function saveAppointment(formData: FormData) {
   const assigneeId = optionalId.parse(str(formData, "assigneeId"));
   const notificationId = await db.transaction(async tx => {
     const existing=await existingRequest(tx,user.id,requestId,"appointment");if(existing)return existing.notificationId;
+    if(user.role==='sales'&&assigneeId&&assigneeId!==user.id)throw new Error('Alleen eigen agenda.');
     await checkReferences(tx, contactId, assigneeId);
     const [appointment] = await tx.insert(appointments).values({
     id:requestId,title,
@@ -75,21 +77,21 @@ async function saveAppointment(formData: FormData) {
  *  geweest is hoeft er niet meer te staan. `status` blijft het label dat ook de
  *  agenda-feed (/api/calendar) leest. */
 export async function completeAppointment(id: string) {
-  await requireUser();
+  const user=await requireUser();
   await db
     .update(appointments)
     .set({ status: "completed", completedAt: new Date(), updatedAt: new Date() })
-    .where(eq(appointments.id, z.string().uuid().parse(id)));
+    .where(and(eq(appointments.id, z.string().uuid().parse(id)),salesAppointmentAccess(user.role,user.id)));
   revalidatePath("/agenda");
   revalidatePath("/");
 }
 
 export async function reopenAppointment(id: string) {
-  await requireUser();
+  const user=await requireUser();
   await db
     .update(appointments)
     .set({ status: "scheduled", completedAt: null, updatedAt: new Date() })
-    .where(eq(appointments.id, z.string().uuid().parse(id)));
+    .where(and(eq(appointments.id, z.string().uuid().parse(id)),salesAppointmentAccess(user.role,user.id)));
   revalidatePath("/agenda");
   revalidatePath("/");
 }
@@ -118,6 +120,7 @@ async function saveTask(formData: FormData) {
     : "middel";
   const notificationId = await db.transaction(async tx => {
     const existing=await existingRequest(tx,user.id,requestId,"task");if(existing)return existing.notificationId!;
+    if(user.role==='sales'&&assigneeId!==user.id)throw new Error('Alleen eigen agenda.');
     await checkReferences(tx,contactId,assigneeId);
     const [task] = await tx.insert(activities).values({
     id:requestId,type: "task",
@@ -163,7 +166,7 @@ export async function createNote(formData: FormData) {
 
 export async function completeTask(id: string) {
   const user=await requireUser();
-  await changeAgendaTask(z.string().uuid().parse(id),user.id,true);
+  await changeAgendaTask(z.string().uuid().parse(id),user.id,true,user.role);
   revalidatePath("/opvolging");revalidatePath("/beurs/opvolging");revalidatePath("/contacts");
   revalidatePath("/agenda");
   revalidatePath("/");
@@ -171,21 +174,21 @@ export async function completeTask(id: string) {
 
 export async function reopenTask(id: string) {
   const user=await requireUser();
-  await changeAgendaTask(z.string().uuid().parse(id),user.id,false);
+  await changeAgendaTask(z.string().uuid().parse(id),user.id,false,user.role);
   revalidatePath("/opvolging");revalidatePath("/beurs/opvolging");revalidatePath("/contacts");
   revalidatePath("/agenda");
   revalidatePath("/");
 }
 
 export async function deleteTask(id: string) {
-  await requireUser();
-  await db.delete(activities).where(and(eq(activities.id,z.string().uuid().parse(id)),eq(activities.type,'task'),sql`coalesce(${activities.subject},'') not in ('Opvolging','Beursopvolging')`));
+  const user=await requireUser();
+  await db.delete(activities).where(and(eq(activities.id,z.string().uuid().parse(id)),eq(activities.type,'task'),salesTaskAccess(user.role,user.id),sql`coalesce(${activities.subject},'') not in ('Opvolging','Beursopvolging')`));
   revalidatePath("/agenda");
   revalidatePath("/");
 }
 
 export async function deleteAppointment(id: string) {
-  await requireUser();
-  await db.delete(appointments).where(eq(appointments.id, z.string().uuid().parse(id)));
+  const user=await requireUser();
+  await db.delete(appointments).where(and(eq(appointments.id, z.string().uuid().parse(id)),salesAppointmentAccess(user.role,user.id)));
   revalidatePath("/agenda");
 }

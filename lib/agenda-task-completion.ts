@@ -5,15 +5,17 @@ import { activities, contacts, partnerProfiles } from "@/lib/db/schema";
 import { agendaDay } from "@/lib/agenda-dates";
 import { FOLLOWUP_DONE, FOLLOWUP_REOPENED } from "@/lib/followup-checklist";
 
+import { salesTaskAccess } from "@/lib/auth/sales-scope";
+
 const isFollowup=(task:typeof activities.$inferSelect)=>!!task.contactId&&['Opvolging','Beursopvolging'].includes(task.subject??'');
 
 /** Contact first, then task: same lock order as saving the follow-up dossier. */
-export async function changeAgendaTask(id:string,authorId:string,completed:boolean){
+export async function changeAgendaTask(id:string,authorId:string,completed:boolean,role?:string){
   await db.transaction(async tx=>{
-    const [initial]=await tx.select().from(activities).where(and(eq(activities.id,id),eq(activities.type,'task')));
+    const [initial]=await tx.select().from(activities).where(and(eq(activities.id,id),eq(activities.type,'task'),salesTaskAccess(role,authorId)));
     if(!initial)return;
     if(initial.contactId)await tx.select({id:contacts.id}).from(contacts).where(eq(contacts.id,initial.contactId)).for('update');
-    const [task]=await tx.select().from(activities).where(and(eq(activities.id,id),eq(activities.type,'task'))).for('update');
+    const [task]=await tx.select().from(activities).where(and(eq(activities.id,id),eq(activities.type,'task'),salesTaskAccess(role,authorId))).for('update');
     if(!task||!!task.completedAt===completed)return; // Idempotent checkbox / network retry.
     const now=new Date();
     if(isFollowup(task)){

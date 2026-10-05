@@ -102,6 +102,7 @@ async function dagtakenBeperkt(userEmail?: string | null): Promise<Dagtaak[]> {
 }
 
 export async function verzamelDagtaken(rol?: string, userEmail?: string | null): Promise<Dagtaak[]> {
+  if (rol === "sales") return [];
   if (rol !== undefined && !magAlles(rol)) return dagtakenBeperkt(userEmail);
   const t = await tekst();
   const now = new Date();

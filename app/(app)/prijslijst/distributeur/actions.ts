@@ -62,7 +62,7 @@ function escapeHtml(s: string) {
 const terug = (params: string): never => redirect(`/wederverkopers/prijzen?${params}#document`);
 
 export async function mailDistributeurPrijslijst(formData: FormData) {
-  await requireModule("prijzen");
+  const user=await requireModule("verkoopprijzen");
 
   const contactId = String(formData.get("contactId") ?? "");
   const serie = String(formData.get("serie") ?? "");

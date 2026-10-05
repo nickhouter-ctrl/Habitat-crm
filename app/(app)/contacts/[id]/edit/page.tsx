@@ -1,3 +1,4 @@
+import { requireModuleRead } from "@/lib/auth/guards";
 import { tekst as uiTranslation } from '@/lib/i18n/server';
 import { eq } from "drizzle-orm";
 import Link from "next/link";
@@ -22,6 +23,7 @@ export default async function EditContactPage({
   params: Promise<{ id: string }>;
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
+  const access=await requireModuleRead("contacts");
   const uiT = await uiTranslation();
   const { id } = await params;
   const sp = await searchParams;
@@ -61,7 +63,7 @@ export default async function EditContactPage({
     city: contact.city,
     province: contact.province,
     preferredLanguage: contact.preferredLanguage,
-    notes: contact.notes,
+    notes: access.rol==='sales'?null:contact.notes,
   };
 
   const save = updateContact.bind(null, id);
@@ -87,6 +89,7 @@ export default async function EditContactPage({
             action={save}
             onSuggest={addressSuggestions}
             initial={initial}
+            hideNotes={access.rol==='sales'}
             submitLabel={uiT("Wijzigingen opslaan")}
           />
         </CardContent>

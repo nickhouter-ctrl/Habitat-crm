@@ -12,7 +12,7 @@ const LOCALES: BrochureLocale[] = ["nl", "de", "en", "es"];
 export const maxDuration = 300;
 
 export async function GET(req: Request) {
-  const nee = await weigerRoute("prijzen");
+  const nee = await weigerRoute("verkoopprijzen");
   if (nee) return nee;
 
   const url = new URL(req.url);

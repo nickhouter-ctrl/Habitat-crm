@@ -14,7 +14,7 @@ import { mailDistributeurPrijslijst } from "@/app/(app)/prijslijst/distributeur/
 export const dynamic = "force-dynamic";
 export async function generateMetadata() { const t = await tekst(); return { title: t("Staffels & marges verkooppunten") }; }
 export default async function Page({searchParams}:{searchParams:Promise<Record<string,string|string[]|undefined>>}) {
-  const access = await requireModuleRead("prijzen");
+  const access = await requireModuleRead("verkoopprijzen");
   const t = await tekst(), sp = await searchParams;
   const parsed = prijsVoorstelInvoer.safeParse({staffel:sp.staffel,extra:sp.extra,serie:sp.serie});
   const invoer = parsed.success ? parsed.data : prijsVoorstelInvoer.parse({});

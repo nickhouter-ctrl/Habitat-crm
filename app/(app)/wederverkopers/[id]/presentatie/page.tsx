@@ -2,7 +2,7 @@ import { tekst as uiTranslation } from '@/lib/i18n/server';
 import { tekst, datumTaal } from '@/lib/i18n/server';
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { desc, eq } from "drizzle-orm";
+import { and, desc, eq } from "drizzle-orm";
 import { z } from "zod";
 import { requireModuleRead } from "@/lib/auth/guards";
 import { db } from "@/lib/db";
@@ -18,10 +18,10 @@ export async function generateMetadata() {
 export default async function PresentationPage({ params }: { params: Promise<{ id: string }> }) {
 
  const t=await tekst(); const dateLocale=await datumTaal();
-  const access = await requireModuleRead("producten");
+  const access = await requireModuleRead("verkooppunten");
   const { id } = await params;
   if (!z.string().uuid().safeParse(id).success) notFound();
-  const contact = await db.query.contacts.findFirst({ where: eq(contacts.id, id) });
+  const contact = await db.query.contacts.findFirst({ where: and(eq(contacts.id, id)) });
   if (!contact) notFound();
   const [agreement] = await db.select().from(presentationAgreements).where(eq(presentationAgreements.contactId, id));
   const entries = agreement ? await db.select({ entry: presentationRedemptions, name: users.name }).from(presentationRedemptions).leftJoin(users, eq(users.id, presentationRedemptions.createdBy)).where(eq(presentationRedemptions.agreementId, agreement.id)).orderBy(desc(presentationRedemptions.createdAt)) : [];

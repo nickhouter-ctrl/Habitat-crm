@@ -1,6 +1,15 @@
 import type { Dictionary } from "@/lib/i18n";
 
 const rows: [string, string, string][] = [
+  ["Verkoopnotitie", "Sales note", "Nota de ventas"],
+  ["Zoek klanten en producten…", "Search customers and products…", "Buscar clientes y productos…"],
+  ["Zoek product", "Search product", "Buscar producto"],
+  ["Verkoopprijs", "Sales price", "Precio de venta"],
+  ["Producten, beschikbare voorraad en verkoopprijzen.", "Products, available stock and sales prices.", "Productos, existencias disponibles y precios de venta."],
+  ["Beschikbare producten, samples en verkoopprijzen", "Available products, samples and sales prices", "Productos disponibles, muestras y precios de venta"],
+  ["B2B-prijs", "B2B price", "Precio B2B"],
+  ["Alle producten", "All products", "Todos los productos"],
+  ["Verkoop en klantopvolging", "Sales and customer follow-up", "Ventas y seguimiento de clientes"],
   ["Ontvangen geld", "Money received", "Dinero recibido"],
   ["Voorschotdocumenten", "Advance documents", "Documentos de anticipos"],
   ["Verrekening", "Settlement", "Compensación"],

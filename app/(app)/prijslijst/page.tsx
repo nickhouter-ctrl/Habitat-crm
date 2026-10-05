@@ -1,3 +1,4 @@
+import { requireModuleRead } from "@/lib/auth/guards";
 import { TabsRoot, TabsBar, TabPanel } from "@/components/tabs";
 import { tekst as uiTranslation } from '@/lib/i18n/server';
 import { sql } from "drizzle-orm";
@@ -29,6 +30,7 @@ export default async function PrijslijstPage({
 }: {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
+  const access=await requireModuleRead("verkoopprijzen");
   const uiT = await uiTranslation();
   const sp = await searchParams;
   const sent = sp.sent === "1";

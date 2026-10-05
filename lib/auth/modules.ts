@@ -20,7 +20,7 @@
  * die lezen de rol uit de database. Het menu filteren is alleen netheid.
  */
 
-export const ROLES = ["admin", "agent", "marketing", "viewer"] as const;
+export const ROLES = ["admin", "agent", "marketing", "sales", "viewer"] as const;
 export type Role = (typeof ROLES)[number];
 
 export type ModuleKey =
@@ -32,6 +32,10 @@ export type ModuleKey =
   | "inbox"
   | "contacts"
   | "aanvragen"
+  | "klantopvolging"
+  | "verkooppunten"
+  | "voorraad"
+  | "verkoopprijzen"
   | "leads"
   | "broadcast"
   | "assistent"
@@ -83,7 +87,11 @@ export const MODULES: ModuleDef[] = [
 
   { key: "inbox", label: "Mail", paths: ["/inbox", "/sent-mail"] },
   { key: "contacts", label: "Contacten", paths: ["/contacts"] },
-  { key: "aanvragen", label: "Website-aanvragen", paths: ["/aanvragen", "/beurs", "/opvolging"] },
+  { key: "aanvragen", label: "Website-aanvragen", paths: ["/aanvragen", "/beurs"] },
+  { key: "klantopvolging", label: "Klantopvolging", paths: ["/opvolging", "/beurs/opvolging"] },
+  { key: "verkooppunten", label: "Verkooppunten", paths: ["/wederverkopers"] },
+  { key: "voorraad", label: "Voorraad", paths: ["/voorraad"] },
+  { key: "verkoopprijzen", label: "Verkoopprijzen", paths: ["/prijslijst", "/wederverkopers/prijzen"] },
   { key: "leads", label: "Leads", paths: ["/leads"] },
   { key: "broadcast", label: "Broadcast", paths: ["/broadcast"] },
   { key: "assistent", label: "Assistent", paths: ["/assistent"] },
@@ -108,13 +116,12 @@ export const MODULES: ModuleDef[] = [
       "/merken",
       "/samples",
       "/samplecatalogus",
-      "/wederverkopers",
       "/scan",
       "/labels",
       "/print-labels",
     ],
   },
-  { key: "prijzen", label: "Prijzen", paths: ["/prijzenboek", "/prijslijst", "/catalogi", "/wederverkopers/prijzen"] },
+  { key: "prijzen", label: "Prijzen", paths: ["/prijzenboek", "/catalogi"] },
   { key: "calculator", label: "Calculator", paths: ["/calculator"] },
   { key: "commissies", label: "Commissies", paths: ["/commissies"] },
   { key: "dashboard", label: "Dashboard", paths: ["/dashboard"] },
@@ -141,12 +148,14 @@ export const ROLE_MODULES: Record<Role, readonly ModuleKey[] | "*"> = {
     "inbox",
     "contacts",
     "aanvragen",
+    "klantopvolging",
     "leads",
     "broadcast",
     "assistent",
     "agenda",
     "teamberichten",
   ],
+  sales: ["start", "eigen-account", "zoeken", "contacts", "klantopvolging", "verkooppunten", "voorraad", "verkoopprijzen", "agenda"],
 };
 
 export const ROLE_CAPS: Record<Role, readonly Capability[]> = {
@@ -155,12 +164,14 @@ export const ROLE_CAPS: Record<Role, readonly Capability[]> = {
   viewer: ["bedragen"],
   // Marketing mag binnen haar modules alles wijzigen, maar ziet geen geld.
   marketing: ["schrijven"],
+  sales: ["schrijven"],
 };
 
 export const ROLE_LABEL: Record<Role, string> = {
   admin: "Beheerder",
   agent: "Medewerker",
   marketing: "Marketing en klantcontact",
+  sales: "Verkoop en klantopvolging",
   viewer: "Alleen lezen",
 };
 
