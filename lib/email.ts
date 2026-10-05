@@ -19,7 +19,7 @@ export interface EmailAttachment {
   contentDisposition?: "inline" | "attachment";
 }
 
-import { copyPolicyCc, systemMailAddresses, withMandatoryBcc, type MailCopyPolicy } from "@/lib/mail-bcc";
+import { copyPolicyCc, systemMailAddresses, withMandatoryBcc, type MailCopyPolicy, type SystemMailScope } from "@/lib/mail-bcc";
 
 export async function sendEmail(input: {
   to: string;
@@ -70,8 +70,11 @@ export async function sendEmail(input: {
    * hi@ wordt uit To, CC en BCC verwijderd; de afzender blijft het bedrijf.
    */
   interneMelding?: boolean;
+  /** Alleen eigen taken/berichten/reacties mogen het bredere opvolgteam bereiken. */
+  systemMailScope?: SystemMailScope;
 }): Promise<{ sent: boolean; reason?: string; messageId?: string }> {
-  const to = input.interneMelding ? systemMailAddresses(input.to) : input.to;
+  const scope = input.systemMailScope ?? (input.noCompanyBcc ? "team" : "office");
+  const to = input.interneMelding ? systemMailAddresses(input.to, scope) : input.to;
   // Een persoonlijk bericht nooit stil naar een andere collega doorsturen.
   if (!to) return { sent: false, reason: "system-recipient-not-allowed" };
   // Elke uitgaande mail krijgt een VERBORGEN kopie (BCC) naar het bedrijf
@@ -88,8 +91,8 @@ export async function sendEmail(input: {
   // lib/gmail.ts overslaan. Op het Gmail-pad dedupliceert sendMail dit nog eens.
   const rawBcc = input.copyPolicy ? undefined : input.noCompanyBcc ? bccBase : withMandatoryBcc(bccBase, to, input.interneMelding);
   const rawCc = input.copyPolicy ? copyPolicyCc(input.copyPolicy, to, input.afzenderEmail) : undefined;
-  const bcc = input.interneMelding ? systemMailAddresses(rawBcc) : rawBcc;
-  const cc = input.interneMelding ? systemMailAddresses(rawCc) : rawCc;
+  const bcc = input.interneMelding ? systemMailAddresses(rawBcc, scope) : rawBcc;
+  const cc = input.interneMelding ? systemMailAddresses(rawCc, scope) : rawCc;
 
   // Voorkeur: Gmail (verstuurt vanaf GMAIL_USER, bv. hi@habitat-one.com). Valt
   // terug op Resend; en als niets is ingesteld een stub, zodat de accept-link
@@ -119,6 +122,7 @@ export async function sendEmail(input: {
         afzenderEmail: input.afzenderEmail,
         noCompanyBcc: input.noCompanyBcc,
         interneMelding: input.interneMelding,
+        systemMailScope: scope,
         account,
         fromName,
         replyTo: input.replyTo,

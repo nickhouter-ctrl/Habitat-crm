@@ -1,3 +1,4 @@
+import { TabsRoot, TabsBar, TabPanel } from "@/components/tabs";
 import { datumTaal } from "@/lib/i18n/server";
 import { tekst as uiTranslation } from '@/lib/i18n/server';
 import { and, asc, desc, eq, isNotNull, sql } from "drizzle-orm";
@@ -86,7 +87,9 @@ export default async function SamplesPage() {
 
   return (
     <>
+<TabsRoot defaultTab="samples" ids={["samples","issue"]} param="section">
       <PageHeader title={uiT("Samples")} subtitle={uiT("Staaltjes · €{v0} borg per sample", { v0: SAMPLE_DEPOSIT_EUR })} />
+<TabsBar tabs={[{id:"samples",label:uiT("Samples")},{id:"issue",label:uiT("Sample uitgeven")}]}/>
 
       <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
         <StatTile label={uiT("In voorraad")} value={Number(stockAgg[0]?.total ?? 0).toLocaleString(uiDateLocale)} hint={uiT("samples op de plank")} tone="neutral" />
@@ -95,7 +98,7 @@ export default async function SamplesPage() {
         <StatTile label={uiT("Borg verkocht")} value={formatEUR(soldDeposit)} hint={uiT("definitief · omzet")} tone={soldDeposit > 0 ? "success" : "neutral"} />
       </div>
 
-      <Card className="mb-5">
+      <TabPanel id="issue"><Card className="mb-5">
         <CardHeader>
           <CardTitle>{uiT("Sample uitgeven")}</CardTitle>
           <span className="text-xs text-muted">{uiT("gaat van de sample-voorraad af · €")}{SAMPLE_DEPOSIT_EUR} {uiT("borg per stuk")}</span>
@@ -115,9 +118,9 @@ export default async function SamplesPage() {
           </Field>
           <SubmitButton size="sm" variant="secondary" pendingLabel="…">{uiT("+ Uitgeven")}</SubmitButton>
         </form>
-      </Card>
+      </Card></TabPanel>
 
-      <Card className="mb-5 overflow-hidden">
+      <TabPanel id="samples"><Card className="mb-5 overflow-hidden">
         <CardHeader>
           <CardTitle>{uiT("Waar zijn mijn samples?")}</CardTitle>
           <span className="text-xs text-muted">{uiT("uitstaande samples ·")} {formatEUR(outstandingDeposit)} {uiT("borg")}</span>
@@ -194,7 +197,7 @@ export default async function SamplesPage() {
             ))}
           </div>
         )}
-      </Card>
+      </Card></TabPanel>
 
       {history.length > 0 && (
         <details className="group">
@@ -204,7 +207,7 @@ export default async function SamplesPage() {
               {uiT("Geschiedenis — retour / verkocht (")}{history.length})
             </span>
           </summary>
-          <Card className="overflow-hidden">
+          <TabPanel id="samples"><Card className="overflow-hidden">
             <Table>
               <THead>
                 <tr>
@@ -227,9 +230,11 @@ export default async function SamplesPage() {
                 ))}
               </TBody>
             </Table>
-          </Card>
+          </Card></TabPanel>
         </details>
       )}
-    </>
+
+</TabsRoot>
+</>
   );
 }

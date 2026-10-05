@@ -3,6 +3,8 @@
  * These are server-renderable; interactive bits live in their own client files.
  */
 import { StatTileLink } from "@/components/stat-tile-link";
+import { PageActions } from "@/components/page-actions";
+import { TableViews, type TableView } from "@/components/table-views";
 import Link from "next/link";
 import type { ComponentProps, ReactNode } from "react";
 
@@ -137,13 +139,15 @@ export function Badge({
 export function Table({
   className,
   wrapperClassName,
+  views,
   ...props
-}: ComponentProps<"table"> & { wrapperClassName?: string }) {
-  return (
+}: ComponentProps<"table"> & { wrapperClassName?: string; views?: TableView[] }) {
+  const table = (
     <div className={cn("overflow-x-auto", wrapperClassName)}>
       <table className={cn("w-full text-sm", className)} {...props} />
     </div>
   );
+  return views?.length ? <TableViews views={views}>{table}</TableViews> : table;
 }
 
 export function THead({ className, ...props }: ComponentProps<"thead">) {
@@ -235,12 +239,12 @@ export function PageHeader({
   actions?: ReactNode;
 }) {
   return (
-    <div className="mb-6 flex flex-wrap items-end justify-between gap-3">
-      <div>
-        <h1 className="text-xl font-semibold tracking-tight">{title}</h1>
-        {subtitle && <p className="mt-0.5 text-sm text-muted">{subtitle}</p>}
+    <div className="mb-7 flex flex-wrap items-start justify-between gap-x-6 gap-y-4">
+      <div className="min-w-0 flex-1 basis-64">
+        <h1 className="text-2xl font-semibold tracking-tight [&>span]:flex-wrap">{title}</h1>
+        {subtitle && <p className="mt-1.5 max-w-3xl text-sm leading-relaxed text-muted">{subtitle}</p>}
       </div>
-      {actions && <div className="flex items-center gap-2">{actions}</div>}
+      {actions && <PageActions>{actions}</PageActions>}
     </div>
   );
 }

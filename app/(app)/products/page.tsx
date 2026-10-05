@@ -1,3 +1,4 @@
+import { ActionDialog } from "@/components/action-dialog";
 import { datumTaal } from "@/lib/i18n/server";
 import { tekst as uiTranslation } from '@/lib/i18n/server';
 import { and, asc, eq, ilike, isNotNull, isNull, lt, ne, or, sql } from "drizzle-orm";
@@ -145,11 +146,9 @@ export default async function ProductsPage({
       and item->>'productId' is not null
     group by product_id
   `)) as unknown as { product_id: string; qty: string; next_date: string | null; suppliers: string }[];
-  const onOrderByProduct = new Map(
-    (Array.isArray(onOrderRows) ? onOrderRows : (onOrderRows as { rows?: any[] }).rows ?? []).map(
-      (r: any) => [r.product_id as string, { qty: Number(r.qty || 0), nextDate: r.next_date as string | null, suppliers: r.suppliers as string }],
-    ),
-  );
+  const onOrderByProduct = new Map(onOrderRows.map(r => [r.product_id, {
+    qty: Number(r.qty || 0), nextDate: r.next_date, suppliers: r.suppliers,
+  }]));
 
 
   // Bereken effectieve voorraad voor kit-producten (sets met components-array).
@@ -245,7 +244,7 @@ export default async function ProductsPage({
         }
       />
 
-      <div className="mb-5 grid grid-cols-2 gap-3 sm:grid-cols-5">
+      <div className="mb-4"><ActionDialog title={uiT("Overzicht cijfers")} wide><div className="mb-5 grid grid-cols-2 gap-3 sm:grid-cols-5">
         <StatTile label={uiT("Producten (totaal)")} value={agg.n} />
         <StatTile label={uiT("Voorraadwaarde (kostprijs)")} value={formatEUR(agg.stockCostValue)} hint={uiT("kostprijs × voorraad")} />
         <StatTile label={uiT("Voorraadwaarde (verkoop)")} value={formatEUR(agg.stockSaleValue)} hint={uiT("verkoopprijs × voorraad")} />
@@ -257,7 +256,7 @@ export default async function ProductsPage({
         <Link href="/products?nofoto=1" className="block">
           <StatTile label={uiT("Zonder foto")} value={agg.noPhoto} hint={uiT("actieve producten · ontbreekt op de site")} />
         </Link>
-      </div>
+      </div></ActionDialog></div>
 
 
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
@@ -323,7 +322,7 @@ export default async function ProductsPage({
                     : "text-muted hover:text-foreground",
                 )}
               >
-                {label}
+                {uiT(label)}
               </Link>
             ))}
           </div>
@@ -354,7 +353,11 @@ export default async function ProductsPage({
                 <h2 className="text-sm font-semibold">{category}</h2>
                 <span className="text-xs text-muted">{items.length}</span>
               </div>
-              <Table>
+              <Table views={[
+                { id: "stock", label: uiT("Voorraad"), hidden: [3, 8, 9, 10, 11, 12] },
+                { id: "prices", label: uiT("Prijzen"), hidden: [2, 3, 5, 6] },
+                { id: "all", label: uiT("Alle kolommen"), hidden: [] },
+              ]}>
                 <THead>
                   <tr>
                     <Th>{uiT("Naam")}</Th>

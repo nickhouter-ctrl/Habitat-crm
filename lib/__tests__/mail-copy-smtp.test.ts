@@ -41,7 +41,8 @@ describe('vaste CC-afspraak op het SMTP-pad', () => {
       await send({ to: 'Info <HI@habitat-one.com>, Nick <NICK@habitat-one.com>', subject: 'Agenda', html: '<p>Taak</p>', bcc: 'hi@habitat-one.com, outsider@example.com, mourad.h@habitat-one.com', interneMelding: true });
       const args = m.send.mock.calls.at(-1)![0];
       expect(args.to).toBe('Nick <NICK@habitat-one.com>');
-      expect(args.bcc).toContain('mourad.h@habitat-one.com');
+      expect(args.bcc).not.toContain('mourad.h@habitat-one.com');
+      expect(args.bcc).not.toContain('teresa@habitat-one.com');
       expect(args.bcc).not.toContain('hi@');
       expect(args.bcc).not.toContain('outsider');
       expect(args.bcc).not.toContain('nick@');
@@ -54,8 +55,17 @@ describe('vaste CC-afspraak op het SMTP-pad', () => {
     expect(m.send).not.toHaveBeenCalled();
   });
   it('behoudt een privébericht uitsluitend voor zijn verantwoordelijke', async () => {
-    await sendEmail({ to: 'teresa@habitat-one.com', subject: 'Taak', html: '<p>Privé</p>', noCompanyBcc: true, interneMelding: true });
-    expect(m.send).toHaveBeenCalledWith(expect.objectContaining({ to: 'teresa@habitat-one.com', cc: undefined, bcc: undefined }));
+    for (const to of ['teresa@habitat-one.com', 'mourad.h@habitat-one.com']) {
+      await sendEmail({ to, subject: 'Taak', html: '<p>Privé</p>', noCompanyBcc: true, interneMelding: true, systemMailScope: 'team' });
+      expect(m.send).toHaveBeenLastCalledWith(expect.objectContaining({ to, cc: undefined, bcc: undefined }));
+    }
+  });
+  it('blokkeert algemene project- of controlemail aan Mourad en Teresa', async () => {
+    for (const to of ['teresa@habitat-one.com', 'mourad.h@habitat-one.com']) {
+      expect(await sendEmail({ to, subject: 'Projecten', html: '<p>Controle</p>', interneMelding: true })).toMatchObject({ sent: false, reason: 'system-recipient-not-allowed' });
+      await expect(sendMail({ to, subject: 'Projecten', interneMelding: true })).rejects.toThrow('system-recipient-not-allowed');
+    }
+    expect(m.send).not.toHaveBeenCalled();
   });
 });
 

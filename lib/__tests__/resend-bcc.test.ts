@@ -82,8 +82,18 @@ describe("sendEmail via Resend", () => {
     const result = await sendEmail({ to: 'HI@habitat-one.com, hans@habitat-one.com', subject: 'Systeem', html: '<p>Controle</p>', bcc: 'hi@habitat-one.com, mourad.h@habitat-one.com, outsider@example.com', interneMelding: true });
     expect(result.sent).toBe(true);
     expect(payloads[0].to).toBe('hans@habitat-one.com');
-    expect(payloads[0].bcc).toEqual(expect.arrayContaining(['mourad.h@habitat-one.com', 'nick@habitat-one.com', 'frederique@habitat-one.com']));
+    expect(payloads[0].bcc).toEqual(expect.arrayContaining(['nick@habitat-one.com', 'frederique@habitat-one.com']));
+    expect(payloads[0].bcc).not.toContain('mourad.h@habitat-one.com');
+    expect(payloads[0].bcc).not.toContain('teresa@habitat-one.com');
     expect(payloads[0].bcc).not.toContain('hi@habitat-one.com');
     expect(payloads[0].bcc).not.toContain('outsider@example.com');
+  });
+  it('bezorgt eigen taakmeldingen zonder kantoorkopie aan beide collega’s', async () => {
+    for (const to of ['teresa@habitat-one.com', 'mourad.h@habitat-one.com']) {
+      const result = await sendEmail({ to, subject: 'Jouw taak', html: '<p>Taak</p>', noCompanyBcc: true, interneMelding: true, systemMailScope: 'team' });
+      expect(result.sent).toBe(true);
+      expect(payloads.at(-1)).toMatchObject({ to });
+      expect(payloads.at(-1)).not.toHaveProperty('bcc');
+    }
   });
 });

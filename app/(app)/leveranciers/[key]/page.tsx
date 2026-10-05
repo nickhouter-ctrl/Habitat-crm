@@ -1,3 +1,4 @@
+import { TabsRoot, TabsBar, TabPanel } from "@/components/tabs";
 import { datumTaal } from "@/lib/i18n/server";
 import { tekst as uiTranslation } from '@/lib/i18n/server';
 /**
@@ -110,6 +111,7 @@ export default async function LeverancierPage({ params }: { params: Promise<{ ke
 
   return (
     <>
+<TabsRoot defaultTab="invoices" ids={["invoices","projects"]} param="section">
       <PageHeader
         title={
           <span className="flex flex-wrap items-center gap-2">
@@ -124,6 +126,7 @@ export default async function LeverancierPage({ params }: { params: Promise<{ ke
             {uiT("← Alle leveranciers")} </LinkButton>
         }
       />
+<TabsBar tabs={[{id:"invoices",label:uiT("Facturen")},{id:"projects",label:uiT("Projecten")}]}/>
 
       {ploegkaart && (
         <Card className="mb-5">
@@ -146,8 +149,8 @@ export default async function LeverancierPage({ params }: { params: Promise<{ ke
         <StatTile label={uiT("Werven")} value={perProject.filter((p) => p.project_id).length} />
       </div>
 
-      <div className="grid gap-5 lg:grid-cols-[1fr_20rem]">
-        <Card className="overflow-hidden">
+      <div className="space-y-5">
+        <TabPanel id="invoices"><Card className="overflow-hidden">
           <CardHeader>
             <CardTitle>{uiT("Facturen")}</CardTitle>
           </CardHeader>
@@ -188,9 +191,9 @@ export default async function LeverancierPage({ params }: { params: Promise<{ ke
               ))}
             </TBody>
           </Table>
-        </Card>
+        </Card></TabPanel>
 
-        <Card>
+        <TabPanel id="projects"><Card>
           <CardHeader>
             <CardTitle>{uiT("Verdeeld over werven")}</CardTitle>
             <span className="text-xs text-muted">{uiT("waar het geld naartoe ging")}</span>
@@ -212,8 +215,10 @@ export default async function LeverancierPage({ params }: { params: Promise<{ ke
               </div>
             ))}
           </CardContent>
-        </Card>
+        </Card></TabPanel>
       </div>
-    </>
+
+</TabsRoot>
+</>
   );
 }

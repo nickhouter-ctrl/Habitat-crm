@@ -1,3 +1,4 @@
+import { TabsRoot, TabsBar, TabPanel } from "@/components/tabs";
 import { datumTaal } from "@/lib/i18n/server";
 import { tekst as uiTranslation } from '@/lib/i18n/server';
 /**
@@ -71,6 +72,7 @@ export default async function WorkerPage({ params }: { params: Promise<{ id: str
 
   return (
     <>
+<TabsRoot defaultTab="hours" ids={["hours","projects","invoices","details"]} param="section">
       <PageHeader
         title={worker.name}
         subtitle={[worker.role, worker.active ? null : "inactief"].filter(Boolean).join(" · ") || undefined}
@@ -79,6 +81,7 @@ export default async function WorkerPage({ params }: { params: Promise<{ id: str
             {uiT("← Hele ploeg")} </Link>
         }
       />
+<TabsBar tabs={[{id:"hours",label:uiT("Urenregels")},{id:"projects",label:uiT("Projecten")},{id:"invoices",label:uiT("Facturen")},{id:"details",label:uiT("Gegevens")}]}/>
 
       <div className="mb-5 grid grid-cols-2 gap-3 sm:grid-cols-4">
         <StatTile label={uiT("Uren geboekt")} value={uren.toLocaleString(uiDateLocale)} hint={uiT("goedgekeurd")} />
@@ -99,9 +102,9 @@ export default async function WorkerPage({ params }: { params: Promise<{ id: str
         </Card>
       )}
 
-      <div className="grid gap-5 lg:grid-cols-[1fr_1.6fr]">
+      <div className="space-y-5">
         <div className="space-y-5">
-          <Card>
+          <TabPanel id="details"><Card>
             <CardHeader>
               <CardTitle>{uiT("Gegevens")}</CardTitle>
               <span className="text-xs text-muted">
@@ -153,9 +156,9 @@ export default async function WorkerPage({ params }: { params: Promise<{ id: str
                 </div>
               </form>
             </CardContent>
-          </Card>
+          </Card></TabPanel>
 
-          <Card>
+          <TabPanel id="projects"><Card>
             <CardHeader>
               <CardTitle>{uiT("Per werf")}</CardTitle>
               <span className="text-xs text-muted">{uiT("waar zijn uren naartoe gingen")}</span>
@@ -187,11 +190,11 @@ export default async function WorkerPage({ params }: { params: Promise<{ id: str
                 ))}
               </div>
             )}
-          </Card>
+          </Card></TabPanel>
         </div>
 
         <div className="space-y-5">
-          <Card className="overflow-hidden">
+          <TabPanel id="hours"><Card className="overflow-hidden">
             <CardHeader>
               <CardTitle>{uiT("Urenregels")}</CardTitle>
               <span className="text-xs text-muted">{uiT("nieuwste eerst")}</span>
@@ -255,9 +258,9 @@ export default async function WorkerPage({ params }: { params: Promise<{ id: str
                 </TBody>
               </Table>
             )}
-          </Card>
+          </Card></TabPanel>
 
-          <Card className="overflow-hidden">
+          <TabPanel id="invoices"><Card className="overflow-hidden">
             <CardHeader>
               <CardTitle>{uiT("Facturen op zijn naam")}</CardTitle>
               <span className="text-xs text-muted">{uiT("uit de inkoop")}</span>
@@ -296,9 +299,11 @@ export default async function WorkerPage({ params }: { params: Promise<{ id: str
                 </TBody>
               </Table>
             )}
-          </Card>
+          </Card></TabPanel>
         </div>
       </div>
-    </>
+
+</TabsRoot>
+</>
   );
 }

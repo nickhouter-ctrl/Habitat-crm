@@ -1,4 +1,6 @@
 "use client";
+import { TabsRoot, TabsBar, TabPanel } from "@/components/tabs";
+
 import { useT as useUiTranslation } from '@/components/taal-provider';
 
 import Link from "next/link";
@@ -125,7 +127,7 @@ export function ContactCreateForm({
     <form action={action} className="space-y-5">
       <input type="hidden" name="klanttype" value={type} />
 
-      <Field label={uiT("Type klant")}>
+      <TabsRoot defaultTab="data" ids={["data","address","admin"]} param="form"><TabsBar tabs={[{id:"data",label:uiT("Contact")},{id:"address",label:uiT("Adres")},{id:"admin",label:uiT("Administratie")}]}/><TabPanel id="data"><Field label={uiT("Type klant")}>
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
           {TYPES.map((t) => (
             <button
@@ -175,9 +177,9 @@ export function ContactCreateForm({
             {viesIndicator}
           </Field>
         </div>
-      )}
+      )}</TabPanel>
 
-      {type !== "zakelijk" && (
+      <TabPanel id="admin">{type !== "zakelijk" && (
         <Field
           label={uiT("NIE / BSN (fiscaal nummer)")}
           htmlFor="taxId"
@@ -192,16 +194,16 @@ export function ContactCreateForm({
           />
           {viesIndicator}
         </Field>
-      )}
+      )}</TabPanel>
 
-      <div className="grid gap-4 sm:grid-cols-2">
+      <TabPanel id="data"><div className="grid gap-4 sm:grid-cols-2">
         <Field label={uiT("E-mail")} htmlFor="email">
           <Input id="email" name="email" type="email" autoComplete="email" defaultValue={initial?.email ?? ""} onBlur={(e) => checkDup(e.currentTarget.form)} />
         </Field>
         <Field label={uiT("Telefoon")} htmlFor="phone">
           <Input id="phone" name="phone" type="tel" defaultValue={initial?.phone ?? ""} onBlur={(e) => checkDup(e.currentTarget.form)} />
         </Field>
-      </div>
+      </div></TabPanel>
 
       {dup && !isEdit && (
         <div className="rounded-lg border border-amber-300 bg-amber-50 px-4 py-2.5 text-sm text-amber-900">
@@ -212,7 +214,7 @@ export function ContactCreateForm({
           {uiT(". Controleer of je geen dubbele aanmaakt.")} </div>
       )}
 
-      <Field
+      <TabPanel id="address"><Field
         label={uiT("Adres (straat + nr.)")}
         htmlFor="addressLine"
         hint={uiT("Begin te typen en kies het juiste adres — postcode en plaats vullen we dan automatisch in.")}
@@ -257,20 +259,20 @@ export function ContactCreateForm({
         <Field label={uiT("Provincie")} htmlFor="province">
           <Input id="province" name="province" value={province} onChange={(e) => setProvince(e.target.value)} />
         </Field>
-      </div>
+      </div></TabPanel>
 
-      <Field label={uiT("Voorkeurstaal")} htmlFor="preferredLanguage" hint={uiT("Voor offertes, facturen en herinneringen.")}>
+      <TabPanel id="data"><Field label={uiT("Voorkeurstaal")} htmlFor="preferredLanguage" hint={uiT("Voor offertes, facturen en herinneringen.")}>
         <Select id="preferredLanguage" name="preferredLanguage" defaultValue={initial?.preferredLanguage ?? "es"}>
           <option value="es">{uiT("Spaans")}</option>
           <option value="nl">Nederlands</option>
           <option value="en">{uiT("Engels")}</option>
           <option value="de">{uiT("Duits")}</option>
         </Select>
-      </Field>
+      </Field></TabPanel>
 
-      <Field label={uiT("Notities")} htmlFor="notes">
+      <TabPanel id="admin"><Field label={uiT("Notities")} htmlFor="notes">
         <Textarea id="notes" name="notes" defaultValue={initial?.notes ?? ""} />
-      </Field>
+      </Field></TabPanel></TabsRoot>
 
       <div className="pt-1">
         <SubmitButton pendingLabel={uiT("Opslaan…")}>{submitLabel}</SubmitButton>

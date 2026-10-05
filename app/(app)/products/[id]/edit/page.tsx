@@ -1,3 +1,4 @@
+import { TabsRoot, TabsBar, TabPanel } from "@/components/tabs";
 import { tekst as uiTranslation } from '@/lib/i18n/server';
 import { and, eq, inArray, sql } from "drizzle-orm";
 import Link from "next/link";
@@ -164,6 +165,7 @@ export default async function EditProductPage({
 
   return (
     <>
+<TabsRoot defaultTab="product" ids={["product","stock","media","variants"]} param="section">
       <PageHeader
         title={uiT("Product bewerken")}
         subtitle={product.name}
@@ -172,6 +174,7 @@ export default async function EditProductPage({
             {uiT("← Producten")} </Link>
         }
       />
+<TabsBar tabs={[{id:"product",label:uiT("Productgegevens")},{id:"stock",label:uiT("Voorraad")},{id:"media",label:uiT("Foto & website")},{id:"variants",label:uiT("Uitvoeringen")}]}/>
       {sp.saved === "1" && (
         <p className="mb-4 max-w-2xl rounded-md bg-green-50 px-3 py-2 text-sm text-success">
           {uiT("Opgeslagen.")} </p>
@@ -210,7 +213,7 @@ export default async function EditProductPage({
         </p>
       )}
 
-      <Card className="mb-4 max-w-2xl">
+      <TabPanel id="stock"><Card className="mb-4 max-w-2xl">
         <CardHeader>
           <CardTitle>{uiT("Barcode")}</CardTitle>
           {product.barcode && (
@@ -239,10 +242,10 @@ export default async function EditProductPage({
             </Button>
           </form>
         </CardContent>
-      </Card>
+      </Card></TabPanel>
 
       {allocation.length > 0 && (
-        <Card className="mb-4 max-w-2xl overflow-hidden">
+        <TabPanel id="stock"><Card className="mb-4 max-w-2xl overflow-hidden">
           <CardHeader>
             <CardTitle>{uiT("Per project — gereserveerd / verkocht")}</CardTitle>
             <span className="text-xs text-muted">
@@ -303,11 +306,11 @@ export default async function EditProductPage({
           <p className="px-5 py-3 text-xs text-muted">
             {uiT("Gereserveerd = uit geaccepteerde offertes; verkocht = uit facturen (− creditnota's). Voorraad nu:")} {product.stockQty != null ? `${Number(product.stockQty)} ${unit}` : "—"}.
           </p>
-        </Card>
+        </Card></TabPanel>
       )}
 
       {(variants.length > 0 || setComponents.length > 0) && (
-        <Card className="mb-4 max-w-2xl overflow-hidden">
+        <TabPanel id="stock"><Card className="mb-4 max-w-2xl overflow-hidden">
           <CardHeader>
             <CardTitle>{uiT("Wat zit er in deze set")}</CardTitle>
             <span className="text-xs text-muted">
@@ -368,11 +371,11 @@ export default async function EditProductPage({
               </div>
             )}
           </CardContent>
-        </Card>
+        </Card></TabPanel>
       )}
 
-      <div className="mb-4 grid max-w-2xl gap-4 sm:grid-cols-2">
-        <Card>
+      <div className="space-y-5">
+        <TabPanel id="media"><Card>
           <CardHeader>
             <CardTitle>{uiT("Foto")}</CardTitle>
             {product.imageUrl && (
@@ -405,9 +408,9 @@ export default async function EditProductPage({
               </Button>
             </form>
           </CardContent>
-        </Card>
+        </Card></TabPanel>
 
-        <Card>
+        <TabPanel id="media"><Card>
           <CardHeader>
             <CardTitle>{uiT("Website")}</CardTitle>
             {product.websiteProductId && (
@@ -436,10 +439,10 @@ export default async function EditProductPage({
                 {uiT("Push naar website")} </Button>
             </form>
           </CardContent>
-        </Card>
+        </Card></TabPanel>
       </div>
 
-      <ProductForm
+      <TabPanel id="product"><ProductForm
         action={update}
         product={product}
         collections={collections}
@@ -447,9 +450,9 @@ export default async function EditProductPage({
         brands={merken}
         variantsManaged={Boolean(product.brandId) || uitvoeringen.length > 0}
         submitLabel={uiT("Wijzigingen opslaan")}
-      />
+      /></TabPanel>
 
-      <Card className="mt-4 max-w-4xl scroll-mt-4" id="uitvoeringen">
+      <TabPanel id="variants"><Card className="mt-4 max-w-4xl scroll-mt-4" id="uitvoeringen">
         <CardHeader>
           <CardTitle>
             <span className="flex items-center gap-2">
@@ -484,14 +487,16 @@ export default async function EditProductPage({
               {uiT("Uitvoeringen opslaan")} </SubmitButton>
           </form>
         </CardContent>
-      </Card>
-      <form action={remove} className="mt-4 max-w-2xl">
+      </Card></TabPanel>
+      <TabPanel id="product"><form action={remove} className="mt-4 max-w-2xl">
         <ConfirmSubmit
           message={uiT("Product \"{v0}\" definitief verwijderen?", { v0: product.name })}
           className="rounded-md px-3 py-2 text-sm font-medium text-danger transition-colors hover:bg-danger/10"
         >
           {uiT("Product verwijderen")} </ConfirmSubmit>
-      </form>
-    </>
+      </form></TabPanel>
+
+</TabsRoot>
+</>
   );
 }

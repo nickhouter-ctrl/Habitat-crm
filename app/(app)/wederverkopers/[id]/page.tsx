@@ -1,3 +1,4 @@
+import { TabsRoot, TabsBar, TabPanel } from "@/components/tabs";
 import { tekst as uiTranslation } from '@/lib/i18n/server';
 import { tekst, datumTaal } from '@/lib/i18n/server';
 import { asc, eq } from "drizzle-orm";
@@ -152,6 +153,7 @@ export default async function ResellerDetailPage({ params }: { params: Promise<{
 
   return (
     <>
+<TabsRoot defaultTab="overview" ids={["overview","stock","add"]} param="section">
       <PageHeader
         title={reseller.name}
         subtitle={t("Wederverkoper · consignatievoorraad")}
@@ -160,13 +162,14 @@ export default async function ResellerDetailPage({ params }: { params: Promise<{
             {t("← Alle wederverkopers")} </Link>
         }
       />
+<TabsBar tabs={[{id:"overview",label:t("Overzicht")},{id:"stock",label:t("In consignatie")},{id:"add",label:t("Product neerleggen")}]}/>
 
-      <Card className="mb-5 p-5">
+      <TabPanel id="overview"><Card className="mb-5 p-5">
         <Link href={`/wederverkopers/${id}/presentatie`} className="font-semibold text-accent hover:underline">{t("Presentatiepakket en verrekeningen →")}</Link>
         <p className="mt-1 text-sm text-muted">{t("Gratis, een eigen bijdrage of verrekenen bij één of meerdere orders. Bekijk de afspraak en het resterende tegoed.")}</p>
-      </Card>
+      </Card></TabPanel>
 
-      {windowsDealers.length > 0 && <Card className="mb-5 p-4"><Link href={`/contacts/${id}?tab=kozijnen`} className="font-medium text-accent hover:underline">{t("Kozijnen: offertes, orders en betalingen bekijken →")}</Link><p className="mt-1 text-xs text-muted">{t("Gekoppeld aan")} {windowsDealers.map(d => d.companyName || d.email).join(", ")} {t("in Habitat One Windows.")}</p></Card>}
+      {windowsDealers.length > 0 && <TabPanel id="overview"><Card className="mb-5 p-4"><Link href={`/contacts/${id}?tab=kozijnen`} className="font-medium text-accent hover:underline">{t("Kozijnen: offertes, orders en betalingen bekijken →")}</Link><p className="mt-1 text-xs text-muted">{t("Gekoppeld aan")} {windowsDealers.map(d => d.companyName || d.email).join(", ")} {t("in Habitat One Windows.")}</p></Card></TabPanel>}
       <div className="mb-5 grid grid-cols-2 gap-3 sm:grid-cols-4">
         <StatTile label={t("Producten")} value={String(rows.length)} tone="neutral" />
         <StatTile label={t("Nu in winkel")} value={formatEUR(inStoreValue)} hint={t("dealerprijs · ex. BTW")} tone={inStoreValue > 0 ? "info" : "neutral"} />
@@ -174,7 +177,7 @@ export default async function ResellerDetailPage({ params }: { params: Promise<{
         <StatTile label={t("Marge-norm")} value={`${DEALER_MIN_MARGIN_PCT}%`} hint={t("minimaal per dealerverkoop")} tone="neutral" />
       </div>
 
-      <Card className="mb-5">
+      <TabPanel id="add"><Card className="mb-5">
         <CardHeader>
           <CardTitle>{t("Product neerleggen")}</CardTitle>
           <span className="text-xs text-muted">{t("gaat van onze voorraad af → consignatie bij")} {reseller.name}</span>
@@ -191,9 +194,9 @@ export default async function ResellerDetailPage({ params }: { params: Promise<{
           </Field>
           <SubmitButton size="sm" variant="secondary" pendingLabel="…">{t("+ Neerleggen")}</SubmitButton>
         </form>
-      </Card>
+      </Card></TabPanel>
 
-      <Card className="overflow-hidden">
+      <TabPanel id="stock"><Card className="overflow-hidden">
         <CardHeader>
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
@@ -241,7 +244,9 @@ export default async function ResellerDetailPage({ params }: { params: Promise<{
             )}
           </>
         )}
-      </Card>
-    </>
+      </Card></TabPanel>
+
+</TabsRoot>
+</>
   );
 }

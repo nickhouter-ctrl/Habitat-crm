@@ -1,3 +1,4 @@
+import { TabsRoot, TabsBar, TabPanel } from "@/components/tabs";
 import { datumTaal } from "@/lib/i18n/server";
 import { tekst as uiTranslation } from '@/lib/i18n/server';
 /**
@@ -119,6 +120,7 @@ export default async function MailingPage({
 
   return (
     <>
+<TabsRoot defaultTab="campaigns" ids={["campaigns","list","help"]} param="section">
       <PageHeader
         title={t("E-mailmarketing")}
         subtitle={t("Campagnes naar bedrijven — met een dagcap, een afmeldlink en een noodrem")}
@@ -139,6 +141,7 @@ export default async function MailingPage({
           </div>
         }
       />
+<TabsBar tabs={[{id:"campaigns",label:t("Campagnes")},{id:"list",label:t("De lijst")},{id:"help",label:t("Zo werkt het")}]}/>
 
       {sp.error && <p className="mb-4 rounded-md bg-danger/10 px-3 py-2 text-sm text-danger">{uiT(sp.error ?? "")}</p>}
 
@@ -193,7 +196,7 @@ export default async function MailingPage({
         </p>
       )}
 
-      <div className="grid items-start gap-5 lg:grid-cols-[minmax(0,1fr)_22rem]">
+      <div className="space-y-5">
         <div className="space-y-5">
           {/* Lopende campagnes eerst, met voortgang. Dat is waar je naar kijkt. */}
           {lopend.length > 0 && (
@@ -238,7 +241,7 @@ export default async function MailingPage({
           )}
 
           {/* Alle campagnes. */}
-          <Card>
+          <TabPanel id="campaigns"><Card>
             <CardHeader>
               <CardTitle>{t("Campagnes")}</CardTitle>
               <span className="text-xs text-muted">{t("{n} in totaal", { n: campagnes.length })}</span>
@@ -276,7 +279,7 @@ export default async function MailingPage({
                 })}
               </CardContent>
             )}
-          </Card>
+          </Card></TabPanel>
 
           <NieuweCampagne groupOpts={groupOpts} />
         </div>
@@ -285,7 +288,7 @@ export default async function MailingPage({
         <div className="space-y-5">
           <Verzendtempo teGaan={totaalWachtrij || mailbaar} />
 
-          <Card>
+          <TabPanel id="list"><Card>
             <CardHeader>
               <CardTitle>{t("De lijst")}</CardTitle>
             </CardHeader>
@@ -307,9 +310,9 @@ export default async function MailingPage({
                 </LinkButton>
               </div>
             </CardContent>
-          </Card>
+          </Card></TabPanel>
 
-          <Card>
+          <TabPanel id="help"><Card>
             <CardHeader>
               <CardTitle>{t("Zo werkt het")}</CardTitle>
             </CardHeader>
@@ -323,9 +326,11 @@ export default async function MailingPage({
               <p>
                 <strong className="text-foreground">4.</strong> {uiT("In de wachtrij zetten. Daarna verstuurt het systeem verspreid over de dagen, binnen de dagcap, en stopt zelf bij te veel bounces.")} </p>
             </CardContent>
-          </Card>
+          </Card></TabPanel>
         </div>
       </div>
-    </>
+
+</TabsRoot>
+</>
   );
 }

@@ -1,3 +1,6 @@
+import { ActionDialog } from "@/components/action-dialog";
+import { ProjectSnapshot } from "@/components/project-snapshot";
+import { projectProgress } from "@/lib/project-progress";
 import { datumTaal } from "@/lib/i18n/server";
 import { tekst as uiTranslation } from '@/lib/i18n/server';
 import { loadProjectFunding } from "@/lib/project-funding";
@@ -565,7 +568,7 @@ export default async function ProjectDetailPage({
   const zichtbareKostenSom = zichtbareCostRows.reduce((sum, c) => sum + Number(c.amountEur ?? 0), 0);
 
   /** Filterknopjes + de totalen per betaalwijze, gedeeld door beide lijsten. */
-  const BetaalFilter = ({
+  const renderPaymentFilter = ({
     welke,
     actief,
     contant,
@@ -596,7 +599,7 @@ export default async function ProjectDetailPage({
               : "border-transparent text-muted hover:bg-background-soft"
           }`}
         >
-          {label} {formatEUR(bedrag)}
+          {uiT(label)} {formatEUR(bedrag)}
           {extra ? <span className="ml-1 opacity-70">{extra}</span> : null}
         </Link>
       ))}
@@ -769,6 +772,7 @@ export default async function ProjectDetailPage({
   // Begroting-samenvatting voor de compacte kaart (de builder zit op /begroting).
   const budgetLineCount = budgetRows.length;
   const hasBudgetContent = budgetLineCount > 0 || phaseRows.length > 0;
+  const progress = projectProgress(phaseRows, budgetRows);
   const begrootMarge = budgetTargetBase - budgetCostTotal;
   const begrootMargePct = budgetTargetBase > 0 ? Math.round((begrootMarge / budgetTargetBase) * 100) : null;
   // Urenportaal-links van dit project (arbeider → persoonlijke invul-link).
@@ -850,14 +854,16 @@ export default async function ProjectDetailPage({
 
       <TabsRoot
         defaultTab="overzicht"
-        ids={["overzicht", "betalingen", "uren", "documenten", "gegevens"]}
+        ids={["overzicht", "betalingen", "resultaat", "planning", "uren", "documenten", "gegevens"]}
         className="flex flex-col"
       >
         <TabsBar
           className="order-2"
           tabs={[
             { id: "overzicht", label: uiT("Overzicht"), icon: <LayoutDashboard /> },
-            { id: "betalingen", label: uiT("Betalingen"), icon: <Wallet /> },
+            { id: "betalingen", label: uiT("Voorschotten & betalingen"), icon: <Wallet /> },
+            { id: "planning", label: uiT("Voortgang & begroting"), icon: <LayoutDashboard /> },
+            { id: "resultaat", label: uiT("Marge & winst"), icon: <Wallet /> },
             { id: "uren", label: uiT("Uren & kosten"), icon: <Clock /> },
             { id: "documenten", label: uiT("Documenten"), icon: <FileText />, badge: linkedDocs.length },
             { id: "gegevens", label: uiT("Gegevens"), icon: <Settings /> },
@@ -999,8 +1005,15 @@ export default async function ProjectDetailPage({
           </Card>
         </TabPanel>
 
-        {/* KPI-strip — de kerncijfers, altijd zichtbaar onder de tabbalk */}
-        <div className="order-1 mb-6 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+        {/* Detailed project finances are kept in the margin and profit tab. */}
+
+
+        {/* ── Tab: Overzicht — geldstroom, resultaat, begroting ── */}
+        <TabPanel id="overzicht" className="order-3">
+      <ProjectSnapshot id={id} cover={cover} progress={progress} status={project.status} requestedOpen={openAdvanceRequests.reduce((sum,r)=>sum+r.open,0)} outstandingInvoices={openOutstanding} startDate={project.startDate} endDate={project.endDate}/>
+
+      {/* ─────────────── Resultaat (P&L) ─────────────── */}
+      </TabPanel><TabPanel id="resultaat" className="order-3"><div className="order-1 mb-6 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
           <StatTile
             label={contractPrice != null ? uiT("Aanneemprijs") : targetIsImplicit ? uiT("Doel") : uiT("Offerte (doel)")}
             value={formatEUR(targetRevenue)}
@@ -1025,80 +1038,7 @@ export default async function ProjectDetailPage({
             hint={uiT("als de volle aanneemprijs gefactureerd wordt")}
             tone={resultTone}
           />
-        </div>
-
-        {/* ── Tab: Overzicht — geldstroom, resultaat, begroting ── */}
-        <TabPanel id="overzicht" className="order-3">
-      <Card id="geldstroom" className="mb-5 scroll-mt-24">
-        <CardHeader>
-          <CardTitle>{uiT("Kosten, klantbetalingen en voorschotruimte")}</CardTitle>
-          <span className="text-xs text-muted">
-            {uiT("geboekte kosten · ontvangen klantgeld · resterende ruimte inclusief opslag — incl. wat via Creadores liep")} </span>
-        </CardHeader>
-        <CardContent>
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
-            <div className="rounded-lg border bg-background p-3">
-              <p className="text-xs text-muted">{uiT("Geboekte uren en externe inkoop")}</p>
-              <p className="text-lg font-semibold tabular-nums text-danger">− {formatEUR(cover.prefinanced)}</p>
-              <p className="text-xs text-muted">{uiT("uren")} {formatEUR(laborCost)} {uiT("+ inkoop derden")} {formatEUR(materialCost)} {uiT("· ex. btw")}</p>
-            </div>
-            {/* Eigen voorraad apart: wel kostprijs, geen kasuitgave — telt dus
-                niet mee in "eruit gegaan" en niet in de voorschotdekking. */}
-            <div className="rounded-lg border bg-background p-3">
-              <p className="text-xs text-muted">{uiT("Eigen voorraad (kostprijs)")}</p>
-              <p className="text-lg font-semibold tabular-nums">{formatEUR(ownProductCostRealized)}</p>
-              <p className="text-xs text-muted">{uiT("verkoopprijs telt mee in de doorbelasting; kostprijs is voor de resultaatberekening")}</p>
-            </div>
-            <div className="rounded-lg border bg-background p-3">
-              <p className="text-xs text-muted">{uiT("Ontvangen van klant")}</p>
-              <p className="text-lg font-semibold tabular-nums text-success">+ {formatEUR(receivedTotalEx)}</p>
-              <p className="text-xs text-muted">
-                {paymentRows.length} {paymentRows.length === 1 ? uiT("betaling") : uiT("betalingen")} {uiT("· ex. btw van")}{" "}
-                {formatEUR(receivedTotal)} {uiT("ontvangen")} {receivedTotalEx - dekkingOntvangenEx > 0.01
-                  ? uiT(" · waarvan {v0} voor eigen producten", { v0: formatEUR(receivedTotalEx - dekkingOntvangenEx) })
-                  : ""}
-              </p>
-            </div>
-            {/* Het stoplicht: dekt wat er binnen is de kasuitgaven (uren + inkoop
-                derden)? Eigen voorraad staat hier bewust buiten. */}
-            <div className="rounded-lg border bg-background p-3">
-              <p className="text-xs text-muted">{uiT("Voorschotruimte incl. opslag")}</p>
-              <p
-                className={`text-lg font-semibold tabular-nums ${
-                  cover.tone === "success" ? "text-success" : cover.tone === "warning" ? "text-warning" : "text-danger"
-                }`}
-              >
-                {cover.saldo < 0 ? `− ${formatEUR(-cover.saldo)}` : formatEUR(cover.saldo)}
-              </p>
-              <p className="text-xs text-muted">
-                {cover.status === "gedekt"
-                  ? uiT("gedekt door voorschotten en betalingen · ex. btw")
-                  : cover.status === "bijna_op"
-                    ? uiT("bijna op — nieuw voorschot voorbereiden · ex. btw")
-                    : uiT("onvoldoende voorschot incl. opslag · ex. btw")}
-                {cover.status !== "gedekt" && (
-                  <>
-                    {" · "}
-                    <Link href="#voorschot-opvragen" className="underline underline-offset-2">
-                      {uiT("nieuw voorschot vragen →")} </Link>
-                  </>
-                )}
-              </p>
-            </div>
-            <div className="rounded-lg border bg-background p-3">
-              <p className="text-xs text-muted">{uiT("Nog te factureren")}</p>
-              <p className={`text-lg font-semibold tabular-nums ${toInvoice > 0 ? "text-warning" : ""}`}>{formatEUR(toInvoice)}</p>
-              <p className="text-xs text-muted">
-                {contractPrice != null ? uiT("aanneemprijs") : uiT("doel")} {formatEUR(targetRevenue)} {uiT("− gefactureerd")} {formatEUR(projRevenue)}
-                {notInvoicedAdvancesEx > 0 ? uiT(" − voorschotten {v0}", { v0: formatEUR(notInvoicedAdvancesEx) }) : ""}
-              </p>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* ─────────────── Resultaat (P&L) ─────────────── */}
-      <Card id="resultaat" className="mb-5 scroll-mt-24">
+        </div><Card id="resultaat" className="mb-5 scroll-mt-24">
         <CardHeader>
           <CardTitle>{uiT("Resultaat — zitten we goed?")}</CardTitle>
           <span className="text-xs text-muted">
@@ -1268,7 +1208,7 @@ export default async function ProjectDetailPage({
             <div className="rounded-lg border border-accent/30 bg-accent/5 p-3 text-sm">
               <p className="font-semibold">{uiT("Wat moet er nu nog binnenkomen?")}</p>
               <p className="mb-2 text-xs text-muted">
-                {uiT("gerekend mét marge en mét eigen producten — dit is dus een ander getal dan de voorschotdekking bij Geldstroom, die alleen naar kale kasuitgaven kijkt")} </p>
+                {uiT("Doorbelasting van geboekt werk, inclusief afgesproken opslag en eigen producten. Dit overzicht toont het projectresultaat; de voorschotstand staat apart bij Overzicht.")} </p>
               <dl className="space-y-1">
                 <div className="flex justify-between gap-2">
                   <dt className="text-muted">
@@ -1342,7 +1282,7 @@ export default async function ProjectDetailPage({
             </div>
           )}
         </CardContent>
-      </Card>
+      </Card></TabPanel><TabPanel id="planning" className="order-3">
 
       {/* ─────────────── Voortgang per bouwfase ─────────────── */}
       {(() => {
@@ -1464,8 +1404,74 @@ export default async function ProjectDetailPage({
         </TabPanel>
 
         {/* ── Tab: Betalingen — aanbetalingen + ontvangen ── */}
-        <TabPanel id="betalingen" className="order-3">
-      {advanceDocs.length > 0 && (
+        <TabPanel id="betalingen" className="order-3"><TabsRoot defaultTab="request" ids={["request","receipts","history"]} param="betaling"><TabsBar tabs={[{id:"request",label:uiT("Voorschot opvragen")},{id:"receipts",label:uiT("Ontvangen betalingen")},{id:"history",label:uiT("Aanbetalingen / voorschotten")}]}/><div className="mb-5"><ActionDialog title={uiT("Berekening voorschotruimte")} wide><Card id="geldstroom" className="mb-5 scroll-mt-24">
+        <CardHeader>
+          <CardTitle>{uiT("Kosten, klantbetalingen en voorschotruimte")}</CardTitle>
+          <span className="text-xs text-muted">
+            {uiT("geboekte kosten · ontvangen klantgeld · resterende ruimte inclusief opslag — incl. wat via Creadores liep")} </span>
+        </CardHeader>
+        <CardContent>
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+            <div className="rounded-lg border bg-background p-3">
+              <p className="text-xs text-muted">{uiT("Geboekte uren en externe inkoop")}</p>
+              <p className="text-lg font-semibold tabular-nums text-danger">− {formatEUR(cover.prefinanced)}</p>
+              <p className="text-xs text-muted">{uiT("uren")} {formatEUR(laborCost)} {uiT("+ inkoop derden")} {formatEUR(materialCost)} {uiT("· ex. btw")}</p>
+            </div>
+            {/* Eigen voorraad apart: wel kostprijs, geen kasuitgave — telt dus
+                niet mee in "eruit gegaan" en niet in de voorschotdekking. */}
+            <div className="rounded-lg border bg-background p-3">
+              <p className="text-xs text-muted">{uiT("Eigen voorraad (kostprijs)")}</p>
+              <p className="text-lg font-semibold tabular-nums">{formatEUR(ownProductCostRealized)}</p>
+              <p className="text-xs text-muted">{uiT("verkoopprijs telt mee in de doorbelasting; kostprijs is voor de resultaatberekening")}</p>
+            </div>
+            <div className="rounded-lg border bg-background p-3">
+              <p className="text-xs text-muted">{uiT("Ontvangen van klant")}</p>
+              <p className="text-lg font-semibold tabular-nums text-success">+ {formatEUR(receivedTotalEx)}</p>
+              <p className="text-xs text-muted">
+                {paymentRows.length} {paymentRows.length === 1 ? uiT("betaling") : uiT("betalingen")} {uiT("· ex. btw van")}{" "}
+                {formatEUR(receivedTotal)} {uiT("ontvangen")} {receivedTotalEx - dekkingOntvangenEx > 0.01
+                  ? uiT(" · waarvan {v0} voor eigen producten", { v0: formatEUR(receivedTotalEx - dekkingOntvangenEx) })
+                  : ""}
+              </p>
+            </div>
+            {/* Het stoplicht: dekt wat er binnen is de kasuitgaven (uren + inkoop
+                derden)? Eigen voorraad staat hier bewust buiten. */}
+            <div className="rounded-lg border bg-background p-3">
+              <p className="text-xs text-muted">{uiT("Voorschotruimte incl. opslag")}</p>
+              <p
+                className={`text-lg font-semibold tabular-nums ${
+                  cover.tone === "success" ? "text-success" : cover.tone === "warning" ? "text-warning" : "text-danger"
+                }`}
+              >
+                {cover.saldo < 0 ? `− ${formatEUR(-cover.saldo)}` : formatEUR(cover.saldo)}
+              </p>
+              <p className="text-xs text-muted">
+                {cover.status === "gedekt"
+                  ? uiT("gedekt door voorschotten en betalingen · ex. btw")
+                  : cover.status === "bijna_op"
+                    ? uiT("bijna op — nieuw voorschot voorbereiden · ex. btw")
+                    : uiT("onvoldoende voorschot incl. opslag · ex. btw")}
+                {cover.status !== "gedekt" && (
+                  <>
+                    {" · "}
+                    <Link href="#voorschot-opvragen" className="underline underline-offset-2">
+                      {uiT("nieuw voorschot vragen →")} </Link>
+                  </>
+                )}
+              </p>
+            </div>
+            <div className="rounded-lg border bg-background p-3">
+              <p className="text-xs text-muted">{uiT("Nog te factureren")}</p>
+              <p className={`text-lg font-semibold tabular-nums ${toInvoice > 0 ? "text-warning" : ""}`}>{formatEUR(toInvoice)}</p>
+              <p className="text-xs text-muted">
+                {contractPrice != null ? uiT("aanneemprijs") : uiT("doel")} {formatEUR(targetRevenue)} {uiT("− gefactureerd")} {formatEUR(projRevenue)}
+                {notInvoicedAdvancesEx > 0 ? uiT(" − voorschotten {v0}", { v0: formatEUR(notInvoicedAdvancesEx) }) : ""}
+              </p>
+            </div>
+          </div>
+        </CardContent>
+      </Card></ActionDialog></div>
+      <TabPanel id="history">{advanceDocs.length > 0 && (
         <Card id="aanbetalingen" className="mb-5 scroll-mt-24">
           <CardHeader>
             <CardTitle>{uiT("Aanbetalingen / voorschotten")}</CardTitle>
@@ -1518,7 +1524,8 @@ export default async function ProjectDetailPage({
         </Card>
       )}
 
-      <AdvanceRequestCard
+      </TabPanel>
+      <TabPanel id="request"><AdvanceRequestCard
         projectId={id}
         projectName={project.name}
         siteAlias={project.siteAlias}
@@ -1531,10 +1538,10 @@ export default async function ProjectDetailPage({
         aanneemsom={targetRevenue}
         doorTeBelasten={margins.totalRevenue}
         params={voorschotParams}
-      />
+      /></TabPanel>
 
       {/* ─────────────── Ontvangen betalingen (van klant) ─────────────── */}
-      <Card id="ontvangen" className="mb-5 scroll-mt-24">
+      <TabPanel id="receipts"><Card id="ontvangen" className="mb-5 scroll-mt-24">
         <CardHeader>
           <CardTitle>{uiT("Ontvangen betalingen")}</CardTitle>
           <span className="text-xs text-muted">
@@ -1647,7 +1654,7 @@ export default async function ProjectDetailPage({
             <SubmitButton size="sm" variant="secondary" pendingLabel="…">{uiT("+ Betaling")}</SubmitButton>
           </form>
         </CardContent>
-      </Card>
+      </Card></TabPanel></TabsRoot>
 
         </TabPanel>
 
@@ -1704,14 +1711,7 @@ export default async function ProjectDetailPage({
                 </div>
               )}
               {timeRows.length > 0 && (
-                <BetaalFilter
-                  welke="uren"
-                  actief={urenFilter}
-                  contant={urenContant.kost}
-                  factuur={urenFactuur.kost}
-                  contantExtra={`(${urenContant.uren.toLocaleString(uiDateLocale)} u)`}
-                  factuurExtra={`(${urenFactuur.uren.toLocaleString(uiDateLocale)} u)`}
-                />
+                renderPaymentFilter({welke: "uren", actief: urenFilter, contant: urenContant.kost, factuur: urenFactuur.kost, contantExtra: `(${urenContant.uren.toLocaleString(uiDateLocale)} u)`, factuurExtra: `(${urenFactuur.uren.toLocaleString(uiDateLocale)} u)`})
               )}
               {timeRows.length > 0 && zichtbareTimeRows.length === 0 && (
                 <p className="text-sm text-muted">{uiT("Geen urenregels die")} {urenFilter === "contant" ? uiT("contant") : uiT("per factuur")} {uiT("betaald zijn.")}</p>
@@ -1982,12 +1982,7 @@ export default async function ProjectDetailPage({
                 </div>
               )}
               {costRows.length > 0 && (
-                <BetaalFilter
-                  welke="kosten"
-                  actief={kostenFilter}
-                  contant={kostenContant}
-                  factuur={kostenFactuur}
-                />
+                renderPaymentFilter({welke: "kosten", actief: kostenFilter, contant: kostenContant, factuur: kostenFactuur})
               )}
               {costRows.length > 0 && zichtbareCostRows.length === 0 && (
                 <p className="text-sm text-muted">

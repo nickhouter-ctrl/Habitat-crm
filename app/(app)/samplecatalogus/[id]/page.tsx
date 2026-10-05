@@ -1,3 +1,4 @@
+import { TabsRoot, TabsBar, TabPanel } from "@/components/tabs";
 import { tekst as uiTranslation } from '@/lib/i18n/server';
 import { eq } from "drizzle-orm";
 import { Plus, Printer, ShoppingCart, Trash2 } from "lucide-react";
@@ -104,6 +105,7 @@ export default async function VariantDetailPage({
 
   return (
     <div className="space-y-6">
+<TabsRoot defaultTab="overview" ids={["overview","sizes","link","prices"]} param="section">
       <PageHeader
         title={`${v.productName} — ${v.color}`}
         subtitle={v.collectionName ?? undefined}
@@ -116,14 +118,15 @@ export default async function VariantDetailPage({
           </div>
         }
       />
+<TabsBar tabs={[{id:"overview",label:uiT("Overzicht")},{id:"sizes",label:uiT("Beschikbare maten")},{id:"link",label:uiT("Koppeling")},{id:"prices",label:uiT("Prijzen")}]}/>
 
-      <div className="grid gap-6 lg:grid-cols-[320px_1fr]">
+      <div className="space-y-5">
         {/* ---- foto + kerngegevens ---- */}
         <div className="space-y-4">
-          <Card className="overflow-hidden">
+          <TabPanel id="overview"><Card className="overflow-hidden">
             {v.imageUrl ? (
               // eslint-disable-next-line @next/next/no-img-element
-              <img src={v.imageUrl} alt={v.color} className="aspect-square w-full object-cover" />
+              <img src={v.imageUrl} alt={v.color} className="h-72 w-full bg-background object-contain" />
             ) : (
               <div className="flex aspect-square w-full items-center justify-center bg-muted text-sm text-muted">
                 {uiT("Geen foto")} </div>
@@ -147,18 +150,18 @@ export default async function VariantDetailPage({
                 </Badge>
               </Row>
             </CardContent>
-          </Card>
+          </Card></TabPanel>
 
           {/* vinkjes */}
-          <Card>
+          <TabPanel id="overview"><Card>
             <CardContent className="space-y-3 p-4">
               <FlagToggle id={id} field="hasSample" value={v.hasSample} label={uiT("Sample in huis")} />
               <FlagToggle id={id} field="inRange" value={v.inRange} label={uiT("In assortiment")} />
             </CardContent>
-          </Card>
+          </Card></TabPanel>
 
           {/* koppeling */}
-          <Card>
+          <TabPanel id="link"><Card>
             <CardHeader>
               <CardTitle>{uiT("Koppeling")}</CardTitle>
             </CardHeader>
@@ -199,13 +202,13 @@ export default async function VariantDetailPage({
                 </>
               )}
             </CardContent>
-          </Card>
+          </Card></TabPanel>
         </div>
 
         {/* ---- prijzen + maten ---- */}
         <div className="space-y-6">
           {/* variant-fallbackprijs */}
-          <Card>
+          <TabPanel id="prices"><Card>
             <CardHeader>
               <CardTitle>{uiT("Prijs (variant — fallback)")}</CardTitle>
             </CardHeader>
@@ -219,10 +222,10 @@ export default async function VariantDetailPage({
               <p className="mt-2 text-xs text-muted">
                 {uiT("Prijs hoort bij de maat — vul bij voorkeur per maat in. Deze prijs geldt als fallback wanneer een maat geen eigen prijs heeft.")} </p>
             </CardContent>
-          </Card>
+          </Card></TabPanel>
 
           {/* maten met prijs per maat */}
-          <Card>
+          <TabPanel id="sizes"><Card>
             <CardHeader>
               <CardTitle>{uiT("Beschikbare maten")}</CardTitle>
             </CardHeader>
@@ -295,10 +298,10 @@ export default async function VariantDetailPage({
                 </SubmitButton>
               </form>
             </CardContent>
-          </Card>
+          </Card></TabPanel>
 
           {sizes.length > 0 && (
-            <Card>
+            <TabPanel id="sizes"><Card>
               <CardHeader>
                 <CardTitle>{uiT("Maat verwijderen")}</CardTitle>
               </CardHeader>
@@ -316,11 +319,13 @@ export default async function VariantDetailPage({
                   </form>
                 ))}
               </CardContent>
-            </Card>
+            </Card></TabPanel>
           )}
         </div>
       </div>
-    </div>
+
+</TabsRoot>
+</div>
   );
 }
 

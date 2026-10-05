@@ -81,7 +81,7 @@ export async function deliverStaffNotifications(ids?: string[]) {
       if (!recipient || !isSystemMailRecipient(recipient.email) || !magModule(recipient.role, requiredModule) || !content) { await db.update(staffNotifications).set({ status: "skipped", updatedAt: new Date() }).where(eq(staffNotifications.id, row.id)); result.skipped++; continue; }
       const mail = staffNotificationEmail(content, recipient);
       smtpStarted = true;
-      const delivery = await sendEmail({ to: recipient.email, ...mail, noCompanyBcc: true, interneMelding: true });
+      const delivery = await sendEmail({ to: recipient.email, ...mail, noCompanyBcc: true, interneMelding: true, systemMailScope: "team" });
       if (!delivery.sent) {
         const safeRetry = delivery.reason === "not-configured";
         await db.update(staffNotifications).set({ status: safeRetry ? "pending" : "unknown", availableAt: new Date(Date.now()+60*60_000), lastError: safeRetry ? "mail-not-configured" : "mail-delivery-unconfirmed", updatedAt: new Date() }).where(eq(staffNotifications.id, row.id));

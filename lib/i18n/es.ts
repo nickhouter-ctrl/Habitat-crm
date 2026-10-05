@@ -10,8 +10,10 @@ import { workflowEs } from './workflow';
 import { dealerPricingEs } from './dealer-pricing';
 
 import { teamWorkflowEs } from "./team-workflow";
+import { usabilityEs } from "./usability";
 
 export const es: Dictionary = {
+  ...usabilityEs,
   ...reportSpanish,
   ...teamWorkflowEs,
   ...dealerPricingEs,

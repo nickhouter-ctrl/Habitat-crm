@@ -22,6 +22,10 @@ import type { StartPrefs } from "@/lib/start-tegels";
 import { saveStartPrefs } from "./_start/actions";
 import { MijnTaken, type MijnTaak } from "./_start/mijn-taken";
 import { TegelGrid } from "./_start/tegel-grid";
+import { TabsRoot, TabsBar, TabPanel } from "@/components/tabs";
+import { staffAgendaItems } from "@/lib/staff-notifications";
+import { agendaDay } from "@/lib/agenda-dates";
+import { TodayAgenda } from "./_start/today";
 
 export async function generateMetadata() {
   const uiT = await uiTranslation();
@@ -54,7 +58,7 @@ export default async function StartPage({
   const geweigerd = "geen-toegang" in (await searchParams);
 
   const author = alias(users, "author");
-  const [dagtaken, taakRows, teamleden, badges, [prefsRow]] = await Promise.all([
+  const [dagtaken, taakRows, teamleden, badges, [prefsRow], agendaItems] = await Promise.all([
     verzamelDagtaken(ik?.rol, ik?.email),
     db
       .select({
@@ -94,6 +98,7 @@ export default async function StartPage({
     verzamelNavBadges(ik?.rol, ik?.email, ik?.id),
     // Naam vers uit de DB: de JWT-sessie kan een oude naam cachen (30 dagen).
     db.select({ startPrefs: users.startPrefs, name: users.name }).from(users).where(eq(users.id, userId)).limit(1),
+    staffAgendaItems(userId, agendaDay(new Date())),
   ]);
 
   // Tellers op de tegels: de nav-badges aangevuld met de dagtaken-signalen,
@@ -129,7 +134,7 @@ export default async function StartPage({
       <div className="mb-6 flex flex-wrap items-end justify-between gap-3">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">
-            {t(begroeting())}, {naam} 👋
+            {t(begroeting())}, {naam}
           </h1>
           <p className="mt-1 text-sm capitalize text-muted">{datum}</p>
         </div>
@@ -147,12 +152,14 @@ export default async function StartPage({
         </p>
       )}
 
-      <div className="mb-8 grid items-start gap-5 lg:grid-cols-2">
-        <DagtakenLijst taken={dagtaken} titel={t("Wat moet er vandaag gebeuren")} className="" />
-        <MijnTaken taken={mijnTaken} teamleden={teamleden} readOnly={isViewer} />
-      </div>
-
-      <TegelGrid prefs={(prefsRow?.startPrefs as StartPrefs | null) ?? null} badges={tegelBadges} saveAction={saveStartPrefs} rol={ik?.rol} />
+      <p className="mb-5 max-w-2xl text-sm leading-relaxed text-muted">{t("Begin met je dagplanning. Open daarna de klant of taak die je wilt afhandelen.")}</p>
+      <TabsRoot defaultTab="vandaag" ids={["vandaag","taken","controles","onderdelen"]}>
+        <TabsBar tabs={[{id:"vandaag",label:t("Vandaag"),badge:agendaItems.length},{id:"taken",label:t("Mijn taken"),badge:mijnTaken.length},{id:"controles",label:t("Controles"),badge:dagtaken.length},{id:"onderdelen",label:t("Onderdelen")}]}/>
+        <TabPanel id="vandaag"><TodayAgenda items={agendaItems} readOnly={isViewer}/><div className="flex flex-wrap gap-3"><LinkButton href="/opvolging" variant="secondary">{t("Opvolging")}{(badges['/opvolging']??0)>0?` · ${badges['/opvolging']}`:''}</LinkButton><LinkButton href="/teamberichten" variant="secondary">{t("Teamberichten")}{(badges['/teamberichten']??0)>0?` · ${badges['/teamberichten']}`:''}</LinkButton><LinkButton href="/handleiding" variant="ghost">{t("Hulp & handleiding")}</LinkButton></div></TabPanel>
+        <TabPanel id="taken"><MijnTaken taken={mijnTaken} teamleden={teamleden} readOnly={isViewer}/></TabPanel>
+        <TabPanel id="controles"><DagtakenLijst taken={dagtaken} titel={t("Wat vraagt aandacht")} className=""/></TabPanel>
+        <TabPanel id="onderdelen"><TegelGrid prefs={(prefsRow?.startPrefs as StartPrefs | null) ?? null} badges={tegelBadges} saveAction={saveStartPrefs} rol={ik?.rol}/></TabPanel>
+      </TabsRoot>
     </>
   );
 }

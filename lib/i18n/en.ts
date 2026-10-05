@@ -9,8 +9,10 @@ import { workflowEn } from './workflow';
 import { dealerPricingEn } from './dealer-pricing';
 
 import { teamWorkflowEn } from "./team-workflow";
+import { usabilityEn } from "./usability";
 
 export const en: Dictionary = {
+  ...usabilityEn,
   ...reportEnglish,
   ...teamWorkflowEn,
   ...dealerPricingEn,

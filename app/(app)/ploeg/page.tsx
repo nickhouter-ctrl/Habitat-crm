@@ -1,3 +1,4 @@
+import { TabsRoot, TabsBar, TabPanel } from "@/components/tabs";
 import { datumTaal } from "@/lib/i18n/server";
 import { tekst as uiTranslation } from '@/lib/i18n/server';
 /**
@@ -51,10 +52,12 @@ export default async function PloegPage() {
 
   return (
     <>
+<TabsRoot defaultTab="workers" ids={["workers","add"]} param="section">
       <PageHeader
         title={uiT("Ploeg")}
         subtitle={uiT("De eigen jongens en onderaannemers. Klik op een naam voor zijn uren, werven en facturen.")}
       />
+<TabsBar tabs={[{id:"workers",label:uiT("Arbeiders")},{id:"add",label:uiT("Arbeider toevoegen")}]}/>
 
       <div className="mb-5 grid grid-cols-2 gap-3 sm:grid-cols-4">
         <StatTile label={uiT("Actief")} value={String(actief.length)} />
@@ -76,7 +79,7 @@ export default async function PloegPage() {
         </Card>
       )}
 
-      <Card className="mb-5 overflow-hidden">
+      <TabPanel id="workers"><Card className="mb-5 overflow-hidden">
         <CardHeader>
           <CardTitle>{uiT("Arbeiders")}</CardTitle>
           <span className="text-xs text-muted">{uiT("alle bedragen zonder btw, over alle werven")}</span>
@@ -129,9 +132,9 @@ export default async function PloegPage() {
             </TBody>
           </Table>
         )}
-      </Card>
+      </Card></TabPanel>
 
-      <Card>
+      <TabPanel id="add"><Card>
         <CardHeader>
           <CardTitle>{uiT("Arbeider toevoegen")}</CardTitle>
           <span className="text-xs text-muted">
@@ -161,7 +164,9 @@ export default async function PloegPage() {
             <SubmitButton pendingLabel={uiT("Bezig…")}>{uiT("Toevoegen")}</SubmitButton>
           </form>
         </CardContent>
-      </Card>
-    </>
+      </Card></TabPanel>
+
+</TabsRoot>
+</>
   );
 }

@@ -14,9 +14,10 @@ import { ALWAYS_BCC, TEAM_BCC, TEAM_CC, copyPolicyCc, withMandatoryBcc } from "@
 const adressen = (v: string | undefined) => (v ?? "").split(",").map((a) => a.trim().toLowerCase()).filter(Boolean);
 
 describe("klantmail", () => {
-  it("gaat in kopie naar kantoor én naar de bredere kring", () => {
+  it("geeft algemene documentmail alleen een vaste kantoorkopie", () => {
     const bcc = adressen(withMandatoryBcc(undefined, "klant@voorbeeld.es"));
-    for (const adres of [...ALWAYS_BCC, ...TEAM_BCC]) expect(bcc).toContain(adres.toLowerCase());
+    for (const adres of ALWAYS_BCC) expect(bcc).toContain(adres.toLowerCase());
+    for (const adres of TEAM_BCC) expect(bcc).not.toContain(adres.toLowerCase());
   });
 
   it("heeft Mourad en Teresa in die kring", () => {

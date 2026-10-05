@@ -1,4 +1,5 @@
 import { datumTaal } from "@/lib/i18n/server";
+import { ActionDialog } from "@/components/action-dialog";
 import { tekst as uiTranslation } from '@/lib/i18n/server';
 import { and, desc, eq, inArray, or } from "drizzle-orm";
 import {
@@ -329,12 +330,11 @@ export default async function ContactDetailPage({
         }
         actions={
           <>
+            {ik?.magModule('aanvragen') && <LinkButton href={`/opvolging/${id}`} variant="primary">{uiT("Opvolging")}</LinkButton>}
+            <LinkButton href={`/contacts/${id}/edit`} variant="secondary">{uiT("Bewerken")}</LinkButton>
             <Link href="/contacts" className="text-sm text-muted hover:underline">
               {uiT("← Contacten")} </Link>
             <Link href="#online-toegang" className="text-sm underline">{uiT("Online toegang")}</Link>
-            {ik?.magModule('aanvragen') && <LinkButton href={`/opvolging/${id}`} variant="secondary">{uiT("Opvolging")}</LinkButton>}
-            <LinkButton href={`/contacts/${id}/edit`} variant="secondary">
-              {uiT("Bewerken")} </LinkButton>
             <form action={deleteContact.bind(null, id)} className="contents">
               <ConfirmSubmit
                 message={uiT("Contact \"{v0}\" definitief verwijderen?", { v0: contact.name })}
@@ -353,7 +353,7 @@ export default async function ContactDetailPage({
           {uiT("Dit contact kan niet verwijderd worden — er hangen nog verstuurde of betaalde facturen aan. Verwijder of ontkoppel die eerst.")} </p>
       )}
 
-      {magBedragen && tab !== "kozijnen" && <div className="mb-4 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+      {magBedragen && tab !== "kozijnen" && <div className="mb-4"><ActionDialog title={uiT("Financieel overzicht")} wide><div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
         <StatTile label={uiT("Totale omzet")} value={formatEUR(omzet)} hint={uiT("gefactureerd, incl. BTW")} tone="success" />
         <StatTile label={uiT("Openstaand")} value={formatEUR(openstaand)} hint={uiT("te ontvangen")} tone={openstaand > 0 ? "warning" : "neutral"} />
         {margeCosted > 0 && (
@@ -371,7 +371,7 @@ export default async function ContactDetailPage({
         <StatTile label={uiT("Totaal geoffreerd")} value={formatEUR(geoffreerd)} hint={uiT("lopende offertes")} />
         <StatTile label={uiT("Offertes")} value={String(estimates.length)} hint={uiT("{v0} gefactureerd", { v0: invoicedEstimateIds.size })} />
         <StatTile label={uiT("Conversie")} value={`${conversie}%`} hint={uiT("offerte → factuur")} tone="info" />
-      </div>}
+      </div></ActionDialog></div>}
 
       <div className="mb-4 flex flex-wrap gap-1 border-b">
         {TABS.filter(t => t.key !== "kozijnen" || hasWindows).map((t) => {
@@ -851,7 +851,7 @@ export default async function ContactDetailPage({
             </Card>
           )}
 
-          <Card>
+          <ActionDialog title={uiT("Holded")} wide><Card>
             <CardHeader>
               <CardTitle>{uiT("Holded")}</CardTitle>
             </CardHeader>
@@ -869,13 +869,13 @@ export default async function ContactDetailPage({
                 <p className="text-muted">{uiT("Nog niet gekoppeld aan Holded.")}</p>
               )}
             </CardContent>
-          </Card>
+          </Card></ActionDialog>
         </div>
 
         {/* Right: timeline */}
         <div className="space-y-4 lg:col-span-2">
           {(contact.aiDossier || dossierConfigured()) && (
-            <Card>
+            <ActionDialog title={uiT("AI-dossier")} wide><Card>
               <CardHeader>
                 <CardTitle>{uiT("🤖 Dossier")}</CardTitle>
                 <div className="flex items-center gap-2">
@@ -900,7 +900,7 @@ export default async function ContactDetailPage({
                     {uiT("Nog geen dossier — klik op Ververs en de AI vat alle feiten over deze klant samen (projecten, offertes, mails, betalingen). Alleen feiten uit het CRM, niets verzonnen.")} </p>
                 )}
               </CardContent>
-            </Card>
+            </Card></ActionDialog>
           )}
 
           <Card>
@@ -908,7 +908,7 @@ export default async function ContactDetailPage({
               <CardTitle>{uiT("Tijdlijn")}</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
-              <form action={submitNote} className="space-y-2">
+              <ActionDialog title={uiT("Notitie toevoegen")}><form action={submitNote} className="space-y-2">
                 <Textarea
                   name="body"
                   placeholder={uiT("Notitie toevoegen (gesprek, afspraak, …)")}
@@ -917,7 +917,7 @@ export default async function ContactDetailPage({
                 />
                 <Button type="submit" size="sm">
                   {uiT("Notitie toevoegen")} </Button>
-              </form>
+              </form></ActionDialog>
 
               {timeline.length === 0 ? (
                 <EmptyState title={uiT("Nog geen activiteiten")} />

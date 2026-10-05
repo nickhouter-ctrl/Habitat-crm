@@ -1,3 +1,4 @@
+import { TabsRoot, TabsBar, TabPanel } from "@/components/tabs";
 import { tekst as uiTranslation } from '@/lib/i18n/server';
 import { isNull } from "drizzle-orm";
 import Link from "next/link";
@@ -56,6 +57,7 @@ export default async function LeadsPage({
 
   return (
     <>
+<TabsRoot defaultTab="find" ids={["find","import","prospects"]} param="section">
       <PageHeader
         title={uiT("Leads")}
         subtitle={uiT("Bedrijven vinden en de lijst schoonhouden. Het versturen gebeurt bij Broadcast.")}
@@ -70,6 +72,7 @@ export default async function LeadsPage({
           </div>
         }
       />
+<TabsBar tabs={[{id:"find",label:uiT("Bedrijven zoeken")},{id:"import",label:uiT("Lijst importeren")},{id:"prospects",label:uiT("Prospects")}]}/>
 
       {flashAdded && (
         <p className="mb-4 rounded-lg border border-green-200 bg-green-50 px-4 py-2 text-sm text-success">
@@ -97,9 +100,9 @@ export default async function LeadsPage({
         />
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-2">
+      <div className="space-y-5">
         {/* Bedrijven zoeken via Google Places */}
-        <Card>
+        <TabPanel id="find"><Card>
           <CardHeader>
             <CardTitle>{uiT("Bedrijven zoeken")}</CardTitle>
           </CardHeader>
@@ -144,10 +147,10 @@ export default async function LeadsPage({
                 {uiT("Zoeken & importeren")} </Button>
             </form>
           </CardContent>
-        </Card>
+        </Card></TabPanel>
 
         {/* Lijst importeren — het echte werk gebeurt op /leads/import */}
-        <Card>
+        <TabPanel id="import"><Card>
           <CardHeader>
             <CardTitle>{uiT("Lijst importeren")}</CardTitle>
           </CardHeader>
@@ -159,13 +162,13 @@ export default async function LeadsPage({
             <LinkButton href="/leads/import" variant="primary">
               {uiT("Bestand importeren")} </LinkButton>
           </CardContent>
-        </Card>
+        </Card></TabPanel>
       </div>
 
       {/* De lijst zelf staat op /leads/prospects: die pagina pagineert en zoekt
           server-side, want bij duizenden rijen is een tabel op deze pagina
           onwerkbaar (en loog de teller erboven). */}
-      <Card className="mt-6">
+      <TabPanel id="prospects"><Card className="mt-6">
         <CardHeader className="flex flex-wrap items-center justify-between gap-3">
           <CardTitle>{uiT("Prospects (")}{prospectCount})</CardTitle>
           <div className="flex flex-wrap items-center gap-2">
@@ -188,8 +191,10 @@ export default async function LeadsPage({
             </p>
           )}
         </CardContent>
-      </Card>
+      </Card></TabPanel>
 
-    </>
+
+</TabsRoot>
+</>
   );
 }

@@ -1,3 +1,5 @@
+
+import { TabsRoot, TabsBar, TabPanel } from "@/components/tabs";
 import { tekst as uiTranslation } from '@/lib/i18n/server';
 import { Combobox } from "@/components/combobox";
 import { CostBreakdown } from "@/components/cost-breakdown";
@@ -69,7 +71,7 @@ export async function ProductForm({
     <Card className="max-w-4xl">
       <CardContent>
         <form action={action} className="space-y-5">
-          <Field label={uiT("Naam *")} htmlFor="name">
+          <TabsRoot defaultTab="data" ids={["data","prices","sizes","website"]} param="form"><TabsBar tabs={[{id:"data",label:uiT("Basisgegevens")},{id:"prices",label:uiT("Prijzen")},{id:"sizes",label:uiT("Maten")},{id:"website",label:uiT("Website")}]}/><TabPanel id="data"><Field label={uiT("Naam *")} htmlFor="name">
             <Input
               id="name"
               name="name"
@@ -170,9 +172,9 @@ export async function ProductForm({
                 defaultValue={product?.subcategory ?? ""}
               />
             </Field>
-          </div>
+          </div></TabPanel>
 
-          <div className="grid gap-4 sm:grid-cols-3">
+          <TabPanel id="prices"><div className="grid gap-4 sm:grid-cols-3">
             <Field label={uiT("Eenheid")} htmlFor="unit">
               <Select id="unit" name="unit" defaultValue={product?.unit ?? "stuk"}>
                 {PRODUCT_UNITS.map((u) => (
@@ -233,9 +235,9 @@ export async function ProductForm({
             </Field>
           </div>
 
-          <CostBreakdown initial={product} />
+          <CostBreakdown initial={product} /></TabPanel>
 
-          <fieldset className="rounded-md border border-border p-3">
+          <TabPanel id="sizes"><fieldset className="rounded-md border border-border p-3">
             <legend className="px-1 text-xs font-medium uppercase tracking-wide text-muted">
               {uiT("Afmetingen (mm) — synced naar de website")} </legend>
             <div className="grid gap-4 sm:grid-cols-4">
@@ -312,9 +314,9 @@ export async function ProductForm({
             >
               <SizesEditor initial={product?.additionalSizes ?? null} />
             </Field>
-          )}
+          )}</TabPanel>
 
-          <Field
+          <TabPanel id="website"><Field
             label={uiT("Omschrijving")}
             htmlFor="description"
             hint={uiT("Wordt automatisch vertaald naar NL/DE/EN/ES bij het pushen naar de website.")}
@@ -330,18 +332,18 @@ export async function ProductForm({
               defaultValue={product?.imageUrl ?? ""}
               placeholder="https://…"
             />
-          </Field>
+          </Field></TabPanel>
 
-          <label className="flex items-center gap-2 text-sm">
+          <TabPanel id="data"><label className="flex items-center gap-2 text-sm">
             <input
               type="checkbox"
               name="isActive"
               defaultChecked={product?.isActive ?? true}
               className="size-4 rounded border-border"
             />
-            {uiT("Actief (verschijnt in de productkeuze bij offertes/facturen)")} </label>
+            {uiT("Actief (verschijnt in de productkeuze bij offertes/facturen)")} </label></TabPanel>
 
-          <div className="rounded-md border border-border p-3 text-sm">
+          <TabPanel id="website"><div className="rounded-md border border-border p-3 text-sm">
             <label className="flex items-center gap-2">
               <input
                 type="checkbox"
@@ -357,7 +359,7 @@ export async function ProductForm({
                   ? uiT("Klaargezet om gepubliceerd te worden — wordt aangemaakt zodra je de sync draait.")
                   : uiT("Niet zichtbaar op de website.")}
             </p>
-          </div>
+          </div></TabPanel></TabsRoot>
 
           <div className="pt-1">
             <SubmitButton pendingLabel={uiT("Opslaan…")}>{submitLabel}</SubmitButton>

@@ -12,7 +12,8 @@ import { followupSources } from '@/lib/followup-source';
 import { hasResellerInterest } from '@/lib/followup-mail';
 import { FOLLOWUP_SORTS, followupCompleted, laatsteReactie, sortFollowup, type FollowupSort } from '@/lib/followup-checklist';
 import { latestFollowupCompletions } from '@/lib/followup-checklist-data';
-import { PageHeader, Card, CardContent, StatTile, LinkButton, Badge } from '@/components/ui';
+import { PageHeader, Card, CardContent, LinkButton, Badge } from '@/components/ui';
+import { ActionDialog } from '@/components/action-dialog';
 import { SyncButton } from './forms';
 import { FollowupCheck } from './check';
 import { followupEligible } from '@/lib/followup-selection';
@@ -105,15 +106,17 @@ export default async function Page({ searchParams }: {
         <LinkButton href="/contacts" variant="secondary">{t("Contact kiezen")}</LinkButton>
         {access.magModule('producten') && <LinkButton href="/wederverkopers">{t("Verkooppunten")}</LinkButton>}
       </>} />
-    <div className="grid gap-3 sm:grid-cols-4">
-      <Link href={href({filter:'open'})}><StatTile label={t("Nog opvolgen")} value={scoped.filter(r => !r.completed && (r.state!=='Wachten op klant'||!!r.profile?.nextAction)).length} /></Link>
-      <Link href={href({filter:'reply'})}><StatTile label={t("Antwoord nodig")} value={scoped.filter(r => !r.completed && r.state === 'Antwoord nodig').length} /></Link>
-      <Link href={href({filter:'due'})}><StatTile label={t("Nu opvolgen")} value={scoped.filter(r => r.due).length} /></Link>
-      <Link href={href({filter:'completed'})}><StatTile label={t("Afgehandeld")} value={scoped.filter(r => r.completed).length} /></Link>
-    </div>
+    <nav aria-label={t("Opvolgstatus")} className="flex gap-1 overflow-x-auto border-b">
+      {([
+        ['open','Nog opvolgen',scoped.filter(r=>!r.completed&&(r.state!=='Wachten op klant'||!!r.profile?.nextAction)).length],
+        ['reply','Antwoord nodig',scoped.filter(r=>!r.completed&&r.state==='Antwoord nodig').length],
+        ['due','Nu opvolgen',scoped.filter(r=>r.due).length],
+        ['completed','Afgehandeld',scoped.filter(r=>r.completed).length],
+      ] as const).map(([value,label,count])=><Link key={value} href={href({filter:value})} aria-current={filter===value?'page':undefined} className={`flex min-h-11 shrink-0 items-center gap-2 border-b-2 px-4 py-3 text-sm font-medium ${filter===value?'border-accent bg-accent/5 text-accent':'border-transparent text-muted hover:bg-surface'}`}>{t(label)}<span className="rounded-full bg-background px-2 text-xs tabular-nums">{count}</span></Link>)}
+    </nav>
     <Card><CardContent>
       <div className="flex flex-wrap items-start justify-between gap-4">
-        <form key={`${q}|${filter}|${bron}|${groep}|${sort}|${direction}`} action="/opvolging" className="grid w-full gap-3 sm:grid-cols-2">
+        <form key={`${q}|${filter}|${bron}|${groep}|${sort}|${direction}`} action="/opvolging" className="flex w-full flex-wrap items-end gap-3">
           <label className="grid min-w-0 gap-1 text-xs font-medium text-muted">{t("Zoeken")} <input aria-label={t("Zoek bedrijf of contact")} name="q" defaultValue={q} maxLength={200} placeholder={t("Zoek bedrijf of contact…")} className={`${input} min-w-0 max-w-full`} />
           </label>
           <label className="grid min-w-0 gap-1 text-xs font-medium text-muted">{t("Opvolgstatus")} <select aria-label={t("Filter")} name="filter" defaultValue={filter} className={input}>
@@ -121,7 +124,7 @@ export default async function Page({ searchParams }: {
               .map(([v, l]) => <option key={v} value={v}>{t(l)}</option>)}
           </select>
           </label>
-          <details className="sm:col-span-2"><summary className="cursor-pointer text-sm text-muted">{t("Meer filters & sorteren")}</summary><div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <ActionDialog title={t("Meer filters & sorteren")}><div className="grid gap-3 sm:grid-cols-2">
           <label className="grid min-w-0 gap-1 text-xs font-medium text-muted">{t("Herkomst")} <select aria-label={t("Herkomst")} name="bron" defaultValue={bron} className={input}>
             <option value="">{t("Alle herkomsten")}</option><option value="beurs">{t("Beurs")}</option><option value="website">{t("Website")}</option>
             <option value="other">{t("Overige kanalen")}</option><option value="unknown">{t("Niet vastgelegd")}</option>
@@ -139,15 +142,15 @@ export default async function Page({ searchParams }: {
             <option value="asc">{t("Oplopend")}</option><option value="desc">{t("Aflopend")}</option>
           </select>
           </label>
-          </div></details>
-          <button className="justify-self-start rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-accent-foreground">{t("Toepassen")}</button>
+          </div><button className="mt-4 rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-accent-foreground">{t("Toepassen")}</button></ActionDialog>
+          <button className="rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-accent-foreground">{t("Toepassen")}</button>
         </form>
         {canMail && access.heeftCap('schrijven') && <SyncButton />}
       </div>
-      <details className="mt-4 border-t pt-3"><summary className="cursor-pointer text-sm text-muted">{t("Zo werkt de opvolging")}</summary><div className="mt-3">      <p className="mt-3 text-sm text-muted">{t("Open een naam om persoonlijk te mailen of een afspraak te plannen. Vink af als deze opvolging klaar is. Je kunt de klant terugvinden bij Afgehandeld en het vinkje weer uitzetten. Een nieuwe reactie of volgende opvolgdatum brengt de klant terug.")}</p>
+      <div className="mt-3"><ActionDialog title={t("Zo werkt de opvolging")}><p className="text-sm text-muted">{t("Open een naam om persoonlijk te mailen of een afspraak te plannen. Vink af als deze opvolging klaar is. Je kunt de klant terugvinden bij Afgehandeld en het vinkje weer uitzetten. Een nieuwe reactie of volgende opvolgdatum brengt de klant terug.")}</p>
       <p className="mt-2 text-xs text-muted">{t("Na een bevestigde persoonlijke mail wordt de huidige opvolging automatisch afgevinkt. Gebruik ‘Uit werklijst halen’ voor contacten die geen opvolging nodig hebben.")}</p>
       <p className="mt-2 text-xs text-muted">{t('Gesprekken worden automatisch bijgewerkt.')}</p>
-</div></details>
+</ActionDialog></div>
     </CardContent></Card>
     <Card><div className="border-b px-5 py-3 text-sm text-muted">{visible.length} {t("van")} {scoped.length} {t("contacten")}{bron==='beurs'?t(" van de beurs"):''}</div><div className="overflow-x-auto"><table className="w-full text-left text-sm">
       <thead className="border-b bg-background text-foreground"><tr>
@@ -166,11 +169,12 @@ export default async function Page({ searchParams }: {
           {r.out && <p className="mt-1 text-xs text-muted">{t("Gemaild")} {new Date(r.out).toLocaleDateString(dateLocale)}</p>}
           {/* Wát de klant terugschreef, zodat je op de lijst al ziet waar het
               over gaat en niet eerst het dossier hoeft te openen. */}
-          {canMail && r.state === 'Antwoord nodig' && r.reactie && <div className="mt-2 max-w-sm rounded-lg border border-warning/30 bg-warning/5 p-2">
+          {canMail && r.state === 'Antwoord nodig' && r.reactie && <div className="mt-2"><ActionDialog title={t("Antwoord bekijken")} trigger={t("Antwoord bekijken")} className="min-h-6 border-0 bg-transparent p-0 text-xs text-accent underline-offset-4 hover:bg-transparent hover:underline">
             <p className="text-xs font-medium">{t("Antwoord")} {new Date(r.reactie.at).toLocaleString(dateLocale, { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}</p>
-            {r.reactie.subject && <p className="mt-0.5 line-clamp-1 text-xs text-muted">{r.reactie.subject}</p>}
-            {r.reactie.tekst?.trim() && <p className="mt-1 line-clamp-3 text-xs text-muted">{r.reactie.tekst.trim()}</p>}
-          </div>}
+            {r.reactie.subject && <p className="mt-2 text-sm font-medium">{r.reactie.subject}</p>}
+            {r.reactie.tekst?.trim() && <p className="mt-3 whitespace-pre-wrap text-sm text-muted">{r.reactie.tekst.replace(/\[cid:[^\]]*\]/g, '').trim()}</p>}
+            <Link className="mt-4 inline-block text-sm text-accent underline" href={`/opvolging/${r.contact.id}`}>{t("Klantdossier")}</Link>
+          </ActionDialog></div>}
         </td>
         <td className="px-5 py-4">
           <p className={r.due ? 'font-medium text-warning' : ''}>{r.profile?.nextAction ?? t("Nog bepalen")}</p>

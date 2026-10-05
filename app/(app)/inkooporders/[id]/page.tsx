@@ -1,3 +1,4 @@
+import { TabsRoot, TabsBar, TabPanel } from "@/components/tabs";
 import { datumTaal } from "@/lib/i18n/server";
 import { tekst as uiTranslation } from '@/lib/i18n/server';
 import { and, asc, desc, eq, ilike, inArray, isNotNull, sql } from "drizzle-orm";
@@ -195,7 +196,7 @@ export default async function PurchaseOrderPage({
   // Kosten/marges rekenen ex. btw; toon dat bedrag hier expliciet naast het totaal.
   const exVat = poExVat(po);
 
-  const Action = ({ status, label, variant = "secondary" }: { status: Parameters<typeof setPurchaseOrderStatus>[1]; label: string; variant?: "primary" | "secondary" }) => (
+  const statusAction = ({ status, label, variant = "secondary" }: { status: Parameters<typeof setPurchaseOrderStatus>[1]; label: string; variant?: "primary" | "secondary" }) => (
     <form action={setPurchaseOrderStatus.bind(null, id, status)}>
       <SubmitButton variant={variant} size="sm" pendingLabel={uiT("Bezig…")}>
         {label}
@@ -205,6 +206,7 @@ export default async function PurchaseOrderPage({
 
   return (
     <>
+<TabsRoot defaultTab="order" ids={["order","projects","files","details"]} param="section">
       <PageHeader
         title={
           <span className="flex items-center gap-2">
@@ -236,13 +238,14 @@ export default async function PurchaseOrderPage({
           </>
         }
       />
+<TabsBar tabs={[{id:"order",label:uiT("Inkooporder")},{id:"projects",label:uiT("Projecten")},{id:"files",label:uiT("Bijlagen")},{id:"details",label:uiT("Status & gegevens")}]}/>
 
-      <div className="grid gap-5 lg:grid-cols-[1fr_18rem]">
+      <div className="space-y-5">
         {items.length === 0 ? (
           // Een factuur van een bouwer heeft vaak geen regels: alleen een
           // totaalbedrag op de PDF. Een lege tabel met kolomkoppen ziet eruit
           // alsof er iets stuk is; dit vertelt wat er aan de hand is.
-          <Card>
+          <TabPanel id="order"><Card>
             <CardHeader>
               <CardTitle>{uiT("Bedrag")}</CardTitle>
               <span className="text-xs text-muted">{uiT("geen regels op deze factuur — alleen een totaal")}</span>
@@ -260,9 +263,9 @@ export default async function PurchaseOrderPage({
                 )}
               </div>
             </CardContent>
-          </Card>
+          </Card></TabPanel>
         ) : (
-        <Card className="overflow-hidden">
+        <TabPanel id="order"><Card className="overflow-hidden">
           <Table>
             <THead>
               <tr>
@@ -359,11 +362,11 @@ export default async function PurchaseOrderPage({
               </Tr>
             </TBody>
           </Table>
-        </Card>
+        </Card></TabPanel>
         )}
 
         {po.projectId == null && verdeling.length > 0 && !verdeelBewerken ? (
-          <Card>
+          <TabPanel id="projects"><Card>
             <CardHeader>
               <CardTitle>{uiT("Verdeeld over projecten")}</CardTitle>
               <span className="text-xs text-muted">
@@ -398,9 +401,9 @@ export default async function PurchaseOrderPage({
                   {uiT("Verdeling aanpassen")} </LinkButton>
               </div>
             </CardContent>
-          </Card>
+          </Card></TabPanel>
         ) : (
-        <Card>
+        <TabPanel id="projects"><Card>
           <CardHeader>
             <CardTitle>{uiT("Bij welk project hoort deze factuur?")}</CardTitle>
             <span className="text-xs text-muted">
@@ -442,11 +445,11 @@ export default async function PurchaseOrderPage({
               }
             />
           </CardContent>
-        </Card>
+        </Card></TabPanel>
         )}
 
         <div className="space-y-5">
-          <Card>
+          <TabPanel id="details"><Card>
             <CardHeader>
               <CardTitle>{uiT("Gegevens")}</CardTitle>
             </CardHeader>
@@ -459,10 +462,10 @@ export default async function PurchaseOrderPage({
               <Row label={uiT("Voorraad bijgewerkt")} value={po.stockAppliedAt ? fmtDate(po.stockAppliedAt, uiDateLocale) : "Nee"} />
               {po.notes && <p className="whitespace-pre-line border-t pt-2 text-muted">{po.notes}</p>}
             </CardContent>
-          </Card>
+          </Card></TabPanel>
 
           {attachments.length > 0 && (
-            <Card>
+            <TabPanel id="files"><Card>
               <CardHeader>
                 <CardTitle>{uiT("Bijlagen")}</CardTitle>
               </CardHeader>
@@ -488,30 +491,30 @@ export default async function PurchaseOrderPage({
                   </form>
                 )}
               </CardContent>
-            </Card>
+            </Card></TabPanel>
           )}
 
-          <Card>
+          <TabPanel id="details"><Card>
             <CardHeader>
               <CardTitle>{uiT("Status")}</CardTitle>
             </CardHeader>
             <CardContent className="space-y-2">
               <div className="flex flex-wrap gap-2">
-                {po.status !== "ordered" && <Action status="ordered" label={uiT("Besteld")} />}
-                {po.status !== "in_transit" && <Action status="in_transit" label={uiT("Onderweg")} />}
+                {po.status !== "ordered" && statusAction({ status: "ordered", label: uiT("Besteld") })}
+                {po.status !== "in_transit" && statusAction({ status: "in_transit", label: uiT("Onderweg") })}
                 {po.status !== "received" && (
-                  <Action status="received" label={uiT("Ontvangen + voorraad bij")} variant="primary" />
+                  statusAction({ status: "received", label: uiT("Ontvangen + voorraad bij"), variant: "primary" })
                 )}
-                {po.status !== "cancelled" && <Action status="cancelled" label={uiT("Annuleren")} />}
+                {po.status !== "cancelled" && statusAction({ status: "cancelled", label: uiT("Annuleren") })}
               </div>
               {!po.stockAppliedAt && (
                 <p className="text-xs text-muted">
                   {uiT("Bij ‘Ontvangen’ worden de aantallen van gekoppelde producten bij de voorraad opgeteld.")} </p>
               )}
             </CardContent>
-          </Card>
+          </Card></TabPanel>
 
-          <Card>
+          <TabPanel id="details"><Card>
             <CardContent className="pt-5">
               <form action={remove}>
                 <ConfirmSubmit
@@ -521,10 +524,12 @@ export default async function PurchaseOrderPage({
                   {uiT("Bestelling verwijderen")} </ConfirmSubmit>
               </form>
             </CardContent>
-          </Card>
+          </Card></TabPanel>
         </div>
       </div>
-    </>
+
+</TabsRoot>
+</>
   );
 }
 

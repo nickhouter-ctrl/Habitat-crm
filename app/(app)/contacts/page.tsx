@@ -1,3 +1,4 @@
+import { ActionDialog } from "@/components/action-dialog";
 import { datumTaal } from "@/lib/i18n/server";
 import { tekst as uiTranslation } from '@/lib/i18n/server';
 import { and, desc, eq, ilike, isNotNull, isNull, or, sql } from "drizzle-orm";
@@ -128,13 +129,13 @@ export default async function ContactsPage({
         }
       />
 
-      <div className="mb-5 grid grid-cols-2 gap-3 sm:grid-cols-5">
+      <div className="mb-4"><ActionDialog title={uiT("Overzicht cijfers")} wide><div className="mb-5 grid grid-cols-2 gap-3 sm:grid-cols-5">
         <StatTile label={uiT("Contacten")} value={kengetallen.totaal} />
         <StatTile label={uiT("Klanten")} value={kengetallen.klanten} />
         <StatTile label={uiT("Leads")} value={kengetallen.leads} hint={uiT("nog geen klant")} />
         <StatTile label={uiT("Zakelijk")} value={kengetallen.zakelijk} hint={uiT("aan een bedrijf gekoppeld")} />
         <StatTile label={uiT("Nieuw deze maand")} value={kengetallen.nieuwDezeMaand} />
-      </div>
+      </div></ActionDialog></div>
 
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <div className="flex flex-wrap items-center gap-3">

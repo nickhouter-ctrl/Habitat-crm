@@ -1,3 +1,4 @@
+import { TabsRoot, TabsBar, TabPanel } from "@/components/tabs";
 import { tekst as uiTranslation } from '@/lib/i18n/server';
 import { and, eq, gte, isNotNull, sql } from "drizzle-orm";
 import { notFound } from "next/navigation";
@@ -97,6 +98,7 @@ export default async function CampaignPage({ params }: { params: Promise<{ id: s
 
   return (
     <>
+<TabsRoot defaultTab="message" ids={["message","send","details"]} param="section">
       <PageHeader
         title={campaign.name}
         subtitle={campaign.subject || uiT("Nog geen onderwerp")}
@@ -105,10 +107,11 @@ export default async function CampaignPage({ params }: { params: Promise<{ id: s
             {uiT("← Terug naar leads")} </Link>
         }
       />
+<TabsBar tabs={[{id:"message",label:uiT("E-mail")},{id:"send",label:uiT("Versturen & status")},{id:"details",label:uiT("Details")}]}/>
 
-      <div className="grid gap-6 lg:grid-cols-[1fr_380px]">
+      <div className="space-y-5">
         {/* Live preview */}
-        <Card>
+        <TabPanel id="message"><Card>
           <CardHeader>
             <CardTitle>{uiT("Voorbeeld van de e-mail")}</CardTitle>
           </CardHeader>
@@ -119,11 +122,11 @@ export default async function CampaignPage({ params }: { params: Promise<{ id: s
             </p>
             <iframe title={uiT("E-mailvoorbeeld")} srcDoc={html} className="h-[720px] w-full rounded-lg border bg-white" />
           </CardContent>
-        </Card>
+        </Card></TabPanel>
 
         <div className="space-y-6">
           {/* Onderwerp & tekst opstellen + verzenden */}
-          <Card>
+          <TabPanel id="send"><Card>
             <CardHeader>
               <CardTitle>{uiT("Onderwerp & tekst · verzenden")}</CardTitle>
             </CardHeader>
@@ -200,10 +203,10 @@ export default async function CampaignPage({ params }: { params: Promise<{ id: s
               <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-warning">
                 {uiT("Stuur eerst een testmail naar jezelf. Er gaat niets in één keer uit: het systeem verstuurt verspreid over de dagen, opbouwend van 200 naar 1.000 per dag, en stopt zelf bij te veel bounces. Elke mail bevat de verplichte afzendergegevens en een werkende afmeldlink.")} </div>
             </CardContent>
-          </Card>
+          </Card></TabPanel>
 
           {/* Handmatig aanpassen */}
-          <Card>
+          <TabPanel id="send"><Card>
             <CardHeader>
               <CardTitle>{uiT("Handmatig aanpassen")}</CardTitle>
             </CardHeader>
@@ -219,10 +222,10 @@ export default async function CampaignPage({ params }: { params: Promise<{ id: s
                   {uiT("Tekst opslaan")} </button>
               </form>
             </CardContent>
-          </Card>
+          </Card></TabPanel>
 
           {/* Details */}
-          <Card>
+          <TabPanel id="details"><Card>
             <CardHeader>
               <CardTitle>{uiT("Details")}</CardTitle>
             </CardHeader>
@@ -236,9 +239,11 @@ export default async function CampaignPage({ params }: { params: Promise<{ id: s
                 {groups.length ? groups.map((g) => g.label).join(", ") : uiT("geen")}
               </div>
             </CardContent>
-          </Card>
+          </Card></TabPanel>
         </div>
       </div>
-    </>
+
+</TabsRoot>
+</>
   );
 }

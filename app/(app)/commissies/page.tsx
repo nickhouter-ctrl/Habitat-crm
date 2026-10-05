@@ -1,3 +1,4 @@
+import { TabsRoot, TabsBar, TabPanel } from "@/components/tabs";
 import { tekst as uiTranslation } from '@/lib/i18n/server';
 import { asc, desc, inArray } from "drizzle-orm";
 import Link from "next/link";
@@ -57,7 +58,9 @@ export default async function CommissiesPage() {
 
   return (
     <>
+<TabsRoot defaultTab="commissions" ids={["commissions","relations","add"]} param="section">
       <PageHeader title={uiT("Commissies")} subtitle={uiT("Aanbreng-relaties: wie bracht wie, en wat verdient de aanbrenger")} />
+<TabsBar tabs={[{id:"commissions",label:uiT("Commissies")},{id:"relations",label:uiT("Aanbreng-relaties")},{id:"add",label:uiT("Nieuwe aanbreng-relatie")}]}/>
 
       <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-3">
         <StatTile label={uiT("Aanbreng-relaties")} value={String(refs.length)} tone="neutral" />
@@ -65,7 +68,7 @@ export default async function CommissiesPage() {
         <StatTile label={uiT("Nog uit te betalen")} value={formatEUR(openCommission)} tone={openCommission ? "warning" : "neutral"} />
       </div>
 
-      <Card className="mb-5">
+      <TabPanel id="add"><Card className="mb-5">
         <CardHeader>
           <CardTitle>{uiT("Nieuwe aanbreng-relatie")}</CardTitle>
           <span className="text-xs text-muted">{uiT("de aanbrenger verdient een % op de facturen van de aangebrachte klant")}</span>
@@ -91,9 +94,9 @@ export default async function CommissiesPage() {
           </Field>
           <SubmitButton size="sm" variant="secondary" pendingLabel="…">{uiT("+ Toevoegen")}</SubmitButton>
         </form>
-      </Card>
+      </Card></TabPanel>
 
-      <Card className="mb-5 overflow-hidden">
+      <TabPanel id="relations"><Card className="mb-5 overflow-hidden">
         <CardHeader>
           <CardTitle>{uiT("Aanbreng-relaties")}</CardTitle>
         </CardHeader>
@@ -149,9 +152,9 @@ export default async function CommissiesPage() {
             </TBody>
           </Table>
         )}
-      </Card>
+      </Card></TabPanel>
 
-      <Card className="overflow-hidden">
+      <TabPanel id="commissions"><Card className="overflow-hidden">
         <CardHeader>
           <CardTitle>{uiT("Verdiende commissie")}</CardTitle>
           <span className="text-xs text-muted">{uiT("per factuur van een aangebrachte klant")}</span>
@@ -193,7 +196,9 @@ export default async function CommissiesPage() {
             </TBody>
           </Table>
         )}
-      </Card>
-    </>
+      </Card></TabPanel>
+
+</TabsRoot>
+</>
   );
 }

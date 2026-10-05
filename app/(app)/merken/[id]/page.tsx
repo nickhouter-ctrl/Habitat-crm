@@ -1,3 +1,4 @@
+import { TabsRoot, TabsBar, TabPanel } from "@/components/tabs";
 import { tekst as uiTranslation } from '@/lib/i18n/server';
 import { asc, eq, sql } from "drizzle-orm";
 import Link from "next/link";
@@ -57,6 +58,7 @@ export default async function MerkPage({
 
   return (
     <>
+<TabsRoot defaultTab="products" ids={["products","details","logo"]} param="section">
       <PageHeader
         title={
           <span className="flex items-center gap-3">
@@ -73,6 +75,7 @@ export default async function MerkPage({
             {uiT("← Merken")} </LinkButton>
         }
       />
+<TabsBar tabs={[{id:"products",label:uiT("Producten")},{id:"details",label:uiT("Gegevens")},{id:"logo",label:uiT("Logo")}]}/>
 
       {sp.saved && <p className="rounded-md bg-success/10 px-3 py-2 text-sm text-success">{uiT("Opgeslagen.")}</p>}
       {sp.error === "upload" && (
@@ -84,18 +87,18 @@ export default async function MerkPage({
           {uiT("Dit merk kan niet weg: er hangen nog")} {aantalProducten} {uiT("producten aan. Koppel die eerst los.")} </p>
       )}
 
-      <div className="grid gap-5 lg:grid-cols-[1fr_20rem]">
-        <Card>
+      <div className="space-y-5">
+        <TabPanel id="details"><Card>
           <CardHeader>
             <CardTitle>{uiT("Gegevens")}</CardTitle>
           </CardHeader>
           <CardContent>
             <BrandForm brand={merk} action={updateBrand.bind(null, id)} submitLabel={uiT("Opslaan")} />
           </CardContent>
-        </Card>
+        </Card></TabPanel>
 
         <div className="space-y-5">
-          <Card>
+          <TabPanel id="logo"><Card>
             <CardHeader>
               <CardTitle>{uiT("Logo")}</CardTitle>
               <span className="text-xs text-muted">{uiT("verschijnt bij de producten van dit merk")}</span>
@@ -125,10 +128,10 @@ export default async function MerkPage({
                 </form>
               )}
             </CardContent>
-          </Card>
+          </Card></TabPanel>
 
           {recent.length > 0 && (
-            <Card>
+            <TabPanel id="products"><Card>
               <CardHeader>
                 <CardTitle>{uiT("Producten")}</CardTitle>
               </CardHeader>
@@ -149,10 +152,10 @@ export default async function MerkPage({
                     {uiT("alle")} {aantalProducten} {uiT("producten")} </Link>
                 )}
               </CardContent>
-            </Card>
+            </Card></TabPanel>
           )}
 
-          <Card>
+          <TabPanel id="products"><Card>
             <CardContent className="pt-5">
               <form action={deleteBrand.bind(null, id)}>
                 <ConfirmSubmit
@@ -162,9 +165,11 @@ export default async function MerkPage({
                   {uiT("Merk verwijderen")} </ConfirmSubmit>
               </form>
             </CardContent>
-          </Card>
+          </Card></TabPanel>
         </div>
       </div>
-    </>
+
+</TabsRoot>
+</>
   );
 }

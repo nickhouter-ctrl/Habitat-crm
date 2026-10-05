@@ -1,3 +1,5 @@
+import { TabsRoot, TabsBar, TabPanel } from "@/components/tabs";
+import Link from "next/link";
 import { datumTaal } from "@/lib/i18n/server";
 import { tekst as uiTranslation } from '@/lib/i18n/server';
 import { asc, desc } from "drizzle-orm";
@@ -80,11 +82,13 @@ export default async function SettingsPage() {
 
   return (
     <>
+<TabsRoot defaultTab="account" ids={["account","team","clients","integration"]} param="section">
       <PageHeader title={uiT("Instellingen")} subtitle={uiT("Medewerkers, integraties en account")} />
-      {ik?.magModule("klantaccounts") && <Card className="mb-5"><CardHeader><CardTitle>{uiT("Klanttoegang")}</CardTitle></CardHeader><div className="flex flex-wrap gap-4 px-5 pb-5 text-sm"><a className="underline" href="/accounts">{uiT("Website-accounts en aanvragen")}</a><a className="underline" href="/windows-accounts">{uiT("Windows-accounts en aanvragen")}</a><a className="underline" href="/contacts">{uiT("Toegang beheren via een contact")}</a></div></Card>}
+<TabsBar tabs={[{id:"account",label:uiT("Account")},...(isAdmin ? [{id:"team",label:uiT("Medewerkers")}] : []),...(ik?.magModule("klantaccounts") ? [{id:"clients",label:uiT("Klanttoegang")}] : []),...(isAdmin ? [{id:"integration",label:uiT("Integraties")}] : [])]}/>
+      {ik?.magModule("klantaccounts") && <TabPanel id="clients"><Card className="mb-5"><CardHeader><CardTitle>{uiT("Klanttoegang")}</CardTitle></CardHeader><div className="flex flex-wrap gap-4 px-5 pb-5 text-sm"><Link className="underline" href="/accounts">{uiT("Website-accounts en aanvragen")}</Link><Link className="underline" href="/windows-accounts">{uiT("Windows-accounts en aanvragen")}</Link><Link className="underline" href="/contacts">{uiT("Toegang beheren via een contact")}</Link></div></Card></TabPanel>}
 
       {isAdmin && (
-        <Card className="mb-4 overflow-hidden">
+        <TabPanel id="team"><Card className="mb-4 overflow-hidden">
           <CardHeader>
             <CardTitle>{uiT("Medewerkers")}</CardTitle>
             <span className="text-xs text-muted">{teamMembers.length} {teamMembers.length === 1 ? uiT("account") : uiT("accounts")}</span>
@@ -190,11 +194,11 @@ export default async function SettingsPage() {
               {uiT("Rollen:")} <strong>{uiT("Beheerder")}</strong> {uiT("mag alles, incl. medewerkers beheren ·")} <strong>{uiT("Medewerker")}</strong> {uiT("is dagelijks gebruik ·")} <strong>{uiT("Marketing en klantcontact")}</strong> {uiT("ziet alleen mail, contacten, aanvragen, leads, agenda en de assistent — geen projecten, financiën, inkoop of prijzen ·")} <strong>{uiT("Alleen lezen")}</strong>{" "}
               {uiT("kan niets wijzigen. Een vergeten wachtwoord is nergens op te zoeken — zet er hierboven een nieuw.")} </p>
           </CardContent>
-        </Card>
+        </Card></TabPanel>
       )}
 
-      <div className="grid gap-4 lg:grid-cols-2">
-        {isAdmin && <Card>
+      <div className="space-y-5">
+        {isAdmin && <TabPanel id="integration"><Card>
           <CardHeader>
             <CardTitle>{uiT("Holded")}</CardTitle>
             <SyncHoldedButton />
@@ -226,9 +230,9 @@ export default async function SettingsPage() {
                 <code className="font-mono">{uiT(".env.local")}</code> {uiT("(Holded → Instellingen → Developers → API key) en herstart de dev-server.")} </p>
             )}
           </CardContent>
-        </Card>}
+        </Card></TabPanel>}
 
-        <Card>
+        <TabPanel id="account"><Card>
           <CardHeader>
             <CardTitle>{uiT("Account")}</CardTitle>
           </CardHeader>
@@ -278,10 +282,10 @@ export default async function SettingsPage() {
                 {uiT("Wachtwoord wijzigen")} </SubmitButton>
             </form>
           </CardContent>
-        </Card>
+        </Card></TabPanel>
       </div>
 
-      {isAdmin && <Card className="mt-4 overflow-hidden">
+      {isAdmin && <TabPanel id="integration"><Card className="mt-4 overflow-hidden">
         <CardHeader>
           <CardTitle>{uiT("Recente Holded-webhooks")}</CardTitle>
         </CardHeader>
@@ -319,7 +323,9 @@ export default async function SettingsPage() {
             </TBody>
           </Table>
         )}
-      </Card>}
-    </>
+      </Card></TabPanel>}
+
+</TabsRoot>
+</>
   );
 }

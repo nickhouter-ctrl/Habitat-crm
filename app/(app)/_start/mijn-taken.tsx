@@ -12,6 +12,8 @@ import { tekst } from "@/lib/i18n/server";
 import { completeTask, createTask } from "@/app/(app)/agenda/actions";
 import { SubmitButton } from "@/components/submit-button";
 import { Badge, Card, CardContent, CardHeader, CardTitle, Input, Select } from "@/components/ui";
+import { ActionDialog } from "@/components/action-dialog";
+import { agendaDay } from "@/lib/agenda-dates";
 
 
 
@@ -79,27 +81,27 @@ export async function MijnTaken({
           );
         })}
 
-        {!readOnly && (
-          <form action={createTask} className="mt-3 flex flex-wrap items-center gap-2 border-t pt-3">
-            <Input name="subject" required placeholder={t("Nieuwe taak…")} className="min-w-40 flex-1" />
-            <Select name="assigneeId" defaultValue="" className="w-auto" title={t("Toewijzen aan")}>
+        {!readOnly && <div className="border-t pt-4"><ActionDialog title={t("Nieuwe taak")}>
+          <form action={createTask} className="grid gap-4">
+            <label className="grid gap-1.5 text-sm font-medium">{t("Wat moet er gebeuren?")}<Input name="subject" required placeholder={t("Nieuwe taak…")} /></label>
+            <label className="grid gap-1.5 text-sm font-medium">{t("Verantwoordelijke")}<Select name="assigneeId" defaultValue="">
               <option value="">{t("Mijzelf")}</option>
               {teamleden.map((u) => (
                 <option key={u.id} value={u.id}>
                   {u.name ?? u.email}
                 </option>
               ))}
-            </Select>
-            <Select name="priority" defaultValue="middel" className="w-auto" title={t("Prioriteit")}>
+            </Select></label>
+            <label className="grid gap-1.5 text-sm font-medium">{t("Deadline")}<Input name="date" type="date" defaultValue={agendaDay(new Date())}/></label>
+            <details><summary className="cursor-pointer text-sm text-muted">{t("Meer opties")}</summary><label className="mt-3 grid gap-1.5 text-sm font-medium">{t("Prioriteit")}<Select name="priority" defaultValue="middel">
               <option value="hoog">{t("Hoog")}</option>
               <option value="middel">{t("Middel")}</option>
               <option value="laag">{t("Laag")}</option>
-            </Select>
-            <Input name="date" type="date" className="w-auto" title={t("Deadline")} />
+            </Select></label></details>
             <SubmitButton size="sm" pendingLabel="…">
               {uiT("Toevoegen")} </SubmitButton>
           </form>
-        )}
+        </ActionDialog></div>}
       </CardContent>
     </Card>
   );

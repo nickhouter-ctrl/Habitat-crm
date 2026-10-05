@@ -1,3 +1,4 @@
+import { TabsRoot, TabsBar, TabPanel } from "@/components/tabs";
 import { tekst as uiTranslation } from '@/lib/i18n/server';
 import {
   Card,
@@ -52,6 +53,7 @@ export default async function RapportenPage() {
   } = await getReportsData();
   return (
     <>
+<TabsRoot defaultTab="profit" ids={["profit","sales","clients","cashflow"]} param="section">
       <PageHeader
         title={uiT("Rapporten")}
         subtitle={uiT("Alle bedragen ex. BTW, laatste 12 maanden. Inkoop komt direct uit Holded's grootboek.")}
@@ -66,6 +68,7 @@ export default async function RapportenPage() {
           </div>
         }
       />
+<TabsBar tabs={[{id:"profit",label:uiT("Winst")},{id:"sales",label:uiT("Omzet & inkoop")},{id:"clients",label:uiT("Klanten & producten")},{id:"cashflow",label:uiT("Cashflow")}]}/>
       <ReportsNav active="/rapporten" />
 
       <div className="mb-5 grid grid-cols-2 gap-3 sm:grid-cols-4">
@@ -76,13 +79,13 @@ export default async function RapportenPage() {
       </div>
 
       {/* ─────────────── Marge & winst ─────────────── */}
-      <div className="mb-2 mt-7 flex items-baseline justify-between">
+      <TabPanel id="profit"><div className="mb-2 mt-7 flex items-baseline justify-between">
         <h2 className="text-lg font-semibold">{uiT("Marge & winst")}</h2>
         <span className="text-xs text-muted">
           {uiT("verkoopmarge = omzet − kostprijs van verkochte producten · ex BTW · 12 mnd")} </span>
-      </div>
+      </div></TabPanel>
 
-      <div className="mb-5 grid grid-cols-2 gap-3 sm:grid-cols-4">
+      <TabPanel id="profit"><div className="mb-5 grid grid-cols-2 gap-3 sm:grid-cols-4">
         <StatTile label={uiT("Omzet")} value={formatEUR(totalRev)} hint={uiT("ex. BTW · 12 mnd")} tone="info" />
         <StatTile label={uiT("Kostprijs verkocht")} value={formatEUR(cogs12)} hint={uiT("COGS · kostprijs van verkochte regels")} />
         <StatTile
@@ -97,10 +100,10 @@ export default async function RapportenPage() {
           hint={uiT("winst / omzet")}
           tone="success"
         />
-      </div>
+      </div></TabPanel>
 
-      <div className="mb-5 grid gap-5 lg:grid-cols-2">
-        <Card className="lg:col-span-2">
+      <div className="space-y-5">
+        <TabPanel id="profit"><Card className="lg:col-span-2">
           <CardHeader>
             <CardTitle>{uiT("Winst per maand")}</CardTitle>
             <span className="text-xs text-muted">{uiT("omzet − kostprijs van verkochte regels")}</span>
@@ -108,9 +111,9 @@ export default async function RapportenPage() {
           <CardContent>
             <MonthlyAmountChart data={margeChart} color="#1f6f5c" />
           </CardContent>
-        </Card>
+        </Card></TabPanel>
 
-        <Card>
+        <TabPanel id="profit"><Card>
           <CardHeader>
             <CardTitle>{uiT("Winst per product")}</CardTitle>
             <span className="text-xs text-muted">{uiT("top 12 op winst € · op productregels")}</span>
@@ -150,9 +153,9 @@ export default async function RapportenPage() {
               </TBody>
             </Table>
           )}
-        </Card>
+        </Card></TabPanel>
 
-        <Card>
+        <TabPanel id="profit"><Card>
           <CardHeader>
             <CardTitle>{uiT("Winst per collectie")}</CardTitle>
             <span className="text-xs text-muted">{uiT("winst € · op productregels")}</span>
@@ -186,9 +189,9 @@ export default async function RapportenPage() {
               </Table>
             </>
           )}
-        </Card>
+        </Card></TabPanel>
 
-        <Card>
+        <TabPanel id="profit"><Card>
           <CardHeader>
             <CardTitle>{uiT("Top klanten — winst")}</CardTitle>
             <span className="text-xs text-muted">{uiT("omzet − kostprijs · op productregels")}</span>
@@ -200,9 +203,9 @@ export default async function RapportenPage() {
               <HorizontalBarChart data={customerProfitData} />
             )}
           </CardContent>
-        </Card>
+        </Card></TabPanel>
 
-        <Card>
+        <TabPanel id="profit"><Card>
           <CardHeader>
             <CardTitle>{uiT("Laagste marge / verlieslatend")}</CardTitle>
             <span className="text-xs text-muted">{uiT("producten met kostprijs, oplopende marge")}</span>
@@ -231,16 +234,16 @@ export default async function RapportenPage() {
               </TBody>
             </Table>
           )}
-        </Card>
+        </Card></TabPanel>
       </div>
 
       {/* ─────────────── Omzet, inkoop & cashflow ─────────────── */}
-      <div className="mb-2 mt-7">
+      <TabPanel id="sales"><div className="mb-2 mt-7">
         <h2 className="text-lg font-semibold">{uiT("Omzet, inkoop & pijplijn")}</h2>
-      </div>
+      </div></TabPanel>
 
-      <div className="grid gap-5 lg:grid-cols-2">
-        <Card>
+      <div className="space-y-5">
+        <TabPanel id="sales"><Card>
           <CardHeader>
             <CardTitle>{uiT("Omzet per maand")}</CardTitle>
             <span className="text-xs text-muted">{uiT("ex. BTW · facturen − creditnota's")}</span>
@@ -248,9 +251,9 @@ export default async function RapportenPage() {
           <CardContent>
             <MonthlyAmountChart data={revenueChart} />
           </CardContent>
-        </Card>
+        </Card></TabPanel>
 
-        <Card>
+        <TabPanel id="sales"><Card>
           <CardHeader>
             <CardTitle>{uiT("Inkoop per maand")}</CardTitle>
             <span className="text-xs text-muted">{uiT("ex. BTW · uit Holded aankoopfacturen")}</span>
@@ -258,9 +261,9 @@ export default async function RapportenPage() {
           <CardContent>
             <MonthlyAmountChart data={purchaseChart} color="#3a2a20" />
           </CardContent>
-        </Card>
+        </Card></TabPanel>
 
-        <Card>
+        <TabPanel id="clients"><Card>
           <CardHeader>
             <CardTitle>{uiT("Top klanten — netto-omzet")}</CardTitle>
             <span className="text-xs text-muted">{uiT("ex. BTW · all-time")}</span>
@@ -272,9 +275,9 @@ export default async function RapportenPage() {
               <HorizontalBarChart data={topCustData} />
             )}
           </CardContent>
-        </Card>
+        </Card></TabPanel>
 
-        <Card>
+        <TabPanel id="clients"><Card>
           <CardHeader>
             <CardTitle>{uiT("Top producten — omzet")}</CardTitle>
             <span className="text-xs text-muted">{uiT("som van factuurregels, ex BTW")}</span>
@@ -286,9 +289,9 @@ export default async function RapportenPage() {
               <HorizontalBarChart data={topProdData} />
             )}
           </CardContent>
-        </Card>
+        </Card></TabPanel>
 
-        <Card>
+        <TabPanel id="clients"><Card>
           <CardHeader>
             <CardTitle>{uiT("Top leveranciers — spend")}</CardTitle>
             <span className="text-xs text-muted">{uiT("ex. BTW · zonder concepten")}</span>
@@ -300,9 +303,9 @@ export default async function RapportenPage() {
               <HorizontalBarChart data={supplierData} />
             )}
           </CardContent>
-        </Card>
+        </Card></TabPanel>
 
-        <Card>
+        <TabPanel id="clients"><Card>
           <CardHeader>
             <CardTitle>{uiT("Leads per bron")}</CardTitle>
             <span className="text-xs text-muted">{uiT("contacten naar herkomst")}</span>
@@ -314,10 +317,10 @@ export default async function RapportenPage() {
               <HorizontalBarChart data={leadSourceData} />
             )}
           </CardContent>
-        </Card>
+        </Card></TabPanel>
       </div>
 
-      <Card className="mt-5 overflow-hidden">
+      <TabPanel id="cashflow"><Card className="mt-5 overflow-hidden">
         <CardHeader>
           <CardTitle>{uiT("Aankomende cashflow — open facturen op vervaldatum")}</CardTitle>
           <span className="text-xs text-muted">{uiT("incl. BTW · wat de klant nog moet betalen")}</span>
@@ -340,7 +343,9 @@ export default async function RapportenPage() {
             ))}
           </TBody>
         </Table>
-      </Card>
-    </>
+      </Card></TabPanel>
+
+</TabsRoot>
+</>
   );
 }

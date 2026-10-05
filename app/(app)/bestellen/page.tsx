@@ -1,3 +1,4 @@
+import { TabsRoot, TabsBar, TabPanel } from "@/components/tabs";
 import { datumTaal } from "@/lib/i18n/server";
 import { tekst as uiTranslation } from '@/lib/i18n/server';
 import { and, asc, desc, eq, inArray, isNotNull, ne } from "drizzle-orm";
@@ -160,10 +161,12 @@ export default async function BestellenPage({
 
   return (
     <div className="space-y-6">
+<TabsRoot defaultTab="products" ids={["products","drafts","sent"]} param="section">
       <PageHeader
         title={uiT("Bestellen")}
         subtitle={uiT("Stel bestelbonnen samen voor álle producten en catalogus-samples. Regels worden automatisch per leverancier gegroepeerd.")}
       />
+<TabsBar tabs={[{id:"products",label:uiT("Producten")},{id:"drafts",label:uiT("Concepten")},{id:"sent",label:uiT("Verstuurd")}]}/>
 
       {prefill && (
         <Card className="border-accent/40 bg-accent/5">
@@ -213,7 +216,7 @@ export default async function BestellenPage({
       </Card>
 
       {/* alle producten — bladeren per collectie (tabs) */}
-      <Card>
+      <TabPanel id="products"><Card>
         <CardHeader>
           <CardTitle>{uiT("Producten (")}{browseProducts.length})</CardTitle>
           <div className="mt-2 flex flex-wrap gap-1">
@@ -388,10 +391,10 @@ export default async function BestellenPage({
             </form>
           )}
         </CardContent>
-      </Card>
+      </Card></TabPanel>
 
       {/* concepten per leverancier */}
-      <div>
+      <TabPanel id="drafts"><div>
         <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-muted">
           {uiT("Concepten (")}{drafts.length})
         </h2>
@@ -405,7 +408,7 @@ export default async function BestellenPage({
             {drafts.map((o) => {
               const list = itemsByOrder.get(o.id) ?? [];
               return (
-                <Card key={o.id}>
+                <TabPanel id="drafts" key={o.id}><Card>
                   <CardHeader className="flex flex-row items-start justify-between gap-3">
                     <div>
                       <CardTitle>{o.supplierName}</CardTitle>
@@ -507,19 +510,19 @@ export default async function BestellenPage({
                       </form>
                     </div>
                   </CardContent>
-                </Card>
+                </Card></TabPanel>
               );
             })}
           </div>
         )}
-      </div>
+      </div></TabPanel>
 
       {/* historie */}
       {sent.length > 0 && (
-        <div>
+        <TabPanel id="sent"><div>
           <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-muted">
             {uiT("Verstuurd")} </h2>
-          <Card className="divide-y divide-border">
+          <TabPanel id="sent"><Card className="divide-y divide-border">
             {sent.map((o) => (
               <Link
                 key={o.id}
@@ -533,10 +536,12 @@ export default async function BestellenPage({
                 </span>
               </Link>
             ))}
-          </Card>
-        </div>
+          </Card></TabPanel>
+        </div></TabPanel>
       )}
-    </div>
+
+</TabsRoot>
+</div>
   );
 }
 

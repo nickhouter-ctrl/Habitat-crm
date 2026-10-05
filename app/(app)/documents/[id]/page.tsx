@@ -1,3 +1,4 @@
+import { TabsRoot, TabsBar, TabPanel } from "@/components/tabs";
 import { datumTaal } from "@/lib/i18n/server";
 import { tekst as uiTranslation } from '@/lib/i18n/server';
 import { and, asc, eq, inArray, ne, or } from "drizzle-orm";
@@ -420,6 +421,7 @@ export default async function DocumentDetailPage({
 
   return (
     <>
+<TabsRoot defaultTab="document" ids={["document","send","files","data","internal"]} param="section">
       <PageHeader
         title={
           <span className="flex flex-wrap items-center gap-3">
@@ -448,6 +450,7 @@ export default async function DocumentDetailPage({
           </>
         }
       />
+<TabsBar tabs={[{id:"document",label:uiT("Document")},{id:"send",label:uiT("Versturen & status")},{id:"files",label:uiT("Bijlagen")},{id:"data",label:uiT("Gegevens")},{id:"internal",label:uiT("Intern")}]}/>
 
       {typeof sp.fout === "string" && sp.fout && (
         <div className="mb-4 rounded-lg border border-red-300 bg-red-50 px-4 py-3 text-sm text-danger">
@@ -661,9 +664,9 @@ export default async function DocumentDetailPage({
           </div>
         )}
 
-      <div className="grid gap-4 lg:grid-cols-3">
+      <div className="space-y-5">
         <div className="space-y-4">
-          <Card>
+          <TabPanel id="data"><Card>
             <CardHeader>
               <CardTitle>{uiT("Gegevens")}</CardTitle>
             </CardHeader>
@@ -717,9 +720,9 @@ export default async function DocumentDetailPage({
                 <dd className="tabular-nums">{formatEUR(doc.paidEur)}</dd>
               </dl>
             </CardContent>
-          </Card>
+          </Card></TabPanel>
 
-          <Card>
+          <TabPanel id="send"><Card>
             <CardHeader>
               <CardTitle>{uiT("Versturen & status")}</CardTitle>
             </CardHeader>
@@ -1101,7 +1104,7 @@ export default async function DocumentDetailPage({
                 </>
               )}
             </CardContent>
-          </Card>
+          </Card></TabPanel>
 
           {doc.kind === "fondos" && (
             <Card className="border-amber-300 bg-amber-50/50">
@@ -1128,7 +1131,7 @@ export default async function DocumentDetailPage({
           )}
 
           {doc.kind !== "fondos" && !doc.isExternal && (
-          <Card>
+          <TabPanel id="internal"><Card>
             <CardHeader>
               <CardTitle>{uiT("Holded")}</CardTitle>
               {(holdedMap || doc.holdedId) && <Badge tone="success">{uiT("✓ gekoppeld")}</Badge>}
@@ -1177,7 +1180,7 @@ export default async function DocumentDetailPage({
                 </>
               )}
             </CardContent>
-          </Card>
+          </Card></TabPanel>
           )}
 
           {(doc.kind === "estimate" || doc.status === "draft") && (
@@ -1192,7 +1195,7 @@ export default async function DocumentDetailPage({
         </div>
 
         <div className="lg:col-span-2">
-          <Card className="overflow-hidden">
+          <TabPanel id="document"><Card className="overflow-hidden">
             <CardHeader>
               <CardTitle>{uiT("Regels")}</CardTitle>
             </CardHeader>
@@ -1270,10 +1273,10 @@ export default async function DocumentDetailPage({
                 </div>
               </>
             )}
-          </Card>
+          </Card></TabPanel>
 
           {begroting && (
-            <Card className="mt-4">
+            <TabPanel id="internal"><Card className="mt-4">
               <CardHeader>
                 <CardTitle>{uiT("Begroting (intern)")}</CardTitle>
                 <span className="text-xs text-muted">
@@ -1344,19 +1347,19 @@ export default async function DocumentDetailPage({
                   {begroting.kostCompleet ? "" : uiT("* Regels zonder kostprijs tellen als € 0 kost — de echte marge ligt daar lager. ")}
                   {uiT("Bij akkoord worden deze fases automatisch de budgetregels van het project; de nacalculatie op het project vergelijkt ze daarna met de werkelijke kosten.")} </p>
               </CardContent>
-            </Card>
+            </Card></TabPanel>
           )}
 
           {doc.notes && (
-            <Card className="mt-4">
+            <TabPanel id="document"><Card className="mt-4">
               <CardHeader>
                 <CardTitle>{uiT("Notities")}</CardTitle>
               </CardHeader>
               <CardContent className="whitespace-pre-wrap text-sm">{doc.notes}</CardContent>
-            </Card>
+            </Card></TabPanel>
           )}
 
-          <Card className="mt-4">
+          <TabPanel id="files"><Card className="mt-4">
             <CardHeader>
               <CardTitle>{uiT("Tekeningen / bijlagen")}</CardTitle>
               <span className="text-xs text-muted">{uiT("PDF-bestanden (bv. kozijn-tekeningen) — worden meegestuurd in de mail naar de klant")}</span>
@@ -1395,9 +1398,11 @@ export default async function DocumentDetailPage({
                 attachAction={attachDocumentFiles}
               />
             </CardContent>
-          </Card>
+          </Card></TabPanel>
         </div>
       </div>
-    </>
+
+</TabsRoot>
+</>
   );
 }

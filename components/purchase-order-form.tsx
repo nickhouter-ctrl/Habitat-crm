@@ -1,4 +1,6 @@
 "use client";
+import { TabsRoot, TabsBar, TabPanel } from "@/components/tabs";
+
 import { useT as useUiTranslation } from '@/components/taal-provider';
 
 import { FileText, Loader2, Plus, Trash2, Upload, X } from "lucide-react";
@@ -238,7 +240,7 @@ export function PurchaseOrderForm({
       )}
 
       {/* Type: bestelling (met productregels) of binnengekomen factuur/bon (bedrag) */}
-      <div className="inline-flex rounded-lg border bg-surface/40 p-0.5 text-sm">
+      <TabsRoot defaultTab="data" ids={["data","amount","files"]} param="form"><TabsBar tabs={[{id:"data",label:uiT("Gegevens")},{id:"amount",label:uiT("Regels & bedragen")},{id:"files",label:uiT("Bijlagen")}]}/><TabPanel id="data"><div className="inline-flex rounded-lg border bg-surface/40 p-0.5 text-sm">
         {([
           ["order", "Bestelling"],
           ["invoice", "Factuur / bon"],
@@ -262,10 +264,10 @@ export function PurchaseOrderForm({
       {kind === "invoice" && (
         <p className="-mt-3 text-xs text-muted">
           {uiT("Voor een binnengekomen factuur of bon (werknemer, materialen…): vul het bedrag in en hang de PDF eronder. Geen productregels of voorraad.")} </p>
-      )}
+      )}</TabPanel>
 
       {/* Upload / auto-read */}
-      <div className="rounded-lg border border-dashed bg-surface/50 p-4">
+      <TabPanel id="files"><div className="rounded-lg border border-dashed bg-surface/50 p-4">
         <div className="flex flex-wrap items-center gap-3">
           <Button
             type="button"
@@ -319,9 +321,9 @@ export function PurchaseOrderForm({
             ))}
           </ul>
         )}
-      </div>
+      </div></TabPanel>
 
-      <div className="grid gap-4 sm:grid-cols-2">
+      <TabPanel id="data"><div className="grid gap-4 sm:grid-cols-2">
         <Field
           label={uiT("Leverancier")}
           htmlFor="supplier"
@@ -395,9 +397,9 @@ export function PurchaseOrderForm({
             onChange={(e) => setExpectedDate(e.target.value)}
           />
         </Field>
-      </div>
+      </div></TabPanel>
 
-      {kind === "invoice" ? (
+      <TabPanel id="amount">{kind === "invoice" ? (
         <>
         <div className="grid gap-4 sm:grid-cols-2">
           <Field label={uiT("Bedrag totaal (incl. btw, {v0})", { v0: currency })} htmlFor="amountTotal">
@@ -605,9 +607,9 @@ export function PurchaseOrderForm({
           <span className="font-semibold tabular-nums">{formatMoney(total, currency)}</span>
         </div>
       </div>
-      )}
+      )}</TabPanel>
 
-      <Field label={uiT("Notities")} htmlFor="notes">
+      <TabPanel id="data"><Field label={uiT("Notities")} htmlFor="notes">
         <Textarea
           id="notes"
           name="notes"
@@ -616,7 +618,7 @@ export function PurchaseOrderForm({
           onChange={(e) => setNotes(e.target.value)}
           placeholder={uiT("Levertijd, aanbetaling, opmerkingen…")}
         />
-      </Field>
+      </Field></TabPanel></TabsRoot>
 
       <div className="flex gap-2">
         <SubmitButton pendingLabel={uiT("Opslaan…")}>

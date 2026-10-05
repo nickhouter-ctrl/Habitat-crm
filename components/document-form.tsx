@@ -1,4 +1,6 @@
 "use client";
+import { TabsRoot, TabsBar, TabPanel } from "@/components/tabs";
+
 import { useT as useUiTranslation } from '@/components/taal-provider';
 
 import {
@@ -95,7 +97,7 @@ export function DocumentForm({
       <input type="hidden" name="kind" value={kind} />
       <input type="hidden" name="currency" value="EUR" />
 
-      <Card>
+      <TabsRoot defaultTab="data" ids={["data","lines","notes"]} param="form"><TabsBar tabs={[{id:"data",label:uiT("Gegevens")},{id:"lines",label:uiT("Regels")},{id:"notes",label:uiT("Notities")}]}/><TabPanel id="data"><Card>
         <CardContent className="space-y-5">
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             <Field label={uiT("{v0}nummer", { v0: uiT(KIND_LABEL[kind]) })} htmlFor="docNumber">
@@ -197,9 +199,9 @@ export function DocumentForm({
             </div>
           )}
         </CardContent>
-      </Card>
+      </Card></TabPanel>
 
-      <Card>
+      <TabPanel id="lines"><Card>
         <CardContent>
           <LineItemsEditor
             initialItems={doc?.items}
@@ -209,15 +211,15 @@ export function DocumentForm({
             onDistanceCoords={kind === "deliverynote" ? undefined : deliveryDistanceFromCoords}
           />
         </CardContent>
-      </Card>
+      </Card></TabPanel>
 
-      <Card>
+      <TabPanel id="notes"><Card>
         <CardContent>
           <Field label={uiT("Notities / voorwaarden")} htmlFor="notes">
             <Textarea id="notes" name="notes" defaultValue={doc?.notes ?? ""} />
           </Field>
         </CardContent>
-      </Card>
+      </Card></TabPanel></TabsRoot>
 
       <div>
         <SubmitButton pendingLabel={uiT("Opslaan…")}>{submitLabel}</SubmitButton>

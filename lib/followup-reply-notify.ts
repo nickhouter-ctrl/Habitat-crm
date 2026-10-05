@@ -150,6 +150,7 @@ export async function notifyFollowupReplies(): Promise<{ sent: boolean; count: n
       // Een privépostvak blijft privé: geen bedrijfskopie van haar klantmail.
       noCompanyBcc: g.alleen,
       interneMelding: true,
+      systemMailScope: "team", // Eigen klantreacties blijven bij de betrokken afzender.
     });
   }));
 

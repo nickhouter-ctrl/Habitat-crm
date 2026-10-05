@@ -1,3 +1,4 @@
+import { TabsRoot, TabsBar, TabPanel } from "@/components/tabs";
 import { datumTaal } from "@/lib/i18n/server";
 import { tekst as uiTranslation } from '@/lib/i18n/server';
 import { auth } from "@/auth";
@@ -126,6 +127,7 @@ export default async function MailDetailPage({
   const session = await auth();
   return (
     <>
+<TabsRoot defaultTab="mail" ids={["mail","reply","links","internal"]} param="section">
       {!mail.readAt && session?.user?.role !== "viewer" && <MarkRead id={mail.id} />}
       <PageHeader
         title={mail.subject || uiT("(geen onderwerp)")}
@@ -135,6 +137,7 @@ export default async function MailDetailPage({
             <ArrowLeft className="h-4 w-4" /> {uiT("Terug")} </LinkButton>
         }
       />
+<TabsBar tabs={[{id:"mail",label:uiT("Bericht")},{id:"reply",label:uiT("Beantwoorden")},{id:"links",label:uiT("Koppelingen")},{id:"internal",label:uiT("Intern")}]}/>
 
       {suggestion && <Card className="mb-4 space-y-2 p-4">
         <p className="font-medium">{uiT("Voorstel:")} {MAIL_GROUPS[suggestion.category as MailGroup] ?? uiT("Controleren")}</p>
@@ -143,9 +146,9 @@ export default async function MailDetailPage({
         {suggestion.deadline && <p className="text-sm text-warning">{uiT("Termijn uit bericht:")} {suggestion.deadline}</p>}
         <Link href="/assistent" className="text-sm text-accent">{uiT("Alle voorstellen bekijken →")}</Link>
       </Card>}
-      <div className="grid gap-4 lg:grid-cols-[2fr_1fr]">
+      <div className="space-y-5">
         {/* LEFT: mail content */}
-        <Card className="space-y-4 p-5">
+        <TabPanel id="mail"><Card className="space-y-4 p-5">
           <div className="space-y-1 border-b border-border pb-3 text-sm">
             <div>
               <span className="font-medium text-muted">{uiT("Van:")}</span>{" "}
@@ -244,13 +247,13 @@ export default async function MailDetailPage({
                 {uiT("Deze bijlages zijn van vóór de archief-upload — alleen metadata beschikbaar. Open de mail in Gmail om ze te bekijken.")} </p>
             </div>
           ) : null}
-        </Card>
+        </Card></TabPanel>
 
         {/* RIGHT: actions sidebar */}
         <div className="space-y-4">
           {/* Beantwoorden — met AI-concept */}
           {mail.fromEmail && (
-            <Card className="p-4">
+            <TabPanel id="reply"><Card className="p-4">
               <p className="mb-3 text-xs font-medium uppercase tracking-wide text-muted">
                 <Mail className="mr-1 inline h-3 w-3" /> {uiT("Beantwoorden")} </p>
               {sp.beantwoord === "1" && (
@@ -279,11 +282,11 @@ export default async function MailDetailPage({
                 aiBeschikbaar={aiReplyConfigured()}
                 bijlagen={catalogi.map((f) => ({ path: f.path, name: f.name, size: f.size }))}
               />
-            </Card>
+            </Card></TabPanel>
           )}
 
           {/* Status */}
-          <Card className="p-4">
+          <TabPanel id="internal"><Card className="p-4">
             <p className="text-xs font-medium uppercase tracking-wide text-muted">{uiT("Status")}</p>
             <div className="mt-2 flex items-center gap-2">
               {mail.status === "new" && <Badge tone="info">{uiT("nieuw")}</Badge>}
@@ -314,11 +317,11 @@ export default async function MailDetailPage({
                   <Archive className="h-3.5 w-3.5" /> {uiT("Archiveren")} </button>
               </form>
             )}
-          </Card>
+          </Card></TabPanel>
 
           {/* Currently linked */}
           {linkedPO && (
-            <Card className="p-4">
+            <TabPanel id="links"><Card className="p-4">
               <p className="text-xs font-medium uppercase tracking-wide text-muted">{uiT("Gelinkt aan PO")}</p>
               <Link
                 href={`/inkooporders/${linkedPO.id}`}
@@ -327,10 +330,10 @@ export default async function MailDetailPage({
                 {linkedPO.supplier} {linkedPO.reference ? `· ${linkedPO.reference}` : ""}
               </Link>
               <p className="text-xs text-muted">{uiT("Status PO:")} {linkedPO.status}</p>
-            </Card>
+            </Card></TabPanel>
           )}
           {linkedQR && (
-            <Card className="p-4">
+            <TabPanel id="links"><Card className="p-4">
               <p className="text-xs font-medium uppercase tracking-wide text-muted">{uiT("Gelinkt aan aanvraag")}</p>
               <Link
                 href={`/aanvragen/${linkedQR.id}`}
@@ -338,12 +341,12 @@ export default async function MailDetailPage({
               >
                 {linkedQR.name ?? linkedQR.email}
               </Link>
-            </Card>
+            </Card></TabPanel>
           )}
 
           {/* Suggestie: link aan PO */}
           {mail.status === "new" && !linkedPO && (
-            <Card className="p-4">
+            <TabPanel id="links"><Card className="p-4">
               <p className="mb-3 text-xs font-medium uppercase tracking-wide text-muted">
                 <Link2 className="mr-1 inline h-3 w-3" /> {uiT("Link aan Purchase Order")} </p>
               {suggestedPOs.length > 0 ? (
@@ -411,12 +414,12 @@ export default async function MailDetailPage({
                   ))}
                 </ul>
               </details>
-            </Card>
+            </Card></TabPanel>
           )}
 
           {/* Suggestie: link aan offerte-aanvraag */}
           {mail.status === "new" && !linkedQR && recentRequests.length > 0 && (
-            <Card className="p-4">
+            <TabPanel id="links"><Card className="p-4">
               <p className="mb-3 text-xs font-medium uppercase tracking-wide text-muted">
                 <Link2 className="mr-1 inline h-3 w-3" /> {uiT("Link aan offerte-aanvraag")} </p>
               <p className="mb-2 text-xs text-muted">{uiT("Aanvragen van zelfde e-mailadres:")}</p>
@@ -442,11 +445,11 @@ export default async function MailDetailPage({
                   </li>
                 ))}
               </ul>
-            </Card>
+            </Card></TabPanel>
           )}
 
           {/* Notes */}
-          <Card className="p-4">
+          <TabPanel id="internal"><Card className="p-4">
             <p className="mb-2 text-xs font-medium uppercase tracking-wide text-muted">
               {uiT("Interne notities")} </p>
             <form
@@ -465,9 +468,11 @@ export default async function MailDetailPage({
               />
               <button className={cn(buttonClass({ size: "sm" }), "w-full")}>{uiT("Bewaren")}</button>
             </form>
-          </Card>
+          </Card></TabPanel>
         </div>
       </div>
-    </>
+
+</TabsRoot>
+</>
   );
 }

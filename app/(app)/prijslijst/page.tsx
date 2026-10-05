@@ -1,3 +1,4 @@
+import { TabsRoot, TabsBar, TabPanel } from "@/components/tabs";
 import { tekst as uiTranslation } from '@/lib/i18n/server';
 import { sql } from "drizzle-orm";
 import Link from "next/link";
@@ -61,7 +62,9 @@ export default async function PrijslijstPage({
 
   return (
     <>
+<TabsRoot defaultTab="download" ids={["download","mail","partners"]} param="section">
       <PageHeader title={uiT("Prijslijst verkoop")} subtitle={uiT("Download of mail een huisstijl-prijslijst per collectie of categorie.")} />
+<TabsBar tabs={[{id:"download",label:uiT("Downloaden & printen")},{id:"mail",label:uiT("Naar klant mailen")},{id:"partners",label:uiT("Verkooppunten")}]}/>
 
       {sent && (
         <p className="mb-4 max-w-2xl rounded-md bg-green-50 px-3 py-2 text-sm text-success">
@@ -73,8 +76,8 @@ export default async function PrijslijstPage({
         </p>
       )}
 
-      <div className="grid max-w-5xl gap-5 lg:grid-cols-2">
-        <Card>
+      <div className="space-y-5">
+        <TabPanel id="download"><Card>
           <CardHeader>
             <CardTitle>{uiT("📥 Downloaden / printen")}</CardTitle>
           </CardHeader>
@@ -87,9 +90,9 @@ export default async function PrijslijstPage({
               <Button type="submit">{uiT("Download PDF")}</Button>
             </form>
           </CardContent>
-        </Card>
+        </Card></TabPanel>
 
-        <Card>
+        <TabPanel id="mail"><Card>
           <CardHeader>
             <CardTitle>{uiT("📧 Naar klant mailen")}</CardTitle>
           </CardHeader>
@@ -114,10 +117,10 @@ export default async function PrijslijstPage({
               <SubmitButton pendingLabel={uiT("Versturen…")}>{uiT("Verstuur per e-mail")}</SubmitButton>
             </form>
           </CardContent>
-        </Card>
+        </Card></TabPanel>
       </div>
 
-      <Card className="mt-5 max-w-5xl border-[#e8dfd0] bg-[#fdfaf5]">
+      <TabPanel id="partners"><Card className="mt-5 max-w-5xl border-[#e8dfd0] bg-[#fdfaf5]">
         <CardHeader>
           <CardTitle>{uiT("🏬 Flexibel Stone — prijzen voor verkooppunten")}</CardTitle>
         </CardHeader>
@@ -127,9 +130,9 @@ export default async function PrijslijstPage({
           <Link href="/prijslijst/distributeur" className="text-sm font-medium text-accent hover:underline">
             {uiT("Bekijk en verstuur de lijst →")} </Link>
         </CardContent>
-      </Card>
+      </Card></TabPanel>
 
-      <Card className="mt-5 max-w-5xl border-[#e8dfd0] bg-[#fdfaf5]">
+      <TabPanel id="partners"><Card className="mt-5 max-w-5xl border-[#e8dfd0] bg-[#fdfaf5]">
         <CardHeader>
           <CardTitle>{uiT("🧱 Flexibel Stone — groothandelbrochure")}</CardTitle>
         </CardHeader>
@@ -156,8 +159,10 @@ export default async function PrijslijstPage({
             <Button type="submit">{uiT("Download brochure")}</Button>
           </form>
         </CardContent>
-      </Card>
-    </>
+      </Card></TabPanel>
+
+</TabsRoot>
+</>
   );
 }
 

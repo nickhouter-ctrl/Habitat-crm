@@ -1,3 +1,5 @@
+
+import { TabsRoot, TabsBar, TabPanel } from "@/components/tabs";
 import { tekst as uiTranslation } from '@/lib/i18n/server';
 import {
   Button,
@@ -48,7 +50,7 @@ export async function PropertyForm({
     <Card className="max-w-2xl">
       <CardContent>
         <form action={action} className="space-y-5">
-          <div className="grid gap-4 sm:grid-cols-[1fr_auto]">
+          <TabsRoot defaultTab="data" ids={["data","features","site"]} param="form"><TabsBar tabs={[{id:"data",label:uiT("Gegevens")},{id:"features",label:uiT("Kenmerken")},{id:"site",label:uiT("Website")}]}/><TabPanel id="data"><div className="grid gap-4 sm:grid-cols-[1fr_auto]">
             <Field label={uiT("Titel")} htmlFor="title">
               <Input
                 id="title"
@@ -119,9 +121,9 @@ export async function PropertyForm({
                 placeholder={uiT("Xàbia — Montgó")}
               />
             </Field>
-          </div>
+          </div></TabPanel>
 
-          <div className="grid gap-4 sm:grid-cols-4">
+          <TabPanel id="features"><div className="grid gap-4 sm:grid-cols-4">
             <Field label={uiT("Slaapkamers")} htmlFor="bedrooms">
               <Input id="bedrooms" name="bedrooms" type="number" min="0" defaultValue={property?.bedrooms ?? ""} />
             </Field>
@@ -134,9 +136,9 @@ export async function PropertyForm({
             <Field label={uiT("Perceel (m²)")} htmlFor="plotSqm">
               <Input id="plotSqm" name="plotSqm" type="number" min="0" defaultValue={property?.plotSqm ?? ""} />
             </Field>
-          </div>
+          </div></TabPanel>
 
-          <div className="grid gap-4 sm:grid-cols-2">
+          <TabPanel id="data"><div className="grid gap-4 sm:grid-cols-2">
             <Field label={uiT("Eigenaar (contact)")} hint={uiT("typ een naam")}>
               {/* Zoekveld, geen uitklaplijst: er staan honderden contacten in. */}
               <Combobox
@@ -157,9 +159,9 @@ export async function PropertyForm({
                 ))}
               </Select>
             </Field>
-          </div>
+          </div></TabPanel>
 
-          <Field label={uiT("Omschrijving")} htmlFor="description">
+          <TabPanel id="site"><Field label={uiT("Omschrijving")} htmlFor="description">
             <Textarea
               id="description"
               name="description"
@@ -174,7 +176,7 @@ export async function PropertyForm({
               defaultChecked={property?.isPublished ?? false}
               className="size-4 rounded border-border"
             />
-            {uiT("Gepubliceerd (zichtbaar op de website)")} </label>
+            {uiT("Gepubliceerd (zichtbaar op de website)")} </label></TabPanel></TabsRoot>
 
           <div className="pt-1">
             <Button type="submit">{submitLabel}</Button>

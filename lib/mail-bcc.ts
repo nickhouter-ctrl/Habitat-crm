@@ -15,17 +15,26 @@ export const SYSTEM_MAIL_RECIPIENTS = [
   "mourad.h@habitat-one.com",
 ] as const;
 
+/** Bedrijfscontroles en projectinformatie horen uitsluitend bij kantoor. */
+export const OFFICE_MAIL_RECIPIENTS = [...NICK_FREDERIQUE, "hans@habitat-one.com"] as const;
+export type SystemMailScope = "office" | "team";
+
+export function isOfficeMailRecipient(address: string): boolean {
+  const email = (address.match(/<([^<>]+)>/)?.[1] ?? address).trim().toLowerCase();
+  return OFFICE_MAIL_RECIPIENTS.some(allowed => allowed === email);
+}
+
 export function isSystemMailRecipient(address: string): boolean {
   const email = (address.match(/<([^<>]+)>/)?.[1] ?? address).trim().toLowerCase();
   return SYSTEM_MAIL_RECIPIENTS.some(allowed => allowed === email);
 }
 
 /** Ook displaynamen en expliciete kopieën worden gefilterd. */
-export function systemMailAddresses(addresses: string | undefined): string | undefined {
+export function systemMailAddresses(addresses: string | undefined, scope: SystemMailScope = "team"): string | undefined {
   const seen = new Set<string>();
   return addresses?.split(",").map(address => address.trim()).filter(address => {
     const email = (address.match(/<([^<>]+)>/)?.[1] ?? address).trim().toLowerCase();
-    if (!isSystemMailRecipient(address) || seen.has(email)) return false;
+    if (!(scope === "office" ? isOfficeMailRecipient(address) : isSystemMailRecipient(address)) || seen.has(email)) return false;
     seen.add(email);
     return true;
   }).join(", ") || undefined;
@@ -74,7 +83,7 @@ export function nickFrederiqueCc(to: string): string | undefined {
 }
 
 /**
- * Vaste, altijd-aanwezige BCC op ELKE uitgaande mail, ongeacht het transport
+ * Vaste BCC op algemene uitgaande klantmail, ongeacht het transport
  * (Gmail SMTP, Resend-fallback of stub). Zo wordt er intern altijd meegelezen.
  * Bevat standaard nick@habitat-one.com (aan te vullen/overschrijven via env
  * EMAIL_BCC_ALWAYS, komma-gescheiden) én ALTIJD het bedrijfsadres hi@ — ook als
@@ -98,13 +107,14 @@ export const ALWAYS_BCC = (() => {
 })();
 
 /**
- * De bredere kring die klantcorrespondentie meeleest: Mourad en Teresa krijgen
- * een kopie van wat er naar klanten uitgaat, zodat zij meekijken en kunnen
- * antwoorden.
+ * De bredere kring voor expliciet gekozen teamkopieën bij klantopvolging.
+ * Mourad en Teresa krijgen geen automatische kopie van algemene klant-,
+ * document- of projectmail.
  *
  * Bewust náást ALWAYS_BCC en niet erin: interne controlemails (de dagelijkse
  * data-check, de weekcontrole) gaan niet naar deze kring — dat is werk van
- * kantoor, geen klantcontact. Die mails vragen om `interneMelding`.
+ * kantoor, geen klantcontact. Die mails vragen om `interneMelding` met
+ * de standaard scope `office`.
  *
  * Aan te passen via env EMAIL_BCC_TEAM (komma-gescheiden).
  */
@@ -117,31 +127,32 @@ export const TEAM_BCC = (process.env.EMAIL_BCC_TEAM?.trim() || "mourad.h@habitat
 export const TEAM_CC = [...NICK_FREDERIQUE, ...TEAM_BCC];
 
 /**
- * Algemene systeemmeldingen gaan naar de vijf genoemde collega’s. Oudere env-
+ * Algemene systeemmeldingen gaan naar kantoor. Oudere env-
  * instellingen kunnen hi@ of andere ontvangers niet opnieuw toevoegen.
  * Persoonlijke taakmails gebruiken uitsluitend hun eigen ontvanger.
  */
-export const NOTIFY_RECIPIENTS = [...SYSTEM_MAIL_RECIPIENTS];
+export const NOTIFY_RECIPIENTS = [...OFFICE_MAIL_RECIPIENTS];
 
 /** Primair meldingsadres (To). De overige ontvangers lopen via de vaste BCC. */
 export const NOTIFY_TO = NOTIFY_RECIPIENTS[0];
 
 /**
- * Voegt de vaste BCC toe aan een eventueel bestaande BCC en dedupliceert
+ * Voegt de vaste kantoorkopie toe aan een eventueel bestaande BCC en dedupliceert
  * (case-insensitive). Laat de directe ontvanger (`to`) nooit als BCC staan.
  *
- * Bij systeemmeldingen mogen uitsluitend de vijf persoonlijke adressen mee.
- * Klantcorrespondentie behoudt de bestaande bedrijfs- en teamkopieën.
+ * Algemene document- en projectmail krijgt geen automatische kopie aan Mourad
+ * of Teresa. Persoonlijke klantopvolging kan expliciet de teamkopie kiezen.
+ * Interne bedrijfscontroles zijn in To, CC en BCC beperkt tot kantoor.
  */
 export function withMandatoryBcc(existing: string | undefined, to: string, interneMelding = false): string | undefined {
   const seen = new Set<string>();
   const out: string[] = [];
   const direct = adressenUit(to);
-  for (const addr of [...(existing?.split(",") ?? []), ...ALWAYS_BCC, ...(interneMelding ? [] : TEAM_BCC)]) {
+  for (const addr of [...(existing?.split(",") ?? []), ...ALWAYS_BCC]) {
     const a = addr.trim();
     if (!a) continue;
     const low = a.toLowerCase();
-    if (direct.has(low) || seen.has(low) || (interneMelding && !isSystemMailRecipient(a))) continue;
+    if (direct.has(low) || seen.has(low) || (interneMelding && !isOfficeMailRecipient(a))) continue;
     seen.add(low);
     out.push(a);
   }

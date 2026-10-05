@@ -1,3 +1,4 @@
+import { TabsRoot, TabsBar, TabPanel } from "@/components/tabs";
 import { tekst as uiTranslation } from '@/lib/i18n/server';
 import { asc, sql } from "drizzle-orm";
 import { Trash2 } from "lucide-react";
@@ -49,15 +50,17 @@ export default async function CatalogManagePage() {
 
   return (
     <div className="space-y-6">
+<TabsRoot defaultTab="overview" ids={["overview","collection","product","color"]} param="section">
       <PageHeader
         title={uiT("Catalogus — beheer")}
         subtitle={uiT("Collecties, producten en kleuren (varianten) beheren.")}
         actions={<LinkButton href="/samplecatalogus" variant="secondary">{uiT("← Terug")}</LinkButton>}
       />
+<TabsBar tabs={[{id:"overview",label:uiT("Overzicht")},{id:"collection",label:uiT("Nieuwe collectie")},{id:"product",label:uiT("Nieuw product")},{id:"color",label:uiT("Nieuwe kleur")}]}/>
 
-      <div className="grid gap-6 lg:grid-cols-3">
+      <div className="space-y-5">
         {/* nieuwe collectie */}
-        <Card>
+        <TabPanel id="collection"><Card>
           <CardHeader>
             <CardTitle>{uiT("Nieuwe collectie (serie)")}</CardTitle>
           </CardHeader>
@@ -69,10 +72,10 @@ export default async function CatalogManagePage() {
               <SubmitButton size="sm">{uiT("Toevoegen")}</SubmitButton>
             </form>
           </CardContent>
-        </Card>
+        </Card></TabPanel>
 
         {/* nieuw product */}
-        <Card>
+        <TabPanel id="product"><Card>
           <CardHeader>
             <CardTitle>{uiT("Nieuw product (item)")}</CardTitle>
           </CardHeader>
@@ -85,10 +88,10 @@ export default async function CatalogManagePage() {
               <SubmitButton size="sm">{uiT("Toevoegen")}</SubmitButton>
             </form>
           </CardContent>
-        </Card>
+        </Card></TabPanel>
 
         {/* nieuwe variant */}
-        <Card>
+        <TabPanel id="color"><Card>
           <CardHeader>
             <CardTitle>{uiT("Nieuwe kleur (variant)")}</CardTitle>
           </CardHeader>
@@ -106,7 +109,7 @@ export default async function CatalogManagePage() {
               <SubmitButton size="sm">{uiT("Toevoegen")}</SubmitButton>
             </form>
           </CardContent>
-        </Card>
+        </Card></TabPanel>
       </div>
 
       {/* overzicht collecties → producten */}
@@ -114,7 +117,7 @@ export default async function CatalogManagePage() {
         {collections.map((c) => {
           const prods = productRows.filter((p) => p.collectionId === c.id);
           return (
-            <Card key={c.id}>
+            <TabPanel id="overview" key={c.id}><Card>
               <CardHeader className="flex flex-row items-center justify-between">
                 <CardTitle>
                   {c.nameEn}
@@ -155,11 +158,13 @@ export default async function CatalogManagePage() {
                   </ul>
                 )}
               </CardContent>
-            </Card>
+            </Card></TabPanel>
           );
         })}
       </div>
-    </div>
+
+</TabsRoot>
+</div>
   );
 }
 

@@ -125,12 +125,11 @@ const NAV_GROUPS: { id: string; label: string | null; items: NavItem[] }[] = [
     label: null,
     items: [
       { href: "/", label: "Start", icon: Home, exact: true },
-      { href: "/assistent", label: "Assistent", icon: FileCheck },
-      { href: "/inbox", label: "Mail-inbox", icon: Mail },
       { href: "/agenda", label: "Agenda", icon: CalendarDays },
       { href: "/opvolging", label: "Opvolging", icon: Send },
+      { href: "/contacts", label: "Contacten", icon: Users },
+      { href: "/inbox", label: "Mail-inbox", icon: Mail },
       { href: "/teamberichten", label: "Teamberichten", icon: MessageSquare },
-      { href: "/scan", label: "Scannen", icon: ScanLine },
     ],
   },
   // Wie er zijn, in de volgorde waarin ze binnenkomen: gesproken → aanvraag →
@@ -139,7 +138,7 @@ const NAV_GROUPS: { id: string; label: string | null; items: NavItem[] }[] = [
     id: "klanten",
     label: "Klanten",
     items: [
-      { href: "/contacts", label: "Contacten", icon: Users },
+      { href: "/assistent", label: "Assistent", icon: FileCheck },
       { href: "/beurs/contacten", label: "Beurscontacten", icon: Users },
       { href: "/wederverkopers", label: "Verkooppunten", icon: Store },
       { href: "/aanvragen", label: "Aanvragen", icon: Inbox },
@@ -176,6 +175,7 @@ const NAV_GROUPS: { id: string; label: string | null; items: NavItem[] }[] = [
     id: "producten",
     label: "Producten",
     items: [
+      { href: "/scan", label: "Scannen", icon: ScanLine },
       { href: "/products", label: "Producten", icon: Boxes },
       { href: "/merken", label: "Merken", icon: Tag },
       { href: "/samples", label: "Samples", icon: Layers },
@@ -249,6 +249,7 @@ export function AppSidebar({
   const uiT = useUiTranslation();
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
+  const [allModules, setAllModules] = useState(false);
   const t = useT();
   // Onbekende groep = dicht. Het bovenste blokje en de groep waar je in zit
   // staan altijd open, ongeacht wat hier staat.
@@ -273,6 +274,7 @@ export function AppSidebar({
           // Zit je in deze groep, dan staat hij open — anders klik je je eigen
           // pagina weg. Het bovenste blokje (zonder kop) blijft altijd staan.
           const bevatHuidige = group.items.some((i) => isActive(i.href, i.exact));
+          if (group.label && !allModules && !bevatHuidige) return null;
           const uitgeklapt = !group.label || bevatHuidige || openGroepen[group.id] === true;
           // Tellers van wat er dichtgeklapt onder zit: "Facturen keuren (3)" mag
           // je niet missen doordat de groep dicht staat.
@@ -320,8 +322,14 @@ export function AppSidebar({
           </div>
           );
         })}
+        <button type="button" onClick={() => setAllModules(value => !value)} aria-expanded={allModules}
+          className="mt-4 flex w-full items-center gap-2.5 rounded-lg border border-border px-2.5 py-2.5 text-sm font-medium text-muted hover:bg-background hover:text-foreground">
+          <Menu className="size-4"/>{t(allModules ? "Minder onderdelen" : "Alle onderdelen")}
+          <ChevronRight className={cn("ml-auto size-3.5", allModules && "rotate-90")}/>
+        </button>
       </nav>
 
+      <Link href="/handleiding" onClick={onNavigate} className="mx-2 mb-2 flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm text-muted hover:bg-background"><BookOpen className="size-4"/>{t("Hulp & handleiding")}</Link>
       <div className="flex items-center gap-1 border-t px-2 py-2">
         <Link
           href="/settings"

@@ -6,7 +6,7 @@ import { ImapFlow, type MailboxLockObject, type FetchMessageObject } from "imapf
 import { simpleParser, type ParsedMail, type AddressObject } from "mailparser";
 import nodemailer, { type Transporter } from "nodemailer";
 
-import { copyPolicyCc, systemMailAddresses, withMandatoryBcc, type MailCopyPolicy } from "@/lib/mail-bcc";
+import { copyPolicyCc, systemMailAddresses, withMandatoryBcc, type MailCopyPolicy, type SystemMailScope } from "@/lib/mail-bcc";
 
 const HOST_IMAP = "imap.gmail.com";
 const HOST_SMTP = "smtp.gmail.com";
@@ -330,9 +330,11 @@ export async function sendMail(args: {
   noCompanyBcc?: boolean;
   /** Interne controlemail: niet naar de bredere kring (zie lib/mail-bcc.ts). */
   interneMelding?: boolean;
+  systemMailScope?: SystemMailScope;
   attachments?: { filename: string; content: Buffer | Uint8Array; contentType?: string; cid?: string; contentDisposition?: "inline" | "attachment" }[];
 }): Promise<{ messageId: string }> {
-  const to = args.interneMelding ? systemMailAddresses(args.to) : args.to;
+  const scope = args.systemMailScope ?? (args.noCompanyBcc ? "team" : "office");
+  const to = args.interneMelding ? systemMailAddresses(args.to, scope) : args.to;
   if (!to) throw new Error("system-recipient-not-allowed");
   const rawCc = args.copyPolicy ? copyPolicyCc(args.copyPolicy, to, args.afzenderEmail) : undefined;
   const rawBcc = args.copyPolicy ? undefined : args.noCompanyBcc ? args.bcc : withMandatoryBcc(args.bcc, to, args.interneMelding);
@@ -341,8 +343,8 @@ export async function sendMail(args: {
   const info = await t.sendMail({
     from: `${args.fromName?.trim() || "Habitat One"} <${account.user}>`,
     to,
-    cc: args.interneMelding ? systemMailAddresses(rawCc) : rawCc,
-    bcc: args.interneMelding ? systemMailAddresses(rawBcc) : rawBcc,
+    cc: args.interneMelding ? systemMailAddresses(rawCc, scope) : rawCc,
+    bcc: args.interneMelding ? systemMailAddresses(rawBcc, scope) : rawBcc,
     subject: args.subject,
     text: args.text,
     html: args.html,

@@ -30,6 +30,7 @@ import {
   Layers,
   LineChart,
   Mail,
+  MessageSquare,
   Megaphone,
   PackageCheck,
   PackagePlus,
@@ -83,6 +84,7 @@ export const START_TEGELS: StartTegel[] = [
   t("/inbox", "Mail-inbox", "Binnengekomen mail en bijlagen verwerken", Mail, "Klantcontact"),
   t("/aanvragen", "Aanvragen", "Offerte-aanvragen via de website", Inbox, "Klantcontact"),
   t("/agenda", "Agenda", "Afspraken en taken van het team", CalendarDays, "Klantcontact"),
+  t("/teamberichten", "Teamberichten", "Berichten en taken voor collega's", MessageSquare, "Klantcontact"),
   t("/contacts", "Contacten", "Alle klanten en relaties", Users, "Klantcontact"),
   t("/beurs/contacten", "Beurscontacten", "Alle contacten van de beurs, met kaart en filters", Users, "Klantcontact"),
   t("/opvolging", "Opvolging", "Mailvoorstellen, gesprekken en afspraken per klant", Send, "Klantcontact"),
@@ -141,17 +143,12 @@ export const START_GROEPEN = [...new Set(START_TEGELS.map((x) => x.groep))];
  * gebruiker zelf tegels vastpint, vervangen die deze selectie.
  */
 export const STANDAARD_HOOFDKNOPPEN = [
-  "/inbox",
-  "/opvolging",
-  "/beurs/contacten",
-  "/aanvragen",
-  "/quotes",
-  "/projects",
-  "/invoices",
-  "/inkooporders/te-verwerken",
-  "/inkooporders",
   "/agenda",
-  "/dashboard",
+  "/opvolging",
+  "/contacts",
+  "/teamberichten",
+  "/inbox",
+  "/quotes",
 ];
 
 const geldigeKeys = new Set(START_TEGELS.map((x) => x.key));

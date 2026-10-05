@@ -1,3 +1,4 @@
+import { TabsRoot, TabsBar, TabPanel } from "@/components/tabs";
 import { tekst as uiTranslation } from '@/lib/i18n/server';
 /**
  * De stand-pagina: bezoekers vastleggen tijdens de beurs.
@@ -65,14 +66,16 @@ export default async function BeursPage() {
 
   return (
     <>
+<TabsRoot defaultTab="register" ids={["register","overview"]} param="section">
       <PageHeader
         title={t("Beursstand")}
         subtitle={`${BEURS.naam} · ${BEURS.plaats} · ${t("stand {nr}|standnummer", { nr: BEURS.stand })}`}
         actions={<LinkButton href="/beurs/contacten">{t("Alle beurscontacten")}</LinkButton>}
       />
+<TabsBar tabs={[{id:"register",label:t("Bezoeker vastleggen")},{id:"overview",label:t("Overzicht")}]}/>
 
-      <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_20rem]">
-        <Card>
+      <div className="space-y-5">
+        <TabPanel id="register"><Card>
           <CardHeader>
             <CardTitle>{t("Bezoeker vastleggen")}</CardTitle>
             <span className="text-xs text-muted">
@@ -82,10 +85,10 @@ export default async function BeursPage() {
           <CardContent>
             <BeursForm opslaan={legBezoekerVast} />
           </CardContent>
-        </Card>
+        </Card></TabPanel>
 
         <div className="space-y-5">
-          <Card>
+          <TabPanel id="register"><Card>
             <CardHeader>
               <CardTitle>{t("Laat de bezoeker zelf invullen")}</CardTitle>
             </CardHeader>
@@ -111,9 +114,9 @@ export default async function BeursPage() {
                 . {t("Dan hoeft dit scherm daar niet open te staan.")}
               </p>
             </CardContent>
-          </Card>
+          </Card></TabPanel>
 
-          <Card>
+          <TabPanel id="overview"><Card>
             <CardHeader>
               <CardTitle>{t("Geteld")}</CardTitle>
             </CardHeader>
@@ -135,11 +138,11 @@ export default async function BeursPage() {
                 ))}
               </ul>
             </CardContent>
-          </Card>
+          </Card></TabPanel>
         </div>
       </div>
 
-      <Card className="mt-5">
+      <TabPanel id="overview"><Card className="mt-5">
         <CardHeader>
           <CardTitle>{t("Laatst gesproken")}</CardTitle>
           <span className="text-xs text-muted">
@@ -216,7 +219,9 @@ export default async function BeursPage() {
             </Table>
           )}
         </CardContent>
-      </Card>
-    </>
+      </Card></TabPanel>
+
+</TabsRoot>
+</>
   );
 }

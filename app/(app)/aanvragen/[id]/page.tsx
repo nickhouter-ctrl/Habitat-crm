@@ -1,3 +1,4 @@
+import { TabsRoot, TabsBar, TabPanel } from "@/components/tabs";
 import { datumTaal } from "@/lib/i18n/server";
 import { tekst as uiTranslation } from '@/lib/i18n/server';
 import { desc, eq, ilike } from "drizzle-orm";
@@ -148,6 +149,7 @@ export default async function QuoteRequestDetailPage({
 
   return (
     <>
+<TabsRoot defaultTab="request" ids={["request","mail","meeting","actions"]} param="section">
       <PageHeader
         title={
           <span className="flex items-center gap-2">
@@ -161,10 +163,11 @@ export default async function QuoteRequestDetailPage({
             {uiT("← Overzicht")} </LinkButton>
         }
       />
+<TabsBar tabs={[{id:"request",label:uiT("Aanvraag")},{id:"mail",label:uiT("Mail de klant")},...(isAppointment ? [{id:"meeting",label:uiT("Afspraak")}] : []),{id:"actions",label:uiT("Afhandelen")}]}/>
 
-      <div className="grid max-w-5xl gap-5 lg:grid-cols-[1fr_22rem]">
+      <div className="space-y-5">
         <div className="space-y-5">
-          <Card>
+          <TabPanel id="request"><Card>
             <CardHeader>
               <CardTitle>{uiT("Klantgegevens")}</CardTitle>
               {req.contactId && (
@@ -178,21 +181,21 @@ export default async function QuoteRequestDetailPage({
               {req.phone && <Row label={uiT("Telefoon")} value={<a href={`tel:${req.phone}`} className="text-accent hover:underline">{req.phone}</a>} />}
               {req.company && <Row label={uiT("Bedrijf")} value={req.company} />}
             </CardContent>
-          </Card>
+          </Card></TabPanel>
 
           {req.message && (
-            <Card>
+            <TabPanel id="request"><Card>
               <CardHeader>
                 <CardTitle>{uiT("Bericht")}</CardTitle>
               </CardHeader>
               <CardContent>
                 <p className="whitespace-pre-line text-sm leading-relaxed">{req.message}</p>
               </CardContent>
-            </Card>
+            </Card></TabPanel>
           )}
 
           {conversatie.length > 0 && (
-            <Card>
+            <TabPanel id="mail"><Card>
               <CardHeader>
                 <CardTitle>{uiT("Conversatie")}</CardTitle>
                 <span className="text-xs text-muted">{conversatie.length}</span>
@@ -228,11 +231,11 @@ export default async function QuoteRequestDetailPage({
                   </div>
                 ))}
               </CardContent>
-            </Card>
+            </Card></TabPanel>
           )}
 
           {products.length > 0 && (
-            <Card>
+            <TabPanel id="request"><Card>
               <CardHeader>
                 <CardTitle>{uiT("Producten in aanvraag")}</CardTitle>
                 <span className="text-xs text-muted">{products.length}</span>
@@ -245,10 +248,10 @@ export default async function QuoteRequestDetailPage({
                   </div>
                 ))}
               </CardContent>
-            </Card>
+            </Card></TabPanel>
           )}
 
-          <Card>
+          <TabPanel id="actions"><Card>
             <CardHeader>
               <CardTitle>{uiT("Interne notitie")}</CardTitle>
             </CardHeader>
@@ -258,11 +261,11 @@ export default async function QuoteRequestDetailPage({
                 <SubmitButton size="sm" variant="secondary" pendingLabel={uiT("Opslaan…")}>{uiT("Notitie opslaan")}</SubmitButton>
               </form>
             </CardContent>
-          </Card>
+          </Card></TabPanel>
         </div>
 
         <div className="space-y-5">
-          <Card>
+          <TabPanel id="actions"><Card>
             <CardHeader>
               <CardTitle>{uiT("Acties")}</CardTitle>
             </CardHeader>
@@ -274,7 +277,7 @@ export default async function QuoteRequestDetailPage({
                       {uiT("✓ Accepteren")} </SubmitButton>
                   </form>
                   <p className="text-xs text-muted">
-                    {uiT("Bij accepteren wordt automatisch een contact aangemaakt (als nog niet bekend). Mailen naar klant komt in een latere release.")} </p>
+                    {uiT("Bij accepteren wordt een contact aangemaakt als het nog niet bestaat. Gebruik Mail de klant om persoonlijk te antwoorden.")} </p>
                   <form action={reject}>
                     <SubmitButton variant="ghost" className="w-full text-danger hover:bg-danger/10" pendingLabel={uiT("Afwijzen…")}>
                       {uiT("Afwijzen")} </SubmitButton>
@@ -305,10 +308,10 @@ export default async function QuoteRequestDetailPage({
                   {uiT("Aanvraag verwijderen")} </ConfirmSubmit>
               </form>
             </CardContent>
-          </Card>
+          </Card></TabPanel>
 
           {isAppointment && (
-            <Card>
+            <TabPanel id="meeting"><Card>
               <CardHeader>
                 <CardTitle>{beurs ? uiT("📅 Beursafspraak inplannen") : uiT("📅 Afspraak inplannen")}</CardTitle>
               </CardHeader>
@@ -373,10 +376,10 @@ export default async function QuoteRequestDetailPage({
                   </form>
                 </div>
               </CardContent>
-            </Card>
+            </Card></TabPanel>
           )}
 
-          <Card>
+          <TabPanel id="mail"><Card>
             <CardHeader>
               <CardTitle>{uiT("Mail de klant")}</CardTitle>
             </CardHeader>
@@ -410,10 +413,10 @@ export default async function QuoteRequestDetailPage({
                 }
               />
             </CardContent>
-          </Card>
+          </Card></TabPanel>
 
           {req.status === "accepted" && req.contactId && (
-            <Card>
+            <TabPanel id="actions"><Card>
               <CardHeader>
                 <CardTitle>{uiT("Volgende stap")}</CardTitle>
               </CardHeader>
@@ -427,11 +430,13 @@ export default async function QuoteRequestDetailPage({
                 <p className="mt-2 text-xs text-muted">
                   {uiT("Opent de wizard met dit contact én de aangevraagde producten alvast ingevuld.")} </p>
               </CardContent>
-            </Card>
+            </Card></TabPanel>
           )}
         </div>
       </div>
-    </>
+
+</TabsRoot>
+</>
   );
 }
 
