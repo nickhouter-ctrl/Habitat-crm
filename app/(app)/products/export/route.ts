@@ -54,7 +54,8 @@ export async function GET(req: Request) {
 
   const ab = await wb.xlsx.writeBuffer();
   const stamp = new Date().toISOString().slice(0, 10);
-  const name = `producten${collection ? "-" + collection.toLowerCase().replace(/[^a-z0-9]+/g, "-") : ""}-${stamp}.xlsx`;
+  const woord = locale === "en" ? "products" : locale === "es" ? "productos" : "producten";
+  const name = `${woord}${collection ? "-" + collection.toLowerCase().replace(/[^a-z0-9]+/g, "-") : ""}-${stamp}.xlsx`;
   return new Response(ab as unknown as BodyInit, {
     headers: {
       "content-type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",

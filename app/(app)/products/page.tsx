@@ -229,6 +229,8 @@ export default async function ProductsPage({
                 <>
                   <a href={`/products/export${qs}`} className={buttonClass({ variant: "secondary" })} download>
                     {uiT("Excel downloaden")} </a>
+                  <a href={`/products/export${qs ? `${qs}&` : "?"}lang=en`} className={buttonClass({ variant: "secondary" })} download>
+                    {uiT("Excel in het Engels")} </a>
                   <Gs1ExcelDownload />
                   <LinkButton href="/products/pdf" variant="primary" target="_blank">
                     {uiT("📄 PDF-overzicht")} </LinkButton>

@@ -76,6 +76,7 @@ const rows: [string, string, string][] = [
   ['Klant stelt voor','El cliente propone','Customer suggests'],
   ['Wacht op reactie van de klant','Esperando respuesta del cliente',"Waiting for the customer's reply"],
   ['Niet gemaild','No enviado','Not emailed'],
+  ['Excel in het Engels','Excel en inglés','Excel in English'],
   ['Bedrijf / contact','Empresa / contacto','Company / contact'],
   ['Contact / bedrijf','Contacto / empresa','Contact / company'], ['Contact kiezen','Elegir contacto','Choose contact'], ['Contactgegevens','Datos del contacto','Contact details'],
   ['Contract, exclusiviteit & afname','Contrato, exclusividad y compras','Contract, exclusivity and purchases'],
