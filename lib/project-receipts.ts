@@ -18,12 +18,7 @@ import { and, eq, isNull, or } from "drizzle-orm";
 
 import { db } from "@/lib/db";
 import { documents, projectPayments } from "@/lib/db/schema";
-
-/** Ontvangsten worden incl. btw geboekt; een creditnota gaat eraf. */
-function ontvangenBedrag(kind: string, paidEur: string | null, totalEur: string | null): number {
-  const bedrag = Number(paidEur ?? 0) || Number(totalEur ?? 0);
-  return kind === "creditnote" ? -bedrag : bedrag;
-}
+import { recordedDocumentReceipt } from "@/lib/receipts";
 
 /**
  * Bestaat er al een handmatige regel die deze factuur dekt? Twee signalen, beide
@@ -109,7 +104,7 @@ export async function syncProjectReceiptFromDocument(documentId: string): Promis
     return "noop";
   }
 
-  const amount = ontvangenBedrag(doc.kind, doc.paidEur, doc.totalEur);
+  const amount = recordedDocumentReceipt(doc.kind, doc.paidEur, doc.totalEur);
   if (amount === 0) return "noop";
 
   // Voorschotten houden hun eigen conventie: methode 'advance' en de marker

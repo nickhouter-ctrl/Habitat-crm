@@ -77,9 +77,10 @@ export async function verzamelWeekcontrole(): Promise<Weekcontrole> {
   /* ── C · Betaalde facturen zonder ontvangstregel ── */
   const betaaldLos = await db.execute<{ id: string; nr: string | null; projectId: string; project: string; bedrag: number; kind: string }>(sql`
     select d.id, d.doc_number nr, d.project_id "projectId", p.name project,
-           coalesce(nullif(d.paid_eur,0), d.total_eur, 0)::float8 bedrag, d.kind
+           coalesce(d.paid_eur, d.total_eur, 0)::float8 bedrag, d.kind
     from documents d join projects p on p.id = d.project_id
     where d.kind in ('invoice','creditnote') and d.status = 'paid'
+      and coalesce(d.paid_eur, d.total_eur, 0) <> 0
       and not exists (select 1 from project_payments pp where pp.document_id = d.id)`);
   const echtLos: string[] = [];
   for (const d of betaaldLos) {

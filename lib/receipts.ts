@@ -20,6 +20,13 @@ export type ReceiptLike = {
 /** Invoice payments can include VAT; unbilled advances contain no VAT. */
 const VAT_DIVISOR = 1.21;
 
+/** A paid/settled status is not proof of a cash receipt: a credit note may
+ * close an invoice with an explicitly recorded cash amount of zero. */
+export function recordedDocumentReceipt(kind: string, paidEur: string | null, totalEur: string | null): number {
+  const amount = Number(paidEur ?? totalEur ?? 0);
+  return kind === "creditnote" ? -amount : amount;
+}
+
 /** Unbilled project advances are settled in full on the final invoice. */
 export function defaultReceiptVatRate(p: Pick<ReceiptLike, "method" | "advanceRequestId">): number {
   return p.method === "cash" || p.method === "advance" || p.advanceRequestId ? 0 : 21;

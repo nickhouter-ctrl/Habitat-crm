@@ -1,10 +1,16 @@
 import { describe, expect, it } from "vitest";
 import { projectAdvanceLedger } from "../project-advance-ledger";
-import { projectReceiptShares, splitProjectReceipts } from "../receipts";
+import { projectReceiptShares, recordedDocumentReceipt, splitProjectReceipts } from "../receipts";
 const line = (name: string, price: number, advanceRef?: string) => ({name, price, units:1, advanceRef});
 const doc = (id: string, items: unknown, subtotal = 1000, status = "paid") => ({id, kind:"invoice", status, items, subtotalEur:String(subtotal), subtotal:String(subtotal), docNumber:id, issueDate:null, isAdvance:false, settledAt:null});
 const pay = (id: string, documentId: string | null, amountEur: number) => ({id, documentId, amountEur, method:"advance", vatRate:"0", date:null, description:null});
 describe("advance history", () => {
+  it("does not recreate a cash receipt for an invoice settled by credit", () => {
+    expect(recordedDocumentReceipt("invoice","0.00","5077.50")).toBe(0);
+    expect(recordedDocumentReceipt("invoice","5077.50","5077.50")).toBe(5077.50);
+    expect(recordedDocumentReceipt("creditnote","0.00","5077.50")).toBe(-0);
+    expect(recordedDocumentReceipt("creditnote","5077.50","5077.50")).toBe(-5077.50);
+  });
   it("combines cash and invoice advances, excluding goods and unpaid drafts from receipts", () => {
     const result = projectAdvanceLedger([
       doc("mixed", [line("Kozijnen",24000),line("Voorschot werkzaamheden",15000)],39000),
