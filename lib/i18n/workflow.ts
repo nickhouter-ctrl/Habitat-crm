@@ -48,6 +48,7 @@ const rows: [string, string, string][] = [
   ['Bijvoorbeeld: showroomwand Flexible Stone','Por ejemplo: pared de showroom Flexible Stone','For example: Flexible Stone showroom wall'],
   ['Boeking corrigeren','Corregir registro','Correct entry'], ['Boeking terugdraaien','Anular registro','Reverse entry'], ['Breedtegraad middelpunt','Latitud del centro','Centre latitude'],
   ['Concept','Borrador','Draft'], ['Concept bekijken en aanpassen','Ver y editar borrador','View and edit draft'], ['Concept bewaren','Guardar borrador','Save draft'], ['Concept bewerken','Editar borrador','Edit draft'], ['Concept opslaan','Guardar borrador','Save draft'],
+  ['Bedrijf / contact','Empresa / contacto','Company / contact'],
   ['Contact / bedrijf','Contacto / empresa','Contact / company'], ['Contact kiezen','Elegir contacto','Choose contact'], ['Contactgegevens','Datos del contacto','Contact details'],
   ['Contract, exclusiviteit & afname','Contrato, exclusividad y compras','Contract, exclusivity and purchases'],
   ['Contracten, exclusiviteit, publicatie en geregistreerde afname.','Contratos, exclusividad, publicación y compras registradas.','Contracts, exclusivity, publication and recorded purchases.'],

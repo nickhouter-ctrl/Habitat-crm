@@ -156,13 +156,15 @@ export default async function Page({ searchParams }: {
     <Card><div className="border-b px-5 py-3 text-sm text-muted">{visible.length} {t("van")} {scoped.length} {t("contacten")}{bron==='beurs'?t(" van de beurs"):''}</div><div className="overflow-x-auto"><table className="w-full text-left text-sm">
       <thead className="border-b bg-background text-foreground"><tr>
         <th className="px-5 py-3 font-medium">{t("Afgehandeld")}</th>
-        {['Contact / bedrijf', 'Gesprek', 'Volgende stap'].map(label => <th className="px-5 py-3 font-medium" key={label}>{t(label)}</th>)}
+        {['Bedrijf / contact', 'Gesprek', 'Volgende stap'].map(label => <th className="px-5 py-3 font-medium" key={label}>{t(label)}</th>)}
       </tr></thead>
       <tbody>{visible.map(r => <tr className="border-b last:border-0 hover:bg-background/60" key={r.contact.id}>
         <td className="px-5 py-4">{access.heeftCap('schrijven') ? <FollowupCheck key={`${r.completion?.id??'new'}:${r.completed}`} contactId={r.contact.id} name={r.contact.name} completed={r.completed} eventId={r.completion?.id??''}/> : r.completed?t("Ja"):t("Nee")}</td>
         <td className="px-5 py-4">
-          <Link className="font-semibold underline-offset-4 hover:underline" href={`/opvolging/${r.contact.id}`}>{r.contact.name}</Link>
-          <p className="text-muted">{r.company ?? r.contact.email}</p>
+          {/* Bedrijf bovenaan, de persoon eronder: je belt een zaak, en zo staan
+              twee mensen van hetzelfde bedrijf ook herkenbaar onder elkaar. */}
+          <Link className="font-semibold underline-offset-4 hover:underline" href={`/opvolging/${r.contact.id}`}>{bedrijfEerst(r.company, r.contact.name).kop}</Link>
+          <p className="text-muted">{bedrijfEerst(r.company, r.contact.name).onder ?? r.contact.email}</p>
           <p className="mt-1 text-xs text-muted">{r.origins.map(o => t(o.label)).join(' · ')}</p>
         {access.heeftCap('schrijven')&&<FollowupExclude id={r.contact.id}/>}</td>
         <td className="px-5 py-4">
@@ -185,4 +187,16 @@ export default async function Page({ searchParams }: {
       </tr>)}</tbody>
     </table>{!visible.length && <p className="p-8 text-muted">{t("Geen contacten bij dit filter.")}</p>}</div></Card>
   </div>;
+}
+
+/**
+ * Wat bovenaan staat en wat eronder. Zonder bedrijf, of als het bedrijf
+ * gewoon de naam van de persoon is ("Haelmilo S.L." / "Haelmilo S.L."), staat
+ * de naam één keer bovenaan.
+ */
+function bedrijfEerst(bedrijf: string | null | undefined, naam: string): { kop: string; onder: string | null } {
+  const b = bedrijf?.trim();
+  const gelijk = (x: string) => x.normalize('NFD').replace(/\p{M}/gu, '').replace(/[^\p{L}\p{N}]/gu, '').toLowerCase();
+  if (!b || gelijk(b) === gelijk(naam)) return { kop: naam, onder: null };
+  return { kop: b, onder: naam };
 }
