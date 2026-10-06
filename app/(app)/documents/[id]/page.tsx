@@ -451,7 +451,12 @@ export default async function DocumentDetailPage({
                 onder het tabblad Intern, waar niemand hem vond. */}
             {(doc.kind === "invoice" || doc.kind === "creditnote") && !doc.isExternal && (
               holdedMap || doc.holdedId ? (
-                <Link href={`/documents/${id}?section=internal`}><Badge tone="success">{uiT("✓ In Holded")}</Badge></Link>
+                // Staat hij er al in, dan is "bijwerken" de knop die je zoekt:
+                // stuurt de huidige versie van alleen deze factuur.
+                <form action={updateDocumentInHoldedAction.bind(null, id)} className="flex items-center gap-2">
+                  <Link href={`/documents/${id}?section=internal`}><Badge tone="success">{uiT("✓ In Holded")}</Badge></Link>
+                  <SubmitButton variant="secondary" pendingLabel={uiT("Bijwerken…")}>{uiT("Bijwerken in Holded")}</SubmitButton>
+                </form>
               ) : (
                 <form action={pushDocumentToHoldedAction.bind(null, id)}>
                   {doc.status === "draft" ? (

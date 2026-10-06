@@ -2099,7 +2099,7 @@ export async function updateDocumentInHoldedAction(id: string) {
   let target: string;
   try {
     await updateDocumentInHolded(id);
-    target = `/documents/${id}?holdedUpdate=ok`;
+    target = `/documents/${id}?section=internal&holdedUpdate=ok`;
   } catch (err) {
     let msg = err instanceof Error ? err.message : "bijwerken in Holded mislukt";
     const body = (err as { body?: unknown })?.body;
@@ -2107,7 +2107,7 @@ export async function updateDocumentInHoldedAction(id: string) {
       const detail = typeof body === "string" ? body : JSON.stringify(body);
       msg += ` — ${detail.slice(0, 300)}`;
     }
-    target = `/documents/${id}?holdedError=${encodeURIComponent(msg)}`;
+    target = `/documents/${id}?section=internal&holdedError=${encodeURIComponent(msg)}`;
   }
   revalidatePath(`/documents/${id}`);
   redirect(target);
