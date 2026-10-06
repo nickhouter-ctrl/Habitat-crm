@@ -20,7 +20,7 @@ export async function loadProjectFunding(projectId?:string, includeClosed = fals
     }>(sql`select p.id,p.name,p.labor_margin_pct "laborPct",p.purchase_margin_pct "purchasePct",
       coalesce((select sum(t.hours*t.hourly_cost_eur) from time_entries t where t.project_id=p.id
         and not(t.self_logged_at is not null and t.approved_at is null)),0)::text labor,
-      coalesce((select jsonb_agg(jsonb_build_object('documentId',r.document_id,'amountEur',r.amount_eur,'method',r.method,'vatRate',r.vat_rate,
+      coalesce((select jsonb_agg(jsonb_build_object('documentId',r.document_id,'advanceRequestId',r.advance_request_id,'amountEur',r.amount_eur,'method',r.method,'vatRate',r.vat_rate,
         'vatAmountEur',r.vat_amount_eur,'docSubtotal',d.subtotal_eur,'docTotal',d.total_eur))
         from project_payments r left join documents d on d.id=r.document_id where r.project_id=p.id),'[]'::jsonb) payments,
       coalesce((select jsonb_agg(jsonb_build_object('id',d.id,'kind',d.kind,'status',d.status,'items',d.items,'subtotal',d.subtotal_eur)) from documents d

@@ -39,6 +39,7 @@ import { COMPANY } from "@/lib/company";
 import { formatEUR } from "@/lib/utils";
 import { workerRate } from "@/lib/worker-rate";
 import { moneyOrNull, moneyOrZero as numOrZero } from "@/lib/parse-money";
+import { defaultReceiptVatRate } from "@/lib/receipts";
 
 async function requireUser() {
   // Centrale guard: ingelogd én geen alleen-lezen (viewer) account.
@@ -368,7 +369,7 @@ const paymentSchema = z.object({
   note: z.string().trim().optional(),
   /** Hoort deze ontvangst bij een eerder verstuurd voorschotverzoek? */
   advanceRequestId: z.string().trim().optional(),
-  /** Leeg = het systeem beslist (contant 0%, bij een factuur die factuur, anders 21%). */
+  /** Leeg = automatisch: contant/voorschot 0%, bij een factuur die factuur. */
   vatRate: z.string().trim().optional(),
   /** Btw-bedrag; wint van het tarief. Voor facturen met gemengde tarieven. */
   vatAmountEur: z.string().trim().optional(),
@@ -380,17 +381,18 @@ export async function addProjectPayment(projectId: string, formData: FormData) {
   if (!parsed.success) throw new Error(parsed.error.issues.map((i) => i.message).join(", "));
   const d = parsed.data;
   const advanceRequestId = uuidOrNull(d.advanceRequestId);
+  const method = advanceRequestId ? "advance" : d.method;
   await db.insert(projectPayments).values({
     projectId,
     date: dateOrNull(d.date),
     amountEur: numOrZero(d.amountEur),
     // Hoort de ontvangst bij een voorschotverzoek, dan is het per definitie een
     // voorschot — anders zou hetzelfde bedrag als 'bank' de voorschotstand niet raken.
-    method: advanceRequestId ? "advance" : d.method,
+    method,
     description: d.description || null,
     note: d.note || null,
     advanceRequestId,
-    vatRate: d.vatRate ? moneyOrNull(d.vatRate) : null,
+    vatRate: d.vatRate ? moneyOrNull(d.vatRate) : method === "advance" ? "0" : null,
     vatAmountEur: d.vatAmountEur ? moneyOrNull(d.vatAmountEur) : null,
   });
   revalidatePath(`/projects/${projectId}`);
@@ -795,6 +797,7 @@ export async function createFinalSettlement(projectId: string, formData?: FormDa
       description: projectPayments.description,
       vatRate: projectPayments.vatRate,
       documentId: projectPayments.documentId,
+      advanceRequestId: projectPayments.advanceRequestId,
     })
     .from(projectPayments)
     .where(and(eq(projectPayments.projectId, projectId), isNull(projectPayments.documentId)))
@@ -881,7 +884,7 @@ export async function createFinalSettlement(projectId: string, formData?: FormDa
     const perTarief = new Map<number, number>();
     for (const p of ontvangsten) {
       const bedrag = Number(p.amountEur ?? 0);
-      const pct = p.vatRate != null ? Number(p.vatRate) : p.method === "cash" ? 0 : 21;
+      const pct = p.vatRate != null ? Number(p.vatRate) : defaultReceiptVatRate(p);
       const ex = Math.round((bedrag / (1 + pct / 100)) * 100) / 100;
       perTarief.set(pct, Math.round(((perTarief.get(pct) ?? 0) + ex) * 100) / 100);
     }
@@ -899,7 +902,7 @@ export async function createFinalSettlement(projectId: string, formData?: FormDa
   }
   for (const p of bundelVoorschotten ? [] : ontvangsten) {
     const bedrag = Number(p.amountEur ?? 0);
-    const pct = p.vatRate != null ? Number(p.vatRate) : p.method === "cash" ? 0 : 21;
+    const pct = p.vatRate != null ? Number(p.vatRate) : defaultReceiptVatRate(p);
     const ex = Math.round((bedrag / (1 + pct / 100)) * 100) / 100;
     /**
      * De verrekenregel krijgt HET TARIEF VAN HET VOORSCHOT ZELF, niet standaard

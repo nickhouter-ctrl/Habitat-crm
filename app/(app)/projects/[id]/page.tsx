@@ -62,7 +62,7 @@ import { docProductMargin, lineCostEur, lineMaterialCostEur, normalizeDocItems }
 import { deliveryTotals } from "@/lib/project-delivery";
 import { poExVat, poExVatAmount, poExVatAssumingSpanishVat } from "@/lib/purchase-orders";
 import { DEFAULT_LABOR_MARGIN_PCT, DEFAULT_PURCHASE_MARGIN_PCT, deriveAdvanceCover, deriveProjectMargins } from "@/lib/project-financials";
-import { receiptExVat as exBtwVanOntvangst, splitReceipt, splitProjectReceipts } from "@/lib/receipts";
+import { defaultReceiptVatRate, receiptExVat as exBtwVanOntvangst, splitReceipt, splitProjectReceipts } from "@/lib/receipts";
 import type { DocumentLineItem } from "@/lib/db/schema";
 import { moneyForInput } from "@/lib/parse-money";
 import { formatEUR } from "@/lib/utils";
@@ -443,6 +443,7 @@ export default async function ProjectDetailPage({
           description: projectPayments.description,
           note: projectPayments.note,
           documentId: projectPayments.documentId,
+          advanceRequestId: projectPayments.advanceRequestId,
           vatRate: projectPayments.vatRate,
           vatAmountEur: projectPayments.vatAmountEur,
           docNumber: documents.docNumber,
@@ -1557,7 +1558,7 @@ export default async function ProjectDetailPage({
                         <span className="block text-xs">{formatEUR(Number(p.vatAmountEur))} {uiT("btw")}</span>
                       ) : p.vatRate != null ? (
                         <span className="block text-xs">{Number(p.vatRate) === 0 ? uiT("geen btw") : uiT("{v0}% btw", { v0: Number(p.vatRate) })}</span>
-                      ) : p.method === "cash" ? (
+                      ) : p.method === "cash" || (!p.documentId && defaultReceiptVatRate(p) === 0) ? (
                         <span className="block text-xs">{uiT("geen btw")}</span>
                       ) : null}
                     </Td>

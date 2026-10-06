@@ -1,6 +1,8 @@
 import type { Dictionary } from "@/lib/i18n";
 
 const rows: [string, string, string][] = [
+  ["Totaal brutowinst", "Total gross profit", "Beneficio bruto total"],
+  ["Brutowinst op werk + brutowinst eigen producten, op basis van gekoppelde kostprijzen", "Gross profit on work + gross profit on our products, based on linked costs", "Beneficio bruto del trabajo + beneficio bruto de nuestros productos, según los costes vinculados"],
   ["Verkoop eigen producten min bekende kostprijs", "Sales of our products less known costs", "Ventas de nuestros productos menos los costes conocidos"],
   ["Brutowinst op uitgevoerd werk", "Gross profit on recorded work", "Beneficio bruto en el trabajo registrado"],
   ["Opslag op uren, bouwmaterialen en overige kosten. Zonder winst op eigen producten.", "Markup on labour, building materials and other costs. Excludes profit on our products.", "Recargo en mano de obra, materiales y otros costes. Sin el beneficio de nuestros productos."],

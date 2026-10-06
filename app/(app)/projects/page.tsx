@@ -214,6 +214,7 @@ export default async function ProjectsPage({
             vatRate: projectPayments.vatRate,
             vatAmountEur: projectPayments.vatAmountEur,
             documentId: projectPayments.documentId,
+            advanceRequestId: projectPayments.advanceRequestId,
             docSubtotal: documents.subtotalEur,
             docTotal: documents.totalEur,
           })

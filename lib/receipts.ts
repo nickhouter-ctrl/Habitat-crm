@@ -9,16 +9,23 @@ export type ReceiptLike = {
   vatRate?: string | null;
   vatAmountEur?: string | null;
   documentId?: string | null;
+  advanceRequestId?: string | null;
   docSubtotal?: string | null;
   docTotal?: string | null;
 };
 
-/** Betalingen worden incl. btw geboekt; de samenvattingen rekenen ex. btw (÷1,21). */
+/** Invoice payments can include VAT; unbilled advances contain no VAT. */
 const VAT_DIVISOR = 1.21;
+
+/** Unbilled project advances are settled in full on the final invoice. */
+export function defaultReceiptVatRate(p: Pick<ReceiptLike, "method" | "advanceRequestId">): number {
+  return p.method === "cash" || p.method === "advance" || p.advanceRequestId ? 0 : 21;
+}
 
 /**
  * Ex. btw per ontvangst, niet blind alles ÷ 1,21:
- *  - contant: daar zit geen btw op (opgave van Nick, 04-08-2026);
+ *  - contant en losse voorschotten: geen btw; voorschotten worden bij de
+ *    eindafrekening verrekend (opgave van Nick, 06-10-2026);
  *  - hangt de ontvangst aan een factuur: de verhouding van díé factuur, dus
  *    ook goed bij btw verlegd of een provisión de fondos zonder btw;
  *  - de rest: 21% aannemen, zoals het altijd al ging.
@@ -41,7 +48,7 @@ export function receiptExVat(p: ReceiptLike): number {
   const sub = Number(p.docSubtotal ?? 0);
   const tot = Number(p.docTotal ?? 0);
   if (sub > 0 && tot > 0) return Math.round(bedrag * (sub / tot) * 100) / 100;
-  return bedrag / VAT_DIVISOR;
+  return defaultReceiptVatRate(p) === 0 ? bedrag : bedrag / VAT_DIVISOR;
 }
 
 /**

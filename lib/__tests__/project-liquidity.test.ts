@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { docOwnShare, docProductMargin, isOwnProductLine } from "../documents";
-import { splitProjectReceipts, splitReceipt } from "../receipts";
+import { computeTotals, docOwnShare, docProductMargin, isOwnProductLine } from "../documents";
+import { defaultReceiptVatRate, receiptExVat, splitProjectReceipts, splitReceipt } from "../receipts";
 import { deriveAdvanceCover, deriveProjectMargins, projectWorkProfit } from "../project-financials";
 import type { DocumentLineItem } from "../db/schema";
 
@@ -43,15 +43,35 @@ describe("own goods independent of known product cost", () => {
 });
 
 describe("liquid project funds", () => {
+  it("keeps a received unbilled advance in full and settles it without VAT", () => {
+    const advance = { amountEur: 25000, method: "advance", vatRate: null };
+    expect(receiptExVat(advance)).toBe(25000);
+    expect(defaultReceiptVatRate(advance)).toBe(0);
+    expect(splitReceipt(advance, new Map())).toEqual({totalReceived:25000,ownProductReceived:0,liquidReceived:25000});
+    expect(receiptExVat({...advance,method:"bank",advanceRequestId:"request"})).toBe(25000);
+    expect(receiptExVat({...advance,amountEur:-25000})).toBe(-25000);
+  });
+  it("uses recorded invoice VAT when an advance is already invoiced", () => {
+    expect(receiptExVat({amountEur:1210,method:"advance",documentId:"invoice",docSubtotal:"1000",docTotal:"1210"})).toBe(1000);
+    expect(receiptExVat({amountEur:1210,method:"advance",vatRate:"21"})).toBe(1000);
+    expect(receiptExVat({amountEur:1210,method:"bank"})).toBe(1000);
+  });
+  it("deducts an unbilled advance from the final amount while keeping the work VAT", () => {
+    const advance = { amountEur: 25000, method: "advance", vatRate: null };
+    expect(computeTotals([
+      line("Uitgevoerd werk",30000),
+      line("Verrekening voorschot",-receiptExVat(advance),{taxRate:defaultReceiptVatRate(advance)}),
+    ])).toEqual({subtotal:5000,tax:6300,total:11300});
+  });
   it.each(["Kozijnen", "Balustrades", "Binnen deuren", "Buiten deuren", "Badkamer artikelen", "Verlichting", "Magic stone"])("excludes the full paid selling price of %s, not just its cost", name => {
     const items=[line(name,10000,{costEur:2000}),line("voorschot werkzaamheden",5000)];
     const receipt=splitReceipt({amountEur:18150,method:"bank",vatRate:"21",documentId:"sale"},new Map([["sale",docOwnShare(items,15000)]]));
     expect(receipt).toEqual({totalReceived:15000,ownProductReceived:10000,liquidReceived:5000});
   });
   it("shows Finca work profit separately from money remaining for costs", () => {
-    const cover=deriveAdvanceCover({laborCost:99409.079492,purchaseCost:24635.35,coverReceivedEx:163156.74,ownProductReceivedEx:81824.73,requiredRevenue:142651.10});
+    const cover=deriveAdvanceCover({laborCost:99409.079492,purchaseCost:24635.35,coverReceivedEx:167495.58,ownProductReceivedEx:81824.73,requiredRevenue:142651.10});
     expect(projectWorkProfit(cover)).toBe(18606.67);
-    expect(cover.saldo).toBe(20505.64);
+    expect(cover.saldo).toBe(24844.48);
     expect(projectWorkProfit(cover)).not.toBe(cover.costSaldo);
     expect(Math.round((cover.received-cover.prefinanced-projectWorkProfit(cover))*100)/100).toBe(cover.saldo);
   });

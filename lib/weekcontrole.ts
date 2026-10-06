@@ -253,10 +253,11 @@ export async function verzamelWeekcontrole(): Promise<Weekcontrole> {
                when pp.vat_rate is not null then pp.amount_eur / (1 + pp.vat_rate/100)
                when pp.method = 'cash' then pp.amount_eur
                when dd.subtotal_eur > 0 and dd.total_eur > 0 then pp.amount_eur * (dd.subtotal_eur / dd.total_eur)
+               when pp.method = 'advance' or pp.advance_request_id is not null then pp.amount_eur
                else pp.amount_eur / 1.21 end), 0)
         from project_payments pp left join documents dd on dd.id = pp.document_id
         where pp.project_id = p.id)::float8 "ontvangenEx"
-      ,coalesce((select jsonb_agg(jsonb_build_object('documentId',pp.document_id,'amountEur',pp.amount_eur,
+      ,coalesce((select jsonb_agg(jsonb_build_object('documentId',pp.document_id,'advanceRequestId',pp.advance_request_id,'amountEur',pp.amount_eur,
         'method',pp.method,'vatRate',pp.vat_rate,'vatAmountEur',pp.vat_amount_eur,
         'docSubtotal',dd.subtotal_eur,'docTotal',dd.total_eur))
         from project_payments pp left join documents dd on dd.id=pp.document_id where pp.project_id=p.id),'[]'::jsonb) payments
