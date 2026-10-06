@@ -5,6 +5,7 @@ import type { projectProgress } from "@/lib/project-progress";
 import { formatDate, formatEUR } from "@/lib/utils";
 import { Badge, Card, CardContent, LinkButton } from "./ui";
 import { ProjectFundingSummary } from "./project-funding-summary";
+import { ActionDialog } from "./action-dialog";
 
 export async function ProjectSnapshot({ id, cover, ownProducts, progress, status, requestedOpen, outstandingInvoices, startDate, endDate }: {
   id: string; cover: AdvanceCover; progress: ReturnType<typeof projectProgress>; status: string;
@@ -20,7 +21,17 @@ export async function ProjectSnapshot({ id, cover, ownProducts, progress, status
       <div><p className="mb-2 text-xs font-medium uppercase tracking-wider text-muted">{t("Projectstand")}</p><Badge tone={status === "active" ? cover.tone : "neutral"}>{label}</Badge>
         <p className="mt-3 max-w-2xl text-sm text-muted">{t("Ontvangsten voor eigen producten staan apart. Hier zie je welk klantgeld overblijft voor de jongens en inkopen bij derden, na de geboekte kosten.")}</p>
       </div>
-      <LinkButton href="#voorschot-opvragen" variant={needsAdvance ? "primary" : "secondary"}>{t(requestedOpen > 0.01 ? "Bestaand voorschot opvolgen" : needsAdvance ? "Voorschot voorbereiden" : "Voorschotten bekijken")}</LinkButton>
+      <div className="flex flex-wrap gap-2">
+        <ActionDialog title={t("Klantoverzicht downloaden")}>
+          <p className="mb-4 text-sm text-muted">{t("PDF met ontvangen bedragen, geboekt werk tegen klantprijs en het resterende voorschot. Zonder interne kostprijzen of winst.")}</p>
+          <div className="flex flex-wrap gap-2">
+            {([['nl', 'Nederlands'], ['en', 'English'], ['es', 'Español']] as const).map(([lang, label]) => (
+              <a key={lang} href={`/projects/${id}/voorschotoverzicht/pdf?lang=${lang}`} download className="inline-flex min-h-10 items-center rounded-lg border px-4 py-2 text-sm font-medium hover:bg-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40">{label} · PDF</a>
+            ))}
+          </div>
+        </ActionDialog>
+        <LinkButton href="#voorschot-opvragen" variant={needsAdvance ? "primary" : "secondary"}>{t(requestedOpen > 0.01 ? "Bestaand voorschot opvolgen" : needsAdvance ? "Voorschot voorbereiden" : "Voorschotten bekijken")}</LinkButton>
+      </div>
     </div>
     <CardContent>
       <ProjectFundingSummary cover={cover} ownProducts={ownProducts}/>

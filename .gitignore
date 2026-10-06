@@ -52,6 +52,7 @@ tmp-*.ts
 /*.pdf
 /*.xlsx
 /*.csv
+/output/pdf/
 /*.MP4
 /*.mp4
 /*.mov
