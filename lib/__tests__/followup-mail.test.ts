@@ -89,8 +89,8 @@ describe('stand van zaken na de beurs', () => {
   });
   it('zegt wat er speelt: overweldigd, druk bezig, partijen in Spanje, zorgvuldig, we komen terug', () => {
     const { body } = followupProposal('status', ctx);
-    for (const zin of ['Nos ha desbordado', 'varias empresas en España', 'puntos de venta', 'con cuidado', 'volveremos a ponernos en contacto',
-      'overwhelmed by the positive response', 'several companies in Spain', 'retail partners', 'carefully', 'we will get back to you'])
+    for (const zin of ['Nos ha desbordado', 'cómo organizar la distribución', 'varias empresas en España', 'puntos de venta', 'con cuidado', 'volveremos a ponernos en contacto',
+      'overwhelmed by the positive response', 'mapping out how to organise distribution', 'several companies in Spain', 'retail partners', 'carefully', 'we will get back to you'])
       expect(body, zin).toContain(zin);
   });
   it('belooft niets wat nog niet vastligt en stuurt geen bijlagen mee', () => {
