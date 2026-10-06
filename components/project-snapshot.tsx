@@ -23,7 +23,7 @@ export async function ProjectSnapshot({ id, cover, ownProducts, progress, status
       </div>
       <div className="flex flex-wrap gap-2">
         <ActionDialog title={t("Klantoverzicht downloaden")}>
-          <p className="mb-4 text-sm text-muted">{t("PDF met ontvangen bedragen, geboekt werk tegen klantprijs en het resterende voorschot. Zonder interne kostprijzen of winst.")}</p>
+          <p className="mb-4 text-sm text-muted">{t("PDF met ontvangen bedragen, afgeboekt werk en het resterende voorschot. Zonder interne kostprijzen of winst.")}</p>
           <div className="flex flex-wrap gap-2">
             {([['nl', 'Nederlands'], ['en', 'English'], ['es', 'Español']] as const).map(([lang, label]) => (
               <a key={lang} href={`/projects/${id}/voorschotoverzicht/pdf?lang=${lang}`} download className="inline-flex min-h-10 items-center rounded-lg border px-4 py-2 text-sm font-medium hover:bg-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40">{label} · PDF</a>

@@ -42,25 +42,25 @@ export function clientFundingReport(input: {
     tables: [
       {
         title: t("Berekening van uw saldo"),
-        subtitle: t("Ontvangen betalingen, verminderd met productbedragen en geboekt werk tegen klantprijs. Alle bedragen ex. btw."),
+        subtitle: t("Ontvangen betalingen, verminderd met productbedragen en afgeboekt werk. Alle bedragen ex. btw."),
         columns,
         rows: [
           [t("Totaal ontvangen"), formatEUR(a.received)],
           [t("Af: ontvangen voor producten"), formatEUR(a.products)],
-          [t("Af: geboekt werk tegen klantprijs"), formatEUR(a.work)],
+          [t("Afgeboekt werk"), formatEUR(a.work)],
           [t("Resterend voorschot"), formatEUR(a.remaining)],
         ],
         emphasizeRow: i => i === 3,
       },
       {
-        title: t("Specificatie van het geboekte werk"),
-        subtitle: t("Deze bedragen zijn opgenomen in het geboekte werk hierboven en worden niet nogmaals afgetrokken."),
+        title: t("Specificatie van het afgeboekte werk"),
+        subtitle: t("Deze bedragen zijn opgenomen in het afgeboekte werk hierboven en worden niet nogmaals afgetrokken."),
         columns,
         rows: [
           [t("Arbeid"), formatEUR(a.labor)],
           [t("Bouwmaterialen"), formatEUR(a.materials)],
           [t("Overige werkzaamheden en diensten"), formatEUR(a.other)],
-          [t("Totaal geboekt werk tegen klantprijs"), formatEUR(a.work)],
+          [t("Totaal afgeboekt werk"), formatEUR(a.work)],
         ],
         emphasizeRow: i => i === 3,
       },
@@ -70,9 +70,9 @@ export function clientFundingReport(input: {
         rows: [
           [t("Productbedragen blijven bestemd voor de betreffende producten en zijn niet beschikbaar voor verdere werkzaamheden.")],
           [t(a.remaining < 0
-            ? "Het geboekte werk overschrijdt het beschikbare voorschot. Het bedrag 'Nog aan te vullen' is het tekort op deze peildatum."
+            ? "Het afgeboekte werk overschrijdt het beschikbare voorschot. Het bedrag 'Nog aan te vullen' is het tekort op deze peildatum."
             : "Het resterende voorschot is beschikbaar voor verdere werkzaamheden.")],
-          [t("Dit is een tussenstand op basis van verwerkte betalingen en geboekt werk op de datum van dit overzicht. Nog niet verwerkte werkzaamheden en betalingen zijn niet opgenomen. Dit overzicht is geen factuur of eindafrekening.")],
+          [t("Dit is een tussenstand op basis van verwerkte betalingen en afgeboekt werk op de datum van dit overzicht. Nog niet verwerkte werkzaamheden en betalingen zijn niet opgenomen. Dit overzicht is geen factuur of eindafrekening.")],
         ],
       },
     ],
