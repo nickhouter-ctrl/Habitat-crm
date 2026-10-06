@@ -1001,7 +1001,7 @@ export default async function ProjectDetailPage({
 
         {/* ── Tab: Overzicht — geldstroom, resultaat, begroting ── */}
         <TabPanel id="overzicht" className="order-3">
-      <ProjectSnapshot id={id} cover={cover} progress={progress} status={project.status} requestedOpen={openAdvanceRequests.reduce((sum,r)=>sum+r.open,0)} outstandingInvoices={openOutstanding} startDate={project.startDate} endDate={project.endDate}/>
+      <ProjectSnapshot id={id} cover={cover} ownProducts={margins} progress={progress} status={project.status} requestedOpen={openAdvanceRequests.reduce((sum,r)=>sum+r.open,0)} outstandingInvoices={openOutstanding} startDate={project.startDate} endDate={project.endDate}/>
 
       {/* ─────────────── Resultaat (P&L) ─────────────── */}
       </TabPanel><TabPanel id="resultaat" className="order-3"><div className="order-1 mb-6 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
@@ -1411,7 +1411,7 @@ export default async function ProjectDetailPage({
             {uiT("Ontvangen − geboekt werk tegen klantprijs = resterende voorschotruimte.")} </span>
         </CardHeader>
         <CardContent>
-          <ProjectFundingSummary cover={cover} details="inline"/>
+          <ProjectFundingSummary cover={cover} ownProducts={margins} details="inline"/>
           <div className="mt-5 grid gap-3 sm:grid-cols-2">
             {/* Own-product cost remains separate from the client-price calculation. */}
             <div className="rounded-lg border bg-background p-3">

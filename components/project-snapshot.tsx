@@ -1,13 +1,14 @@
 import Link from "next/link";
 import { datumTaal, tekst } from "@/lib/i18n/server";
-import type { AdvanceCover } from "@/lib/project-financials";
+import type { AdvanceCover, ProjectMargins } from "@/lib/project-financials";
 import type { projectProgress } from "@/lib/project-progress";
 import { formatDate, formatEUR } from "@/lib/utils";
 import { Badge, Card, CardContent, LinkButton } from "./ui";
 import { ProjectFundingSummary } from "./project-funding-summary";
 
-export async function ProjectSnapshot({ id, cover, progress, status, requestedOpen, outstandingInvoices, startDate, endDate }: {
+export async function ProjectSnapshot({ id, cover, ownProducts, progress, status, requestedOpen, outstandingInvoices, startDate, endDate }: {
   id: string; cover: AdvanceCover; progress: ReturnType<typeof projectProgress>; status: string;
+  ownProducts: Pick<ProjectMargins, "productMargin" | "uncostedProductRevenue">;
   requestedOpen: number; outstandingInvoices: number; startDate: string | null; endDate: string | null;
 }) {
   const t = await tekst(), locale = await datumTaal();
@@ -22,7 +23,7 @@ export async function ProjectSnapshot({ id, cover, progress, status, requestedOp
       <LinkButton href="#voorschot-opvragen" variant={needsAdvance ? "primary" : "secondary"}>{t(requestedOpen > 0.01 ? "Bestaand voorschot opvolgen" : needsAdvance ? "Voorschot voorbereiden" : "Voorschotten bekijken")}</LinkButton>
     </div>
     <CardContent>
-      <ProjectFundingSummary cover={cover}/>
+      <ProjectFundingSummary cover={cover} ownProducts={ownProducts}/>
       <div className="mt-5 flex flex-wrap items-center justify-between gap-3 border-t pt-4 text-sm">
         <span>{progress.percent === null ? t("Voortgang nog niet vastgelegd") : `${t("Voortgang")} ${progress.percent}% · ${t("{done} van {total} fases afgerond", { done: progress.completed, total: progress.total })}`}{progress.current && <span className="ml-2 text-muted">· {progress.current}</span>}</span>
         <Link href="#planning" className="text-accent underline-offset-4 hover:underline">{t("Voortgang bijwerken")}</Link>
