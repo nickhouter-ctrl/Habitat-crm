@@ -36,6 +36,26 @@ export function laatsteReactie<T extends { email: string | null; at: Date | null
     .sort((a, b) => b.at.getTime() - a.at.getTime())[0];
 }
 
+/**
+ * Hoort deze klant onder "Nog opvolgen"?
+ *
+ * Wachten op een antwoord van de klant is geen taak voor ons, dus die staan er
+ * normaal niet tussen. Twee uitzonderingen: er staat een volgende actie, of
+ * iemand heeft de opvolging bewust weer opengezet (het vinkje uitgezet). Dat
+ * laatste moet altijd zichtbaar worden — anders verdwijnt een klant die je net
+ * terughaalde meteen weer uit beeld. De volgende persoonlijke mail vinkt hem
+ * vanzelf weer af.
+ */
+export function nogOpvolgen(r: {
+  completed: boolean;
+  state: string;
+  nextAction?: string | null;
+  completion?: { subject: string | null } | null;
+}): boolean {
+  if (r.completed) return false;
+  return r.state !== 'Wachten op klant' || !!r.nextAction?.trim() || r.completion?.subject === FOLLOWUP_REOPENED;
+}
+
 export const FOLLOWUP_SORTS = {
   priority: 'Prioriteit', name: 'Naam', company: 'Bedrijf', next: 'Opvolgdatum', last: 'Laatste persoonlijke mail',
 } as const;

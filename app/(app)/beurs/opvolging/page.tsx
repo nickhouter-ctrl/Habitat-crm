@@ -10,7 +10,7 @@ import { partnerMailVisible } from '@/lib/partner-context';
 import { conversationState } from '@/lib/partners';
 import { followupSources } from '@/lib/followup-source';
 import { hasResellerInterest } from '@/lib/followup-mail';
-import { FOLLOWUP_SORTS, followupCompleted, laatsteReactie, sortFollowup, type FollowupSort } from '@/lib/followup-checklist';
+import { FOLLOWUP_SORTS, followupCompleted, laatsteReactie, nogOpvolgen, sortFollowup, type FollowupSort } from '@/lib/followup-checklist';
 import { latestFollowupCompletions } from '@/lib/followup-checklist-data';
 import { PageHeader, Card, CardContent, LinkButton, Badge } from '@/components/ui';
 import { ActionDialog } from '@/components/action-dialog';
@@ -94,7 +94,7 @@ export default async function Page({ searchParams }: {
     (!groep || groep==='reseller' && r.interested || groep==='professional' && !r.interested),
   );
   const visible = sortFollowup(scoped.filter(r =>
-    filter === 'all' || filter === 'open' && !r.completed && (r.state!=='Wachten op klant'||!!r.profile?.nextAction) || filter === 'completed' && r.completed ||
+    filter === 'all' || filter === 'open' && nogOpvolgen({ ...r, nextAction: r.profile?.nextAction }) || filter === 'completed' && r.completed ||
     filter === 'due' && r.due || filter === 'reply' && !r.completed && r.state === 'Antwoord nodig' ||
     filter === 'interested' && r.interested || filter === 'new' && !r.completed && !r.out || filter === 'active' && r.profile?.active,
   ), sort, direction === 'desc');
@@ -109,7 +109,7 @@ export default async function Page({ searchParams }: {
       </>} />
     <nav aria-label={t("Opvolgstatus")} className="flex gap-1 overflow-x-auto border-b">
       {([
-        ['open','Nog opvolgen',scoped.filter(r=>!r.completed&&(r.state!=='Wachten op klant'||!!r.profile?.nextAction)).length],
+        ['open','Nog opvolgen',scoped.filter(r=>nogOpvolgen({ ...r, nextAction: r.profile?.nextAction })).length],
         ['reply','Antwoord nodig',scoped.filter(r=>!r.completed&&r.state==='Antwoord nodig').length],
         ['due','Nu opvolgen',scoped.filter(r=>r.due).length],
         ['completed','Afgehandeld',scoped.filter(r=>r.completed).length],

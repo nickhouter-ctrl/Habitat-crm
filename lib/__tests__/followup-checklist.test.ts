@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { FOLLOWUP_DONE, FOLLOWUP_REOPENED, followupCompleted, laatsteReactie, sortFollowup, type FollowupWorkRow } from '../followup-checklist';
+import { FOLLOWUP_DONE, FOLLOWUP_REOPENED, followupCompleted, laatsteReactie, nogOpvolgen, sortFollowup, type FollowupWorkRow } from '../followup-checklist';
 
 const event = { id: 'done', subject: FOLLOWUP_DONE, createdAt: new Date('2026-10-02T09:00:00Z') };
 describe('opvolging afvinken en opnieuw oppakken', () => {
@@ -62,5 +62,25 @@ describe('welke binnengekomen mail als reactie geldt', () => {
   it('negeert mail van een ander adres en mail zonder ontvangstmoment', () => {
     expect(laatsteReactie('ana@estudio.es', [mail('luis@obra.es', '2026-10-03T10:00:00Z')])).toBeUndefined();
     expect(laatsteReactie('ana@estudio.es', [mail('ana@estudio.es', null)])).toBeUndefined();
+  });
+});
+
+describe('wie er onder "Nog opvolgen" staat', () => {
+  const wacht = { completed: false, state: 'Wachten op klant' };
+  it('wie op een antwoord van de klant wacht, staat er normaal niet tussen', () => {
+    expect(nogOpvolgen(wacht)).toBe(false);
+  });
+  it('komt terug zodra iemand het vinkje bewust uitzet', () => {
+    // VOL Lines: showroommail verstuurd, geen reactie, vinkje uitgezet — en bleef weg.
+    expect(nogOpvolgen({ ...wacht, completion: { subject: FOLLOWUP_REOPENED } })).toBe(true);
+  });
+  it('komt ook terug met een geplande volgende actie', () => {
+    expect(nogOpvolgen({ ...wacht, nextAction: 'Bellen over stalen' })).toBe(true);
+    expect(nogOpvolgen({ ...wacht, nextAction: '   ' })).toBe(false);
+  });
+  it('afgevinkt blijft afgevinkt, en een antwoord van de klant staat er altijd tussen', () => {
+    expect(nogOpvolgen({ ...wacht, completed: true, completion: { subject: FOLLOWUP_REOPENED } })).toBe(false);
+    expect(nogOpvolgen({ completed: false, state: 'Antwoord nodig' })).toBe(true);
+    expect(nogOpvolgen({ ...wacht, completion: { subject: FOLLOWUP_DONE } })).toBe(false);
   });
 });
