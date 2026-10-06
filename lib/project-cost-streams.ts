@@ -8,7 +8,7 @@ type Split = { material: number; other: number; own: number; groups: Map<string,
 const round = (n: number) => Math.round(n * 100) / 100;
 const service = /\b(architect\w*|arquitect\w*|topograf\w*|topograph\w*|survey\w*|containers?|huur|rental|alquiler|transport|vervoer|onderaannemer\w*|subcontract\w*|montage|installatie|installation|instalacion|arbeid|labor|labour)\b/i;
 const goods = (name: string, productId?: string, sku?: string): DocumentLineItem => ({name,productId,description:sku,units:1,price:0});
-const ownOrigin = /\b(eigen producten|eigen voorraad|china|foshan|hanhai|kingkonree|magic stone|import\w*|invoer\w*|landed)\b/i;
+const ownOrigin = /\b(eigen producten|eigen voorraad|china|foshan|hanhai|kingkonree|magic stone|zimmermann plantas|import\w*|invoer\w*|landed)\b/i;
 
 /** Preserve every booked euro; only its stream changes. Mixed orders split by line value. */
 export function splitPurchaseCost(po: Purchase, amount = poExVatAmount(po)): Split {
@@ -71,12 +71,13 @@ export function projectOwnProducts(docs: {kind:string;status:string;items:unknow
     }
   }
   let revenue=0,cost=0,uncosted=0,bookedCost=0;
+  const supplierCostGroups = new Map<string,number>();
   for (const key of new Set([...groups.keys(),...booked.keys()])) {
     const g=groups.get(key)??{revenue:0,cost:0,uncosted:0}, purchase=booked.get(key)??0;
     // A family with no sales-line cost can use its actual booked supplier costs.
-    if (g.cost===0 && g.uncosted*purchase>0) {g.revenue+=g.uncosted;g.uncosted=0;g.cost=purchase;}
+    if (g.cost===0 && g.uncosted*purchase>0) {g.revenue+=g.uncosted;g.uncosted=0;g.cost=purchase;supplierCostGroups.set(key,purchase);}
     revenue+=g.revenue;cost+=g.cost;uncosted+=g.uncosted;
     bookedCost+=purchase>0&&g.cost>0?Math.max(purchase,g.cost):purchase!==0?purchase:g.cost;
   }
-  return {revenue:round(revenue),cost:round(cost),uncosted:round(uncosted),totalRevenue:round(revenue+uncosted),bookedCost:round(bookedCost)};
+  return {revenue:round(revenue),cost:round(cost),uncosted:round(uncosted),totalRevenue:round(revenue+uncosted),bookedCost:round(bookedCost),supplierCostGroups};
 }

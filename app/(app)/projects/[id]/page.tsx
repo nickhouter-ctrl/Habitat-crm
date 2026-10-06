@@ -1,3 +1,5 @@
+import { FinancialDetailsProvider, FinancialInspect, FinancialTable, type FinancialDetail, type FinancialSection } from "@/components/project-financial-details";
+import { projectAdvanceLedger } from "@/lib/project-advance-ledger";
 import { ActionDialog } from "@/components/action-dialog";
 import { ProjectSnapshot } from "@/components/project-snapshot";
 import { ProjectFundingSummary } from "@/components/project-funding-summary";
@@ -6,7 +8,7 @@ import { projectProgress } from "@/lib/project-progress";
 import { datumTaal } from "@/lib/i18n/server";
 import { tekst as uiTranslation } from '@/lib/i18n/server';
 import { loadProjectFunding } from "@/lib/project-funding";
-import { projectCostStreams } from "@/lib/project-cost-streams";
+import { projectCostStreams, splitPurchaseCost, splitLooseCost } from "@/lib/project-cost-streams";
 import { and, asc, desc, eq, inArray, isNull, or, sql } from "drizzle-orm";
 import { headers } from "next/headers";
 import Link from "next/link";
@@ -58,7 +60,7 @@ import {
   workerPortalLinks,
   workers,
 } from "@/lib/db/schema";
-import { docProductMargin, lineCostEur, lineMaterialCostEur, normalizeDocItems } from "@/lib/documents";
+import { isOwnProductLine, ownProductGroup, lineNet, docProductMargin, lineCostEur, lineMaterialCostEur, normalizeDocItems } from "@/lib/documents";
 import { deliveryTotals } from "@/lib/project-delivery";
 import { poExVat, poExVatAmount, poExVatAssumingSpanishVat } from "@/lib/purchase-orders";
 import { DEFAULT_LABOR_MARGIN_PCT, DEFAULT_PURCHASE_MARGIN_PCT, deriveAdvanceCover, deriveProjectMargins } from "@/lib/project-financials";
@@ -177,6 +179,7 @@ export default async function ProjectDetailPage({
         totalEur: documents.totalEur,
         subtotalEur: documents.subtotalEur,
         issueDate: documents.issueDate,
+        isExternal: documents.isExternal,
         stockAppliedAt: documents.stockAppliedAt,
         reservedAt: documents.reservedAt,
         deliveredAt: documents.deliveredAt,
@@ -220,21 +223,19 @@ export default async function ProjectDetailPage({
       subtotalEur: documents.subtotalEur,
       vatReverseCharge: documents.vatReverseCharge,
       settledAt: documents.advanceSettledAt,
+      items: documents.items,
+      issueDate: documents.issueDate,
+      isAdvance: documents.isAdvance,
+      sourceDocumentId: documents.sourceDocumentId,
     })
     .from(documents)
     .where(
       and(
         eq(documents.projectId, id),
-        or(eq(documents.kind, "proforma"), eq(documents.isAdvance, true)),
+        inArray(documents.kind, ["invoice", "proforma", "fondos"]),
       ),
     )
     .orderBy(desc(documents.createdAt));
-  const advPaid = advanceDocs.filter((a) => a.status === "paid");
-  const advPaidTotal = advPaid.reduce((s, a) => s + Number(a.totalEur ?? 0), 0);
-  const advOpenToSettle = advPaid
-    .filter((a) => !a.settledAt)
-    .reduce((s, a) => s + Number(a.totalEur ?? 0), 0);
-
   const allPids = new Set<string>();
   const allSkus = new Set<string>();
   for (const d of marginDocs) {
@@ -328,7 +329,6 @@ export default async function ProjectDetailPage({
   const invoiceDocs = marginDocs.filter((d) => d.kind !== "estimate");
   // Openstaand (ex. btw): onbetaalde facturen, subtotaal × onbetaalde fractie.
   let openOutstanding = 0;
-  let openInvoiceCount = 0;
   for (const d of marginDocs) {
     if (d.kind !== "invoice") continue;
     if (d.status === "draft" || d.status === "void" || d.status === "paid") continue;
@@ -336,7 +336,6 @@ export default async function ProjectDetailPage({
     const paid = Number(d.paidEur ?? 0);
     if (total <= paid) continue;
     openOutstanding += total > 0 ? Number(d.subtotalEur ?? 0) * ((total - paid) / total) : 0;
-    openInvoiceCount += 1;
   }
   // Let op: géén projRevenue − projCost meer als "marge". Dat telde regels zonder
   // kostprijs (bv. de aanbetaling FAC-2026-0028) als 100% marge. De marge op eigen
@@ -622,7 +621,7 @@ export default async function ProjectDetailPage({
   // Voorschotverzoeken waar nog iets op openstaat — om een (deel)betaling aan
   // te kunnen hangen. Een klant maakt op een verzoek van € 50.000 soms eerst
   // € 30.000 over; zonder deze koppeling zie je nergens wat er nog moet komen.
-  const advanceRequestRows = await loadProjectAdvanceRequests(id);
+  const advanceRequestRows = await loadProjectAdvanceRequests(id, null);
   const openAdvanceRequests = advanceRequestRows
     .map((v) => {
       const gevraagd = v.amountEur != null ? Number(v.amountEur) : 0;
@@ -636,7 +635,7 @@ export default async function ProjectDetailPage({
   // Betalingen worden incl. btw geboekt; de samenvattingen rekenen ex. btw.
   // De omrekening per ontvangst (contant, factuurverhouding, 21%-aanname)
   // staat in lib/receipts.ts en wordt gedeeld met de projectenlijst.
-  const VAT_DIVISOR = 1.21;
+  const advanceLedger = projectAdvanceLedger(advanceDocs, paymentRows);
   const receivedTotalEx = paymentRows.reduce((s, p) => s + exBtwVanOntvangst(p), 0);
 
   /**
@@ -650,7 +649,7 @@ export default async function ProjectDetailPage({
    * bij Silvestre staan F260012 en F260013 (samen € 25.056,45 ex. btw) al maanden
    * open. Die horen dus niet bij "al ontvangen".
    */
-  const openInvoicedEx = Math.max(0, projRevenue - paymentRows.filter((p) => p.documentId).reduce((s, p) => s + exBtwVanOntvangst(p), 0));
+
 
   const voorschottenOnverrekendEx = paymentRows
     .filter((p) => !p.documentId)
@@ -694,21 +693,7 @@ export default async function ProjectDetailPage({
   // "nog te factureren" mee zodra er een ontvangst wordt geboekt.
   // Ontvangsten uit een betaald voorschot-FACTUUR zitten al in projRevenue
   // (gefactureerd) — die niet nogmaals aftrekken richting de aanneemprijs.
-  const invoiceAdvanceMarkers = new Set(
-    advanceDocs
-      .filter((a) => a.kind === "invoice" && a.status === "paid")
-      .map((a) => `Voorschot ${a.docNumber ?? ""}`.trim()),
-  );
-  const receivedFromInvoicedAdvances = paymentRows
-    .filter((p) => p.method === "advance" && p.description && invoiceAdvanceMarkers.has(p.description))
-    .reduce((s, p) => s + Number(p.amountEur ?? 0), 0);
-  // Alleen NIET-gefactureerde voorschotten tellen mee richting de aanneemprijs.
-  // Gewone factuurbetalingen zitten al in 'gefactureerd' (projRevenue) — die er
-  // óók van aftrekken zou het betaalde bedrag dubbel tellen.
-  const advanceReceived = paymentRows
-    .filter((p) => p.method === "advance")
-    .reduce((s, p) => s + Number(p.amountEur ?? 0), 0);
-  const notInvoicedAdvancesEx = Math.max(0, advanceReceived - receivedFromInvoicedAdvances) / VAT_DIVISOR;
+  const notInvoicedAdvancesEx = voorschottenOnverrekendEx;
   const settledToTarget = projRevenue + notInvoicedAdvancesEx;
   const toInvoice = Math.max(0, targetRevenue - settledToTarget);
 
@@ -745,7 +730,6 @@ export default async function ProjectDetailPage({
   });
   const ownProductRevenue = projectFunding?.own.totalRevenue ?? margins.productRevenue + margins.uncostedProductRevenue;
 
-  const isConstruction = project.kind === "construction";
   const PAY_LABEL = { cash: "Contant", invoice: "Per factuur" } as const;
   const RECEIVED_METHOD_LABEL: Record<string, string> = {
     cash: "Contant",
@@ -798,11 +782,87 @@ export default async function ProjectDetailPage({
   const ownerOptions: ComboOption[] = ownerOpts.map((u) => ({ value: u.id, label: u.name ?? u.email }));
   const propertyOptions: ComboOption[] = propertyOpts.map((p) => ({ value: p.id, label: p.title }));
 
+  const docMeta = new Map(linkedDocs.map(d => [d.id, d]));
+  const docLabel = (id: string) => { const d = docMeta.get(id); return `${d?.docNumber ?? id}${d?.isExternal ? ` · ${d.title?.includes("Creadores") ? "Creadores" : uiT("Extern")}` : ""}`; };
+  const receiptSection: FinancialSection = {
+    title: uiT("Ontvangen betalingen"), columns: [uiT("Bron"), uiT("Datum"), uiT("Ontvangen ex. btw"), uiT("Eigen producten"), uiT("Werkgeld")],
+    note: uiT("Gemengde facturen worden naar verhouding verdeeld. Verrekende voorschotten volgen de product- en werkverdeling van de factuur waarop ze zijn verrekend."),
+    rows: paymentRows.map(p => { const split = splitReceipt(p, ownShareByDoc); return {
+      cells: [p.docNumber ?? p.description ?? uiT("Voorschot"), p.date ?? "—", formatEUR(split.totalReceived), formatEUR(split.ownProductReceived), formatEUR(split.liquidReceived)],
+      href: p.documentId ? `/documents/${p.documentId}` : "#ontvangen",
+    }; }),
+  };
+  const productSection: FinancialSection = {
+    title: uiT("Eigen producten op facturen en creditnota’s"),
+    columns: [uiT("Factuur"), uiT("Product"), uiT("Aantal"), uiT("Verkoop"), uiT("Kostprijs"), uiT("Kostprijsbron")],
+    note: uiT("Creditnota’s worden afgetrokken. Onbekende kostprijzen tellen niet als winst. Voor productgroepen zonder regelkostprijs wordt beschikbare geboekte leveranciersinkoop gebruikt; die staat hieronder apart."),
+    rows: marginDocs.filter(d => ["invoice","creditnote"].includes(d.kind) && !["draft","void"].includes(d.status)).flatMap(d => {
+      const sign = d.kind === "creditnote" ? -1 : 1;
+      return normalizeDocItems(d.items).filter(it => isOwnProductLine(it, productCostOf)).map(it => {
+        const cost = lineMaterialCostEur(it, productCostOf);
+        const supplierCost = projectFunding?.own.supplierCostGroups.get(ownProductGroup(it));
+        return {href: `/documents/${d.id}`, cells: [docLabel(d.id), `${d.kind === "creditnote" ? `${uiT("Creditnota")} · ` : ""}${it.name}`, String(sign * it.units), formatEUR(sign * lineNet(it)), cost ? formatEUR(sign * cost) : supplierCost ? uiT("Zie inkoop eigen producten") : uiT("Nog te koppelen"), cost ? uiT(it.costEur ? "Factuurregel" : "Productcatalogus") : supplierCost ? `${uiT("Geboekte inkoop voor deze productgroep")}: ${formatEUR(supplierCost)}` : uiT("Geen gekoppelde regelkostprijs")]};
+      });
+    }),
+  };
+  const uncostedSection: FinancialSection = {
+    title: uiT("Omzet zonder gekoppelde kostprijs"), columns: productSection.columns,
+    note: uiT("Deze verkoopbedragen blijven volledig gereserveerd voor producten. Er wordt pas brutowinst berekend zodra de inkoopkostprijs is vastgelegd en gekoppeld."),
+    rows: productSection.rows.filter(row => row.cells[4] === uiT("Nog te koppelen")),
+  };
+  const workersById = new Map(workerRows.map(w => [w.id,w.name]));
+  const laborSection: FinancialSection = {
+    title: uiT("Uren — arbeid"), columns: [uiT("Bron"),uiT("Datum"),uiT("Omschrijving"),uiT("Uren"),uiT("Kostprijs per uur"),uiT("Kosten")],
+    rows: approvedTimeRows.map(r => ({href:r.purchaseOrderId ? `/inkooporders/${r.purchaseOrderId}` : "#uren", cells:[workersById.get(r.workerId ?? "") ?? r.workerName ?? uiT("Uren"),r.date ?? "—",r.note ?? "—",String(Number(r.hours)),formatEUR(Number(r.hourlyCostEur)),formatEUR(Number(r.hours)*Number(r.hourlyCostEur))]})),
+  };
+  const purchaseById = new Map(linkedPOs.map(p => [p.id,p]));
+  const sourceCosts = [
+    ...materialPOs.map(p => ({label:`${p.supplier} · ${p.reference ?? ""}`,href:`/inkooporders/${p.id}`,split:splitPurchaseCost(p)})),
+    ...costRows.map(c => ({label:c.description,href:c.purchaseOrderId ? `/inkooporders/${c.purchaseOrderId}` : "#kosten",split:splitLooseCost({...c,source:c.purchaseOrderId ? purchaseById.get(c.purchaseOrderId) : undefined})})),
+  ];
+  const costsSection = (stream: "material" | "other" | "own", title: string): FinancialSection => ({title,columns:[uiT("Bron"),uiT("Kosten")],rows:sourceCosts.filter(s=>s.split[stream] !== 0).map(s=>({href:s.href,cells:[s.label,formatEUR(s.split[stream])]}))});
+  const materialSection = costsSection("material",uiT("Bouwmaterialen van derden"));
+  const otherSection = costsSection("other",uiT("Overige projectkosten"));
+  const ownCostSection = costsSection("own",uiT("Geboekte inkoop eigen producten"));
+  const invoiceSection: FinancialSection = {title:uiT("Facturen en creditnota’s"),columns:[uiT("Bron"),uiT("Omschrijving"),uiT("Bedrag ex. btw")],rows:marginDocs.filter(d=>["invoice","creditnote"].includes(d.kind)&&!["draft","void"].includes(d.status)).map(d=>({href:`/documents/${d.id}`,cells:[docLabel(d.id),docMeta.get(d.id)?.title ?? uiT(d.kind === "creditnote" ? "Creditnota" : "Factuur"),formatEUR(Number(d.subtotalEur)*(d.kind === "creditnote" ? -1 : 1))]}))};
+  const targetSection: FinancialSection = {title:uiT("Doel en begroting"),columns:[uiT("Bron"),uiT("Bedrag")],rows:[{cells:[uiT("Aanneemprijs"),contractPrice == null ? "—" : formatEUR(contractPrice)]},...budgetRows.map(b=>({cells:[b.description,formatEUR(Number(b.amountEur))]})),{cells:[uiT("Offertes totaal"),formatEUR(estimateSubtotal)]}],note:uiT("De aanneemprijs heeft voorrang, daarna de begroting, daarna de offerte. Het doel is minimaal de al gefactureerde omzet.")};
+  const profitSection: FinancialSection = {title:uiT("Brutowinst"),columns:[uiT("Onderdeel"),uiT("Verkoop / doorbelasting"),uiT("Kostprijs"),uiT("Brutowinst")],rows:[
+    {cells:[uiT("Uren — arbeid"),formatEUR(margins.laborRevenue),formatEUR(margins.laborCost),formatEUR(margins.laborMargin)]},
+    {cells:[uiT("Bouwmaterialen van derden"),formatEUR(margins.purchaseRevenue),formatEUR(margins.purchaseCost),formatEUR(margins.purchaseMargin)]},
+    {cells:[uiT("Overige projectkosten"),formatEUR(margins.otherRevenue),formatEUR(margins.otherCost),formatEUR(margins.otherMargin)]},
+    {cells:[uiT("Eigen producten met bekende kostprijs"),formatEUR(margins.productRevenue),formatEUR(margins.productCost),formatEUR(margins.productMargin)]},
+    {cells:[uiT("Eigen producten zonder gekoppelde kostprijs"),formatEUR(margins.uncostedProductRevenue),uiT("Nog te koppelen"),"—"]},
+  ]};
+  const additionalProductSection: FinancialSection = {title:uiT("Leveringen en meerwerk"),columns:[uiT("Bron"),uiT("Verkoop"),uiT("Kostprijs")],rows:[{cells:[uiT("Geboekte leveringen zonder factuur"),formatEUR(leveringen.price),formatEUR(leveringen.cost)],href:"#producten"},{cells:[uiT("Meerwerk"),formatEUR(meerwerkBedrag),formatEUR(Number(meerwerkTotaal?.kost ?? 0))],href:"#meerwerk"}]};
+  const workSections = [laborSection,materialSection,otherSection];
+  const goodsSections = [profitSection,productSection,ownCostSection,additionalProductSection];
+  const workProfit = Math.round((cover.requiredRevenue - cover.prefinanced)*100)/100;
+  const financialDetails: Record<string,FinancialDetail> = {
+    "uncosted-products":{title:uiT("Omzet zonder gekoppelde kostprijs"),formula:`${uiT("Verkoopbedrag waarvan de kostprijs nog niet is gekoppeld")}: ${formatEUR(margins.uncostedProductRevenue)}`,sections:[uncostedSection]},
+    "total-received":{title:uiT("Totaal ontvangen"),formula:`${uiT("Som ontvangen betalingen ex. btw")}: ${formatEUR(cover.totalReceived)}`,sections:[receiptSection]},
+    "own-products":{title:uiT("Ontvangen voor eigen producten"),formula:`${uiT("Som productdelen van ontvangen betalingen")}: ${formatEUR(cover.ownProductReceived)}`,sections:[receiptSection,productSection]},
+    received:{title:uiT("Liquide ontvangen"),formula:`${formatEUR(cover.totalReceived)} − ${formatEUR(cover.ownProductReceived)} = ${formatEUR(cover.received)}`,sections:[receiptSection]},
+    work:{title:uiT("Geboekte werkkosten"),formula:`${formatEUR(margins.laborCost)} + ${formatEUR(margins.purchaseCost)} + ${formatEUR(margins.otherCost)} = ${formatEUR(cover.prefinanced)}`,sections:workSections},
+    "work-profit":{title:uiT("Brutowinst op uitgevoerd werk"),formula:`${formatEUR(margins.laborMargin)} + ${formatEUR(margins.purchaseMargin)} + ${formatEUR(margins.otherMargin)} = ${formatEUR(workProfit)}`,sections:[profitSection,...workSections]},
+    "own-product-profit":{title:uiT("Brutowinst eigen producten"),formula:`${formatEUR(margins.productRevenue)} − ${formatEUR(margins.productCost)} = ${formatEUR(margins.productMargin)}`,sections:goodsSections},
+    "total-gross-profit":{title:uiT("Totaal brutowinst"),formula:`${formatEUR(workProfit)} + ${formatEUR(margins.productMargin)} = ${formatEUR(margins.totalMargin)}`,sections:[profitSection,...workSections,...goodsSections.slice(1)]},
+    "advance-remaining":{title:uiT("Resterende voorschotruimte"),formula:`${formatEUR(cover.totalReceived)} − ${formatEUR(cover.ownProductReceived)} − ${formatEUR(cover.prefinanced)} − ${formatEUR(workProfit)} = ${formatEUR(cover.saldo)}`,sections:[receiptSection,profitSection,...workSections]},
+    labor:{title:uiT("Uren — arbeid"),formula:`${formatEUR(margins.laborCost)} × ${margins.laborMarginPct}% = ${formatEUR(margins.laborMargin)}`,sections:[laborSection]},
+    material:{title:uiT("Bouwmaterialen van derden"),formula:`${formatEUR(margins.purchaseCost)} × ${margins.purchaseMarginPct}% = ${formatEUR(margins.purchaseMargin)}`,sections:[materialSection]},
+    other:{title:uiT("Overige projectkosten"),formula:`${formatEUR(margins.otherCost)} × ${margins.purchaseMarginPct}% = ${formatEUR(margins.otherMargin)}`,sections:[otherSection]},
+    target:{title:uiT("Doel (omzet)"),formula:formatEUR(targetRevenue),sections:[targetSection]},
+    invoiced:{title:uiT("Gefactureerd"),formula:`${uiT("Facturen minus creditnota’s")}: ${formatEUR(projRevenue)}`,sections:[invoiceSection]},
+    costs:{title:uiT("Kosten tot nu toe"),formula:`${formatEUR(cover.prefinanced)} + ${formatEUR(ownProductCostRealized)} = ${formatEUR(realizedCost)}`,sections:[...workSections,...goodsSections]},
+    result:{title:uiT("Verwacht resultaat"),formula:`${formatEUR(targetRevenue)} − ${formatEUR(realizedCost)} = ${formatEUR(resultToDate)}`,sections:[targetSection,...workSections,...goodsSections]},
+    ceiling:{title:uiT("Kostenplafond"),formula:`${formatEUR(targetRevenue)} × ${(1-MIN_MARGIN_PCT/100)*100}% = ${formatEUR(maxCost)}`,sections:[targetSection]},
+    headroom:{title:uiT("Ruimte tot plafond"),formula:`${formatEUR(maxCost)} − ${formatEUR(realizedCost)} = ${formatEUR(costHeadroom)}`,sections:[targetSection,...workSections,...goodsSections]},
+  };
+
   const action = updateProject.bind(null, id);
   const remove = deleteProject.bind(null, id);
 
   return (
-    <>
+    <FinancialDetailsProvider details={financialDetails}>
       <PageHeader
         title={
           <span className="flex items-center gap-2">
@@ -1002,34 +1062,35 @@ export default async function ProjectDetailPage({
 
         {/* ── Tab: Overzicht — geldstroom, resultaat, begroting ── */}
         <TabPanel id="overzicht" className="order-3">
+      <p className="mb-3 text-xs text-muted">{uiT("Klik op een financieel blok voor de berekening en onderliggende boekingen.")}</p>
       <ProjectSnapshot id={id} cover={cover} ownProducts={margins} progress={progress} status={project.status} requestedOpen={openAdvanceRequests.reduce((sum,r)=>sum+r.open,0)} outstandingInvoices={openOutstanding} startDate={project.startDate} endDate={project.endDate}/>
 
       {/* ─────────────── Resultaat (P&L) ─────────────── */}
       </TabPanel><TabPanel id="resultaat" className="order-3"><div className="order-1 mb-6 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
-          <StatTile
+          <FinancialInspect detail="target" label={financialDetails["target"].title}><StatTile
             label={contractPrice != null ? uiT("Aanneemprijs") : targetIsImplicit ? uiT("Doel") : uiT("Offerte (doel)")}
             value={formatEUR(targetRevenue)}
             hint={uiT("ex. BTW")}
             tone="info"
-          />
-          <StatTile label={uiT("Gefactureerd")} value={formatEUR(projRevenue)} hint={uiT("nog {v0} te doen", { v0: formatEUR(toInvoice) })} tone="neutral" />
-          <StatTile
+          /></FinancialInspect>
+          <FinancialInspect detail="invoiced" label={financialDetails["invoiced"].title}><StatTile label={uiT("Gefactureerd")} value={formatEUR(projRevenue)} hint={uiT("nog {v0} te doen", { v0: formatEUR(toInvoice) })} tone="neutral" /></FinancialInspect>
+          <FinancialInspect detail="total-received" label={financialDetails["total-received"].title}><StatTile
             label={uiT("Ontvangen")}
             value={formatEUR(receivedTotalEx)}
             hint={uiT("{v0} {v1} · {v2} ontvangen{v3}", { v0: paymentRows.length, v1: paymentRows.length === 1 ? "betaling" : "betalingen", v2: formatEUR(receivedTotal), v3: receivedTotal - receivedTotalEx > 0.01 ? `, waarvan ${formatEUR(receivedTotal - receivedTotalEx)} btw` : " · geen btw" })}
             tone={receivedTotalEx > 0 ? "success" : "neutral"}
-          />
-          <StatTile label={uiT("Kosten")} value={formatEUR(realizedCost)} hint={uiT("uren + inkoop derden + kostprijs eigen voorraad")} tone="neutral" />
+          /></FinancialInspect>
+          <FinancialInspect detail="costs" label={financialDetails["costs"].title}><StatTile label={uiT("Kosten")} value={formatEUR(realizedCost)} hint={uiT("uren + inkoop derden + kostprijs eigen voorraad")} tone="neutral" /></FinancialInspect>
           {/* "Resultaat" las alsof het verdiend was, terwijl het een vooruitblik
               is: doel − kosten, dus alleen waar als de volle aanneemprijs ook
               echt gefactureerd wordt. Bij Silvestre is daarvan pas € 49.736,80
               gefactureerd, dus dat verschil moet je kunnen zien. */}
-          <StatTile
+          <FinancialInspect detail="result" label={financialDetails["result"].title}><StatTile
             label={uiT("Verwacht resultaat")}
             value={`${formatEUR(resultToDate)}${resultMarginPct != null ? ` · ${resultMarginPct}%` : ""}`}
             hint={uiT("als de volle aanneemprijs gefactureerd wordt")}
             tone={resultTone}
-          />
+          /></FinancialInspect>
         </div><Card id="resultaat" className="mb-5 scroll-mt-24">
         <CardHeader>
           <CardTitle>{uiT("Resultaat — zitten we goed?")}</CardTitle>
@@ -1038,16 +1099,16 @@ export default async function ProjectDetailPage({
         </CardHeader>
         <CardContent className="space-y-3">
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-            <div className="rounded-lg border bg-background p-3">
+            <FinancialInspect detail="target" label={financialDetails["target"].title}><div className="rounded-lg border bg-background p-3">
               <p className="text-xs text-muted">{uiT("Doel (omzet)")}</p>
               <p className="text-lg font-semibold tabular-nums">{formatEUR(targetRevenue)}</p>
-            </div>
-            <div className="rounded-lg border bg-background p-3">
+            </div></FinancialInspect>
+            <FinancialInspect detail="ceiling" label={financialDetails["ceiling"].title}><div className="rounded-lg border bg-background p-3">
               <p className="text-xs text-muted">{uiT("Max. kosten (")}{MIN_MARGIN_LABEL}{uiT("% marge)")}</p>
               <p className="text-lg font-semibold tabular-nums">{formatEUR(maxCost)}</p>
               <p className="text-xs text-muted">{uiT("kostenplafond")}</p>
-            </div>
-            <div className="rounded-lg border bg-background p-3">
+            </div></FinancialInspect>
+            <FinancialInspect detail="costs" label={financialDetails["costs"].title}><div className="rounded-lg border bg-background p-3">
               <p className="text-xs text-muted">{uiT("Kosten tot nu toe")}</p>
               <p className="text-lg font-semibold tabular-nums">
                 {formatEUR(realizedCost)}
@@ -1058,14 +1119,14 @@ export default async function ProjectDetailPage({
               </p>
               {/* Anders dan de kas-/voorschotkant telt hier de voorraad WEL mee. */}
               <p className="text-xs text-muted">{uiT("incl. kostprijs producten uit eigen voorraad")}</p>
-            </div>
-            <div className="rounded-lg border bg-background p-3">
+            </div></FinancialInspect>
+            <FinancialInspect detail="headroom" label={financialDetails["headroom"].title}><div className="rounded-lg border bg-background p-3">
               <p className="text-xs text-muted">{uiT("Ruimte tot plafond")}</p>
               <p className={`text-lg font-semibold tabular-nums ${costHeadroom < 0 ? "text-danger" : "text-success"}`}>
                 {costHeadroom < 0 ? `− ${formatEUR(Math.abs(costHeadroom))}` : formatEUR(costHeadroom)}
               </p>
               <p className="text-xs text-muted">{costHeadroom < 0 ? uiT("boven plafond") : uiT("kosten mogen er nog bij")}</p>
-            </div>
+            </div></FinancialInspect>
           </div>
           <div className={`rounded-lg p-3 text-sm ${resultTone === "danger" ? "bg-danger/10 text-danger" : resultTone === "warning" ? "bg-warning/10 text-warning" : resultTone === "neutral" ? "bg-background text-muted" : "bg-success/10 text-success"}`}>
             <span className="font-semibold">
@@ -1084,7 +1145,7 @@ export default async function ProjectDetailPage({
 
           {/* Drie stromen apart: uren (norm), eigen producten (gemeten), inkoop (kost). */}
           <div data-margin-streams className="grid gap-3 lg:grid-cols-2 xl:grid-cols-4">
-            <div className="rounded-lg border bg-background p-3">
+            <FinancialInspect detail="labor" label={financialDetails["labor"].title}><div className="rounded-lg border bg-background p-3">
               <div className="mb-2 flex items-baseline justify-between gap-2">
                 <p className="text-sm font-semibold">{uiT("Uren — arbeid")}</p>
                 <span className="text-xs text-muted">{uiT("opslag")} {margins.laborMarginPct}%</span>
@@ -1111,9 +1172,9 @@ export default async function ProjectDetailPage({
                   ? uiT(" · inclusief {v0} aan arbeidsfacturen van derden", { v0: formatEUR(arbeidPoCost) })
                   : ""}
               </p>
-            </div>
+            </div></FinancialInspect>
 
-            <div className="rounded-lg border bg-background p-3">
+            <FinancialInspect detail="own-product-profit" label={financialDetails["own-product-profit"].title}><div className="rounded-lg border bg-background p-3">
               <div className="mb-2 flex items-baseline justify-between gap-2">
                 <p className="text-sm font-semibold">{uiT("Eigen producten")}</p>
                 {margins.productMarginPct != null && (
@@ -1142,11 +1203,9 @@ export default async function ProjectDetailPage({
                       </dd>
                     </div>
                   </dl>
-                  <p className="mt-2 text-xs text-muted">
-                    {uiT("Kostprijs uit factuurregels of geboekte inkoop van eigen producten.")} {margins.uncostedProductRevenue > 0
-                      ? uiT(" {amount} omzet heeft nog geen kostprijs; hiervoor is geen brutowinst berekend.", { amount: formatEUR(margins.uncostedProductRevenue) })
-                      : ""}
-                  </p>
+                  <div className="mt-2 text-xs text-muted">
+                    {uiT("Kostprijs uit factuurregels of geboekte inkoop van eigen producten.")} {margins.uncostedProductRevenue > 0 && <span className="relative z-10 block"><ActionDialog title={uiT("Omzet zonder gekoppelde kostprijs")} trigger={uiT(" {amount} omzet heeft nog geen gekoppelde kostprijs; hiervoor is geen brutowinst berekend.", { amount: formatEUR(margins.uncostedProductRevenue) })} className="min-h-0 border-0 bg-transparent p-0 text-left text-xs text-warning underline underline-offset-2" wide><FinancialTable section={uncostedSection}/></ActionDialog></span>}
+                  </div>
                 </>
               ) : (
                 <p className="text-sm text-muted">
@@ -1155,9 +1214,9 @@ export default async function ProjectDetailPage({
                     : ""}
                 </p>
               )}
-            </div>
+            </div></FinancialInspect>
 
-            <div className="rounded-lg border bg-background p-3">
+            <FinancialInspect detail="material" label={financialDetails["material"].title}><div className="rounded-lg border bg-background p-3">
               <div className="mb-2 flex items-baseline justify-between gap-2">
                 <p className="text-sm font-semibold">{uiT("Bouwmaterialen van derden")}</p>
                 <span className="text-xs text-muted">{uiT("opslag")} {margins.purchaseMarginPct}%</span>
@@ -1188,8 +1247,8 @@ export default async function ProjectDetailPage({
                   ? uiT(" · {v0} aan arbeidsfacturen telt bij Uren — arbeid, niet hier", { v0: formatEUR(arbeidPoCost) })
                   : ""}
               </p>
-            </div>
-            <div className="rounded-lg border bg-background p-3">
+            </div></FinancialInspect>
+            <FinancialInspect detail="other" label={financialDetails["other"].title}><div className="rounded-lg border bg-background p-3">
               <p className="mb-2 text-sm font-semibold">{uiT("Overige projectkosten")}</p>
               <dl className="space-y-1 text-sm">
                 <div className="flex justify-between gap-2"><dt>{uiT("Kostprijs")}</dt><dd data-margin-value="other-cost" data-amount={margins.otherCost} className="tabular-nums">{formatEUR(margins.otherCost)}</dd></div>
@@ -1197,77 +1256,34 @@ export default async function ProjectDetailPage({
                 <div className="flex justify-between gap-2 border-t pt-1 font-semibold"><dt>{uiT("Berekende brutowinst")}</dt><dd data-margin-value="other-margin" data-amount={margins.otherMargin} className="tabular-nums">{formatEUR(margins.otherMargin)}</dd></div>
               </dl>
               <p className="mt-2 text-xs text-muted">{uiT("Architect, onderaannemers, huur en vervoer. De ingestelde opslag blijft van toepassing.")}</p>
-            </div>
+            </div></FinancialInspect>
           </div>
           {/* Eén uitlegregel voor alle drie — beter dan drie keer jargon in de kaarten. */}
           <p className="text-xs text-muted">
             {uiT("Eigen producten zijn ons eigen assortiment, waaronder kozijnen, balustrades, deuren, badkamerproducten en verlichting. Lokaal gekochte bouwmaterialen blijven bij Inkoop derden. Brutowinst is verkoop minus bekende kostprijs; algemene bedrijfskosten zijn nog niet afgetrokken.")} </p>
 
-          {/* Eén blok i.p.v. twee: "minimaal door te belasten" stond eerst los
-              én nogmaals als eerste regel van dit sommetje — dubbel en rommelig. */}
-          {margins.totalRevenue > 0 && (
-            <div className="rounded-lg border border-accent/30 bg-accent/5 p-3 text-sm">
-              <p className="font-semibold">{uiT("Wat moet er nu nog binnenkomen?")}</p>
-              <p className="mb-2 text-xs text-muted">
-                {uiT("Doorbelasting van geboekt werk, inclusief afgesproken opslag en eigen producten. Dit overzicht toont het projectresultaat; de voorschotstand staat apart bij Overzicht.")} </p>
-              <dl className="space-y-1">
-                <div className="flex justify-between gap-2">
-                  <dt className="text-muted">
-                    {uiT("Werk tot nu toe moet minimaal opbrengen")} <span className="block text-xs">
-                      {uiT("uren")} {formatEUR(margins.laborRevenue)} {uiT("+ inkoop")} {formatEUR(margins.purchaseRevenue)} + {uiT("Overige projectkosten")} {formatEUR(margins.otherRevenue)} {uiT("+ eigen producten")} {formatEUR(ownProductRevenue)} {uiT("· alle bedragen ex. btw")} </span>
-                  </dt>
-                  <dd className="tabular-nums">{formatEUR(margins.totalRevenue + margins.uncostedProductRevenue)}</dd>
-                </div>
-                <div className="flex justify-between gap-2">
-                  <dt className="text-muted">
-                    {uiT("Al ontvangen")} <span className="block text-xs">
-                      {/* Gefactureerd is géén geld: een verstuurde factuur kan onbetaald
-                          zijn. Daarom telt hier wat er ECHT binnen is — betalingen op
-                          facturen én voorschotten. */}
-                      {uiT("alle betalingen, op factuur én als voorschot")} </span>
-                  </dt>
-                  <dd className="tabular-nums">− {formatEUR(receivedTotalEx)}</dd>
-                </div>
-                {/* Een negatief "nog te ontvangen" leest als een fout; zeg dan
-                    gewoon wat het is: de klant heeft vooruitbetaald. */}
-                {margins.totalRevenue + margins.uncostedProductRevenue - receivedTotalEx >= -0.01 ? (
-                  <div className="flex justify-between gap-2 border-t pt-1 font-semibold">
-                    <dt>{uiT("Nog te ontvangen")}</dt>
-                    <dd className="tabular-nums">{formatEUR(Math.max(0, margins.totalRevenue + margins.uncostedProductRevenue - receivedTotalEx))}</dd>
-                  </div>
-                ) : (
-                  <div className="flex justify-between gap-2 border-t pt-1 font-semibold">
-                    <dt>
-                      {uiT("Vooruit ontvangen")} <span className="block text-xs font-normal text-muted">
-                        {uiT("de klant heeft vooruitbetaald voor werk dat nog komt")} </span>
-                    </dt>
-                    <dd className="tabular-nums text-success">{formatEUR(receivedTotalEx - margins.totalRevenue - margins.uncostedProductRevenue)}</dd>
-                  </div>
-                )}
-                {openInvoicedEx > 0.01 && (
-                  <div className="flex justify-between gap-2 pt-1">
-                    <dt className="text-muted">
-                      {uiT("waarvan al gefactureerd, nog niet betaald")} <span className="block text-xs">{uiT("openstaande facturen")}</span>
-                    </dt>
-                    <dd className="tabular-nums text-warning">{formatEUR(openInvoicedEx)}</dd>
-                  </div>
-                )}
-                {margins.totalRevenue + margins.uncostedProductRevenue - receivedTotalEx - openInvoicedEx > 0.01 && (
-                  <div className="flex justify-between gap-2">
-                    <dt className="text-muted">{uiT("nog te factureren")}</dt>
-                    <dd className="tabular-nums">{formatEUR(margins.totalRevenue + margins.uncostedProductRevenue - receivedTotalEx - openInvoicedEx)}</dd>
-                  </div>
-                )}
-              </dl>
+          <div className="rounded-lg border border-accent/30 bg-accent/5 p-3 text-sm" data-margin-funding>
+            <dl className="space-y-2">
+              <FinancialInspect detail="total-gross-profit" label={financialDetails["total-gross-profit"].title}><div className="flex justify-between gap-2 border-b pb-3 font-semibold">
+                <dt>{uiT("Totaal brutowinst")}</dt>
+                <dd data-margin-value="total-gross-profit" data-amount={margins.totalMargin} className="tabular-nums">{formatEUR(margins.totalMargin)}</dd>
+              </div></FinancialInspect>
+              <FinancialInspect detail="total-received" label={financialDetails["total-received"].title}><div className="flex justify-between gap-2"><dt className="text-muted">{uiT("Totaal ontvangen")}</dt><dd className="tabular-nums">{formatEUR(cover.totalReceived)}</dd></div></FinancialInspect>
+              <FinancialInspect detail="own-products" label={financialDetails["own-products"].title}><div className="flex justify-between gap-2"><dt className="text-muted">{uiT("Ontvangen voor eigen producten")}</dt><dd className="tabular-nums">− {formatEUR(cover.ownProductReceived)}</dd></div></FinancialInspect>
+              <FinancialInspect detail="work" label={financialDetails["work"].title}><div className="flex justify-between gap-2"><dt className="text-muted">{uiT("Geboekte werkkosten")}</dt><dd className="tabular-nums">− {formatEUR(cover.prefinanced)}</dd></div></FinancialInspect>
+              <FinancialInspect detail="work-profit" label={financialDetails["work-profit"].title}><div className="flex justify-between gap-2"><dt className="text-muted">{uiT("Brutowinst op uitgevoerd werk")}</dt><dd className="tabular-nums">− {formatEUR(Math.round((cover.requiredRevenue - cover.prefinanced) * 100) / 100)}</dd></div></FinancialInspect>
+              <FinancialInspect detail="advance-remaining" label={financialDetails["advance-remaining"].title}><div className="flex justify-between gap-2 border-t pt-2 font-semibold">
+                <dt>{uiT("Resterende voorschotruimte")}</dt>
+                <dd data-margin-value="advance-remaining" data-amount={cover.saldo} className={`tabular-nums ${cover.saldo < 0 ? "text-danger" : "text-success"}`}>{formatEUR(cover.saldo)}</dd>
+              </div></FinancialInspect>
+            </dl>
+            <p className="mt-3 text-xs text-muted">{uiT("Deze voorschotruimte is dezelfde als bij Overzicht. Eigen productontvangsten blijven apart; brutowinst eigen producten telt niet mee als werkgeld.")}</p>
               {targetRevenue > 0 && margins.totalRevenue > targetRevenue && (
                 <p className="mt-2 text-xs text-warning">
                   {uiT("⚠ Wat het werk moet opbrengen (")}{formatEUR(margins.totalRevenue)}{uiT(") ligt")} {formatEUR(margins.totalRevenue - targetRevenue)} {uiT("boven de aanneemprijs van")} {formatEUR(targetRevenue)} {uiT("— leg het verschil vast als meerwerk.")} </p>
               )}
               {voorschottenOnverrekendEx > 0 && (
-                <p className="mt-2 text-xs text-muted">
-                  {uiT("Op de eindafrekening moet er méér op papier dan er nog binnenkomt:")}{" "}
-                  <strong>{formatEUR(Math.max(0, margins.totalRevenue - projRevenue))}</strong>{uiT(", want de")}{" "}
-                  {formatEUR(voorschottenOnverrekendEx)} {uiT("aan voorschotten is wél betaald maar nooit gefactureerd. Die gaat er als verrekening weer af, en de btw over het hele werk wordt dan in één keer afgerekend.")} </p>
+                <p className="mt-2 text-xs text-muted">{uiT("Los ontvangen voorschotten voor verrekening op de eindafrekening:")} <strong>{formatEUR(voorschottenOnverrekendEx)}</strong>. {uiT("Deze voorschotten zijn zonder btw ontvangen. De btw over het werk volgt bij de eindafrekening.")}</p>
               )}
               <form action={createFinalSettlement.bind(null, id)} className="mt-3 space-y-2">
                 <label className="flex items-start gap-2 text-xs">
@@ -1280,8 +1296,7 @@ export default async function ProjectDetailPage({
                 <SubmitButton size="sm" variant="secondary" pendingLabel={uiT("Opstellen…")}>
                   {uiT("Eindafrekening opstellen")} </SubmitButton>
               </form>
-            </div>
-          )}
+          </div>
         </CardContent>
       </Card></TabPanel><TabPanel id="planning" className="order-3">
 
@@ -1432,59 +1447,36 @@ export default async function ProjectDetailPage({
           {cover.status !== "gedekt" && <Link href="#voorschot-opvragen" className="mt-4 inline-block text-sm text-accent underline underline-offset-2">{uiT("nieuw voorschot vragen →")}</Link>}
         </CardContent>
       </Card></ActionDialog></div>
-      <TabPanel id="history"><p className="mb-4 max-w-3xl text-sm text-muted">{uiT("Voorschotfacturen en provisiones de fondos, met betaalstatus en verrekening op de eindfactuur.")}</p>{advanceDocs.length > 0 ? (
-        <Card id="aanbetalingen" className="mb-5 scroll-mt-24">
-          <CardHeader>
-            <CardTitle>{uiT("Voorschotdocumenten")}</CardTitle>
-            <span className="text-xs text-muted">
-              {formatEUR(advPaidTotal)} {uiT("betaald ·")} {formatEUR(advOpenToSettle)} {uiT("nog te verrekenen op de eindfactuur")} </span>
-          </CardHeader>
-          <CardContent className="p-0">
-            <Table>
-              <THead>
-                <tr>
-                  <Th>{uiT("Voorschot")}</Th>
-                  <Th>{uiT("Bedrag")}</Th>
-                  <Th>{uiT("BTW")}</Th>
-                  <Th>{uiT("Status")}</Th>
-                  <Th>{uiT("Verrekening")}</Th>
-                </tr>
-              </THead>
-              <TBody>
-                {advanceDocs.map((a) => (
-                  <Tr key={a.id}>
-                    <Td>
-                      <Link href={`/documents/${a.id}`} className="font-medium hover:underline">
-                        {a.docNumber ?? "—"}
-                      </Link>
-                      <span className="block text-xs text-muted">
-                        {a.kind === "proforma" ? uiT("proforma") : a.kind === "fondos" ? uiT("provisión de fondos") : uiT("factuur")}
-                      </span>
-                    </Td>
-                    <Td className="tabular-nums">{formatEUR(Number(a.totalEur ?? 0))}</Td>
-                    <Td>{a.kind === "fondos" ? uiT("geen btw") : a.vatReverseCharge ? uiT("verlegd") : uiT("met btw")}</Td>
-                    <Td>
-                      <Badge tone={a.status === "paid" ? "success" : "neutral"}>
-                        {a.status === "paid" ? uiT("Betaald") : a.status === "sent" ? uiT("Verstuurd") : uiT("Concept")}
-                      </Badge>
-                    </Td>
-                    <Td>
-                      {a.settledAt ? (
-                        <Badge tone="neutral">{uiT("Verrekend")}</Badge>
-                      ) : a.status === "paid" ? (
-                        <span className="text-xs text-warning">{uiT("Nog te verrekenen")}</span>
-                      ) : (
-                        <span className="text-xs text-muted">—</span>
-                      )}
-                    </Td>
-                  </Tr>
-                ))}
-              </TBody>
-            </Table>
+      <TabPanel id="history">
+        <p className="mb-4 max-w-3xl text-sm text-muted">{uiT("Alle ontvangen voorschotten en voorschotdocumenten bij elkaar. Bij gemengde facturen staat hier alleen het voorschot voor werk; productgeld staat apart. Alle bedragen ex. btw.")}</p>
+        <Card id="aanbetalingen" data-advance-ledger className="mb-5 scroll-mt-24">
+          <CardHeader><CardTitle>{uiT("Alle voorschotten")}</CardTitle></CardHeader>
+          <CardContent>
+            <div className="mb-4 grid gap-3 sm:grid-cols-3">
+              <StatTile label={uiT("Ontvangen voorschotten")} value={formatEUR(advanceLedger.received)} />
+              <StatTile label={uiT("Verrekend op facturen")} value={formatEUR(advanceLedger.settled)} />
+              <StatTile label={uiT("Nog te verrekenen")} value={formatEUR(advanceLedger.open)} />
+            </div>
+            <p className="mb-4 text-xs text-muted">{uiT("Nog te verrekenen is geen resterend werkgeld. De resterende voorschotruimte houdt ook rekening met geboekte kosten en brutowinst.")}</p>
+            <Table><THead><tr><Th>{uiT("Datum")}</Th><Th>{uiT("Voorschot / bron")}</Th><Th>{uiT("Aangevraagd / gefactureerd")}</Th><Th>{uiT("Ontvangen")}</Th><Th>{uiT("Verrekend")}</Th><Th>{uiT("Nog te verrekenen")}</Th></tr></THead><TBody>
+              {advanceLedger.rows.map(a => <Tr key={a.id}>
+                <Td>{a.date ? new Date(a.date).toLocaleDateString(uiDateLocale) : "—"}</Td>
+                <Td>{a.documentId ? <Link className="font-medium hover:underline" href={`/documents/${a.documentId}`}>{a.label}</Link> : <span className="font-medium">{a.label}</span>}
+                  <span className="block text-xs text-muted">{uiT(a.kind === "payment" ? "Los ontvangen voorschot" : a.kind === "proforma" ? "proforma" : a.kind === "fondos" ? "provisión de fondos" : "Voorschot op factuur")}{a.status === "draft" ? ` · ${uiT("Concept")}` : ""}</span>
+                  {a.replacedBy && <span className="block text-xs text-muted">{uiT("Omgezet naar factuur")}: <Link href={`/documents/${a.replacedBy.id}`} className="text-accent underline">{a.replacedBy.label}</Link>. {uiT("Geen extra ontvangst.")}</span>}
+                  <ActionDialog title={a.label} trigger={uiT("Betalingen bekijken")} className="mt-1 min-h-0 border-0 bg-transparent p-0 text-xs text-accent" wide>
+                    <p className="mb-3 text-sm">{uiT("Bij een gemengde factuur telt alleen het voorschotdeel mee in deze lijst.")}</p>
+                    {a.payments.length === 0 ? <p>{uiT("Nog geen betaling geregistreerd")}</p> : a.payments.map(p => <p className="mb-2 text-sm" key={p.id}>{p.date ?? "—"} · {p.description ?? a.label} · {formatEUR(exBtwVanOntvangst(p))} {uiT("ex. BTW")}</p>)}
+                  </ActionDialog>
+                </Td>
+                <Td className="tabular-nums">{a.kind === "payment" ? "—" : formatEUR(a.amount)}</Td>
+                <Td className="tabular-nums">{formatEUR(a.received)}</Td><Td className="tabular-nums">{formatEUR(a.settled)}</Td><Td className="tabular-nums">{formatEUR(a.open)}</Td>
+              </Tr>)}
+              {advanceLedger.rows.length === 0 && <Tr><Td colSpan={6}>{uiT("Nog geen voorschotten")}</Td></Tr>}
+            </TBody></Table>
+            {openAdvanceRequests.length > 0 && <div className="mt-5 border-t pt-4"><p className="mb-2 font-medium">{uiT("Openstaande voorschotverzoeken")}</p>{openAdvanceRequests.map(r => <p key={r.id} className="text-sm">{r.label}</p>)}<p className="mt-2 text-xs text-muted">{uiT("Openstaande verzoeken tellen pas mee bij ontvangen geld zodra de betaling is geboekt.")}</p></div>}
           </CardContent>
         </Card>
-      ) : <Card><CardContent><p className="text-sm text-muted">{uiT("Er zijn nog geen voorschotdocumenten voor dit project.")}</p></CardContent></Card>}
-
       </TabPanel>
       <TabPanel id="request"><AdvanceRequestCard
         projectId={id}
@@ -1648,6 +1640,7 @@ export default async function ProjectDetailPage({
             ]}
           />
           <TabPanel id="producten">
+            <Card className="mb-5" data-invoiced-products><CardContent><FinancialTable section={productSection}/><FinancialTable section={ownCostSection}/><p className="mt-3 text-xs text-muted">{uiT("Deze factuurregels zijn al verwerkt in de berekening. Boek ze niet opnieuw als levering.")}</p></CardContent></Card>
             <ProjectDeliveriesCard
               projectId={id}
               voorschottenEx={voorschottenOnverrekendEx}
@@ -2403,7 +2396,7 @@ export default async function ProjectDetailPage({
       )}
         </TabPanel>
       </TabsRoot>
-    </>
+    </FinancialDetailsProvider>
   );
 }
 

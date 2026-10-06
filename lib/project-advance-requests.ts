@@ -8,8 +8,8 @@ import { projectPayments, sentEmails } from "@/lib/db/schema";
  * a column interpolated into a single-table SELECT's correlated SQL expression.
  * Restrict receipts to the same project as well as the exact request.
  */
-export function loadProjectAdvanceRequests(projectId: string, limit = 10) {
-  return db.select({
+export function loadProjectAdvanceRequests(projectId: string, limit: number | null = 10) {
+  const query = db.select({
     id: sentEmails.id,
     subject: sentEmails.subject,
     toEmail: sentEmails.toEmail,
@@ -23,6 +23,6 @@ export function loadProjectAdvanceRequests(projectId: string, limit = 10) {
     ))
     .where(and(eq(sentEmails.projectId, projectId), like(sentEmails.subject, "Voorschot: %")))
     .groupBy(sentEmails.id)
-    .orderBy(desc(sentEmails.createdAt))
-    .limit(limit);
+    .orderBy(desc(sentEmails.createdAt));
+  return limit == null ? query : query.limit(limit);
 }

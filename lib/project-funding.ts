@@ -1,9 +1,8 @@
 import "server-only";
 import { sql } from "drizzle-orm";
 import { db } from "@/lib/db";
-import { docOwnShare } from "@/lib/documents";
 import { deriveAdvanceCover, deriveProjectMargins } from "@/lib/project-financials";
-import { splitProjectReceipts, type ReceiptLike } from "@/lib/receipts";
+import { projectReceiptShares, splitProjectReceipts, type ReceiptLike } from "@/lib/receipts";
 import { projectCostStreams, projectOwnProducts } from "@/lib/project-cost-streams";
 
 /** One funding calculation for the start screen, project list and detail.
@@ -41,8 +40,8 @@ export async function loadProjectFunding(projectId?:string, includeClosed = fals
   const byId=new Map(productRows.map(p=>[p.id,Number(p.cost)]));
   const bySku=new Map(productRows.filter(p=>p.sku).map(p=>[p.sku!,Number(p.cost)]));
   return new Map(rows.map(p=>{
-    const ownShareByDoc = new Map(p.docs.map(d => [d.id, docOwnShare(d.items, Number(d.subtotal),
-      it => (it.productId ? byId.get(it.productId) : undefined) ?? (it.description ? bySku.get(it.description.trim()) : undefined))]));
+    const ownShareByDoc = projectReceiptShares(p.docs, p.payments,
+      it => (it.productId ? byId.get(it.productId) : undefined) ?? (it.description ? bySku.get(it.description.trim()) : undefined));
     const receipts = splitProjectReceipts(p.payments, ownShareByDoc);
     const costs = projectCostStreams(p.purchases,p.costs);
     const own = projectOwnProducts([...p.docs,{kind:"invoice",status:"paid",items:p.deliveries}],costs.groups,

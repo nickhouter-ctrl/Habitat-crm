@@ -83,6 +83,8 @@ export function ownProductFamily(raw: string): string | null {
   if (/\b(badkamer\w*|bathroom\w*|sanitair\w*|sanitarios?|sanitary|bano|banos|wastafels?|washbasins?|lavabos?|kranen?|taps?|griferia|douches?|showers?|duchas?|toilets?|inodoros?|bathtubs?|baden|baneras?)\b/.test(name)) return "bathroom";
   if (/\b(verlichting|lampen?|lighting|lights?|led|spots?|downlights?|luminarias?|iluminacion|lamparas?)\b/.test(name)) return "lighting";
   if (/\b(magic stone|flexib(?:el|le) stone)\b/.test(name)) return "stone";
+  if (/\b(warmte\s*pomp(?:en)?|heat\s*pumps?|bomba(?:s)? de calor|air\s*flows?)\b/.test(name)) return "climate";
+  if (/\b(planten|beplanting|plants|plantas|palmbomen|palmeras)\b/.test(name)) return "plants";
   return null;
 }
 

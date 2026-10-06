@@ -13,9 +13,8 @@ import { sql } from "drizzle-orm";
 
 import { db } from "@/lib/db";
 import { zoekDubbeleFacturen } from "@/lib/dubbele-facturen";
-import { docOwnShare } from "@/lib/documents";
 import type { DocumentLineItem } from "@/lib/db/schema";
-import { splitProjectReceipts, type ReceiptLike } from "@/lib/receipts";
+import { projectReceiptShares, splitProjectReceipts, type ReceiptLike } from "@/lib/receipts";
 import { alGedekt } from "@/lib/project-receipts";
 import { projectCostStreams, projectOwnProducts } from "@/lib/project-cost-streams";
 import { deriveAdvanceCover, deriveProjectMargins, projectWorkProfit } from "@/lib/project-financials";
@@ -287,8 +286,8 @@ export async function verzamelWeekcontrole(): Promise<Weekcontrole> {
   const productCostOf = (it: DocumentLineItem) =>
     (it.productId ? kostPerId.get(it.productId) : undefined) ??
     (it.description ? kostPerSku.get(it.description.trim()) : undefined);
-  const ownShareByDoc = new Map(docs.map(d => [d.id, docOwnShare(d.items, Number(d.subtotal), productCostOf)]));
   for (const p of projecten) {
+    const ownShareByDoc = projectReceiptShares(docs.filter(d=>d.project_id===p.id), p.payments, productCostOf);
     const streams=projectCostStreams(p.purchases,p.costs);
     const own=projectOwnProducts([...docs.filter(d=>d.project_id===p.id),{kind:"invoice",status:"paid",items:p.deliveries}],streams.groups,productCostOf);
     p.inkoop=streams.materialPo+streams.otherPo;

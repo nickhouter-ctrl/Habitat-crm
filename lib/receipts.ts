@@ -1,3 +1,6 @@
+import type { DocumentLineItem } from "./db/schema";
+import { docOwnShare, isOwnProductLine, lineNet, normalizeDocItems } from "./documents";
+
 /**
  * Ontvangst-helpers, gedeeld door projectdetail en projectenlijst zodat beide
  * exact hetzelfde rekenen. Pure functies — geen db-imports.
@@ -83,4 +86,44 @@ export function splitProjectReceipts(payments: ReceiptLike[], ownShareByDoc: Rea
     ownCents += Math.round(receipt.ownProductReceived * 100);
   }
   return { totalReceived: totalCents / 100, ownProductReceived: ownCents / 100, liquidReceived: (totalCents - ownCents) / 100 };
+}
+
+/** A settled advance funds the final invoice's goods/work mix. Use the positive
+ * invoice value before advance deductions, and allocate the recorded advance
+ * once. Otherwise a negative settlement can leave product money in work funds.
+ * Call with documents and receipts from one project only.
+ */
+export function projectReceiptShares(
+  docs: {id:string;kind:string;status:string;items:unknown;subtotal:string|number}[],
+  payments: ReceiptLike[],
+  productCost?: (item: DocumentLineItem) => number | undefined,
+): Map<string, number> {
+  const shares = new Map(docs.map(d => [d.id, docOwnShare(d.items, Number(d.subtotal), productCost)]));
+  const original = new Map(shares);
+  const paid = new Map<string, number>();
+  for (const p of payments) if (p.documentId) paid.set(p.documentId, (paid.get(p.documentId) ?? 0) + receiptExVat(p));
+  const allocated = new Map<string, {amount:number;own:number}>();
+  for (const d of docs) {
+    if (d.kind !== "invoice" || ["draft","void"].includes(d.status)) continue;
+    const items = normalizeDocItems(d.items);
+    const settlements = items.filter(it => it.advanceRef && it.advanceRef !== d.id && lineNet(it) < 0 && original.has(it.advanceRef));
+    if (!settlements.length) continue;
+    const gross = Number(d.subtotal) - settlements.reduce((sum, it) => sum + lineNet(it), 0);
+    if (!(gross > 0)) continue;
+    const own = items.reduce((sum, it) => sum + (isOwnProductLine(it, productCost) ? lineNet(it) : 0), 0);
+    const share = Math.min(1, Math.max(0, own / gross));
+    shares.set(d.id, share);
+    for (const it of settlements) {
+      const ref = it.advanceRef!;
+      const previous = allocated.get(ref) ?? {amount:0,own:0};
+      const amount = Math.min(-lineNet(it), Math.max(0, (paid.get(ref) ?? 0) - previous.amount));
+      allocated.set(ref, {amount:previous.amount + amount,own:previous.own + amount * share});
+    }
+  }
+  for (const [ref, allocation] of allocated) {
+    const received = paid.get(ref) ?? 0;
+    if (received > 0) shares.set(ref, Math.min(1, Math.max(0,
+      ((received - allocation.amount) * (original.get(ref) ?? 0) + allocation.own) / received)));
+  }
+  return shares;
 }

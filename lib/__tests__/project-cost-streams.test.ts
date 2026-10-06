@@ -51,7 +51,8 @@ describe("own product costs and margins",()=>{
   const invoice=(items:unknown)=>({kind:"invoice",status:"paid",items});
   it("uses Finca's booked window cost where its sales line has no cost",()=>{
     const result=projectOwnProducts([invoice([{name:"kozijnen Finca Lisa",units:1,price:24029.84}])],new Map([["windows",11203.90]]));
-    expect(result).toEqual({revenue:24029.84,cost:11203.90,uncosted:0,totalRevenue:24029.84,bookedCost:11203.90});
+    expect(result).toMatchObject({revenue:24029.84,cost:11203.90,uncosted:0,totalRevenue:24029.84,bookedCost:11203.90});
+    expect(result.supplierCostGroups.get("windows")).toBe(11203.90);
   });
   it("does not double-count a supplier cost already represented on the sales line",()=>{
     const result=projectOwnProducts([invoice([{name:"Kozijnen",units:1,price:100,costEur:60}])],new Map([["windows",60]]));
@@ -72,5 +73,23 @@ describe("own product costs and margins",()=>{
   it("preserves the configured markup on other project costs without mixing it into material costs",()=>{
     const m=deriveProjectMargins({laborCost:100,purchaseCost:50,otherCost:20,productRevenue:100,productCost:60});
     expect(m.purchaseCost).toBe(50);expect(m.otherCost).toBe(20);expect(m.otherRevenue).toBe(23);expect(m.totalRevenue).toBe(295.5);expect(m.costToDate).toBe(230);
+  });
+});
+
+describe("confirmed historical product costs", () => {
+  it("counts the confirmed old bundles and fireplace while leaving the unpurchased heat pump uncosted", () => {
+    const result=projectOwnProducts([{kind:"invoice",status:"paid",items:[
+      {name:"Binnen deuren",units:1,price:3421.25,costEur:2357.05},
+      {name:"Buiten deur",units:1,price:977.50,costEur:506.67},
+      {name:"Badkamer artikelen inclusief haard",units:1,price:7922.48,costEur:10108.64},
+      {name:"Warmtepomp installatie/Air flows",units:1,price:13655.57,category:"eigen_producten"},
+    ]}],new Map());
+    expect(result).toMatchObject({revenue:12321.23,cost:12972.36,uncosted:13655.57});
+  });
+  it("keeps invoiced plants and their nursery purchase outside building materials", () => {
+    const purchase=splitPurchaseCost({supplier:"ZIMMERMANN PLANTAS Y LOGISTICA, S.L.",subtotal:"776.25",tax:"0",total:"776.25",items:[{name:"ZIMMERMANN PLANTAS Y LOGISTICA, S.L. 26/655",units:1,unitPrice:776.25}]});
+    expect(purchase.material).toBe(0);expect(purchase.own).toBe(776.25);
+    const result=projectOwnProducts([{kind:"invoice",status:"paid",items:[{name:"beplanting villa Benissa inclusief transport",units:1,price:4848.66,category:"materiaal"}]}],purchase.groups);
+    expect(result).toMatchObject({revenue:4848.66,cost:776.25,uncosted:0});
   });
 });
