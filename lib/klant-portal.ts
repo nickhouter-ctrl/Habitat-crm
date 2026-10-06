@@ -13,10 +13,10 @@
 import "server-only";
 import { createHmac, timingSafeEqual } from "node:crypto";
 import { cookies } from "next/headers";
-import { and, asc, eq, inArray, isNotNull, sql } from "drizzle-orm";
+import { and, asc, eq, inArray, isNotNull, or, sql } from "drizzle-orm";
 
 import { db } from "@/lib/db";
-import { commissionEntries, contacts, documents, projectCosts, projectExtras, projectPhases, projectPayments, projects, purchaseOrders, referrals, sentEmails, timeEntries } from "@/lib/db/schema";
+import { commissionEntries, contacts, documents, projectCosts, projectExtras, projectPhases, projectPayments, projectPortalAccess, projects, purchaseOrders, referrals, sentEmails, timeEntries } from "@/lib/db/schema";
 import { like } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import { deriveProjectMargins } from "@/lib/project-financials";
@@ -160,7 +160,7 @@ export interface KlantProject {
   endDate: string | null;
 }
 
-/** De projecten van deze klant (via projects.contactId). Klant-veilige velden. */
+/** Own projects plus explicitly shared projects. Sharing grants no contact/profile access. */
 export async function klantProjecten(email: string) {
   const cts = await klantContacten(email);
   if (cts.length === 0) return { contacten: cts, projecten: [] as KlantProject[] };
@@ -176,7 +176,12 @@ export async function klantProjecten(email: string) {
       endDate: projects.endDate,
     })
     .from(projects)
-    .where(inArray(projects.contactId, cts.map((c) => c.id)))
+    .where(or(
+      inArray(projects.contactId, cts.map((c) => c.id)),
+      inArray(projects.id, db.select({ projectId: projectPortalAccess.projectId })
+        .from(projectPortalAccess)
+        .where(inArray(projectPortalAccess.contactId, cts.map((c) => c.id)))),
+    ))
     .orderBy(asc(projects.createdAt));
   return { contacten: cts, projecten };
 }

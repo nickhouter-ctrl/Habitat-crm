@@ -1854,6 +1854,21 @@ export const accountRequests = pgTable(
   ],
 );
 
+/** Extra project access in the client portal; never changes the billing contact. */
+export const projectPortalAccess = pgTable(
+  "project_portal_access",
+  {
+    projectId: uuid().notNull().references(() => projects.id, { onDelete: "cascade" }),
+    contactId: uuid().notNull().references(() => contacts.id, { onDelete: "cascade" }),
+    reason: text().notNull(),
+    createdAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.projectId, t.contactId] }),
+    index("project_portal_access_contact_idx").on(t.contactId),
+  ],
+).enableRLS();
+
 /**
  * Klant-/aannemer-account waarmee op de website prijzen zichtbaar zijn. Los van
  * de staff-`users`-tabel. `priceTier` bepaalt welke prijs de portal-API teruggeeft
