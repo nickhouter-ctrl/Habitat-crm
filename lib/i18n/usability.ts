@@ -1,9 +1,16 @@
 import type { Dictionary } from "@/lib/i18n";
 
 const rows: [string, string, string][] = [
-  ["Over na kosten, vóór opslag", "Remaining after costs, before markup", "Restante tras costes, antes del recargo"],
-  ["Het systeem reserveert hiervan {amount} opslag op uren en derden.", "The calculation reserves {amount} of this for markup on labour and third parties.", "El cálculo reserva {amount} de este importe para el recargo en mano de obra y terceros."],
-  ["Voor volgend werk, na kosten én afgesproken opslag", "For future work, after costs and agreed markup", "Para futuros trabajos, tras costes y recargo acordado"],
+  ["Over na geboekte kosten", "Remaining after recorded costs", "Restante tras los costes registrados"],
+  ["Berekende brutowinst op uren en inkoop", "Calculated gross profit on labour and purchases", "Beneficio bruto calculado en mano de obra y compras"],
+  ["Berekende brutowinst op uren en inkoop: {amount}.", "Calculated gross profit on labour and purchases: {amount}.", "Beneficio bruto calculado en mano de obra y compras: {amount}."],
+  ["Voorschot voor volgend werk", "Advance for future work", "Anticipo para futuros trabajos"],
+  ["Na aftrek van kosten en berekende brutowinst", "After deducting costs and calculated gross profit", "Tras descontar los costes y el beneficio bruto calculado"],
+  ["Kosten + berekende brutowinst", "Costs + calculated gross profit", "Costes + beneficio bruto calculado"],
+  ["Tekort voor geboekt werk", "Shortfall for recorded work", "Déficit para el trabajo registrado"],
+  ["Na kosten en berekende brutowinst", "After costs and calculated gross profit", "Tras costes y beneficio bruto calculado"],
+  ["Van het ontvangen geld voor uren en inkopen bij derden trekken we de geboekte kosten en de berekende brutowinst af. Het restant is het voorschot voor volgend werk. Betalingen en winst op eigen producten staan apart.", "We deduct recorded costs and calculated gross profit from the payments received for labour and third-party purchases. The remainder is the advance for future work. Payments and profit from our products are kept separate.", "De los cobros para mano de obra y compras a terceros descontamos los costes registrados y el beneficio bruto calculado. El resto es el anticipo para futuros trabajos. Los cobros y el beneficio de nuestros productos se mantienen aparte."],
+  ["De brutowinst komt uit de opslag op uren en inkoop. Algemene bedrijfskosten zijn daar nog niet vanaf. Alle bedragen ex. btw, op basis van geboekte betalingen en kosten.", "Gross profit comes from the markup on labour and purchases. General business expenses have not yet been deducted. All amounts excl. VAT, based on recorded payments and costs.", "El beneficio bruto procede del recargo en mano de obra y compras. Aún no se han descontado los gastos generales de la empresa. Todos los importes sin IVA, según cobros y costes registrados."],
   ["Na kosten én afgesproken opslag op uren en derden", "After costs and agreed markup on labour and third parties", "Tras costes y recargo acordado en mano de obra y terceros"],
   ["Totaal ontvangen", "Total received", "Total cobrado"],
   ["Ontvangen voor eigen producten", "Received for our products", "Cobrado por nuestros productos"],
