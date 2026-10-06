@@ -3,11 +3,12 @@ import { useT, useLocale } from '@/components/taal-provider';
 import { useActionState, useEffect, useRef, useState } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
-import { editDraft, saveProfile, syncSent, saveDraft, sendDraft, generateDraft, addMeeting, type DraftSamenvatting, type Result } from './actions';
+import { editDraft, saveProfile, syncSent, saveDraft, sendDraft, generateDraft, addMeeting, takeOverProposal, withdrawInvite, type DraftSamenvatting, type Result } from './actions';
 import { INTEREST, STAGES } from '@/lib/partners';
 import type { partnerProfiles } from '@/lib/db/schema';
 import { FOLLOWUP_MAILS, vasteDatasheets, followupDesigns, followupDesignUrl, followupProposal, type FollowupMailKind, type FollowupMailContext } from '@/lib/followup-mail';
 import { PdfBijlagen, type BibliotheekPdf } from './pdf-bijlagen';
+import { MAX_MOMENTEN } from '@/lib/afspraak-constanten';
 const input='w-full rounded-lg border border-border bg-surface px-3 py-2 text-foreground';
 export function Field({label,children}:{label:string;children:React.ReactNode}){
  const t=useT();return <label className="grid gap-1 text-sm font-medium">{t(label)}{children}</label>;}
@@ -116,8 +117,43 @@ export function Compose({id,context,resellerInterested,bibliotheek=[]}:{id:strin
 }
 export function SendForm({id,updatedAt}:{id:string;updatedAt:string}){
  const t=useT();return <ActionForm action={sendDraft} label={t("Dit concept versturen")}><input type="hidden" name="updatedAt" value={updatedAt}/><input type="hidden" name="id" value={id}/><label className="flex gap-2 text-sm"><input type="checkbox" name="confirm" required/>{t("Ik heb ontvanger, mailtekst en afspraken gecontroleerd.")}</label></ActionForm>;}
+/**
+ * Afspraak plannen: een vast moment, een paar momenten om uit te kiezen, of de
+ * klant zelf laten voorstellen. Bij de laatste twee gaat er altijd een mail
+ * uit; bij een vast moment kies je zelf of de klant een bevestiging krijgt.
+ */
 export function MeetingForm({id}:{id:string}){
- const t=useT();const [date,setDate]=useState('');return <ActionForm action={addMeeting} label={t("Bevestigde afspraak in agenda zetten")}><input type="hidden" name="contactId" value={id}/><input type="hidden" name="startsAt" value={date&&!isNaN(Date.parse(date))?new Date(date).toISOString():''}/><Field label={t("Afspraak")}><input className={input} name="title" required placeholder={t("Bijvoorbeeld: afspraak bij de klant")}/></Field><div className="grid gap-4 sm:grid-cols-2"><Field label={t("Datum en tijd (tijdzone van je apparaat)")}><input className={input} type="datetime-local" required value={date} onChange={e=>setDate(e.target.value)}/></Field><Field label={t("Duur in minuten")}><input className={input} name="minutes" type="number" min={5} max={480} defaultValue={30}/></Field></div><Field label={t("Locatie of videolink")}><input className={input} name="location"/></Field><Field label={t("Notities / bevestiging per mail")}><textarea className={input} name="notes" rows={3}/></Field><label className="flex gap-2 text-sm"><input type="checkbox" name="confirmed" required/>{t("Datum en tijd zijn met de klant bevestigd.")}</label></ActionForm>;}
+ const t=useT();
+ const [soort,setSoort]=useState<'fixed'|'choice'|'open'>('fixed');
+ const [momenten,setMomenten]=useState<string[]>(['','']);
+ const [mailen,setMailen]=useState(true);
+ const iso=(v:string)=>v&&!isNaN(Date.parse(v))?new Date(v).toISOString():'';
+ const zichtbaar=soort==='fixed'?momenten.slice(0,1):soort==='choice'?momenten:[];
+ const metMail=soort!=='fixed'||mailen;
+ const zet=(i:number,v:string)=>setMomenten(m=>m.map((x,j)=>j===i?v:x));
+ const label=soort==='choice'?t("Momenten naar de klant sturen"):soort==='open'?t("Vraag naar de klant sturen"):mailen?t("In agenda zetten en bevestiging sturen"):t("In agenda zetten");
+ const keuzes:[typeof soort,string,string][]=[['fixed',"Vast moment","Jij kiest het moment; de klant gaat akkoord of stelt iets anders voor."],['choice',"Meerdere momenten","De klant kiest er één uit, of stelt een ander moment voor."],['open',"Klant laten kiezen","De klant geeft zelf door wanneer het uitkomt."]];
+ return <ActionForm action={addMeeting} label={label}>
+  <input type="hidden" name="contactId" value={id}/><input type="hidden" name="soort" value={soort}/><input type="hidden" name="mailen" value={metMail?'on':'off'}/>
+  {zichtbaar.map((m,i)=><input key={i} type="hidden" name="moment" value={iso(m)}/>)}
+  <div className="grid gap-2 sm:grid-cols-3">{keuzes.map(([k,kop,uitleg])=><label key={k} className={`flex cursor-pointer flex-col gap-1 rounded-lg border p-3 text-sm ${soort===k?'border-accent bg-accent/5':'border-border'}`}><span className="flex items-center gap-2 font-medium"><input type="radio" name="soortKeuze" checked={soort===k} onChange={()=>setSoort(k)}/>{t(kop)}</span><span className="text-xs text-muted">{t(uitleg)}</span></label>)}</div>
+  <Field label={t("Afspraak")}><input className={input} name="title" required placeholder={t("Bijvoorbeeld: afspraak bij de klant")}/></Field>
+  {soort!=='open'&&<div className="space-y-2">{zichtbaar.map((m,i)=><div key={i} className="flex items-end gap-2"><Field label={soort==='fixed'?t("Datum en tijd (tijdzone van je apparaat)"):t("Moment {n}",{n:i+1})}><input className={input} type="datetime-local" required value={m} onChange={e=>zet(i,e.target.value)}/></Field>{soort==='choice'&&momenten.length>2&&<button type="button" className="mb-1 rounded-lg border border-border px-3 py-2 text-sm" onClick={()=>setMomenten(x=>x.filter((_,j)=>j!==i))}>{t("Weg")}</button>}</div>)}
+   {soort==='choice'&&momenten.length<MAX_MOMENTEN&&<button type="button" className="rounded-lg border border-border px-3 py-1.5 text-sm" onClick={()=>setMomenten(x=>[...x,''])}>{t("+ Moment toevoegen")}</button>}</div>}
+  <div className="grid gap-4 sm:grid-cols-2"><Field label={t("Duur in minuten")}><input className={input} name="minutes" type="number" min={5} max={480} defaultValue={30}/></Field><Field label={t("Locatie of videolink")}><input className={input} name="location"/></Field></div>
+  {soort==='fixed'&&<label className="flex items-start gap-2 rounded-lg border border-border p-3 text-sm"><input type="checkbox" checked={mailen} onChange={e=>setMailen(e.target.checked)} className="mt-1"/><span>{t("Bevestiging per mail naar de klant sturen")}<span className="mt-1 block text-xs text-muted">{t("De klant kan in de mail akkoord geven of een ander moment voorstellen. Je ziet het antwoord terug in dit dossier.")}</span></span></label>}
+  {metMail&&<Field label={t("Bericht aan de klant (optioneel)")}><textarea className={input} name="bericht" rows={3} maxLength={2000} placeholder={t("Komt in de mail, onder het moment")}/></Field>}
+  <Field label={t("Interne notities")}><textarea className={input} name="notes" rows={2}/></Field>
+ </ActionForm>;}
 
 export function EditDraftForm({id,subject,body,updatedAt}:{id:string;subject:string;body:string;updatedAt:string}){
  const t=useT();return <details className="mb-4"><summary className="cursor-pointer text-sm underline">{t("Concept bewerken")}</summary><ActionForm action={editDraft} label={t("Wijzigingen bewaren")}><input type="hidden" name="id" value={id}/><input type="hidden" name="updatedAt" value={updatedAt}/><Field label={t("Onderwerp concept")}><input className={input} name="subject" defaultValue={subject} required maxLength={250}/></Field><Field label={t("Inhoud concept")}><textarea className={input} name="body" rows={10} defaultValue={body} required maxLength={20000}/></Field></ActionForm></details>;}
+
+/** Knoppen bij een afspraakvoorstel: het moment van de klant overnemen, of het voorstel intrekken. */
+export function InviteActions({inviteId,overnemen,intrekken}:{inviteId:string;overnemen:boolean;intrekken:boolean}){
+ const t=useT();
+ return <div className="mt-2 flex flex-wrap gap-2">
+  {overnemen&&<ActionForm action={takeOverProposal} label={t("Moment van de klant overnemen")}><input type="hidden" name="inviteId" value={inviteId}/></ActionForm>}
+  {intrekken&&<ActionForm action={withdrawInvite} label={t("Voorstel intrekken")}><input type="hidden" name="inviteId" value={inviteId}/></ActionForm>}
+ </div>;
+}

@@ -5,7 +5,9 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { requireModule } from "@/lib/auth/guards";
 import { db } from "@/lib/db";
-import { activities, appointments, contacts, emailSuppressions, partnerProfiles, partnerMessages, staffNotifications, users } from "@/lib/db/schema";
+import { activities, appointmentInvites, appointments, contacts, emailSuppressions, partnerProfiles, partnerMessages, staffNotifications, users } from "@/lib/db/schema";
+import { maakAfspraakvoorstel, neemVoorstelOver, trekVoorstelIn, verstuurAfspraakvoorstel } from "@/lib/afspraak-reactie-db";
+import { MAX_MOMENTEN, afspraakTaal } from "@/lib/afspraak-reactie";
 import { sendQueuedStaffNotification } from "@/lib/staff-notifications";
 import { heeftCap } from "@/lib/auth/modules";
 import { FOLLOWUP_EXCLUDED } from "@/lib/followup-selection";
@@ -187,8 +189,42 @@ export async function sendDraft(_:Result,fd:FormData):Promise<Result>{
 }
 export async function addMeeting(_:Result,fd:FormData):Promise<Result>{
   const user=await requireModule('klantopvolging');await requireModule('agenda');
-  try {const d=z.object({contactId:z.string().uuid(),title:z.string().trim().min(3).max(200),startsAt:z.string().datetime({offset:true}),minutes:z.coerce.number().int().min(5).max(480),location:z.string().max(500),notes:z.string().max(4000),confirmed:z.literal('on')}).parse(Object.fromEntries(fd));await contact(d.contactId);
-    await db.insert(appointments).values({contactId:d.contactId,title:d.title,startsAt:new Date(d.startsAt),endsAt:new Date(Date.parse(d.startsAt)+d.minutes*60000),location:d.location,notes:d.notes,createdBy:user.id,assigneeId:user.id});revalidatePath('/agenda');refresh(d.contactId);return{success:'Bevestigde afspraak staat in de agenda. Er is geen uitnodigingsmail verstuurd.'};
+  try {
+    const d=z.object({
+      contactId:z.string().uuid(),soort:z.enum(['fixed','choice','open']).default('fixed'),title:z.string().trim().min(3).max(200),
+      minutes:z.coerce.number().int().min(5).max(480),location:z.string().max(500),notes:z.string().max(4000),
+      bericht:z.string().max(2000).default(''),mailen:z.enum(['on','off']).default('off'),
+    }).parse({...Object.fromEntries(fd),mailen:fd.get('mailen')??'off'});
+    const momenten=fd.getAll('moment').map(String).filter(Boolean).map(m=>z.string().datetime({offset:true}).parse(m)).map(m=>new Date(m));
+    if(d.soort==='fixed'&&momenten.length!==1)throw new InputError('Kies datum en tijd van de afspraak.');
+    if(d.soort==='choice'&&(momenten.length<2||momenten.length>MAX_MOMENTEN))throw new InputError(`Stel 2 tot ${MAX_MOMENTEN} momenten voor.`);
+    if(momenten.some(m=>m.getTime()<Date.now()-5*60000))throw new InputError('Een voorgesteld moment ligt in het verleden.');
+    // Een keuze of een vraag zonder mail heeft geen zin: de klant moet het kunnen zien.
+    const mailen=d.soort!=='fixed'||d.mailen==='on';
+    const c=await contact(d.contactId);
+    if(mailen&&!c.email?.trim())throw new InputError('Deze klant heeft geen e-mailadres; plan een vast moment zonder mail of vul eerst het adres in.');
+    const [profile]=await db.select({language:partnerProfiles.language}).from(partnerProfiles).where(eq(partnerProfiles.contactId,c.id));
+    const inv=await maakAfspraakvoorstel({contactId:c.id,soort:d.soort,titel:d.title,locatie:d.location,minuten:d.minutes,notities:d.notes,bericht:d.bericht,momenten,taal:afspraakTaal(profile?.language,c.preferredLanguage),door:user.id});
+    let melding=d.soort==='fixed'?'Afspraak staat in de agenda.':'Voorstel bewaard.';
+    if(mailen){
+      const r=await verstuurAfspraakvoorstel(inv.id,{name:user.name,email:user.email},isFairContact(c));
+      melding+=r.verstuurd?(d.soort==='fixed'?' De klant kreeg een bevestiging en kan akkoord geven of een ander moment voorstellen.':d.soort==='choice'?' De klant kreeg de momenten per mail en kiest er zelf één.':' De klant kreeg een mail en geeft door wanneer het uitkomt.'):` De mail ging niet weg: ${r.reden}`;
+    }
+    revalidatePath('/agenda');refresh(d.contactId);return{success:melding};
+  }catch(e){return failure(e);}
+}
+export async function takeOverProposal(_:Result,fd:FormData):Promise<Result>{
+  const user=await requireModule('klantopvolging');await requireModule('agenda');
+  try{const id=z.string().uuid().parse(fd.get('inviteId'));const [inv]=await db.select().from(appointmentInvites).where(eq(appointmentInvites.id,id));if(!inv)throw new InputError('Voorstel niet gevonden.');
+    const r=await neemVoorstelOver(id);if(!r.ok)throw new InputError(r.fout??'Overnemen mislukt.');
+    const c=await contact(inv.contactId);const m=await verstuurAfspraakvoorstel(id,{name:user.name,email:user.email},isFairContact(c));
+    revalidatePath('/agenda');refresh(inv.contactId);return{success:m.verstuurd?'Afspraak staat op het moment van de klant; de klant kreeg een bevestiging.':`Afspraak verplaatst. De bevestiging ging niet weg: ${m.reden}`};
+  }catch(e){return failure(e);}
+}
+export async function withdrawInvite(_:Result,fd:FormData):Promise<Result>{
+  await requireModule('klantopvolging');
+  try{const id=z.string().uuid().parse(fd.get('inviteId'));const [inv]=await db.select({contactId:appointmentInvites.contactId}).from(appointmentInvites).where(eq(appointmentInvites.id,id));if(!inv)throw new InputError('Voorstel niet gevonden.');
+    await trekVoorstelIn(id);refresh(inv.contactId);return{success:'Voorstel ingetrokken; de link in de mail werkt niet meer.'};
   }catch(e){return failure(e);}
 }
 

@@ -1971,6 +1971,54 @@ export const appointments = pgTable(
     index("appointments_assignee_idx").on(t.assigneeId),
   ],
 );
+/**
+ * Een afspraakvoorstel aan een klant, met een link waarop hij reageert.
+ *
+ * Drie soorten:
+ * - `fixed`  — één moment; de afspraak staat al in de agenda. De klant geeft
+ *              akkoord of stelt een ander moment voor.
+ * - `choice` — meerdere momenten; de klant kiest er één. Pas dán komt de
+ *              afspraak in de agenda.
+ * - `open`   — geen moment; de klant geeft door wanneer het hem uitkomt.
+ *
+ * Het token in de link geeft toegang tot precies dit ene voorstel, en alleen
+ * tot reageren. Een link in een mail mag zelf niets vastleggen (mailscanners
+ * openen links); de klant bevestigt altijd met een klik op de pagina.
+ *
+ * status: pending | accepted | chosen | proposed | cancelled
+ */
+export const appointmentInvites = pgTable(
+  "appointment_invites",
+  {
+    id: uuid().primaryKey().default(sql`gen_random_uuid()`),
+    token: text().notNull().unique(),
+    contactId: uuid().notNull().references((): AnyPgColumn => contacts.id, { onDelete: "cascade" }),
+    /** De afspraak in de agenda, zodra er een moment vaststaat. */
+    appointmentId: uuid().references((): AnyPgColumn => appointments.id, { onDelete: "set null" }),
+    mode: text().notNull(),
+    title: text().notNull(),
+    location: text(),
+    durationMinutes: integer().notNull().default(30),
+    /** Interne notities — gaan niet naar de klant. */
+    notes: text(),
+    /** Persoonlijke tekst in de mail aan de klant. */
+    message: text(),
+    /** Voorgestelde momenten (ISO-tijden), leeg bij `open`. */
+    slots: jsonb().$type<string[]>().notNull().default(sql`'[]'::jsonb`),
+    lang: text().notNull(),
+    status: text().notNull().default("pending"),
+    proposedStartsAt: timestamp({ withTimezone: true }),
+    customerMessage: text(),
+    respondedAt: timestamp({ withTimezone: true }),
+    sentAt: timestamp({ withTimezone: true }),
+    assigneeId: uuid().references((): AnyPgColumn => users.id, { onDelete: "set null" }),
+    createdBy: uuid().references((): AnyPgColumn => users.id, { onDelete: "set null" }),
+    ...timestamps,
+  },
+  (t) => [index("appointment_invites_contact_idx").on(t.contactId), index("appointment_invites_status_idx").on(t.status)],
+);
+export type AppointmentInvite = typeof appointmentInvites.$inferSelect;
+
 export type Appointment = typeof appointments.$inferSelect;
 export type NewAppointment = typeof appointments.$inferInsert;
 

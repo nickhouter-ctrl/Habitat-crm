@@ -31,6 +31,7 @@ export const authConfig = {
         pathname.startsWith("/api/webhooks") ||
         pathname.startsWith("/offerte") || // public accept/reject page for clients
         pathname.startsWith("/book") || // public "pick an appointment slot" page
+        pathname.startsWith("/afspraak") || // klant reageert op een afspraakbevestiging (token-link)
         pathname.startsWith("/uren") || // zzp-urenportaal (personal token links)
         pathname.startsWith("/inkoop/keuren") || // inkoopfactuur keuren via de knop in de melding
         pathname === "/verkooppunten" ||
