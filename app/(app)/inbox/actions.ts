@@ -271,6 +271,7 @@ export async function replyToMail(emailId: string, formData: FormData) {
       // Uit een persoonlijk postvak gaat geen kopie naar het team: dat is
       // haar klantcontact, en meelezen is hier niet het doel.
       noCompanyBcc: postvak === "marketing",
+      copyToContactEmails: true,
       inReplyTo: mail.messageId ?? undefined,
       references: mail.messageId ?? undefined,
     });

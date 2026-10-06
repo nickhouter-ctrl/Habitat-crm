@@ -11,6 +11,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { sendEmail } from "@/lib/email";
+vi.mock("@/lib/contact-email-recipients", () => ({ contactEmailRecipients: async (to: string) => to }));
 
 const oud = { ...process.env };
 let payloads: Record<string, unknown>[] = [];

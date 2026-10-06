@@ -7,6 +7,7 @@ import { z } from "zod";
 import { requireModule, requireCapability } from "@/lib/auth/guards";
 
 import { contactDisplayName } from "@/lib/contact-name";
+import { additionalContactEmailsSchema } from "@/lib/contact-email-addresses";
 import { checkVatVies, type ViesResult } from "@/lib/vies";
 import { db } from "@/lib/db";
 import { activities, companies, contacts, documents, holdedSyncMap } from "@/lib/db/schema";
@@ -27,6 +28,7 @@ const newContactSchema = z.object({
   companyVat: z.string().trim().max(40).optional().or(z.literal("")),
   taxId: z.string().trim().max(40).optional().or(z.literal("")),
   email: z.string().trim().email().optional().or(z.literal("")),
+  additionalEmails: additionalContactEmailsSchema,
   phone: z.string().trim().max(40).optional().or(z.literal("")),
   preferredLanguage: z.enum(["en", "nl", "es", "de"]).default("es"),
   addressLine: z.string().trim().max(200).optional().or(z.literal("")),
@@ -123,6 +125,7 @@ export async function createContact(formData: FormData) {
         lastName: v.lastName || "",
         name: displayName,
         email: v.email || "",
+        additionalEmails: v.additionalEmails.filter(e => e !== v.email?.toLowerCase()),
         phone: v.phone || "",
         taxId: (v.taxId || v.companyVat) || "",
         type,
@@ -201,6 +204,7 @@ export async function updateContact(id: string, formData: FormData) {
         lastName: v.lastName || "",
         name: displayName,
         email: v.email || "",
+        additionalEmails: v.additionalEmails.filter(e => e !== v.email?.toLowerCase()),
         phone: v.phone || "",
         taxId: (v.taxId || v.companyVat) || "",
         type,

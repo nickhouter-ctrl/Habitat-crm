@@ -65,6 +65,9 @@ export async function sendEmail(input: {
    * daar is meelezen juist het punt.
    */
   noCompanyBcc?: boolean;
+  /** Include saved contact recipients for ordinary business mail. Private
+   * messages (noCompanyBcc) are excluded unless explicitly opted in. */
+  copyToContactEmails?: boolean;
   /**
    * Systeemmelding: uitsluitend persoonlijke adressen van de vijf collega’s.
    * hi@ wordt uit To, CC en BCC verwijderd; de afzender blijft het bedrijf.
@@ -72,11 +75,20 @@ export async function sendEmail(input: {
   interneMelding?: boolean;
   /** Alleen eigen taken/berichten/reacties mogen het bredere opvolgteam bereiken. */
   systemMailScope?: SystemMailScope;
-}): Promise<{ sent: boolean; reason?: string; messageId?: string }> {
+}): Promise<{ sent: boolean; reason?: string; messageId?: string; recipients?: string }> {
   const scope = input.systemMailScope ?? (input.noCompanyBcc ? "team" : "office");
-  const to = input.interneMelding ? systemMailAddresses(input.to, scope) : input.to;
+  let to = input.interneMelding ? systemMailAddresses(input.to, scope) : input.to;
   // Een persoonlijk bericht nooit stil naar een andere collega doorsturen.
   if (!to) return { sent: false, reason: "system-recipient-not-allowed" };
+  if (!input.interneMelding && (input.copyToContactEmails ?? !input.noCompanyBcc)) {
+    try {
+      const { contactEmailRecipients } = await import("@/lib/contact-email-recipients");
+      to = await contactEmailRecipients(to);
+    } catch {
+      // Do not silently send to only one address if recipient resolution fails.
+      return { sent: false, reason: "contact-recipients-unavailable" };
+    }
+  }
   // Elke uitgaande mail krijgt een VERBORGEN kopie (BCC) naar het bedrijf
   // (EMAIL_BCC, anders NOTIFY_EMAIL of het verzendadres hi@habitat-one.com), zodat
   // je altijd meeleest zonder dat de klant het meeziet. Niet naar de ontvanger
@@ -133,7 +145,7 @@ export async function sendEmail(input: {
         inReplyTo: input.inReplyTo,
         references: input.references,
       });
-      return { sent: true, messageId: res.messageId };
+      return { sent: true, messageId: res.messageId, recipients: to };
     } catch (err) {
       console.warn("[habitat-crm] gmail send error:", err);
       return { sent: false, reason: "gmail-exception" };
@@ -159,7 +171,7 @@ export async function sendEmail(input: {
       .filter(Boolean);
     const payload: Record<string, unknown> = {
       from,
-      to,
+      to: to.includes(",") ? to.split(",").map(s => s.trim()).filter(Boolean) : to,
       ...(bccLijst?.length ? { bcc: bccLijst } : {}),
       ...(cc ? { cc: cc.split(", ").filter(Boolean) } : {}),
       subject: input.subject,
@@ -189,7 +201,7 @@ export async function sendEmail(input: {
       console.warn("[habitat-crm] email send failed:", res.status, await res.text());
       return { sent: false, reason: `http-${res.status}` };
     }
-    return { sent: true };
+    return { sent: true, recipients: to };
   } catch (err) {
     console.warn("[habitat-crm] email send error:", err);
     return { sent: false, reason: "exception" };

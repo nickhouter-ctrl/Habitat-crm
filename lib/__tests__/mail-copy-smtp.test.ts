@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 const m = vi.hoisted(() => ({ send: vi.fn() }));
 vi.mock('nodemailer', () => ({ default: { createTransport: () => ({ sendMail: m.send }) } }));
 import { sendMail } from '@/lib/gmail';
+vi.mock("@/lib/contact-email-recipients", () => ({ contactEmailRecipients: async (to: string) => to }));
 import { sendEmail } from '@/lib/email';
 import { isFairContact, isFairSource } from '@/lib/followup-source';
 

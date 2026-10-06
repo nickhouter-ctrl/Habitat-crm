@@ -62,9 +62,9 @@ export async function verstuurAfspraakvoorstel(inviteId: string, afzender: { nam
     await db.update(appointmentInvites).set({ sentAt: new Date(), updatedAt: new Date() }).where(eq(appointmentInvites.id, inv.id));
     const wat = inv.mode === "fixed" ? `afspraak ${afspraakMoment(new Date(inv.slots[0]), "nl")}`
       : inv.mode === "choice" ? `${inv.slots.length} momenten om uit te kiezen` : "vraag wanneer het de klant uitkomt";
-    await db.insert(activities).values({ contactId: c.id, type: "note", subject: "Afspraakvoorstel verstuurd", body: `${wat} · naar ${naar}` });
+    await db.insert(activities).values({ contactId: c.id, type: "note", subject: "Afspraakvoorstel verstuurd", body: `${wat} · naar ${r.recipients ?? naar}` });
   }
-  return { verstuurd: r.sent, reden: r.sent ? undefined : "De mailprovider bevestigde de verzending niet.", naar };
+  return { verstuurd: r.sent, reden: r.sent ? undefined : "De mailprovider bevestigde de verzending niet.", naar: r.recipients ?? naar };
 }
 
 export async function vindAfspraakvoorstel(token: string) {

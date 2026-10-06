@@ -575,6 +575,13 @@
       "when": 1791289743615,
       "tag": "0081_high_sally_floyd",
       "breakpoints": true
+    },
+    {
+      "idx": 82,
+      "version": "7",
+      "when": 1791300472863,
+      "tag": "0082_optimal_pepper_potts",
+      "breakpoints": true
     }
   ]
 }

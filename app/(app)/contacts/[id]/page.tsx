@@ -806,6 +806,12 @@ export default async function ContactDetailPage({
                   </a>
                 </InfoRow>
               ) : null}
+              {contact.additionalEmails.map(email => (
+                <InfoRow key={email} icon={Mail}>
+                  <a href={`mailto:${email}`} className="hover:underline">{email}</a>
+                  <span className="ml-1 text-xs text-muted">({uiT("Extra e-mailontvanger")})</span>
+                </InfoRow>
+              ))}
               {contact.mobile || contact.phone ? (
                 <InfoRow icon={Phone}>
                   {contact.mobile ?? contact.phone}

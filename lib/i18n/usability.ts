@@ -1,6 +1,9 @@
 import type { Dictionary } from "@/lib/i18n";
 
 const rows: [string, string, string][] = [
+  ["Extra e-mailontvangers", "Additional email recipients", "Destinatarios adicionales"],
+  ["Extra e-mailontvanger", "Additional email recipient", "Destinatario adicional"],
+  ["Deze adressen ontvangen ook klantmails. Scheid meerdere adressen met een komma.", "These addresses also receive customer emails. Separate multiple addresses with a comma.", "Estas direcciones también reciben los correos al cliente. Separa varias direcciones con una coma."],
   ["Arbeid", "Labour", "Mano de obra"],
   ["Bouwmaterialen", "Building materials", "Materiales de construcción"],
   ["Klantoverzicht downloaden", "Download client overview", "Descargar resumen para el cliente"],

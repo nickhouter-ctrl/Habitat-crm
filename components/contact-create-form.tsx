@@ -30,6 +30,7 @@ export type ContactFormInitial = {
   companyVat?: string | null;
   taxId?: string | null;
   email?: string | null;
+  additionalEmails?: string[];
   phone?: string | null;
   addressLine?: string | null;
   postalCode?: string | null;
@@ -201,6 +202,10 @@ export function ContactCreateForm({
       <TabPanel id="data"><div className="grid gap-4 sm:grid-cols-2">
         <Field label={uiT("E-mail")} htmlFor="email">
           <Input id="email" name="email" type="email" autoComplete="email" defaultValue={initial?.email ?? ""} onBlur={(e) => checkDup(e.currentTarget.form)} />
+        </Field>
+        <Field label={uiT("Extra e-mailontvangers")} htmlFor="additionalEmails">
+          <Input id="additionalEmails" name="additionalEmails" type="email" multiple defaultValue={initial?.additionalEmails?.join(", ") ?? ""} />
+          <p className="mt-1 text-xs text-muted">{uiT("Deze adressen ontvangen ook klantmails. Scheid meerdere adressen met een komma.")}</p>
         </Field>
         <Field label={uiT("Telefoon")} htmlFor="phone">
           <Input id="phone" name="phone" type="tel" defaultValue={initial?.phone ?? ""} onBlur={(e) => checkDup(e.currentTarget.form)} />

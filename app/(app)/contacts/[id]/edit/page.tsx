@@ -57,6 +57,7 @@ export default async function EditContactPage({
     companyVat: company?.vatNumber ?? null,
     taxId: contact.taxId,
     email: contact.email,
+    additionalEmails: contact.additionalEmails,
     phone: contact.phone,
     addressLine: contact.addressLine,
     postalCode: contact.postalCode,

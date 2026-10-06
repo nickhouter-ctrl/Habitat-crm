@@ -343,6 +343,8 @@ export const contacts = pgTable(
     /** Display name — kept denormalised so company-only contacts still sort/search. */
     name: text().notNull(),
     email: text(),
+    /** Additional recipients for customer correspondence; never login identities. */
+    additionalEmails: text().array().notNull().default(sql`'{}'::text[]`),
     phone: text(),
     mobile: text(),
     jobTitle: text(),

@@ -172,17 +172,17 @@ export async function sendDraft(_:Result,fd:FormData):Promise<Result>{
       .where(and(eq(partnerMessages.id,id),eq(partnerMessages.status,'draft'),draftVersionMatches(partnerMessages.updatedAt,seen))).returning();
     if(!claimed)throw new InputError('Het concept is gewijzigd of door iemand anders in behandeling genomen. Vernieuw de pagina om de actuele status te zien.');
     try {
-      const r=await sendEmail({to:d.toEmail,subject:d.subject,html:rendered.html,text:rendered.text,attachments,fromUser:{name:kind==='custom'?user.name:'Hans'},fromMailbox:d.mailboxUser===marketingMailbox()?'marketing':'main',noCompanyBcc:d.mailboxUser===marketingMailbox(),copyPolicy:isFairContact(c)?'team':undefined,afzenderEmail:user.email});
+      const r=await sendEmail({to:d.toEmail,subject:d.subject,html:rendered.html,text:rendered.text,attachments,fromUser:{name:kind==='custom'?user.name:'Hans'},fromMailbox:d.mailboxUser===marketingMailbox()?'marketing':'main',noCompanyBcc:d.mailboxUser===marketingMailbox(),copyToContactEmails:true,copyPolicy:isFairContact(c)?'team':undefined,afzenderEmail:user.email});
       if(!r.sent)throw new Error('Mailprovider bevestigt geen verzending');
       const sentAt=new Date();
       await db.transaction(async tx=>{
         await tx.select({id:contacts.id}).from(contacts).where(eq(contacts.id,c.id)).for('update');
-        await tx.update(partnerMessages).set({status:'sent',messageId:r.messageId??null,sentAt,updatedAt:sentAt}).where(eq(partnerMessages.id,id));
+        await tx.update(partnerMessages).set({status:'sent',toEmail:r.recipients??d.toEmail,messageId:r.messageId??null,sentAt,updatedAt:sentAt}).where(eq(partnerMessages.id,id));
         await tx.update(contacts).set({lastContactedAt:sentAt}).where(eq(contacts.id,c.id));
         await tx.update(partnerProfiles).set({stage:'contacted',version:sql`${partnerProfiles.version}+1`,updatedAt:sentAt}).where(and(eq(partnerProfiles.contactId,c.id),eq(partnerProfiles.stage,'new')));
         await completeFollowupAfterMail(tx,c.id,user.id,sentAt);
       });
-      try{await recordSentEmail({kind:'other',contactId:c.id,toEmail:d.toEmail,subject:d.subject,html:rendered.html,text:rendered.text});}catch{console.warn('[followup] sent-mail-archive-pending',{id});}
+      try{await recordSentEmail({kind:'other',contactId:c.id,toEmail:r.recipients??d.toEmail,subject:d.subject,html:rendered.html,text:rendered.text});}catch{console.warn('[followup] sent-mail-archive-pending',{id});}
       revalidatePath('/agenda');revalidatePath('/');refresh(c.id);return{success:'Verstuurd, bewaard en opvolging automatisch afgehandeld.'};
     }catch{await db.update(partnerMessages).set({status:'unknown',updatedAt:new Date()}).where(and(eq(partnerMessages.id,id),eq(partnerMessages.status,'sending')));refresh(c.id);return{error:'Verzending niet volledig bevestigd. Controleer Verzonden en synchroniseer voordat je opnieuw mailt.'};}
   }catch(e){return failure(e);}

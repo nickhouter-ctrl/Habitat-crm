@@ -1,0 +1,1 @@
+ALTER TABLE "contacts" ADD COLUMN "additional_emails" text[] DEFAULT '{}'::text[] NOT NULL;
