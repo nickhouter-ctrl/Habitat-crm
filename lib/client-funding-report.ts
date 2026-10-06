@@ -2,6 +2,7 @@ import { maakT, type Locale } from "@/lib/i18n";
 import type { AdvanceCover, ProjectMargins } from "@/lib/project-financials";
 import type { ReportPdfInput } from "@/lib/report-pdf";
 import { formatEUR } from "@/lib/utils";
+import type { ClientFundingProduct } from "./client-funding-products";
 
 /** Explicit customer-facing projection: never pass costs, notes or profit to the PDF. */
 export function clientFundingAmounts(
@@ -25,10 +26,30 @@ export function clientFundingReport(input: {
   generatedAt: Date;
   locale: Locale;
   amounts: ReturnType<typeof clientFundingAmounts>;
+  products?: ClientFundingProduct[];
 }): ReportPdfInput {
   const { amounts: a, locale } = input;
   const t = maakT(locale);
+  if (input.products && input.products.reduce((sum, p) => sum + Math.round(p.received * 100), 0) !== Math.round(a.products * 100)) {
+    throw new Error("Product specification does not reconcile with the project balance");
+  }
   const columns = [{ header: t("Omschrijving"), flex: 4 }, { header: t("Bedrag"), align: "right" as const, flex: 1.5 }];
+  const productRows = (input.products ?? []).flatMap(p => {
+    const names = p.products.length ? p.products : [t("Producten volgens factuur of verrekening")];
+    // Keep long invoices readable and allow the specification to span pages.
+    return Array.from({ length: Math.ceil(names.length / 4) }, (_, i) => [
+      p.documentNumber ?? t("Betaling"),
+      names.slice(i * 4, (i + 1) * 4).join(" · "),
+      i === 0 ? formatEUR(p.received) : "",
+    ]);
+  });
+  const productTables = Array.from({ length: Math.ceil(productRows.length / 5) }, (_, i) => ({
+    title: t(i === 0 ? "Specificatie van de productbedragen" : "Specificatie van de productbedragen (vervolg)"),
+    subtitle: t("Ontvangen productbedrag per factuur, ex. btw. Bij deelbetalingen telt alleen het betaalde deel mee. Deze bedragen zijn hierboven al afgetrokken."),
+    columns: [{ header: t("Factuur"), flex: 1.5 }, { header: t("Producten"), flex: 4 }, { header: t("Bedrag"), flex: 1.5, align: "right" as const }],
+    rows: [...productRows.slice(i * 5, (i + 1) * 5), ...(i === Math.ceil(productRows.length / 5) - 1 ? [[t("Totaal"), "", formatEUR(a.products)]] : [])],
+    emphasizeRow: (row: number) => i === Math.ceil(productRows.length / 5) - 1 && row === productRows.slice(i * 5, (i + 1) * 5).length,
+  }));
   return {
     locale,
     title: t("Voorschotoverzicht van uw project"),
@@ -52,6 +73,7 @@ export function clientFundingReport(input: {
         ],
         emphasizeRow: i => i === 3,
       },
+      ...productTables,
       {
         title: t("Specificatie van het afgeboekte werk"),
         subtitle: t("Deze bedragen zijn opgenomen in het afgeboekte werk hierboven en worden niet nogmaals afgetrokken."),

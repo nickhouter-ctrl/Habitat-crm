@@ -23,6 +23,7 @@ export async function renderClientFundingPdf(projectId: string, requestedLocale?
     projectName: project.name, clientName: contact?.name ?? null,
     generatedAt: new Date(), locale,
     amounts: clientFundingAmounts(current.cover, current.margins),
+    products: current.productReceipts,
   }));
   return {
     buffer,
