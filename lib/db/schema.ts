@@ -232,6 +232,23 @@ export const users = pgTable("users", {
   ...timestamps,
 });
 
+/** Assigned daily checks; completion is stored per Madrid calendar day. */
+export const staffDailyTasks = pgTable("staff_daily_tasks", {
+  id: uuid().defaultRandom().primaryKey(),
+  userId: uuid().notNull().references(() => users.id, { onDelete: "cascade" }),
+  kind: text().$type<"mail" | "purchase_reviews">().notNull(),
+  ...timestamps,
+}, (t) => [
+  uniqueIndex("staff_daily_tasks_user_kind_idx").on(t.userId, t.kind),
+  check("staff_daily_tasks_kind_check", sql`${t.kind} in ('mail', 'purchase_reviews')`),
+]).enableRLS();
+
+export const staffDailyTaskCompletions = pgTable("staff_daily_task_completions", {
+  taskId: uuid().notNull().references(() => staffDailyTasks.id, { onDelete: "cascade" }),
+  day: date().notNull(),
+  completedAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
+}, (t) => [primaryKey({ columns: [t.taskId, t.day] })]).enableRLS();
+
 export const accounts = pgTable(
   "accounts",
   {

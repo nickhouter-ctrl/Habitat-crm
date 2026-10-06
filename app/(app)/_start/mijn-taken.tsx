@@ -31,10 +31,12 @@ export async function MijnTaken({
   taken,
   teamleden,
   readOnly = false,
+  hasDailyTasks = false,
 }: {
   taken: MijnTaak[];
   teamleden: { id: string; name: string | null; email: string }[];
   readOnly?: boolean;
+  hasDailyTasks?: boolean;
 }) {
   const uiDateLocale = await datumTaal();
   const DAG_FMT = new Intl.DateTimeFormat(uiDateLocale, { weekday: "short", day: "numeric", month: "short" });
@@ -44,17 +46,17 @@ export async function MijnTaken({
   return (
     <Card>
       <CardHeader>
-        <CardTitle>{t("Mijn taken")}</CardTitle>
+        <CardTitle>{t(hasDailyTasks ? "Overige taken" : "Mijn taken")} <span className="ml-2 text-sm font-normal text-muted">{taken.length}</span></CardTitle>
         <Link href="/agenda" className="text-xs text-accent hover:underline">
           {t("Agenda")}
         </Link>
       </CardHeader>
       <CardContent className="space-y-1">
-        {taken.length === 0 && <p className="py-1 text-sm text-muted">{t("Geen open taken — lekker bezig.")} ✓</p>}
+        {taken.length === 0 && <p className="py-1 text-sm text-muted">{t(hasDailyTasks ? "Geen andere open taken." : "Geen open taken — lekker bezig.")} ✓</p>}
         {taken.map((taak) => {
           const teLaat = !!taak.dueAt && taak.dueAt < nu;
           return (
-            <div key={taak.id} className="-mx-2 flex items-center gap-2.5 rounded-md px-2 py-1.5 hover:bg-background">
+            <div key={taak.id} className="-mx-2 flex flex-wrap items-center gap-2.5 rounded-md px-2 py-1.5 hover:bg-background">
               {!readOnly && (
                 <form action={completeTask.bind(null, taak.id)}>
                   <SubmitButton
@@ -68,7 +70,7 @@ export async function MijnTaken({
                   </SubmitButton>
                 </form>
               )}
-              <span className="min-w-0 flex-1 truncate text-sm">{taakTitel(taak.subject, uiT)}</span>
+              <span className="min-w-0 flex-1 whitespace-normal break-words text-sm">{taakTitel(taak.subject, uiT)}</span>
               {taak.priority === "hoog" && <Badge tone="danger">{t("hoog")}</Badge>}
               {taak.isVanAnder && taak.authorName && (
                 <span className="hidden text-xs text-muted sm:inline">{t("van {wie}", { wie: taak.authorName })}</span>

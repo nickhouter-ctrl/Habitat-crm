@@ -1,14 +1,14 @@
 import { tekst as uiTranslation } from '@/lib/i18n/server';
 /**
  * Persoonlijke startpagina — de landingspagina na inloggen.
- * Begroeting op Madrid-tijd, "Vandaag" (automatische dagtaken + mijn taken)
- * en alle functies als grote tegels op werkvolgorde (per gebruiker indeelbaar).
+ * Begroeting op Madrid-tijd, eigen dagelijkse taken en open taken direct
+ * zichtbaar naast de dagplanning. Overige controles en tegels zijn inklapbaar.
  * Het cijfer-dashboard leeft op /dashboard.
  */
 import { and, asc, eq, isNull, or, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 
-import { huidigeToegangOfNull } from "@/lib/auth/access";
+import { requireModuleRead } from "@/lib/auth/guards";
 import { datumTaal, tekst } from "@/lib/i18n/server";
 import { salesTaskFilter } from "@/lib/auth/sales-scope";
 import { magAlles } from "@/lib/auth/modules";
@@ -23,7 +23,8 @@ import type { StartPrefs } from "@/lib/start-tegels";
 import { saveStartPrefs } from "./_start/actions";
 import { MijnTaken, type MijnTaak } from "./_start/mijn-taken";
 import { TegelGrid } from "./_start/tegel-grid";
-import { TabsRoot, TabsBar, TabPanel } from "@/components/tabs";
+import { DailyTasks } from "@/components/daily-tasks";
+import { loadDailyTasks } from "@/lib/daily-tasks";
 import { staffAgendaItems } from "@/lib/staff-notifications";
 import { agendaDay } from "@/lib/agenda-dates";
 import { TodayAgenda } from "./_start/today";
@@ -52,14 +53,15 @@ export default async function StartPage({
   searchParams: Promise<{ "geen-toegang"?: string }>;
 }) {
   const t = await tekst();
-  const ik = await huidigeToegangOfNull();
+  const ik = await requireModuleRead("start");
+  const today = agendaDay(new Date());
   const userId = ik?.id ?? "";
   const isViewer = !ik?.heeftCap("schrijven");
   const allesZichtbaar = magAlles(ik?.rol);
   const geweigerd = "geen-toegang" in (await searchParams);
 
   const author = alias(users, "author");
-  const [dagtaken, taakRows, teamleden, badges, [prefsRow], agendaItems] = await Promise.all([
+  const [dagtaken, taakRows, teamleden, badges, [prefsRow], agendaItems, dailyTasks] = await Promise.all([
     verzamelDagtaken(ik?.rol, ik?.email),
     db
       .select({
@@ -95,12 +97,13 @@ export default async function StartPage({
     // De teamledenlijst is er om taken toe te wijzen; dat is niets voor een
     // beperkt account, en dan hoeft de lijst ook niet opgehaald te worden.
     allesZichtbaar
-      ? db.select({ id: users.id, name: users.name, email: users.email }).from(users).orderBy(asc(users.name))
+      ? db.select({ id: users.id, name: users.name, email: users.email }).from(users).where(sql`${users.role} <> 'viewer'`).orderBy(asc(users.name))
       : Promise.resolve([] as { id: string; name: string | null; email: string }[]),
     verzamelNavBadges(ik?.rol, ik?.email, ik?.id),
     // Naam vers uit de DB: de JWT-sessie kan een oude naam cachen (30 dagen).
     db.select({ startPrefs: users.startPrefs, name: users.name }).from(users).where(eq(users.id, userId)).limit(1),
-    staffAgendaItems(userId, agendaDay(new Date())),
+    staffAgendaItems(userId, today),
+    loadDailyTasks(ik, today),
   ]);
 
   // Tellers op de tegels: de nav-badges aangevuld met de dagtaken-signalen,
@@ -154,14 +157,29 @@ export default async function StartPage({
         </p>
       )}
 
-      <p className="mb-5 max-w-2xl text-sm leading-relaxed text-muted">{t("Begin met je dagplanning. Open daarna de klant of taak die je wilt afhandelen.")}</p>
-      <TabsRoot defaultTab="vandaag" ids={["vandaag","taken","controles","onderdelen"]}>
-        <TabsBar tabs={[{id:"vandaag",label:t("Vandaag"),badge:agendaItems.length},{id:"taken",label:t("Mijn taken"),badge:mijnTaken.length},{id:"controles",label:t("Controles"),badge:dagtaken.length},{id:"onderdelen",label:t("Onderdelen")}]}/>
-        <TabPanel id="vandaag"><TodayAgenda items={agendaItems} readOnly={isViewer}/><div className="flex flex-wrap gap-3"><LinkButton href="/opvolging" variant="secondary">{t("Opvolging")}{(badges['/opvolging']??0)>0?` · ${badges['/opvolging']}`:''}</LinkButton><LinkButton href="/teamberichten" variant="secondary">{t("Teamberichten")}{(badges['/teamberichten']??0)>0?` · ${badges['/teamberichten']}`:''}</LinkButton><LinkButton href="/handleiding" variant="ghost">{t("Hulp & handleiding")}</LinkButton></div></TabPanel>
-        <TabPanel id="taken"><MijnTaken taken={mijnTaken} teamleden={teamleden} readOnly={isViewer}/></TabPanel>
-        <TabPanel id="controles"><DagtakenLijst taken={dagtaken} titel={t("Wat vraagt aandacht")} className=""/></TabPanel>
-        <TabPanel id="onderdelen"><TegelGrid prefs={(prefsRow?.startPrefs as StartPrefs | null) ?? null} badges={tegelBadges} saveAction={saveStartPrefs} rol={ik?.rol}/></TabPanel>
-      </TabsRoot>
+      <p className="mb-5 max-w-2xl text-sm leading-relaxed text-muted">{t("Jouw taken, dagelijkse controles en afspraken. Alles wat voor jou klaarstaat.")}</p>
+      <div className="mb-6 grid items-start gap-5 xl:grid-cols-[1.15fr_1fr]">
+        <div id="taken" className="space-y-5">
+          <DailyTasks tasks={dailyTasks} day={today} userId={userId} readOnly={isViewer}/>
+          <MijnTaken hasDailyTasks={dailyTasks.length > 0} taken={mijnTaken} teamleden={teamleden} readOnly={isViewer}/>
+        </div>
+        <div id="vandaag" className="space-y-5">
+          <TodayAgenda hasDailyTasks={dailyTasks.length > 0} items={agendaItems} readOnly={isViewer}/>
+          <div className="flex flex-wrap gap-3">
+            {ik.magModule("klantopvolging")&&<LinkButton href="/opvolging" variant="secondary">{t("Opvolging")}{(badges['/opvolging']??0)>0?` · ${badges['/opvolging']}`:''}</LinkButton>}
+            {ik.magModule("teamberichten")&&<LinkButton href="/teamberichten" variant="secondary">{t("Teamberichten")}{(badges['/teamberichten']??0)>0?` · ${badges['/teamberichten']}`:''}</LinkButton>}
+            {ik.heeftCap("teambeheer")&&<LinkButton href="/agenda?owner=all&kind=task" variant="secondary">{t("Taken per medewerker")}</LinkButton>}
+          </div>
+        </div>
+      </div>
+      <details id="controles" className="mb-5 rounded-xl border bg-surface p-4">
+        <summary className="cursor-pointer text-sm font-semibold">{t("Overige aandachtspunten")}{dagtaken.length?` · ${dagtaken.length}`:''}</summary>
+        <div className="mt-4"><DagtakenLijst taken={dagtaken} titel={t("Wat vraagt aandacht")} className=""/></div>
+      </details>
+      <details id="onderdelen" className="rounded-xl border bg-surface p-4">
+        <summary className="cursor-pointer text-sm font-semibold">{t("Onderdelen")}</summary>
+        <div className="mt-4"><TegelGrid prefs={(prefsRow?.startPrefs as StartPrefs | null) ?? null} badges={tegelBadges} saveAction={saveStartPrefs} rol={ik?.rol}/></div>
+      </details>
     </>
   );
 }

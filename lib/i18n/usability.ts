@@ -1,6 +1,22 @@
 import type { Dictionary } from "@/lib/i18n";
 
 const rows: [string, string, string][] = [
+  ["Overige taken", "Other tasks", "Otras tareas"],
+  ["Geen andere open taken.", "No other open tasks.", "No hay otras tareas pendientes."],
+  ["Geen afspraken of losse taken gepland", "No appointments or one-off tasks scheduled", "No hay citas ni tareas puntuales programadas"],
+  ["Je dagelijkse werkzaamheden staan bij Dagelijkse taken. Plan hier je afspraken en extra taken.", "Your daily work is listed under Daily tasks. Schedule appointments and additional tasks here.", "Tu trabajo diario aparece en Tareas diarias. Programa aquí tus citas y tareas adicionales."],
+
+  ["Dagelijkse taken", "Daily tasks", "Tareas diarias"],
+  ["Mails lezen en beantwoorden", "Read and reply to emails", "Leer y responder correos"],
+  ["Inkoopfacturen keuren", "Review purchase invoices", "Revisar facturas de compra"],
+  ["Elke dag opnieuw klaar. Vink af zodra je de controle hebt gedaan.", "Ready again each day. Tick off each check when you have finished.", "Disponibles cada día. Marca cada revisión cuando la hayas terminado."],
+  ["Vandaag gedaan", "Done today", "Hecho hoy"],
+  ["Dagelijks", "Daily", "Cada día"],
+  ["{n} open", "{n} open", "{n} pendientes"],
+  ["Taken per medewerker", "Tasks by employee", "Tareas por empleado"],
+  ["Overige aandachtspunten", "Other items needing attention", "Otros asuntos pendientes"],
+  ["Jouw taken, dagelijkse controles en afspraken. Alles wat voor jou klaarstaat.", "Your tasks, daily checks and appointments. Everything ready for you.", "Tus tareas, revisiones diarias y citas. Todo lo que tienes pendiente."],
+
   ["Extra e-mailontvangers", "Additional email recipients", "Destinatarios adicionales"],
   ["Extra e-mailontvanger", "Additional email recipient", "Destinatario adicional"],
   ["Deze adressen ontvangen ook klantmails. Scheid meerdere adressen met een komma.", "These addresses also receive customer emails. Separate multiple addresses with a comma.", "Estas direcciones también reciben los correos al cliente. Separa varias direcciones con una coma."],
