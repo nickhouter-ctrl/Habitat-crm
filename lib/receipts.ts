@@ -49,13 +49,31 @@ export function receiptExVat(p: ReceiptLike): number {
  * betalingen die aan een factuur hangen alleen het deel dat géén eigen
  * producten is (het aandeel per document komt uit `docOwnShare` in
  * lib/documents.ts). Voorschotten zonder document tellen volledig mee; een
- * betaling op een document zonder bekend aandeel ook — veilige default.
+ * betaling op een document zonder bekend aandeel ook.
  */
 export function coverReceivedEx(payments: ReceiptLike[], ownShareByDoc: Map<string, number>): number {
-  let som = 0;
+  return splitProjectReceipts(payments, ownShareByDoc).liquidReceived;
+}
+
+export function splitReceipt(p: ReceiptLike, ownShareByDoc: ReadonlyMap<string, number>) {
+  const totalReceived = Math.round(receiptExVat(p) * 100) / 100;
+  const rawShare = p.documentId ? ownShareByDoc.get(p.documentId) ?? 0 : 0;
+  const share = Number.isFinite(rawShare) ? Math.max(0, Math.min(1, rawShare)) : 0;
+  const ownProductReceived = Math.round(totalReceived * share * 100) / 100;
+  // Subtract rounded amounts so every displayed row reconciles to the cent.
+  const liquidReceived = Math.round((totalReceived - ownProductReceived) * 100) / 100;
+  return { totalReceived, ownProductReceived, liquidReceived };
+}
+
+/** Partial payments and refunds follow their linked document's goods/work split.
+ * Unlinked advances stay available for work; unpaid documents create no receipt.
+ */
+export function splitProjectReceipts(payments: ReceiptLike[], ownShareByDoc: ReadonlyMap<string, number>) {
+  let totalCents = 0, ownCents = 0;
   for (const p of payments) {
-    const share = p.documentId ? (ownShareByDoc.get(p.documentId) ?? 0) : 0;
-    som += receiptExVat(p) * (1 - share);
+    const receipt = splitReceipt(p, ownShareByDoc);
+    totalCents += Math.round(receipt.totalReceived * 100);
+    ownCents += Math.round(receipt.ownProductReceived * 100);
   }
-  return Math.round(som * 100) / 100;
+  return { totalReceived: totalCents / 100, ownProductReceived: ownCents / 100, liquidReceived: (totalCents - ownCents) / 100 };
 }

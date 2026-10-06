@@ -201,7 +201,7 @@ export async function AdvanceRequestCard({
               <strong className="tabular-nums text-foreground">{formatEUR(cover.prefinanced)}</strong>
             </span>
             <span className="text-muted">
-              {uiT("dekking ontvangen")} <strong className="tabular-nums text-foreground">{formatEUR(cover.received)}</strong>
+              {uiT("Liquide ontvangen")} <strong className="tabular-nums text-foreground">{formatEUR(cover.received)}</strong>
             </span>
             <span
               className={`font-semibold tabular-nums ${
@@ -212,12 +212,12 @@ export async function AdvanceRequestCard({
             </span>
           </div>
           <p className="mt-1 text-xs text-muted">
-            {cover.status === "gedekt" ? uiT("De ontvangen betalingen dekken de doorbelasting inclusief opslag en productverkoop.")
+            {cover.status === "gedekt" ? uiT("De liquide ontvangsten dekken uren en externe inkoop inclusief opslag.")
               : cover.status === "bijna_op" ? uiT("Het voorschot is bijna verbruikt. Bereid een nieuw verzoek voor voordat je verdere kosten maakt.")
               : uiT("Er is onvoldoende ontvangen om de doorbelasting inclusief verdiensten te dekken. Voorgesteld verzoek: {v0}.", { v0: formatEUR(tekortAfgerond) })}
             {" "}{uiT("Alle bedragen ex. btw.")} </p>
           <p className="mt-2 text-xs text-muted">
-            {uiT("Doorbelasting:")} {formatEUR(cover.requiredRevenue)}{uiT(". Arbeid en externe materialen inclusief opslag; eigen producten tegen verkoopprijs. Een verstuurd voorschotverzoek telt pas mee na ontvangst. Geboekte kosten geven geen bewijs dat leveranciers al betaald zijn; betaalstatus blijft in Holded.")} </p>
+            {uiT("Doorbelasting:")} {formatEUR(cover.requiredRevenue)}{uiT(". Uren en externe inkoop inclusief opslag. Ontvangsten voor eigen producten blijven apart. Een verstuurd verzoek telt pas mee na ontvangst. Betaalstatus van leveranciers blijft in Holded.")} </p>
           {aanneemsom > 0 && doorTeBelasten > aanneemsom && (
             <p className="mt-2 text-xs text-warning">
               {uiT("Let op: wat er doorbelast moet worden (")}{formatEUR(doorTeBelasten)}{uiT(") ligt boven de aanneemsom van")}{" "}

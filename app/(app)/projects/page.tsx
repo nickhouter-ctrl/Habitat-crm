@@ -38,7 +38,7 @@ import {
 import { docOwnShare, docProductMargin, normalizeDocItems } from "@/lib/documents";
 import type { DocumentLineItem } from "@/lib/db/schema";
 import { deriveAdvanceCover, deriveProjectMargins, deriveProjectFinancials } from "@/lib/project-financials";
-import { coverReceivedEx } from "@/lib/receipts";
+import { splitProjectReceipts } from "@/lib/receipts";
 import { poExVatSql } from "@/lib/purchase-orders-sql";
 import { formatEUR } from "@/lib/utils";
 
@@ -107,7 +107,7 @@ export default async function ProjectsPage({
   await requireModuleRead("projects");
   const uiT = await uiTranslation();
   const { status, funding: fundingFilter } = await searchParams;
-  const funding = await loadProjectFunding();
+  const funding = await loadProjectFunding(undefined, true);
   const filter: Filter = status === "inactive" || status === "all" ? status : "active";
 
   const statusWhere =
@@ -355,8 +355,7 @@ export default async function ProjectsPage({
     if (d.kind === "estimate") continue;
     ownShareByDoc.set(d.id, docOwnShare(d.items, Number(d.subtotalEur ?? 0), productCostOf));
   }
-  const coverReceivedBy = new Map<string, number>();
-  for (const [pid, list] of paymentsByProject) coverReceivedBy.set(pid, coverReceivedEx(list, ownShareByDoc));
+  const receiptsByProject = new Map([...paymentsByProject].map(([pid, list]) => [pid, splitProjectReceipts(list, ownShareByDoc)]));
 
   // 4. Samenvoegen + per-project financiën afleiden (zelfde formule als detailscherm).
   const rows = projectRows
@@ -397,7 +396,9 @@ export default async function ProjectsPage({
       const cover = funding.get(p.id)?.cover ?? deriveAdvanceCover({
         laborCost,
         purchaseCost: materialCost,
-        coverReceivedEx: coverReceivedBy.get(p.id) ?? 0,
+        coverReceivedEx: receiptsByProject.get(p.id)?.liquidReceived ?? 0,
+        ownProductReceivedEx: receiptsByProject.get(p.id)?.ownProductReceived ?? 0,
+        requiredRevenue: margins.laborRevenue + margins.purchaseRevenue,
       });
       const lastActivity =
         a?.lastDocAt && new Date(a.lastDocAt) > new Date(p.updatedAt)
@@ -498,18 +499,21 @@ export default async function ProjectsPage({
           <Link href="/projects?funding=attention" className="rounded-xl border bg-surface px-4 py-4"><p className="text-xs text-muted">{uiT("Voorschot controleren")}</p><p className="mt-1 text-xl font-semibold text-warning">{rows.filter(p=>p.status==='active'&&p.cover.requiredRevenue>0.01&&p.cover.status!=='gedekt').length}</p></Link>
           <div className="rounded-xl border bg-surface px-4 py-4"><p className="text-xs text-muted">{uiT("Openstaande klantfacturen")}</p><p className="mt-1 text-xl font-semibold tabular-nums">{formatEUR(totals.outstanding)}</p><p className="mt-1 text-xs text-muted">{uiT("Nog niet ontvangen · ex. btw")}</p></div>
         </div>
-        <Card className="overflow-hidden"><CardHeader><CardTitle>{uiT("Stand per project")}</CardTitle><span className="text-xs text-muted">{uiT("Ontvangsten en voorschotruimte · ex. btw")}</span></CardHeader><Table className="min-w-[850px]">
-          <THead><Tr><Th>{uiT("Project")}</Th><Th>{uiT("Voortgang")}</Th><Th className="text-right">{uiT("Ontvangen")}</Th><Th className="text-right">{uiT("Geboekt werk tegen klantprijs")}</Th><Th className="text-right">{uiT("Resterende voorschotruimte")}</Th><Th>{uiT("Volgende stap")}</Th></Tr></THead>
+        <Card className="overflow-hidden"><CardHeader><CardTitle>{uiT("Stand per project")}</CardTitle><span className="text-xs text-muted">{uiT("Ontvangsten en voorschotruimte · ex. btw")}</span></CardHeader><Table className="min-w-[1200px]">
+          <THead><Tr><Th>{uiT("Project")}</Th><Th>{uiT("Voortgang")}</Th><Th className="text-right">{uiT("Totaal ontvangen")}</Th><Th className="text-right">{uiT("Ontvangen voor eigen producten")}</Th><Th className="text-right">{uiT("Liquide ontvangen")}</Th><Th className="text-right">{uiT("Liquide beschikbaar na geboekte kosten")}</Th><Th className="text-right">{uiT("Uren en derden tegen klantprijs")}</Th><Th className="text-right">{uiT("Resterende voorschotruimte")}</Th><Th>{uiT("Volgende stap")}</Th></Tr></THead>
           <TBody>{rows.map(p=><Tr key={p.id}>
             <Td><Link href={`/projects/${p.id}`} className="font-semibold text-accent hover:underline">{p.name}</Link><p className="mt-1 text-xs text-muted">{p.contactName??uiT("Geen klant gekoppeld")}{p.ownerName?` · ${p.ownerName}`:''}</p><div className="mt-2">{statusBadge(p.status)}</div></Td>
             <Td>{p.progress.percent===null?<span className="text-xs text-muted">{uiT("Nog niet vastgelegd")}</span>:<><p className="text-sm font-semibold">{p.progress.percent}%</p><div role="progressbar" aria-label={uiT("Voortgang")} aria-valuenow={p.progress.percent} aria-valuemin={0} aria-valuemax={100} className="mt-2 h-1.5 w-24 overflow-hidden rounded-full bg-background"><div className="h-full bg-accent" style={{width:`${p.progress.percent}%`}}/></div><p className="mt-1 max-w-36 text-xs text-muted">{p.progress.current??uiT("Alle fases afgerond")}</p></>}</Td>
+            <Td className="text-right tabular-nums">{formatEUR(p.cover.totalReceived)}</Td>
+            <Td className="text-right tabular-nums">{formatEUR(p.cover.ownProductReceived)}</Td>
             <Td className="text-right tabular-nums">{formatEUR(p.cover.received)}</Td>
-            <Td className="text-right tabular-nums">{formatEUR(p.cover.requiredRevenue)}<p className="mt-1 text-xs text-muted">{uiT("Incl. opslag en eigen producten")}</p></Td>
+            <Td className={`text-right font-semibold tabular-nums ${p.cover.costSaldo < 0 ? "text-danger" : "text-success"}`}>{formatEUR(p.cover.costSaldo)}</Td>
+            <Td className="text-right tabular-nums">{formatEUR(p.cover.requiredRevenue)}<p className="mt-1 text-xs text-muted">{uiT("Incl. opslag op uren en derden")}</p></Td>
             <Td className="text-right"><p className={`font-semibold tabular-nums ${p.cover.saldo<0?'text-danger':p.cover.status==='bijna_op'?'text-warning':'text-success'}`}>{formatEUR(p.cover.saldo)}</p><p className="mt-1 text-xs text-muted">{uiT(p.cover.saldo<0?"tekort incl. opslag":"vooruit ontvangen incl. opslag")}</p></Td>
             <Td><Link href={`/projects/${p.id}#voorschot-opvragen`} className="inline-block text-sm font-medium text-accent hover:underline">{uiT(p.status!=='active'?"Betalingen controleren":p.cover.requiredRevenue<=0.01?"Voorschot plannen":p.cover.status==='voorgeschoten'?"Voorschot nodig":p.cover.status==='bijna_op'?"Nieuw voorschot voorbereiden":"Voldoende voorschotruimte")}</Link>{p.outstanding>0.01&&<p className="mt-2 text-xs text-warning">{uiT("{amount} facturen nog open",{amount:formatEUR(p.outstanding)})}</p>}</Td>
-          </Tr>)}{!rows.length&&<Tr><Td colSpan={6}>{uiT("Geen projecten in deze weergave — maak er een aan met “Nieuw project”.")}</Td></Tr>}</TBody>
+          </Tr>)}{!rows.length&&<Tr><Td colSpan={9}>{uiT("Geen projecten in deze weergave — maak er een aan met “Nieuw project”.")}</Td></Tr>}</TBody>
         </Table></Card>
-        <p className="text-xs leading-relaxed text-muted">{uiT("Ontvangen − geboekt werk tegen klantprijs = resterende voorschotruimte.")} {uiT("Kosten en berekening bekijk je in het project. Marge en winst staan in hun eigen tabblad.")}</p>
+        <p className="text-xs leading-relaxed text-muted">{uiT("Liquide ontvangen − geboekte kosten van uren en derden = liquide projectruimte. Alle bedragen ex. btw; gebaseerd op geboekte betalingen en kosten.")} {uiT("Kosten en berekening bekijk je in het project. Marge en winst staan in hun eigen tabblad.")}</p>
       </TabPanel>
       <TabPanel id="resultaat">
       <Card className="overflow-hidden">

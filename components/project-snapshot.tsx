@@ -12,12 +12,12 @@ export async function ProjectSnapshot({ id, cover, progress, status, requestedOp
 }) {
   const t = await tekst(), locale = await datumTaal();
   const needsAdvance = status === "active" && cover.status !== "gedekt";
-  const label = status !== "active" ? t("Project afgesloten") : cover.requiredRevenue <= 0.01 && cover.received <= 0.01
+  const label = status !== "active" ? t("Project afgesloten") : cover.requiredRevenue <= 0.01 && cover.totalReceived <= 0.01
     ? t("Nog geen werk geboekt") : cover.status === "voorgeschoten" ? t("Voorschot nodig") : cover.status === "bijna_op" ? t("Nieuw voorschot voorbereiden") : t("Voldoende voorschotruimte");
   return <Card className="mb-5 overflow-hidden" data-project-snapshot>
     <div className="flex flex-wrap items-start justify-between gap-4 border-b bg-background/40 px-5 py-5">
       <div><p className="mb-2 text-xs font-medium uppercase tracking-wider text-muted">{t("Projectstand")}</p><Badge tone={status === "active" ? cover.tone : "neutral"}>{label}</Badge>
-        <p className="mt-3 max-w-2xl text-sm text-muted">{t("Hier zie je wat van het ontvangen klantgeld overblijft na aftrek van het geboekte werk tegen klantprijs. De kosten en hun omrekening staan bij Kosten en berekening.")}</p>
+        <p className="mt-3 max-w-2xl text-sm text-muted">{t("Ontvangsten voor eigen producten staan apart. Hier zie je welk klantgeld overblijft voor de jongens en inkopen bij derden, na de geboekte kosten.")}</p>
       </div>
       <LinkButton href="#voorschot-opvragen" variant={needsAdvance ? "primary" : "secondary"}>{t(requestedOpen > 0.01 ? "Bestaand voorschot opvolgen" : needsAdvance ? "Voorschot voorbereiden" : "Voorschotten bekijken")}</LinkButton>
     </div>

@@ -55,6 +55,25 @@ export function isLaborLine(item: DocumentLineItem): boolean {
   return !!item.category && LABOR_CATEGORIES.has(item.category);
 }
 
+/** Own goods are a separate funding stream, even when their cost is unknown.
+ * Catalog links and the explicit category take precedence over legacy names.
+ * Do not turn installation, renovation, services or advance settlements into goods.
+ */
+export function isOwnProductLine(
+  item: DocumentLineItem,
+  productCost?: (item: DocumentLineItem) => number | undefined,
+): boolean {
+  if (isLaborLine(item) || item.advanceRef) return false;
+  if (item.category === "eigen_producten") return true;
+  if (item.pricingBasis === "construction") return false;
+  if (item.productId || item.pricingBasis === "catalog") return true;
+  if (["renovatie", "ontwerp", "transport"].includes(item.category ?? "")) return false;
+  const name = String(item.name ?? "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+  if (/\b(montage|plaatsing|installatie|installation|instalacion|werkzaamheden|arbeid|labor|labour|mano de obra|reeds betaald|verrekening)\b/.test(name)) return false;
+  if (Number(item.costEur) > 0 || productCost?.(item) != null) return true;
+  return /\b(kozijn(?:en)?|ramen|windows?|ventanas?|bal+ustrades?|balustradas?|barandillas?|railings?|(?:binnen|buiten)?deur(?:en)?|doors?|puertas?|badkamer\w*|bathroom\w*|sanitair\w*|sanitarios?|sanitary|bano|banos|wastafels?|washbasins?|lavabos?|kranen?|taps?|griferia|douches?|showers?|duchas?|toilets?|inodoros?|bathtubs?|baden|baneras?|magic stone|flexib(?:el|le) stone)\b/.test(name);
+}
+
 /**
  * Kostprijs van een regel voor de MARGE-weergave (per document): eigen kostprijs
  * (costEur) > afgeleid uit regel-marge% > catalogus-kostprijs. `null` = onbekend
@@ -81,7 +100,7 @@ export function lineMaterialCostEur(
   item: DocumentLineItem,
   productCost?: (item: DocumentLineItem) => number | undefined,
 ): number {
-  if (isLaborLine(item) || item.pricingBasis === "construction") return 0;
+  if (isLaborLine(item) || (item.pricingBasis === "construction" && item.category !== "eigen_producten")) return 0;
   const units = Number(item.units) || 0;
   if (item.costEur != null && Number(item.costEur) > 0) return round2(Number(item.costEur) * units);
   const pc = productCost?.(item);
@@ -106,10 +125,10 @@ export function docProductMargin(
   let cost = 0;
   let uncostedRevenue = 0;
   for (const it of normalizeDocItems(items)) {
-    if (isLaborLine(it) || it.pricingBasis === "construction") continue;
+    if (!isOwnProductLine(it, productCost)) continue;
     const net = lineNet(it);
     const c = lineMaterialCostEur(it, productCost);
-    if (c > 0) {
+    if (c !== 0) {
       revenue += net;
       cost += c;
     } else {
@@ -124,10 +143,9 @@ export function docProductMargin(
  * het subtotaal is verkoop van eigen (voorraad)producten? Een betaling op dit
  * document telt dan voor (1 − aandeel) mee als dekking van uren + inkoop derden.
  *
- * Alleen de GEMETEN productregels tellen (bekende kostprijs of
- * catalogus-koppeling, zelfde afbakening als de marge-kaart "Eigen producten").
- * Regels zonder kostprijs — termijnen, doorbelaste verbouwingsposten — horen bij
- * de verbouwing en dus bij de dekking. Geklemd op [0,1]: eindafrekeningen met
+ * Alle eigen productregels tellen, ook maatwerk zonder bekende kostprijs.
+ * Een onbekende kostprijs sluit alleen de marge-meting uit, niet de reservering.
+ * Geklemd op [0,1]: eindafrekeningen met
  * negatieve verrekenregels drukken het subtotaal en zouden anders boven de 1
  * uitkomen.
  */
@@ -136,9 +154,10 @@ export function docOwnShare(
   subtotalEur: number,
   productCost?: (item: DocumentLineItem) => number | undefined,
 ): number {
-  if (!(subtotalEur > 0)) return 0;
-  const pm = docProductMargin(items, productCost);
-  return Math.min(1, Math.max(0, pm.revenue / subtotalEur));
+  if (!Number.isFinite(subtotalEur) || subtotalEur === 0) return 0;
+  const ownRevenue = normalizeDocItems(items).reduce((sum, it) =>
+    sum + (isOwnProductLine(it, productCost) ? lineNet(it) : 0), 0);
+  return Math.min(1, Math.max(0, round2(ownRevenue) / subtotalEur));
 }
 
 type AddressParts = { addressLine?: string | null; postalCode?: string | null; city?: string | null };

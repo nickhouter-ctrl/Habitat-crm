@@ -1,5 +1,6 @@
 /** Line-item categories and their default Spanish IVA rate. Editable per line. */
 export const LINE_CATEGORIES = [
+  { value: "eigen_producten", label: "Eigen producten", vat: 21 },
   { value: "materiaal", label: "Materiaal / levering", vat: 21 },
   { value: "renovatie", label: "Renovatie / verbouwing", vat: 10 },
   { value: "arbeid", label: "Arbeid / uitvoering", vat: 10 },

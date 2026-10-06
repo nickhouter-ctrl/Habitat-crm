@@ -61,7 +61,7 @@ import { docProductMargin, lineCostEur, lineMaterialCostEur, normalizeDocItems }
 import { deliveryTotals } from "@/lib/project-delivery";
 import { poExVat, poExVatAmount, poExVatAssumingSpanishVat } from "@/lib/purchase-orders";
 import { DEFAULT_LABOR_MARGIN_PCT, DEFAULT_PURCHASE_MARGIN_PCT, deriveAdvanceCover, deriveProjectMargins } from "@/lib/project-financials";
-import { receiptExVat as exBtwVanOntvangst } from "@/lib/receipts";
+import { receiptExVat as exBtwVanOntvangst, splitReceipt, splitProjectReceipts } from "@/lib/receipts";
 import type { DocumentLineItem } from "@/lib/db/schema";
 import { moneyForInput } from "@/lib/parse-money";
 import { formatEUR } from "@/lib/utils";
@@ -660,10 +660,13 @@ export default async function ProjectDetailPage({
   // Ontvangen klantgeld minus het geboekte werk tegen klantprijs.
   // De gedeelde berekening houdt projectenlijst en detail gelijk.
   const funding = await loadProjectFunding(id);
+  const ownShareByDoc = funding.get(id)?.ownShareByDoc ?? new Map<string, number>();
+  const receiptSplit = splitProjectReceipts(paymentRows, ownShareByDoc);
   const cover = funding.get(id)?.cover ?? deriveAdvanceCover({ laborCost, purchaseCost: materialCost,
-    coverReceivedEx: receivedTotalEx,
+    coverReceivedEx: receiptSplit.liquidReceived,
+    ownProductReceivedEx: receiptSplit.ownProductReceived,
     requiredRevenue: laborCost * (1 + Number(project.laborMarginPct ?? 15) / 100)
-      + materialCost * (1 + Number(project.purchaseMarginPct ?? 15) / 100) + ownRevenue,
+      + materialCost * (1 + Number(project.purchaseMarginPct ?? 15) / 100),
   });
 
   // Begroting: targetprijzen (verkoop) + geraamde kosten per onderdeel.
@@ -1493,6 +1496,12 @@ export default async function ProjectDetailPage({
         </CardHeader>
         <CardContent className="space-y-4">
           <p className="max-w-3xl text-sm text-muted">{uiT("Wat de klant werkelijk heeft betaald. Betalingen van betaalde facturen komen automatisch mee; boek die hier niet nogmaals.")}</p>
+          <div className="grid gap-3 sm:grid-cols-3">
+            <StatTile label={uiT("Totaal ontvangen")} value={formatEUR(cover.totalReceived)} hint={uiT("ex. btw")} />
+            <StatTile label={uiT("Ontvangen voor eigen producten")} value={formatEUR(cover.ownProductReceived)} hint={uiT("Apart gehouden voor eigen producten")} />
+            <StatTile label={uiT("Liquide ontvangen")} value={formatEUR(cover.received)} hint={uiT("Voor uren en inkopen bij derden")} />
+          </div>
+          <p className="text-xs text-muted">{uiT("Gemengde facturen en deelbetalingen worden naar verhouding verdeeld. Eigen producten tellen ook mee zonder bekende kostprijs.")}</p>
           {paymentRows.length > 0 && (
             <Table>
               <THead>
@@ -1502,6 +1511,8 @@ export default async function ProjectDetailPage({
                   <Th>{uiT("Wijze")}</Th>
                   <Th className="text-right">{uiT("Bedrag")}</Th>
                   <Th className="text-right">{uiT("waarvan ex. btw")}</Th>
+                  <Th className="text-right">{uiT("Eigen producten")}</Th>
+                  <Th className="text-right">{uiT("Liquide ontvangen")}</Th>
                   <Th />
                 </tr>
               </THead>
@@ -1537,6 +1548,8 @@ export default async function ProjectDetailPage({
                         <span className="block text-xs">{uiT("geen btw")}</span>
                       ) : null}
                     </Td>
+                    <Td className="text-right tabular-nums">{formatEUR(splitReceipt(p, ownShareByDoc).ownProductReceived)}</Td>
+                    <Td className="text-right tabular-nums">{formatEUR(splitReceipt(p, ownShareByDoc).liquidReceived)}</Td>
                     <Td className="text-right">
                       {/* Een ontvangst die uit een betaalde factuur komt kun je hier
                           niet weghalen — hij komt terug bij de volgende synchronisatie.

@@ -194,17 +194,22 @@ export type AdvanceCoverInput = {
   purchaseCost: number;
   /** Ontvangen dekking ex. btw — zie {@link deriveAdvanceCover} voor wat meetelt. */
   coverReceivedEx: number;
-  /** Doorbelasting inclusief opslag en eigen producten. Zonder dit veld: alleen kostendekking. */
+  /** Ontvangen voor eigen producten; blijft buiten de dekking van uren/derden. */
+  ownProductReceivedEx?: number;
+  /** Uren en externe inkoop inclusief opslag. Zonder dit veld: alleen kostendekking. */
   requiredRevenue?: number;
   /** Standaard {@link ADVANCE_WARN_BUFFER_EUR}. */
   warnBufferEur?: number;
 };
 
 export type AdvanceCover = {
+  totalReceived: number;
+  ownProductReceived: number;
   /** Geboekte kosten van uren en inkoop derden; geen bewijs van leveranciersbetaling. */
   prefinanced: number;
   requiredRevenue: number;
   costSaldo: number;
+  /** Liquide ontvangen voor uren en derden, na reservering voor eigen producten. */
   received: number;
   /** Ontvangsten minus vereiste doorbelasting inclusief verdiensten. */
   saldo: number;
@@ -215,7 +220,8 @@ export type AdvanceCover = {
 };
 
 /** Vergelijkt ontvangen bedragen excl. btw met de doorbelasting van geboekt werk,
- * inclusief opslag en de verkoopwaarde van eigen producten. Zonder requiredRevenue
+ * inclusief opslag, nadat ontvangsten voor eigen producten apart zijn gehouden.
+ * Eigen producten worden hier niet opnieuw afgetrokken. Zonder requiredRevenue
  * blijft de bestaande berekening op uitsluitend geboekte kosten beschikbaar.
  * Dit is voorschotdekking, geen kasboek of registratie van leveranciersbetalingen.
  */
@@ -231,6 +237,8 @@ export function deriveAdvanceCover(i: AdvanceCoverInput): AdvanceCover {
     requiredRevenue,
     costSaldo: round2(received - prefinanced),
     received,
+    totalReceived: round2(received + (i.ownProductReceivedEx ?? 0)),
+    ownProductReceived: round2(i.ownProductReceivedEx ?? 0),
     saldo,
     status,
     tone: status === "gedekt" ? "success" : status === "bijna_op" ? "warning" : "danger",

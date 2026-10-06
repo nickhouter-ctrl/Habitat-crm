@@ -96,11 +96,11 @@ export default async function AssistantPage({ searchParams }: { searchParams: Pr
     </Card>}
     {view === "projects" && <Card className="mb-6 p-5" id="projecten">
       <h2 className="text-lg font-semibold">{uiT("Projecten — voorschot voorbereiden")}</h2>
-      <p className="mt-1 text-sm text-muted">{uiT("Dezelfde actuele berekening als op de projectpagina. Ontvangsten en doorbelasting excl. btw, inclusief projectopslagen en verkoopwaarde van eigen materialen. Nog niet gekeurde facturen tellen niet mee.")}</p>
+      <p className="mt-1 text-sm text-muted">{uiT("Dezelfde actuele berekening als op de projectpagina: liquide ontvangsten voor uren en derden, na reservering voor eigen producten. De doorbelasting bevat de afgesproken opslag. Alle bedragen ex. btw.")}</p>
       {!projects.length && <p className="mt-4 text-sm">{uiT("Geen actieve projecten met geboekt werk en krappe dekking.")}</p>}
       {projects.sort((a, b) => a.cover.saldo - b.cover.saldo).map(p => <div key={p.id} className="mt-4 rounded-lg border border-border p-4"><Link href={`/projects/${p.id}`} className="font-medium text-accent">{p.name}</Link>
-        <p className="mt-2 text-sm">{uiT("Ontvangen")} {formatEUR(p.cover.received)} {uiT("· Doorbelasting")} {formatEUR(p.cover.requiredRevenue)} {uiT("· Resterende dekking")} <strong>{formatEUR(p.cover.saldo)}</strong></p>
-        {p.cover.received === 0 && <p className="mt-2 text-sm text-warning">{uiT("Nog geen ontvangen betalingen geregistreerd. Controleer eerst of de betalingsregistratie compleet is.")}</p>}
+        <p className="mt-2 text-sm">{uiT("Liquide ontvangen")} {formatEUR(p.cover.received)} {uiT("· Doorbelasting")} {formatEUR(p.cover.requiredRevenue)} {uiT("· Resterende dekking")} <strong>{formatEUR(p.cover.saldo)}</strong></p>
+        {p.cover.totalReceived === 0 && <p className="mt-2 text-sm text-warning">{uiT("Nog geen ontvangen betalingen geregistreerd. Controleer eerst of de betalingsregistratie compleet is.")}</p>}
         <p className="mt-2 text-sm">{uiT("Voorstel nieuw voorschot:")} <strong>{formatEUR(p.cover.suggestedRequestEur)}</strong> {uiT("excl. btw. Controleer planning en openstaande voorschotverzoeken voordat je dit overneemt.")}</p>
         <details className="mt-2 text-sm"><summary className="cursor-pointer text-accent">{uiT("Voorsteltekst bekijken")}</summary><p className="mt-2 whitespace-pre-wrap">{uiT("Beste klant,\n\nVoor de volgende werkzaamheden aan {v0} willen we een volgend voorschot met u afstemmen. Ons voorstel is {v1} exclusief btw. Na afstemming ontvangt u het bijbehorende voorschotdocument.\n\nMet vriendelijke groet,\nHabitat One", { v0: p.name, v1: formatEUR(p.cover.suggestedRequestEur) })}</p></details>
         <Link href={`/projects/${p.id}`} className="mt-3 inline-block text-sm text-accent">{uiT("Bedragen controleren en voorschot voorbereiden →")}</Link>

@@ -13,8 +13,9 @@ import { sql } from "drizzle-orm";
 
 import { db } from "@/lib/db";
 import { zoekDubbeleFacturen } from "@/lib/dubbele-facturen";
-import { lineMaterialCostEur, normalizeDocItems } from "@/lib/documents";
+import { docOwnShare, lineMaterialCostEur, normalizeDocItems } from "@/lib/documents";
 import type { DocumentLineItem } from "@/lib/db/schema";
+import { splitProjectReceipts, type ReceiptLike } from "@/lib/receipts";
 import { alGedekt } from "@/lib/project-receipts";
 
 const eur = (n: number) =>
@@ -29,6 +30,7 @@ export type Projectcijfers = {
   levKost: number; gefactureerd: number; openFacturen: number; ontvangenIncl: number; ontvangenEx: number;
   /** Kostprijs van de op facturen gezette eigen producten — zelfde som als de projectpagina. */
   eigenKost: number;
+  eigenOntvangen: number; liquideOntvangen: number; liquideRuimte: number;
 };
 
 export type Weekcontrole = { signalen: Signaal[]; projecten: Projectcijfers[]; openTotaal: number };
@@ -223,8 +225,8 @@ export async function verzamelWeekcontrole(): Promise<Weekcontrole> {
   }
 
   /* ── Projectcijfers (actieve projecten) ── */
-  const projecten = await db.execute<Projectcijfers>(sql`
-    select p.name naam, p.contract_price_eur::float8 doel,
+  const projecten = await db.execute<Projectcijfers & { id: string; payments: ReceiptLike[] }>(sql`
+    select p.id, p.name naam, p.contract_price_eur::float8 doel,
       (select coalesce(sum(t.hours * t.hourly_cost_eur),0) from time_entries t
         where t.project_id = p.id and not (t.self_logged_at is not null and t.approved_at is null))::float8 arbeid,
       (select coalesce(sum(coalesce(nullif(po.subtotal,0),
@@ -248,6 +250,10 @@ export async function verzamelWeekcontrole(): Promise<Weekcontrole> {
                else pp.amount_eur / 1.21 end), 0)
         from project_payments pp left join documents dd on dd.id = pp.document_id
         where pp.project_id = p.id)::float8 "ontvangenEx"
+      ,coalesce((select jsonb_agg(jsonb_build_object('documentId',pp.document_id,'amountEur',pp.amount_eur,
+        'method',pp.method,'vatRate',pp.vat_rate,'vatAmountEur',pp.vat_amount_eur,
+        'docSubtotal',dd.subtotal_eur,'docTotal',dd.total_eur))
+        from project_payments pp left join documents dd on dd.id=pp.document_id where pp.project_id=p.id),'[]'::jsonb) payments
     from projects p
     where p.status = 'active' and p.name not in ('test')
     order by p.contract_price_eur desc nulls last, p.name`);
@@ -255,40 +261,34 @@ export async function verzamelWeekcontrole(): Promise<Weekcontrole> {
   /* ── Kostprijs van gefactureerde eigen producten — zelfde rekenwijze als de
         projectpagina (regel-kostprijs, anders catalogus op productId of SKU).
         Zonder deze post stond Silvestre hier € 24.944 lager dan in het CRM. ── */
-  const projectIds = await db.execute<{ id: string; naam: string }>(sql`
-    select id, name naam from projects where status = 'active'`);
-  const idPerNaam = new Map(projectIds.map((r) => [r.naam, r.id]));
-  const docs = await db.execute<{ project_id: string; kind: string; items: unknown }>(sql`
-    select project_id, kind, items from documents
-    where kind in ('invoice','creditnote') and status not in ('draft','void')
-      and project_id = any(${sql.raw(`ARRAY[${projectIds.map((r) => `'${r.id}'`).join(",") || "null"}]::uuid[]`)})`);
-  const pids = new Set<string>();
-  const skus = new Set<string>();
-  for (const d of docs)
-    for (const it of normalizeDocItems(d.items)) {
-      if (it.productId) pids.add(it.productId);
-      if (it.description?.trim()) skus.add(it.description.trim());
-    }
-  const kostRows =
-    pids.size || skus.size
-      ? await db.execute<{ id: string; sku: string | null; cost: number | null }>(sql`
-          select id, sku, cost_eur::float8 cost from products
-          where id = any(${sql.raw(`ARRAY[${[...pids].map((x) => `'${x}'`).join(",") || "null"}]::uuid[]`)})
-             or sku = any(${sql.raw(`ARRAY[${[...skus].map((x) => `'${x.replace(/'/g, "''")}'`).join(",") || "null"}]::text[]`)})`)
-      : [];
+  const docs = await db.execute<{ id: string; project_id: string; kind: string; status: string; subtotal: string; items: unknown }>(sql`
+    select id, project_id, kind, status, subtotal_eur::text subtotal, items from documents
+    where exists(select 1 from projects p where p.id=documents.project_id and p.status='active')`);
+  const kostRows = await db.execute<{ id: string; sku: string | null; cost: number | null }>(sql`
+    select id, sku, cost_eur::float8 cost from products`);
   const kostPerId = new Map(kostRows.map((r) => [r.id, Number(r.cost ?? 0)]));
   const kostPerSku = new Map(kostRows.filter((r) => r.sku).map((r) => [r.sku as string, Number(r.cost ?? 0)]));
   const productCostOf = (it: DocumentLineItem) =>
     (it.productId ? kostPerId.get(it.productId) : undefined) ??
     (it.description ? kostPerSku.get(it.description.trim()) : undefined);
   const eigenKostPerProject = new Map<string, number>();
+  const ownShareByDoc = new Map(docs.map(d => [d.id, docOwnShare(d.items, Number(d.subtotal), productCostOf)]));
   for (const d of docs) {
+    if (!["invoice", "creditnote"].includes(d.kind) || ["draft", "void"].includes(d.status)) continue;
     const teken = d.kind === "creditnote" ? -1 : 1;
     let kost = 0;
     for (const it of normalizeDocItems(d.items)) kost += lineMaterialCostEur(it, productCostOf);
     eigenKostPerProject.set(d.project_id, (eigenKostPerProject.get(d.project_id) ?? 0) + teken * kost);
   }
-  for (const p of projecten) p.eigenKost = eigenKostPerProject.get(idPerNaam.get(p.naam) ?? "") ?? 0;
+  for (const p of projecten) {
+    p.eigenKost = eigenKostPerProject.get(p.id) ?? 0;
+    const receipts = splitProjectReceipts(p.payments, ownShareByDoc);
+    p.ontvangenEx = receipts.totalReceived;
+    p.eigenOntvangen = receipts.ownProductReceived;
+    p.liquideOntvangen = receipts.liquidReceived;
+    const workCost = Math.round((p.arbeid + p.inkoop + p.losse) * 100) / 100;
+    p.liquideRuimte = Math.round((receipts.liquidReceived - workCost) * 100) / 100;
+  }
 
   /* ── H · Kostenplafond (85% van het doel) ── */
   for (const p of projecten) {
@@ -313,6 +313,7 @@ export function bouwArtifactHtml({ signalen, projecten, openTotaal }: Weekcontro
   const middel = signalen.filter((s) => s.ernst === "middel").length;
   const kostenTotaal = projecten.reduce((s, p) => s + p.arbeid + p.inkoop + p.losse + p.levKost + p.eigenKost, 0);
   const ontvangenTotaal = projecten.reduce((s, p) => s + p.ontvangenEx, 0);
+  const liquideTotaal = projecten.reduce((s, p) => s + p.liquideRuimte, 0);
 
   const signaalHtml = signalen.length
     ? signalen
@@ -337,7 +338,9 @@ export function bouwArtifactHtml({ signalen, projecten, openTotaal }: Weekcontro
         <td class="num">${eur(p.gefactureerd)}</td>
         <td class="num">${p.openFacturen > 0.01 ? `<span class="warn">${eur(p.openFacturen)}</span>` : "—"}</td>
         <td class="num">${eur(p.ontvangenEx)}</td>
-        <td class="num ${p.ontvangenEx - kosten < 0 ? "warn" : "goed"}">${eur(p.ontvangenEx - kosten)}</td>
+        <td class="num">${eur(p.eigenOntvangen)}</td>
+        <td class="num">${eur(p.liquideOntvangen)}</td>
+        <td class="num ${p.liquideRuimte < 0 ? "warn" : "goed"}">${eur(p.liquideRuimte)}</td>
       </tr>`;
     })
     .join("");
@@ -403,6 +406,7 @@ export function bouwArtifactHtml({ signalen, projecten, openTotaal }: Weekcontro
     <div class="tegel"><b>${eur(openTotaal)}</b><span>openstaand bij klanten</span></div>
     <div class="tegel"><b>${eur(ontvangenTotaal)}</b><span>ontvangen op actieve projecten (ex. btw)</span></div>
     <div class="tegel"><b>${eur(kostenTotaal)}</b><span>kosten actieve projecten</span></div>
+    <div class="tegel"><b>${eur(liquideTotaal)}</b><span>liquide ruimte na geboekte kosten (ex. btw)</span></div>
   </div>
 
   <h2>Signalen</h2>
@@ -413,14 +417,14 @@ export function bouwArtifactHtml({ signalen, projecten, openTotaal }: Weekcontro
     <table>
       <thead><tr>
         <th>Project</th><th>Aanneemsom</th><th>Kosten</th><th>Gefactureerd</th>
-        <th>Open bij klant</th><th>Ontvangen (ex)</th><th>Saldo</th>
+        <th>Open bij klant</th><th>Totaal ontvangen (ex)</th><th>Eigen producten (ex)</th><th>Liquide ontvangen (ex)</th><th>Liquide ruimte (ex)</th>
       </tr></thead>
       <tbody>${rijen}</tbody>
     </table>
   </div>
 
   <footer>
-    Indicatieve cijfers — de projectpagina in het CRM is leidend. Saldo = ontvangen (ex. btw) − kosten.
+    Liquide ruimte = totaal ontvangen − ontvangen voor eigen producten − geboekte kosten van uren en derden. Alle bedragen ex. btw. Gebaseerd op geboekte betalingen en kosten; de projectpagina is leidend.
     Kosten = arbeid + inkoop + losse kosten + kostprijs van geleverde én gefactureerde eigen producten — dezelfde som als de projectpagina. Deze pagina wordt wekelijks automatisch ververst.
   </footer>
 </main>`;
