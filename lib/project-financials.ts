@@ -108,6 +108,10 @@ export type ProjectMargins = {
   purchaseRevenue: number;
   purchaseMargin: number;
 
+  otherCost: number;
+  otherRevenue: number;
+  otherMargin: number;
+
   /* Totalen */
   /** Alles bij elkaar door te belasten: uren + inkoop + gefactureerde producten. */
   totalRevenue: number;
@@ -148,12 +152,17 @@ export function deriveProjectMargins(i: {
   purchaseCost: number;
   /** null/undefined → {@link DEFAULT_PURCHASE_MARGIN_PCT}. */
   purchaseMarginPct?: number | null;
+  /** Services, equipment hire and other execution costs remain separate from building materials. */
+  otherCost?: number;
 }): ProjectMargins {
   // Bewaar de bestaande begrenzing voor instelbare projectopslagen.
   const laborPct = clampPct(i.laborMarginPct ?? DEFAULT_LABOR_MARGIN_PCT);
   const purchasePct = clampPct(i.purchaseMarginPct ?? DEFAULT_PURCHASE_MARGIN_PCT);
   const laborRevenue = round2(i.laborCost * (1 + laborPct / 100));
   const purchaseRevenue = round2(i.purchaseCost * (1 + purchasePct / 100));
+  const otherCost = i.otherCost ?? 0;
+  const otherRevenue = round2(otherCost * (1 + purchasePct / 100));
+  const otherMargin = round2(otherRevenue - otherCost);
   const laborMargin = round2(laborRevenue - i.laborCost);
   const purchaseMargin = round2(purchaseRevenue - i.purchaseCost);
   const productMargin = round2(i.productRevenue - i.productCost);
@@ -172,9 +181,12 @@ export function deriveProjectMargins(i: {
     purchaseCost: i.purchaseCost,
     purchaseRevenue,
     purchaseMargin,
-    totalRevenue: round2(laborRevenue + purchaseRevenue + i.productRevenue),
-    totalMargin: round2(laborMargin + purchaseMargin + productMargin),
-    costToDate: round2(i.laborCost + i.purchaseCost + i.productCost),
+    otherCost,
+    otherRevenue,
+    otherMargin,
+    totalRevenue: round2(laborRevenue + purchaseRevenue + otherRevenue + i.productRevenue),
+    totalMargin: round2(laborMargin + purchaseMargin + otherMargin + productMargin),
+    costToDate: round2(i.laborCost + i.purchaseCost + otherCost + i.productCost),
   };
 }
 

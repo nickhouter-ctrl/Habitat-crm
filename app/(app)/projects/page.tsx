@@ -367,8 +367,9 @@ export default async function ProjectsPage({
       // niet dubbel aftrekken in "nog te factureren".
       const receivedFromInvoicedAdvances = invAdvanceBy.get(p.id) ?? 0;
       const laborCost = laborBy.get(p.id) ?? 0;
-      const materialCost = (poBy.get(p.id) ?? 0) + (looseBy.get(p.id) ?? 0);
-      const ownProductCost = ownProductCostByProject.get(p.id) ?? 0;
+      const projectFunding = funding.get(p.id);
+      const materialCost = projectFunding ? projectFunding.costs.material + projectFunding.costs.other : (poBy.get(p.id) ?? 0) + (looseBy.get(p.id) ?? 0);
+      const ownProductCost = projectFunding?.own.bookedCost ?? ownProductCostByProject.get(p.id) ?? 0;
       const fin = deriveProjectFinancials({
         contractPriceEur: p.contractPriceEur != null ? Number(p.contractPriceEur) : null,
         contingencyPct: p.contingencyPct != null ? Number(p.contingencyPct) : null,
@@ -382,7 +383,7 @@ export default async function ProjectsPage({
       });
       // Marge per stroom — zelfde meting als op het detailscherm.
       const own = ownProductMarginByProject.get(p.id) ?? { revenue: 0, cost: 0, uncosted: 0 };
-      const margins = deriveProjectMargins({
+      const margins = projectFunding?.margins ?? deriveProjectMargins({
         laborCost,
         laborMarginPct: p.laborMarginPct != null ? Number(p.laborMarginPct) : null,
         productRevenue: own.revenue,
@@ -407,6 +408,8 @@ export default async function ProjectsPage({
       return {
         ...p,
         margins,
+        ownProductRevenue: projectFunding?.own.totalRevenue ?? margins.productRevenue + margins.uncostedProductRevenue,
+        ownProductBookedCost: ownProductCost,
         cover,
         progress: projectProgress(progressPhases.filter(f=>f.projectId===p.id),progressBudget.filter(b=>b.projectId===p.id)),
         docCount: a?.docCount ?? 0,
@@ -500,7 +503,7 @@ export default async function ProjectsPage({
           <div className="rounded-xl border bg-surface px-4 py-4"><p className="text-xs text-muted">{uiT("Openstaande klantfacturen")}</p><p className="mt-1 text-xl font-semibold tabular-nums">{formatEUR(totals.outstanding)}</p><p className="mt-1 text-xs text-muted">{uiT("Nog niet ontvangen · ex. btw")}</p></div>
         </div>
         <Card className="overflow-hidden"><CardHeader><CardTitle>{uiT("Stand per project")}</CardTitle><span className="text-xs text-muted">{uiT("Ontvangsten en voorschotruimte · ex. btw")}</span></CardHeader><Table className="min-w-[1200px]">
-          <THead><Tr><Th>{uiT("Project")}</Th><Th>{uiT("Voortgang")}</Th><Th className="text-right">{uiT("Totaal ontvangen")}</Th><Th className="text-right">{uiT("Ontvangen voor eigen producten")}</Th><Th className="text-right">{uiT("Liquide ontvangen")}</Th><Th className="text-right">{uiT("Over na geboekte kosten")}</Th><Th className="text-right">{uiT("Uren en derden tegen klantprijs")}</Th><Th className="text-right">{uiT("Voorschot voor volgend werk")}</Th><Th>{uiT("Volgende stap")}</Th></Tr></THead>
+          <THead><Tr><Th>{uiT("Project")}</Th><Th>{uiT("Voortgang")}</Th><Th className="text-right">{uiT("Totaal ontvangen")}</Th><Th className="text-right">{uiT("Ontvangen voor eigen producten")}</Th><Th className="text-right">{uiT("Liquide ontvangen")}</Th><Th className="text-right">{uiT("Brutowinst + voorschot voor volgend werk")}</Th><Th className="text-right">{uiT("Uren en derden tegen klantprijs")}</Th><Th className="text-right">{uiT("Voorschot voor volgend werk")}</Th><Th>{uiT("Volgende stap")}</Th></Tr></THead>
           <TBody>{rows.map(p=><Tr key={p.id}>
             <Td><Link href={`/projects/${p.id}`} className="font-semibold text-accent hover:underline">{p.name}</Link><p className="mt-1 text-xs text-muted">{p.contactName??uiT("Geen klant gekoppeld")}{p.ownerName?` · ${p.ownerName}`:''}</p><div className="mt-2">{statusBadge(p.status)}</div></Td>
             <Td>{p.progress.percent===null?<span className="text-xs text-muted">{uiT("Nog niet vastgelegd")}</span>:<><p className="text-sm font-semibold">{p.progress.percent}%</p><div role="progressbar" aria-label={uiT("Voortgang")} aria-valuenow={p.progress.percent} aria-valuemin={0} aria-valuemax={100} className="mt-2 h-1.5 w-24 overflow-hidden rounded-full bg-background"><div className="h-full bg-accent" style={{width:`${p.progress.percent}%`}}/></div><p className="mt-1 max-w-36 text-xs text-muted">{p.progress.current??uiT("Alle fases afgerond")}</p></>}</Td>
@@ -513,7 +516,7 @@ export default async function ProjectsPage({
             <Td><Link href={`/projects/${p.id}#voorschot-opvragen`} className="inline-block text-sm font-medium text-accent hover:underline">{uiT(p.status!=='active'?"Betalingen controleren":p.cover.requiredRevenue<=0.01?"Voorschot plannen":p.cover.status==='voorgeschoten'?"Voorschot nodig":p.cover.status==='bijna_op'?"Nieuw voorschot voorbereiden":"Voldoende voorschotruimte")}</Link>{p.outstanding>0.01&&<p className="mt-2 text-xs text-warning">{uiT("{amount} facturen nog open",{amount:formatEUR(p.outstanding)})}</p>}</Td>
           </Tr>)}{!rows.length&&<Tr><Td colSpan={9}>{uiT("Geen projecten in deze weergave — maak er een aan met “Nieuw project”.")}</Td></Tr>}</TBody>
         </Table></Card>
-        <p className="text-xs leading-relaxed text-muted">{uiT("Van het ontvangen geld voor uren en inkopen bij derden trekken we de geboekte kosten en de berekende brutowinst af. Het restant is het voorschot voor volgend werk. Betalingen en winst op eigen producten staan apart.")} {uiT("De brutowinst komt uit de opslag op uren en inkoop. Algemene bedrijfskosten zijn daar nog niet vanaf. Alle bedragen ex. btw, op basis van geboekte betalingen en kosten.")}</p>
+        <p className="text-xs leading-relaxed text-muted">{uiT("Van het liquide ontvangen geld trekken we de geboekte werkkosten en de berekende brutowinst af. Het restant is het voorschot voor volgend werk. Betalingen en winst op eigen producten staan apart.")} {uiT("De brutowinst komt uit de opslag op uren en inkoop. Algemene bedrijfskosten zijn daar nog niet vanaf. Alle bedragen ex. btw, op basis van geboekte betalingen en kosten.")}</p>
       </TabPanel>
       <TabPanel id="resultaat">
       <Card className="overflow-hidden">
@@ -538,22 +541,27 @@ export default async function ProjectsPage({
             {uiT("Geen projecten in deze weergave — maak er een aan met “Nieuw project”.")} </div>
         ) : (
           <Table views={[
-            { id: "profit", label: uiT("Marge & winst"), hidden: [4, 5, 6, 7, 8] },
+            { id: "profit", label: uiT("Marge & winst"), hidden: [4, 5, 6, 7, 9, 10, 17, 18] },
             { id: "all", label: uiT("Alle kolommen"), hidden: [] },
           ]}>
             <THead>
               <tr>
                 <Th>{uiT("Project")}</Th>
+                <Th className="text-right">{uiT("Ontvangen voor eigen producten")}</Th>
+                <Th className="text-right">{uiT("Liquide ontvangen")}</Th>
                 <Th>{uiT("Klant")}</Th>
                 <Th className="text-right">{uiT("Aanneemprijs")}</Th>
                 <Th className="text-right">{uiT("Gefactureerd")}</Th>
                 <Th className="text-right">{uiT("Openstaand")}</Th>
-                <Th className="text-right">{uiT("Voorschot")}</Th>
+                <Th className="text-right">{uiT("Voorschot voor volgend werk")}</Th>
                 <Th className="text-right">{uiT("Open facturen")}</Th>
                 <Th className="text-right">{uiT("Nog te factureren")}</Th>
-                <Th className="text-right">{uiT("Marge uren")}</Th>
-                <Th className="text-right">{uiT("Marge inkoop")}</Th>
-                <Th className="text-right">{uiT("Marge eigen producten")}</Th>
+                <Th className="text-right">{uiT("Brutowinst uren")}</Th>
+                <Th className="text-right">{uiT("Brutowinst bouwmaterialen")}</Th>
+                <Th className="text-right">{uiT("Brutowinst overige projectkosten")}</Th>
+                <Th className="text-right">{uiT("Verkoop eigen producten")}</Th>
+                <Th className="text-right">{uiT("Kostprijs eigen producten")}</Th>
+                <Th className="text-right">{uiT("Brutowinst eigen producten")}</Th>
                 <Th className="text-right">{uiT("Resultaat tot nu toe")}</Th>
                 <Th>{uiT("Op koers")}</Th>
                 <Th>{uiT("Status")}</Th>
@@ -576,10 +584,12 @@ export default async function ProjectsPage({
                           className="inline-block size-2.5 shrink-0 rounded-full"
                           style={{ background: p.color ?? "#9ca3af" }}
                         />
-                        <span className="truncate">{p.name}</span>
+                        <span className="max-w-52 truncate" title={p.name}>{p.name}</span>
                         {p.code ? <span className="text-xs font-normal text-muted">{p.code}</span> : null}
                       </Link>
                     </Td>
+                    <Td className="text-right tabular-nums" data-margin-value="own-received" data-amount={p.cover.ownProductReceived}>{formatEUR(p.cover.ownProductReceived)}</Td>
+                    <Td className="text-right tabular-nums" data-margin-value="liquid" data-amount={p.cover.received}>{formatEUR(p.cover.received)}</Td>
                     <Td>
                       {p.contactName ? (
                         <Link href={`/contacts/${p.contactId}`} className="hover:underline">
@@ -611,21 +621,7 @@ export default async function ProjectsPage({
                     {/* Voorschotdekking: rood = wij schieten voor, oranje = bijna
                         op. Zonder kasuitgaven valt er niets te dekken → "—". */}
                     <Td className="text-right tabular-nums">
-                      {p.cover.requiredRevenue <= 0.01 ? (
-                        <span className="text-muted">—</span>
-                      ) : p.cover.status === "voorgeschoten" ? (
-                        <Link href={`/projects/${p.id}#voorschot-opvragen`} title={uiT("Voorschottekort inclusief opslag — nieuw voorschot vragen")}>
-                          <Badge tone="danger">− {formatEUR(-p.cover.saldo)}</Badge>
-                        </Link>
-                      ) : p.cover.status === "bijna_op" ? (
-                        <Link href={`/projects/${p.id}#voorschot-opvragen`} title={uiT("Nog {v0} dekking over", { v0: formatEUR(p.cover.saldo) })}>
-                          <Badge tone="warning">{uiT("bijna op")}</Badge>
-                        </Link>
-                      ) : (
-                        <span className="text-success" title={uiT("{v0} dekking over", { v0: formatEUR(p.cover.saldo) })}>
-                          ✓
-                        </span>
-                      )}
+                      <Link href={`/projects/${p.id}#voorschot-opvragen`} data-margin-value="advance" data-amount={p.cover.saldo} className={p.cover.saldo<0?"text-danger":"text-success"}>{formatEUR(p.cover.saldo)}</Link>
                     </Td>
                     <Td className="text-right tabular-nums">
                       {p.openInvoices > 0 ? (
@@ -655,8 +651,11 @@ export default async function ProjectsPage({
                         <span className="text-muted">—</span>
                       )}
                     </Td>
-                    <Td className="text-right tabular-nums">
-                      {p.margins.productRevenue > 0 ? (
+                    <Td className="text-right tabular-nums" data-margin-value="other-margin" data-amount={p.margins.otherMargin}>{formatEUR(p.margins.otherMargin)}</Td>
+                    <Td className="text-right tabular-nums" data-margin-value="own-revenue" data-amount={p.ownProductRevenue}>{formatEUR(p.ownProductRevenue)}</Td>
+                    <Td className="text-right tabular-nums" data-margin-value="own-cost" data-amount={p.ownProductBookedCost}>{formatEUR(p.ownProductBookedCost)}</Td>
+                    <Td className="text-right tabular-nums" data-margin-value="own-margin" data-amount={p.margins.productMargin}>
+                      {p.margins.productRevenue !== 0 ? (
                         <span
                           className={p.margins.productMargin < 0 ? "font-medium text-danger" : undefined}
                           title={uiT("gefactureerd {v0} − kostprijs {v1}", { v0: formatEUR(p.margins.productRevenue), v1: formatEUR(p.margins.productCost) })}
@@ -671,6 +670,7 @@ export default async function ProjectsPage({
                       ) : (
                         <span className="text-muted">—</span>
                       )}
+                      {p.margins.uncostedProductRevenue > 0 && <p className="mt-1 text-xs text-warning">{uiT("{amount} omzet zonder kostprijs", {amount:formatEUR(p.margins.uncostedProductRevenue)})}</p>}
                     </Td>
                     <Td className="text-right tabular-nums">
                       {p.fin.tone === "neutral" ? (

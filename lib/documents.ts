@@ -65,13 +65,29 @@ export function isOwnProductLine(
 ): boolean {
   if (isLaborLine(item) || item.advanceRef) return false;
   if (item.category === "eigen_producten") return true;
-  if (item.pricingBasis === "construction") return false;
   if (item.productId || item.pricingBasis === "catalog") return true;
   if (["renovatie", "ontwerp", "transport"].includes(item.category ?? "")) return false;
   const name = String(item.name ?? "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
   if (/\b(montage|plaatsing|installatie|installation|instalacion|werkzaamheden|arbeid|labor|labour|mano de obra|reeds betaald|verrekening)\b/.test(name)) return false;
-  if (Number(item.costEur) > 0 || productCost?.(item) != null) return true;
-  return /\b(kozijn(?:en)?|ramen|windows?|ventanas?|bal+ustrades?|balustradas?|barandillas?|railings?|(?:binnen|buiten)?deur(?:en)?|doors?|puertas?|badkamer\w*|bathroom\w*|sanitair\w*|sanitarios?|sanitary|bano|banos|wastafels?|washbasins?|lavabos?|kranen?|taps?|griferia|douches?|showers?|duchas?|toilets?|inodoros?|bathtubs?|baden|baneras?|magic stone|flexib(?:el|le) stone)\b/.test(name);
+  if (ownProductFamily(name)) return true;
+  if (item.pricingBasis === "construction") return false;
+  return Number(item.costEur) > 0 || productCost?.(item) != null;
+}
+
+/** Stable families let old supplier invoices and sales lines describe the same goods. */
+export function ownProductFamily(raw: string): string | null {
+  const name = raw.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+  if (/\b(kozijn(?:en)?|ramen|windows?|ventanas?)\b/.test(name)) return "windows";
+  if (/\b(bal+ustrades?|balustradas?|barandillas?|railings?)\b/.test(name)) return "railings";
+  if (/\b((?:binnen|buiten)?deur(?:en)?|doors|puertas?|(?:interior|exterior|front|entrance) door)\b/.test(name) || name.trim() === "door") return "doors";
+  if (/\b(badkamer\w*|bathroom\w*|sanitair\w*|sanitarios?|sanitary|bano|banos|wastafels?|washbasins?|lavabos?|kranen?|taps?|griferia|douches?|showers?|duchas?|toilets?|inodoros?|bathtubs?|baden|baneras?)\b/.test(name)) return "bathroom";
+  if (/\b(verlichting|lampen?|lighting|lights?|led|spots?|downlights?|luminarias?|iluminacion|lamparas?)\b/.test(name)) return "lighting";
+  if (/\b(magic stone|flexib(?:el|le) stone)\b/.test(name)) return "stone";
+  return null;
+}
+
+export function ownProductGroup(item: DocumentLineItem): string {
+  return ownProductFamily(item.name) ?? (item.productId ? `product:${item.productId}` : item.description?.trim() ? `sku:${item.description.trim()}` : `name:${item.name.trim().toLowerCase()}`);
 }
 
 /**
@@ -100,7 +116,7 @@ export function lineMaterialCostEur(
   item: DocumentLineItem,
   productCost?: (item: DocumentLineItem) => number | undefined,
 ): number {
-  if (isLaborLine(item) || (item.pricingBasis === "construction" && item.category !== "eigen_producten")) return 0;
+  if (isLaborLine(item) || (item.pricingBasis === "construction" && !isOwnProductLine(item, productCost))) return 0;
   const units = Number(item.units) || 0;
   if (item.costEur != null && Number(item.costEur) > 0) return round2(Number(item.costEur) * units);
   const pc = productCost?.(item);

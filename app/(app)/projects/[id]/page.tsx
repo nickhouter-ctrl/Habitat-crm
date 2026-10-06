@@ -6,6 +6,7 @@ import { projectProgress } from "@/lib/project-progress";
 import { datumTaal } from "@/lib/i18n/server";
 import { tekst as uiTranslation } from '@/lib/i18n/server';
 import { loadProjectFunding } from "@/lib/project-funding";
+import { projectCostStreams } from "@/lib/project-cost-streams";
 import { and, asc, desc, eq, inArray, isNull, or, sql } from "drizzle-orm";
 import { headers } from "next/headers";
 import Link from "next/link";
@@ -608,9 +609,12 @@ export default async function ProjectDetailPage({
     </div>
   );
 
-  const poCost = materialPOs.reduce((s, p) => s + poExVatAmount(p), 0); // ex. btw, EUR
+  const funding = await loadProjectFunding(id);
+  const projectFunding = funding.get(id);
+  const costStreams = projectFunding?.costs ?? projectCostStreams(materialPOs,costRows);
+  const poCost = materialPOs.reduce((s, p) => s + poExVatAmount(p), 0);
   const looseCost = costRows.reduce((s, c) => s + Number(c.amountEur ?? 0), 0);
-  const materialCost = poCost + looseCost;
+  const materialCost = costStreams.material + costStreams.other;
 
   // Ontvangen betalingen van de klant (incl. btw) — informatief, los van de
   // factuurgebaseerde omzet/marge hierboven.
@@ -654,12 +658,11 @@ export default async function ProjectDetailPage({
   // Eigen-productkost: gerealiseerd = op facturen; verwacht = het meest complete
   // beeld (offerte als die hoger is dan wat al gefactureerd is). Voorkomt zowel
   // "100% marge" (offerte nog niet gefactureerd) als dubbeltelling.
-  const ownProductCostRealized = projCost;
+  const ownProductCostRealized = projectFunding?.own.bookedCost ?? projCost;
   const realizedCost = laborCost + materialCost + ownProductCostRealized; // kosten tot nu toe
 
   // Ontvangen klantgeld minus het geboekte werk tegen klantprijs.
   // De gedeelde berekening houdt projectenlijst en detail gelijk.
-  const funding = await loadProjectFunding(id);
   const ownShareByDoc = funding.get(id)?.ownShareByDoc ?? new Map<string, number>();
   const receiptSplit = splitProjectReceipts(paymentRows, ownShareByDoc);
   const cover = funding.get(id)?.cover ?? deriveAdvanceCover({ laborCost, purchaseCost: materialCost,
@@ -730,7 +733,7 @@ export default async function ProjectDetailPage({
 
   // Marge per stroom: uren tegen een norm, eigen producten echt gemeten, inkoop
   // derden puur als kost (die zit in de aanneemprijs, niet in een eigen marge).
-  const margins = deriveProjectMargins({
+  const margins = projectFunding?.margins ?? deriveProjectMargins({
     laborCost,
     laborMarginPct: project.laborMarginPct != null ? Number(project.laborMarginPct) : null,
     productRevenue: ownRevenue,
@@ -739,6 +742,7 @@ export default async function ProjectDetailPage({
     purchaseCost: materialCost,
     purchaseMarginPct: project.purchaseMarginPct != null ? Number(project.purchaseMarginPct) : null,
   });
+  const ownProductRevenue = projectFunding?.own.totalRevenue ?? margins.productRevenue + margins.uncostedProductRevenue;
 
   const isConstruction = project.kind === "construction";
   const PAY_LABEL = { cash: "Contant", invoice: "Per factuur" } as const;
@@ -1078,7 +1082,7 @@ export default async function ProjectDetailPage({
           </div>
 
           {/* Drie stromen apart: uren (norm), eigen producten (gemeten), inkoop (kost). */}
-          <div className="grid gap-3 lg:grid-cols-3">
+          <div data-margin-streams className="grid gap-3 lg:grid-cols-2 xl:grid-cols-4">
             <div className="rounded-lg border bg-background p-3">
               <div className="mb-2 flex items-baseline justify-between gap-2">
                 <p className="text-sm font-semibold">{uiT("Uren — arbeid")}</p>
@@ -1117,29 +1121,29 @@ export default async function ProjectDetailPage({
                   </span>
                 )}
               </div>
-              {margins.productRevenue > 0 ? (
+              {ownProductRevenue !== 0 || ownProductCostRealized !== 0 ? (
                 <>
                   <dl className="space-y-1 text-sm">
                     {/* Kostprijs bovenaan, net als bij Uren en Inkoop derden:
                         overal eerst wat het ons kost, daaronder wat het opbrengt. */}
                     <div className="flex justify-between gap-2">
-                      <dt className="text-muted">{uiT("Kostprijs")}</dt>
-                      <dd className="tabular-nums">{formatEUR(margins.productCost)}</dd>
+                      <dt className="text-muted">{uiT("Geboekte kostprijs")}</dt>
+                      <dd data-margin-value="own-cost" data-amount={ownProductCostRealized} className="tabular-nums">{formatEUR(ownProductCostRealized)}</dd>
                     </div>
                     <div className="flex justify-between gap-2">
-                      <dt className="text-muted">{uiT("Gefactureerd")}</dt>
-                      <dd className="tabular-nums">{formatEUR(margins.productRevenue)}</dd>
+                      <dt className="text-muted">{uiT("Verkoop eigen producten")}</dt>
+                      <dd data-margin-value="own-revenue" data-amount={ownProductRevenue} className="tabular-nums">{formatEUR(ownProductRevenue)}</dd>
                     </div>
                     <div className="flex justify-between gap-2 border-t pt-1 font-semibold">
-                      <dt>{uiT("Marge op producten")}</dt>
-                      <dd className={`tabular-nums ${margins.productMargin < 0 ? "text-danger" : "text-success"}`}>
-                        {formatEUR(margins.productMargin)}
+                      <dt>{uiT("Brutowinst bij bekende kostprijzen")}</dt>
+                      <dd data-margin-value="own-margin" data-amount={margins.productMargin} className={`tabular-nums ${margins.productMargin < 0 ? "text-danger" : "text-success"}`}>
+                        {margins.productRevenue !== 0 ? formatEUR(margins.productMargin) : "—"}
                       </dd>
                     </div>
                   </dl>
                   <p className="mt-2 text-xs text-muted">
-                    {uiT("gemeten uit de factuurregels")} {margins.uncostedProductRevenue > 0
-                      ? uiT(" · {v0} zonder kostprijs, niet meegeteld", { v0: formatEUR(margins.uncostedProductRevenue) })
+                    {uiT("Kostprijs uit factuurregels of geboekte inkoop van eigen producten.")} {margins.uncostedProductRevenue > 0
+                      ? uiT(" {amount} omzet heeft nog geen kostprijs; hiervoor is geen brutowinst berekend.", { amount: formatEUR(margins.uncostedProductRevenue) })
                       : ""}
                   </p>
                 </>
@@ -1154,20 +1158,20 @@ export default async function ProjectDetailPage({
 
             <div className="rounded-lg border bg-background p-3">
               <div className="mb-2 flex items-baseline justify-between gap-2">
-                <p className="text-sm font-semibold">{uiT("Inkoop derden")}</p>
+                <p className="text-sm font-semibold">{uiT("Bouwmaterialen van derden")}</p>
                 <span className="text-xs text-muted">{uiT("opslag")} {margins.purchaseMarginPct}%</span>
               </div>
               <dl className="space-y-1 text-sm">
                 <div className="flex justify-between gap-2">
                   <dt className="text-muted">{uiT("Kostprijs")}</dt>
-                  <dd className="tabular-nums">{formatEUR(margins.purchaseCost)}</dd>
+                  <dd data-margin-value="material-cost" data-amount={margins.purchaseCost} className="tabular-nums">{formatEUR(margins.purchaseCost)}</dd>
                 </div>
                 <div className="flex justify-between gap-2">
                   <dt className="text-muted">{uiT("Door te belasten")}</dt>
                   <dd className="tabular-nums">{formatEUR(margins.purchaseRevenue)}</dd>
                 </div>
                 <div className="flex justify-between gap-2 border-t pt-1 font-semibold">
-                  <dt>{uiT("Marge op inkoop")}</dt>
+                  <dt>{uiT("Brutowinst bouwmaterialen")}</dt>
                   <dd className="tabular-nums text-success">
                     {formatEUR(margins.purchaseMargin)}
                     <span className="ml-1 text-xs font-normal text-muted">{margins.purchaseMarginPct}%</span>
@@ -1175,7 +1179,7 @@ export default async function ProjectDetailPage({
                 </div>
               </dl>
               <p className="mt-2 text-xs text-muted">
-                {uiT("inkooporders")} {formatEUR(poCost)} {uiT("+ losse kosten")} {formatEUR(looseCost)}
+                {uiT("inkooporders")} {formatEUR(costStreams.materialPo)} {uiT("+ losse kosten")} {formatEUR(costStreams.materialLoose)}
                 {/* Dezelfde euro's mogen niet twee keer meetellen: een factuur van
                     een bouwer zit als uren in de kaart hiernaast. Dat hier benoemen
                     scheelt het vermoeden dat het dubbel staat. */}
@@ -1184,10 +1188,19 @@ export default async function ProjectDetailPage({
                   : ""}
               </p>
             </div>
+            <div className="rounded-lg border bg-background p-3">
+              <p className="mb-2 text-sm font-semibold">{uiT("Overige projectkosten")}</p>
+              <dl className="space-y-1 text-sm">
+                <div className="flex justify-between gap-2"><dt>{uiT("Kostprijs")}</dt><dd data-margin-value="other-cost" data-amount={margins.otherCost} className="tabular-nums">{formatEUR(margins.otherCost)}</dd></div>
+                <div className="flex justify-between gap-2"><dt>{uiT("Door te belasten")}</dt><dd className="tabular-nums">{formatEUR(margins.otherRevenue)}</dd></div>
+                <div className="flex justify-between gap-2 border-t pt-1 font-semibold"><dt>{uiT("Berekende brutowinst")}</dt><dd data-margin-value="other-margin" data-amount={margins.otherMargin} className="tabular-nums">{formatEUR(margins.otherMargin)}</dd></div>
+              </dl>
+              <p className="mt-2 text-xs text-muted">{uiT("Architect, onderaannemers, huur en vervoer. De ingestelde opslag blijft van toepassing.")}</p>
+            </div>
           </div>
           {/* Eén uitlegregel voor alle drie — beter dan drie keer jargon in de kaarten. */}
           <p className="text-xs text-muted">
-            {uiT("\"Norm")} {margins.laborMarginPct}{uiT("%\" betekent: uren en inkoop hebben geen eigen verkoopprijs, dus \"door te belasten\" is de kostprijs plus onze opslag op kostprijs. Eigen producten zijn wél echt gemeten: verkoopprijs min kostprijs van de factuurregels.")} </p>
+            {uiT("Eigen producten zijn ons eigen assortiment, waaronder kozijnen, balustrades, deuren, badkamerproducten en verlichting. Lokaal gekochte bouwmaterialen blijven bij Inkoop derden. Brutowinst is verkoop minus bekende kostprijs; algemene bedrijfskosten zijn nog niet afgetrokken.")} </p>
 
           {/* Eén blok i.p.v. twee: "minimaal door te belasten" stond eerst los
               én nogmaals als eerste regel van dit sommetje — dubbel en rommelig. */}
@@ -1200,9 +1213,9 @@ export default async function ProjectDetailPage({
                 <div className="flex justify-between gap-2">
                   <dt className="text-muted">
                     {uiT("Werk tot nu toe moet minimaal opbrengen")} <span className="block text-xs">
-                      {uiT("uren")} {formatEUR(margins.laborRevenue)} {uiT("+ inkoop")} {formatEUR(margins.purchaseRevenue)} {uiT("+ eigen producten")} {formatEUR(margins.productRevenue)} {uiT("· alle bedragen ex. btw")} </span>
+                      {uiT("uren")} {formatEUR(margins.laborRevenue)} {uiT("+ inkoop")} {formatEUR(margins.purchaseRevenue)} + {uiT("Overige projectkosten")} {formatEUR(margins.otherRevenue)} {uiT("+ eigen producten")} {formatEUR(ownProductRevenue)} {uiT("· alle bedragen ex. btw")} </span>
                   </dt>
-                  <dd className="tabular-nums">{formatEUR(margins.totalRevenue)}</dd>
+                  <dd className="tabular-nums">{formatEUR(margins.totalRevenue + margins.uncostedProductRevenue)}</dd>
                 </div>
                 <div className="flex justify-between gap-2">
                   <dt className="text-muted">
@@ -1216,10 +1229,10 @@ export default async function ProjectDetailPage({
                 </div>
                 {/* Een negatief "nog te ontvangen" leest als een fout; zeg dan
                     gewoon wat het is: de klant heeft vooruitbetaald. */}
-                {margins.totalRevenue - receivedTotalEx >= -0.01 ? (
+                {margins.totalRevenue + margins.uncostedProductRevenue - receivedTotalEx >= -0.01 ? (
                   <div className="flex justify-between gap-2 border-t pt-1 font-semibold">
                     <dt>{uiT("Nog te ontvangen")}</dt>
-                    <dd className="tabular-nums">{formatEUR(Math.max(0, margins.totalRevenue - receivedTotalEx))}</dd>
+                    <dd className="tabular-nums">{formatEUR(Math.max(0, margins.totalRevenue + margins.uncostedProductRevenue - receivedTotalEx))}</dd>
                   </div>
                 ) : (
                   <div className="flex justify-between gap-2 border-t pt-1 font-semibold">
@@ -1227,7 +1240,7 @@ export default async function ProjectDetailPage({
                       {uiT("Vooruit ontvangen")} <span className="block text-xs font-normal text-muted">
                         {uiT("de klant heeft vooruitbetaald voor werk dat nog komt")} </span>
                     </dt>
-                    <dd className="tabular-nums text-success">{formatEUR(receivedTotalEx - margins.totalRevenue)}</dd>
+                    <dd className="tabular-nums text-success">{formatEUR(receivedTotalEx - margins.totalRevenue - margins.uncostedProductRevenue)}</dd>
                   </div>
                 )}
                 {openInvoicedEx > 0.01 && (
@@ -1238,10 +1251,10 @@ export default async function ProjectDetailPage({
                     <dd className="tabular-nums text-warning">{formatEUR(openInvoicedEx)}</dd>
                   </div>
                 )}
-                {margins.totalRevenue - receivedTotalEx - openInvoicedEx > 0.01 && (
+                {margins.totalRevenue + margins.uncostedProductRevenue - receivedTotalEx - openInvoicedEx > 0.01 && (
                   <div className="flex justify-between gap-2">
                     <dt className="text-muted">{uiT("nog te factureren")}</dt>
-                    <dd className="tabular-nums">{formatEUR(margins.totalRevenue - receivedTotalEx - openInvoicedEx)}</dd>
+                    <dd className="tabular-nums">{formatEUR(margins.totalRevenue + margins.uncostedProductRevenue - receivedTotalEx - openInvoicedEx)}</dd>
                   </div>
                 )}
               </dl>
@@ -1841,9 +1854,9 @@ export default async function ProjectDetailPage({
             <CardHeader>
               <CardTitle>{uiT("Kosten & inkoop")}</CardTitle>
               <span className="text-xs text-muted">
-                {uiT("gekoppelde inkoop")} {formatEUR(poCost)} {uiT("+ losse kosten")} {formatEUR(looseCost)} = {formatEUR(materialCost)}
+                {uiT("gekoppelde inkoop")} {formatEUR(poCost)} {uiT("+ losse kosten")} {formatEUR(looseCost)} = {formatEUR(poCost+looseCost)}
                 {uiT(" · alle bedragen ex. btw")}
-                {uiT(" · door te belasten {v0} — {v1}% opslag op kostprijs = {v2}", { v0: formatEUR(margins.purchaseRevenue), v1: margins.purchaseMarginPct, v2: formatEUR(margins.purchaseMargin) })}
+                {uiT(" · eigen producten {own}, bouwmaterialen {material}, overige kosten {other}", {own:formatEUR(costStreams.own),material:formatEUR(costStreams.material),other:formatEUR(costStreams.other)})}
                 {arbeidPoCost > 0
                   ? uiT(" · {v0} aan arbeidsfacturen telt hier NIET in mee — die staat bij Uren — arbeid", { v0: formatEUR(arbeidPoCost) })
                   : ""}

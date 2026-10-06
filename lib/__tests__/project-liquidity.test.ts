@@ -8,7 +8,7 @@ const line = (name: string, price = 100, extra: Partial<DocumentLineItem> = {}):
   ({ name, units: 1, price, taxRate: 21, ...extra });
 
 describe("own goods independent of known product cost", () => {
-  it.each(["kozijnen Finca Lisa", "Ballustrade", "Binnen deuren", "Buiten deur", "Badkamer artikelen", "Ventanas", "Puerta exterior", "Bathroom products", "Magic stone"])("recognizes %s", name => {
+  it.each(["kozijnen Finca Lisa", "Ballustrade", "Binnen deuren", "Buiten deur", "Badkamer artikelen", "Ventanas", "Puerta exterior", "Bathroom products", "Magic stone", "Verlichting", "Lighting", "Iluminación"])("recognizes %s", name => {
     expect(isOwnProductLine(line(name))).toBe(true);
     expect(docOwnShare([line(name)], 100)).toBe(1);
   });
@@ -23,7 +23,7 @@ describe("own goods independent of known product cost", () => {
     line("montage kozijnen"), line("Warmte pomp installatie / Air flows"),
     line("Architect"), line("Topograaf"), line("1st term exterior works according design"),
     line("Puertas", 100, { category: "plaatsing" }),
-    line("kozijnen", 100, { pricingBasis: "construction", costEur: 50 }),
+    line("Bouwmaterialen gekocht door ons", 100, { pricingBasis: "construction", costEur: 50 }),
     line("verrekening voorschot", -100, { advanceRef: "previous-invoice" }),
   ])("keeps work, third parties and settlements out of our goods: $name", item => {
     expect(isOwnProductLine(item)).toBe(false);
