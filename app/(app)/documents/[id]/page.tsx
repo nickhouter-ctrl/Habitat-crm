@@ -447,6 +447,25 @@ export default async function DocumentDetailPage({
             </a>
             <LinkButton href={`/documents/${id}/edit`} variant="secondary">
               {uiT("Bewerken")} </LinkButton>
+            {/* Eén factuur naar Holded, zonder de hele sync. Stond eerder alleen
+                onder het tabblad Intern, waar niemand hem vond. */}
+            {(doc.kind === "invoice" || doc.kind === "creditnote") && !doc.isExternal && (
+              holdedMap || doc.holdedId ? (
+                <Link href={`/documents/${id}?section=internal`}><Badge tone="success">{uiT("✓ In Holded")}</Badge></Link>
+              ) : (
+                <form action={pushDocumentToHoldedAction.bind(null, id)}>
+                  {doc.status === "draft" ? (
+                    <ConfirmSubmit
+                      message={uiT("{v0} naar Holded sturen? Daarmee wordt hij definitief in de boekhouding en wordt de voorraad afgeboekt.", { v0: `${kindLabel} ${doc.docNumber ?? ""}`.trim() })}
+                      className={buttonClass({ variant: "secondary" })}
+                    >
+                      {uiT("Naar Holded")} </ConfirmSubmit>
+                  ) : (
+                    <SubmitButton variant="secondary" pendingLabel={uiT("Pushen…")}>{uiT("Naar Holded")}</SubmitButton>
+                  )}
+                </form>
+              )
+            )}
           </>
         }
       />

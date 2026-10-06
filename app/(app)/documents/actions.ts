@@ -2054,7 +2054,7 @@ export async function pushDocumentToHoldedAction(id: string) {
     columns: { isExternal: true },
   });
   if (target0?.isExternal) {
-    redirect(`/documents/${id}?holdedError=${encodeURIComponent("Externe factuur — hoort niet in Habitats Holded.")}`);
+    redirect(`/documents/${id}?section=internal&holdedError=${encodeURIComponent("Externe factuur — hoort niet in Habitats Holded.")}`);
   }
   let target: string;
   try {
@@ -2078,7 +2078,7 @@ export async function pushDocumentToHoldedAction(id: string) {
         .where(and(eq(documents.id, id), eq(documents.status, "draft")));
       await bookStockInForCreditNote(id, user.id, { auto: true });
     }
-    target = `/documents/${id}?holded=ok&hid=${encodeURIComponent(hid)}`;
+    target = `/documents/${id}?section=internal&holded=ok&hid=${encodeURIComponent(hid)}`;
   } catch (err) {
     let msg = err instanceof Error ? err.message : "push naar Holded mislukt";
     // Holded-foutdetail (body) meesturen zodat de gebruiker de echte oorzaak ziet.
@@ -2087,7 +2087,7 @@ export async function pushDocumentToHoldedAction(id: string) {
       const detail = typeof body === "string" ? body : JSON.stringify(body);
       msg += ` — ${detail.slice(0, 300)}`;
     }
-    target = `/documents/${id}?holdedError=${encodeURIComponent(msg)}`;
+    target = `/documents/${id}?section=internal&holdedError=${encodeURIComponent(msg)}`;
   }
   revalidatePath(`/documents/${id}`);
   redirect(target);
