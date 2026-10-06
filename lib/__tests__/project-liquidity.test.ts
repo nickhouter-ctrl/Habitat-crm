@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { docOwnShare, docProductMargin, isOwnProductLine } from "../documents";
 import { splitProjectReceipts, splitReceipt } from "../receipts";
-import { deriveAdvanceCover, deriveProjectMargins } from "../project-financials";
+import { deriveAdvanceCover, deriveProjectMargins, projectWorkProfit } from "../project-financials";
 import type { DocumentLineItem } from "../db/schema";
 
 const line = (name: string, price = 100, extra: Partial<DocumentLineItem> = {}): DocumentLineItem =>
@@ -43,6 +43,18 @@ describe("own goods independent of known product cost", () => {
 });
 
 describe("liquid project funds", () => {
+  it.each(["Kozijnen", "Balustrades", "Binnen deuren", "Buiten deuren", "Badkamer artikelen", "Verlichting", "Magic stone"])("excludes the full paid selling price of %s, not just its cost", name => {
+    const items=[line(name,10000,{costEur:2000}),line("voorschot werkzaamheden",5000)];
+    const receipt=splitReceipt({amountEur:18150,method:"bank",vatRate:"21",documentId:"sale"},new Map([["sale",docOwnShare(items,15000)]]));
+    expect(receipt).toEqual({totalReceived:15000,ownProductReceived:10000,liquidReceived:5000});
+  });
+  it("shows Finca work profit separately from money remaining for costs", () => {
+    const cover=deriveAdvanceCover({laborCost:99409.079492,purchaseCost:24635.35,coverReceivedEx:163156.74,ownProductReceivedEx:81824.73,requiredRevenue:142651.10});
+    expect(projectWorkProfit(cover)).toBe(18606.67);
+    expect(cover.saldo).toBe(20505.64);
+    expect(projectWorkProfit(cover)).not.toBe(cover.costSaldo);
+    expect(Math.round((cover.received-cover.prefinanced-projectWorkProfit(cover))*100)/100).toBe(cover.saldo);
+  });
   const ownShareByDoc = new Map([
     ["mixed", docOwnShare([line("kozijnen", 24029.84), line("voorschot werkzaamheden", 15000)], 39029.84)],
     ["goods", 1], ["work", 0], ["credit", 1],

@@ -37,7 +37,7 @@ import {
 } from "@/lib/db/schema";
 import { docOwnShare, docProductMargin, normalizeDocItems } from "@/lib/documents";
 import type { DocumentLineItem } from "@/lib/db/schema";
-import { deriveAdvanceCover, deriveProjectMargins, deriveProjectFinancials } from "@/lib/project-financials";
+import { deriveAdvanceCover, deriveProjectMargins, deriveProjectFinancials, projectWorkProfit } from "@/lib/project-financials";
 import { splitProjectReceipts } from "@/lib/receipts";
 import { poExVatSql } from "@/lib/purchase-orders-sql";
 import { formatEUR } from "@/lib/utils";
@@ -503,20 +503,20 @@ export default async function ProjectsPage({
           <div className="rounded-xl border bg-surface px-4 py-4"><p className="text-xs text-muted">{uiT("Openstaande klantfacturen")}</p><p className="mt-1 text-xl font-semibold tabular-nums">{formatEUR(totals.outstanding)}</p><p className="mt-1 text-xs text-muted">{uiT("Nog niet ontvangen · ex. btw")}</p></div>
         </div>
         <Card className="overflow-hidden"><CardHeader><CardTitle>{uiT("Stand per project")}</CardTitle><span className="text-xs text-muted">{uiT("Ontvangsten en voorschotruimte · ex. btw")}</span></CardHeader><Table className="min-w-[1200px]">
-          <THead><Tr><Th>{uiT("Project")}</Th><Th>{uiT("Voortgang")}</Th><Th className="text-right">{uiT("Totaal ontvangen")}</Th><Th className="text-right">{uiT("Ontvangen voor eigen producten")}</Th><Th className="text-right">{uiT("Liquide ontvangen")}</Th><Th className="text-right">{uiT("Brutowinst + voorschot voor volgend werk")}</Th><Th className="text-right">{uiT("Uren en derden tegen klantprijs")}</Th><Th className="text-right">{uiT("Voorschot voor volgend werk")}</Th><Th>{uiT("Volgende stap")}</Th></Tr></THead>
+          <THead><Tr><Th>{uiT("Project")}</Th><Th>{uiT("Voortgang")}</Th><Th className="text-right">{uiT("Totaal ontvangen")}</Th><Th className="text-right">{uiT("Ontvangen voor eigen producten")}</Th><Th className="text-right">{uiT("Liquide ontvangen")}</Th><Th className="text-right">{uiT("Brutowinst op uitgevoerd werk")}</Th><Th className="text-right">{uiT("Uren en derden tegen klantprijs")}</Th><Th className="text-right">{uiT("Resterende voorschotruimte")}</Th><Th>{uiT("Volgende stap")}</Th></Tr></THead>
           <TBody>{rows.map(p=><Tr key={p.id}>
             <Td><Link href={`/projects/${p.id}`} className="font-semibold text-accent hover:underline">{p.name}</Link><p className="mt-1 text-xs text-muted">{p.contactName??uiT("Geen klant gekoppeld")}{p.ownerName?` · ${p.ownerName}`:''}</p><div className="mt-2">{statusBadge(p.status)}</div></Td>
             <Td>{p.progress.percent===null?<span className="text-xs text-muted">{uiT("Nog niet vastgelegd")}</span>:<><p className="text-sm font-semibold">{p.progress.percent}%</p><div role="progressbar" aria-label={uiT("Voortgang")} aria-valuenow={p.progress.percent} aria-valuemin={0} aria-valuemax={100} className="mt-2 h-1.5 w-24 overflow-hidden rounded-full bg-background"><div className="h-full bg-accent" style={{width:`${p.progress.percent}%`}}/></div><p className="mt-1 max-w-36 text-xs text-muted">{p.progress.current??uiT("Alle fases afgerond")}</p></>}</Td>
             <Td className="text-right tabular-nums">{formatEUR(p.cover.totalReceived)}</Td>
             <Td className="text-right tabular-nums">{formatEUR(p.cover.ownProductReceived)}</Td>
             <Td className="text-right tabular-nums">{formatEUR(p.cover.received)}</Td>
-            <Td className={`text-right font-semibold tabular-nums ${p.cover.costSaldo < 0 ? "text-danger" : "text-success"}`}>{formatEUR(p.cover.costSaldo)}</Td>
+            <Td data-funding-value="work-profit" data-amount={projectWorkProfit(p.cover)} className={`text-right font-semibold tabular-nums ${projectWorkProfit(p.cover) < 0 ? "text-danger" : "text-success"}`}>{formatEUR(projectWorkProfit(p.cover))}</Td>
             <Td className="text-right tabular-nums">{formatEUR(p.cover.requiredRevenue)}<p className="mt-1 text-xs text-muted">{uiT("Kosten + berekende brutowinst")}</p></Td>
             <Td className="text-right"><p className={`font-semibold tabular-nums ${p.cover.saldo<0?'text-danger':p.cover.status==='bijna_op'?'text-warning':'text-success'}`}>{formatEUR(p.cover.saldo)}</p><p className="mt-1 text-xs text-muted">{uiT(p.cover.saldo<0?"Tekort voor geboekt werk":"Na kosten en berekende brutowinst")}</p></Td>
             <Td><Link href={`/projects/${p.id}#voorschot-opvragen`} className="inline-block text-sm font-medium text-accent hover:underline">{uiT(p.status!=='active'?"Betalingen controleren":p.cover.requiredRevenue<=0.01?"Voorschot plannen":p.cover.status==='voorgeschoten'?"Voorschot nodig":p.cover.status==='bijna_op'?"Nieuw voorschot voorbereiden":"Voldoende voorschotruimte")}</Link>{p.outstanding>0.01&&<p className="mt-2 text-xs text-warning">{uiT("{amount} facturen nog open",{amount:formatEUR(p.outstanding)})}</p>}</Td>
           </Tr>)}{!rows.length&&<Tr><Td colSpan={9}>{uiT("Geen projecten in deze weergave — maak er een aan met “Nieuw project”.")}</Td></Tr>}</TBody>
         </Table></Card>
-        <p className="text-xs leading-relaxed text-muted">{uiT("Van het liquide ontvangen geld trekken we de geboekte werkkosten en de berekende brutowinst af. Het restant is het voorschot voor volgend werk. Betalingen en winst op eigen producten staan apart.")} {uiT("De brutowinst komt uit de opslag op uren en inkoop. Algemene bedrijfskosten zijn daar nog niet vanaf. Alle bedragen ex. btw, op basis van geboekte betalingen en kosten.")}</p>
+        <p className="text-xs leading-relaxed text-muted">{uiT("Verkoopontvangsten voor alle eigen producten blijven buiten het werkgeld. Van het werkgeld trekken we de geboekte werkkosten af en houden we de berekende brutowinst apart. Wat overblijft is beschikbaar voor projectkosten.")} {uiT("De brutowinst komt uit de opslag op uren en inkoop. Algemene bedrijfskosten zijn daar nog niet vanaf. Alle bedragen ex. btw, op basis van geboekte betalingen en kosten.")}</p>
       </TabPanel>
       <TabPanel id="resultaat">
       <Card className="overflow-hidden">
@@ -553,7 +553,7 @@ export default async function ProjectsPage({
                 <Th className="text-right">{uiT("Aanneemprijs")}</Th>
                 <Th className="text-right">{uiT("Gefactureerd")}</Th>
                 <Th className="text-right">{uiT("Openstaand")}</Th>
-                <Th className="text-right">{uiT("Voorschot voor volgend werk")}</Th>
+                <Th className="text-right">{uiT("Resterende voorschotruimte")}</Th>
                 <Th className="text-right">{uiT("Open facturen")}</Th>
                 <Th className="text-right">{uiT("Nog te factureren")}</Th>
                 <Th className="text-right">{uiT("Brutowinst uren")}</Th>

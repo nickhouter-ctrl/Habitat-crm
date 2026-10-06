@@ -231,6 +231,11 @@ export type AdvanceCover = {
   suggestedRequestEur: number;
 };
 
+/** Earned markup only; excludes both product profit and the unused work advance. */
+export function projectWorkProfit(cover: Pick<AdvanceCover, "requiredRevenue" | "prefinanced">): number {
+  return round2(cover.requiredRevenue - cover.prefinanced);
+}
+
 /** Vergelijkt ontvangen bedragen excl. btw met de doorbelasting van geboekt werk,
  * inclusief opslag, nadat ontvangsten voor eigen producten apart zijn gehouden.
  * Eigen producten worden hier niet opnieuw afgetrokken. Zonder requiredRevenue

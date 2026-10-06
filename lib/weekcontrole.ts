@@ -18,6 +18,7 @@ import type { DocumentLineItem } from "@/lib/db/schema";
 import { splitProjectReceipts, type ReceiptLike } from "@/lib/receipts";
 import { alGedekt } from "@/lib/project-receipts";
 import { projectCostStreams, projectOwnProducts } from "@/lib/project-cost-streams";
+import { deriveAdvanceCover, deriveProjectMargins, projectWorkProfit } from "@/lib/project-financials";
 
 const eur = (n: number) =>
   "€ " + n.toLocaleString("nl-NL", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -32,6 +33,7 @@ export type Projectcijfers = {
   /** Known product costs, including purchases and deliveries, without counting a source twice. */
   eigenKost: number;
   eigenOntvangen: number; liquideOntvangen: number; liquideRuimte: number;
+  werkWinst: number; voorschotRuimte: number;
 };
 
 export type Weekcontrole = { signalen: Signaal[]; projecten: Projectcijfers[]; openTotaal: number };
@@ -227,8 +229,10 @@ export async function verzamelWeekcontrole(): Promise<Weekcontrole> {
 
   /* ── Projectcijfers (actieve projecten) ── */
   const projecten = await db.execute<Projectcijfers & { id: string; payments: ReceiptLike[];
-    purchases:Parameters<typeof projectCostStreams>[0];costs:Parameters<typeof projectCostStreams>[1];deliveries:unknown;extraCost:number }>(sql`
+    purchases:Parameters<typeof projectCostStreams>[0];costs:Parameters<typeof projectCostStreams>[1];deliveries:unknown;extraCost:number;
+    laborPct:number|null;purchasePct:number|null }>(sql`
     select p.id, p.name naam, p.contract_price_eur::float8 doel,
+      p.labor_margin_pct::float8 "laborPct",p.purchase_margin_pct::float8 "purchasePct",
       (select coalesce(sum(t.hours * t.hourly_cost_eur),0) from time_entries t
         where t.project_id = p.id and not (t.self_logged_at is not null and t.approved_at is null))::float8 arbeid,
       (select coalesce(sum(coalesce(nullif(po.subtotal,0),
@@ -295,6 +299,12 @@ export async function verzamelWeekcontrole(): Promise<Weekcontrole> {
     p.liquideOntvangen = receipts.liquidReceived;
     const workCost = Math.round((p.arbeid + p.inkoop + p.losse) * 100) / 100;
     p.liquideRuimte = Math.round((receipts.liquidReceived - workCost) * 100) / 100;
+    const margins=deriveProjectMargins({laborCost:p.arbeid,purchaseCost:streams.material,otherCost:streams.other,
+      productRevenue:0,productCost:0,laborMarginPct:p.laborPct,purchaseMarginPct:p.purchasePct});
+    const cover=deriveAdvanceCover({laborCost:p.arbeid,purchaseCost:streams.material+streams.other,coverReceivedEx:receipts.liquidReceived,
+      ownProductReceivedEx:receipts.ownProductReceived,requiredRevenue:margins.totalRevenue});
+    p.werkWinst=projectWorkProfit(cover);
+    p.voorschotRuimte=cover.saldo;
   }
 
   /* ── H · Kostenplafond (85% van het doel) ── */
@@ -320,7 +330,7 @@ export function bouwArtifactHtml({ signalen, projecten, openTotaal }: Weekcontro
   const middel = signalen.filter((s) => s.ernst === "middel").length;
   const kostenTotaal = projecten.reduce((s, p) => s + p.arbeid + p.inkoop + p.losse + p.eigenKost, 0);
   const ontvangenTotaal = projecten.reduce((s, p) => s + p.ontvangenEx, 0);
-  const liquideTotaal = projecten.reduce((s, p) => s + p.liquideRuimte, 0);
+  const liquideTotaal = projecten.reduce((s, p) => s + p.voorschotRuimte, 0);
 
   const signaalHtml = signalen.length
     ? signalen
@@ -347,7 +357,8 @@ export function bouwArtifactHtml({ signalen, projecten, openTotaal }: Weekcontro
         <td class="num">${eur(p.ontvangenEx)}</td>
         <td class="num">${eur(p.eigenOntvangen)}</td>
         <td class="num">${eur(p.liquideOntvangen)}</td>
-        <td class="num ${p.liquideRuimte < 0 ? "warn" : "goed"}">${eur(p.liquideRuimte)}</td>
+        <td class="num ${p.werkWinst < 0 ? "warn" : "goed"}">${eur(p.werkWinst)}</td>
+        <td class="num ${p.voorschotRuimte < 0 ? "warn" : "goed"}">${eur(p.voorschotRuimte)}</td>
       </tr>`;
     })
     .join("");
@@ -413,7 +424,7 @@ export function bouwArtifactHtml({ signalen, projecten, openTotaal }: Weekcontro
     <div class="tegel"><b>${eur(openTotaal)}</b><span>openstaand bij klanten</span></div>
     <div class="tegel"><b>${eur(ontvangenTotaal)}</b><span>ontvangen op actieve projecten (ex. btw)</span></div>
     <div class="tegel"><b>${eur(kostenTotaal)}</b><span>kosten actieve projecten</span></div>
-    <div class="tegel"><b>${eur(liquideTotaal)}</b><span>liquide ruimte na geboekte kosten (ex. btw)</span></div>
+    <div class="tegel"><b>${eur(liquideTotaal)}</b><span>resterende voorschotruimte (ex. btw)</span></div>
   </div>
 
   <h2>Signalen</h2>
@@ -424,14 +435,14 @@ export function bouwArtifactHtml({ signalen, projecten, openTotaal }: Weekcontro
     <table>
       <thead><tr>
         <th>Project</th><th>Aanneemsom</th><th>Kosten</th><th>Gefactureerd</th>
-        <th>Open bij klant</th><th>Totaal ontvangen (ex)</th><th>Eigen producten (ex)</th><th>Liquide ontvangen (ex)</th><th>Liquide ruimte (ex)</th>
+        <th>Open bij klant</th><th>Totaal ontvangen (ex)</th><th>Eigen producten (ex)</th><th>Liquide ontvangen (ex)</th><th>Brutowinst op werk (ex)</th><th>Resterende voorschotruimte (ex)</th>
       </tr></thead>
       <tbody>${rijen}</tbody>
     </table>
   </div>
 
   <footer>
-    Liquide ruimte = totaal ontvangen − ontvangen voor eigen producten − geboekte kosten van uren en derden. Alle bedragen ex. btw. Gebaseerd op geboekte betalingen en kosten; de projectpagina is leidend.
+    Resterende voorschotruimte = totaal ontvangen − volledige verkoopontvangsten voor alle eigen producten − geboekte werkkosten − berekende brutowinst op werk. Winst op eigen producten staat apart. Alle bedragen ex. btw. Gebaseerd op geboekte betalingen en kosten; de projectpagina is leidend.
     Kosten = arbeid + bouwmaterialen + overige projectkosten + bekende kostprijs van eigen producten. Inkoop, factuurregels en leveringen worden per productgroep samengevoegd; dezelfde kostprijs telt eenmaal. Deze pagina wordt wekelijks automatisch ververst.
   </footer>
 </main>`;
