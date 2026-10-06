@@ -1,6 +1,9 @@
 import type { Dictionary } from "@/lib/i18n";
 
 const rows: [string, string, string][] = [
+  ["Over na kosten, vóór opslag", "Remaining after costs, before markup", "Restante tras costes, antes del recargo"],
+  ["Het systeem reserveert hiervan {amount} opslag op uren en derden.", "The calculation reserves {amount} of this for markup on labour and third parties.", "El cálculo reserva {amount} de este importe para el recargo en mano de obra y terceros."],
+  ["Voor volgend werk, na kosten én afgesproken opslag", "For future work, after costs and agreed markup", "Para futuros trabajos, tras costes y recargo acordado"],
   ["Na kosten én afgesproken opslag op uren en derden", "After costs and agreed markup on labour and third parties", "Tras costes y recargo acordado en mano de obra y terceros"],
   ["Totaal ontvangen", "Total received", "Total cobrado"],
   ["Ontvangen voor eigen producten", "Received for our products", "Cobrado por nuestros productos"],
