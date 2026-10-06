@@ -512,13 +512,13 @@ export async function signCatalogUpload(
  * grootte. Zonder ze te downloaden: bij het bewaren van een concept hoeft een
  * presentatie van 15 MB nog niet binnengehaald te worden.
  */
-export async function catalogusKeuze(paths: string[]): Promise<{ path: string; name: string; size: number }[]> {
+export async function catalogusKeuze(paths: string[]): Promise<{ path: string; name: string; size: number; url: string }[]> {
   const uniek = [...new Set(paths.filter(Boolean))];
   if (uniek.length === 0) return [];
   const bibliotheek = new Map((await listCatalogFiles()).map((f) => [f.path, f]));
   return uniek.flatMap((p) => {
     const f = bibliotheek.get(p);
-    return f ? [{ path: f.path, name: f.name, size: f.size }] : [];
+    return f ? [{ path: f.path, name: f.name, size: f.size, url: f.url }] : [];
   });
 }
 

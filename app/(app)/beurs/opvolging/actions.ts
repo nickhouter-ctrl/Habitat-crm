@@ -25,6 +25,7 @@ import { followupAttachments } from "@/lib/followup-mail-attachments";
 import { catalogusKeuze, catalogusMailBijlagen, signCatalogUpload } from "@/lib/storage";
 import { vasteDatasheets, CUSTOM_STONE_SOURCE, followupDesigns, followupMailKind, followupMailSource, hasResellerInterest } from "@/lib/followup-mail";
 import { recordSentEmail } from "@/lib/sent-email";
+import { appendContactEmails } from "@/lib/contact-email-addresses";
 import { isFairContact } from "@/lib/followup-source";
 import { FOLLOWUP_DONE, FOLLOWUP_REOPENED, followupCheckInput } from "@/lib/followup-checklist";
 import { followupCompletionFilter } from "@/lib/followup-checklist-data";
@@ -36,7 +37,9 @@ import { followupCompletionFilter } from "@/lib/followup-checklist-data";
  * verderop in de mailhistorie opzoeken om het te versturen, en dan weet je niet
  * zeker of je naar het juiste kijkt.
  */
-export type DraftSamenvatting={id:string;updatedAt:string;to:string;mailbox:string;afzender:string;subject:string;body:string;attachments:string[]};
+/** Een bijlage zoals de controlepopup hem toont: met link, en bij een afbeelding een voorbeeld. */
+export type BijlageVoorbeeld={naam:string;url:string;afbeelding:boolean};
+export type DraftSamenvatting={id:string;updatedAt:string;to:string;mailbox:string;afzender:string;subject:string;body:string;attachments:BijlageVoorbeeld[]};
 export type Result={error?:string;success?:string;draft?:DraftSamenvatting};
 class InputError extends Error {}
 function failure(e:unknown):Result { return {error:e instanceof InputError?e.message:e instanceof z.ZodError?e.issues[0].message:"Opslaan mislukt. Controleer de gegevens en probeer opnieuw."}; }
@@ -130,7 +133,7 @@ export async function saveDraft(_:Result,fd:FormData):Promise<Result>{
     const savedAt=new Date();
     const [bewaard]=await db.insert(partnerMessages).values({updatedAt:savedAt,createdAt:savedAt,contactId:d.contactId,subject:d.subject,body:d.body,source:d.templateKind==='custom'&&includeTechnical?CUSTOM_STONE_SOURCE:followupMailSource(d.templateKind),attachments:[...attachments.map(a=>({name:a.filename,size:Buffer.byteLength(a.content)})),...pdfs.map(p=>({name:p.name,size:p.size,catalogus:p.path}))],toEmail:to,mailboxUser:mailbox,authorId:user.id}).returning();
     refresh(d.contactId);
-    return{success:'Concept met bijlagen bewaard. Controleer het en verstuur het hier.',draft:{id:bewaard.id,updatedAt:bewaard.updatedAt.toISOString(),to,mailbox,afzender:d.templateKind==='custom'?(user.name??'Habitat One'):'Hans',subject:d.subject,body:d.body,attachments:[...attachments.map(a=>a.filename),...pdfs.map(p=>p.name)]}};
+    return{success:'Concept met bijlagen bewaard. Controleer het en verstuur het hier.',draft:{id:bewaard.id,updatedAt:bewaard.updatedAt.toISOString(),to:appendContactEmails(to,c.additionalEmails??[]),mailbox,afzender:d.templateKind==='custom'?(user.name??'Habitat One'):'Hans',subject:d.subject,body:d.body,attachments:[...attachments.map(a=>{const beeld=/\.(jpe?g|png|webp)$/i.test(a.filename);return{naam:a.filename,url:beeld?`/mail/followup/${a.filename}`:`/docs/${a.filename}`,afbeelding:beeld};}),...pdfs.map(p=>({naam:p.name,url:p.url,afbeelding:false}))]}};
   }catch(e){return failure(e);}
 }
 export async function generateDraft(id:string,instruction:string,proposalKind:unknown='custom',currentDraft:unknown='',includeStoneInfo:unknown=false,gekozenPdfs:unknown=[]){

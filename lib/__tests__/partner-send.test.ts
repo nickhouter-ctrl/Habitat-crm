@@ -62,7 +62,7 @@ describe('voorstel bewaren en aanpassen',()=>{
    m.select.mockResolvedValueOnce([{id,email:draft.toEmail}]);
    m.attachments.mockResolvedValue([{filename:'display.jpg',content:Buffer.from('image')}]);
    const res=await saveDraft({},saveForm());
-   expect(res.draft).toMatchObject({to:draft.toEmail,subject:'Voorstel',body:'Persoonlijk aangepast voorstel',attachments:['display.jpg'],afzender:'Hans'});
+   expect(res.draft).toMatchObject({to:draft.toEmail,subject:'Voorstel',body:'Persoonlijk aangepast voorstel',attachments:[{naam:'display.jpg',url:'/mail/followup/display.jpg',afbeelding:true}],afzender:'Hans'});
    expect(res.draft?.id).toBeTruthy();expect(res.draft?.updatedAt).toBeTruthy();
    expect(m.mail).not.toHaveBeenCalled();
  });
@@ -104,13 +104,13 @@ const PRESENTATIE='Flexible-Stone-Distributor-Presentation.pdf';
 describe('PDF\'s uit de bibliotheek meesturen',()=>{
  it('bewaart de gekozen PDF met zijn pad, zonder hem al op te halen',async()=>{
    m.select.mockResolvedValueOnce([{id,email:draft.toEmail}]);
-   m.keuze.mockResolvedValue([{path:PRESENTATIE,name:PRESENTATIE,size:14_754_802}]);
+   m.keuze.mockResolvedValue([{path:PRESENTATIE,name:PRESENTATIE,size:14_754_802,url:'https://cdn.example/p.pdf'}]);
    const f=saveForm('custom');f.append('bijlage',PRESENTATIE);
    const r=await saveDraft({},f);
    expect(r.success).toBeTruthy();
    expect(m.keuze).toHaveBeenCalledWith([PRESENTATIE]);
    expect(m.insert).toHaveBeenCalledWith(expect.objectContaining({attachments:[{name:PRESENTATIE,size:14_754_802,catalogus:PRESENTATIE}]}));
-   expect(r.draft?.attachments).toEqual([PRESENTATIE]);
+   expect(r.draft?.attachments).toEqual([{naam:PRESENTATIE,url:expect.any(String),afbeelding:false}]);
    expect(m.pdfs).not.toHaveBeenCalled();
  });
  it('weigert bijlagen die samen te groot zijn voor één mail',async()=>{

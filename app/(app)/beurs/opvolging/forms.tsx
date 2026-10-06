@@ -68,7 +68,13 @@ function ControlePopup({draft,onClose}:{draft:DraftSamenvatting;onClose:()=>void
     <p><span className="text-muted">{t("Naar")}: </span><span className="font-medium">{draft.to}</span></p>
     <p><span className="text-muted">{t("Van")}: </span>{draft.afzender} · {draft.mailbox}</p>
     <p><span className="text-muted">{t("Onderwerp")}: </span><span className="font-medium">{draft.subject}</span></p>
-    <p><span className="text-muted">{t("Bijlagen")}: </span>{draft.attachments.length?draft.attachments.join(', '):t("geen")}</p>
+    <div><p className="text-muted">{t("Bijlagen")}: {draft.attachments.length?'':t("geen")}</p>
+     {draft.attachments.length>0&&<ul className="mt-2 flex flex-wrap gap-2">{draft.attachments.map(b=><li key={b.url}>
+      <a href={b.url} target="_blank" rel="noopener noreferrer" title={t("Openen in een nieuw tabblad")} className="flex max-w-56 flex-col gap-1 rounded-lg border border-border bg-background/50 p-2 text-xs hover:border-accent">
+       {b.afbeelding?<img src={b.url} alt={b.naam} className="h-28 w-full rounded object-cover"/>:<span className="flex h-28 w-full items-center justify-center rounded bg-surface text-lg font-semibold text-muted">PDF</span>}
+       <span className="truncate">{b.naam}</span>
+      </a></li>)}</ul>}
+    </div>
     <pre className="max-h-80 overflow-y-auto whitespace-pre-wrap rounded-lg border border-border bg-background/50 p-3 font-sans">{draft.body}</pre>
    </div>
    <div className="flex flex-wrap items-center gap-3 border-t border-border px-5 py-4">
