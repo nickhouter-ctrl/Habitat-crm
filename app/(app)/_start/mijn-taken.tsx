@@ -6,6 +6,7 @@ import { tekst as uiTranslation } from '@/lib/i18n/server';
  * direct een taak toe te wijzen. Afvinken werkt inline.
  */
 import Link from "next/link";
+import { taakTitel } from "@/lib/taak-titel";
 
 import { tekst } from "@/lib/i18n/server";
 
@@ -67,7 +68,7 @@ export async function MijnTaken({
                   </SubmitButton>
                 </form>
               )}
-              <span className="min-w-0 flex-1 truncate text-sm">{taak.subject}</span>
+              <span className="min-w-0 flex-1 truncate text-sm">{taakTitel(taak.subject, uiT)}</span>
               {taak.priority === "hoog" && <Badge tone="danger">{t("hoog")}</Badge>}
               {taak.isVanAnder && taak.authorName && (
                 <span className="hidden text-xs text-muted sm:inline">{t("van {wie}", { wie: taak.authorName })}</span>

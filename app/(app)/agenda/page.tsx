@@ -6,6 +6,7 @@ import { alias } from "drizzle-orm/pg-core";
 import { ChevronLeft, ChevronRight, Plus, CalendarDays, CheckSquare } from "lucide-react";
 import { z } from "zod";
 import { db } from "@/lib/db";
+import { taakTitel } from "@/lib/taak-titel";
 import { activities, appointments, contacts, users } from "@/lib/db/schema";
 import { salesTaskFilter } from "@/lib/auth/sales-scope";
 import { requireModuleRead } from "@/lib/auth/guards";
@@ -124,7 +125,7 @@ async function TaskCard({ task: t, overdue = false, write }: { task: TaskRow; ov
       </form>}
       <div className="min-w-0 flex-1">
         <div className="flex items-start justify-between gap-2">
-          <p className="font-medium">{t.subject}</p>
+          <p className="font-medium">{taakTitel(t.subject, uiT)}</p>
           <span className="flex shrink-0 items-center gap-1.5">
             {t.priority === "hoog" && <Badge tone="danger">{uiT("Hoog")}</Badge>}
             {t.priority === "laag" && <Badge tone="neutral">{uiT("Laag")}</Badge>}
