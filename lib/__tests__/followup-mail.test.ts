@@ -83,6 +83,9 @@ describe('stand van zaken na de beurs', () => {
     expect(m.body).toContain('──────── English ────────');
     expect(m.body).toContain('Hi Raúl,');
     expect(m.body.match(/Hans\nHabitat One/g)).toHaveLength(2);
+    // Geen herhaalde kennismaking: de klant weet dat we elkaar op de beurs spraken.
+    expect(m.body).not.toMatch(/Fue un placer|It was a pleasure/);
+    expect(m.body).toMatch(/^Hola Raúl:\n\nNos ha desbordado/);
   });
   it('zegt wat er speelt: overweldigd, druk bezig, partijen in Spanje, zorgvuldig, we komen terug', () => {
     const { body } = followupProposal('status', ctx);
