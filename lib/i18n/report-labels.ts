@@ -10,6 +10,8 @@ const rows: [string,string,string][] = [
 ["Prijslijst & kortingsstaffel","Price list & discount tiers","Lista de precios y descuentos por volumen"],
 ["{n} producten · {datum} · Marge = winst als percentage van de verkoopprijs. Maximale korting voor break-even.","{n} products · {datum} · Margin = profit as a percentage of selling price. Maximum discount to break even.","{n} productos · {datum} · Margen = beneficio como porcentaje del precio de venta. Descuento máximo para cubrir el coste."],
 ["Prijs −{pct}%","Price −{pct}%","Precio −{pct}%"],["Winst −{pct}%","Profit −{pct}%","Beneficio −{pct}%"],
+["Naam","Name","Nombre"],["Afmeting (mm)","Size (mm)","Medida (mm)"],["m² per stuk","m² per piece","m² por pieza"],["Prijs per m²","Price per m²","Precio por m²"],["Kostprijs per m²","Cost per m²","Coste por m²"],
+["Alle prijzen ex btw. Prijs per m² op basis van de afmeting. Ingesprongen regels (↳) zijn andere formaten van hetzelfde product. Rood in de staffel = onder de kostprijs.","All prices excl. VAT. Price per m² based on the size. Indented rows (↳) are other sizes of the same product. Red in the tiers = below cost.","Todos los precios sin IVA. Precio por m² según la medida. Las filas sangradas (↳) son otros formatos del mismo producto. En rojo en la escala = por debajo del coste."],
 ["Winst €","Profit €","Beneficio €"],["Marge %","Margin %","Margen %"],["Max. korting %","Max. discount %","Descuento máx. %"],
 
 ['Onvoorzien ({pct}%)','Contingency ({pct}%)','Imprevistos ({pct}%)'],
