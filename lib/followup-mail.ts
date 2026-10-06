@@ -1,6 +1,7 @@
 export const FOLLOWUP_MAILS = {
   professional: 'Architecten, bouwbedrijven & andere zakelijke klanten',
   reseller: 'Verkooppunten — winkel of showroom',
+  status: 'Stand van zaken na de beurs — we komen bij je terug',
   custom: 'Eigen mail / AI-concept',
 } as const;
 export type FollowupMailKind = keyof typeof FOLLOWUP_MAILS;
@@ -9,6 +10,7 @@ export const CUSTOM_STONE_SOURCE = 'crm:flexible-stone-custom-v1';
 const SOURCES = {
   professional: 'crm:professional-display-v1',
   reseller: 'crm:reseller-display-v1',
+  status: 'crm:fair-status-v1',
   custom: 'crm',
 } as const;
 
@@ -16,7 +18,16 @@ export function followupMailSource(kind: FollowupMailKind): string { return SOUR
 export function followupMailKind(source: string | null | undefined): FollowupMailKind {
   if (source === SOURCES.professional) return 'professional';
   if (source === SOURCES.reseller) return 'reseller';
+  if (source === SOURCES.status) return 'status';
   return 'custom';
+}
+
+/**
+ * Gaan de technische data sheets standaard mee? Alleen bij de twee
+ * voorstellen; de stand-van-zakenmail is een korte boodschap zonder bijlagen.
+ */
+export function vasteDatasheets(kind: FollowupMailKind): boolean {
+  return kind === 'professional' || kind === 'reseller';
 }
 
 /** Interesse staat los van beroep. Een expliciete afwijzing gaat vóór oude importtags. */
@@ -52,12 +63,28 @@ export const FOLLOWUP_DESIGNS = {
     { filename: 'habitat-one-showroom-compact-v1.jpg', label: 'Compact showroomconcept', width: 1448, height: 1086 },
     { filename: 'habitat-one-showroom-large-v1.jpg', label: 'Uitgebreid showroomconcept', width: 1774, height: 887 },
   ],
+  status: [],
   custom: [],
 } as const;
 export function followupDesigns(kind: FollowupMailKind) { return FOLLOWUP_DESIGNS[kind]; }
 export function followupDesignUrl(filename: string) { return `/mail/followup/${filename}`; }
 
 export type FollowupMailContext = { name: string; isFair: boolean; meetingDate: string; company?: string | null; interests?: string[] };
+
+/**
+ * Een eerlijke tussenstand voor beurscontacten die op antwoord wachten. Na de
+ * beurs kwamen er meer reacties dan we in één keer goed konden oppakken; deze
+ * mail zegt dat, en belooft niets wat nog niet vastligt — geen prijzen, geen
+ * data, geen exclusiviteit.
+ */
+function statusMail(name: string, introEs: string, introEn: string, isFair: boolean, signature: string) {
+  const es = `Hola ${name}:\n\n${introEs}\n\nNos ha desbordado la respuesta tan positiva que hemos recibido en la feria. Muchas gracias por formar parte de ella.\n\nAhora mismo estamos trabajando a fondo para decidir cuál es la mejor manera de dar el siguiente paso. Ya estamos en conversaciones con varias empresas en España que se convertirán en puntos de venta de Flexible Stone.\n\nQueremos hacerlo con cuidado: estudiar bien cada paso para que la colaboración funcione para todos.\n\nEn cuanto tengamos más información, volveremos a ponernos en contacto con vosotros. Gracias por vuestra paciencia.\n\nUn cordial saludo,\n${signature}`;
+  const en = `Hi ${name},\n\n${introEn}\n\nWe have been overwhelmed by the positive response we received at the fair. Thank you for being part of it.\n\nRight now we are working hard on the best way to take the next step. We are already in talks with several companies in Spain that will become Flexible Stone retail partners.\n\nWe want to get this right, so we are taking the time to work it out carefully and decide on each step.\n\nAs soon as we have more information, we will get back to you. Thank you for your patience.\n\nWarm regards,\n${signature}`;
+  return {
+    subject: isFair ? 'Novedades tras Feria Hábitat / An update after Feria Hábitat' : 'Novedades sobre Flexible Stone / An update on Flexible Stone',
+    body: `${es}\n\n──────── English ────────\n\n${en}`,
+  };
+}
 
 export function followupProposal(kind: Exclude<FollowupMailKind, 'custom'>, context: FollowupMailContext) {
   const name = context.name.trim() || 'there';
@@ -79,6 +106,7 @@ export function followupProposal(kind: Exclude<FollowupMailKind, 'custom'>, cont
   const interestEn=selected.length?`\n\nYou expressed an interest in ${selected.map(i=>i.en).join(', ')}. We’d love to discuss what you need and how we can help.`:'';
   const link = 'https://www.habitat-one.com/beurs/films';
   const signature = 'Hans\nHabitat One\nTouch. Feel. Experience.';
+  if (kind === 'status') return statusMail(name, introEs, introEn, context.isFair, signature);
   const es = kind === 'professional' ? `Hola ${name}:\n\n${introEs}\n\nNos gustaría dar el siguiente paso con vosotros. Hemos diseñado un expositor compacto para profesionales, con muestras para ver y tocar y una pantalla que muestra cómo se trabaja con nuestros paneles Flexible Stone. Encontraréis el diseño conceptual adjunto.\n\nPorque una foto está bien, pero tocar y doblar el material suele provocar la misma reacción: «Un momento… ¿esto es realmente piedra?» 😉\n\nNos encantaría comentar cómo adaptar el expositor con las muestras, los vídeos y la información de producto más adecuados para vuestro equipo y vuestros proyectos. Así podréis presentar nuestros materiales a vuestros clientes y ayudarles a descubrir todas sus posibilidades.\n\n¿Os interesa la idea? Responded a este correo y le damos forma juntos.`
     : `Hola ${name}:\n\n${introEs}\n\nNos gustaría dar el siguiente paso con vosotros. Hemos diseñado una propuesta de exposición para puntos de venta, con paneles, muestras y espacio para una pequeña colección de producto. Encontraréis los diseños conceptuales adjuntos.\n\nVuestros clientes podrán ver, tocar y doblar el material, y probablemente se preguntarán: «Un momento… ¿esto es realmente piedra?» 😉\n\nNuestra propuesta es invertir juntos en una colaboración duradera. Vosotros asumiríais inicialmente el coste del expositor, los materiales de presentación y la entrega. La inversión de presentación que acordemos se descontará de futuros pedidos de producto. Definiremos juntos el importe y cómo se realizará esa compensación.\n\nPara empezar, os proponemos una selección de productos que compraríais directamente a Habitat One para vuestra tienda o showroom. Acordaremos juntos el surtido, las cantidades y las condiciones de compra, y podremos ampliar la colección a medida que crezca la demanda.\n\nNos encantaría comentar cómo adaptar la exposición y la colección a vuestro negocio y construir una colaboración fructífera a largo plazo.\n\n¿Os interesa la idea? Responded a este correo y estudiamos juntos las posibilidades.`;
   const en = kind === 'professional' ? `Hi ${name},\n\n${introEn}\n\nWe’d love to take the next step with you. We’ve designed a compact inspiration display for professionals, with samples to see and touch and a screen showing how our Flexible Stone panels can be used. You’ll find the concept design attached.\n\nBecause a photo is great, but touching and bending the material usually gets the same reaction: “Wait a minute… is this really stone?” 😉\n\nWe’d love to discuss how we can tailor the display with the right samples, videos and product information for your team and projects. This will help you present our materials to your clients and show them what’s possible.\n\nInterested in the idea? Simply reply to this email, and we can develop it together.`

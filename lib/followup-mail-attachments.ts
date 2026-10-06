@@ -2,11 +2,11 @@ import 'server-only';
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { beursBijlagen } from '@/lib/beurs-bijlagen';
-import { followupDesigns, type FollowupMailKind } from '@/lib/followup-mail';
+import { followupDesigns, vasteDatasheets, type FollowupMailKind } from '@/lib/followup-mail';
 import type { EmailAttachment } from '@/lib/email';
 
 /** Alleen vaste gebundelde ontwerpen; een formulier kan geen bestandspad aanleveren. */
-export async function followupAttachments(kind: FollowupMailKind, includeTechnical = kind !== 'custom'): Promise<EmailAttachment[]> {
+export async function followupAttachments(kind: FollowupMailKind, includeTechnical = vasteDatasheets(kind)): Promise<EmailAttachment[]> {
   const sheets = includeTechnical ? await beursBijlagen() : [];
   const designs = await Promise.all(followupDesigns(kind).map(async ({ filename }) => {
     const content = await readFile(path.join(process.cwd(), 'public', 'mail', 'followup', filename));

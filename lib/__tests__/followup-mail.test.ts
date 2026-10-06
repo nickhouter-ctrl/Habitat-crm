@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { confirmedFairDate, followupMailKind, followupMailSource, followupProposal, hasResellerInterest, recommendedFollowupMail } from '../followup-mail';
+import { confirmedFairDate, followupDesigns, followupMailKind, followupMailSource, followupProposal, hasResellerInterest, recommendedFollowupMail, vasteDatasheets } from '../followup-mail';
 vi.mock('server-only',()=>({}));
 import { followupAttachments } from '../followup-mail-attachments';
 
@@ -71,5 +71,30 @@ describe('daadwerkelijke meegebundelde mailbijlagen',()=>{
       expect(attachment.content.length).toBeGreaterThan(1000);
       if(attachment.contentType==='image/jpeg')expect([...attachment.content.subarray(0,3)]).toEqual([255,216,255]);
     }
+  });
+});
+
+describe('stand van zaken na de beurs', () => {
+  const ctx = { name: 'Raúl', isFair: true, meetingDate: '2026-09-28', company: 'Lamiplast', interests: ['stalen', 'prijzen'] };
+  it('staat in het Spaans én het Engels, ondertekend door Hans', () => {
+    const m = followupProposal('status', ctx);
+    expect(m.subject).toBe('Novedades tras Feria Hábitat / An update after Feria Hábitat');
+    expect(m.body).toMatch(/^Hola Raúl:/);
+    expect(m.body).toContain('──────── English ────────');
+    expect(m.body).toContain('Hi Raúl,');
+    expect(m.body.match(/Hans\nHabitat One/g)).toHaveLength(2);
+  });
+  it('zegt wat er speelt: overweldigd, druk bezig, partijen in Spanje, zorgvuldig, we komen terug', () => {
+    const { body } = followupProposal('status', ctx);
+    for (const zin of ['Nos ha desbordado', 'varias empresas en España', 'puntos de venta', 'con cuidado', 'volveremos a ponernos en contacto',
+      'overwhelmed by the positive response', 'several companies in Spain', 'retail partners', 'carefully', 'we will get back to you'])
+      expect(body, zin).toContain(zin);
+  });
+  it('belooft niets wat nog niet vastligt en stuurt geen bijlagen mee', () => {
+    const { body } = followupProposal('status', ctx);
+    expect(body).not.toMatch(/precio|price|exclusiv|adjunt|attached|muestras|samples/i);
+    expect(followupDesigns('status')).toEqual([]);
+    expect(vasteDatasheets('status')).toBe(false);
+    expect(followupMailKind(followupMailSource('status'))).toBe('status');
   });
 });

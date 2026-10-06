@@ -6,7 +6,7 @@ import Link from 'next/link';
 import { editDraft, saveProfile, syncSent, saveDraft, sendDraft, generateDraft, addMeeting, type DraftSamenvatting, type Result } from './actions';
 import { INTEREST, STAGES } from '@/lib/partners';
 import type { partnerProfiles } from '@/lib/db/schema';
-import { FOLLOWUP_MAILS, followupDesigns, followupDesignUrl, followupProposal, type FollowupMailKind, type FollowupMailContext } from '@/lib/followup-mail';
+import { FOLLOWUP_MAILS, vasteDatasheets, followupDesigns, followupDesignUrl, followupProposal, type FollowupMailKind, type FollowupMailContext } from '@/lib/followup-mail';
 import { PdfBijlagen, type BibliotheekPdf } from './pdf-bijlagen';
 const input='w-full rounded-lg border border-border bg-surface px-3 py-2 text-foreground';
 export function Field({label,children}:{label:string;children:React.ReactNode}){
@@ -29,7 +29,7 @@ export function ProfileForm({id,profile,users,interested}:{id:string;profile:typ
  {profile?.active&&<p className="text-sm">{t("Dit is een officieel verkooppunt. Alleen ‘Gestopt’ trekt de activering en publicatie in.")}</p>}
  <Field label={t("Gespreksnotities en afspraken")}><textarea className={input} name="notes" rows={5} maxLength={10000} defaultValue={profile?.notes??''}/></Field></ActionForm>;
 }
-export function ProposalAttachments({kind,includeTechnical=kind!=='custom'}:{kind:FollowupMailKind;includeTechnical?:boolean}){
+export function ProposalAttachments({kind,includeTechnical=vasteDatasheets(kind)}:{kind:FollowupMailKind;includeTechnical?:boolean}){
  const t=useT();
  const designs=followupDesigns(kind);
  if(!includeTechnical&&!designs.length)return null;
@@ -99,11 +99,11 @@ export function Compose({id,context,resellerInterested,bibliotheek=[]}:{id:strin
  const popup=bewaarStaat.draft&&weggeklikt!==bewaarStaat.draft.id?bewaarStaat.draft:null;
  return <div className="space-y-4">
  <Field label={t("Mailvoorstel")}><select aria-label={t("Mailvoorstel")} className={input} value={kind} disabled={busy} onChange={e=>choose(e.target.value as FollowupMailKind)}>{Object.entries(FOLLOWUP_MAILS).map(([v,l])=><option key={v} value={v}>{t(l)}</option>)}</select></Field>
- <p className="text-xs text-muted">{t(kind==='custom'?"Schrijf zelf een mail of laat de AI een passend concept en onderwerp maken.":"De keuze laadt de tekst en de bijlagen. Pas de mail hieronder aan voor deze klant.")}</p>
+ <p className="text-xs text-muted">{t(kind==='custom'?"Schrijf zelf een mail of laat de AI een passend concept en onderwerp maken.":kind==='status'?"De keuze laadt de tekst, zonder bijlagen. Pas de mail hieronder aan voor deze klant.":"De keuze laadt de tekst en de bijlagen. Pas de mail hieronder aan voor deze klant.")}</p>
  {kind==='reseller'&&!resellerInterested&&<p role="status" className="rounded-lg border border-warning/30 bg-warning/5 p-3 text-sm">{t("Wil deze klant verkooppunt worden? Leg die interesse eerst vast bij ‘Relatie en volgende stap’ en sla het dossier op. Het beroep hoeft niet te veranderen.")}</p>}
  {kind!=='custom'&&<p className="text-sm text-muted">{t("Spaans én Engels · ondertekend door Hans")}{context.isFair&&context.meetingDate?` · ${t('Gesprek op {datum}',{datum:new Date(`${context.meetingDate}T12:00:00Z`).toLocaleDateString(dateLocale,{timeZone:'UTC'})})}`:''}</p>}
  <div className="space-y-3"><Field label={t("Wat wil je persoonlijk benadrukken?")}><input aria-label={t("Wat wil je persoonlijk benadrukken?")} className={input} value={instruction} onChange={e=>setInstruction(e.target.value)} maxLength={2000} placeholder={t("Bijvoorbeeld hun showroom, project of jullie laatste gesprek")}/></Field><button type="button" disabled={busy} className="rounded-lg border border-border px-4 py-2 text-sm" onClick={async()=>{setBusy(true);setError('');try{const r=await generateDraft(id,instruction,kind,body,stoneInfo,pdfs);if(r){setSubject(r.subject);setBody(r.body);}else setError('AI niet beschikbaar; pas de persoonlijke tekst hieronder zelf aan.');}catch{setError(kind==='reseller'&&!resellerInterested?'Leg eerst de verkooppuntinteresse vast en sla het dossier op.':'Het persoonlijke voorstel kon niet worden gemaakt. De bestaande tekst blijft staan.');}finally{setBusy(false);}}}>{busy?t("Persoonlijk voorstel schrijven…"):kind==='custom'?t("Maak concept met dossiercontext"):t("Maak persoonlijk met dossier")}</button><p className="text-xs text-muted">{kind==='custom'?t("Gebruikt gespreksnotities en eerdere mails uit dit dossier."):t("Werkt het voorstel hieronder uit met de gespreksnotities en eerdere mails uit dit dossier.")} {t("Controleer de nieuwe tekst voordat je die bewaart.")}</p>{error&&<p role="alert" className="text-sm text-danger">{t(error)}</p>}</div>
- <div>{kind==='custom'&&<label className="flex items-start gap-2 rounded-lg border border-border p-3 text-sm"><input type="checkbox" checked={stoneInfo} onChange={e=>setStoneInfo(e.target.checked)} className="mt-1"/><span>{t("Flexible Stone-mail: technische data sheets meesturen")}<span className="mt-1 block text-xs text-muted">{t("Alleen aanvinken als deze mail over Flexible Stone gaat.")}</span></span></label>}<ProposalAttachments kind={kind} includeTechnical={kind!=='custom'||stoneInfo}/></div>
+ <div>{kind==='custom'&&<label className="flex items-start gap-2 rounded-lg border border-border p-3 text-sm"><input type="checkbox" checked={stoneInfo} onChange={e=>setStoneInfo(e.target.checked)} className="mt-1"/><span>{t("Flexible Stone-mail: technische data sheets meesturen")}<span className="mt-1 block text-xs text-muted">{t("Alleen aanvinken als deze mail over Flexible Stone gaat.")}</span></span></label>}<ProposalAttachments kind={kind} includeTechnical={vasteDatasheets(kind)||(kind==='custom'&&stoneInfo)}/></div>
  <PdfBijlagen bibliotheek={bibliotheek} gekozen={pdfs} onChange={setPdfs}/>
  <form action={bewaarForm} className="space-y-4"><fieldset disabled={bewaarBezig} className="space-y-4">
  <input type="hidden" name="contactId" value={id}/><input type="hidden" name="templateKind" value={kind}/><input type="hidden" name="flexibleStoneInfo" value={stoneInfo?"on":"off"}/>{pdfs.map(p=><input key={p} type="hidden" name="bijlage" value={p}/>)}
