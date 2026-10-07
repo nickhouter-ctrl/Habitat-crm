@@ -5,6 +5,7 @@ import { deriveAdvanceCover, deriveProjectMargins } from "@/lib/project-financia
 import { projectReceiptShares, splitProjectReceipts, type ReceiptLike } from "@/lib/receipts";
 import { projectCostStreams, projectOwnProducts } from "@/lib/project-cost-streams";
 import { clientFundingProducts } from "@/lib/client-funding-products";
+import { gecrediteerdeParen } from "@/lib/credit-pairs";
 
 /** One funding calculation for the start screen, project list and detail.
  * Pending invoice reviews are not purchase orders and are deliberately absent.
@@ -14,7 +15,7 @@ export async function loadProjectFunding(projectId?:string, includeClosed = fals
   const [rows,productRows]=await Promise.all([
     db.execute<{
       id:string;name:string;labor:string;laborPct:string|null;purchasePct:string|null;
-      payments:ReceiptLike[];docs:{id:string;docNumber:string|null;kind:string;status:string;items:unknown;subtotal:string}[];
+      payments:ReceiptLike[];docs:{id:string;docNumber:string|null;kind:string;status:string;items:unknown;subtotal:string;total:string|null;paid:string|null}[];
       purchases:Parameters<typeof projectCostStreams>[0]; costs:Parameters<typeof projectCostStreams>[1];
       deliveries:unknown;extraRevenue:string;extraCost:string;
     }>(sql`select p.id,p.name,p.labor_margin_pct "laborPct",p.purchase_margin_pct "purchasePct",
@@ -23,7 +24,7 @@ export async function loadProjectFunding(projectId?:string, includeClosed = fals
       coalesce((select jsonb_agg(jsonb_build_object('documentId',r.document_id,'advanceRequestId',r.advance_request_id,'amountEur',r.amount_eur,'method',r.method,'vatRate',r.vat_rate,
         'vatAmountEur',r.vat_amount_eur,'docSubtotal',d.subtotal_eur,'docTotal',d.total_eur))
         from project_payments r left join documents d on d.id=r.document_id where r.project_id=p.id),'[]'::jsonb) payments,
-      coalesce((select jsonb_agg(jsonb_build_object('id',d.id,'docNumber',d.doc_number,'kind',d.kind,'status',d.status,'items',d.items,'subtotal',d.subtotal_eur)) from documents d
+      coalesce((select jsonb_agg(jsonb_build_object('id',d.id,'docNumber',d.doc_number,'kind',d.kind,'status',d.status,'items',d.items,'subtotal',d.subtotal_eur,'total',d.total_eur,'paid',d.paid_eur)) from documents d
         where d.project_id=p.id),'[]'::jsonb) docs,
       coalesce((select jsonb_agg(jsonb_build_object('supplier',po.supplier,'currency',po.currency,'notes',po.notes,'items',po.items,
         'subtotal',po.subtotal,'tax',po.tax,'total',po.total)) from purchase_orders po where po.project_id=p.id and not po.count_as_labor),'[]'::jsonb) purchases,
@@ -54,11 +55,18 @@ export async function loadProjectFunding(projectId?:string, includeClosed = fals
     const margins=deriveProjectMargins({laborCost:Number(p.labor),purchaseCost:costs.material,otherCost:costs.other,
       productCost:own.cost,productRevenue:own.revenue,uncostedProductRevenue:own.uncosted,
       laborMarginPct:p.laborPct==null?null:Number(p.laborPct),purchaseMarginPct:p.purchasePct==null?null:Number(p.purchasePct)});
-    const cover=deriveAdvanceCover({laborCost:Number(p.labor),purchaseCost:costs.material+costs.other,
-      coverReceivedEx:receipts.liquidReceived,ownProductReceivedEx:receipts.ownProductReceived,
+    // Openstaand ex. btw, zonder facturen die met een creditnota volledig zijn teruggedraaid.
+    const gecrediteerd = gecrediteerdeParen(p.docs.map(d => ({ ...d, amount: d.subtotal })));
+    const openInvoicedEx = Math.round(p.docs.reduce((sum, d) => {
+      if (d.kind !== "invoice" || ["draft","void","paid"].includes(d.status) || gecrediteerd.has(d.id)) return sum;
+      const total = Number(d.total ?? 0), paid = Number(d.paid ?? 0);
+      return total > paid && total > 0 ? sum + Number(d.subtotal ?? 0) * ((total - paid) / total) : sum;
+    }, 0) * 100) / 100;
+    const cover=deriveAdvanceCover({openInvoicedEx,laborCost:Number(p.labor),purchaseCost:costs.material+costs.other,
+      coverReceivedEx:receipts.liquidReceived,ownProductReceivedEx:receipts.ownProductReceived,ownProductCost:own.bookedCost,
       requiredRevenue:margins.laborRevenue+margins.purchaseRevenue+margins.otherRevenue});
     const productReceipts = clientFundingProducts(p.docs, p.payments, ownShareByDoc,
       it => (it.productId ? byId.get(it.productId) : undefined) ?? (it.description ? bySku.get(it.description.trim()) : undefined));
-    return [p.id,{id:p.id,name:p.name,cover,ownShareByDoc,costs,own,margins,productReceipts}] as const;
+    return [p.id,{id:p.id,name:p.name,openInvoicedEx,cover,ownShareByDoc,costs,own,margins,productReceipts}] as const;
   }));
 }

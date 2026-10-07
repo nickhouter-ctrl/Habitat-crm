@@ -868,7 +868,7 @@ export default async function ProjectDetailPage({
     "own-cost":{title:uiT("Geboekte kostprijs eigen producten"),formula:`${ownCostTerms.join(" + ") || "—"} = ${formatEUR(ownProductCostRealized)}`,sections:[ownCostBuildSection,ownCostSection,productSection]},
     "own-product-profit":{title:uiT("Brutowinst eigen producten"),formula:`${formatEUR(margins.productRevenue)} − ${formatEUR(margins.productCost)} = ${formatEUR(margins.productMargin)}`,sections:goodsSections},
     "total-gross-profit":{title:uiT("Totaal brutowinst"),formula:`${formatEUR(workProfit)} + ${formatEUR(margins.productMargin)} = ${formatEUR(margins.totalMargin)}`,sections:[profitSection,...workSections,...goodsSections.slice(1)]},
-    "advance-remaining":{title:uiT("Resterende voorschotruimte"),formula:`${formatEUR(cover.totalReceived)} − ${formatEUR(cover.ownProductReceived)} − ${formatEUR(cover.prefinanced)} − ${formatEUR(workProfit)} = ${formatEUR(cover.saldo)}`,sections:[receiptSection,profitSection,...workSections]},
+    "advance-remaining":{title:uiT("Resterende voorschotruimte"),formula:`${formatEUR(cover.totalReceived)} − ${formatEUR(cover.ownProductReceived)} − ${formatEUR(cover.prefinanced)} − ${formatEUR(workProfit)}${cover.ownProductPrefinanced ? ` − ${formatEUR(cover.ownProductPrefinanced)} ${uiT("eigen producten betaald, nog niet ontvangen")}` : ""} = ${formatEUR(cover.saldo)}`,sections:[receiptSection,profitSection,...workSections,...(cover.ownProductPrefinanced ? [ownCostBuildSection] : [])]},
     labor:{title:uiT("Uren — arbeid"),formula:`${formatEUR(margins.laborCost)} × ${margins.laborMarginPct}% = ${formatEUR(margins.laborMargin)}`,sections:[laborSection]},
     material:{title:uiT("Bouwmaterialen van derden"),formula:`${formatEUR(margins.purchaseCost)} × ${margins.purchaseMarginPct}% = ${formatEUR(margins.purchaseMargin)}`,sections:[materialSection]},
     other:{title:uiT("Overige projectkosten"),formula:`${formatEUR(margins.otherCost)} × ${margins.purchaseMarginPct}% = ${formatEUR(margins.otherMargin)}`,sections:[otherSection]},
@@ -1085,7 +1085,7 @@ export default async function ProjectDetailPage({
         {/* ── Tab: Overzicht — geldstroom, resultaat, begroting ── */}
         <TabPanel id="overzicht" className="order-3">
       <p className="mb-3 text-xs text-muted">{uiT("Klik op een financieel blok voor de berekening en onderliggende boekingen.")}</p>
-      <ProjectSnapshot id={id} cover={cover} ownProducts={margins} progress={progress} status={project.status} requestedOpen={openAdvanceRequests.reduce((sum,r)=>sum+r.open,0)} outstandingInvoices={openOutstanding} startDate={project.startDate} endDate={project.endDate}/>
+      <ProjectSnapshot id={id} cover={cover} ownProducts={margins} ownProductSales={ownProductRevenue} progress={progress} status={project.status} requestedOpen={openAdvanceRequests.reduce((sum,r)=>sum+r.open,0)} outstandingInvoices={openOutstanding} startDate={project.startDate} endDate={project.endDate}/>
 
       {/* ─────────────── Resultaat (P&L) ─────────────── */}
       </TabPanel><TabPanel id="resultaat" className="order-3"><div className="order-1 mb-6 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">

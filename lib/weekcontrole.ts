@@ -303,7 +303,7 @@ export async function verzamelWeekcontrole(): Promise<Weekcontrole> {
     const margins=deriveProjectMargins({laborCost:p.arbeid,purchaseCost:streams.material,otherCost:streams.other,
       productRevenue:0,productCost:0,laborMarginPct:p.laborPct,purchaseMarginPct:p.purchasePct});
     const cover=deriveAdvanceCover({laborCost:p.arbeid,purchaseCost:streams.material+streams.other,coverReceivedEx:receipts.liquidReceived,
-      ownProductReceivedEx:receipts.ownProductReceived,requiredRevenue:margins.totalRevenue});
+      ownProductReceivedEx:receipts.ownProductReceived,ownProductCost:p.eigenKost,requiredRevenue:margins.totalRevenue});
     p.werkWinst=projectWorkProfit(cover);
     p.voorschotRuimte=cover.saldo;
   }

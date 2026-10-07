@@ -20,3 +20,17 @@ describe("voorschot inclusief verdiensten", () => {
     expect(deriveAdvanceCover({laborCost:1000,purchaseCost:0,coverReceivedEx:4000,requiredRevenue:1150}).suggestedRequestEur).toBe(0);
   });
 });
+
+describe("voorgeschoten eigen producten", () => {
+  it("trekt betaalde maar nog niet ontvangen productkosten af van de voorschotruimte", () => {
+    const cover = deriveAdvanceCover({ laborCost: 100, purchaseCost: 0, coverReceivedEx: 200, requiredRevenue: 115, ownProductCost: 36946.87, ownProductReceivedEx: 0 });
+    expect(cover.ownProductPrefinanced).toBe(36946.87);
+    expect(cover.saldo).toBe(85 - 36946.87);
+  });
+
+  it("laat een productontvangst boven de kostprijs het werkgeld niet aanvullen", () => {
+    const cover = deriveAdvanceCover({ laborCost: 100, purchaseCost: 0, coverReceivedEx: 200, requiredRevenue: 115, ownProductCost: 500, ownProductReceivedEx: 800 });
+    expect(cover.ownProductPrefinanced).toBe(0);
+    expect(cover.saldo).toBe(85);
+  });
+});

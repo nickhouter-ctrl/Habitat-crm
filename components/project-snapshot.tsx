@@ -7,8 +7,10 @@ import { Badge, Card, CardContent, LinkButton } from "./ui";
 import { ProjectFundingSummary } from "./project-funding-summary";
 import { ActionDialog } from "./action-dialog";
 
-export async function ProjectSnapshot({ id, cover, ownProducts, progress, status, requestedOpen, outstandingInvoices, startDate, endDate }: {
+export async function ProjectSnapshot({ id, cover, ownProducts, ownProductSales, progress, status, requestedOpen, outstandingInvoices, startDate, endDate }: {
   id: string; cover: AdvanceCover; progress: ReturnType<typeof projectProgress>; status: string;
+  /** Verkoopwaarde eigen producten (gefactureerd, geleverd en meerwerk), ex. btw. */
+  ownProductSales: number;
   ownProducts: Pick<ProjectMargins, "productMargin" | "uncostedProductRevenue">;
   requestedOpen: number; outstandingInvoices: number; startDate: string | null; endDate: string | null;
 }) {
@@ -35,6 +37,7 @@ export async function ProjectSnapshot({ id, cover, ownProducts, progress, status
     </div>
     <CardContent>
       <ProjectFundingSummary cover={cover} ownProducts={ownProducts}/>
+      <KlantStand cover={cover} ownProductSales={ownProductSales} outstandingInvoices={outstandingInvoices}/>
       <div className="mt-5 flex flex-wrap items-center justify-between gap-3 border-t pt-4 text-sm">
         <span>{progress.percent === null ? t("Voortgang nog niet vastgelegd") : `${t("Voortgang")} ${progress.percent}% · ${t("{done} van {total} fases afgerond", { done: progress.completed, total: progress.total })}`}{progress.current && <span className="ml-2 text-muted">· {progress.current}</span>}</span>
         <Link href="#planning" className="text-accent underline-offset-4 hover:underline">{t("Voortgang bijwerken")}</Link>
@@ -46,4 +49,40 @@ export async function ProjectSnapshot({ id, cover, ownProducts, progress, status
       {outstandingInvoices > 0.01 && <div className="mt-4 rounded-lg bg-warning/5 px-3 py-2 text-sm"><p>{t("Er staat {amount} aan klantfacturen open (ex. btw). Volg die op en stem een nieuw voorschot af op de afgesproken termijnen.", { amount: formatEUR(outstandingInvoices) })}</p><Link href="#documenten" className="mt-1 inline-block text-accent underline underline-offset-4">{t("Openstaande facturen bekijken")}</Link></div>}
     </CardContent>
   </Card>;
+}
+
+/**
+ * Waar staat de klant: alles wat we doorbelasten (werk tegen klantprijs + eigen
+ * producten tegen verkoopprijs) min wat hij betaalde. Het restant splitsen we in
+ * "staat al op een factuur" en "nog te factureren", zodat je niet dubbel vraagt.
+ */
+async function KlantStand({ cover, ownProductSales, outstandingInvoices }: { cover: AdvanceCover; ownProductSales: number; outstandingInvoices: number }) {
+  const t = await tekst();
+  const r = (n: number) => Math.round(n * 100) / 100;
+  const totaal = r(cover.requiredRevenue + ownProductSales);
+  const nogTeBetalen = r(totaal - cover.totalReceived);
+  const opFactuur = r(Math.min(Math.max(nogTeBetalen, 0), outstandingInvoices));
+  const nogTeFactureren = r(Math.max(0, nogTeBetalen - opFactuur));
+  const rij = (label: string, bedrag: number, opts: { sterk?: boolean; lijn?: boolean; teken?: string; sub?: boolean } = {}) =>
+    <div className={`flex flex-wrap justify-between gap-2 ${opts.lijn ? "border-t pt-2" : ""} ${opts.sub ? "pl-4 text-muted" : ""}`}>
+      <dt className={opts.sterk ? "font-semibold" : ""}>{label}</dt>
+      <dd className={`tabular-nums ${opts.sterk ? "font-semibold" : "font-medium"}`}>{opts.teken ?? ""}{formatEUR(bedrag)}</dd>
+    </div>;
+  return <section className="mt-5 rounded-xl border bg-background/40 p-4" data-klantstand>
+    <h3 className="text-sm font-semibold">{t("Waar staat de klant")}</h3>
+    <p className="mt-1 text-xs text-muted">{t("Alles wat we tot nu toe doorbelasten, min wat de klant heeft betaald. Bedragen ex. btw.")}</p>
+    <dl className="mt-3 space-y-2 text-sm">
+      {rij(t("Werk tegen klantprijs (uren, bouwmaterialen, overige kosten)"), cover.requiredRevenue)}
+      {rij(t("Eigen producten tegen verkoopprijs"), ownProductSales)}
+      {rij(t("Totaal door te belasten"), totaal, { sterk: true, lijn: true })}
+      {rij(t("Betaald door de klant"), cover.totalReceived, { teken: "− " })}
+      {nogTeBetalen >= 0
+        ? <>
+            {rij(t("Klant moet nog betalen"), nogTeBetalen, { sterk: true, lijn: true })}
+            {rij(t("waarvan op openstaande facturen"), opFactuur, { sub: true })}
+            {rij(t("waarvan nog te factureren"), nogTeFactureren, { sub: true })}
+          </>
+        : rij(t("Klant heeft vooruitbetaald"), -nogTeBetalen, { sterk: true, lijn: true })}
+    </dl>
+  </section>;
 }

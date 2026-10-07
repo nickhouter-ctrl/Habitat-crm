@@ -208,6 +208,11 @@ export type AdvanceCoverInput = {
   coverReceivedEx: number;
   /** Ontvangen voor eigen producten; blijft buiten de dekking van uren/derden. */
   ownProductReceivedEx?: number;
+  /** Geboekte kostprijs eigen producten. Wat daarvan nog niet door de klant is
+   * betaald, hebben wij voorgeschoten en gaat van de voorschotruimte af. */
+  ownProductCost?: number;
+  /** Openstaande klantfacturen ex. btw: dat geld is al gevraagd, dus niet nog eens als voorschot. */
+  openInvoicedEx?: number;
   /** Uren en externe inkoop inclusief opslag. Zonder dit veld: alleen kostendekking. */
   requiredRevenue?: number;
   /** Standaard {@link ADVANCE_WARN_BUFFER_EUR}. */
@@ -217,6 +222,8 @@ export type AdvanceCoverInput = {
 export type AdvanceCover = {
   totalReceived: number;
   ownProductReceived: number;
+  /** Kostprijs eigen producten min wat de klant voor producten betaalde (nooit negatief). */
+  ownProductPrefinanced: number;
   /** Geboekte kosten van uren en inkoop derden; geen bewijs van leveranciersbetaling. */
   prefinanced: number;
   requiredRevenue: number;
@@ -247,7 +254,10 @@ export function deriveAdvanceCover(i: AdvanceCoverInput): AdvanceCover {
   const prefinanced = round2(i.laborCost + i.purchaseCost);
   const received = round2(i.coverReceivedEx);
   const requiredRevenue = round2(i.requiredRevenue ?? prefinanced);
-  const saldo = round2(received - requiredRevenue);
+  // Eigen producten die wij betaalden en de klant nog niet: ook voorgeschoten.
+  // Een productontvangst boven de kostprijs vult het werkgeld niet aan.
+  const ownProductPrefinanced = round2(Math.max(0, (i.ownProductCost ?? 0) - (i.ownProductReceivedEx ?? 0)));
+  const saldo = round2(received - requiredRevenue - ownProductPrefinanced);
   const status: AdvanceCover["status"] = saldo < 0 ? "voorgeschoten" : saldo < buffer ? "bijna_op" : "gedekt";
   return {
     prefinanced,
@@ -256,11 +266,12 @@ export function deriveAdvanceCover(i: AdvanceCoverInput): AdvanceCover {
     received,
     totalReceived: round2(received + (i.ownProductReceivedEx ?? 0)),
     ownProductReceived: round2(i.ownProductReceivedEx ?? 0),
+    ownProductPrefinanced,
     saldo,
     status,
     tone: status === "gedekt" ? "success" : status === "bijna_op" ? "warning" : "danger",
     // Een voorschot vraag je niet op de cent — zelfde afronding als de oude prefill.
-    suggestedRequestEur: Math.max(0, Math.ceil((buffer - saldo) / 1000) * 1000),
+    suggestedRequestEur: Math.max(0, Math.ceil((buffer - saldo - (i.openInvoicedEx ?? 0)) / 1000) * 1000),
   };
 }
 
