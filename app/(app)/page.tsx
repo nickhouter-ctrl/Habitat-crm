@@ -7,6 +7,7 @@ import { tekst as uiTranslation } from '@/lib/i18n/server';
  */
 import { and, asc, eq, isNull, or, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
+import { Bot } from "lucide-react";
 
 import { requireModuleRead } from "@/lib/auth/guards";
 import { datumTaal, tekst } from "@/lib/i18n/server";
@@ -143,11 +144,15 @@ export default async function StartPage({
           </h1>
           <p className="mt-1 text-sm capitalize text-muted">{datum}</p>
         </div>
-        {allesZichtbaar && (
-          <LinkButton href="/dashboard" variant="secondary">
+        <div className="flex flex-wrap items-center gap-2">
+          {ik.magModule("assistent") && <LinkButton href="/assistent" variant="ghost" size="sm" className="text-muted hover:text-accent" data-testid="start-assistant">
+            <Bot size={16} aria-hidden="true"/>{t("Assistent")}
+            {(badges["/assistent"] ?? 0) > 0 && <span className="rounded-full bg-accent/10 px-1.5 text-xs tabular-nums text-accent" title={t("Openstaande voorstellen")}>{badges["/assistent"]}</span>}
+          </LinkButton>}
+          {allesZichtbaar && <LinkButton href="/dashboard" variant="secondary">
             {t("Naar het dashboard")} →
-          </LinkButton>
-        )}
+          </LinkButton>}
+        </div>
       </div>
 
       {/* Iemand die een verboden pad intypte, hoort te weten waarom hij hier staat. */}
