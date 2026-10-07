@@ -49,6 +49,15 @@ describe("project cost streams",()=>{
 
 describe("own product costs and margins",()=>{
   const invoice=(items:unknown)=>({kind:"invoice",status:"paid",items});
+  it("splits booked cost per product group so the card total can be traced",()=>{
+    const result=projectOwnProducts([invoice([{name:"Binnen deuren",units:1,price:3421.25,costEur:2357.05},{name:"Warmtepomp + airflows",units:1,price:13655.57}])],new Map([["windows",36946.87]]));
+    expect(result.breakdown).toEqual([
+      {group:"windows",label:null,revenue:0,lineCost:0,purchase:36946.87,booked:36946.87},
+      {group:"doors",label:"Binnen deuren",revenue:3421.25,lineCost:2357.05,purchase:0,booked:2357.05},
+      {group:"climate",label:"Warmtepomp + airflows",revenue:13655.57,lineCost:0,purchase:0,booked:0},
+    ]);
+    expect(result.breakdown.reduce((s,b)=>s+b.booked,0)).toBeCloseTo(result.bookedCost,2);
+  });
   it("uses Finca's booked window cost where its sales line has no cost",()=>{
     const result=projectOwnProducts([invoice([{name:"kozijnen Finca Lisa",units:1,price:24029.84}])],new Map([["windows",11203.90]]));
     expect(result).toMatchObject({revenue:24029.84,cost:11203.90,uncosted:0,totalRevenue:24029.84,bookedCost:11203.90});

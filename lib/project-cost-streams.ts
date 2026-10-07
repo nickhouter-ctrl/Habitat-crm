@@ -59,12 +59,14 @@ export function projectCostStreams(purchases: Purchase[], costs: Cost[]) {
 /** Supplier cost replaces an absent sales-line cost. Never add both for the same goods. */
 export function projectOwnProducts(docs: {kind:string;status:string;items:unknown}[], booked: Map<string,number>, productCost?: (item:DocumentLineItem)=>number|undefined) {
   const groups = new Map<string,{revenue:number;cost:number;uncosted:number}>();
+  const labels = new Map<string,string>();
   for (const d of docs) {
     if (!["invoice","creditnote"].includes(d.kind) || ["draft","void"].includes(d.status)) continue;
     const sign=d.kind==="creditnote"?-1:1;
     for (const it of normalizeDocItems(d.items)) {
       if (!isOwnProductLine(it,productCost)) continue;
       const key=ownProductGroup(it), group=groups.get(key)??{revenue:0,cost:0,uncosted:0};
+      if(!labels.has(key)) labels.set(key,it.name);
       const cost=lineMaterialCostEur(it,productCost), revenue=sign*lineNet(it);
       if(cost!==0) {group.revenue+=revenue;group.cost+=sign*cost;} else group.uncosted+=revenue;
       groups.set(key,group);
@@ -72,12 +74,18 @@ export function projectOwnProducts(docs: {kind:string;status:string;items:unknow
   }
   let revenue=0,cost=0,uncosted=0,bookedCost=0;
   const supplierCostGroups = new Map<string,number>();
+  /** Per productgroep hoe de geboekte kostprijs is opgebouwd — telt op tot bookedCost. */
+  const breakdown: {group:string;label:string|null;revenue:number;lineCost:number;purchase:number;booked:number}[] = [];
   for (const key of new Set([...groups.keys(),...booked.keys()])) {
     const g=groups.get(key)??{revenue:0,cost:0,uncosted:0}, purchase=booked.get(key)??0;
+    const lineCost=g.cost, groupRevenue=g.revenue+g.uncosted;
     // A family with no sales-line cost can use its actual booked supplier costs.
     if (g.cost===0 && g.uncosted*purchase>0) {g.revenue+=g.uncosted;g.uncosted=0;g.cost=purchase;supplierCostGroups.set(key,purchase);}
     revenue+=g.revenue;cost+=g.cost;uncosted+=g.uncosted;
-    bookedCost+=purchase>0&&g.cost>0?Math.max(purchase,g.cost):purchase!==0?purchase:g.cost;
+    const groupBooked=purchase>0&&g.cost>0?Math.max(purchase,g.cost):purchase!==0?purchase:g.cost;
+    bookedCost+=groupBooked;
+    breakdown.push({group:key,label:labels.get(key)??null,revenue:round(groupRevenue),lineCost:round(lineCost),purchase:round(purchase),booked:round(groupBooked)});
   }
-  return {revenue:round(revenue),cost:round(cost),uncosted:round(uncosted),totalRevenue:round(revenue+uncosted),bookedCost:round(bookedCost),supplierCostGroups};
+  breakdown.sort((a,b)=>b.booked-a.booked);
+  return {revenue:round(revenue),cost:round(cost),uncosted:round(uncosted),totalRevenue:round(revenue+uncosted),bookedCost:round(bookedCost),supplierCostGroups,breakdown};
 }

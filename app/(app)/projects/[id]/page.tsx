@@ -838,8 +838,25 @@ export default async function ProjectDetailPage({
     {cells:[uiT("Eigen producten zonder gekoppelde kostprijs"),formatEUR(margins.uncostedProductRevenue),uiT("Nog te koppelen"),"—"]},
   ]};
   const additionalProductSection: FinancialSection = {title:uiT("Leveringen en meerwerk"),columns:[uiT("Bron"),uiT("Verkoop"),uiT("Kostprijs")],rows:[{cells:[uiT("Geboekte leveringen zonder factuur"),formatEUR(leveringen.price),formatEUR(leveringen.cost)],href:"#producten"},{cells:[uiT("Meerwerk"),formatEUR(meerwerkBedrag),formatEUR(Number(meerwerkTotaal?.kost ?? 0))],href:"#meerwerk"}]};
+  // Opbouw van "Geboekte kostprijs": per productgroep, zodat het bedrag op de kaart
+  // te herleiden is. Telt exact op tot ownProductCostRealized.
+  const groepNaam: Record<string,string> = {windows:uiT("Kozijnen / ramen"),railings:uiT("Balustrades"),doors:uiT("Deuren"),bathroom:uiT("Badkamer"),lighting:uiT("Verlichting"),stone:"Magic stone",climate:uiT("Warmtepomp / klimaat"),plants:uiT("Beplanting")};
+  const groepLabel = (b: { group: string; label: string | null }) => groepNaam[b.group] ?? b.label ?? uiT("Overig product");
+  const kostGroepen = (projectFunding?.own.breakdown ?? []).filter(b => [b.revenue, b.lineCost, b.purchase, b.booked].some(v => Math.abs(v) >= 0.01));
+  const meerwerkKost = Number(meerwerkTotaal?.kost ?? 0);
+  const ownCostBuildSection: FinancialSection = {
+    title: uiT("Opbouw geboekte kostprijs eigen producten"),
+    columns: [uiT("Productgroep"), uiT("Verkoop"), uiT("Kostprijs op factuurregels"), uiT("Geboekte inkoop"), uiT("Telt mee")],
+    note: uiT("Per productgroep telt de hoogste van de kostprijs op factuurregels en de geboekte inkoop. Inkoop zonder verkoop telt volledig mee als kosten; de verkoop staat dan nog op nul."),
+    rows: [
+      ...kostGroepen.map(b => ({ cells: [groepLabel(b), formatEUR(b.revenue), b.lineCost ? formatEUR(b.lineCost) : "—", b.purchase ? formatEUR(b.purchase) : "—", formatEUR(b.booked)] })),
+      ...(meerwerkKost ? [{ cells: [uiT("Meerwerk"), formatEUR(meerwerkBedrag), formatEUR(meerwerkKost), "—", formatEUR(meerwerkKost)], href: "#meerwerk" }] : []),
+      { cells: [uiT("Totaal geboekte kostprijs"), formatEUR(ownProductRevenue), "", "", formatEUR(ownProductCostRealized)] },
+    ],
+  };
   const workSections = [laborSection,materialSection,otherSection];
-  const goodsSections = [profitSection,productSection,ownCostSection,additionalProductSection];
+  const goodsSections = [profitSection,ownCostBuildSection,productSection,ownCostSection,additionalProductSection];
+  const ownCostTerms = [...kostGroepen.filter(b => b.booked !== 0).map(b => `${groepLabel(b)} ${formatEUR(b.booked)}`), ...(meerwerkKost ? [`${uiT("Meerwerk")} ${formatEUR(meerwerkKost)}`] : [])];
   const workProfit = Math.round((cover.requiredRevenue - cover.prefinanced)*100)/100;
   const financialDetails: Record<string,FinancialDetail> = {
     "uncosted-products":{title:uiT("Omzet zonder gekoppelde kostprijs"),formula:`${uiT("Verkoopbedrag waarvan de kostprijs nog niet is gekoppeld")}: ${formatEUR(margins.uncostedProductRevenue)}`,sections:[uncostedSection]},
@@ -848,6 +865,7 @@ export default async function ProjectDetailPage({
     received:{title:uiT("Liquide ontvangen"),formula:`${formatEUR(cover.totalReceived)} − ${formatEUR(cover.ownProductReceived)} = ${formatEUR(cover.received)}`,sections:[receiptSection]},
     work:{title:uiT("Geboekte werkkosten"),formula:`${formatEUR(margins.laborCost)} + ${formatEUR(margins.purchaseCost)} + ${formatEUR(margins.otherCost)} = ${formatEUR(cover.prefinanced)}`,sections:workSections},
     "work-profit":{title:uiT("Brutowinst op uitgevoerd werk"),formula:`${formatEUR(margins.laborMargin)} + ${formatEUR(margins.purchaseMargin)} + ${formatEUR(margins.otherMargin)} = ${formatEUR(workProfit)}`,sections:[profitSection,...workSections]},
+    "own-cost":{title:uiT("Geboekte kostprijs eigen producten"),formula:`${ownCostTerms.join(" + ") || "—"} = ${formatEUR(ownProductCostRealized)}`,sections:[ownCostBuildSection,ownCostSection,productSection]},
     "own-product-profit":{title:uiT("Brutowinst eigen producten"),formula:`${formatEUR(margins.productRevenue)} − ${formatEUR(margins.productCost)} = ${formatEUR(margins.productMargin)}`,sections:goodsSections},
     "total-gross-profit":{title:uiT("Totaal brutowinst"),formula:`${formatEUR(workProfit)} + ${formatEUR(margins.productMargin)} = ${formatEUR(margins.totalMargin)}`,sections:[profitSection,...workSections,...goodsSections.slice(1)]},
     "advance-remaining":{title:uiT("Resterende voorschotruimte"),formula:`${formatEUR(cover.totalReceived)} − ${formatEUR(cover.ownProductReceived)} − ${formatEUR(cover.prefinanced)} − ${formatEUR(workProfit)} = ${formatEUR(cover.saldo)}`,sections:[receiptSection,profitSection,...workSections]},
@@ -1192,10 +1210,10 @@ export default async function ProjectDetailPage({
                   <dl className="space-y-1 text-sm">
                     {/* Kostprijs bovenaan, net als bij Uren en Inkoop derden:
                         overal eerst wat het ons kost, daaronder wat het opbrengt. */}
-                    <div className="flex justify-between gap-2">
+                    <FinancialInspect detail="own-cost" label={uiT("Geboekte kostprijs eigen producten")} className="z-10"><div className="flex justify-between gap-2">
                       <dt className="text-muted">{uiT("Geboekte kostprijs")}</dt>
-                      <dd data-margin-value="own-cost" data-amount={ownProductCostRealized} className="tabular-nums">{formatEUR(ownProductCostRealized)}</dd>
-                    </div>
+                      <dd data-margin-value="own-cost" data-amount={ownProductCostRealized} className="tabular-nums underline decoration-dotted underline-offset-2">{formatEUR(ownProductCostRealized)}</dd>
+                    </div></FinancialInspect>
                     <div className="flex justify-between gap-2">
                       <dt className="text-muted">{uiT("Verkoop eigen producten")}</dt>
                       <dd data-margin-value="own-revenue" data-amount={ownProductRevenue} className="tabular-nums">{formatEUR(ownProductRevenue)}</dd>
@@ -1434,11 +1452,11 @@ export default async function ProjectDetailPage({
           <ProjectFundingSummary cover={cover} ownProducts={margins} details="inline"/>
           <div className="mt-5 grid gap-3 sm:grid-cols-2">
             {/* Own-product cost remains separate from the client-price calculation. */}
-            <div className="rounded-lg border bg-background p-3">
+            <FinancialInspect detail="own-cost" label={uiT("Geboekte kostprijs eigen producten")}><div className="rounded-lg border bg-background p-3">
               <p className="text-xs text-muted">{uiT("Eigen voorraad (kostprijs)")}</p>
               <p className="text-lg font-semibold tabular-nums">{formatEUR(ownProductCostRealized)}</p>
               <p className="text-xs text-muted">{uiT("verkoopprijs telt mee in de doorbelasting; kostprijs is voor de resultaatberekening")}</p>
-            </div>
+            </div></FinancialInspect>
             <div className="rounded-lg border bg-background p-3">
               <p className="text-xs text-muted">{uiT("Nog te factureren")}</p>
               <p className={`text-lg font-semibold tabular-nums ${toInvoice > 0 ? "text-warning" : ""}`}>{formatEUR(toInvoice)}</p>
