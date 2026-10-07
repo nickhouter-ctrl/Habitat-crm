@@ -4,6 +4,7 @@ import { notFound, redirect } from "next/navigation";
 import { Badge, Card, CardContent, CardHeader, CardTitle, StatTile, TBody, Table, Td, Th, THead, Tr } from "@/components/ui";
 import { kiesTaal, klantEmail, klantKostenOverzicht, klantProjectDetail, klantVoorschotten } from "@/lib/klant-portal";
 import { formatDate, formatEUR } from "@/lib/utils";
+import { gecrediteerdeParen } from "@/lib/credit-pairs";
 
 import { klantT } from "../../_t";
 
@@ -30,7 +31,11 @@ export default async function KlantProjectPage({
 
   const detail = await klantProjectDetail(email, id);
   if (!detail) notFound();
-  const { project, fases, docs, betalingen, meerwerk } = detail;
+  const { project, fases, betalingen, meerwerk } = detail;
+  // Een factuur die met een creditnota volledig is teruggedraaid staat niet open;
+  // het paar laten we weg, anders ziet de klant een vordering die er niet is.
+  const gecrediteerd = gecrediteerdeParen(detail.docs.map(d => ({ ...d, amount: d.totalEur })));
+  const docs = detail.docs.filter(d => !gecrediteerd.has(d.id));
   const [kosten, voorschotten] = await Promise.all([klantKostenOverzicht(id), klantVoorschotten(id)]);
 
   // Gewogen totaalvoortgang: gelijke weging per fase (zelfde beeld als de

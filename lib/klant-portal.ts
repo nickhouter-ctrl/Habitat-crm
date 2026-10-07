@@ -227,6 +227,7 @@ export async function klantProjectDetail(email: string, projectId: string) {
         totalEur: documents.totalEur,
         paidEur: documents.paidEur,
         isAdvance: documents.isAdvance,
+        items: documents.items,
       })
       .from(documents)
       .where(

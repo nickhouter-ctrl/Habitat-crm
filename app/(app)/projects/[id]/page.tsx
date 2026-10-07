@@ -62,6 +62,7 @@ import {
 } from "@/lib/db/schema";
 import { isOwnProductLine, ownProductGroup, lineNet, docProductMargin, lineCostEur, lineMaterialCostEur, normalizeDocItems } from "@/lib/documents";
 import { deliveryTotals } from "@/lib/project-delivery";
+import { gecrediteerdeParen } from "@/lib/credit-pairs";
 import { poExVat, poExVatAmount, poExVatAssumingSpanishVat } from "@/lib/purchase-orders";
 import { DEFAULT_LABOR_MARGIN_PCT, DEFAULT_PURCHASE_MARGIN_PCT, deriveAdvanceCover, deriveProjectMargins } from "@/lib/project-financials";
 import { defaultReceiptVatRate, receiptExVat as exBtwVanOntvangst, splitReceipt, splitProjectReceipts } from "@/lib/receipts";
@@ -209,9 +210,12 @@ export default async function ProjectDetailPage({
   // OFFERTE (estimate) op, zodat de prognose de productkostprijs op de offerte
   // meeneemt — ook vóór er gefactureerd is (anders lijkt de marge 100%).
   const marginDocs = await db
-    .select({ id: documents.id, kind: documents.kind, status: documents.status, subtotalEur: documents.subtotalEur, totalEur: documents.totalEur, paidEur: documents.paidEur, items: documents.items })
+    .select({ id: documents.id, kind: documents.kind, status: documents.status, docNumber: documents.docNumber, subtotalEur: documents.subtotalEur, totalEur: documents.totalEur, paidEur: documents.paidEur, items: documents.items })
     .from(documents)
     .where(and(eq(documents.projectId, id), inArray(documents.kind, ["estimate", "invoice", "creditnote"])));
+  // Factuur + creditnota die elkaar volledig opheffen: netto nul, dus weg uit de
+  // lijsten en niet "openstaand". De totalen veranderen er niet door.
+  const gecrediteerd = gecrediteerdeParen(marginDocs.map(d => ({ ...d, amount: d.subtotalEur })));
   // Aanbetalingen/voorschotten (proforma of als voorschot gemarkeerde factuur).
   const advanceDocs = await db
     .select({
@@ -331,7 +335,7 @@ export default async function ProjectDetailPage({
   let openOutstanding = 0;
   for (const d of marginDocs) {
     if (d.kind !== "invoice") continue;
-    if (d.status === "draft" || d.status === "void" || d.status === "paid") continue;
+    if (d.status === "draft" || d.status === "void" || d.status === "paid" || gecrediteerd.has(d.id)) continue;
     const total = Number(d.totalEur ?? 0);
     const paid = Number(d.paidEur ?? 0);
     if (total <= paid) continue;
@@ -796,7 +800,7 @@ export default async function ProjectDetailPage({
     title: uiT("Eigen producten op facturen en creditnota’s"),
     columns: [uiT("Factuur"), uiT("Product"), uiT("Aantal"), uiT("Verkoop"), uiT("Kostprijs"), uiT("Kostprijsbron")],
     note: uiT("Creditnota’s worden afgetrokken. Onbekende kostprijzen tellen niet als winst. Voor productgroepen zonder regelkostprijs wordt beschikbare geboekte leveranciersinkoop gebruikt; die staat hieronder apart."),
-    rows: marginDocs.filter(d => ["invoice","creditnote"].includes(d.kind) && !["draft","void"].includes(d.status)).flatMap(d => {
+    rows: marginDocs.filter(d => ["invoice","creditnote"].includes(d.kind) && !["draft","void"].includes(d.status) && !gecrediteerd.has(d.id)).flatMap(d => {
       const sign = d.kind === "creditnote" ? -1 : 1;
       return normalizeDocItems(d.items).filter(it => isOwnProductLine(it, productCostOf)).map(it => {
         const cost = lineMaterialCostEur(it, productCostOf);
@@ -824,7 +828,7 @@ export default async function ProjectDetailPage({
   const materialSection = costsSection("material",uiT("Bouwmaterialen van derden"));
   const otherSection = costsSection("other",uiT("Overige projectkosten"));
   const ownCostSection = costsSection("own",uiT("Geboekte inkoop eigen producten"));
-  const invoiceSection: FinancialSection = {title:uiT("Facturen en creditnota’s"),columns:[uiT("Bron"),uiT("Omschrijving"),uiT("Bedrag ex. btw")],rows:marginDocs.filter(d=>["invoice","creditnote"].includes(d.kind)&&!["draft","void"].includes(d.status)).map(d=>({href:`/documents/${d.id}`,cells:[docLabel(d.id),docMeta.get(d.id)?.title ?? uiT(d.kind === "creditnote" ? "Creditnota" : "Factuur"),formatEUR(Number(d.subtotalEur)*(d.kind === "creditnote" ? -1 : 1))]}))};
+  const invoiceSection: FinancialSection = {title:uiT("Facturen en creditnota’s"),columns:[uiT("Bron"),uiT("Omschrijving"),uiT("Bedrag ex. btw")],rows:marginDocs.filter(d=>["invoice","creditnote"].includes(d.kind)&&!["draft","void"].includes(d.status)&&!gecrediteerd.has(d.id)).map(d=>({href:`/documents/${d.id}`,cells:[docLabel(d.id),docMeta.get(d.id)?.title ?? uiT(d.kind === "creditnote" ? "Creditnota" : "Factuur"),formatEUR(Number(d.subtotalEur)*(d.kind === "creditnote" ? -1 : 1))]}))};
   const targetSection: FinancialSection = {title:uiT("Doel en begroting"),columns:[uiT("Bron"),uiT("Bedrag")],rows:[{cells:[uiT("Aanneemprijs"),contractPrice == null ? "—" : formatEUR(contractPrice)]},...budgetRows.map(b=>({cells:[b.description,formatEUR(Number(b.amountEur))]})),{cells:[uiT("Offertes totaal"),formatEUR(estimateSubtotal)]}],note:uiT("De aanneemprijs heeft voorrang, daarna de begroting, daarna de offerte. Het doel is minimaal de al gefactureerde omzet.")};
   const profitSection: FinancialSection = {title:uiT("Brutowinst"),columns:[uiT("Onderdeel"),uiT("Verkoop / doorbelasting"),uiT("Kostprijs"),uiT("Brutowinst")],rows:[
     {cells:[uiT("Uren — arbeid"),formatEUR(margins.laborRevenue),formatEUR(margins.laborCost),formatEUR(margins.laborMargin)]},
