@@ -440,6 +440,18 @@ export default async function ProjectsPage({
     },
     { invoiced: 0, outstanding: 0, toInvoice: 0, resultToDate: 0, contract: 0, voorgeschoten: 0 },
   );
+  // Brutowinst per stroom over alle projecten in deze weergave (zelfde cijfers
+  // als de kolommen per project), plus kostprijs en doorbelasting voor de toelichting.
+  const winst = rows.reduce((s, r) => {
+    const m = r.margins;
+    s.uren += m.laborMargin; s.urenKost += m.laborCost; s.urenOmzet += m.laborRevenue;
+    s.materiaal += m.purchaseMargin; s.materiaalKost += m.purchaseCost; s.materiaalOmzet += m.purchaseRevenue;
+    s.overig += m.otherMargin; s.overigKost += m.otherCost; s.overigOmzet += m.otherRevenue;
+    s.producten += m.productMargin; s.productenKost += m.productCost; s.productenOmzet += m.productRevenue;
+    s.zonderKostprijs += m.uncostedProductRevenue;
+    return s;
+  }, { uren: 0, urenKost: 0, urenOmzet: 0, materiaal: 0, materiaalKost: 0, materiaalOmzet: 0, overig: 0, overigKost: 0, overigOmzet: 0, producten: 0, productenKost: 0, productenOmzet: 0, zonderKostprijs: 0 });
+  const winstTotaal = winst.uren + winst.materiaal + winst.overig + winst.producten;
 
   const statusBadge = (s: string) =>
     s === "active" ? (
@@ -520,6 +532,17 @@ export default async function ProjectsPage({
         <p className="text-xs leading-relaxed text-muted">{uiT("Verkoopontvangsten voor alle eigen producten blijven buiten het werkgeld. Van het werkgeld trekken we de geboekte werkkosten af en houden we de berekende brutowinst apart. Wat overblijft is beschikbaar voor projectkosten.")} {uiT("De brutowinst komt uit de opslag op uren en inkoop. Algemene bedrijfskosten zijn daar nog niet vanaf. Alle bedragen ex. btw, op basis van geboekte betalingen en kosten.")}</p>
       </TabPanel>
       <TabPanel id="resultaat">
+        <section aria-label={uiT("Brutowinst alle projecten")} className="mb-4">
+          <p className="mb-2 text-xs text-muted">{uiT("Brutowinst over alle projecten in deze weergave ({filter}) · ex. btw", { filter: uiT(FILTERS.find((f) => f.key === filter)?.label ?? "") })}</p>
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+          <div className="rounded-xl border bg-surface px-4 py-4"><p className="text-xs text-muted">{uiT("Winst op uren")}</p><p className={`mt-1 text-xl font-semibold tabular-nums ${winst.uren < 0 ? "text-danger" : "text-success"}`}>{formatEUR(winst.uren)}</p><p className="mt-1 text-xs text-muted">{uiT("kostprijs {cost} → doorbelast {revenue}", { cost: formatEUR(winst.urenKost), revenue: formatEUR(winst.urenOmzet) })}</p></div>
+          <div className="rounded-xl border bg-surface px-4 py-4"><p className="text-xs text-muted">{uiT("Winst op bouwmaterialen")}</p><p className={`mt-1 text-xl font-semibold tabular-nums ${winst.materiaal < 0 ? "text-danger" : "text-success"}`}>{formatEUR(winst.materiaal)}</p><p className="mt-1 text-xs text-muted">{uiT("kostprijs {cost} → doorbelast {revenue}", { cost: formatEUR(winst.materiaalKost), revenue: formatEUR(winst.materiaalOmzet) })}</p></div>
+          <div className="rounded-xl border bg-surface px-4 py-4"><p className="text-xs text-muted">{uiT("Winst op overige projectkosten")}</p><p className={`mt-1 text-xl font-semibold tabular-nums ${winst.overig < 0 ? "text-danger" : "text-success"}`}>{formatEUR(winst.overig)}</p><p className="mt-1 text-xs text-muted">{uiT("kostprijs {cost} → doorbelast {revenue}", { cost: formatEUR(winst.overigKost), revenue: formatEUR(winst.overigOmzet) })}</p></div>
+          <div className="rounded-xl border bg-surface px-4 py-4"><p className="text-xs text-muted">{uiT("Winst op eigen producten")}</p><p className={`mt-1 text-xl font-semibold tabular-nums ${winst.producten < 0 ? "text-danger" : "text-success"}`}>{formatEUR(winst.producten)}</p><p className="mt-1 text-xs text-muted">{uiT("kostprijs {cost} → doorbelast {revenue}", { cost: formatEUR(winst.productenKost), revenue: formatEUR(winst.productenOmzet) })}</p></div>
+          <div className="rounded-xl border-2 border-success/40 bg-surface px-4 py-4"><p className="text-xs font-medium">{uiT("Totale brutowinst")}</p><p className={`mt-1 text-2xl font-semibold tabular-nums ${winstTotaal < 0 ? "text-danger" : "text-success"}`}>{formatEUR(winstTotaal)}</p><p className="mt-1 text-xs text-muted">{uiT("uren + bouwmaterialen + overige kosten + eigen producten")}</p></div>
+          </div>
+          {winst.zonderKostprijs > 0.01 && <p className="mt-2 text-xs text-warning">{uiT("{amount} verkoop van eigen producten heeft nog geen kostprijs en telt niet mee in de winst.", { amount: formatEUR(winst.zonderKostprijs) })}</p>}
+        </section>
       <Card className="overflow-hidden">
         <CardHeader>
           <CardTitle>{uiT("Alle projecten")}</CardTitle>
@@ -696,6 +719,27 @@ export default async function ProjectsPage({
                   </Tr>
                 );
               })}
+              <Tr className="border-t-2 bg-background/60 font-semibold">
+                <Td>{uiT("Totaal")}</Td>
+                <Td className="text-right tabular-nums">{formatEUR(rows.reduce((t, r) => t + r.cover.ownProductReceived, 0))}</Td>
+                <Td className="text-right tabular-nums">{formatEUR(rows.reduce((t, r) => t + r.cover.received, 0))}</Td>
+                <Td />
+                <Td className="text-right tabular-nums">{formatEUR(totals.contract)}</Td>
+                <Td className="text-right tabular-nums">{formatEUR(totals.invoiced)}</Td>
+                <Td className="text-right tabular-nums">{formatEUR(totals.outstanding)}</Td>
+                <Td className="text-right tabular-nums">{formatEUR(rows.reduce((t, r) => t + r.cover.saldo, 0))}</Td>
+                <Td />
+                <Td className="text-right tabular-nums">{formatEUR(totals.toInvoice)}</Td>
+                <Td className="text-right tabular-nums">{formatEUR(winst.uren)}</Td>
+                <Td className="text-right tabular-nums">{formatEUR(winst.materiaal)}</Td>
+                <Td className="text-right tabular-nums">{formatEUR(winst.overig)}</Td>
+                <Td className="text-right tabular-nums">{formatEUR(rows.reduce((t, r) => t + r.ownProductRevenue, 0))}</Td>
+                <Td className="text-right tabular-nums">{formatEUR(rows.reduce((t, r) => t + r.ownProductBookedCost, 0))}</Td>
+                <Td className="text-right tabular-nums">{formatEUR(winst.producten)}</Td>
+                <Td className="text-right tabular-nums">{formatEUR(totals.resultToDate)}</Td>
+                <Td />
+                <Td />
+              </Tr>
             </TBody>
           </Table>
         )}
