@@ -589,6 +589,13 @@
       "when": 1791301144529,
       "tag": "0083_nebulous_wallow",
       "breakpoints": true
+    },
+    {
+      "idx": 84,
+      "version": "7",
+      "when": 1791464815811,
+      "tag": "0084_gifted_blazing_skull",
+      "breakpoints": true
     }
   ]
 }

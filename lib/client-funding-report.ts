@@ -6,13 +6,14 @@ import type { ClientFundingProduct } from "./client-funding-products";
 
 /** Explicit customer-facing projection: never pass costs, notes or profit to the PDF. */
 export function clientFundingAmounts(
-  cover: Pick<AdvanceCover, "totalReceived" | "ownProductReceived" | "requiredRevenue" | "saldo">,
+  cover: Pick<AdvanceCover, "totalReceived" | "ownProductReceived" | "requiredRevenue" | "saldo" | "advanceCredit">,
   margins: Pick<ProjectMargins, "laborRevenue" | "purchaseRevenue" | "otherRevenue">,
 ) {
   return {
     received: cover.totalReceived,
     products: cover.ownProductReceived,
     work: cover.requiredRevenue,
+    advanceCredit: cover.advanceCredit,
     remaining: cover.saldo,
     labor: margins.laborRevenue,
     materials: margins.purchaseRevenue,
@@ -93,9 +94,10 @@ export function clientFundingReport(input: {
           [t("Totaal ontvangen"), formatEUR(a.received)],
           [t("Af: ontvangen voor producten"), formatEUR(a.products)],
           [t("Afgeboekt werk"), formatEUR(a.work)],
+          ...(a.advanceCredit > 0 ? [[t("Tegoed toegevoegd aan voorschotruimte"), `+ ${formatEUR(a.advanceCredit)}`]] : []),
           [t("Resterend voorschot"), formatEUR(a.remaining)],
         ],
-        emphasizeRow: i => i === 3,
+        emphasizeRow: i => i === (a.advanceCredit > 0 ? 4 : 3),
       },
       ...productTables,
       {
@@ -115,6 +117,7 @@ export function clientFundingReport(input: {
         columns: [{ header: "", flex: 1 }],
         rows: [
           [t("Productbedragen blijven bestemd voor de betreffende producten en zijn niet beschikbaar voor verdere werkzaamheden.")],
+          ...(a.advanceCredit > 0 ? [[t("Een apart tegoed is toegevoegd aan de voorschotruimte. Dit is geen nieuwe betaling.")]] : []),
           [t(a.remaining < 0
             ? "Het afgeboekte werk overschrijdt het beschikbare voorschot. Het bedrag 'Nog aan te vullen' is het tekort op deze peildatum."
             : "Het resterende voorschot is beschikbaar voor verdere werkzaamheden.")],

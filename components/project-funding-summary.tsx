@@ -17,9 +17,11 @@ export async function ProjectFundingSummary({ cover, ownProducts, details = "dia
       <div className="flex flex-wrap justify-between gap-2"><dt>{t("Berekende brutowinst op uitgevoerd werk")}</dt><dd className="font-medium tabular-nums">{formatEUR(markup)}</dd></div>
       <div className="flex flex-wrap justify-between gap-2 border-t pt-3"><dt>{t("Uren en derden tegen klantprijs")}</dt><dd className="font-medium tabular-nums">{formatEUR(cover.requiredRevenue)}</dd></div>
       {cover.ownProductPrefinanced > 0 && <div className="flex flex-wrap justify-between gap-2"><dt>{t("Eigen producten betaald, nog niet ontvangen")}</dt><dd className="font-medium tabular-nums">− {formatEUR(cover.ownProductPrefinanced)}</dd></div>}
+      {cover.advanceCredit > 0 && <div className="flex flex-wrap justify-between gap-2"><dt>{t("Tegoed toegevoegd aan voorschotruimte")}</dt><dd className="font-medium tabular-nums">+ {formatEUR(cover.advanceCredit)}</dd></div>}
       <div className="flex flex-wrap justify-between gap-2"><dt>{t("Resterende voorschotruimte")}</dt><dd className="font-semibold tabular-nums">{formatEUR(cover.saldo)}</dd></div>
     </dl>
     <p className="mt-4 text-sm leading-relaxed text-muted">{t("Verkoopontvangsten voor alle eigen producten blijven buiten het werkgeld. Van het werkgeld trekken we de geboekte werkkosten af en houden we de berekende brutowinst apart. Wat overblijft is beschikbaar voor projectkosten.")}</p>
+    {cover.advanceCredit > 0 && <p className="mt-3 text-sm leading-relaxed text-muted">{t("Dit tegoed verhoogt de voorschotruimte en is geen nieuwe betaling.")}</p>}
     {cover.ownProductPrefinanced > 0 && <p className="mt-3 text-sm leading-relaxed text-muted">{t("Eigen producten die wij al betaalden en de klant nog niet, zijn ook voorgeschoten. Die kostprijs gaat van de voorschotruimte af tot de klant ervoor betaalt.")}</p>}
     <p className="mt-3 text-xs text-muted">{t("Alle bedragen ex. btw")}</p>
   </div>;

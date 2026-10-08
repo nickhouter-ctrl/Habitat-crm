@@ -1530,6 +1530,29 @@ export const projectExtras = pgTable(
 
 export type ProjectExtra = typeof projectExtras.$inferSelect;
 
+/** Customer-facing credits that increase project advance capacity without
+ * pretending that cash was received or changing invoice turnover. Amounts are
+ * stored ex VAT because advance coverage is calculated ex VAT. */
+export const projectFundingAdjustments = pgTable(
+  "project_funding_adjustments",
+  {
+    id: uuid().primaryKey().default(sql`gen_random_uuid()`),
+    projectId: uuid().notNull().references(() => projects.id, { onDelete: "cascade" }),
+    amountEur: numeric({ precision: 14, scale: 2 }).notNull(),
+    description: text().notNull(),
+    internalNote: text(),
+    referenceKey: text().notNull(),
+    effectiveDate: date().notNull(),
+    ...timestamps,
+  },
+  (t) => [
+    index("project_funding_adjustments_project_idx").on(t.projectId),
+    uniqueIndex("project_funding_adjustments_reference_uidx").on(t.referenceKey),
+  ],
+).enableRLS();
+
+export type ProjectFundingAdjustment = typeof projectFundingAdjustments.$inferSelect;
+
 /**
  * Hoe anderen een werf noemen.
  *

@@ -213,6 +213,8 @@ export type AdvanceCoverInput = {
   ownProductCost?: number;
   /** Openstaande klantfacturen ex. btw: dat geld is al gevraagd, dus niet nog eens als voorschot. */
   openInvoicedEx?: number;
+  /** Customer credit assigned to advance capacity; not a cash receipt. */
+  advanceCreditEx?: number;
   /** Uren en externe inkoop inclusief opslag. Zonder dit veld: alleen kostendekking. */
   requiredRevenue?: number;
   /** Standaard {@link ADVANCE_WARN_BUFFER_EUR}. */
@@ -230,6 +232,8 @@ export type AdvanceCover = {
   costSaldo: number;
   /** Liquide ontvangen voor uren en derden, na reservering voor eigen producten. */
   received: number;
+  /** Separate customer credit added to advance capacity (not cash received). */
+  advanceCredit: number;
   /** Ontvangsten minus vereiste doorbelasting inclusief verdiensten. */
   saldo: number;
   status: "gedekt" | "bijna_op" | "voorgeschoten";
@@ -253,17 +257,19 @@ export function deriveAdvanceCover(i: AdvanceCoverInput): AdvanceCover {
   const buffer = i.warnBufferEur ?? ADVANCE_WARN_BUFFER_EUR;
   const prefinanced = round2(i.laborCost + i.purchaseCost);
   const received = round2(i.coverReceivedEx);
+  const advanceCredit = round2(i.advanceCreditEx ?? 0);
   const requiredRevenue = round2(i.requiredRevenue ?? prefinanced);
   // Eigen producten die wij betaalden en de klant nog niet: ook voorgeschoten.
   // Een productontvangst boven de kostprijs vult het werkgeld niet aan.
   const ownProductPrefinanced = round2(Math.max(0, (i.ownProductCost ?? 0) - (i.ownProductReceivedEx ?? 0)));
-  const saldo = round2(received - requiredRevenue - ownProductPrefinanced);
+  const saldo = round2(received + advanceCredit - requiredRevenue - ownProductPrefinanced);
   const status: AdvanceCover["status"] = saldo < 0 ? "voorgeschoten" : saldo < buffer ? "bijna_op" : "gedekt";
   return {
     prefinanced,
     requiredRevenue,
     costSaldo: round2(received - prefinanced),
     received,
+    advanceCredit,
     totalReceived: round2(received + (i.ownProductReceivedEx ?? 0)),
     ownProductReceived: round2(i.ownProductReceivedEx ?? 0),
     ownProductPrefinanced,
