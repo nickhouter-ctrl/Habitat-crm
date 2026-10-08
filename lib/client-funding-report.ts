@@ -6,7 +6,7 @@ import type { ClientFundingProduct } from "./client-funding-products";
 
 /** Explicit customer-facing projection: never pass costs, notes or profit to the PDF. */
 export function clientFundingAmounts(
-  cover: Pick<AdvanceCover, "totalReceived" | "ownProductReceived" | "requiredRevenue" | "saldo" | "advanceCredit">,
+  cover: Pick<AdvanceCover, "totalReceived" | "ownProductReceived" | "requiredRevenue" | "saldo" | "advanceCredit" | "advanceCreditDescription">,
   margins: Pick<ProjectMargins, "laborRevenue" | "purchaseRevenue" | "otherRevenue">,
 ) {
   return {
@@ -14,6 +14,7 @@ export function clientFundingAmounts(
     products: cover.ownProductReceived,
     work: cover.requiredRevenue,
     advanceCredit: cover.advanceCredit,
+    advanceCreditDescription: cover.advanceCreditDescription,
     remaining: cover.saldo,
     labor: margins.laborRevenue,
     materials: margins.purchaseRevenue,
@@ -94,7 +95,7 @@ export function clientFundingReport(input: {
           [t("Totaal ontvangen"), formatEUR(a.received)],
           [t("Af: ontvangen voor producten"), formatEUR(a.products)],
           [t("Afgeboekt werk"), formatEUR(a.work)],
-          ...(a.advanceCredit > 0 ? [[t("Tegoed toegevoegd aan voorschotruimte"), `+ ${formatEUR(a.advanceCredit)}`]] : []),
+          ...(a.advanceCredit > 0 ? [[t(a.advanceCreditDescription ?? "Tegoed toegevoegd aan voorschotruimte"), `+ ${formatEUR(a.advanceCredit)}`]] : []),
           [t("Resterend voorschot"), formatEUR(a.remaining)],
         ],
         emphasizeRow: i => i === (a.advanceCredit > 0 ? 4 : 3),

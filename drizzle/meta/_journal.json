@@ -596,6 +596,13 @@
       "when": 1791464815811,
       "tag": "0084_gifted_blazing_skull",
       "breakpoints": true
+    },
+    {
+      "idx": 85,
+      "version": "7",
+      "when": 1791465640000,
+      "tag": "0085_finca_lisa_credit_label",
+      "breakpoints": true
     }
   ]
 }

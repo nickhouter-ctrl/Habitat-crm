@@ -215,6 +215,8 @@ export type AdvanceCoverInput = {
   openInvoicedEx?: number;
   /** Customer credit assigned to advance capacity; not a cash receipt. */
   advanceCreditEx?: number;
+  /** Customer-safe description of the separate credit, if one exists. */
+  advanceCreditDescription?: string | null;
   /** Uren en externe inkoop inclusief opslag. Zonder dit veld: alleen kostendekking. */
   requiredRevenue?: number;
   /** Standaard {@link ADVANCE_WARN_BUFFER_EUR}. */
@@ -234,6 +236,7 @@ export type AdvanceCover = {
   received: number;
   /** Separate customer credit added to advance capacity (not cash received). */
   advanceCredit: number;
+  advanceCreditDescription: string | null;
   /** Ontvangsten minus vereiste doorbelasting inclusief verdiensten. */
   saldo: number;
   status: "gedekt" | "bijna_op" | "voorgeschoten";
@@ -270,6 +273,7 @@ export function deriveAdvanceCover(i: AdvanceCoverInput): AdvanceCover {
     costSaldo: round2(received - prefinanced),
     received,
     advanceCredit,
+    advanceCreditDescription: i.advanceCreditDescription ?? null,
     totalReceived: round2(received + (i.ownProductReceivedEx ?? 0)),
     ownProductReceived: round2(i.ownProductReceivedEx ?? 0),
     ownProductPrefinanced,

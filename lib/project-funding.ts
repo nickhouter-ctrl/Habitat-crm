@@ -18,7 +18,7 @@ export async function loadProjectFunding(projectId?:string, includeClosed = fals
       payments:ReceiptLike[];docs:{id:string;docNumber:string|null;kind:string;status:string;items:unknown;subtotal:string;total:string|null;paid:string|null}[];
       purchases:Parameters<typeof projectCostStreams>[0]; costs:Parameters<typeof projectCostStreams>[1];
       deliveries:unknown;extraRevenue:string;extraCost:string;
-      advanceCredit:string;
+      advanceCredit:string;advanceCreditDescription:string|null;
     }>(sql`select p.id,p.name,p.labor_margin_pct "laborPct",p.purchase_margin_pct "purchasePct",
       coalesce((select sum(t.hours*t.hourly_cost_eur) from time_entries t where t.project_id=p.id
         and not(t.self_logged_at is not null and t.approved_at is null)),0)::text labor,
@@ -37,7 +37,8 @@ export async function loadProjectFunding(projectId?:string, includeClosed = fals
         from project_deliveries d where d.project_id=p.id and d.reversed_at is null),'[]'::jsonb) deliveries,
       coalesce((select sum(e.amount_eur) from project_extras e where e.project_id=p.id),0)::text "extraRevenue",
       coalesce((select sum(e.cost_eur) from project_extras e where e.project_id=p.id),0)::text "extraCost",
-      coalesce((select sum(a.amount_eur) from project_funding_adjustments a where a.project_id=p.id),0)::text "advanceCredit"
+      coalesce((select sum(a.amount_eur) from project_funding_adjustments a where a.project_id=p.id),0)::text "advanceCredit",
+      (select string_agg(a.description, '; ' order by a.effective_date, a.created_at) from project_funding_adjustments a where a.project_id=p.id) "advanceCreditDescription"
       from projects p where ${projectId?sql`p.id=${projectId}`:includeClosed?sql`true`:sql`p.status='active'`}`),
     db.execute<{id:string;sku:string|null;cost:string|null}>(sql`select id,sku,cost_eur::text cost from products`),
   ]);
@@ -66,7 +67,7 @@ export async function loadProjectFunding(projectId?:string, includeClosed = fals
     }, 0) * 100) / 100;
     const cover=deriveAdvanceCover({openInvoicedEx,laborCost:Number(p.labor),purchaseCost:costs.material+costs.other,
       coverReceivedEx:receipts.liquidReceived,ownProductReceivedEx:receipts.ownProductReceived,ownProductCost:own.bookedCost,
-      requiredRevenue:margins.laborRevenue+margins.purchaseRevenue+margins.otherRevenue,advanceCreditEx:Number(p.advanceCredit)});
+      requiredRevenue:margins.laborRevenue+margins.purchaseRevenue+margins.otherRevenue,advanceCreditEx:Number(p.advanceCredit),advanceCreditDescription:p.advanceCreditDescription});
     const productReceipts = clientFundingProducts(p.docs, p.payments, ownShareByDoc,
       it => (it.productId ? byId.get(it.productId) : undefined) ?? (it.description ? bySku.get(it.description.trim()) : undefined));
     return [p.id,{id:p.id,name:p.name,openInvoicedEx,cover,ownShareByDoc,costs,own,margins,productReceipts}] as const;

@@ -217,6 +217,7 @@ const rows: [string, string, string][] = [
   ["Dit tegoed verhoogt de voorschotruimte en is geen nieuwe betaling.", "This credit increases the available advance balance and is not a new payment.", "Este crédito aumenta el saldo disponible del anticipo y no es un nuevo pago."],
   ["Een apart tegoed is toegevoegd aan de voorschotruimte. Dit is geen nieuwe betaling.", "A separate credit has been added to the advance balance. This is not a new payment.", "Se ha añadido un crédito separado al saldo del anticipo. No es un nuevo pago."],
   ["tegoed toegevoegd aan voorschotruimte", "credit added to advance coverage", "crédito añadido a la cobertura del anticipo"],
+  ["Credit deuren en badkamerartikelen — factuur F260014", "Credit for doors and bathroom items — invoice F260014", "Crédito de puertas y artículos de baño — factura F260014"],
   ["Ontvangen − geboekt werk tegen klantprijs = resterende voorschotruimte.", "Received − recorded work at client price = remaining advance coverage.", "Cobrado − trabajo registrado a precio de cliente = cobertura restante del anticipo."],
   ["Van kosten naar klantprijs", "From cost to client price", "Del coste al precio de cliente"],
   ["Kosten en berekening bekijken", "View costs and calculation", "Ver costes y cálculo"],
