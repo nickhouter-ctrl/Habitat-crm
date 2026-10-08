@@ -1,6 +1,12 @@
 import type { Dictionary } from "@/lib/i18n";
 
 const rows: [string, string, string][] = [
+  ["Productregels van {facturen}", "Product lines from {facturen}", "Líneas de productos de {facturen}"],
+  ["Productregels - {factuur}", "Product lines - {factuur}", "Líneas de productos - {factuur}"],
+  ["Productregels - {factuur} (vervolg)", "Product lines - {factuur} (continued)", "Líneas de productos - {factuur} (continuación)"],
+  ["Factuurbedragen per product, ex. btw, na eventuele korting. Het ontvangen deel staat in het overzicht hierboven. Productregels worden één keer getoond en niet opnieuw afgetrokken.", "Invoiced amounts per product, excluding VAT, after any discount. The amount received is shown in the overview above. Product lines are shown once and are not deducted again.", "Importes facturados por producto, sin IVA, después de descuentos. El importe recibido figura en el resumen anterior. Las líneas se muestran una sola vez y no se descuentan de nuevo."],
+  ["Per eenheid", "Per unit", "Por unidad"],
+  ["Totaal producten op factuur", "Total products on invoice", "Total de productos en factura"],
   ["Overige taken", "Other tasks", "Otras tareas"],
   ["Geen andere open taken.", "No other open tasks.", "No hay otras tareas pendientes."],
   ["Geen afspraken of losse taken gepland", "No appointments or one-off tasks scheduled", "No hay citas ni tareas puntuales programadas"],

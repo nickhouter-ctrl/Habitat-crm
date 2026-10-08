@@ -1,6 +1,6 @@
 import { maakT, type Locale } from "@/lib/i18n";
 import type { AdvanceCover, ProjectMargins } from "@/lib/project-financials";
-import type { ReportPdfInput } from "@/lib/report-pdf";
+import type { ReportPdfInput, ReportTable } from "@/lib/report-pdf";
 import { formatEUR } from "@/lib/utils";
 import type { ClientFundingProduct } from "./client-funding-products";
 
@@ -34,22 +34,46 @@ export function clientFundingReport(input: {
     throw new Error("Product specification does not reconcile with the project balance");
   }
   const columns = [{ header: t("Omschrijving"), flex: 4 }, { header: t("Bedrag"), align: "right" as const, flex: 1.5 }];
-  const productRows = (input.products ?? []).flatMap(p => {
-    const names = p.products.length ? p.products : [t("Producten volgens factuur of verrekening")];
-    // Keep long invoices readable and allow the specification to span pages.
-    return Array.from({ length: Math.ceil(names.length / 4) }, (_, i) => [
-      p.documentNumber ?? t("Betaling"),
-      names.slice(i * 4, (i + 1) * 4).join(" · "),
-      i === 0 ? formatEUR(p.received) : "",
-    ]);
+  const receipts = input.products ?? [];
+  const productRows = receipts.map(p => [
+    p.documentNumber ?? t("Betaling"),
+    p.specifications?.length
+      ? t("Productregels van {facturen}", { facturen: [...new Set(p.specifications.map(d => d.documentNumber ?? t("Factuur")))].join(", ") })
+      : p.products.join(" · ") || t("Producten volgens factuur of verrekening"),
+    formatEUR(p.received),
+  ]);
+  const productTables: ReportTable[] = Array.from({ length: Math.ceil(productRows.length / 10) }, (_, i) => {
+    const rows = productRows.slice(i * 10, (i + 1) * 10);
+    const last = (i + 1) * 10 >= productRows.length;
+    return {
+      title: t(i === 0 ? "Specificatie van de productbedragen" : "Specificatie van de productbedragen (vervolg)"),
+      subtitle: t("Ontvangen productbedrag per factuur, ex. btw. Bij deelbetalingen telt alleen het betaalde deel mee. Deze bedragen zijn hierboven al afgetrokken."),
+      columns: [{ header: t("Factuur"), flex: 1.5 }, { header: t("Producten"), flex: 4 }, { header: t("Bedrag"), flex: 1.5, align: "right" }],
+      rows: [...rows, ...(last ? [[t("Totaal"), "", formatEUR(a.products)]] : [])],
+      emphasizeRow: row => last && row === rows.length,
+    };
   });
-  const productTables = Array.from({ length: Math.ceil(productRows.length / 5) }, (_, i) => ({
-    title: t(i === 0 ? "Specificatie van de productbedragen" : "Specificatie van de productbedragen (vervolg)"),
-    subtitle: t("Ontvangen productbedrag per factuur, ex. btw. Bij deelbetalingen telt alleen het betaalde deel mee. Deze bedragen zijn hierboven al afgetrokken."),
-    columns: [{ header: t("Factuur"), flex: 1.5 }, { header: t("Producten"), flex: 4 }, { header: t("Bedrag"), flex: 1.5, align: "right" as const }],
-    rows: [...productRows.slice(i * 5, (i + 1) * 5), ...(i === Math.ceil(productRows.length / 5) - 1 ? [[t("Totaal"), "", formatEUR(a.products)]] : [])],
-    emphasizeRow: (row: number) => i === Math.ceil(productRows.length / 5) - 1 && row === productRows.slice(i * 5, (i + 1) * 5).length,
-  }));
+  // An advance and its final invoice can refer to the same goods. Show their
+  // receipt allocations above, but the underlying invoice lines only once.
+  // IDs, not invoice numbers: external suppliers can reuse the same number.
+  const specifications = new Map(receipts.flatMap(p => p.specifications ?? []).map(d => [d.documentId, d]));
+  const quantity = new Intl.NumberFormat(locale, { maximumFractionDigits: 6 });
+  for (const spec of specifications.values()) {
+    const total = spec.items.reduce((sum, it) => sum + Math.round(it.total * 100), 0) / 100;
+    for (let start = 0; start < spec.items.length; start += 10) {
+      const items = spec.items.slice(start, start + 10);
+      const last = start + 10 >= spec.items.length;
+      productTables.push({
+        title: t(start === 0 ? "Productregels - {factuur}" : "Productregels - {factuur} (vervolg)", { factuur: spec.documentNumber ?? t("Factuur") }),
+        subtitle: t("Factuurbedragen per product, ex. btw, na eventuele korting. Het ontvangen deel staat in het overzicht hierboven. Productregels worden één keer getoond en niet opnieuw afgetrokken."),
+        columns: [{ header: t("Product"), flex: 3.2 }, { header: t("Aantal"), flex: 0.65, align: "right" },
+          { header: t("Per eenheid"), flex: 1.15, align: "right" }, { header: t("Totaal ex. btw"), flex: 1.2, align: "right" }],
+        rows: [...items.map(it => [it.name, quantity.format(it.quantity), formatEUR(it.unitPrice), formatEUR(it.total)]),
+          ...(last ? [[t("Totaal producten op factuur"), "", "", formatEUR(total)]] : [])],
+        emphasizeRow: row => last && row === items.length,
+      });
+    }
+  }
   return {
     locale,
     title: t("Voorschotoverzicht van uw project"),
