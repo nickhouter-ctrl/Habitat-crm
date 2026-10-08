@@ -1,6 +1,4 @@
-/* Server-only: rendert een cijfer-/managementoverzicht naar een luxe, printbare
- * PDF via @react-pdf/renderer — in dezelfde Habitat One-huisstijl als de
- * offerte/factuur-PDF (Cormorant-serif, gouden accentlijnen, crème & terracotta).
+/* Server-only: renders print-ready financial reports via @react-pdf/renderer.
  * Generiek opgezet (KPI's + tabellen), zodat zowel de Rapporten- als de
  * Producten-pagina 'm kan voeden. */
 import path from "node:path";
@@ -39,7 +37,6 @@ Font.register({
     { src: path.join(CORMORANT_DIR, "CormorantGaramond-SemiBold.ttf"), fontWeight: 600 },
   ],
 });
-
 const LOGO_CREAM = path.join(process.cwd(), "public", "brand", "habitat-one-logo-cream.png");
 
 export type ReportKpi = { label: string; value: string; hint?: string };
@@ -66,6 +63,8 @@ export type ReportPdfInput = {
   generatedAt: Date;
   kpis: ReportKpi[];
   tables: ReportTable[];
+  /** Use a simple, high-legibility face for customer advance statements. */
+  typography?: "brand" | "readable";
 };
 
 const s = StyleSheet.create({
@@ -165,26 +164,45 @@ const s = StyleSheet.create({
   footerText: { fontSize: 7, color: COMPANY.muted, letterSpacing: 0.2 },
 });
 
-function Table({ table, t }: { table: ReportTable; t: ReturnType<typeof maakT> }) {
+const readable = StyleSheet.create({
+  page: { fontFamily: "Helvetica", fontSize: 9.5 },
+  title: { fontFamily: "Helvetica-Bold", fontSize: 24, letterSpacing: 0 },
+  subtitle: { fontSize: 9, lineHeight: 1.45 },
+  kpiLabel: { fontSize: 7, letterSpacing: 0.5 },
+  kpiValue: { fontFamily: "Helvetica-Bold", fontSize: 17 },
+  tableTitle: { fontFamily: "Helvetica-Bold", fontSize: 13 },
+  tableSubtitle: { fontSize: 8, lineHeight: 1.35 },
+  tHeadCell: { fontFamily: "Helvetica-Bold", fontSize: 7.5, letterSpacing: 0.35 },
+  tCell: { fontFamily: "Helvetica", fontSize: 9 },
+  tCellNum: { fontFamily: "Helvetica", fontSize: 9, fontWeight: 400 },
+  tCellEmph: { fontFamily: "Helvetica-Bold", fontSize: 9, fontWeight: 700 },
+  empty: { fontSize: 9 },
+  headerDate: { fontFamily: "Helvetica-Bold", fontWeight: 700 },
+  headerKicker: { fontFamily: "Helvetica-Bold", fontWeight: 700 },
+  tagline: { fontFamily: "Helvetica", fontWeight: 400 },
+  footerText: { fontFamily: "Helvetica", fontWeight: 400 },
+});
+
+function Table({ table, t, useReadable }: { table: ReportTable; t: ReturnType<typeof maakT>; useReadable: boolean }) {
   // Geen regels én geen emptyText → puur een tekst-sectie (titel + uitleg), zonder
   // tabel-koprij. Zo rendert een fase die alleen uit uitleg bestaat netjes.
   const showGrid = table.rows.length > 0 || table.emptyText != null;
   return (
     <View style={s.tableBlock} wrap={false}>
-      <Text style={s.tableTitle}>{table.title}</Text>
+      <Text style={useReadable ? [s.tableTitle, readable.tableTitle] : s.tableTitle}>{table.title}</Text>
       <View style={s.tableTitleAccent} />
-      {table.subtitle ? <Text style={s.tableSubtitle}>{table.subtitle}</Text> : <View style={{ height: 5 }} />}
+      {table.subtitle ? <Text style={useReadable ? [s.tableSubtitle, readable.tableSubtitle] : s.tableSubtitle}>{table.subtitle}</Text> : <View style={{ height: 5 }} />}
       {!showGrid ? null : (
       <>
       <View style={s.tHead}>
         {table.columns.map((c, i) => (
-          <Text key={i} style={[s.tHeadCell, { flex: c.flex ?? 1, textAlign: c.align ?? "left" }]}>
+          <Text key={i} style={[s.tHeadCell, ...(useReadable ? [readable.tHeadCell] : []), { flex: c.flex ?? 1, textAlign: c.align ?? "left" }]}>
             {c.header}
           </Text>
         ))}
       </View>
       {table.rows.length === 0 ? (
-        <Text style={s.empty}>{table.emptyText ?? t("Geen gegevens.")}</Text>
+        <Text style={useReadable ? [s.empty, readable.empty] : s.empty}>{table.emptyText ?? t("Geen gegevens.")}</Text>
       ) : (
         table.rows.map((row, ri) => {
           const emph = table.emphasizeRow?.(ri) ?? false;
@@ -204,8 +222,9 @@ function Table({ table, t }: { table: ReportTable; t: ReturnType<typeof maakT> }
                 }
                 const right = (c.align ?? "left") === "right";
                 const base = emph ? s.tCellEmph : right ? s.tCellNum : s.tCell;
+                const readableBase = emph ? readable.tCellEmph : right ? readable.tCellNum : readable.tCell;
                 return (
-                  <Text key={ci} style={[base, { flex: c.flex ?? 1, textAlign: c.align ?? "left" }]}>
+                  <Text key={ci} style={[base, ...(useReadable ? [readableBase] : []), { flex: c.flex ?? 1, textAlign: c.align ?? "left" }]}>
                     {row[ci] ?? ""}
                   </Text>
                 );
@@ -222,6 +241,7 @@ function Table({ table, t }: { table: ReportTable; t: ReturnType<typeof maakT> }
 
 export async function renderReportPdf(input: ReportPdfInput): Promise<Buffer> {
   const locale = input.locale ?? 'nl', t = maakT(locale);
+  const useReadable = input.typography === "readable";
   input = localizeReportInput(input, locale);
   const dateStr = new Intl.DateTimeFormat(dateLocale(locale), {
     day: "numeric",
@@ -231,7 +251,7 @@ export async function renderReportPdf(input: ReportPdfInput): Promise<Buffer> {
 
   const doc = (
     <Document title={input.title} author={COMPANY.legalName}>
-      <Page size="A4" style={s.page}>
+      <Page size="A4" style={useReadable ? [s.page, readable.page] : s.page}>
         <View style={s.topBand} fixed />
         <View style={s.topBandGold} fixed />
 
@@ -239,26 +259,26 @@ export async function renderReportPdf(input: ReportPdfInput): Promise<Buffer> {
           <View>
             {/* eslint-disable-next-line jsx-a11y/alt-text */}
             <Image src={LOGO_CREAM} style={s.logo} />
-            <Text style={s.tagline}>{COMPANY.tagline}</Text>
+            <Text style={useReadable ? [s.tagline, readable.tagline] : s.tagline}>{COMPANY.tagline}</Text>
           </View>
           <View style={s.headerRight}>
-            <Text style={s.headerKicker}>{t("Overzicht")}</Text>
-            <Text style={s.headerDate}>{dateStr}</Text>
+            <Text style={useReadable ? [s.headerKicker, readable.headerKicker] : s.headerKicker}>{t("Overzicht")}</Text>
+            <Text style={useReadable ? [s.headerDate, readable.headerDate] : s.headerDate}>{dateStr}</Text>
           </View>
         </View>
         <View style={s.headerRule} fixed />
 
-        <Text style={s.title}>{input.title}</Text>
+        <Text style={useReadable ? [s.title, readable.title] : s.title}>{input.title}</Text>
         <View style={s.titleAccent} />
-        {input.subtitle ? <Text style={s.subtitle}>{input.subtitle}</Text> : <View style={{ marginBottom: 12 }} />}
+        {input.subtitle ? <Text style={useReadable ? [s.subtitle, readable.subtitle] : s.subtitle}>{input.subtitle}</Text> : <View style={{ marginBottom: 12 }} />}
 
         {input.kpis.length > 0 && (
           <View style={s.kpiGrid}>
             {input.kpis.map((k, i) => (
               <View key={i} style={s.kpiCell}>
                 <View style={s.kpiBox}>
-                  <Text style={s.kpiLabel}>{k.label}</Text>
-                  <Text style={s.kpiValue}>{k.value}</Text>
+                  <Text style={useReadable ? [s.kpiLabel, readable.kpiLabel] : s.kpiLabel}>{k.label}</Text>
+                  <Text style={useReadable ? [s.kpiValue, readable.kpiValue] : s.kpiValue}>{k.value}</Text>
                   {k.hint ? <Text style={s.kpiHint}>{k.hint}</Text> : null}
                 </View>
               </View>
@@ -267,15 +287,15 @@ export async function renderReportPdf(input: ReportPdfInput): Promise<Buffer> {
         )}
 
         {input.tables.map((table, i) => (
-          <Table key={i} table={table} t={t} />
+          <Table key={i} table={table} t={t} useReadable={useReadable} />
         ))}
 
         <View style={s.footer} fixed>
-          <Text style={s.footerText}>
+          <Text style={useReadable ? [s.footerText, readable.footerText] : s.footerText}>
             {COMPANY.legalName} · {COMPANY.vatNumber} · {COMPANY.website}
           </Text>
           <Text
-            style={s.footerText}
+            style={useReadable ? [s.footerText, readable.footerText] : s.footerText}
             render={({ pageNumber, totalPages }) => `${pageNumber} / ${totalPages}`}
           />
         </View>

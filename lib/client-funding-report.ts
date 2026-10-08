@@ -78,6 +78,7 @@ export function clientFundingReport(input: {
   }
   return {
     locale,
+    typography: "readable",
     title: t("Voorschotoverzicht van uw project"),
     subtitle: [input.projectName, input.clientName ? t("voor {naam}", { naam: input.clientName }) : null].filter(Boolean).join(" - "),
     generatedAt: input.generatedAt,
