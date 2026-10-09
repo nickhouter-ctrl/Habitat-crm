@@ -1,7 +1,7 @@
 /**
  * Huisstijl van de mail van Habitat One Windows (kopie van lib/mail.ts in de
  * Windows-repo, zodat de activatiemails vanuit het CRM er hetzelfde uitzien):
- * crème vlak, witte kaart, logo, kop in serif, tekst in Arial, knop in kapitalen.
+ * crème vlak, witte kaart, logo, koppen en tekst in Arial (Montserrat-vervanger), knop in kapitalen.
  */
 const WINDOWS_URL = "https://windows.habitat-one.com";
 
@@ -20,7 +20,7 @@ export function windowsMailLayout(title: string, bodyHtml: string, opts: { eyebr
   </td></tr>
   <tr><td style="background:#fffdfa;border:1px solid #e6e0d4;border-radius:10px;padding:40px 40px 36px">
     <div style="font-family:Arial,Helvetica,sans-serif;font-size:11px;font-weight:bold;letter-spacing:2.5px;text-transform:uppercase;color:#8f6f47;margin-bottom:14px">${eyebrow}</div>
-    <h1 style="font-family:Georgia,'Times New Roman',serif;font-weight:normal;font-size:28px;line-height:1.2;color:#1c1714;margin:0 0 22px">${title}</h1>
+    <h1 style="font-family:Arial,Helvetica,sans-serif;font-weight:600;font-size:24px;line-height:1.25;letter-spacing:-0.3px;color:#1c1714;margin:0 0 22px">${title}</h1>
     <div style="font-family:Arial,Helvetica,sans-serif;font-size:14px;line-height:1.7;color:#3a342d">${bodyHtml}</div>
   </td></tr>
   <tr><td style="padding:22px 6px 0;font-family:Arial,Helvetica,sans-serif;font-size:11px;line-height:1.7;color:#8a8177">
