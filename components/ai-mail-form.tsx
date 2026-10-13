@@ -214,7 +214,7 @@ export function AiMailForm({
         </>
       )}
       {(bijlagen.length > 0 || downloadLijst.length > 0 || uploadDownloadBijlage) && (
-        <details className="rounded-md border border-border" open={gekozen.size > 0 || gekozenLinks.size > 0}>
+        <details className="rounded-md border border-border" open={gekozen.size > 0 || gekozenLinks.size > 0 || downloadLijst.some((item) => item.path.startsWith("brochure:"))}>
           <summary className="cursor-pointer px-3 py-2 text-xs font-medium text-muted hover:text-foreground">
             {uiT("📎 PDF meesturen")}{gekozen.size + gekozenLinks.size > 0 ? uiT(" ({v0} gekozen)", { v0: gekozen.size + gekozenLinks.size }) : ""}
           </summary>

@@ -16,6 +16,7 @@ import { sanitizeMailHtml } from "@/lib/sanitize-mail-html";
 import { aiReplyConfigured } from "@/lib/ai-reply";
 import { listCatalogFiles, listFollowupFiles } from "@/lib/storage";
 import { AiMailForm } from "@/components/ai-mail-form";
+import { WEBSITE_BROCHURES } from "@/lib/brochure-links";
 import { LinkButton } from "@/components/ui";
 import { SubmitButton } from "@/components/submit-button";
 import { saveReplyDraft } from "../assistent/actions";
@@ -29,7 +30,7 @@ async function ReaderReply({ mail, suggestion, returnTo }: { mail: Mail; suggest
   return <AiMailForm initialBody={suggestion?.draft ?? ""} initialAttachments={suggestion?.draftAttachments ?? []}
     defaultSubject={suggestion?.draftSubject || `Re: ${(mail.subject || "je bericht").replace(/^(re|fwd?|aw):\s*/i, "")}`}
     toEmail={mail.fromEmail!} aiBeschikbaar={aiReplyConfigured()} bijlagen={catalogi.map(f => ({ path: f.path, name: f.name, size: f.size }))}
-    downloadBijlagen={grotePdfLinks.map(f => ({ path: f.path, name: f.name, size: f.size }))} uploadDownloadBijlage={signReplyPdfUpload}
+    downloadBijlagen={[...grotePdfLinks.map(f => ({ path: f.path, name: f.name, size: f.size })), ...WEBSITE_BROCHURES]} uploadDownloadBijlage={signReplyPdfUpload}
     saveDraft={saveReplyDraft.bind(null, mail.id)} genereer={aiMailConcept.bind(null, mail.id)} verstuur={replyToMail.bind(null, mail.id)} returnTo={returnTo} />;
 }
 export async function MailReader({ opened, id, reply, replyResult, backHref, mailHref }: { opened: boolean; id: string; reply: boolean; replyResult: string; backHref: string; mailHref: string }) {
