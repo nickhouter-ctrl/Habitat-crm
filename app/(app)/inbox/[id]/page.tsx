@@ -17,7 +17,7 @@ import { db } from "@/lib/db";
 import { emailInbox, inboxSuggestions, mailAttachments, purchaseOrders, quoteRequests } from "@/lib/db/schema";
 import { CATEGORIES } from "@/lib/email-categories";
 import { sanitizeMailHtml } from "@/lib/sanitize-mail-html";
-import { listCatalogFiles } from "@/lib/storage";
+import { listCatalogFiles, listFollowupFiles } from "@/lib/storage";
 import { cn, formatEUR } from "@/lib/utils";
 
 import {
@@ -27,6 +27,7 @@ import {
   linkMailToQuoteRequest,
   reopenMail,
   replyToMail,
+  signReplyPdfUpload,
   saveMailNotes,
 } from "../actions";
 import { InvoiceFromMailButtons } from "../invoice-from-mail-buttons";
@@ -60,7 +61,7 @@ export default async function MailDetailPage({
   const mail = await db.query.emailInbox.findFirst({ where: eq(emailInbox.id, id) });
   if (!mail) notFound();
 
-  const [catalogi, suggestion] = await Promise.all([listCatalogFiles(), db.query.inboxSuggestions.findFirst({ where: eq(inboxSuggestions.emailId, id) })]);
+  const [catalogi, grotePdfLinks, suggestion] = await Promise.all([listCatalogFiles(), listFollowupFiles(), db.query.inboxSuggestions.findFirst({ where: eq(inboxSuggestions.emailId, id) })]);
 
   // Suggesties: PO's die mogelijk bij deze mail horen (zelfde supplier-naam in subject of from)
   const fromDomain = mail.fromEmail?.split("@")[1] ?? "";
@@ -281,6 +282,8 @@ export default async function MailDetailPage({
                 placeholder={uiT("Typ je antwoord, of kort wat je wilt zeggen en klik ✨…")}
                 aiBeschikbaar={aiReplyConfigured()}
                 bijlagen={catalogi.map((f) => ({ path: f.path, name: f.name, size: f.size }))}
+                downloadBijlagen={grotePdfLinks.map((f) => ({ path: f.path, name: f.name, size: f.size }))}
+                uploadDownloadBijlage={signReplyPdfUpload}
               />
             </Card></TabPanel>
           )}

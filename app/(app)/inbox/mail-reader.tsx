@@ -14,21 +14,22 @@ import { emailInbox, inboxSuggestions, mailAttachments, purchaseInvoiceReviews }
 import { MAIL_GROUPS, type MailGroup } from "@/lib/assistant/mail-rules";
 import { sanitizeMailHtml } from "@/lib/sanitize-mail-html";
 import { aiReplyConfigured } from "@/lib/ai-reply";
-import { listCatalogFiles } from "@/lib/storage";
+import { listCatalogFiles, listFollowupFiles } from "@/lib/storage";
 import { AiMailForm } from "@/components/ai-mail-form";
 import { LinkButton } from "@/components/ui";
 import { SubmitButton } from "@/components/submit-button";
 import { saveReplyDraft } from "../assistent/actions";
-import { aiMailConcept, replyToMail } from "./actions";
+import { aiMailConcept, replyToMail, signReplyPdfUpload } from "./actions";
 import { archiveReaderMail, createRequestFromMail, restoreReaderMail } from "./reader-actions";
 
 type Mail = typeof emailInbox.$inferSelect;
 type Suggestion = typeof inboxSuggestions.$inferSelect;
 async function ReaderReply({ mail, suggestion, returnTo }: { mail: Mail; suggestion?: Suggestion; returnTo: string }) {
-  const catalogi = await listCatalogFiles();
+  const [catalogi, grotePdfLinks] = await Promise.all([listCatalogFiles(), listFollowupFiles()]);
   return <AiMailForm initialBody={suggestion?.draft ?? ""} initialAttachments={suggestion?.draftAttachments ?? []}
     defaultSubject={suggestion?.draftSubject || `Re: ${(mail.subject || "je bericht").replace(/^(re|fwd?|aw):\s*/i, "")}`}
     toEmail={mail.fromEmail!} aiBeschikbaar={aiReplyConfigured()} bijlagen={catalogi.map(f => ({ path: f.path, name: f.name, size: f.size }))}
+    downloadBijlagen={grotePdfLinks.map(f => ({ path: f.path, name: f.name, size: f.size }))} uploadDownloadBijlage={signReplyPdfUpload}
     saveDraft={saveReplyDraft.bind(null, mail.id)} genereer={aiMailConcept.bind(null, mail.id)} verstuur={replyToMail.bind(null, mail.id)} returnTo={returnTo} />;
 }
 export async function MailReader({ opened, id, reply, replyResult, backHref, mailHref }: { opened: boolean; id: string; reply: boolean; replyResult: string; backHref: string; mailHref: string }) {

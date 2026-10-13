@@ -55,6 +55,7 @@ async function resolveToken(token: string) {
   });
   if (!review) return null;
   if (review.status !== "pending") return null;
+  if ((review.aiFields as { documentType?: string } | null)?.documentType === "timesheet") return null;
   if (review.actionTokenExpiresAt && review.actionTokenExpiresAt.getTime() < Date.now()) return null;
   return review;
 }

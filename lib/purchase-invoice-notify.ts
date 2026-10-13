@@ -10,7 +10,7 @@
  */
 import { randomBytes } from "node:crypto";
 
-import { and, asc, eq, inArray, isNull, sql } from "drizzle-orm";
+import { and, asc, eq, inArray, isNull, or, sql } from "drizzle-orm";
 
 import { db } from "@/lib/db";
 import { purchaseInvoiceReviews, users } from "@/lib/db/schema";
@@ -100,6 +100,10 @@ type Regel = {
   total: string | null;
   verdict: string;
   findings: unknown;
+  documentType?: string | null;
+  emailId?: string;
+  status?: string;
+  decidedVia?: string | null;
   dagen: number;
   /** Voor de knoppen in de mail; wordt aangemaakt bij de eerste melding. */
   token?: string | null;
@@ -128,7 +132,7 @@ export function tabel(regels: Regel[], toonLeeftijd = false, wie: string | null 
       // knoppen op de volle breedte daaronder.
       return `<tr>
         <td style="padding:10px 10px 2px">
-          <strong>${escapeHtml(r.supplier ?? "onbekend")}</strong><br>
+          <strong>${escapeHtml(r.documentType === "timesheet" ? (r.status === "approved" && r.decidedVia === "agent" ? "Urenstaat · automatisch verwerkt" : "Urenstaat · controle in CRM") : r.supplier ?? "onbekend")}</strong><br>
           <span style="color:#888;font-size:12px">${escapeHtml(r.reference ?? "")}${toonLeeftijd && r.dagen > 0 ? ` · wacht ${r.dagen} dag${r.dagen === 1 ? "" : "en"}` : ""}</span>
         </td>
         <td style="padding:10px 10px 2px;text-align:right;white-space:nowrap;vertical-align:top">
@@ -137,9 +141,11 @@ export function tabel(regels: Regel[], toonLeeftijd = false, wie: string | null 
       </tr>
       <tr>
         <td colspan="2" style="padding:0 10px 10px;border-bottom:1px solid #eee">
-          <span style="font-size:13px">${VERDICT_LABEL[r.verdict] ?? r.verdict}</span>${mist ? `<br><span style="color:#888;font-size:12px">${escapeHtml(mist)}</span>` : ""}
+          <span style="font-size:13px">${r.status === "approved" && r.decidedVia === "agent" ? "✅ automatisch goedgekeurd na controles · steekproefcontrole aanbevolen" : VERDICT_LABEL[r.verdict] ?? r.verdict}</span>${mist ? `<br><span style="color:#888;font-size:12px">${escapeHtml(mist)}</span>` : ""}
           <div style="margin-top:8px">${
-            r.token
+            r.documentType === "timesheet"
+              ? `<a href="${APP_URL}${r.status === "approved" && r.emailId ? `/inbox/${encodeURIComponent(r.emailId)}` : "/inkooporders/te-verwerken"}" style="font-size:13px">${r.status === "approved" && r.decidedVia === "agent" ? "E-mail en urenstaat bekijken in het CRM" : "Urenstaat in het CRM controleren"}</a>`
+              : r.token
               ? `<a href="${APP_URL}/inkoop/keuren/${r.token}${wieParam}" style="display:inline-block;padding:8px 16px;background:#3a2a20;color:#fff;border-radius:6px;text-decoration:none;font-size:13px">Goedkeuren</a>
                  <a href="${APP_URL}/inkoop/keuren/${r.token}${wieParam}#afkeuren" style="display:inline-block;padding:8px 16px;border:1px solid #ccc;border-radius:6px;text-decoration:none;color:#333;font-size:13px;margin-left:6px">Afkeuren</a>`
               : `<a href="${APP_URL}/inkooporders/te-verwerken" style="font-size:13px">Beoordelen in het CRM</a>`
@@ -175,37 +181,51 @@ export async function notifyNewInvoiceReviews(reviewIds: string[]): Promise<{ se
       total: purchaseInvoiceReviews.proposedTotal,
       verdict: purchaseInvoiceReviews.verdict,
       findings: purchaseInvoiceReviews.findings,
+      aiFields: purchaseInvoiceReviews.aiFields,
+      emailId: purchaseInvoiceReviews.emailId,
+      status: purchaseInvoiceReviews.status,
+      decidedVia: purchaseInvoiceReviews.decidedVia,
       token: purchaseInvoiceReviews.actionToken,
       dagen: sql<number>`0`,
     })
     .from(purchaseInvoiceReviews)
     .where(
-      and(isNull(purchaseInvoiceReviews.notifiedAt), eq(purchaseInvoiceReviews.status, "pending")),
+      and(isNull(purchaseInvoiceReviews.notifiedAt), or(
+        eq(purchaseInvoiceReviews.status, "pending"),
+        and(eq(purchaseInvoiceReviews.status, "approved"), eq(purchaseInvoiceReviews.decidedVia, "agent")),
+      )),
     );
   if (regels.length === 0) return { sent: false, count: 0 };
 
   // Tokens aanmaken zodat de knoppen in de mail werken. Een bestaande token
   // hergebruiken, anders zou de link uit een eerdere melding dood raken.
   const metToken = await Promise.all(
-    regels.map(async (r) => ({ ...r, token: await ensureActionToken(r.id, r.token) })),
+    regels.map(async (r) => {
+      const documentType = (r.aiFields as { documentType?: string } | null)?.documentType ?? null;
+      return { ...r, documentType, token: documentType === "timesheet" ? null : await ensureActionToken(r.id, r.token) };
+    }),
   );
 
   const ontvangers = await ontvangersMetId();
-  const aantal = regels.length;
-  const som = regels.reduce((s, r) => s + Number(r.total ?? 0), 0);
+  const aantal = regels.filter((r) => (r.aiFields as { documentType?: string } | null)?.documentType !== "timesheet").length;
+  const urenstaten = regels.filter((r) => (r.aiFields as { documentType?: string } | null)?.documentType === "timesheet" && r.status === "pending").length;
+  const automatisch = regels.filter((r) => (r.aiFields as { documentType?: string } | null)?.documentType === "timesheet" && r.status === "approved" && r.decidedVia === "agent").length;
+  const som = regels.filter((r) => (r.aiFields as { documentType?: string } | null)?.documentType !== "timesheet").reduce((s, r) => s + Number(r.total ?? 0), 0);
+  const onderwerp = [aantal ? `${aantal} facturen ter goedkeuring` : "", urenstaten ? `${urenstaten} urenstaten ter controle` : "", automatisch ? `${automatisch} urenstaten automatisch verwerkt` : ""].filter(Boolean).join(" · ");
   const htmlVoor = (wie: string | null, loginToken: string | null) => brandedEmail(`
-    <p><strong>${aantal} nieuwe inkoopfactu${aantal === 1 ? "ur" : "ren"}</strong> ter goedkeuring — samen ${escapeHtml(formatEUR(som))}.</p>
+    <p><strong>${escapeHtml(onderwerp)}</strong>${aantal ? ` — facturen samen ${escapeHtml(formatEUR(som))}.` : ""}</p>
+    ${automatisch ? `<p>De automatische controle heeft deze urenstaten verwerkt omdat alle gegevens eenduidig waren. Controleer ze steekproefsgewijs via de e-mail in het CRM.</p>` : ""}
     ${tabel(metToken, false, wie)}
     <p style="color:#888;font-size:13px">Zolang een factuur niet is goedgekeurd telt hij niet mee in de projectkosten en gaat hij niet naar Holded.</p>
     <p><a href="${APP_URL}/inkooporders/te-verwerken">Alle facturen beoordelen</a></p>
     ${inlogRegel(loginToken, "/inkooporders/te-verwerken")}
   `);
   const text = [
-    `${aantal} nieuwe inkoopfactu${aantal === 1 ? "ur" : "ren"} ter goedkeuring (samen ${formatEUR(som)}):`,
+    `${onderwerp}${aantal ? ` (facturen samen ${formatEUR(som)})` : ""}:`,
     "",
     ...regels.map(
       (r) =>
-        `- ${r.supplier ?? "onbekend"} ${r.reference ?? ""} · ${r.total ? formatEUR(Number(r.total)) : "—"} · ${VERDICT_LABEL[r.verdict] ?? r.verdict}${ontbrekend(r.findings) ? ` (${ontbrekend(r.findings)})` : ""}`,
+        `- ${(r.aiFields as { documentType?: string } | null)?.documentType === "timesheet" ? "Urenstaat" : r.supplier ?? "onbekend"} ${r.reference ?? ""} · ${r.status === "approved" && r.decidedVia === "agent" ? "automatisch goedgekeurd; steekproefcontrole aanbevolen" : VERDICT_LABEL[r.verdict] ?? r.verdict}${ontbrekend(r.findings) ? ` (${ontbrekend(r.findings)})` : ""}`,
     ),
     "",
     `${APP_URL}/inkooporders/te-verwerken`,
@@ -217,7 +237,7 @@ export async function notifyNewInvoiceReviews(reviewIds: string[]): Promise<{ se
     ontvangers.map((o) =>
       sendEmail({
         to: o.email,
-        subject: `${aantal} inkoopfactu${aantal === 1 ? "ur" : "ren"} ter goedkeuring`,
+        subject: onderwerp,
         html: htmlVoor(o.userId, o.loginToken),
         text,
         // Geen kopie naar het gedeelde postvak: deze mail bevat een
@@ -260,6 +280,7 @@ export async function runPurchaseInvoiceDigest(): Promise<{
       total: purchaseInvoiceReviews.proposedTotal,
       verdict: purchaseInvoiceReviews.verdict,
       findings: purchaseInvoiceReviews.findings,
+      aiFields: purchaseInvoiceReviews.aiFields,
       token: purchaseInvoiceReviews.actionToken,
       dagen: sql<number>`greatest(0, extract(day from now() - ${purchaseInvoiceReviews.createdAt})::int)`,
     })
@@ -271,17 +292,22 @@ export async function runPurchaseInvoiceDigest(): Promise<{
   if (regels.length === 0) return { ok: true, pending: 0, sent: false, reason: "niets openstaand" };
 
   const metToken = await Promise.all(
-    regels.map(async (r) => ({ ...r, token: await ensureActionToken(r.id, r.token) })),
+    regels.map(async (r) => {
+      const documentType = (r.aiFields as { documentType?: string } | null)?.documentType ?? null;
+      return { ...r, documentType, token: documentType === "timesheet" ? null : await ensureActionToken(r.id, r.token) };
+    }),
   );
 
   const ontvangers = await ontvangersMetId();
-  const som = regels.reduce((s, r) => s + Number(r.total ?? 0), 0);
+  const invoiceCount = regels.filter((r) => (r.aiFields as { documentType?: string } | null)?.documentType !== "timesheet").length;
+  const timesheetCount = regels.length - invoiceCount;
+  const som = regels.filter((r) => (r.aiFields as { documentType?: string } | null)?.documentType !== "timesheet").reduce((s, r) => s + Number(r.total ?? 0), 0);
   const oud = regels.filter((r) => r.dagen >= 7);
   const incompleet = regels.filter((r) => r.verdict === "reject");
   const onleesbaar = regels.filter((r) => r.verdict === "unreadable");
 
   const htmlVoor = (wie: string | null, loginToken: string | null) => brandedEmail(`
-    <p><strong>${regels.length} inkoopfactu${regels.length === 1 ? "ur" : "ren"}</strong> wacht${regels.length === 1 ? "" : "en"} op goedkeuring — samen ${escapeHtml(formatEUR(som))}.</p>
+    <p><strong>${invoiceCount ? `${invoiceCount} inkoopfactu${invoiceCount === 1 ? "ur" : "ren"}` : ""}${invoiceCount && timesheetCount ? " en " : ""}${timesheetCount ? `${timesheetCount} urenstaat${timesheetCount === 1 ? "" : "en"}` : ""}</strong> ${invoiceCount ? `wacht${invoiceCount === 1 ? "" : "en"} op goedkeuring — facturen samen ${escapeHtml(formatEUR(som))}.` : "klaar voor controle in het CRM."}</p>
     ${oud.length > 0 ? `<p style="color:#b6552d"><strong>${oud.length}</strong> wacht${oud.length === 1 ? "" : "en"} al langer dan een week.</p>` : ""}
     ${incompleet.length > 0 ? `<p>${incompleet.length} incompleet — terug te sturen naar de leverancier.</p>` : ""}
     ${onleesbaar.length > 0 ? `<p>${onleesbaar.length} kon de uitlezing niet lezen — handmatig bekijken.</p>` : ""}
@@ -290,7 +316,7 @@ export async function runPurchaseInvoiceDigest(): Promise<{
     ${inlogRegel(loginToken, "/inkooporders/te-verwerken")}
   `);
   const text = [
-    `${regels.length} inkoopfacturen wachten op goedkeuring (samen ${formatEUR(som)}).`,
+    `${invoiceCount} inkoopfacturen en ${timesheetCount} urenstaten staan klaar voor controle${invoiceCount ? ` (facturen samen ${formatEUR(som)})` : ""}.`,
     oud.length > 0 ? `${oud.length} wacht(en) al langer dan een week.` : "",
     "",
     ...regels.map(
@@ -308,7 +334,7 @@ export async function runPurchaseInvoiceDigest(): Promise<{
     ontvangers.map((o) =>
       sendEmail({
         to: o.email,
-        subject: `${regels.length} inkoopfactu${regels.length === 1 ? "ur" : "ren"} te keuren${oud.length ? ` · ${oud.length} langer dan een week` : ""}`,
+        subject: `${invoiceCount} facturen · ${timesheetCount} urenstaten ter controle${oud.length ? ` · ${oud.length} langer dan een week` : ""}`,
         html: htmlVoor(o.userId, o.loginToken),
         text,
         noCompanyBcc: true,

@@ -22,13 +22,15 @@ import { syncPartnerSent } from "@/lib/partner-mail-sync";
 import { isMarketingGebruiker, marketingMailbox } from "@/lib/mail-visibility";
 import { persoonlijkeMail, sendEmail } from "@/lib/email";
 import { followupAttachments } from "@/lib/followup-mail-attachments";
-import { catalogusKeuze, catalogusMailBijlagen, signCatalogUpload } from "@/lib/storage";
+import { catalogusKeuze, catalogusMailBijlagen, signCatalogUpload, signLargeCatalogUpload } from "@/lib/storage";
 import { vasteDatasheets, CUSTOM_STONE_SOURCE, followupDesigns, followupMailKind, followupMailSource, hasResellerInterest } from "@/lib/followup-mail";
 import { recordSentEmail } from "@/lib/sent-email";
 import { appendContactEmails } from "@/lib/contact-email-addresses";
 import { isFairContact } from "@/lib/followup-source";
 import { FOLLOWUP_DONE, FOLLOWUP_REOPENED, followupCheckInput } from "@/lib/followup-checklist";
 import { followupCompletionFilter } from "@/lib/followup-checklist-data";
+import { createFollowupDownloadToken } from "@/lib/followup-download-link";
+import { crmUrl } from "@/lib/crm-url";
 /**
  * Een bewaard concept, zoals de controlepopup het laat zien.
  *
@@ -115,6 +117,10 @@ export async function signFollowupPdfUpload(filename:string,contentType:string){
   const user=await requireModule('klantopvolging');if(user.role!=='sales')await requireModule('inbox');
   return signCatalogUpload(z.string().min(1).max(200).parse(filename),z.string().max(100).parse(contentType||'application/pdf'));
 }
+export async function signFollowupLargePdfUpload(filename:string,contentType:string,size:number){
+  const user=await requireModule('klantopvolging');if(user.role!=='sales')await requireModule('inbox');
+  return signLargeCatalogUpload(z.string().min(1).max(200).parse(filename),z.string().max(100).parse(contentType||'application/pdf'),z.number().int().positive().max(250*1024*1024).parse(size));
+}
 export async function saveDraft(_:Result,fd:FormData):Promise<Result>{
   const user=await requireModule('klantopvolging');if(user.role!=='sales')await requireModule('inbox');
   try {const d=z.object({contactId:z.string().uuid(),subject:z.string().trim().min(1).max(250).regex(/^[^\r\n]+$/),body:z.string().trim().min(3).max(20000),templateKind:z.enum(['professional','reseller','status','custom']).default('custom'),flexibleStoneInfo:z.enum(['on','off']).default('off')}).parse(Object.fromEntries(fd));
@@ -128,12 +134,18 @@ export async function saveDraft(_:Result,fd:FormData):Promise<Result>{
     const attachments=await followupAttachments(d.templateKind,includeTechnical);
     // Gekozen PDF's uit de bibliotheek: alleen naam, grootte en pad bewaren; de
     // bytes worden pas bij versturen opgehaald.
-    const pdfs=await catalogusKeuze(fd.getAll('bijlage').map(String));
+    const attachPaths=fd.getAll('bijlage').map(String);
+    const linkPaths=fd.getAll('downloadLink').map(String);
+    if(attachPaths.length>20||linkPaths.length>20||new Set([...attachPaths,...linkPaths]).size!==attachPaths.length+linkPaths.length)throw new InputError('Controleer de gekozen PDF’s. Een PDF kan maar één keer worden gekozen.');
+    const pdfs=attachPaths.length?await catalogusKeuze(attachPaths):[];
+    const linkPdfs=linkPaths.length?await catalogusKeuze(linkPaths):[];
+    if(pdfs.length!==attachPaths.length||linkPdfs.length!==linkPaths.length)throw new InputError('Een gekozen PDF staat niet meer in de bibliotheek. Kies hem opnieuw.');
     bewaakGrootte([...attachments.map(a=>Buffer.byteLength(a.content)),...pdfs.map(p=>p.size)]);
+    const mailBody=[d.body.trim(),...(linkPdfs.length?['',...linkPdfs.map(p=>`Download / Descargar ${p.name}: ${p.path.startsWith('followup:')?`${crmUrl()}/api/followup-download/${createFollowupDownloadToken(p.path)}`:p.url}`)]:[])].join('\n');
     const savedAt=new Date();
-    const [bewaard]=await db.insert(partnerMessages).values({updatedAt:savedAt,createdAt:savedAt,contactId:d.contactId,subject:d.subject,body:d.body,source:d.templateKind==='custom'&&includeTechnical?CUSTOM_STONE_SOURCE:followupMailSource(d.templateKind),attachments:[...attachments.map(a=>({name:a.filename,size:Buffer.byteLength(a.content)})),...pdfs.map(p=>({name:p.name,size:p.size,catalogus:p.path}))],toEmail:to,mailboxUser:mailbox,authorId:user.id}).returning();
+    const [bewaard]=await db.insert(partnerMessages).values({updatedAt:savedAt,createdAt:savedAt,contactId:d.contactId,subject:d.subject,body:mailBody,source:d.templateKind==='custom'&&includeTechnical?CUSTOM_STONE_SOURCE:followupMailSource(d.templateKind),attachments:[...attachments.map(a=>({name:a.filename,size:Buffer.byteLength(a.content)})),...pdfs.map(p=>({name:p.name,size:p.size,catalogus:p.path})),...linkPdfs.map(p=>({name:p.name,size:p.size,catalogusLink:p.path}))],toEmail:to,mailboxUser:mailbox,authorId:user.id}).returning();
     refresh(d.contactId);
-    return{success:'Concept met bijlagen bewaard. Controleer het en verstuur het hier.',draft:{id:bewaard.id,updatedAt:bewaard.updatedAt.toISOString(),to:appendContactEmails(to,c.additionalEmails??[]),mailbox,afzender:d.templateKind==='custom'?(user.name??'Habitat One'):'Hans',subject:d.subject,body:d.body,attachments:[...attachments.map(a=>{const beeld=/\.(jpe?g|png|webp)$/i.test(a.filename);return{naam:a.filename,url:beeld?`/mail/followup/${a.filename}`:`/docs/${a.filename}`,afbeelding:beeld};}),...pdfs.map(p=>({naam:p.name,url:p.url,afbeelding:false}))]}};
+    return{success:'Concept met bestanden bewaard. Controleer het en verstuur het hier.',draft:{id:bewaard.id,updatedAt:bewaard.updatedAt.toISOString(),to:appendContactEmails(to,c.additionalEmails??[]),mailbox,afzender:d.templateKind==='custom'?(user.name??'Habitat One'):'Hans',subject:d.subject,body:mailBody,attachments:[...attachments.map(a=>{const beeld=/\.(jpe?g|png|webp)$/i.test(a.filename);return{naam:a.filename,url:beeld?`/mail/followup/${a.filename}`:`/docs/${a.filename}`,afbeelding:beeld};}),...pdfs.map(p=>({naam:p.name,url:p.url,afbeelding:false})),...linkPdfs.map(p=>({naam:`${p.name} · downloadlink`,url:p.url,afbeelding:false}))]}};
   }catch(e){return failure(e);}
 }
 export async function generateDraft(id:string,instruction:string,proposalKind:unknown='custom',currentDraft:unknown='',includeStoneInfo:unknown=false,gekozenPdfs:unknown=[]){
@@ -167,11 +179,18 @@ export async function sendDraft(_:Result,fd:FormData):Promise<Result>{
     // PDF's uit de bibliotheek die bij het concept zijn aangevinkt. Is er één
     // inmiddels verwijderd, dan liever geen mail dan een mail zonder de beloofde bijlage.
     const gekozen=(d.attachments??[]).flatMap(a=>a.catalogus?[a.catalogus]:[]);
+    const gekozenLinks=(d.attachments??[]).flatMap(a=>a.catalogusLink?[a.catalogusLink]:[]);
     const pdfs=await catalogusMailBijlagen(gekozen);
     if(pdfs.length!==gekozen.length)throw new InputError('Een gekozen PDF staat niet meer in de bibliotheek. Maak het concept opnieuw.');
+    const linkPdfs=await catalogusKeuze(gekozenLinks);
+    if(linkPdfs.length!==gekozenLinks.length)throw new InputError('Een downloadbestand staat niet meer in de bibliotheek. Maak het concept opnieuw.');
     const attachments=[...vast,...pdfs];bewaakGrootte(attachments.map(a=>Buffer.byteLength(a.content)));
-    const rendered=persoonlijkeMail(d.body);
-    const [claimed]=await db.update(partnerMessages).set({status:'sending',html:rendered.html,body:rendered.text,attachments:[...vast.map(a=>({name:a.filename,size:Buffer.byteLength(a.content)})),...pdfs.map(a=>({name:a.filename,size:Buffer.byteLength(a.content),catalogus:a.filename}))],updatedAt:new Date()})
+    const bodyForSend=d.body.split('\n').map(line=>{
+      const link=linkPdfs.find(p=>line.startsWith(`Download / Descargar ${p.name}: `));
+      return link?`Download / Descargar ${link.name}: ${link.path.startsWith('followup:')?`${crmUrl()}/api/followup-download/${createFollowupDownloadToken(link.path)}`:link.url}`:line;
+    }).join('\n');
+    const rendered=persoonlijkeMail(bodyForSend);
+    const [claimed]=await db.update(partnerMessages).set({status:'sending',html:rendered.html,body:rendered.text,attachments:[...vast.map(a=>({name:a.filename,size:Buffer.byteLength(a.content)})),...pdfs.map(a=>({name:a.filename,size:Buffer.byteLength(a.content),catalogus:a.filename})),...linkPdfs.map(a=>({name:a.name,size:a.size,catalogusLink:a.path}))],updatedAt:new Date()})
       .where(and(eq(partnerMessages.id,id),eq(partnerMessages.status,'draft'),draftVersionMatches(partnerMessages.updatedAt,seen))).returning();
     if(!claimed)throw new InputError('Het concept is gewijzigd of door iemand anders in behandeling genomen. Vernieuw de pagina om de actuele status te zien.');
     try {

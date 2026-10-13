@@ -14,7 +14,7 @@ import { Badge, Field, Input, Select, Textarea, buttonClass } from "@/components
 import { Combobox } from "@/components/combobox";
 import { SubmitButton } from "@/components/submit-button";
 import { formatEUR } from "@/lib/utils";
-import { approveReviewAction, attachToSiblingAction, ignoreReviewAction, rejectReviewAction } from "./actions";
+import { approveReviewAction, approveTimesheetReviewAction, attachToSiblingAction, ignoreReviewAction, rejectReviewAction } from "./actions";
 
 export type ReviewCheck = {
   key: string;
@@ -67,7 +67,13 @@ export type ReviewCardData = {
   /** Andere facturen uit dezelfde mail — deze kaart kan daar een bijlage
    *  (urenverantwoording, pakbon) bij zijn. */
   siblings: { id: string; label: string }[];
+  timesheet?: {
+    warnings: string[];
+    rows: { workerHint: string | null; workerId: string | null; date: string; projectHint: string | null; projectId: string | null; hours: number | null; note: string | null; warning: string | null; hourlyRate: number | null }[];
+  };
 };
+
+type WorkerOption = { id: string; name: string; active: boolean; hourlyCostEur: string | null; hourlyCostCashEur: string | null; defaultPaymentMethod: "cash" | "invoice" };
 
 const VERDICT: Record<ReviewCardData["verdict"], { label: string; tone: "success" | "warning" | "danger" | "neutral" }> = {
   ok: { label: "Compleet", tone: "success" },
@@ -77,7 +83,50 @@ const VERDICT: Record<ReviewCardData["verdict"], { label: string; tone: "success
   pending: { label: "Nog niet beoordeeld", tone: "neutral" },
 };
 
-export function ReviewCard({
+export function ReviewCard({ data, projects, workers = [] }: { data: ReviewCardData; projects: { id: string; name: string; aliassen?: string[] }[]; workers?: WorkerOption[] }) {
+  if (data.timesheet) return <TimesheetReviewCard data={data} projects={projects} workers={workers} />;
+  return <InvoiceReviewCard data={data} projects={projects} />;
+}
+
+function TimesheetReviewCard({ data, projects, workers }: { data: ReviewCardData; projects: { id: string; name: string; aliassen?: string[] }[]; workers: WorkerOption[] }) {
+  const uiT = useUiTranslation();
+  const sheet = data.timesheet!;
+  const projectOpties = projects.map((p) => ({ value: p.id, label: p.name, terms: p.aliassen, hint: p.aliassen?.length ? `ook: ${p.aliassen.join(" · ")}` : undefined }));
+  return <div className="rounded-lg border border-accent/30 bg-background p-4">
+    <div className="mb-3 flex flex-wrap items-start justify-between gap-3">
+      <div>
+        <p className="flex flex-wrap items-center gap-2 font-medium"><span>{uiT("Urenstaat")}</span><Badge tone="warning">{uiT("Controle nodig")}</Badge></p>
+        <p className="text-xs text-muted">{data.attachmentName} · {sheet.rows.length} {uiT("urenregels")}</p>
+      </div>
+      <a href={`/api/archief/${data.attachmentId}`} target="_blank" rel="noopener noreferrer" className="text-sm text-accent hover:underline">{uiT("Excel openen")}</a>
+    </div>
+    <p className="mb-3 text-sm text-muted">{uiT("Controleer werknemer, project, datum en uren. Het juiste uurtarief wordt per werknemer gebruikt; er wordt geen inkoopfactuur aangemaakt.")}</p>
+    {sheet.warnings.length > 0 && <div className="mb-3 rounded-md bg-warning/10 p-2 text-xs text-warning">{sheet.warnings.join(" · ")}</div>}
+    <form action={approveTimesheetReviewAction.bind(null, data.id)} className="space-y-3">
+      <input type="hidden" name="rowCount" value={sheet.rows.length} />
+      <div className="overflow-x-auto rounded-md border">
+        <table className="w-full min-w-[780px] text-sm">
+          <thead className="bg-surface/60 text-left text-xs text-muted"><tr><th className="p-2">{uiT("Werknemer")}</th><th className="p-2">{uiT("Project")}</th><th className="p-2">{uiT("Datum")}</th><th className="p-2 text-right">{uiT("Uren")}</th><th className="p-2 text-right">{uiT("Kostprijs/u")}</th><th className="p-2 text-right">{uiT("Arbeidskosten")}</th></tr></thead>
+          <tbody>{sheet.rows.map((row, i) => {
+            const worker = workers.find((w) => w.id === row.workerId);
+            const rate = worker ? Number(worker.defaultPaymentMethod === "cash" ? worker.hourlyCostCashEur ?? worker.hourlyCostEur ?? 0 : worker.hourlyCostEur ?? worker.hourlyCostCashEur ?? 0) : null;
+            return <tr key={i} className="border-t align-top">
+              <td className="p-2"><Select name={`worker_${i}`} required defaultValue={row.workerId ?? ""}><option value="">{uiT("Kies werknemer")}</option>{workers.map((w) => <option key={w.id} value={w.id}>{w.name}</option>)}</Select>{row.workerHint && <p className="mt-1 text-[11px] text-muted">{uiT("Excel:")} {row.workerHint}</p>}</td>
+              <td className="p-2"><Combobox name={`project_${i}`} defaultValue={row.projectId ?? ""} placeholder={uiT("Kies project")} options={projectOpties} menuClassName="w-72" />{row.projectHint && <p className="mt-1 text-[11px] text-muted">{uiT("Excel:")} {row.projectHint}</p>}</td>
+              <td className="p-2"><Input type="date" name={`date_${i}`} required defaultValue={row.date} /></td>
+              <td className="p-2"><Input name={`hours_${i}`} required inputMode="decimal" className="w-24 text-right" defaultValue={row.hours != null ? String(row.hours).replace(".", ",") : ""} />{row.warning && <p className="mt-1 max-w-28 text-[11px] text-warning">{row.warning}</p>}</td>
+              <td className="p-2 text-right tabular-nums">{rate != null && rate > 0 ? `${formatEUR(rate)}/${uiT("u")}` : <span className="text-warning">{uiT("tarief ontbreekt")}</span>}</td>
+              <td className="p-2 text-right tabular-nums">{rate != null && row.hours != null ? formatEUR(rate * row.hours) : "—"}</td>
+            </tr>;
+          })}</tbody>
+        </table>
+      </div>
+      <div className="flex flex-wrap items-center gap-2"><SubmitButton variant="primary" pendingLabel={uiT("Uren registreren…")}>{uiT("Uren goedkeuren en registreren")}</SubmitButton><span className="text-xs text-muted">{uiT("Alleen na goedkeuring tellen de uren mee in de projectkosten.")}</span></div>
+    </form>
+  </div>;
+}
+
+function InvoiceReviewCard({
   data,
   projects,
 }: {

@@ -12,7 +12,9 @@ vi.mock('@/lib/sent-email',()=>({recordSentEmail:vi.fn()}));
 vi.mock('@/lib/partner-context',()=>({partnerContext:m.context,partnerMailVisible:vi.fn()}));
 vi.mock('@/lib/partner-mail-sync',()=>({syncPartnerSent:vi.fn()}));
 vi.mock('@/lib/ai-reply',()=>({genereerMailAntwoord:m.ai}));
-vi.mock('@/lib/storage',()=>({catalogusKeuze:m.keuze,catalogusMailBijlagen:m.pdfs,signCatalogUpload:vi.fn()}));
+vi.mock('@/lib/storage',()=>({catalogusKeuze:m.keuze,catalogusMailBijlagen:m.pdfs,signCatalogUpload:vi.fn(),signLargeCatalogUpload:vi.fn()}));
+vi.mock('@/lib/followup-download-link',()=>({createFollowupDownloadToken:()=>"stable-token"}));
+vi.mock('@/lib/crm-url',()=>({crmUrl:()=>"https://crm.habitat-one.com"}));
 import { saveDraft, sendDraft, editDraft, generateDraft } from '../../app/(app)/beurs/opvolging/actions';
 import { followupMailSource } from '../followup-mail';
 const id='00000000-0000-4000-8000-000000000001';
@@ -115,10 +117,35 @@ describe('PDF\'s uit de bibliotheek meesturen',()=>{
  });
  it('weigert bijlagen die samen te groot zijn voor één mail',async()=>{
    m.select.mockResolvedValueOnce([{id,email:draft.toEmail}]);
-   m.keuze.mockResolvedValue([{path:'a.pdf',name:'a.pdf',size:10*1024*1024},{path:'b.pdf',name:'b.pdf',size:10*1024*1024}]);
-   const r=await saveDraft({},saveForm('custom'));
+   m.keuze.mockResolvedValueOnce([{path:'a.pdf',name:'a.pdf',size:10*1024*1024,url:'https://cdn.example/a.pdf'},{path:'b.pdf',name:'b.pdf',size:10*1024*1024,url:'https://cdn.example/b.pdf'}]);
+   const f=saveForm('custom');f.append('bijlage','a.pdf');f.append('bijlage','b.pdf');
+   const r=await saveDraft({},f);
    expect(r.error).toContain('18,0 MB');
    expect(m.insert).not.toHaveBeenCalled();
+ });
+ it('voegt een gekozen brochure-downloadlink toe aan het mailconcept',async()=>{
+   m.select.mockResolvedValueOnce([{id,email:draft.toEmail}]);
+   const path='Stone-Motion-EN.pdf';
+   const url='https://cdn.example/stone-motion-en.pdf';
+   m.keuze.mockResolvedValueOnce([{path,name:'Stone-Motion-EN.pdf',size:198_000_000,url}]);
+   const f=saveForm('custom');f.append('downloadLink',path);
+   const r=await saveDraft({},f);
+   expect(r.success).toBeTruthy();
+   expect(m.insert).toHaveBeenCalledWith(expect.objectContaining({body:expect.stringContaining(url),attachments:[{name:'Stone-Motion-EN.pdf',size:198_000_000,catalogusLink:path}]}));
+   expect(r.draft?.body).toContain(url);
+ });
+ it('verstuurt een blijvende downloadlink voor een privébestand',async()=>{
+   const path='followup:Stone-Motion-EN-a1b2c3d4.pdf';
+   const oldUrl='https://storage.example/expired';
+   const freshUrl='https://storage.example/fresh';
+   const metLink={...draft,source:'followup:custom',body:`Bericht\n\nDownload / Descargar Stone-Motion-EN.pdf: ${oldUrl}`,attachments:[{name:'Stone-Motion-EN.pdf',size:198_000_000,catalogusLink:path}]};
+   m.select.mockResolvedValueOnce([metLink]).mockResolvedValueOnce([{id,email:draft.toEmail}]).mockResolvedValueOnce([]).mockResolvedValueOnce([]);
+   m.keuze.mockResolvedValueOnce([{path,name:'Stone-Motion-EN.pdf',size:198_000_000,url:freshUrl}]);
+   m.claim.mockResolvedValue([metLink]);m.mail.mockResolvedValue({sent:true});
+   expect((await sendDraft({},form())).success).toBeTruthy();
+   expect(m.keuze).toHaveBeenCalledWith([path]);
+   expect(m.mail).toHaveBeenCalledWith(expect.objectContaining({html:expect.stringContaining('https://crm.habitat-one.com/api/followup-download/stable-token')}));
+   expect(m.mail).not.toHaveBeenCalledWith(expect.objectContaining({html:expect.stringContaining(oldUrl)}));
  });
  it('haalt de gekozen PDF bij versturen op en stuurt hem mee',async()=>{
    const metPdf={...draft,source:'followup:custom',attachments:[{name:PRESENTATIE,size:3,catalogus:PRESENTATIE}]};

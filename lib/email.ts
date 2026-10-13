@@ -929,8 +929,10 @@ export function persoonlijkeMail(message: string, sender?: { phone?: string | nu
     .trim()
     .split(/\n{2,}/)
     .map(
-      (p) =>
-        `<p style="margin:0 0 14px;font-size:15px;line-height:1.65;color:${COMPANY.charcoal}">${escapeHtml(p).replace(/\n/g, "<br/>")}</p>`,
+      (p) => {
+        const safe = escapeHtml(p).replace(/https:\/\/[^\s<]+/g, (url) => `<a href="${url}" style="color:${COMPANY.terracotta};text-decoration:underline">${url}</a>`);
+        return `<p style="margin:0 0 14px;font-size:15px;line-height:1.65;color:${COMPANY.charcoal}">${safe.replace(/\n/g, "<br/>")}</p>`;
+      },
     )
     .join("");
   const html = `<div style="margin:0;padding:32px 12px;background:${COMPANY.cream};font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;color:${COMPANY.charcoal}">

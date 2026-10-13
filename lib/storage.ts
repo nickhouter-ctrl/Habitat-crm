@@ -446,12 +446,25 @@ export async function uploadPurchaseOrderBytes(
 /* Publieke bucket — catalogus/brochure-PDF's, downloadbaar op /catalogi.       */
 
 const CATALOG_BUCKET = process.env.SUPABASE_CATALOG_BUCKET ?? "catalogs";
+const FOLLOWUP_BUCKET = "followup-shares";
 
 async function ensureCatalogBucket() {
   const sb = supabase();
   const { data } = await sb.storage.getBucket(CATALOG_BUCKET);
   if (data) return;
   await sb.storage.createBucket(CATALOG_BUCKET, { public: true });
+}
+
+async function ensureFollowupBucket() {
+  const sb = supabase();
+  const { data } = await sb.storage.getBucket(FOLLOWUP_BUCKET);
+  if (data) {
+    if (data.file_size_limit == null || data.file_size_limit < 262_144_000) {
+      await sb.storage.updateBucket(FOLLOWUP_BUCKET, { public: false, fileSizeLimit: 262_144_000, allowedMimeTypes: ["application/pdf"] });
+    }
+    return;
+  }
+  await sb.storage.createBucket(FOLLOWUP_BUCKET, { public: false, fileSizeLimit: 262_144_000, allowedMimeTypes: ["application/pdf"] });
 }
 
 export type CatalogFile = {
@@ -461,6 +474,20 @@ export type CatalogFile = {
   size: number;
   uploadedAt: string | null;
 };
+
+/** Private PDF's die alleen vanuit klantopvolging als tijdelijke link gedeeld worden. */
+export async function listFollowupFiles(): Promise<CatalogFile[]> {
+  const sb = supabase();
+  const { data, error } = await sb.storage.from(FOLLOWUP_BUCKET).list("", { limit: 200, sortBy: { column: "created_at", order: "desc" } });
+  if (error || !data) return [];
+  return data.filter((f) => f.id).map((f) => ({
+    name: f.name.replace(/-[a-f0-9]{8}(\.pdf)$/i, "$1"),
+    path: `followup:${f.name}`,
+    url: "",
+    size: Number((f.metadata as { size?: number } | null)?.size ?? 0),
+    uploadedAt: (f.created_at as string | undefined) ?? null,
+  }));
+}
 
 /** Alle geüploade catalogus-PDF's, nieuwste eerst. */
 export async function listCatalogFiles(): Promise<CatalogFile[]> {
@@ -478,7 +505,7 @@ export async function listCatalogFiles(): Promise<CatalogFile[]> {
       // browser/CDN nooit een oude versie blijft serveren.
       const ver = (f.updated_at ?? f.created_at) as string | undefined;
       return {
-        name: f.name,
+        name: f.name.replace(/-[a-f0-9]{8}(\.pdf)$/i, "$1"),
         path: f.name,
         url: ver ? `${base}?v=${Date.parse(ver) || 0}` : base,
         size: Number((f.metadata as { size?: number } | null)?.size ?? 0),
@@ -507,6 +534,21 @@ export async function signCatalogUpload(
   return { path, token: data.token, signedUrl: data.signedUrl, contentType: "application/pdf" };
 }
 
+/** Signed TUS upload voor grote brochurebestanden; nooit via een Server Action-body. */
+export async function signLargeCatalogUpload(filename: string, contentType: string, size: number) {
+  if (!/\.pdf$/i.test(filename) || contentType !== "application/pdf") throw new Error("Alleen PDF-bestanden.");
+  if (!Number.isSafeInteger(size) || size <= 0 || size > 250 * 1024 * 1024) throw new Error("Het PDF-bestand mag maximaal 250 MB zijn.");
+  await ensureFollowupBucket();
+  const path = safeName(filename).replace(/\.pdf$/i, "") + "-" + crypto.randomUUID().slice(0, 8) + ".pdf";
+  const { data, error } = await supabase().storage.from(FOLLOWUP_BUCKET).createSignedUploadUrl(path, { upsert: false });
+  if (error || !data) throw new Error(`Kon upload niet voorbereiden: ${error?.message ?? "onbekend"}`);
+  const endpoint = new URL(SUPABASE_URL!);
+  endpoint.hostname = endpoint.hostname.replace(/\.supabase\.co$/, ".storage.supabase.co");
+  endpoint.pathname = "/storage/v1/upload/resumable";
+  endpoint.search = "";
+  return { path: `followup:${path}`, objectPath: path, token: data.token, endpoint: endpoint.toString(), bucketName: FOLLOWUP_BUCKET };
+}
+
 /**
  * Welke van de gekozen catalogus-PDF's echt in de bibliotheek staan, met hun
  * grootte. Zonder ze te downloaden: bij het bewaren van een concept hoeft een
@@ -515,11 +557,31 @@ export async function signCatalogUpload(
 export async function catalogusKeuze(paths: string[]): Promise<{ path: string; name: string; size: number; url: string }[]> {
   const uniek = [...new Set(paths.filter(Boolean))];
   if (uniek.length === 0) return [];
-  const bibliotheek = new Map((await listCatalogFiles()).map((f) => [f.path, f]));
-  return uniek.flatMap((p) => {
+  const [catalogi, followupFiles] = await Promise.all([listCatalogFiles(), listFollowupFiles()]);
+  const bibliotheek = new Map(catalogi.map((f) => [f.path, f]));
+  const privé = new Map(followupFiles.map((f) => [f.path, f]));
+  return (await Promise.all(uniek.map(async (p) => {
+    if (p.startsWith("followup:")) {
+      const f = privé.get(p);
+      if (!f) return null;
+      const { data, error } = await supabase().storage.from(FOLLOWUP_BUCKET).createSignedUrl(p.slice("followup:".length), 30 * 24 * 60 * 60, { download: f.name });
+      if (error || !data) return null;
+      return { ...f, url: data.signedUrl };
+    }
     const f = bibliotheek.get(p);
-    return f ? [{ path: f.path, name: f.name, size: f.size, url: f.url }] : [];
-  });
+    return f ? { path: f.path, name: f.name, size: f.size, url: f.url } : null;
+  }))).filter((f): f is CatalogFile => f !== null);
+}
+
+/** Maak voor een opgeslagen privé-PDF een tijdelijke URL voor de downloadproxy. */
+export async function followupDownloadTarget(path: string): Promise<string | null> {
+  if (!path.startsWith("followup:")) return null;
+  const file = (await listFollowupFiles()).find((f) => f.path === path);
+  if (!file) return null;
+  const { data, error } = await supabase().storage.from(FOLLOWUP_BUCKET)
+    .createSignedUrl(path.slice("followup:".length), 60, { download: file.name });
+  if (error || !data) return null;
+  return data.signedUrl;
 }
 
 /** Upload één catalogus-PDF. */

@@ -10,6 +10,8 @@ import { useT as useUiTranslation } from '@/components/taal-provider';
  * bewuste klik — en je ziet vóór het versturen exact welke bijlagen meegaan.
  */
 import { useState, useTransition } from "react";
+import { useRef } from "react";
+import { Upload } from "tus-js-client";
 
 import { SubmitButton } from "@/components/submit-button";
 import { Input, Textarea } from "@/components/ui";
@@ -38,11 +40,15 @@ export function AiMailForm({
   initialBody = "",
   saveDraft,
   initialAttachments = [],
+  downloadBijlagen = [],
+  uploadDownloadBijlage,
   returnTo,
 }: {
   returnTo?: string;
   initialBody?: string;
   initialAttachments?: string[];
+  downloadBijlagen?: MailBijlageOptie[];
+  uploadDownloadBijlage?: (filename: string, contentType: string, size: number) => Promise<{ path: string; token: string; endpoint: string; objectPath: string; bucketName: string }>;
   saveDraft?: (body: string, subject: string, attachments: string[]) => Promise<void>;
   /** Server action die de mail verstuurt (leest `subject`, `message` en `bijlage[]`). */
   verstuur: (formData: FormData) => Promise<void>;
@@ -64,6 +70,12 @@ export function AiMailForm({
   const [subject, setSubject] = useState(defaultSubject);
   const [message, setMessage] = useState(initialBody);
   const [gekozen, setGekozen] = useState<Set<string>>(new Set(initialAttachments));
+  const [gekozenLinks, setGekozenLinks] = useState<Set<string>>(new Set());
+  const [downloadLijst, setDownloadLijst] = useState(downloadBijlagen);
+  const [uploadBezig, setUploadBezig] = useState(false);
+  const [uploadVoortgang, setUploadVoortgang] = useState(0);
+  const [uploadFout, setUploadFout] = useState("");
+  const uploadInput = useRef<HTMLInputElement>(null);
   const [saved, setSaved] = useState(false);
   const [saving, startSaving] = useTransition();
   const [saveError, setSaveError] = useState(false);
@@ -83,6 +95,57 @@ export function AiMailForm({
       else next.add(path);
       return next;
     });
+  }
+
+  function toggleDownload(path: string) {
+    setSaved(false);
+    setGekozenLinks((prev) => {
+      const next = new Set(prev);
+      if (next.has(path)) next.delete(path);
+      else next.add(path);
+      return next;
+    });
+  }
+
+  async function uploadPdf(file: File) {
+    setUploadFout("");
+    if (!uploadDownloadBijlage) return;
+    if (!/\.pdf$/i.test(file.name) || (file.type && file.type !== "application/pdf")) {
+      setUploadFout(uiT("Alleen PDF-bestanden zijn toegestaan."));
+      return;
+    }
+    if (file.size > 250 * 1024 * 1024) {
+      setUploadFout(uiT("Een PDF mag maximaal 250 MB zijn."));
+      return;
+    }
+    setUploadBezig(true);
+    try {
+      const sign = await uploadDownloadBijlage(file.name, "application/pdf", file.size);
+      await new Promise<void>((resolve, reject) => {
+        const upload = new Upload(file, {
+          endpoint: sign.endpoint,
+          headers: { "x-signature": sign.token },
+          metadata: { bucketName: sign.bucketName, objectName: sign.objectPath, contentType: "application/pdf", cacheControl: "3600" },
+          chunkSize: 6 * 1024 * 1024,
+          retryDelays: [0, 3000, 5000, 10000, 20000],
+          removeFingerprintOnSuccess: true,
+          onProgress: (sent, total) => setUploadVoortgang(Math.round((sent / total) * 100)),
+          onError: reject,
+          onSuccess: () => resolve(),
+        });
+        upload.start();
+      });
+      const option = { path: sign.path, name: file.name, size: file.size };
+      setDownloadLijst((old) => [option, ...old.filter((item) => item.path !== sign.path)]);
+      setGekozenLinks((old) => new Set([...old, sign.path]));
+      setSaved(false);
+    } catch (e) {
+      setUploadFout(e instanceof Error ? e.message : uiT("Uploaden is niet gelukt."));
+    } finally {
+      setUploadBezig(false);
+      setUploadVoortgang(0);
+      if (uploadInput.current) uploadInput.current.value = "";
+    }
   }
 
   function schrijfMetAi(instructie?: string) {
@@ -150,12 +213,21 @@ export function AiMailForm({
             {uiT("Tip: typ eerst in het kort wat je wilt zeggen (of laat leeg) en klik ✨ — de AI maakt er een nette mail van in de taal van de klant. Vraag je om een brochure mee te sturen, dan vinkt de AI die hieronder aan. Je kunt alles nog aanpassen vóór het versturen.")} </p>
         </>
       )}
-      {bijlagen.length > 0 && (
-        <details className="rounded-md border border-border" open={gekozen.size > 0}>
+      {(bijlagen.length > 0 || downloadLijst.length > 0 || uploadDownloadBijlage) && (
+        <details className="rounded-md border border-border" open={gekozen.size > 0 || gekozenLinks.size > 0}>
           <summary className="cursor-pointer px-3 py-2 text-xs font-medium text-muted hover:text-foreground">
-            {uiT("📎 Bijlagen uit catalogi")}{gekozen.size > 0 ? uiT(" ({v0} gekozen · {v1})", { v0: gekozen.size, v1: formatSize(totaalBytes) }) : ""}
+            {uiT("📎 PDF meesturen")}{gekozen.size + gekozenLinks.size > 0 ? uiT(" ({v0} gekozen)", { v0: gekozen.size + gekozenLinks.size }) : ""}
           </summary>
-          <div className="max-h-52 space-y-1 overflow-y-auto px-3 pb-2">
+          <div className="space-y-2 px-3 pb-3">
+            {uploadDownloadBijlage && <div className="flex flex-wrap items-center gap-2">
+              <button type="button" disabled={uploadBezig} onClick={() => uploadInput.current?.click()} className="rounded-md border border-border px-3 py-2 text-xs hover:bg-background-soft disabled:opacity-50">
+                {uploadBezig ? uiT("PDF uploaden… {v0}%", { v0: uploadVoortgang }) : uiT("PDF uploaden als downloadlink")}
+              </button>
+              <input ref={uploadInput} type="file" accept="application/pdf,.pdf" className="hidden" onChange={(event) => { const file = event.target.files?.[0]; if (file) void uploadPdf(file); }} />
+              <span className="text-xs text-muted">{uiT("Maximaal 250 MB; de link blijft werken zolang het bestand beschikbaar is.")}</span>
+            </div>}
+            {uploadFout && <p className="rounded-md bg-warning/10 px-3 py-2 text-xs text-warning">{uploadFout}</p>}
+            <div className="max-h-52 space-y-1 overflow-y-auto">
             {bijlagen.map((b) => (
               <label
                 key={b.path}
@@ -173,6 +245,14 @@ export function AiMailForm({
                 <span className="shrink-0 tabular-nums text-muted">{formatSize(b.size)}</span>
               </label>
             ))}
+            {downloadLijst.map((b) => (
+              <label key={b.path} className="flex cursor-pointer items-center gap-2 rounded px-1 py-1 text-xs hover:bg-background-soft">
+                <input type="checkbox" checked={gekozenLinks.has(b.path)} onChange={() => toggleDownload(b.path)} className="accent-[var(--accent,#b4552d)]" />
+                <span className="min-w-0 flex-1 truncate" title={b.name}>{b.name}</span>
+                <span className="shrink-0 text-muted">{formatSize(b.size)} · {uiT("downloadlink")}</span>
+              </label>
+            ))}
+            </div>
           </div>
         </details>
       )}
@@ -183,11 +263,15 @@ export function AiMailForm({
       {[...gekozen].map((path) => (
         <input key={path} type="hidden" name="bijlage" value={path} />
       ))}
+      {[...gekozenLinks].map((path) => (
+        <input key={path} type="hidden" name="downloadLink" value={path} />
+      ))}
       {/* Conditionele spread: een expliciete `disabled` zou anders de eigen
           pending-disable van SubmitButton overschrijven. */}
       <SubmitButton variant="secondary" className="w-full" pendingLabel={uiT("Versturen…")} {...(teGroot ? { disabled: true } : {})}>
         {uiT("Versturen naar")} {toEmail}
         {gekozen.size > 0 ? uiT(" (+{v0} bijlage{v1})", { v0: gekozen.size, v1: gekozen.size === 1 ? "" : "n" }) : ""}
+        {gekozenLinks.size > 0 ? uiT(" (+{v0} downloadlink{v1})", { v0: gekozenLinks.size, v1: gekozenLinks.size === 1 ? "" : "s" }) : ""}
       </SubmitButton>
     </form>
   );

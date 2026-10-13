@@ -58,7 +58,7 @@ describe("customer product receipt specification", () => {
     const products = clientFundingProducts(docs, payments, shares);
     expect(products.reduce((sum, p) => sum + p.received, 0)).toBe(1000);
     const report = clientFundingReport({ projectName: "Test", clientName: null, generatedAt: new Date(), locale,
-      amounts: { received: 2000, products: 1000, work: 1000, remaining: 0, labor: 1000, materials: 0, other: 0 }, products });
+      amounts: { received: 2000, products: 1000, work: 1000, advanceCredit: 0, advanceCreditDescription: null, remaining: 0, labor: 1000, materials: 0, other: 0 }, products });
     const rows = report.tables.filter(t => t.columns.length === 4).flatMap(t => t.rows);
     expect(rows).toEqual([
       ["Deuren", "2", "€\u00a0450,00", "€\u00a0900,00"],
@@ -75,14 +75,14 @@ describe("customer product receipt specification", () => {
     const payments = docs.map(d => ({ documentId: d.id, method: "invoice", amountEur: "121", vatRate: "21" }));
     const products = clientFundingProducts(docs, payments, projectReceiptShares(docs, payments));
     const report = clientFundingReport({ projectName: "Test", clientName: null, generatedAt: new Date(), locale: "nl",
-      amounts: { received: 200, products: 200, work: 0, remaining: 0, labor: 0, materials: 0, other: 0 }, products });
+      amounts: { received: 200, products: 200, work: 0, advanceCredit: 0, advanceCreditDescription: null, remaining: 0, labor: 0, materials: 0, other: 0 }, products });
     const rows = report.tables.filter(t => t.columns.length === 4).flatMap(t => t.rows);
     expect(rows.filter(r => r[0].startsWith("Product-"))).toHaveLength(2);
   });
   it.each(["nl", "en", "es"] as const)("shows every product once and one reconciled total in %s, even across long specifications", locale => {
     const products = Array.from({ length: 12 }, (_, i) => ({ documentNumber: `F-${i}`, products: Array.from({ length: 5 }, (_, j) => `Item-${i}-${j}`), received: 100 }));
     const report = clientFundingReport({ projectName: "Test", clientName: null, generatedAt: new Date(), locale,
-      amounts: { received: 2000, products: 1200, work: 300, remaining: 500, labor: 300, materials: 0, other: 0 }, products });
+      amounts: { received: 2000, products: 1200, work: 300, advanceCredit: 0, advanceCreditDescription: null, remaining: 500, labor: 300, materials: 0, other: 0 }, products });
     const rows = report.tables.filter(t => t.columns.length === 3).flatMap(t => t.rows);
     expect(rows.filter(r => r[2] === "€\u00a01.200,00")).toHaveLength(1);
     expect(rows.filter(r => r[2] === "€\u00a0100,00")).toHaveLength(12);
@@ -91,7 +91,7 @@ describe("customer product receipt specification", () => {
   });
   it("refuses a specification that does not reconcile with the customer balance", () => {
     expect(() => clientFundingReport({ projectName: "Test", clientName: null, generatedAt: new Date(), locale: "nl",
-      amounts: { received: 2000, products: 1200, work: 300, remaining: 500, labor: 300, materials: 0, other: 0 },
+      amounts: { received: 2000, products: 1200, work: 300, advanceCredit: 0, advanceCreditDescription: null, remaining: 500, labor: 300, materials: 0, other: 0 },
       products: [{ documentNumber: "F-1", products: ["Kozijnen"], received: 1199.99 }],
     })).toThrow(/does not reconcile/);
   });

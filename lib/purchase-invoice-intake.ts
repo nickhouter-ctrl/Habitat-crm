@@ -12,7 +12,7 @@
  * Bewust géén `server-only`: de scripts in scripts/ moeten deze functies kunnen
  * aanroepen om de poort te testen zonder de hele app te starten.
  */
-import { and, desc, eq, isNotNull, ne, sql } from "drizzle-orm";
+import { and, desc, eq, isNotNull, isNull, ne, sql } from "drizzle-orm";
 
 import { readInvoiceWithAI, type AiInvoiceFields } from "@/lib/ai-invoice-extract";
 import { db } from "@/lib/db";
@@ -650,6 +650,16 @@ export async function approveInvoiceReview(args: {
   userId: string | null;
   via: "app" | "mail";
 }): Promise<{ purchaseOrderId: string | null; reason?: string }> {
+  const candidate = await db.query.purchaseInvoiceReviews.findFirst({ where: eq(purchaseInvoiceReviews.id, args.reviewId) });
+  if ((candidate?.aiFields as { documentType?: string } | null)?.documentType === "timesheet")
+    throw new Error("Dit is een urenstaat. Verwerk deze via de urenstaatcontrole, niet als inkoopfactuur.");
+  const candidateKind = args.overrides?.kind ?? (candidate?.suggestedKind as "labor" | "material" | null);
+  if (candidate && candidateKind === "labor") {
+    const siblings = await db.select({ id: purchaseInvoiceReviews.id, status: purchaseInvoiceReviews.status, aiFields: purchaseInvoiceReviews.aiFields })
+      .from(purchaseInvoiceReviews).where(eq(purchaseInvoiceReviews.emailId, candidate.emailId));
+    if (siblings.some((r) => r.id !== candidate.id && r.status === "pending" && (r.aiFields as { documentType?: string } | null)?.documentType === "timesheet"))
+      throw new Error("Keur eerst de Excel-urenstaat uit dezelfde mail goed. Zo worden de uren niet dubbel geboekt.");
+  }
   const claimed = await db
     .update(purchaseInvoiceReviews)
     .set({
@@ -665,6 +675,10 @@ export async function approveInvoiceReview(args: {
   if (!review) return { purchaseOrderId: null, reason: "al-afgehandeld" };
 
   const o = args.overrides ?? {};
+  const sameMailReviews = await db.select({ id: purchaseInvoiceReviews.id, status: purchaseInvoiceReviews.status, aiFields: purchaseInvoiceReviews.aiFields })
+    .from(purchaseInvoiceReviews).where(eq(purchaseInvoiceReviews.emailId, review.emailId));
+  const approvedTimesheetIds = sameMailReviews.filter((r) => r.id !== review.id && r.status === "approved" && (r.aiFields as { documentType?: string } | null)?.documentType === "timesheet").map((r) => r.id);
+  const hasApprovedTimesheet = approvedTimesheetIds.length > 0;
   const supplier = (o.supplier ?? review.proposedSupplier ?? "Onbekende leverancier").trim();
   const reference = (o.reference ?? review.proposedReference ?? "").trim() || null;
   const total = o.total ?? (review.proposedTotal != null ? Number(review.proposedTotal) : 0);
@@ -728,6 +742,23 @@ export async function approveInvoiceReview(args: {
     if (!ba) continue;
     const copied = await copyMailAttachmentToPoBucket({ mailStoragePath: ba.storagePath, filename: ba.filename, sizeBytes: ba.sizeBytes });
     if (copied) poAttachments.push({ ...copied, uploadedAt: new Date().toISOString() });
+  }
+  // Approved hours spreadsheets remain attached to the invoice's audit trail.
+  for (const siblingId of approvedTimesheetIds) {
+    const sibling = await db.query.purchaseInvoiceReviews.findFirst({ where: eq(purchaseInvoiceReviews.id, siblingId) });
+    const sheetAttachment = sibling ? await db.query.mailAttachments.findFirst({ where: eq(mailAttachments.id, sibling.mailAttachmentId) }) : null;
+    if (!sheetAttachment) continue;
+    const copied = await copyMailAttachmentToPoBucket({ mailStoragePath: sheetAttachment.storagePath, filename: sheetAttachment.filename, sizeBytes: sheetAttachment.sizeBytes });
+    if (copied) poAttachments.push({ ...copied, uploadedAt: new Date().toISOString() });
+    if (isExcelAttachment(sheetAttachment.filename, sheetAttachment.contentType ?? "")) {
+      try {
+        const xbuf = await downloadMailAttachmentBuffer(sheetAttachment.storagePath);
+        const pdf = xbuf ? await buildInvoicePdfAttachment(xbuf, sheetAttachment.filename) : null;
+        if (pdf) poAttachments.push(pdf);
+      } catch (e) {
+        console.error("Excel-urenstaat→PDF mislukt:", e instanceof Error ? e.message : e);
+      }
+    }
   }
 
   // "Algemene kosten" aangevinkt: onthouden voor de volgende keer. Bewust vóór
@@ -814,8 +845,16 @@ export async function approveInvoiceReview(args: {
     );
   }
 
+  if (kind === "labor" && hasApprovedTimesheet) {
+    // The detailed spreadsheet rows are the source of hours. Link them to the
+    // approved invoice instead of creating a second aggregate labor entry.
+    await db.update(timeEntries).set({ purchaseOrderId: po.id, updatedAt: new Date() }).where(and(
+      isNull(timeEntries.purchaseOrderId),
+      sql`${timeEntries.note} like ${`%[urenstaat-email:${review.emailId}]%`}`,
+    ));
+  }
   for (const deel of verdelingen) {
-    if (kind === "labor" && !o.hoursAlreadyLogged) {
+    if (kind === "labor" && !o.hoursAlreadyLogged && !hasApprovedTimesheet) {
       const uren = deel.hours && deel.hours > 0 ? deel.hours : 1;
       await db.insert(timeEntries).values({
         projectId: deel.projectId,

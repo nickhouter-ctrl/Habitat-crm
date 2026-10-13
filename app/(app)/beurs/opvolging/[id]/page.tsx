@@ -11,7 +11,7 @@ import { appendContactEmails } from '@/lib/contact-email-addresses';
 import { contacts, companies, partnerProfiles, partnerMessages, quoteRequests, emailInbox, sentEmails, users, appointments, activities, appointmentInvites } from '@/lib/db/schema';
 import { salesMailFilter, salesAppointmentAccess } from '@/lib/auth/sales-scope';
 import { requireModuleRead } from '@/lib/auth/guards';
-import { listCatalogFiles } from '@/lib/storage';
+import { listCatalogFiles, listFollowupFiles } from '@/lib/storage';
 import { geenInkoopmail, mailZichtbaarVoor } from '@/lib/mail-visibility';
 import { partnerMailVisible } from '@/lib/partner-context';
 import { followupSource, followupSources } from '@/lib/followup-source';
@@ -64,7 +64,7 @@ export default async function Page({params,searchParams}:{params:Promise<{id:str
    ...incoming.map((m): Mailregel => ({ soort: 'in', op: m.receivedAt ?? m.createdAt, binnen: m })),
  ].sort((a, b) => b.op.getTime() - a.op.getTime());
  const resellerInterested=hasResellerInterest(c,p);
- const bibliotheek=write&&canMail&&sp.actie==='mail'?(await listCatalogFiles()).map(f=>({path:f.path,name:f.name,size:f.size})):[];
+ const bibliotheek=write&&canMail&&sp.actie==='mail'?(await Promise.all([listCatalogFiles(),listFollowupFiles()])).flat().map(f=>({path:f.path,name:f.name,size:f.size,downloadOnly:f.path.startsWith('followup:')})):[];
  const mailContext={name:c.name,company:row.company??requests.find(r=>r.company)?.company,isFair:origins.some(o=>o.key==='beurs'),meetingDate:confirmedFairDate(c.tags),interests:(c.tags??[]).filter(t=>t.startsWith('wil:')).map(t=>t.slice(4))};
  const self=`/opvolging/${id}`;
  const modalHref=(modal:string)=>`${self}?actie=${modal}`;

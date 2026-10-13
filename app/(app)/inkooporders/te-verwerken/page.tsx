@@ -18,6 +18,7 @@ import {
   overheadSupplierKey,
   projects,
   purchaseInvoiceReviews,
+  workers,
 } from "@/lib/db/schema";
 import { beoordeelKandidaat } from "@/lib/invoice-learning";
 import { buildInvoiceRejectEmail, supplierEmailCandidates, type EmailCandidate } from "@/lib/invoice-reject";
@@ -40,7 +41,7 @@ const dagenSinds = (d: Date | string | null) =>
 export default async function FacturenKeurenPage() {
   const uiDateLocale = await datumTaal();
   const uiT = await uiTranslation();
-  const [rows, projectRijen, aliassen] = await Promise.all([
+  const [rows, projectRijen, aliassen, workerRijen] = await Promise.all([
     db
       .select({
         review: purchaseInvoiceReviews,
@@ -64,6 +65,8 @@ export default async function FacturenKeurenPage() {
       .where(ne(projects.status, "archived"))
       .orderBy(asc(projects.name)),
     alleAliassen(),
+    db.select({ id: workers.id, name: workers.name, active: workers.active, hourlyCostEur: workers.hourlyCostEur, hourlyCostCashEur: workers.hourlyCostCashEur, defaultPaymentMethod: workers.defaultPaymentMethod })
+      .from(workers).where(eq(workers.active, true)).orderBy(asc(workers.name)),
   ]);
 
   // De namen die leveranciers zelf voor een werf gebruiken, zodat je in het
@@ -147,7 +150,9 @@ export default async function FacturenKeurenPage() {
         items: [] as ReviewCardData[],
       };
     const v = r.review;
-    const fields = (v.aiFields ?? null) as { lines?: ReviewLine[] } | null;
+    const fields = (v.aiFields ?? null) as { documentType?: string; lines?: ReviewLine[]; timesheet?: { rows?: { workerHint?: string | null; date?: string | null; projectHint?: string | null; hours?: number | null; note?: string | null; warning?: string | null }[]; warnings?: string[] } } | null;
+    const timesheet = fields?.documentType === "timesheet" ? fields.timesheet ?? { rows: [], warnings: ["Urenstaat kon niet worden uitgelezen."] } : undefined;
+    const normalize = (s: string | null | undefined) => (s ?? "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]/g, "");
     groep.items.push({
       id: v.id,
       supplier: v.proposedSupplier,
@@ -175,6 +180,17 @@ export default async function FacturenKeurenPage() {
       wachtDagen: dagenSinds(r.receivedAt),
       twijfel: beoordelingen.get(v.id) ?? null,
       siblings: [],
+      timesheet: timesheet ? {
+        warnings: timesheet.warnings ?? [],
+        rows: (timesheet.rows ?? []).map((line) => {
+          const wh = normalize(line.workerHint);
+          const matchedWorker = wh ? workerRijen.find((w) => normalize(w.name) === wh || normalize(w.name).includes(wh) || wh.includes(normalize(w.name))) : null;
+          const ph = normalize(line.projectHint);
+          const matchedProject = ph ? projectRows.find((p) => normalize(p.name) === ph || normalize(p.name).includes(ph) || ph.includes(normalize(p.name)) || (p.aliassen ?? []).some((a) => normalize(a) === ph)) : null;
+          const rate = matchedWorker ? Number(matchedWorker.defaultPaymentMethod === "cash" ? matchedWorker.hourlyCostCashEur ?? matchedWorker.hourlyCostEur ?? 0 : matchedWorker.hourlyCostEur ?? matchedWorker.hourlyCostCashEur ?? 0) : null;
+          return { workerHint: line.workerHint ?? null, workerId: matchedWorker?.id ?? null, date: line.date ?? "", projectHint: line.projectHint ?? null, projectId: matchedProject?.id ?? null, hours: line.hours != null ? Number(line.hours) : null, note: line.note ?? null, warning: line.warning ?? null, hourlyRate: rate };
+        }),
+      } : undefined,
     });
     perMail.set(r.mailId, groep);
   }
@@ -189,6 +205,8 @@ export default async function FacturenKeurenPage() {
     }
   }
 
+  const factuurCount = rows.filter((r) => (r.review.aiFields as { documentType?: string } | null)?.documentType !== "timesheet").length;
+  const urenstaatCount = rows.length - factuurCount;
   const totaal = rows.reduce((s, r) => s + (r.review.proposedTotal != null ? Number(r.review.proposedTotal) : 0), 0);
   const afkeuren = rows.filter((r) => r.review.verdict === "reject").length;
   const onleesbaar = rows.filter((r) => r.review.verdict === "unreadable").length;
@@ -201,7 +219,11 @@ export default async function FacturenKeurenPage() {
         subtitle={
           rows.length === 0
             ? uiT("Geen inkoopfacturen die op beoordeling wachten.")
-            : uiT(rows.length === 1 ? "{n} factuur · {total} · pas na goedkeuring komt deze in de inkoop" : "{n} facturen · {total} · pas na goedkeuring komen ze in de inkoop", { n: rows.length, total: formatEUR(totaal) })
+            : factuurCount === 0
+              ? uiT("{n} urenstaten klaar voor controle", { n: urenstaatCount })
+              : urenstaatCount === 0
+                ? uiT(factuurCount === 1 ? "{n} factuur · {total} · pas na goedkeuring komt deze in de inkoop" : "{n} facturen · {total} · pas na goedkeuring komen ze in de inkoop", { n: factuurCount, total: formatEUR(totaal) })
+                : uiT("{n} facturen ({total}) en {v0} urenstaten klaar voor controle", { n: factuurCount, total: formatEUR(totaal), v0: urenstaatCount })
         }
         actions={
           <LinkButton href="/inkooporders" variant="ghost">
@@ -240,7 +262,7 @@ export default async function FacturenKeurenPage() {
               </CardHeader>
               <CardContent className="space-y-4">
                 {groep.items.map((item) => (
-                  <ReviewCard key={item.id} data={item} projects={projectRows} />
+                  <ReviewCard key={item.id} data={item} projects={projectRows} workers={workerRijen} />
                 ))}
               </CardContent>
             </Card>

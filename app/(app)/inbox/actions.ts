@@ -18,11 +18,22 @@ import { recordPartnerReply } from '@/lib/partner-correspondence';
 import { recordSentEmail } from "@/lib/sent-email";
 import { runImapPoll, type ImapPollResult } from "@/lib/imap-poll";
 import { mailZichtbaarVoor, marketingMailbox } from "@/lib/mail-visibility";
-import { catalogusMailBijlagen, copyMailAttachmentToPoBucket, listCatalogFiles } from "@/lib/storage";
+import { catalogusKeuze, catalogusMailBijlagen, copyMailAttachmentToPoBucket, listCatalogFiles, signLargeCatalogUpload } from "@/lib/storage";
+import { createFollowupDownloadToken } from "@/lib/followup-download-link";
+import { crmUrl } from "@/lib/crm-url";
 
 async function requireUser() {
   // Centrale guard: ingelogd én geen alleen-lezen (viewer) account.
   return requireModule("inbox");
+}
+
+/** Direct-to-storage upload signing for large PDFs shared from an inbox reply. */
+export async function signReplyPdfUpload(filename: string, contentType: string, size: number) {
+  await requireUser();
+  if (typeof filename !== "string" || filename.length > 200 || !/\.pdf$/i.test(filename)) throw new Error("Kies een PDF-bestand.");
+  if (contentType !== "application/pdf") throw new Error("Alleen PDF-bestanden zijn toegestaan.");
+  if (!Number.isSafeInteger(size) || size <= 0 || size > 250 * 1024 * 1024) throw new Error("Een PDF mag maximaal 250 MB zijn.");
+  return signLargeCatalogUpload(filename, contentType, size);
 }
 
 /** Link de mail aan een purchase order. Optioneel zet PO direct op "in_transit". */
@@ -234,6 +245,11 @@ export async function replyToMail(emailId: string, formData: FormData) {
   });
 
   const bijlagePaden = formData.getAll("bijlage").map((v) => String(v));
+  const downloadPaden = formData.getAll("downloadLink").map((v) => String(v));
+  if (bijlagePaden.length > 20 || downloadPaden.length > 20 || new Set([...bijlagePaden, ...downloadPaden]).size !== bijlagePaden.length + downloadPaden.length) {
+    returnUrl.searchParams.set("beantwoord", "0");
+    redirect(returnUrl.pathname + returnUrl.search);
+  }
 
   // Antwoorden vanaf het postvak waar de mail binnenkwam. Op een mail aan
   // teresa@ antwoorden vanaf hi@ breekt de thread bij de ontvanger en zet het
@@ -243,6 +259,7 @@ export async function replyToMail(emailId: string, formData: FormData) {
   let sent = false;
   let providerMessageId: string | undefined;
   let savedAttachments: { name: string; size: number }[] = [];
+  let bodyWithLinks = message;
   let sentHtml = '', sentText = '';
   try {
     const recipients = await db.select({ source: contacts.source, tags: contacts.tags }).from(contacts)
@@ -252,8 +269,15 @@ export async function replyToMail(emailId: string, formData: FormData) {
       : null;
     const fair = recipients.some(isFairContact) || isFairSource(linkedRequest?.source);
     const attachments = await catalogusMailBijlagen(bijlagePaden);
-    const opgemaakt = persoonlijkeMail(message, me);
-    savedAttachments = attachments.map(a => ({ name: a.filename, size: Buffer.byteLength(a.content) }));
+    const sharedFiles = downloadPaden.length ? await catalogusKeuze(downloadPaden) : [];
+    if (sharedFiles.length !== downloadPaden.length || sharedFiles.some((f) => !f.path.startsWith("followup:"))) throw new Error("Een gekozen downloadbestand staat niet meer in de bibliotheek. Kies het opnieuw.");
+    const linkLines = sharedFiles.map((f) => `Download / Descargar ${f.name}: ${crmUrl()}/api/followup-download/${createFollowupDownloadToken(f.path)}`);
+    bodyWithLinks = [message, ...(linkLines.length ? ["", ...linkLines] : [])].join("\n");
+    const opgemaakt = persoonlijkeMail(bodyWithLinks, me);
+    savedAttachments = [
+      ...attachments.map(a => ({ name: a.filename, size: Buffer.byteLength(a.content) })),
+      ...sharedFiles.map(f => ({ name: `${f.name} (downloadlink)`, size: f.size })),
+    ];
     sentHtml = opgemaakt.html; sentText = opgemaakt.text;
     const res = await sendEmail({
       to: mail.fromEmail,
@@ -290,7 +314,7 @@ export async function replyToMail(emailId: string, formData: FormData) {
     revalidatePath("/", "layout");
     await db.update(inboxSuggestions).set({ status: "reviewed", draft: null, draftSubject: null, draftAttachments: [], needsReply: false, reviewedBy: user.id, reviewedAt: new Date(), updatedAt: new Date() }).where(eq(inboxSuggestions.emailId, emailId));
     const archiefTekst =
-      message + (bijlagePaden.length > 0 ? `\n\n📎 ${bijlagePaden.join(", ")}` : "");
+      bodyWithLinks + (bijlagePaden.length > 0 ? `\n\n📎 ${bijlagePaden.join(", ")}` : "");
     await recordSentEmail({
       kind: "other",
       toEmail: mail.fromEmail,
@@ -302,7 +326,7 @@ export async function replyToMail(emailId: string, formData: FormData) {
       type: "email",
       subject: `Antwoord op mail — ${subject}`,
       body:
-        message +
+        bodyWithLinks +
         (bijlagePaden.length > 0 ? `\n\nBijlagen: ${bijlagePaden.join(", ")}` : ""),
       authorId: user.id,
     });

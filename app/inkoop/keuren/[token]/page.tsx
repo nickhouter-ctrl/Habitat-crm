@@ -65,6 +65,10 @@ export default async function KeurenViaMailPage({
   const v = found.review;
   const verlopen = found.verlopen;
 
+  if ((v.aiFields as { documentType?: string } | null)?.documentType === "timesheet") {
+    return <Melding title="Urenstaat controleren in het CRM">Een urenstaat kan niet via een mailknop worden goedgekeurd. Open de controlewachtrij in het CRM en controleer daar werknemer, project, uren en tarief per regel.</Melding>;
+  }
+
   if (v.status !== "pending" && gedaan) {
     // Net zelf gedaan: bevestigen, niet vermanen.
     return (

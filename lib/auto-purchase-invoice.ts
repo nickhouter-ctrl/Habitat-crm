@@ -10,6 +10,9 @@ import { and, asc, eq, lt, sql, inArray, isNull } from "drizzle-orm";
 
 import { db } from "@/lib/db";
 import { emailInbox, mailAttachments, purchaseInvoiceReviews } from "@/lib/db/schema";
+import { downloadMailAttachmentBuffer } from "@/lib/storage";
+import { parseTimesheet } from "@/lib/timesheet-intake";
+import { autoApproveTimesheet } from "@/lib/timesheet-agent";
 import {
   attachReviewToSibling,
   buildInvoiceProposal,
@@ -121,11 +124,26 @@ export async function tryAutoCreatePurchaseInvoice(emailId: string): Promise<Aut
 
   const atts = await db.select().from(mailAttachments).where(eq(mailAttachments.emailId, emailId));
   const financial = atts.filter((a) => FINANCIAL_CATEGORIES.includes(a.category as (typeof FINANCIAL_CATEGORIES)[number]) && !isProformaOrQuote(a.filename));
-  if (financial.length === 0) return result;
+  // Excel timesheets may be classified as "other" because they are not invoices.
+  // Inspect them independently; only a workbook with date + project + hours
+  // columns is promoted to the review queue.
+  const spreadsheets = atts.filter((a) => /\.(xlsx|xls|xlsm)$/i.test(a.filename));
+  const parsedSheets = new Map<string, ReturnType<typeof parseTimesheet>>();
+  for (const a of spreadsheets) {
+    try {
+      const bytes = await downloadMailAttachmentBuffer(a.storagePath);
+      const parsed = bytes ? parseTimesheet(bytes, a.filename) : null;
+      if (parsed) parsedSheets.set(a.id, parsed);
+    } catch (e) {
+      console.error(`Timesheet read failed for ${a.filename}:`, e instanceof Error ? e.message : e);
+    }
+  }
+  const candidates = [...new Map([...financial, ...spreadsheets.filter((a) => parsedSheets.has(a.id))].map((a) => [a.id, a])).values()];
+  if (candidates.length === 0) return result;
 
   // Persist every card before starting slow OCR. Interrupted reads remain
   // visible and are picked up by retryFailedAiReads instead of disappearing.
-  await db.insert(purchaseInvoiceReviews).values(financial.map((a) => ({
+  await db.insert(purchaseInvoiceReviews).values(candidates.map((a) => ({
     emailId,
     mailAttachmentId: a.id,
     source: "auto",
@@ -141,8 +159,37 @@ export async function tryAutoCreatePurchaseInvoice(emailId: string): Promise<Aut
   // van er twee te-betalen posten van te maken.
   const gemaakt: { reviewId: string; filename: string; spec: boolean }[] = [];
 
-  for (const a of financial) {
+  for (const a of candidates) {
     try {
+      const timesheet = parsedSheets.get(a.id);
+      if (timesheet) {
+        const [review] = await db.select({ id: purchaseInvoiceReviews.id })
+          .from(purchaseInvoiceReviews)
+          .where(eq(purchaseInvoiceReviews.mailAttachmentId, a.id)).limit(1);
+        if (!review) continue;
+        const [saved] = await db.update(purchaseInvoiceReviews).set({
+          proposedSupplier: timesheet.workerHint,
+          proposedReference: `Urenstaat · ${a.filename}`,
+          proposedTotal: null,
+          proposedSubtotal: null,
+          aiFields: { documentType: "timesheet", timesheet } as unknown,
+          aiReadOk: true,
+          aiError: null,
+          aiModel: "deterministic-xlsx-parser",
+          aiPromptVersion: 1,
+          aiCheckedAt: new Date(),
+          verdict: timesheet.warnings.length ? "warn" : "ok",
+          findings: timesheet.warnings.map((label, i) => ({ key: `timesheet_${i}`, label, severity: "warning", ok: false, es: label })),
+          updatedAt: new Date(),
+        }).where(eq(purchaseInvoiceReviews.id, review.id)).returning({ id: purchaseInvoiceReviews.id });
+        if (saved) {
+          result.reviewIds.push(saved.id);
+          result.created++;
+          const approved = await autoApproveTimesheet(saved.id);
+          if (!approved) result.needsReview++;
+        }
+        continue;
+      }
       const proposal = await buildInvoiceProposal({ emailId, attachmentId: a.id });
       if (!proposal) continue;
       const reviewId = await upsertInvoiceReview(proposal, "auto");
