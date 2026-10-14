@@ -75,7 +75,7 @@ export async function runDataHealth(): Promise<{ ok: boolean; findings: Finding[
     SELECT count(*)::int AS n, coalesce(sum(coalesce(total_eur,0)-coalesce(paid_eur,0)),0)::float8 AS v
     FROM documents WHERE kind='invoice' AND coalesce(is_external, false) = false
       AND status NOT IN ('paid','void','draft','rejected') AND due_date < current_date
-      AND coalesce(total_eur,0) > coalesce(paid_eur,0)`);
+      AND coalesce(total_eur,0) - coalesce(paid_eur,0) > 0.01`);
   if (Number(overdue.n) > 0)
     findings.push({ key: "overdue", label: "Vervallen facturen", count: Number(overdue.n), detail: formatEUR(Number(overdue.v)) + " openstaand", severity: "warn" });
 
