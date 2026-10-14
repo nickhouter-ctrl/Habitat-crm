@@ -168,7 +168,7 @@ export async function completeTask(id: string) {
   const user=await requireUser();
   await changeAgendaTask(z.string().uuid().parse(id),user.id,true,user.role);
   revalidatePath("/opvolging");revalidatePath("/beurs/opvolging");revalidatePath("/contacts");
-  revalidatePath("/agenda");
+  revalidatePath("/agenda");revalidatePath(`/agenda/afvinken/${id}`);
   revalidatePath("/");
 }
 

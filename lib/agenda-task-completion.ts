@@ -1,13 +1,33 @@
 import "server-only";
-import { and, desc, eq, inArray, isNull, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, isNull, ne, sql } from "drizzle-orm";
 import { db } from "@/lib/db";
-import { activities, contacts, partnerProfiles } from "@/lib/db/schema";
+import { activities, contacts, partnerProfiles, staffMessages } from "@/lib/db/schema";
 import { agendaDay } from "@/lib/agenda-dates";
 import { FOLLOWUP_DONE, FOLLOWUP_REOPENED } from "@/lib/followup-checklist";
 
 import { salesTaskAccess } from "@/lib/auth/sales-scope";
 
 const isFollowup=(task:typeof activities.$inferSelect)=>!!task.contactId&&['Opvolging','Beursopvolging'].includes(task.subject??'');
+
+type Tx=Parameters<Parameters<typeof db.transaction>[0]>[0];
+
+/**
+ * Een teambericht met taak maakt één kopie per collega, in één transactie (zelfde
+ * auteur, onderwerp, klant en created_at). Het is één klus: wie hem afvinkt, rondt
+ * hem voor iedereen af, anders blijft hij in ieders dagmail staan. Heropenen zet
+ * alleen de kopieën terug die tegelijk met deze zijn afgevinkt.
+ */
+async function syncTeamCopies(tx:Tx,task:typeof activities.$inferSelect,completed:boolean,now:Date){
+  const [own]=await tx.select({id:staffMessages.id}).from(staffMessages).where(eq(staffMessages.taskId,task.id)).limit(1);
+  if(!own)return;
+  const copies=await tx.select({id:activities.id}).from(activities).innerJoin(staffMessages,eq(staffMessages.taskId,activities.id)).where(and(
+    eq(activities.type,'task'),ne(activities.id,task.id),eq(activities.createdAt,task.createdAt),
+    task.authorId?eq(activities.authorId,task.authorId):isNull(activities.authorId),
+    task.subject!=null?eq(activities.subject,task.subject):isNull(activities.subject),
+    task.contactId?eq(activities.contactId,task.contactId):isNull(activities.contactId),
+    completed?isNull(activities.completedAt):task.completedAt?eq(activities.completedAt,task.completedAt):sql`false`));
+  if(copies.length)await tx.update(activities).set({completedAt:completed?now:null,updatedAt:now}).where(inArray(activities.id,copies.map(c=>c.id)));
+}
 
 /** Contact first, then task: same lock order as saving the follow-up dossier. */
 export async function changeAgendaTask(id:string,authorId:string,completed:boolean,role?:string){
@@ -38,5 +58,6 @@ export async function changeAgendaTask(id:string,authorId:string,completed:boole
       }
     }
     await tx.update(activities).set({completedAt:completed?now:null,updatedAt:now}).where(eq(activities.id,id));
+    if(!isFollowup(task))await syncTeamCopies(tx,task,completed,now);
   });
 }
