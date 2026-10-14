@@ -93,7 +93,7 @@ export async function getReportsData() {
           paidEur: documents.paidEur,
         })
         .from(documents)
-        .where(sql`${documents.kind} = 'invoice' and ${documents.status} not in ('paid','void','draft')`)
+        .where(sql`${documents.kind} = 'invoice' and coalesce(${documents.isExternal}, false) = false and ${documents.status} not in ('paid','void','draft')`)
         .orderBy(asc(documents.dueDate)),
       db
         .select({

@@ -78,7 +78,7 @@ export default async function DashboardPage() {
   const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0, 10);
   const today = now.toISOString().slice(0, 10);
 
-  const openExpr = sql`${documents.status} not in ('paid', 'void', 'draft')`;
+  const openExpr = sql`${documents.status} not in ('paid', 'void', 'draft') and coalesce(${documents.totalEur}, 0) - coalesce(${documents.paidEur}, 0) > 0.01`;
 
   const [[contactsTotal], recentProjects, [docAgg], [creditAgg], [purchaseAgg], [productsAgg], openPurchaseOrders, [activeProjectsAgg], recentActivity, holdedExpensesYTD, proformas, [acceptedAgg], dagtaken] =
     await Promise.all([
@@ -101,7 +101,7 @@ export default async function DashboardPage() {
         })
         .from(documents)
         // Concepten/geannuleerd tellen niet als omzet.
-        .where(and(eq(documents.kind, "invoice"), notInArray(documents.status, ["draft", "void"]))),
+        .where(and(eq(documents.kind, "invoice"), notInArray(documents.status, ["draft", "void"]), sql`coalesce(${documents.isExternal}, false) = false`)),
       // Credit notes to subtract from revenue (ex BTW).
       db
         .select({
@@ -231,6 +231,8 @@ export default async function DashboardPage() {
         and(
           eq(documents.kind, "invoice"),
           inArray(documents.status, ["sent", "partially_paid", "overdue"]),
+          sql`coalesce(${documents.isExternal}, false) = false`,
+          sql`coalesce(${documents.totalEur}, 0) - coalesce(${documents.paidEur}, 0) > 0.01`,
         ),
       )
       .orderBy(documents.dueDate)
