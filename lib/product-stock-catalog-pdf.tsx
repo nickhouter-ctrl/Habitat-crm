@@ -64,7 +64,11 @@ function Catalog({ items, locale, generatedAt }: { items: StockCatalogItem[]; lo
       <View style={s.meta} wrap={false}><View><Text style={s.metaLabel}>{copy.count}</Text><Text style={s.metaValue}>{items.length}</Text></View><View><Text style={s.metaLabel}>{copy.units}</Text><Text style={s.metaValue}>{units.toLocaleString(locale)}</Text></View></View>
       <View style={s.grid}>
         {items.map((item, index) => <View key={`${item.sku ?? item.name}-${index}`} style={s.card} wrap={false}>
-          {item.image ? <Image src={item.image} style={s.image} alt={item.name} /> : <View style={s.noImage}><Text style={s.noImageText}>{copy.noImage}</Text></View>}
+          {item.image ? (
+            // @react-pdf/renderer images are PDF primitives, not accessible HTML images.
+            // eslint-disable-next-line jsx-a11y/alt-text
+            <Image src={item.image} style={s.image} />
+          ) : <View style={s.noImage}><Text style={s.noImageText}>{copy.noImage}</Text></View>}
           <View style={s.detail}>
             <View>
               {item.category && <Text style={s.category}>{item.category}</Text>}
