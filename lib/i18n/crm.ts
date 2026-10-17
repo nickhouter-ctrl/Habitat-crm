@@ -2912,6 +2912,7 @@ const rows: [string,string,string][] = [
   [" onder voorraaddrempel"," por debajo del stock mínimo"," below the stock threshold"],
   ["Excel downloaden","Descargar Excel","Download Excel"],
   ["📄 PDF-overzicht","📄 Resumen PDF","📄 PDF overview"],
+  ["📦 Voorraadcatalogus PDF","📦 Catálogo de stock PDF","📦 Stock catalogue PDF"],
   ["Labels printen","Imprimir etiquetas","Print labels"],
   ["Producten (totaal)","Productos (total)","Products (total)"],
   ["Voorraadwaarde (kostprijs)","Valor del stock (coste)","Stock value (cost)"],

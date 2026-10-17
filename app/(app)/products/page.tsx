@@ -234,6 +234,8 @@ export default async function ProductsPage({
                   <Gs1ExcelDownload />
                   <LinkButton href="/products/pdf" variant="primary" target="_blank">
                     {uiT("📄 PDF-overzicht")} </LinkButton>
+                  <LinkButton href="/products/pdf/catalog" variant="secondary" target="_blank">
+                    {uiT("📦 Voorraadcatalogus PDF")} </LinkButton>
                   <LinkButton href={`/print-labels${qs}`} variant="secondary">
                     {uiT("Labels printen")} </LinkButton>
                   <LinkButton href="/products/afboeken" variant="secondary">
