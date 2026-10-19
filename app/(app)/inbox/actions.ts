@@ -270,8 +270,13 @@ export async function replyToMail(emailId: string, formData: FormData) {
     const fair = recipients.some(isFairContact) || isFairSource(linkedRequest?.source);
     const attachments = await catalogusMailBijlagen(bijlagePaden);
     const sharedFiles = downloadPaden.length ? await catalogusKeuze(downloadPaden) : [];
-    if (sharedFiles.length !== downloadPaden.length || sharedFiles.some((f) => !f.path.startsWith("followup:"))) throw new Error("Een gekozen downloadbestand staat niet meer in de bibliotheek. Kies het opnieuw.");
-    const linkLines = sharedFiles.map((f) => `Download / Descargar ${f.name}: ${crmUrl()}/api/followup-download/${createFollowupDownloadToken(f.path)}`);
+    if (sharedFiles.length !== downloadPaden.length || sharedFiles.some((f) => !f.path.startsWith("followup:") && !f.path.startsWith("brochure:"))) throw new Error("Een gekozen downloadbestand staat niet meer in de bibliotheek. Kies het opnieuw.");
+    const linkLines = sharedFiles.map((f) => {
+      const url = f.path.startsWith("brochure:")
+        ? f.url
+        : `${crmUrl()}/api/followup-download/${createFollowupDownloadToken(f.path)}`;
+      return `Download / Descargar ${f.name}: ${url}`;
+    });
     bodyWithLinks = [message, ...(linkLines.length ? ["", ...linkLines] : [])].join("\n");
     const opgemaakt = persoonlijkeMail(bodyWithLinks, me);
     savedAttachments = [

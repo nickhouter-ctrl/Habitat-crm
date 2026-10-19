@@ -25,6 +25,7 @@ export async function runInvoiceStatusSweep(): Promise<{
     .where(
       and(
         eq(documents.kind, "invoice"),
+        sql`coalesce(${documents.isExternal}, false) = false`,
         isNotNull(documents.holdedId),
         notInArray(documents.status, ["paid", "void", "draft"]),
       ),
@@ -48,6 +49,7 @@ export async function runInvoiceStatusSweep(): Promise<{
     .where(
       and(
         eq(documents.kind, "invoice"),
+        sql`coalesce(${documents.isExternal}, false) = false`,
         inArray(documents.status, ["sent", "accepted"]),
         sql`${documents.dueDate} < current_date`,
         sql`coalesce(${documents.totalEur}, 0) - coalesce(${documents.paidEur}, 0) > 0.01`,

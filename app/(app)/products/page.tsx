@@ -14,6 +14,7 @@ import {
   Input,
   LinkButton,
   PageHeader,
+  Select,
   StatTile,
   TBody,
   Table,
@@ -116,6 +117,10 @@ export default async function ProductsPage({
     orderBy: [asc(products.category), asc(products.name)],
     limit: 1000,
   });
+  const catalogCategories = await db.selectDistinct({ category: products.category })
+    .from(products)
+    .where(eq(products.isActive, true))
+    .orderBy(asc(products.category));
 
   const [agg] = await db
     .select({
@@ -234,6 +239,17 @@ export default async function ProductsPage({
                   <Gs1ExcelDownload />
                   <LinkButton href="/products/pdf" variant="primary" target="_blank">
                     {uiT("📄 PDF-overzicht")} </LinkButton>
+                  <form action="/products/pdf/catalog" method="get" className="flex items-center gap-2">
+                    <Select name="category" aria-label={uiT("Product type")} defaultValue="">
+                      <option value="">{uiT("All product types")}</option>
+                      {catalogCategories.flatMap(({ category }) => category ? [
+                        <option key={category} value={category}>{category}</option>,
+                      ] : [])}
+                    </Select>
+                    <button type="submit" className={buttonClass({ variant: "secondary" })}>
+                      {uiT("📦 Stock catalogue PDF")}
+                    </button>
+                  </form>
                   <LinkButton href={`/print-labels${qs}`} variant="secondary">
                     {uiT("Labels printen")} </LinkButton>
                   <LinkButton href="/products/afboeken" variant="secondary">

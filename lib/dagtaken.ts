@@ -107,7 +107,7 @@ export async function verzamelDagtaken(rol?: string, userEmail?: string | null):
   const t = await tekst();
   const now = new Date();
   const today = now.toISOString().slice(0, 10);
-  const openExpr = sql`${documents.status} not in ('paid', 'void', 'draft')`;
+  const openExpr = sql`${documents.status} not in ('paid', 'void', 'draft', 'rejected')`;
 
   const [
     [uren],
@@ -144,11 +144,11 @@ export async function verzamelDagtaken(rol?: string, userEmail?: string | null):
       // Vervallen verkoopfacturen (openstaand bedrag = totaal − betaald).
       db
         .select({
-          n: sql<number>`count(case when ${openExpr} and ${documents.dueDate} < ${today} then 1 end)::int`,
-          v: sql<string>`coalesce(sum(case when ${openExpr} and ${documents.dueDate} < ${today} then ${documents.totalEur} - ${documents.paidEur} else 0 end), 0)`,
+          n: sql<number>`count(case when ${openExpr} and coalesce(${documents.isExternal}, false) = false and ${documents.dueDate} < ${today} and coalesce(${documents.totalEur}, 0) - coalesce(${documents.paidEur}, 0) > 0.01 then 1 end)::int`,
+          v: sql<string>`coalesce(sum(case when ${openExpr} and coalesce(${documents.isExternal}, false) = false and ${documents.dueDate} < ${today} and coalesce(${documents.totalEur}, 0) - coalesce(${documents.paidEur}, 0) > 0.01 then ${documents.totalEur} - ${documents.paidEur} else 0 end), 0)`,
         })
         .from(documents)
-        .where(and(eq(documents.kind, "invoice"), sql`${documents.status} not in ('draft', 'void')`)),
+        .where(and(eq(documents.kind, "invoice"), sql`${documents.status} not in ('draft', 'void', 'rejected')`)),
       // Verstuurde/betaalde facturen met productregels waarvan de voorraad nog
       // niet is afgeboekt — productregels checken we in JS (jsonb-veilig).
       db
@@ -158,6 +158,7 @@ export async function verzamelDagtaken(rol?: string, userEmail?: string | null):
           and(
             eq(documents.kind, "invoice"),
             inArray(documents.status, ["sent", "paid", "partially_paid", "overdue"]),
+            sql`coalesce(${documents.isExternal}, false) = false`,
             isNull(documents.stockAppliedAt),
           ),
         ),

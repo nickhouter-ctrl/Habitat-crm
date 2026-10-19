@@ -11,6 +11,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { AiMailForm } from "@/components/ai-mail-form";
+import { WEBSITE_BROCHURES } from "@/lib/brochure-links";
 import { Badge, Card, LinkButton, PageHeader, buttonClass } from "@/components/ui";
 import { aiReplyConfigured } from "@/lib/ai-reply";
 import { db } from "@/lib/db";
@@ -282,7 +283,7 @@ export default async function MailDetailPage({
                 placeholder={uiT("Typ je antwoord, of kort wat je wilt zeggen en klik ✨…")}
                 aiBeschikbaar={aiReplyConfigured()}
                 bijlagen={catalogi.map((f) => ({ path: f.path, name: f.name, size: f.size }))}
-                downloadBijlagen={grotePdfLinks.map((f) => ({ path: f.path, name: f.name, size: f.size }))}
+                downloadBijlagen={[...grotePdfLinks.map((f) => ({ path: f.path, name: f.name, size: f.size })), ...WEBSITE_BROCHURES]}
                 uploadDownloadBijlage={signReplyPdfUpload}
               />
             </Card></TabPanel>

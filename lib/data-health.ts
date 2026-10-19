@@ -27,8 +27,10 @@ export async function runDataHealth(): Promise<{ ok: boolean; findings: Finding[
   // 1. Dubbele documentnummers.
   const dupDocs = await one(sql`
     SELECT count(*)::int AS n, string_agg(doc_number, ', ') AS sample FROM (
-      SELECT doc_number FROM documents WHERE doc_number IS NOT NULL
-      GROUP BY doc_number HAVING count(*) > 1 LIMIT 10) x`);
+      SELECT min(doc_number) AS doc_number FROM documents
+      WHERE doc_number IS NOT NULL AND btrim(doc_number) <> ''
+        AND coalesce(is_external, false) = false
+      GROUP BY lower(btrim(doc_number)) HAVING count(*) > 1 LIMIT 10) x`);
   if (Number(dupDocs.n) > 0)
     findings.push({ key: "dup_docnumbers", label: "Dubbele documentnummers", count: Number(dupDocs.n), detail: String(dupDocs.sample ?? ""), severity: "warn" });
 
@@ -52,14 +54,28 @@ export async function runDataHealth(): Promise<{ ok: boolean; findings: Finding[
   const unbooked = await one(sql`
     SELECT count(*)::int AS n FROM documents
     WHERE kind='invoice' AND status IN ('sent','paid','partially_paid','overdue')
-      AND stock_applied_at IS NULL`);
+      AND coalesce(is_external, false) = false
+      AND stock_applied_at IS NULL
+      AND jsonb_typeof(items) = 'array'
+      AND EXISTS (
+        SELECT 1
+        FROM jsonb_array_elements(items) AS line
+        JOIN products p ON p.id::text = line->>'productId'
+        WHERE CASE
+          WHEN coalesce(line->>'units', '1') ~ '^-?[0-9]+([.][0-9]+)?$'
+            THEN coalesce(line->>'units', '1')::numeric <> 0
+          ELSE true
+        END
+      )`);
   if (Number(unbooked.n) > 0)
     findings.push({ key: "unbooked", label: "Verstuurde/betaalde facturen — voorraad nog niet afgeboekt", count: Number(unbooked.n), severity: "info" });
 
   // 5. Vervallen facturen.
   const overdue = await one(sql`
     SELECT count(*)::int AS n, coalesce(sum(coalesce(total_eur,0)-coalesce(paid_eur,0)),0)::float8 AS v
-    FROM documents WHERE kind='invoice' AND status NOT IN ('paid','void','draft','rejected') AND due_date < current_date`);
+    FROM documents WHERE kind='invoice' AND coalesce(is_external, false) = false
+      AND status NOT IN ('paid','void','draft','rejected') AND due_date < current_date
+      AND coalesce(total_eur,0) - coalesce(paid_eur,0) > 0.01`);
   if (Number(overdue.n) > 0)
     findings.push({ key: "overdue", label: "Vervallen facturen", count: Number(overdue.n), detail: formatEUR(Number(overdue.v)) + " openstaand", severity: "warn" });
 

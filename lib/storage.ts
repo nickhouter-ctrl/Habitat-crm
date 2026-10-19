@@ -3,6 +3,7 @@
  * Server-only: uses the service-role key. Public URLs are stored on `properties.images`.
  */
 import { createClient } from "@supabase/supabase-js";
+import { findWebsiteBrochure } from "@/lib/brochure-links";
 
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -561,6 +562,8 @@ export async function catalogusKeuze(paths: string[]): Promise<{ path: string; n
   const bibliotheek = new Map(catalogi.map((f) => [f.path, f]));
   const privé = new Map(followupFiles.map((f) => [f.path, f]));
   return (await Promise.all(uniek.map(async (p) => {
+    const brochure = findWebsiteBrochure(p);
+    if (brochure) return brochure;
     if (p.startsWith("followup:")) {
       const f = privé.get(p);
       if (!f) return null;

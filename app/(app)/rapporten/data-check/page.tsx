@@ -61,8 +61,9 @@ export default async function DataCheckPage() {
     where: and(
       eq(documents.kind, "invoice"),
       inArray(documents.status, ["sent", "paid", "partially_paid", "overdue"]),
+      sql`coalesce(${documents.isExternal}, false) = false`,
     ),
-    columns: { id: true, docNumber: true, items: true, stockAppliedAt: true, totalEur: true },
+    columns: { id: true, docNumber: true, items: true, stockAppliedAt: true },
   });
 
   const reserved = await getReservedStockByProduct();
@@ -182,7 +183,7 @@ export default async function DataCheckPage() {
     why: "Deze facturen hebben productregels maar de voorraad is niet afgeboekt — je voorraad staat dan te hoog.",
     items: unbooked.map((x) => ({
       label: `Factuur ${x.d.docNumber ?? x.d.id.slice(0, 8)}`,
-      sub: `${x.lines.length} productregel(s) · ${eur(Number(x.d.totalEur ?? 0))}`,
+      sub: `${x.lines.length} productregel(s) zonder voorraad-afboeking`,
       href: `/documents/${x.d.id}`,
     })),
   });

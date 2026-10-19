@@ -62,7 +62,7 @@ export async function verzamelWeekcontrole(): Promise<Weekcontrole> {
            (coalesce(d.total_eur,0) - coalesce(d.paid_eur,0))::float8 open,
            greatest(0, extract(day from now() - d.due_date::timestamp))::int dagen
     from documents d left join projects p on p.id = d.project_id
-    where d.kind = 'invoice' and d.status in ('sent','overdue','partially_paid')
+    where d.kind = 'invoice' and coalesce(d.is_external,false)=false and d.status in ('sent','overdue','partially_paid')
       and coalesce(d.total_eur,0) - coalesce(d.paid_eur,0) > 0.01
     order by open desc`);
   const teLaatTot = teLaat.reduce((s, r) => s + r.open, 0);
@@ -246,7 +246,7 @@ export async function verzamelWeekcontrole(): Promise<Weekcontrole> {
           and d.status not in ('draft','void'))::float8 gefactureerd,
       (select coalesce(sum(coalesce(d.total_eur,0) - coalesce(d.paid_eur,0)),0)
         from documents d where d.project_id = p.id and d.kind = 'invoice'
-          and d.status in ('sent','overdue','partially_paid'))::float8 "openFacturen",
+          and coalesce(d.is_external,false)=false and d.status in ('sent','overdue','partially_paid'))::float8 "openFacturen",
       (select coalesce(sum(pp.amount_eur),0) from project_payments pp where pp.project_id = p.id)::float8 "ontvangenIncl",
       (select coalesce(sum(
           case when pp.vat_amount_eur is not null then pp.amount_eur - pp.vat_amount_eur
