@@ -2,7 +2,7 @@
 import { useT as useUiTranslation } from '@/components/taal-provider';
 
 import { useActionState, useEffect, useMemo, useState, useSyncExternalStore } from "react";
-import { Bath, Check, ChevronDown, Plus, RotateCcw, Trash2 } from "lucide-react";
+import { Bath, Check, ChevronDown, FileImage, Plus, RotateCcw, Trash2, Upload } from "lucide-react";
 import { Button, Card, CardContent, Field, Input, Select } from "@/components/ui";
 import { Combobox } from "@/components/combobox";
 import { SubmitButton } from "@/components/submit-button";
@@ -12,6 +12,7 @@ import { formatEUR } from "@/lib/utils";
 import { createConfiguredQuote } from "@/app/(app)/calculator/actions";
 import { autoTermijnen } from "@/lib/quote-clauses";
 import { DRIVERS, DRIVER_GROEP_LABEL } from "@/lib/price-book";
+import { applyPlanMeasurements, MAX_PLAN_BYTES, planSchema, type PlanRead } from "@/lib/plan-measurements";
 
 const MEASURES=[...DRIVERS.filter(d=>d.groep!=="sanitair"&&!d.afgeleid&&d.key!=="woonoppervlak_m2"),
   {key:"sloop_vloer_m2",label:"Vloer slopen (buiten badkamers)",groep:"wanden" as const,eenheid:"m²"},
@@ -35,6 +36,13 @@ export function QuoteConfigurator({data,contacts,projects,userId,initial}:{data:
   const [language,setLanguage]=useState<"nl"|"en"|"es">("nl");
   const [saved,setSaved]=useState(false);
   const [reviewed,setReviewed]=useState(false);
+  const [planFile,setPlanFile]=useState<File|null>(null);
+  const [planReference,setPlanReference]=useState("");
+  const [planRead,setPlanRead]=useState<PlanRead|null>(null);
+  const [planBusy,setPlanBusy]=useState(false);
+  const [planError,setPlanError]=useState("");
+  const [planConfirmed,setPlanConfirmed]=useState(false);
+  const [planFloorConfirmed,setPlanFloorConfirmed]=useState(false);
   const [state,action,pending]=useActionState(createConfiguredQuote,{error:""});
   const storageKey=`habitat-calculator-v2-${userId}`;
   const result=useMemo(()=>calculate(config,data),[config,data]);
@@ -49,6 +57,30 @@ export function QuoteConfigurator({data,contacts,projects,userId,initial}:{data:
   },[saved,result.lines.length,config.bathrooms.length]);
   function saveDraft(){try{localStorage.setItem(storageKey,JSON.stringify({config,contact,project,language}));setSaved(true);window.dispatchEvent(new Event("calculator-draft"));}catch{setSaved(false);}}
   function restore(){try{const draft=JSON.parse(localStorage.getItem(storageKey)??"{}");const parsed=calculatorSchema.safeParse(draft.config);if(parsed.success){setConfig(parsed.data);setContact(draft.contact??"");setProject(draft.project??"");setLanguage(["nl","en","es"].includes(draft.language)?draft.language:"nl");setSaved(true);setReviewed(false);}}catch{}}
+  async function extractPlan(){
+    if(!planFile||planBusy)return;
+    if(planFile.size>MAX_PLAN_BYTES){setPlanError(uiT("Bestand te groot. Gebruik maximaal 3,8 MB per tekening of foto."));return;}
+    setPlanFloorConfirmed(false);setPlanConfirmed(false);
+    setPlanBusy(true);setPlanError("");setPlanRead(null);
+    try{
+      const body=new FormData();body.set("file",planFile);body.set("reference",planReference);
+      const response=await fetch("/api/calculator/read-plan",{method:"POST",body});
+      const payload=await response.json().catch(()=>null);
+      if(!response.ok)throw new Error(payload?.error?uiT(payload.error):uiT("De tekening kon niet worden uitgelezen."));
+      const parsed=planSchema.safeParse(payload);
+      if(!parsed.success)throw new Error(uiT("De tekening kon niet worden uitgelezen."));
+      setPlanRead(parsed.data);setPlanConfirmed(false);
+    }catch(error){setPlanError(error instanceof Error?error.message:uiT("De tekening kon niet worden uitgelezen."));}
+    finally{setPlanBusy(false);}
+  }
+  function applyPlan(){
+    if(!planRead||!planConfirmed)return;
+    try{
+      const next=applyPlanMeasurements(config,planRead,planFloorConfirmed);
+      if(planRead.rooms.some(room=>room.type==="bathroom")&&config.bathrooms.length&&!window.confirm(uiT("De herkende badkamers vervangen de badkamers die je al hebt ingevuld. Doorgaan?")))return;
+      update(next);setPlanRead(null);setPlanError("");
+    }catch(error){setPlanError(error instanceof Error?uiT(error.message):uiT("De tekening kon niet worden uitgelezen."));}
+  }
   const schedule=autoTermijnen(language,Object.fromEntries(chapters.map(c=>[c,result.lines.filter(l=>l.chapter===c).reduce((s,l)=>s+l.price*l.quantity,0)])));
   return <form action={action} className="space-y-5">
     <input type="hidden" name="requestId" value={requestId}/><input type="hidden" name="configuration" value={JSON.stringify(config)}/><input type="hidden" name="contactId" value={contact}/><input type="hidden" name="projectId" value={project}/><input type="hidden" name="taal" value={language}/>
@@ -64,6 +96,23 @@ export function QuoteConfigurator({data,contacts,projects,userId,initial}:{data:
           <Field label={uiT("Project (optioneel)")}><Combobox key={`project-${project}`} options={projects.map(p=>({value:p.id,label:p.name}))} defaultValue={project} clearable placeholder={uiT("Kies een project")} onSelect={setProject}/></Field>
           <Field label={uiT("Offertetaal")}><Select value={language} onChange={e=>setLanguage(e.target.value as typeof language)}><option value="nl">Nederlands</option><option value="en">{uiT("Engels")}</option><option value="es">{uiT("Spaans")}</option></Select></Field>
         </div></CardContent></Card>
+        <Card><CardContent className="space-y-4">
+          <div className="flex items-start gap-3"><span className="rounded-xl bg-accent/10 p-2.5 text-accent"><FileImage className="size-5"/></span><div><h2 className="font-semibold">{uiT("Tekeningen en maten")}</h2><p className="mt-1 text-xs text-muted">{uiT("Upload een maatvaste tekening of een foto. AI stelt ruimten en maten voor; je controleert alles voordat het in de calculatie komt.")}</p></div></div>
+          <div className="grid gap-3 sm:grid-cols-[1fr_1fr_auto] sm:items-end">
+            <label className="block text-xs text-muted">{uiT("Bouwtekening of foto (PDF, JPG, PNG, WebP · max. 3,8 MB)")}<Input className="mt-1" type="file" disabled={planBusy} accept="application/pdf,image/jpeg,image/png,image/webp,.pdf,.jpg,.jpeg,.png,.webp" onChange={event=>{setPlanFile(event.target.files?.[0]??null);setPlanRead(null);setPlanError("");setPlanConfirmed(false);}}/></label>
+            <label className="block text-xs text-muted">{uiT("Referentiemaat of schaal (optioneel)")}<Input className="mt-1" value={planReference} maxLength={240} disabled={planBusy} onChange={event=>{setPlanReference(event.target.value);setPlanRead(null);setPlanConfirmed(false);setPlanFloorConfirmed(false);}} placeholder={uiT("Bijv. schaal 1:50 of deurbreedte 90 cm")}/></label>
+            <Button type="button" variant="secondary" disabled={!planFile||planBusy} onClick={extractPlan}>{planBusy?<span className="animate-pulse">{uiT("Tekening lezen…")}</span>:<><Upload className="size-4"/>{uiT("Maten voorstellen")}</>}</Button>
+          </div>
+          {planError&&<p role="alert" className="rounded-lg bg-danger/10 p-3 text-sm text-danger">{planError}</p>}
+          {planRead&&<div className="space-y-3 rounded-xl border bg-background/50 p-4">
+            <div><p className="font-medium">{uiT("Voorstel uit tekening — nog niet toegepast")}</p><p className="text-xs text-muted">{planRead.scale?`${uiT("Schaal")}: ${planRead.scale} · `:""}{planRead.unit==="unknown"?uiT("Eenheid niet herkend"):uiT("Maten omgezet naar meter")}</p></div>
+            {planRead.notes.map((note,index)=><p key={index} className="text-xs text-warning">{note}</p>)}
+            {planRead.rooms.length===0?<p className="text-sm text-muted">{uiT("Geen ruimten met voldoende maatvoering gevonden. Vul de maten hieronder handmatig in.")}</p>:<div className="overflow-x-auto"><table className="w-full min-w-[680px] text-left text-xs"><thead className="text-muted"><tr><th className="py-2">{uiT("Ruimte")}</th><th>{uiT("Vloer m²")}</th><th>{uiT("Omtrek m")}</th><th>{uiT("Hoogte m")}</th><th>{uiT("Openingen m²")}</th><th>{uiT("Wand m²")}</th><th>{uiT("Badkamer")}</th><th>{uiT("Betrouwbaarheid")}</th></tr></thead><tbody>{planRead.rooms.map((room,index)=><tr key={`${room.name}-${index}`} className="border-t"><td className="py-2 pr-2">{room.name}</td><td>{room.floorM2??"—"}</td><td>{room.perimeterM??"—"}</td><td>{room.wallHeightM??"—"}</td><td>{room.openingsM2??"—"}</td><td>{room.perimeterM!=null&&room.wallHeightM!=null&&room.openingsM2!=null?Math.max(0,room.perimeterM*room.wallHeightM-room.openingsM2).toFixed(2):"—"}</td><td>{room.type==="bathroom"?[room.showers!=null?`${room.showers} ${uiT("douches")}`:"",room.baths!=null?`${room.baths} ${uiT("baden")}`:"",room.toilets!=null?`${room.toilets} ${uiT("toiletten")}`:"",room.basins!=null?`${room.basins} ${uiT("wasbakken")}`:""].filter(Boolean).join(" · "):"—"}</td><td>{uiT(room.confidence==="high"?"Hoge betrouwbaarheid":room.confidence==="medium"?"Gemiddelde betrouwbaarheid":"Lage betrouwbaarheid")}<span className="block text-muted">{room.evidence}</span></td></tr>)}</tbody></table></div>}
+            <p className="text-xs text-muted">{uiT("De herkende wandoppervlakte is omtrek × hoogte − openingen. Onbekende maten blijven leeg; ongedimensioneerde tekeningen kunnen geen betrouwbare m² opleveren.")}</p>
+            {planRead.rooms.length>0&&<><p className="text-xs text-muted">{uiT("Wand- of vloertegels worden bij ontbrekende maten niet ingeschakeld. Vul de maten aan en schakel het tegelwerk daarna zelf in.")}</p>{planRead.rooms.every(room=>room.floorM2!=null)&&<label className="flex items-start gap-2 text-xs text-muted"><input type="checkbox" className="mt-0.5" checked={planFloorConfirmed} onChange={event=>setPlanFloorConfirmed(event.target.checked)}/>{uiT("Deze tekening bevat alle ruimten van de woning. Neem de som over als totaal woonoppervlak.")}</label>}<p className="rounded-lg bg-warning/10 p-3 text-xs text-warning">{uiT("Ontbrekende maten of aantallen worden als 0 overgenomen. Vul die zelf aan voordat je de offerte maakt.")}</p><label className="flex items-start gap-2 text-xs text-muted"><input className="mt-0.5" type="checkbox" checked={planConfirmed} onChange={event=>setPlanConfirmed(event.target.checked)}/>{uiT("Ik heb de voorstellen met de tekening vergeleken en vul ontbrekende gegevens aan.")}</label><Button type="button" variant="secondary" disabled={!planConfirmed} onClick={applyPlan}>{uiT("Badkamers en woonoppervlak overnemen")}</Button></>}
+          </div>}
+          <p className="text-xs text-muted">{uiT("Je kunt maten ook zonder tekening invoeren in de velden hieronder. De tekening zelf wordt niet opgeslagen in het dossier.")}</p>
+        </CardContent></Card>
         <Card><CardContent className="space-y-5">
           <div className="flex flex-wrap items-center justify-between gap-3"><div className="flex items-center gap-3"><span className="rounded-xl bg-accent/10 p-2.5 text-accent"><Bath className="size-5"/></span><div><h2 className="font-semibold">{uiT("Badkamers samenstellen")}</h2><p className="text-xs text-muted">{uiT("Complete stelposten met Brauer, per kleur en uitvoering.")}</p></div></div>
             <Button type="button" variant="secondary" size="sm" disabled={config.bathrooms.length>=12} onClick={()=>patch({bathrooms:[...config.bathrooms,newBathroom()]})}><Plus className="size-4"/>{uiT("Badkamer toevoegen")}</Button></div>
@@ -129,7 +178,8 @@ export function QuoteConfigurator({data,contacts,projects,userId,initial}:{data:
       </div>
       <aside className="space-y-4 xl:sticky xl:top-20">
         <Card><CardContent className="space-y-4"><h2 className="font-semibold">{uiT("Jouw calculatie")}</h2>
-          <div className="space-y-2 text-sm"><div className="flex justify-between"><span className="text-muted">{uiT("Werk + producten")}</span><span>{formatEUR(result.subtotal)}</span></div><div className="flex justify-between"><span className="text-muted">{uiT("Geraamde kostprijs")}{result.unknownCost?uiT(" (onvolledig)"):""}</span><span>{formatEUR(result.cost)}</span></div><div className="flex justify-between"><span className="text-muted">{uiT("Opslag + productwinst")}</span><span>{result.earnings==null?uiT("Niet volledig bekend"):formatEUR(result.earnings)}</span></div><div className="flex justify-between"><span className="text-muted">{uiT("Geraamde arbeid")}</span><span>{result.hours} {uiT("uur")}</span></div></div>
+          <div className="space-y-2 text-sm"><div className="flex justify-between"><span className="text-muted">{uiT("Werk + producten")}</span><span>{formatEUR(result.subtotal)}</span></div><div className="flex justify-between"><span className="text-muted">{uiT("Geraamde kostprijs")}{result.unknownCost?uiT(" (onvolledig)"):""}</span><span>{formatEUR(result.cost)}</span></div><div className="flex justify-between"><span className="text-muted">{uiT("Brutowinst vóór overhead")}</span><span>{result.earnings==null?uiT("Niet volledig bekend"):formatEUR(result.earnings)}</span></div><div className="flex justify-between"><span className="text-muted">{uiT("Brutomarge op verkoop")}</span><span>{result.earnings==null||result.subtotal<=0?"—":`${((result.earnings/result.subtotal)*100).toFixed(1)}%`}</span></div><div className="flex justify-between"><span className="text-muted">{uiT("Geraamde arbeid")}</span><span>{result.hours} {uiT("uur")}</span></div></div>
+          <p className="text-xs text-muted">{uiT("Brutomarge = brutowinst ÷ verkoopbedrag excl. btw. Algemene bedrijfskosten zijn niet afgetrokken.")}</p>
           <div className="grid grid-cols-2 gap-3 border-t pt-3"><NumberField label={uiT("Kosttarief arbeid €/uur")} value={config.hourlyRate} onChange={hourlyRate=>patch({hourlyRate:Math.min(250,hourlyRate)})}/><NumberField label={uiT("Onvoorzien % (bewust kiezen)")} value={config.contingency} onChange={contingency=>patch({contingency:Math.min(30,contingency)})}/></div>
           {config.contingency>0&&<p className="text-xs text-muted">{uiT("Onvoorzien:")} {formatEUR(result.contingency)} {uiT("over werk en producten, als aparte offerteregel.")}</p>}
           <div className="rounded-lg bg-accent/10 p-4"><p className="text-xs text-muted">{uiT("Offertetotaal excl. btw")}</p><p className="mt-1 text-2xl font-semibold tabular-nums text-accent" aria-live="polite">{formatEUR(result.total)}</p><p className="mt-1 text-xs text-muted">{formatEUR(result.total*1.21)} {uiT("incl. 21% btw")}</p></div>

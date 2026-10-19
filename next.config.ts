@@ -22,6 +22,7 @@ const nextConfig: NextConfig = {
     // Sharp's native addon needs libvips beside it on Linux. The addon alone
     // can be traced without its shared library when imported by PDF actions.
     "/wederverkopers/prijzen": ["./node_modules/sharp/**/*", "./node_modules/@img/sharp-*/**/*"],
+    "/products/pdf/catalog": ["./node_modules/sharp/**/*", "./node_modules/@img/sharp-*/**/*"],
     "/prijslijst/distributeur/pdf": ["./node_modules/sharp/**/*", "./node_modules/@img/sharp-*/**/*"],
   },
   // De handtekening-generator is één los HTML-bestand in public/. Zo houdt het
