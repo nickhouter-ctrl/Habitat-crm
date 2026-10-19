@@ -1,3 +1,4 @@
+import sharp from "sharp";
 import { and, asc, eq, inArray } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { products } from "@/lib/db/schema";
@@ -6,6 +7,7 @@ import { renderProductStockCatalog, type StockCatalogItem } from "@/lib/product-
 import { weigerRoute } from "@/lib/auth/guards";
 
 export const dynamic = "force-dynamic";
+export const runtime = "nodejs";
 
 function allowedAssetUrl(raw: string | null | undefined): URL | null {
   if (!raw) return null;
@@ -33,8 +35,7 @@ async function safeImage(raw: string | null | undefined): Promise<string | null>
       if (size > 8_000_000) { await reader.cancel(); return null; }
       chunks.push(value);
     }
-    const { default: sharp } = await import("sharp");
-    const image = await sharp(Buffer.concat(chunks), { limitInputPixels: 40_000_000 }).rotate().resize(360, 440, { fit: "cover", withoutEnlargement: true }).jpeg({ quality: 82 }).toBuffer();
+    const image = await sharp(Buffer.concat(chunks), { limitInputPixels: 40_000_000 }).rotate().resize(360, 440, { fit: "inside", withoutEnlargement: true }).jpeg({ quality: 82 }).toBuffer();
     return `data:image/jpeg;base64,${image.toString("base64")}`;
   } catch { return null; }
 }

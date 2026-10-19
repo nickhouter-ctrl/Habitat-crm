@@ -27,9 +27,9 @@ const s = StyleSheet.create({
   intro: { fontSize: 9, color: COMPANY.muted, marginBottom: 17 },
   meta: { flexDirection: "row", justifyContent: "space-between", padding: 10, backgroundColor: "#f7f3ec", marginBottom: 16 },
   metaLabel: { fontSize: 7, color: COMPANY.muted }, metaValue: { fontSize: 10, fontWeight: 600, color: COMPANY.brown, marginTop: 3 },
-  grid: { flexDirection: "row", flexWrap: "wrap", justifyContent: "space-between" },
+  row: { flexDirection: "row", justifyContent: "space-between" },
   card: { width: "48.7%", minHeight: 146, borderWidth: 0.8, borderColor: COMPANY.sand, borderRadius: 5, marginBottom: 12, padding: 9, flexDirection: "row" },
-  image: { width: 104, height: 126, objectFit: "cover", backgroundColor: "#f1eee8", borderRadius: 3, marginRight: 10 },
+  image: { width: 104, height: 126, objectFit: "contain", backgroundColor: "#f1eee8", borderRadius: 3, marginRight: 10 },
   noImage: { width: 104, height: 126, backgroundColor: "#f1eee8", borderRadius: 3, marginRight: 10, alignItems: "center", justifyContent: "center" },
   noImageText: { fontSize: 7, color: COMPANY.muted },
   detail: { flex: 1, justifyContent: "space-between" },
@@ -58,8 +58,8 @@ function Catalog({ items, locale, generatedAt, category }: { items: StockCatalog
       <View style={s.header} fixed><Text style={s.brand}>HABITAT ONE</Text><Text style={s.date}>{generatedAt.toLocaleDateString("en-GB")}</Text></View>
       <Text style={s.title}>{copy.title}</Text><Text style={s.intro}>{copy.intro}</Text>
       <View style={s.meta} wrap={false}><View><Text style={s.metaLabel}>{copy.count}</Text><Text style={s.metaValue}>{items.length}</Text></View><View><Text style={s.metaLabel}>{copy.units}</Text><Text style={s.metaValue}>{units.toLocaleString(locale)}</Text></View></View>
-      <View style={s.grid}>
-        {items.map((item, index) => <View key={`${item.sku ?? item.name}-${index}`} style={s.card} wrap={false}>
+      {Array.from({ length: Math.ceil(items.length / 2) }, (_, row) => <View key={row} style={s.row} wrap={false}>
+        {items.slice(row * 2, row * 2 + 2).map((item, index) => <View key={`${item.sku ?? item.name}-${index}`} style={s.card} wrap={false}>
           {item.image ? (
             // @react-pdf/renderer images are PDF primitives, not accessible HTML images.
             // eslint-disable-next-line jsx-a11y/alt-text
@@ -79,7 +79,7 @@ function Catalog({ items, locale, generatedAt, category }: { items: StockCatalog
             </View>}
           </View>
         </View>)}
-      </View>
+      </View>)}
       <View style={s.footer} fixed><Text>{COMPANY.name} · {COMPANY.website}</Text><Text>{copy.footer}</Text></View>
     </Page>
   </Document>;
