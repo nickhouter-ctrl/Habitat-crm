@@ -1,6 +1,6 @@
 import { datumTaal } from "@/lib/i18n/server";
 import { tekst as uiTranslation } from '@/lib/i18n/server';
-import { and, desc, eq, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import Link from "next/link";
 
 import { RowLink } from "@/components/row-link";
@@ -25,6 +25,8 @@ import { quoteRequests } from "@/lib/db/schema";
 import { gewoneAanvragen } from "@/lib/aanvraag-selectie";
 import { requireModuleRead } from "@/lib/auth/guards";
 import { formatDate } from "@/lib/utils";
+import { acceptQuoteRequest, rejectQuoteRequest, reopenQuoteRequest } from "./actions";
+import { AanvraagRijActies } from "./row-actions";
 
 export async function generateMetadata() {
   const uiT = await uiTranslation();
@@ -33,6 +35,7 @@ export async function generateMetadata() {
 
 const STATUS_META: Record<string, { label: string; tone: "info" | "success" | "warning" | "danger" | "neutral" }> = {
   pending: { label: "Open", tone: "info" },
+  proposed: { label: "Tijden voorgesteld", tone: "info" },
   accepted: { label: "Geaccepteerd", tone: "success" },
   rejected: { label: "Afgewezen", tone: "neutral" },
 };
@@ -44,19 +47,20 @@ export default async function QuoteRequestsPage({
 }) {
   const uiDateLocale = await datumTaal();
   const uiT = await uiTranslation();
-  await requireModuleRead('aanvragen');
+  const user = await requireModuleRead('aanvragen');
+  const write = user.heeftCap('schrijven');
   const sp = await searchParams;
   const status = typeof sp.status === "string" ? sp.status : "";
 
   const [rows, [counts]] = await Promise.all([
     db.query.quoteRequests.findMany({
-      where: and(gewoneAanvragen, status ? eq(quoteRequests.status, status) : undefined),
+      where: and(gewoneAanvragen, status === "pending" ? inArray(quoteRequests.status, ["pending", "proposed"]) : status ? eq(quoteRequests.status, status) : undefined),
       orderBy: desc(quoteRequests.createdAt),
       limit: 200,
     }),
     db
       .select({
-        pending: sql<number>`count(case when status = 'pending' then 1 end)::int`,
+        pending: sql<number>`count(case when status in ('pending', 'proposed') then 1 end)::int`,
         accepted: sql<number>`count(case when status = 'accepted' then 1 end)::int`,
         rejected: sql<number>`count(case when status = 'rejected' then 1 end)::int`,
       })
@@ -117,6 +121,7 @@ export default async function QuoteRequestsPage({
           <Table>
             <THead>
               <tr>
+                {write && <Th className="w-20"><span className="sr-only">{uiT("Afvinken")}</span></Th>}
                 <Th>{uiT("Klant")}</Th>
                 <Th>{uiT("Bedrijf")}</Th>
                 <Th>{uiT("Producten")}</Th>
@@ -130,6 +135,15 @@ export default async function QuoteRequestsPage({
                 const products = asStringArray(r.productNames);
                 return (
                   <RowLink key={r.id} href={`/aanvragen/${r.id}`}>
+                    {write && <Td>
+                      <AanvraagRijActies
+                        open={r.status === "pending" || r.status === "proposed"}
+                        afhandelen={acceptQuoteRequest.bind(null, r.id)}
+                        afwijzen={rejectQuoteRequest.bind(null, r.id)}
+                        heropenen={reopenQuoteRequest.bind(null, r.id)}
+                        labels={{ afhandelen: uiT("Afgehandeld"), afwijzen: uiT("Afwijzen"), heropenen: uiT("Heropenen") }}
+                      />
+                    </Td>}
                     <Td>
                       <span className="font-medium">
                         {r.kind === "appointment" ? "📅 " : r.kind === "contact" ? "✉️ " : ""}

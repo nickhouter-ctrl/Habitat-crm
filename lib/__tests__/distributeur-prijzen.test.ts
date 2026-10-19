@@ -1,16 +1,18 @@
 import { describe, expect, it } from "vitest";
-import { DEALER_STAFFELS, brutomarge, distributeurPrijzen, margeVerkooppunt, staffelVoorVolume, veiligePrijs } from "@/lib/distributeur-prijzen";
+import { DEALER_STAFFELS, brutomarge, distributeurPrijzen, margeVerkooppunt, staffelVoorBestelling, veiligePrijs } from "@/lib/distributeur-prijzen";
 import { catalogusItems, type CatalogusPaneel } from "@/lib/distributeur-catalogus";
 import { prijsVoorstelInvoer } from "@/lib/distributeur-invoer";
 
 const panel: CatalogusPaneel = {id:"one",name:"Huge Travertine - Beige",sku:"MS-024",category:"Huge Travertine",imageUrl:null,widthMm:1200,heightMm:2400,description:null,price:206.5702,cost:44.13,vatRate:21,stockQty:114,additionalSizes:[{sku:"MS-024-1",label:"2400*600",priceEur:103.2645,stockQty:0},{sku:"MS-024-2",label:"2400*1200",priceEur:206.5702,costEur:37.42,stockQty:114}]};
 
 describe("verkooppuntstaffels",()=>{
- it("uses paid volume boundaries up to the approved 50% tier without gaps",()=>{
-   for(const [m2,discount] of [[0,35],[499.99,35],[500,37.5],[999.99,37.5],[1000,40],[1999.99,40],[2000,42.5],[4999.99,42.5],[5000,45],[7499.99,45],[7500,47.5],[9999.99,47.5],[10000,50],[100000,50]])expect(staffelVoorVolume(m2).kortingPct).toBe(discount);
-   expect(DEALER_STAFFELS.every(s=>s.kortingPct<=50)).toBe(true);
+ it("follows the per-order pallet schedule of the price list",()=>{
+   for(const [pallets,discount] of [[1,35],[2,35],[3,40],[9,40],[10,45],[40,45]])expect(staffelVoorBestelling(pallets).kortingPct).toBe(discount);
+   expect(staffelVoorBestelling(0,true).kortingPct).toBe(50);
+   expect(DEALER_STAFFELS.map(s=>s.kortingPct)).toEqual([35,40,45,50]);
    for(const tier of DEALER_STAFFELS)expect(prijsVoorstelInvoer.parse({staffel:tier.id}).staffel).toBe(tier.id);
-   for(const value of [-1,Infinity,NaN])expect(()=>staffelVoorVolume(value)).toThrow();
+   expect(prijsVoorstelInvoer.parse({}).staffel).toBe("pallets-1");
+   for(const value of [0,0.5,-1,Infinity,NaN])expect(()=>staffelVoorBestelling(value)).toThrow();
  });
  it("distinguishes gross margin from markup",()=>{
    expect(brutomarge(48.75,15).eur).toBe(33.75);
@@ -33,9 +35,9 @@ describe("verkooppuntstaffels",()=>{
    expect(p.display.kortingPct!).toBeLessThan(60);
  });
  it("applies 50% only where it preserves the minimum dealer margin",()=>{
-   const ordinary=distributeurPrijzen(100,20,{staffelId:"volume-max"})!;
+   const ordinary=distributeurPrijzen(100,20,{staffelId:"container"})!;
    expect(ordinary.verkooppunt).toBe(50);expect(ordinary.dealer.begrensd).toBe(false);
-   const limited=distributeurPrijzen(100,40,{staffelId:"volume-max"})!;
+   const limited=distributeurPrijzen(100,40,{staffelId:"container"})!;
    expect(limited.verkooppunt).toBe(61.54);expect(limited.dealer.begrensd).toBe(true);
    expect(limited.dealer.margePct!).toBeGreaterThanOrEqual(35);
  });
@@ -43,7 +45,7 @@ describe("verkooppuntstaffels",()=>{
    const start=distributeurPrijzen(100,20)!;
    expect(margeVerkooppunt(start)).toBe(35);
    expect(brutomarge(start.adviesEx,start.verkooppunt!).pct).toBe(35);
-   const capped=distributeurPrijzen(100,40,{staffelId:"volume-max"})!;
+   const capped=distributeurPrijzen(100,40,{staffelId:"container"})!;
    expect(margeVerkooppunt(capped)).toBe(38.46);
    expect(brutomarge(capped.adviesEx,capped.verkooppunt!).pct).toBeCloseTo(38.46);
    expect(margeVerkooppunt(distributeurPrijzen(100)!)).toBeNull();

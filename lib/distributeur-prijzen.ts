@@ -1,15 +1,22 @@
 /** Prijsvoorstel per paneelmaat, met een ondergrens voor onze brutomarge.
  * Adviesprijzen zijn vrijblijvend. Dit wijzigt geen bestaande contracten. */
+/** Staffel per bestelling (één order, één levering), zoals in de Stone-Motion-prijslijst:
+ * volle fabriekspallets tellen, en een complete 40HQ-container krijgt de hoogste korting.
+ * Staffels stapelen niet. Onder één volle pallet: op aanvraag. */
 export const DEALER_STAFFELS = [
-  { id: "start", vanafM2: 0, totM2: 500, kortingPct: 35 },
-  { id: "groei", vanafM2: 500, totM2: 1000, kortingPct: 37.5 },
-  { id: "partner", vanafM2: 1000, totM2: 2000, kortingPct: 40 },
-  { id: "plus", vanafM2: 2000, totM2: 5000, kortingPct: 42.5 },
-  { id: "volume", vanafM2: 5000, totM2: 7500, kortingPct: 45 },
-  { id: "volume-plus", vanafM2: 7500, totM2: 10000, kortingPct: 47.5 },
-  { id: "volume-max", vanafM2: 10000, totM2: null, kortingPct: 50 },
+  { id: "pallets-1", vanafPallets: 1, totPallets: 3, container: false, kortingPct: 35 },
+  { id: "pallets-3", vanafPallets: 3, totPallets: 10, container: false, kortingPct: 40 },
+  { id: "pallets-10", vanafPallets: 10, totPallets: null, container: false, kortingPct: 45 },
+  { id: "container", vanafPallets: null, totPallets: null, container: true, kortingPct: 50 },
 ] as const;
-export type DealerStaffelId = typeof DEALER_STAFFELS[number]["id"];
+export type DealerStaffel = typeof DEALER_STAFFELS[number];
+export type DealerStaffelId = DealerStaffel["id"];
+/** Panelen per volle pallet volgens de fabrieksverpakking (Stone-Motion, okt. 2026). */
+export const PANELEN_PER_PALLET = [
+  { formaat: "3000 × 1200 mm", panelen: 50, uitzondering: "MS Travertino / Wood-cement: 60" },
+  { formaat: "1200 × 600 mm", panelen: 208, uitzondering: "Rough Granite, Stream Limestone, Italian Ash, Lime Stone, Terrazzo: 156" },
+  { formaat: "900 × 600 mm", panelen: 130, uitzondering: null },
+] as const;
 export const KORTING_VERKOOPPUNT = 35;
 export const KORTING_SHOWROOM = 60;
 export const MIN_MARGE_VERKOOPPUNT = 35;
@@ -17,9 +24,11 @@ export const MIN_MARGE_SHOWROOM = 30;
 export const DEEL_VERKOOPPUNT = 1 - KORTING_VERKOOPPUNT / 100;
 export const DEEL_SHOWROOM = 1 - KORTING_SHOWROOM / 100;
 
-export function staffelVoorVolume(m2: number) {
-  if (!Number.isFinite(m2) || m2 < 0) throw new Error("Ongeldige jaarafname.");
-  return [...DEALER_STAFFELS].reverse().find(s => m2 >= s.vanafM2)!;
+/** Staffel voor één bestelling: aantal volle pallets, of een complete container. */
+export function staffelVoorBestelling(pallets: number, volleContainer = false) {
+  if (volleContainer) return DEALER_STAFFELS[3];
+  if (!Number.isFinite(pallets) || pallets < 1) throw new Error("Onder één volle pallet: prijs op aanvraag.");
+  return [...DEALER_STAFFELS].filter(s => !s.container).reverse().find(s => pallets >= s.vanafPallets!)!;
 }
 export function staffelMetId(id: unknown) {
   return DEALER_STAFFELS.find(s => s.id === id) ?? DEALER_STAFFELS[0];
