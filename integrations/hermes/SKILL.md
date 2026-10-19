@@ -31,7 +31,7 @@ Elke repository heeft een eigen SSH-deploykey met schrijfrecht. Geen algemeen Gi
 
 1. Lees lokale AGENTS.md en relevante documentatie. Inspecteer git status. Maak bij bestaand werk een aparte worktree; overschrijf geen wijzigingen van anderen.
 2. `git fetch origin`, maak branch `hermes/<datum>-<onderwerp>` vanaf origin/main. Werk daar; force-push nooit.
-3. Voer relevante tests/lint/typechecks uit. Lees scripts voordat je ze uitvoert. Productie bij Vercel gebruikt Node 24. Geheimen voor builds blijven bij Vercel. Kopieer geen productie-.env naar een checkout.
+3. Voer relevante tests/lint/typechecks uit. Lees scripts voordat je ze uitvoert. Gebruik `source /home/hermes/habitat/node-env` voor Node 24 LTS; Vercel gebruikt eveneens Node 24. Geheimen voor builds blijven bij Vercel. Kopieer geen productie-.env naar een checkout.
 4. Bekijk diff, controleer secrets, commit uitsluitend bedoelde bronbestanden. Git-identiteit: Habitat Hermes / nickhouter96@gmail.com. Push de featurebranch voor een Vercel-preview.
 5. Een opdracht tot aanpassen/concept maken is geen opdracht tot publiceren. Als Nick expliciet zegt commit/push/deploy/publiceer, voer dat uit binnen de genoemde scope. Voor productie: fetch opnieuw, behoud nieuw werk, verifieer controles, merge de beoordeelde branch naar de nieuwste origin/main in een schone worktree en push zonder force.
 6. Vercel bouwt de gepushte broncode. Een geslaagde push is nog geen geslaagde deployment. Controleer status via beschikbare projecttools/dashboard en relevant gedrag op het domein. Als buildstatus niet toegankelijk is, meld 'gepusht, deployment nog niet bevestigd'.

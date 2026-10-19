@@ -65,9 +65,12 @@ Telegram is afgerond: bot `@hermes_wrsye5vwl7z26j2o_bot`, weergavenaam `Habitat-
 - Git-checkouts: `/home/hermes/habitat/repos/{crm,windows,website}`. Drie afzonderlijke SSH-deploykeys met schrijfrecht; geregistreerd bij uitsluitend hun eigen repository. Privésleutels staan op de server in `.ssh/habitat-{naam}` (600). GitHub-hostsleutels gepind op de officiële `/meta`-response.
 - Alle drie GitHub-repositories zijn gekoppeld aan hun Vercel-project; `main` is de productiebranch. Featurebranches voor previews; productiepush alleen bij een concrete publicatieopdracht. Geen algemeen GitHub- of Vercel-accounttoken op de agentserver.
 - Skill `habitat-systems` beschrijft opdrachtgrenzen, codebranches, controles, commits, deploymentcontrole en omgaan met onbetrouwbare mail/inhoud. Een geslaagde push is niet automatisch een geslaagde deployment.
+- Node 24.22.0 LTS staat op de server, met SHA256 gecontroleerd tegen de officiële Node-download. `source /home/hermes/habitat/node-env` activeert deze voor codewerk.
 - Vercel CLI 64.5.0 gebruikt via `npx --yes vercel@64.5.0`; globale oudere CLI niet vervangen.
 
 ## Validatie
+
+Git-pushes met de juiste GitHub-identiteit bouwen succesvol op Vercel. Directe CLI-uploads werden geweigerd op commit-auteur; gebruik de bestaande Git-integratie.
 
 Negen tests voor authenticatie, autorisatie, invoer, bodylimiet, foutafscherming en cachebeleid. Typecheck en gerichte lintcontrole. Acht leesqueries gecontroleerd op de echte database. `integrations/hermes/verify-db.ts` test schrijftaken, idempotentie, conceptconflicten en ontbrekende records in een transactie die altijd wordt teruggedraaid; geen testmails verstuurd.
 
