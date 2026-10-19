@@ -49,17 +49,13 @@ function euro(value: number, locale: string) {
   return new Intl.NumberFormat(locale, { style: "currency", currency: "EUR" }).format(value);
 }
 
-function Catalog({ items, locale, generatedAt }: { items: StockCatalogItem[]; locale: string; generatedAt: Date }) {
-  const copy = locale === "es"
-    ? { title: "Productos disponibles", intro: "Productos con existencias disponibles · precios de venta", count: "Productos", units: "Unidades disponibles", ex: "sin IVA", inc: "IVA incluido", stock: "Disponible", noImage: "Sin foto", footer: "Existencias en el momento de generar este documento" }
-    : locale === "en"
-      ? { title: "Products in stock", intro: "Products currently available · selling prices", count: "Products", units: "Units available", ex: "excl. VAT", inc: "incl. VAT", stock: "Available", noImage: "No photo", footer: "Stock snapshot at the time this document was generated" }
-      : { title: "Producten op voorraad", intro: "Producten die nu beschikbaar zijn · verkoopprijzen", count: "Producten", units: "Stuks beschikbaar", ex: "excl. btw", inc: "incl. btw", stock: "Beschikbaar", noImage: "Geen foto", footer: "Voorraadmomentopname op het tijdstip waarop dit document is gemaakt" };
+function Catalog({ items, locale, generatedAt, category }: { items: StockCatalogItem[]; locale: string; generatedAt: Date; category?: string }) {
+  const copy = { title: category ? `${category} stock list` : "Products in stock", intro: category ? `Available ${category} products · selling prices` : "Products currently available · selling prices", count: "Products", units: "Units available", ex: "excl. VAT", inc: "incl. VAT", stock: "Available", noImage: "No photo", footer: "Stock snapshot at the time this document was generated" };
   const units = items.reduce((sum, item) => sum + item.quantity, 0);
   return <Document title={copy.title} author={COMPANY.name}>
     <Page size="A4" style={s.page} wrap>
       <View style={s.top} fixed />
-      <View style={s.header} fixed><Text style={s.brand}>HABITAT ONE</Text><Text style={s.date}>{generatedAt.toLocaleDateString(locale)}</Text></View>
+      <View style={s.header} fixed><Text style={s.brand}>HABITAT ONE</Text><Text style={s.date}>{generatedAt.toLocaleDateString("en-GB")}</Text></View>
       <Text style={s.title}>{copy.title}</Text><Text style={s.intro}>{copy.intro}</Text>
       <View style={s.meta} wrap={false}><View><Text style={s.metaLabel}>{copy.count}</Text><Text style={s.metaValue}>{items.length}</Text></View><View><Text style={s.metaLabel}>{copy.units}</Text><Text style={s.metaValue}>{units.toLocaleString(locale)}</Text></View></View>
       <View style={s.grid}>
@@ -89,6 +85,6 @@ function Catalog({ items, locale, generatedAt }: { items: StockCatalogItem[]; lo
   </Document>;
 }
 
-export function renderProductStockCatalog(args: { items: StockCatalogItem[]; locale: string; generatedAt?: Date }) {
+export function renderProductStockCatalog(args: { items: StockCatalogItem[]; locale: string; generatedAt?: Date; category?: string }) {
   return renderToBuffer(<Catalog {...args} generatedAt={args.generatedAt ?? new Date()} />);
 }

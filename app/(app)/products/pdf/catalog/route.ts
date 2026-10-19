@@ -1,9 +1,8 @@
-import { asc, eq, inArray } from "drizzle-orm";
+import { and, asc, eq, inArray } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { products } from "@/lib/db/schema";
 import { computeKitStock, getReservedStockByProduct, type KitComponent } from "@/lib/stock";
 import { renderProductStockCatalog, type StockCatalogItem } from "@/lib/product-stock-catalog-pdf";
-import { huidigeTaal } from "@/lib/i18n/server";
 import { weigerRoute } from "@/lib/auth/guards";
 
 export const dynamic = "force-dynamic";
@@ -12,7 +11,7 @@ function allowedAssetUrl(raw: string | null | undefined): URL | null {
   if (!raw) return null;
   try {
     const url = new URL(raw);
-    const allowed = new Set(["habitat-one-ecru.vercel.app", "www.habitat-one.com", "habitat-one.com", "kcsqmsmferruwnhsibxk.supabase.co"]);
+    const allowed = new Set(["habitat-one-ecru.vercel.app", "www.habitat-one.com", "habitat-one.com", "kcsqmsmferruwnhsibxk.supabase.co", "cdn.shopify.com", "www.corneliuslifestyle.com"]);
     if (process.env.NEXT_PUBLIC_SUPABASE_URL) allowed.add(new URL(process.env.NEXT_PUBLIC_SUPABASE_URL).hostname);
     return url.protocol === "https:" && !url.username && !url.password && (!url.port || url.port === "443") && allowed.has(url.hostname) ? url : null;
   } catch { return null; }
@@ -23,7 +22,7 @@ async function safeImage(raw: string | null | undefined): Promise<string | null>
   if (!url) return null;
   try {
     const response = await fetch(url, { redirect: "error", signal: AbortSignal.timeout(12000) });
-    if (!response.ok || !response.body || !/^image\/(jpeg|png|webp)$/i.test(response.headers.get("content-type") ?? "")) return null;
+    if (!response.ok || !response.body || !/^image\/(jpeg|png|webp|avif)$/i.test(response.headers.get("content-type") ?? "")) return null;
     if (Number(response.headers.get("content-length")) > 8_000_000) { await response.body.cancel(); return null; }
     const reader = response.body.getReader(), chunks: Uint8Array[] = [];
     let size = 0;
@@ -40,13 +39,15 @@ async function safeImage(raw: string | null | undefined): Promise<string | null>
   } catch { return null; }
 }
 
-export async function GET() {
+export async function GET(request: Request) {
   const denied = await weigerRoute("producten");
   if (denied) return denied;
 
-  const locale = await huidigeTaal();
+  const category = new URL(request.url).searchParams.get("category")?.trim() ?? "";
+  if (category.length > 120) return new Response("Invalid product type", { status: 400 });
+  const locale = "en";
   const [rows, reserved] = await Promise.all([
-    db.query.products.findMany({ where: eq(products.isActive, true), orderBy: [asc(products.category), asc(products.name)] }),
+    db.query.products.findMany({ where: and(eq(products.isActive, true), category ? eq(products.category, category) : undefined), orderBy: [asc(products.category), asc(products.name)] }),
     getReservedStockByProduct(),
   ]);
   const skuSet = new Set(rows.flatMap(row => (row.components as KitComponent[] | null ?? []).map(part => part.sku)));
@@ -59,7 +60,7 @@ export async function GET() {
   for (const row of rows) {
     if (row.availability === "order_only") continue;
     const names = row.nameI18n as { nl?: string; en?: string; es?: string; de?: string } | null;
-    const name = names?.[locale] || row.name;
+    const name = names?.en || row.name;
     const dims = [row.lengthMm, row.widthMm, row.heightMm].filter(v => v != null && Number(v) > 0).map(v => `${Number(v)} mm`).join(" × ") || null;
     const components = row.components as KitComponent[] | null;
     const baseQty = components?.length
@@ -93,11 +94,12 @@ export async function GET() {
   }));
 
   const generatedAt = new Date();
-  const pdf = await renderProductStockCatalog({ items, locale, generatedAt });
+  const pdf = await renderProductStockCatalog({ items, locale, generatedAt, category: category || undefined });
   const today = generatedAt.toISOString().slice(0, 10);
+  const suffix = category ? `-${category.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "")}` : "";
   return new Response(new Uint8Array(pdf), { headers: {
     "content-type": "application/pdf",
-    "content-disposition": `attachment; filename="Habitat-One-voorraad-${today}.pdf"`,
+    "content-disposition": `attachment; filename="Habitat-One-stock-catalog${suffix}-${today}.pdf"`,
     "cache-control": "no-store, max-age=0, must-revalidate",
   } });
 }
