@@ -11,6 +11,7 @@ import type { DocumentLineItem } from "@/lib/db/schema";
 import { computeTotals, lineNet, lineUnitPrice } from "@/lib/documents";
 import { LINE_CATEGORIES, vatForCategory } from "@/lib/products";
 import { cn, formatEUR } from "@/lib/utils";
+import { catalogLineCost } from "@/lib/catalog-line-cost";
 
 /** Eén uitvoering/maat van een product, zoals de kiezer die krijgt. */
 type ProductMaat = NonNullable<ProductOption["additionalSizes"]>[number];
@@ -165,21 +166,11 @@ export function LineItemsEditor({
   const [audience, setAudience] = useState<"particulier" | "aannemer">("particulier");
 
   const totals = computeTotals(rows.map(rowToItem).filter((r) => r.name.length > 0));
-  const costById = new Map(products.map((p) => [p.id, p.costEur != null ? Number(p.costEur) : null]));
-  // Ook op SKU kunnen matchen (regels die wel een SKU in de omschrijving hebben
-  // maar niet aan een productId gekoppeld zijn) — net als de factuurweergave.
-  const costBySku = new Map(
-    products
-      .filter((p) => p.sku && p.costEur != null)
-      .map((p) => [p.sku as string, Number(p.costEur)]),
-  );
+  const productCostOf = catalogLineCost(products);
   /** Kostprijs van een regel: eigen costEur (kozijn), anders via productId of SKU. */
   const costOfRow = (r: Row): number | null => {
     if (r.costEur != null && r.costEur !== "") return Number(r.costEur);
-    const byId = r.productId ? costById.get(r.productId) : undefined;
-    if (byId != null) return byId;
-    const bySku = r.description ? costBySku.get(r.description.trim()) : undefined;
-    return bySku ?? null;
+    return productCostOf(r) ?? null;
   };
 
   const priceFor = (p: { priceEur: string | null; tradePriceEur: string | null }) =>
@@ -290,6 +281,8 @@ export function LineItemsEditor({
       taxRate: String(p.vatRate ?? 21),
       category: "materiaal",
       productId: p.id,
+      // Snapshot the selected size's cost so saving/reopening keeps its margin.
+      costEur: size ? (size.costEur != null ? String(size.costEur) : undefined) : p.costEur ?? undefined,
       phase: "",
     };
     setRows((rs) =>
@@ -457,7 +450,7 @@ export function LineItemsEditor({
   let costedCount = 0;
   let productLineCount = 0;
   for (const r of rows) {
-    const isProductLine = !!r.productId || (r.description ? costBySku.has(r.description.trim()) : false);
+    const isProductLine = !!r.productId || productCostOf(r) != null;
     if (!isProductLine) continue;
     productLineCount++;
     const cost = costOfRow(r);

@@ -28,6 +28,7 @@ import { db } from "@/lib/db";
 import { brands, companies, deliveries, documents, holdedSyncMap, products } from "@/lib/db/schema";
 import { SubmitButton } from "@/components/submit-button";
 import { lineCostEur, lineNet, lineTax, normalizeDocItems } from "@/lib/documents";
+import { catalogLineCost } from "@/lib/catalog-line-cost";
 import { missingBillingFields } from "@/lib/invoice-validation";
 import { labelForCategory } from "@/lib/products";
 import { HOOFDSTUKKEN } from "@/lib/price-book";
@@ -271,7 +272,7 @@ export default async function DocumentDetailPage({
             itemProductIds.length ? inArray(products.id, itemProductIds) : undefined,
             itemSkus.length ? inArray(products.sku, itemSkus) : undefined,
           ),
-          columns: { id: true, sku: true, name: true, costEur: true, stockQty: true, stockMin: true, brandId: true },
+          columns: { id: true, sku: true, name: true, costEur: true, additionalSizes: true, stockQty: true, stockMin: true, brandId: true },
         })
       : [];
   // Merken die we niet op voorraad houden (Brauer): daar is "niet op voorraad"
@@ -285,10 +286,6 @@ export default async function DocumentDetailPage({
       })
     : [];
   const bestelMerkNaam = new Map(bestelMerken.map((b) => [b.id, b.name]));
-  const costById = new Map(costRows.map((p) => [p.id, Number(p.costEur ?? 0)]));
-  const costBySku = new Map(
-    costRows.filter((p) => p.sku).map((p) => [p.sku as string, Number(p.costEur ?? 0)]),
-  );
   // Voorraad per product (op id én sku) — voor de tekort-waarschuwing.
   type StockInfo = { sku: string | null; name: string; stock: number; min: number; merk: string | null };
   const stockByKey = new Map<string, StockInfo>();
@@ -342,9 +339,7 @@ export default async function DocumentDetailPage({
   let docCost = 0;
   let costedRevenue = 0;
   let costedLines = 0;
-  const productCostOf = (it: (typeof items)[number]) =>
-    (it.productId ? costById.get(it.productId) : undefined) ??
-    (it.description ? costBySku.get(it.description.trim()) : undefined);
+  const productCostOf = catalogLineCost(costRows);
   for (const it of items) {
     const cost = lineCostEur(it, productCostOf); // regel-kostprijs > marge% > catalogus
     if (cost != null) {
