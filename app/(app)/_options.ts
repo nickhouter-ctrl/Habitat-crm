@@ -18,7 +18,7 @@ export type ProductOption = {
   costEur: string | null;
   vatRate: number;
   additionalSizes:
-    | Array<{ sku: string; label: string; priceEur?: number | null; inStock?: boolean; stockQty?: number | null }>
+    | Array<{ sku: string; label: string; priceEur?: number | null; costEur?: number | null; inStock?: boolean; stockQty?: number | null }>
     | null;
 };
 
@@ -94,8 +94,9 @@ async function listActiveProducts(): Promise<ProductOption[]> {
   // Twee redenen. De payload: met een merkassortiment erbij dragen 1.500
   // producten samen ruim 9.000 uitvoeringen, en die gingen integraal mee naar
   // de browser op élke offerte- en factuurpagina (2,4 MB). En de inhoud: in
-  // die volle jsonb zitten inkoop- en kostprijzen per uitvoering, en die horen
-  // sowieso niet in de browser thuis.
+  // die volle jsonb zitten ook leveranciersprijzen en andere velden die deze
+  // interne kiezer niet nodig heeft. Alleen de landed kostprijs gaat mee voor
+  // de margecontrole, net als de kostprijs van het hoofdproduct.
   return rijen.map((p) => ({
     ...p,
     additionalSizes:
@@ -103,6 +104,7 @@ async function listActiveProducts(): Promise<ProductOption[]> {
         sku: m.sku,
         label: m.label,
         priceEur: m.priceEur ?? null,
+        costEur: m.costEur ?? null,
         inStock: m.inStock,
         stockQty: m.stockQty ?? null,
       })) ?? null,
