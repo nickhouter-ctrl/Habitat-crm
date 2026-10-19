@@ -44,11 +44,18 @@ export async function GET(request: Request) {
   const denied = await weigerRoute("producten");
   if (denied) return denied;
 
-  const category = new URL(request.url).searchParams.get("category")?.trim() ?? "";
-  if (category.length > 120) return new Response("Invalid product type", { status: 400 });
+  const params = new URL(request.url).searchParams;
+  const collection = params.get("collection")?.trim() ?? "";
+  // Keep existing links to a specific product type working as well.
+  const category = params.get("category")?.trim() ?? "";
+  if (collection.length > 120 || category.length > 120) return new Response("Invalid product group", { status: 400 });
+  const catalogLabel = collection || category;
   const locale = "en";
   const [rows, reserved] = await Promise.all([
-    db.query.products.findMany({ where: and(eq(products.isActive, true), category ? eq(products.category, category) : undefined), orderBy: [asc(products.category), asc(products.name)] }),
+    db.query.products.findMany({
+      where: and(eq(products.isActive, true), collection ? eq(products.collection, collection) : undefined, category ? eq(products.category, category) : undefined),
+      orderBy: [asc(products.collection), asc(products.category), asc(products.name)],
+    }),
     getReservedStockByProduct(),
   ]);
   const skuSet = new Set(rows.flatMap(row => (row.components as KitComponent[] | null ?? []).map(part => part.sku)));
@@ -95,9 +102,9 @@ export async function GET(request: Request) {
   }));
 
   const generatedAt = new Date();
-  const pdf = await renderProductStockCatalog({ items, locale, generatedAt, category: category || undefined });
+  const pdf = await renderProductStockCatalog({ items, locale, generatedAt, category: catalogLabel || undefined });
   const today = generatedAt.toISOString().slice(0, 10);
-  const suffix = category ? `-${category.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "")}` : "";
+  const suffix = catalogLabel ? `-${catalogLabel.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "")}` : "";
   return new Response(new Uint8Array(pdf), { headers: {
     "content-type": "application/pdf",
     "content-disposition": `attachment; filename="Habitat-One-stock-catalog${suffix}-${today}.pdf"`,

@@ -2955,6 +2955,8 @@ const rows: [string,string,string][] = [
   ["📄 PDF-overzicht","📄 Resumen PDF","📄 PDF overview"],
   ["Product type","Tipo de producto","Product type"],
   ["All product types","Todos los tipos","All product types"],
+  ["Hoofdcategorie","Categoría principal","Main category"],
+  ["Alle hoofdcategorieën","Todas las categorías principales","All main categories"],
   ["📦 Stock catalogue PDF","📦 Catálogo de stock PDF","📦 Stock catalogue PDF"],
   ["Labels printen","Imprimir etiquetas","Print labels"],
   ["Producten (totaal)","Productos (total)","Products (total)"],
