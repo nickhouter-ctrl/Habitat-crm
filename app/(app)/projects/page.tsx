@@ -1,3 +1,4 @@
+import { loadCatalogLineCost } from "@/lib/catalog-costs";
 import { TabsRoot, TabsBar, TabPanel } from "@/components/tabs";
 import { requireModuleRead } from "@/lib/auth/guards";
 import { projectProgress } from "@/lib/project-progress";
@@ -35,8 +36,7 @@ import {
   timeEntries,
   users,
 } from "@/lib/db/schema";
-import { docOwnShare, docProductMargin, normalizeDocItems } from "@/lib/documents";
-import type { DocumentLineItem } from "@/lib/db/schema";
+import { docOwnShare, docProductMargin, normalizeDocItems, lineMaterialCostEur } from "@/lib/documents";
 import { deriveAdvanceCover, deriveProjectMargins, deriveProjectFinancials, projectWorkProfit } from "@/lib/project-financials";
 import { splitProjectReceipts } from "@/lib/receipts";
 import { poExVatSql } from "@/lib/purchase-orders-sql";
@@ -281,37 +281,9 @@ export default async function ProjectsPage({
 
   // Kostprijs eigen producten: koppel offerte-/factuurregels aan de productcatalogus
   // (op productId of op SKU=omschrijving). Verwacht = max(gefactureerd, offerte).
-  const pidSet = new Set<string>();
-  const skuSet = new Set<string>();
-  for (const d of costDocs) {
-    for (const it of normalizeDocItems(d.items)) {
-      if (it.productId) pidSet.add(it.productId);
-      if (it.description?.trim()) skuSet.add(it.description.trim());
-    }
-  }
-  const prodCostRows =
-    pidSet.size || skuSet.size
-      ? await db.query.products.findMany({
-          where: (p, { or, inArray: inArr }) =>
-            or(
-              pidSet.size ? inArr(p.id, [...pidSet]) : undefined,
-              skuSet.size ? inArr(p.sku, [...skuSet]) : undefined,
-            ),
-          columns: { id: true, sku: true, costEur: true },
-        })
-      : [];
-  const pCostById = new Map(prodCostRows.map((p) => [p.id, Number(p.costEur ?? 0)]));
-  const pCostBySku = new Map(prodCostRows.filter((p) => p.sku).map((p) => [p.sku as string, Number(p.costEur ?? 0)]));
-  const lineCost = (items: unknown) => {
-    let cost = 0;
-    for (const it of normalizeDocItems(items)) {
-      const c =
-        (it.productId ? pCostById.get(it.productId) : undefined) ??
-        (it.description ? pCostBySku.get(it.description.trim()) : undefined);
-      if (c != null && c > 0) cost += c * (Number(it.units) || 0);
-    }
-    return cost;
-  };
+  const productCostOf = await loadCatalogLineCost();
+  const lineCost = (items: unknown) => normalizeDocItems(items)
+    .reduce((total, item) => total + lineMaterialCostEur(item, productCostOf), 0);
 
   // Per project: gereserveerd + kostprijs eigen producten (realized vs. offerte).
   const docsByProject = new Map<string, typeof costDocs>();
@@ -325,9 +297,6 @@ export default async function ProjectsPage({
   const ownProductCostByProject = new Map<string, number>();
   // Verkoop én kostprijs van de eigen producten — zelfde meting als het detailscherm.
   const ownProductMarginByProject = new Map<string, { revenue: number; cost: number; uncosted: number }>();
-  const productCostOf = (it: DocumentLineItem) =>
-    (it.productId ? pCostById.get(it.productId) : undefined) ??
-    (it.description ? pCostBySku.get(it.description.trim()) : undefined);
   for (const [pid, docs] of docsByProject) {
     reservedByProject.set(pid, computeReservedNet(docs as ReservedDoc[]));
     // Kostprijs eigen producten TOT NU TOE = gerealiseerd op facturen (− creditnota's).

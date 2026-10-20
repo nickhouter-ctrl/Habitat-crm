@@ -1,3 +1,4 @@
+import { loadCatalogLineCost } from "@/lib/catalog-costs";
 import { FinancialDetailsProvider, FinancialInspect, FinancialTable, type FinancialDetail, type FinancialSection } from "@/components/project-financial-details";
 import { projectAdvanceLedger } from "@/lib/project-advance-ledger";
 import { ActionDialog } from "@/components/action-dialog";
@@ -9,7 +10,7 @@ import { datumTaal } from "@/lib/i18n/server";
 import { tekst as uiTranslation } from '@/lib/i18n/server';
 import { loadProjectFunding } from "@/lib/project-funding";
 import { projectCostStreams, splitPurchaseCost, splitLooseCost } from "@/lib/project-cost-streams";
-import { and, asc, desc, eq, inArray, isNull, or, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, isNull, sql } from "drizzle-orm";
 import { headers } from "next/headers";
 import Link from "next/link";
 import { notFound } from "next/navigation";
@@ -66,7 +67,6 @@ import { gecrediteerdeParen } from "@/lib/credit-pairs";
 import { poExVat, poExVatAmount, poExVatAssumingSpanishVat } from "@/lib/purchase-orders";
 import { DEFAULT_LABOR_MARGIN_PCT, DEFAULT_PURCHASE_MARGIN_PCT, deriveAdvanceCover, deriveProjectMargins } from "@/lib/project-financials";
 import { defaultReceiptVatRate, receiptExVat as exBtwVanOntvangst, splitReceipt, splitProjectReceipts } from "@/lib/receipts";
-import type { DocumentLineItem } from "@/lib/db/schema";
 import { moneyForInput } from "@/lib/parse-money";
 import { formatEUR } from "@/lib/utils";
 import {
@@ -240,32 +240,7 @@ export default async function ProjectDetailPage({
       ),
     )
     .orderBy(desc(documents.createdAt));
-  const allPids = new Set<string>();
-  const allSkus = new Set<string>();
-  for (const d of marginDocs) {
-    for (const it of normalizeDocItems(d.items)) {
-      if (it.productId) allPids.add(it.productId);
-      if (it.description?.trim()) allSkus.add(it.description.trim());
-    }
-  }
-  const projCostRows =
-    allPids.size || allSkus.size
-      ? await db.query.products.findMany({
-          where: or(
-            allPids.size ? inArray(products.id, [...allPids]) : undefined,
-            allSkus.size ? inArray(products.sku, [...allSkus]) : undefined,
-          ),
-          columns: { id: true, sku: true, costEur: true },
-        })
-      : [];
-  const pCostById = new Map(projCostRows.map((p) => [p.id, Number(p.costEur ?? 0)]));
-  const pCostBySku = new Map(
-    projCostRows.filter((p) => p.sku).map((p) => [p.sku as string, Number(p.costEur ?? 0)]),
-  );
-  // Kostprijs-lookup uit de catalogus (op productId of SKU/omschrijving).
-  const productCostOf = (it: DocumentLineItem) =>
-    (it.productId ? pCostById.get(it.productId) : undefined) ??
-    (it.description ? pCostBySku.get(it.description.trim()) : undefined);
+  const productCostOf = await loadCatalogLineCost();
   // Marge per document: regel-kostprijs > regel-marge% > catalogus-kostprijs.
   const docMarginCost = (items: unknown) => {
     let cost = 0;

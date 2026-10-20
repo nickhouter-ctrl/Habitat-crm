@@ -1,3 +1,5 @@
+import { invoiceProductMargin } from "@/lib/catalog-line-cost";
+import { loadCatalogLineCost } from "@/lib/catalog-costs";
 import { datumTaal } from "@/lib/i18n/server";
 import { tekst as uiTranslation } from '@/lib/i18n/server';
 import { and, count, desc, eq, gte, inArray, isNotNull, ne, notInArray, sql } from "drizzle-orm";
@@ -73,7 +75,6 @@ const ACTIVITY_LABEL: Record<string, string> = {
 export default async function DashboardPage() {
   const uiDateLocale = await datumTaal();
   const uiT = await uiTranslation();
-  const t0 = Date.now();
   const now = new Date();
   const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0, 10);
   const today = now.toISOString().slice(0, 10);
@@ -165,12 +166,11 @@ export default async function DashboardPage() {
   // te beginnen; de awaits verderop pakken alleen nog het resultaat.
   const since12 = new Date(now.getFullYear(), now.getMonth() - 11, 1).toISOString().slice(0, 10);
 
-  console.log(`[dash] eerste golf klaar na ${Date.now() - t0} ms`);
   // Tweede golf: één Promise.all, net als de eerste golf. Losse
   // Promise.resolve-kickoffs + een volle pool lieten postgres.js queries
   // pipelinen waarvan er één in protocol-limbo bleef (server: ClientRead)
   // — de response sloot dan pas bij de functie-timeout van 60 s.
-  const [reservedByProduct, activeProductRows, estimateRows, invoicedSumRows, openOffertes, openSalesInvoices, plannedDeliveries, deliveredDocRows, toPlanRows, doorProductRows, doorInvoiceRows, productCostRows, cogsRows, revByMonthRows, estByMonthRows, [estConv]] = await Promise.all([
+  const [reservedByProduct, activeProductRows, estimateRows, invoicedSumRows, openOffertes, openSalesInvoices, plannedDeliveries, deliveredDocRows, toPlanRows, doorProductRows, doorInvoiceRows, productCostOf, cogsRows, revByMonthRows, estByMonthRows, [estConv]] = await Promise.all([
     getReservedStockByProduct(),
     db
       .select({ id: products.id, sku: products.sku, name: products.name, stockQty: products.stockQty })
@@ -285,11 +285,11 @@ export default async function DashboardPage() {
       .from(documents)
       .leftJoin(projects, eq(documents.projectId, projects.id))
       .where(eq(documents.kind, "invoice")),
-    db.select({ id: products.id, costEur: products.costEur }).from(products),
+    loadCatalogLineCost(),
     db
       .select({ items: documents.items, issueDate: documents.issueDate, kind: documents.kind })
       .from(documents)
-      .where(inArray(documents.kind, ["invoice", "creditnote"])),
+      .where(and(inArray(documents.kind, ["invoice", "creditnote"]), notInArray(documents.status, ["draft", "void", "rejected"]), sql`coalesce(${documents.isExternal}, false) = false`)),
     db
       .select({
         ym: sql<string>`to_char(${documents.issueDate}, 'YYYY-MM')`,
@@ -315,7 +315,6 @@ export default async function DashboardPage() {
       .from(documents)
       .where(eq(documents.kind, "estimate")),
   ]);
-  console.log(`[dash] tweede golf klaar na ${Date.now() - t0} ms`);
   const toOrder = activeProductRows
     .map((p) => {
       const reserved = reservedByProduct.get(p.id) ?? 0;
@@ -376,26 +375,10 @@ export default async function DashboardPage() {
   const revenueAll = Number(docAgg.revenueAll) - Number(creditAgg.paidAll);
   const revenueMonth = Number(docAgg.revenueMonth) - Number(creditAgg.revenueMonth);
 
-  // Marge = omzet − kostprijs van de verkochte producten (COGS uit de
-  // factuurregels × products.costEur). Creditnota's draaien de marge terug.
-  // Regels zonder gekoppeld product (bv. arbeid) tellen niet mee in de COGS.
-  const costMap = new Map(productCostRows.map((p) => [p.id, Number(p.costEur) || 0]));
-  let cogsAll = 0;
-  let cogsMonth = 0;
-  for (const d of cogsRows) {
-    const sign = d.kind === "creditnote" ? -1 : 1;
-    const inMonth = !!d.issueDate && String(d.issueDate).slice(0, 10) >= monthStart;
-    for (const it of normalizeDocItems(d.items)) {
-      if (!it.productId) continue;
-      const c = (costMap.get(it.productId) ?? 0) * (Number(it.units) || 0) * sign;
-      cogsAll += c;
-      if (inMonth) cogsMonth += c;
-    }
-  }
-  const marginAll = revenueAll - cogsAll;
-  const marginMonth = revenueMonth - cogsMonth;
-  const marginPctAll = revenueAll > 0 ? Math.round((marginAll / revenueAll) * 100) : 0;
-  const marginPctMonth = revenueMonth > 0 ? Math.round((marginMonth / revenueMonth) * 100) : 0;
+  // Product margin only includes known costs; labor is not free product revenue.
+  const productMargin = invoiceProductMargin(cogsRows, productCostOf, monthStart);
+  const marginPctAll = productMargin.all.marginPct;
+  const marginPctMonth = productMargin.month.marginPct;
   const unpushedPurchase = Number(purchaseAgg.totalEur);
   const totalPurchase = Number(holdedExpensesYTD) + unpushedPurchase;
   const acceptedN = acceptedAgg?.n ?? 0;
@@ -421,11 +404,11 @@ export default async function DashboardPage() {
       >
       {/* KPI's — altijd zichtbaar onder de tabbalk */}
       <div className="order-1 mb-6 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
-        <StatTile label={uiT("Omzet deze maand")} value={formatEUR(revenueMonth)} hint={marginPctMonth != null ? uiT("{v0}% marge · ex. BTW", { v0: marginPctMonth }) : uiT("ex. BTW")} tone="success" icon={<TrendingUp className="size-5" />} />
+        <StatTile label={uiT("Omzet deze maand")} value={formatEUR(revenueMonth)} hint={marginPctMonth != null ? uiT(productMargin.month.uncostedLines ? "{pct}% productmarge · onvolledig · ex. BTW" : "{pct}% productmarge · ex. BTW", { pct: marginPctMonth }) : uiT("ex. BTW")} tone="success" icon={<TrendingUp className="size-5" />} />
         <StatTile label={uiT("Openstaande facturen")} value={docAgg.outstandingN} hint={formatEUR(docAgg.outstandingV)} tone="warning" icon={<Clock className="size-5" />} />
         <StatTile label={uiT("Vervallen facturen")} value={docAgg.overdueN} hint={formatEUR(docAgg.overdueV)} tone="danger" icon={<AlertTriangle className="size-5" />} />
         <StatTile label={uiT("Geaccepteerde offertes")} value={acceptedN} hint={uiT("klaar om te factureren")} tone="accent" icon={<CheckCircle2 className="size-5" />} />
-        <StatTile label={uiT("Totale omzet")} value={formatEUR(revenueAll)} hint={marginPctAll != null ? uiT("{v0}% marge · dit jaar", { v0: marginPctAll }) : uiT("ex. BTW · dit jaar")} tone="info" icon={<Wallet className="size-5" />} />
+        <StatTile label={uiT("Totale omzet")} value={formatEUR(revenueAll)} hint={marginPctAll != null ? uiT(productMargin.all.uncostedLines ? "{pct}% productmarge · onvolledig · ex. BTW" : "{pct}% productmarge · ex. BTW", { pct: marginPctAll }) : uiT("Productmarge onbekend · ex. BTW")} tone="info" icon={<Wallet className="size-5" />} />
       </div>
 
         <TabsBar

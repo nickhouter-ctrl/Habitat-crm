@@ -269,8 +269,8 @@ export default async function BestellenPage({
                         const orderable = sizes.filter((sz) => sz.label);
                         const multiSize = orderable.length >= 2;
                         const single = orderable.length === 1 ? orderable[0] : null;
-                        const inkoop = single?.purchaseEur ?? (p.purchaseCostEur != null ? Number(p.purchaseCostEur) : null);
-                        const kostprijs = single?.costEur ?? (p.costEur != null ? Number(p.costEur) : null);
+                        const inkoop = single ? (single.purchaseEur ?? null) : (p.purchaseCostEur != null ? Number(p.purchaseCostEur) : null);
+                        const kostprijs = single ? (single.costEur ?? null) : (p.costEur != null ? Number(p.costEur) : null);
                         const stock = single
                           ? (single.stockQty ?? 0)
                           : p.stockQty != null

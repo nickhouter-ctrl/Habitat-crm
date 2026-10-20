@@ -1,3 +1,4 @@
+import { loadCatalogLineCost } from "@/lib/catalog-costs";
 import "server-only";
 import { sql } from "drizzle-orm";
 import { db } from "@/lib/db";
@@ -12,7 +13,7 @@ import { gecrediteerdeParen } from "@/lib/credit-pairs";
  * Amounts are booked costs, not assertions about payments to suppliers.
  */
 export async function loadProjectFunding(projectId?:string, includeClosed = false) {
-  const [rows,productRows]=await Promise.all([
+  const [rows,productCostOf]=await Promise.all([
     db.execute<{
       id:string;name:string;labor:string;laborPct:string|null;purchasePct:string|null;
       payments:ReceiptLike[];docs:{id:string;docNumber:string|null;kind:string;status:string;items:unknown;subtotal:string;total:string|null;paid:string|null}[];
@@ -40,17 +41,15 @@ export async function loadProjectFunding(projectId?:string, includeClosed = fals
       coalesce((select sum(a.amount_eur) from project_funding_adjustments a where a.project_id=p.id),0)::text "advanceCredit",
       (select string_agg(a.description, '; ' order by a.effective_date, a.created_at) from project_funding_adjustments a where a.project_id=p.id) "advanceCreditDescription"
       from projects p where ${projectId?sql`p.id=${projectId}`:includeClosed?sql`true`:sql`p.status='active'`}`),
-    db.execute<{id:string;sku:string|null;cost:string|null}>(sql`select id,sku,cost_eur::text cost from products`),
+    loadCatalogLineCost(),
   ]);
-  const byId=new Map(productRows.map(p=>[p.id,Number(p.cost)]));
-  const bySku=new Map(productRows.filter(p=>p.sku).map(p=>[p.sku!,Number(p.cost)]));
   return new Map(rows.map(p=>{
     const ownShareByDoc = projectReceiptShares(p.docs, p.payments,
-      it => (it.productId ? byId.get(it.productId) : undefined) ?? (it.description ? bySku.get(it.description.trim()) : undefined));
+      productCostOf);
     const receipts = splitProjectReceipts(p.payments, ownShareByDoc);
     const costs = projectCostStreams(p.purchases,p.costs);
     const own = projectOwnProducts([...p.docs,{kind:"invoice",status:"paid",items:p.deliveries}],costs.groups,
-      it => (it.productId ? byId.get(it.productId) : undefined) ?? (it.description ? bySku.get(it.description.trim()) : undefined));
+      productCostOf);
     own.revenue += Number(p.extraRevenue);
     own.totalRevenue += Number(p.extraRevenue);
     own.cost += Number(p.extraCost);
@@ -69,7 +68,7 @@ export async function loadProjectFunding(projectId?:string, includeClosed = fals
       coverReceivedEx:receipts.liquidReceived,ownProductReceivedEx:receipts.ownProductReceived,ownProductCost:own.bookedCost,
       requiredRevenue:margins.laborRevenue+margins.purchaseRevenue+margins.otherRevenue,advanceCreditEx:Number(p.advanceCredit),advanceCreditDescription:p.advanceCreditDescription});
     const productReceipts = clientFundingProducts(p.docs, p.payments, ownShareByDoc,
-      it => (it.productId ? byId.get(it.productId) : undefined) ?? (it.description ? bySku.get(it.description.trim()) : undefined));
+      productCostOf);
     return [p.id,{id:p.id,name:p.name,openInvoicedEx,cover,ownShareByDoc,costs,own,margins,productReceipts}] as const;
   }));
 }

@@ -256,14 +256,10 @@ export function LineItemsEditor({
   const addFromProduct = (productId: string, size?: ProductMaat) => {
     const p = products.find((x) => x.id === productId);
     if (!p) return;
-    // Maat-prijs heeft voorrang; anders de productprijs.
+    // Een gekozen uitvoering moet een eigen bevestigde verkoopprijs hebben.
     const basePrice = priceFor(p);
-    const sizePrice =
-      size && size.priceEur != null && size.priceEur !== undefined
-        ? Number(size.priceEur)
-        : basePrice
-          ? Number(basePrice)
-          : null;
+    const sizePrice = size ? (size.priceEur ?? null) : (basePrice ? Number(basePrice) : null);
+    if (!(Number(sizePrice) > 0)) return; // Unpriced variants require a confirmed catalogue price.
     const row: Row = {
       name: size ? `${p.name} — ${size.label}` : p.name,
       // De uitvoeringscode erbij: dát is wat er straks op de bestelling naar de
@@ -575,6 +571,8 @@ export function LineItemsEditor({
                       className="mt-1 text-xs"
                       list="doc-phase-suggestions"
                     />
+                    {m == null && r.productId && <p className="mt-1 text-xs text-warning">{uiT("Kostprijs ontbreekt — marge onbekend.")}</p>}
+                    {r.productId && !(Number(r.price) > 0) && <p className="mt-1 text-xs text-danger">{uiT("Verkoopprijs ontbreekt — controleer vóór verzending.")}</p>}
                     {m != null && (
                       <p
                         className={cn(
@@ -1004,6 +1002,7 @@ export function LineItemsEditor({
                             <li key={p.id}>
                               <button
                                 type="button"
+                                disabled={!hasSizes && !(Number(price) > 0)}
                                 onClick={() => {
                                   if (hasSizes) {
                                     toggleMaten(p.id);
@@ -1044,7 +1043,7 @@ export function LineItemsEditor({
                                         : uiT("{v0} uitvoeringen ↓", { v0: maten.totaal })
                                       : added
                                         ? uiT("✓ toegevoegd")
-                                        : uiT("+ toevoegen")}
+                                        : !(Number(price) > 0) ? uiT("Prijs op aanvraag") : uiT("+ toevoegen")}
                                   </span>
                                 </span>
                               </button>
@@ -1060,6 +1059,7 @@ export function LineItemsEditor({
                                       <li key={s.sku || s.label}>
                                         <button
                                           type="button"
+                                          disabled={!(Number(s.priceEur) > 0)}
                                           onClick={() => {
                                             addFromProduct(p.id, s);
                                             setAddedIds((prev) => new Set(prev).add(p.id));
@@ -1093,10 +1093,10 @@ export function LineItemsEditor({
                                           </span>
                                           <span className="flex shrink-0 items-center gap-3 text-xs">
                                             <span className="tabular-nums">
-                                              {s.priceEur != null ? formatEUR(s.priceEur) : "—"}
+                                              {Number(s.priceEur) > 0 ? formatEUR(s.priceEur!) : uiT("Prijs op aanvraag")}
                                             </span>
                                             <span className="rounded bg-accent/10 px-2 py-0.5 font-medium text-accent">
-                                              {uiT("+ toevoegen")} </span>
+                                              {Number(s.priceEur) > 0 ? uiT("+ toevoegen") : uiT("Prijs ontbreekt")} </span>
                                           </span>
                                         </button>
                                       </li>

@@ -1,8 +1,9 @@
+import { loadCatalogLineCost } from "@/lib/catalog-costs";
 import { salesContactActivityFilter } from "@/lib/auth/sales-scope";
 import { datumTaal } from "@/lib/i18n/server";
 import { ActionDialog } from "@/components/action-dialog";
 import { tekst as uiTranslation } from '@/lib/i18n/server';
-import { and, desc, eq, inArray, or } from "drizzle-orm";
+import { and, desc, eq, inArray } from "drizzle-orm";
 import {
   Bell,
   CalendarClock,
@@ -41,13 +42,12 @@ import {
   contacts,
   documents,
   holdedSyncMap,
-  products,
   projects,
   sentEmails,
 } from "@/lib/db/schema";
 import { ContactOnlineAccess } from "@/components/contact-online-access";
 import { cn, formatDate, formatEUR } from "@/lib/utils";
-import { normalizeDocItems } from "@/lib/documents";
+import { normalizeDocItems, lineCostEur, lineNet } from "@/lib/documents";
 import { ConfirmSubmit } from "@/components/confirm-submit";
 import { SubmitButton } from "@/components/submit-button";
 import { AccountReminderButton } from "@/components/account-reminder-button";
@@ -188,33 +188,16 @@ export default async function ContactDetailPage({
   const marginItems = marginDocs.flatMap((d) =>
     normalizeDocItems(d.items).map((it) => ({ it, sign: d.kind === "creditnote" ? -1 : 1 })),
   );
-  const mPids = [...new Set(marginItems.map((x) => x.it.productId).filter(Boolean) as string[])];
-  const mSkus = [...new Set(marginItems.map((x) => x.it.description?.trim()).filter(Boolean) as string[])];
-  const mCostRows =
-    mPids.length || mSkus.length
-      ? await db.query.products.findMany({
-          where: or(
-            mPids.length ? inArray(products.id, mPids) : undefined,
-            mSkus.length ? inArray(products.sku, mSkus) : undefined,
-          ),
-          columns: { id: true, sku: true, costEur: true },
-        })
-      : [];
-  const mCostById = new Map(mCostRows.map((p) => [p.id, Number(p.costEur ?? 0)]));
-  const mCostBySku = new Map(
-    mCostRows.filter((p) => p.sku).map((p) => [p.sku as string, Number(p.costEur ?? 0)]),
-  );
+  const productCostOf = await loadCatalogLineCost();
   let margeRevenue = 0;
   let margeCost = 0;
   let margeCosted = 0;
   for (const { it, sign } of marginItems) {
-    const cost =
-      (it.productId ? mCostById.get(it.productId) : undefined) ??
-      (it.description ? mCostBySku.get(it.description.trim()) : undefined);
+    const cost = lineCostEur(it, productCostOf);
     if (cost != null && cost > 0) {
-      const net = (Number(it.price) || 0) * (Number(it.units) || 0) * (1 - (Number(it.discount) || 0) / 100);
+      const net = lineNet(it);
       margeRevenue += sign * net;
-      margeCost += sign * cost * (Number(it.units) || 0);
+      margeCost += sign * cost;
       margeCosted++;
     }
   }

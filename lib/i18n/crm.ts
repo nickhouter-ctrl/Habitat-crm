@@ -1,5 +1,16 @@
 /** Vaste CRM-schermteksten. Opgeslagen klantinhoud wordt niet vertaald. */
 const rows: [string,string,string][] = [
+  ["Kostprijs ontbreekt — marge onbekend.", "Falta el coste — margen desconocido.", "Cost price missing — margin unknown."],
+  ["Verkoopprijs ontbreekt — controleer vóór verzending.", "Falta el precio de venta — compruébalo antes de enviar.", "Sale price missing — check before sending."],
+  ["Prijs op aanvraag", "Precio bajo consulta", "Price on request"],
+  ["Prijs ontbreekt", "Falta el precio", "Price missing"],
+  ["Productmarge onbekend · ex. BTW", "Margen de producto desconocido · sin IVA", "Product margin unknown · excl. VAT"],
+  ["{pct}% productmarge · ex. BTW", "{pct}% margen de producto · sin IVA", "{pct}% product margin · excl. VAT"],
+  ["{pct}% productmarge · onvolledig · ex. BTW", "{pct}% margen de producto · incompleto · sin IVA", "{pct}% product margin · incomplete · excl. VAT"],
+  ["Uitvoering zonder kostprijs", "Variante sin coste", "Variant without cost price"],
+  ["Uitvoering zonder verkoopprijs", "Variante sin precio de venta", "Variant without sale price"],
+  ["Uitvoering met kostprijs ≥ verkoopprijs", "Variante con coste ≥ precio de venta", "Variant with cost ≥ sale price"],
+
   ["Iedereen","Todos","Everyone"],
   ["(geen nr.)","(sin núm.)","(no number)"],
   ["bij","en","at"],
