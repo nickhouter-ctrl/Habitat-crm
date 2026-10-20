@@ -139,6 +139,7 @@ function InvoiceReviewCard({
   const [split, setSplit] = useState(data.lines.length > 1);
   const [extraRegels, setExtraRegels] = useState(0);
   const [rejecting, setRejecting] = useState(false);
+  const [approveError, setApproveError] = useState<string | null>(null);
   const [sendMail, setSendMail] = useState(true);
   const [mailTo, setMailTo] = useState(data.emailCandidates[0]?.email ?? "");
   const gekozen = data.emailCandidates.find((c) => c.email === mailTo);
@@ -239,7 +240,17 @@ function InvoiceReviewCard({
 
       {/* Goedkeuren, met correctie */}
       {!rejecting && (
-        <form action={approveReviewAction.bind(null, data.id)} className="space-y-3 border-t pt-3">
+        <form
+          action={async (fd) => {
+            setApproveError(null);
+            const r = await approveReviewAction(data.id, fd);
+            if (r && r.error) setApproveError(r.error);
+          }}
+          className="space-y-3 border-t pt-3"
+        >
+          {approveError && (
+            <p role="alert" className="rounded-lg bg-danger/10 p-3 text-sm font-medium text-danger">{approveError}</p>
+          )}
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
             <Field label={uiT("Leverancier")} htmlFor={`sup-${data.id}`}>
               <Input id={`sup-${data.id}`} name="supplier" defaultValue={data.supplier ?? ""} />

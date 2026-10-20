@@ -37,7 +37,7 @@ import { rateToEur } from "@/lib/fx";
 import { evaluateInvoice, type Check, type InvoiceVerdict } from "@/lib/invoice-checks";
 import { matchProject, type ProjectNeedle } from "@/lib/project-match";
 import { matchWorkerByName, poExVatAssumingSpanishVat } from "@/lib/purchase-orders";
-import { verdeelBedragen } from "@/lib/verdeel-bedragen";
+import { VerdelingFoutError, verdeelBedragen, verdelingFout } from "@/lib/verdeel-bedragen";
 import { sendEmail } from "@/lib/email";
 import { recordSentEmail } from "@/lib/sent-email";
 import { copyMailAttachmentToPoBucket, downloadMailAttachmentBuffer } from "@/lib/storage";
@@ -791,6 +791,46 @@ export async function approveInvoiceReview(args: {
   const split = o.split?.length ? o.split : null;
   const projectId = split ? null : (o.projectId ?? review.suggestedProjectId);
 
+  // Kosten op de juiste plek zetten.
+  const ex = poExVatAssumingSpanishVat({ subtotal, total, tax: null, items: [] });
+  const ruw = split ?? (projectId ? [{ projectId, hours: o.hours ?? null, amount: ex.amount }] : []);
+
+  // Een verdeling kan nooit méér kosten dan de factuur ex btw waard is. Bij
+  // Wilhelmus 0-05 telden de ingevulde bedragen op tot € 1.061,78 — het totaal
+  // INCLUSIEF btw — en stond er dus 21% te veel arbeidskost op drie werven.
+  // De verhouding tussen de delen blijft; alleen de schaal gaat terug naar het
+  // bedrag ex btw. Btw is geen kostprijs.
+  // Ontbrekende bedragen aanvullen en het geheel binnen de factuur houden —
+  // zie lib/verdeel-bedragen.ts voor de regel en de tests.
+  // Staat de leverancier als arbeider in de ploeg, dan is zijn uurtarief bekend
+  // en volgt het bedrag per werf uit uren × tarief. Zo hoef je bij het
+  // goedkeuren alleen de uren per werf in te vullen.
+  const verdelingen = verdeelBedragen(ruw, ex.amount, werker?.hourlyCostEur != null ? Number(werker.hourlyCostEur) : null);
+  const somDelen = ruw.reduce((s, d) => s + (d.amount ?? 0), 0);
+  if (somDelen > ex.amount + 0.01) {
+    console.warn(
+      `[inkoop] verdeling van ${reference ?? supplier} telde op tot ${somDelen.toFixed(2)} terwijl de factuur ${ex.amount.toFixed(2)} ex btw is — teruggeschaald`,
+    );
+  }
+
+  // Harde grens: wat er op de werven komt, is precies de factuur ex btw. Bij
+  // Pieter Hoogendijk 260074 stond een urenfactuur van € 2.255 op geen enkele
+  // werf, en bij 260076 alleen zijn eigen uren (€ 1.260 van € 2.020) — de tweede
+  // man en het vervoer waren weg. Dan liever niet goedkeuren en het zeggen.
+  const fout = verdelingFout({
+    kind,
+    verdelingen,
+    exBtw: ex.amount,
+    vrijgesteld: !!o.overhead || !!o.hoursAlreadyLogged || hasApprovedTimesheet,
+  });
+  if (fout) {
+    await db
+      .update(purchaseInvoiceReviews)
+      .set({ status: "pending", decidedBy: null, decidedAt: null, decidedVia: null, updatedAt: new Date() })
+      .where(eq(purchaseInvoiceReviews.id, review.id));
+    throw new VerdelingFoutError(fout);
+  }
+
   const [po] = await db
     .insert(purchaseOrders)
     .values({
@@ -822,28 +862,6 @@ export async function approveInvoiceReview(args: {
       stockAppliedAt: new Date(), // geen voorraadmutatie
     })
     .returning({ id: purchaseOrders.id });
-
-  // Kosten op de juiste plek zetten.
-  const ex = poExVatAssumingSpanishVat({ subtotal, total, tax: null, items: [] });
-  const ruw = split ?? (projectId ? [{ projectId, hours: o.hours ?? null, amount: ex.amount }] : []);
-
-  // Een verdeling kan nooit méér kosten dan de factuur ex btw waard is. Bij
-  // Wilhelmus 0-05 telden de ingevulde bedragen op tot € 1.061,78 — het totaal
-  // INCLUSIEF btw — en stond er dus 21% te veel arbeidskost op drie werven.
-  // De verhouding tussen de delen blijft; alleen de schaal gaat terug naar het
-  // bedrag ex btw. Btw is geen kostprijs.
-  // Ontbrekende bedragen aanvullen en het geheel binnen de factuur houden —
-  // zie lib/verdeel-bedragen.ts voor de regel en de tests.
-  // Staat de leverancier als arbeider in de ploeg, dan is zijn uurtarief bekend
-  // en volgt het bedrag per werf uit uren × tarief. Zo hoef je bij het
-  // goedkeuren alleen de uren per werf in te vullen.
-  const verdelingen = verdeelBedragen(ruw, ex.amount, werker?.hourlyCostEur != null ? Number(werker.hourlyCostEur) : null);
-  const somDelen = ruw.reduce((s, d) => s + (d.amount ?? 0), 0);
-  if (somDelen > ex.amount + 0.01) {
-    console.warn(
-      `[inkoop] verdeling van ${reference ?? supplier} telde op tot ${somDelen.toFixed(2)} terwijl de factuur ${ex.amount.toFixed(2)} ex btw is — teruggeschaald`,
-    );
-  }
 
   if (kind === "labor" && hasApprovedTimesheet) {
     // The detailed spreadsheet rows are the source of hours. Link them to the

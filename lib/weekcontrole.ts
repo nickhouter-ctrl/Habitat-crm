@@ -130,6 +130,41 @@ export async function verzamelWeekcontrole(): Promise<Weekcontrole> {
     });
   }
 
+  /* ── D1 · Facturen die niet (helemaal) op een werf staan ──
+   *
+   * D hierboven ziet alleen urenfacturen die al urenregels hebben. Een
+   * urenfactuur zonder één regel (Pieter Hoogendijk 260074, € 2.255) of een
+   * materiaalfactuur waarvan één bon nooit verdeeld is (260050, € 380,74 voor
+   * Silvestre) bleef zo maanden onzichtbaar. Hier telt elke factuur die niet
+   * als geheel aan één project hangt: alles wat er op de werven staat, moet
+   * samen precies de factuur ex btw zijn. Vaste lasten en voorraadinkoop zonder
+   * enige verdeling vallen erbuiten — die horen op geen werf. */
+  const nietVerdeeld = await db.execute<{ ref: string | null; supplier: string; geboekt: number; sub: number; tot: number; arbeid: boolean }>(sql`
+    with x as (
+      select po.id, po.reference ref, po.supplier, po.count_as_labor arbeid,
+             coalesce(nullif(po.subtotal,0),0)::float8 sub, coalesce(po.total,0)::float8 tot,
+             (coalesce((select sum(t.hours * t.hourly_cost_eur) from time_entries t where t.purchase_order_id = po.id), 0)
+              + coalesce((select sum(c.amount_eur) from project_costs c where c.purchase_order_id = po.id), 0))::float8 geboekt,
+             exists (select 1 from workers w where lower(w.name) = lower(split_part(po.supplier, ' /', 1))) ploeg
+      from purchase_orders po
+      where po.status <> 'cancelled' and po.project_id is null
+    )
+    select ref, supplier, geboekt, sub, tot, arbeid from x
+    where (geboekt > 0.005 or arbeid or ploeg)
+      and abs(geboekt - case when sub > 0 then sub else tot end) > 0.05
+      and abs(geboekt - tot / 1.21) > 0.05
+      and not (arbeid and geboekt > 0.005) -- die meldt D al`);
+  if (nietVerdeeld.length > 0) {
+    signalen.push({
+      ernst: "hoog",
+      titel: `${nietVerdeeld.length} factu${nietVerdeeld.length === 1 ? "ur staat" : "ren staan"} niet (helemaal) op een werf`,
+      regels: nietVerdeeld.map(
+        (r) =>
+          `${r.ref ?? r.supplier} · op werven ${eur(r.geboekt)} · factuur ${eur(r.sub > 0 ? r.sub : r.tot)}${r.geboekt < 0.005 ? " — nergens geboekt" : ""}`,
+      ),
+    });
+  }
+
   /* ── D2 · Dezelfde factuur twee keer op één werf ──
    * De handmatig ingetypte regel naast de regel die uit de inkoopmail kwam.
    * Niets koppelt die twee, dus geen enkele andere controle ziet het; op

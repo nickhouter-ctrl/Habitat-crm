@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { verdeelBedragen } from "@/lib/verdeel-bedragen";
+import { verdeelBedragen, verdelingFout } from "@/lib/verdeel-bedragen";
 
 const som = (d: { amount: number }[]) => Math.round(d.reduce((s, x) => s + x.amount, 0) * 100) / 100;
 
@@ -55,14 +55,52 @@ describe("verdeelBedragen met een bekend uurtarief", () => {
     expect(Math.round(uit.reduce((s, d) => s + d.amount, 0) * 100) / 100).toBeCloseTo(1120.5, 1);
   });
 
-  it("laat een ingevuld bedrag met rust, ook als er een tarief bekend is", () => {
+  it("laat een ingevuld bedrag met rust; de rest van de factuur gaat naar de lege regel", () => {
     const uit = verdeelBedragen([{ hours: 10, amount: 100 }, { hours: 10 }], 1000, 27);
     expect(uit[0].amount).toBe(100);
-    expect(uit[1].amount).toBe(270);
+    expect(uit[1].amount).toBe(900);
+  });
+
+  it("verliest de tweede man en het vervoer niet (Pieter Hoogendijk 260076)", () => {
+    // Pieter € 30/u, 42 uur over vijf werven = € 1.260; de factuur is € 2.020
+    // ex btw omdat Luis (€ 630), vervoer (€ 100) en transport (€ 30) erop staan.
+    const uit = verdeelBedragen([{ hours: 8 }, { hours: 17 }, { hours: 2 }, { hours: 8 }, { hours: 7 }], 2020, 30);
+    expect(som(uit)).toBe(2020);
+    // Elke werf houdt minstens zijn eigen uren × tarief, plus naar rato de rest.
+    expect(uit[1].amount).toBeGreaterThan(17 * 30);
+    expect(uit[1].amount).toBeCloseTo(2020 * (17 / 42), 1);
+  });
+
+  it("sluit op de cent, ook als naar rato niet rond uitkomt", () => {
+    expect(som(verdeelBedragen([{ hours: 1 }, { hours: 1 }, { hours: 1 }], 100, 30))).toBe(100);
+    expect(som(verdeelBedragen([{ hours: 1 }, { hours: 1 }, { hours: 1 }], 100))).toBe(100);
   });
 
   it("valt terug op naar rato als er geen tarief is", () => {
     const uit = verdeelBedragen([{ hours: 1 }, { hours: 3 }], 400, null);
     expect(uit.map((d) => d.amount)).toEqual([100, 300]);
+  });
+});
+
+describe("verdelingFout", () => {
+  it("weigert een urenfactuur die op geen enkele werf staat (Pieter Hoogendijk 260074)", () => {
+    expect(verdelingFout({ kind: "labor", verdelingen: [], exBtw: 2255, vrijgesteld: false })).toMatch(/geen enkele werf/);
+  });
+
+  it("laat vaste lasten en al gelogde uren door", () => {
+    expect(verdelingFout({ kind: "labor", verdelingen: [], exBtw: 2255, vrijgesteld: true })).toBeNull();
+  });
+
+  it("laat een materiaalfactuur zonder werf door (voorraad, container)", () => {
+    expect(verdelingFout({ kind: "material", verdelingen: [], exBtw: 500, vrijgesteld: false })).toBeNull();
+  });
+
+  it("weigert een verdeling die niet op de factuur uitkomt", () => {
+    const fout = verdelingFout({ kind: "labor", verdelingen: [{ amount: 1260 }], exBtw: 2020, vrijgesteld: false });
+    expect(fout).toMatch(/verschil € 760,00/);
+  });
+
+  it("accepteert een verdeling die op de cent sluit", () => {
+    expect(verdelingFout({ kind: "labor", verdelingen: [{ amount: 1010 }, { amount: 1010 }], exBtw: 2020, vrijgesteld: false })).toBeNull();
   });
 });

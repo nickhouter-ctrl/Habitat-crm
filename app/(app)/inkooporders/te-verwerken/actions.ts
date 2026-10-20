@@ -19,6 +19,7 @@ import {
 import { db } from "@/lib/db";
 import { activities, projects, purchaseInvoiceReviews, timeEntries, workers } from "@/lib/db/schema";
 import { workerRate } from "@/lib/worker-rate";
+import { VerdelingFoutError } from "@/lib/verdeel-bedragen";
 
 /** Bedrag-string (NL-komma of punt) → number; leeg/ongeldig → null. */
 function amountOrNull(v: FormDataEntryValue | null): number | null {
@@ -86,7 +87,7 @@ export async function approveTimesheetReviewAction(reviewId: string, formData: F
   revalidatePath("/projects");
 }
 
-export async function approveReviewAction(reviewId: string, formData: FormData) {
+export async function approveReviewAction(reviewId: string, formData: FormData): Promise<{ error?: string } | void> {
   const user = await requireModule("inkoop");
 
   // Verdeling over meerdere werven: regel-index → project + uren + bedrag.
@@ -147,7 +148,13 @@ export async function approveReviewAction(reviewId: string, formData: FormData) 
     }
   }
 
-  await approveInvoiceReview({ reviewId, overrides, userId: user.id, via: "app" });
+  try {
+    await approveInvoiceReview({ reviewId, overrides, userId: user.id, via: "app" });
+  } catch (e) {
+    // De verdeling sloot niet op de factuur: niets goedgekeurd, en zeggen waarom.
+    if (e instanceof VerdelingFoutError) return { error: e.message };
+    throw e;
+  }
   refresh();
 }
 
