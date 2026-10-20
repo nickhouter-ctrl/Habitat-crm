@@ -37,7 +37,11 @@ export function catalogLineCost(products: CatalogProduct[]) {
         ?? sizes.find(size => description === size.label || line.name === `${product.name} — ${size.label}`);
       if (selected) return cost(selected.costEur);
       // An obsolete/unknown variant code must not inherit a different size's cost.
-      if (sizes.length && description.includes(" · ")) return undefined;
+      if (sizes.length && (
+        description.includes(" · ")
+        || (sku !== product.sku && (bySku.has(sku) || (!!product.sku && sku.startsWith(`${product.sku}-`))))
+        || line.name?.startsWith(`${product.name} — `)
+      )) return undefined;
       return cost(product.costEur);
     }
     return bySku.get(sku);

@@ -28,6 +28,9 @@ describe("catalog line costs", () => {
     expect(resolve({ productId: "rowena", description: "2900*1200 · MS-291-5" })).toBe(75.63);
     expect(resolve({ productId: "rowena", description: "Other · MS-291-10" })).toBeUndefined();
     expect(resolve({ productId: "rowena", description: "Wrong product · MS-340-1" })).toBeUndefined();
+    expect(resolve({ productId: "rowena", description: "MS-291-10" })).toBeUndefined();
+    expect(resolve({ productId: "rowena", description: "MS-340-1" })).toBeUndefined();
+    expect(resolve({ productId: "rowena", name: "Rowena Travertine - Beige — Old size" })).toBeUndefined();
   });
   it("does not fall back to the parent when the chosen size has no cost", () => {
     expect(resolve({ productId: "rowena", description: "Unknown cost · MS-291-2" })).toBeUndefined();
