@@ -1,3 +1,4 @@
+import { loadCatalogLineCost } from "@/lib/catalog-costs";
 /**
  * Weekcontrole: loopt de administratie na op de dingen die in de praktijk
  * misgingen — dubbele facturen, urenregels die centen lieten vallen, betaalde
@@ -13,7 +14,6 @@ import { sql } from "drizzle-orm";
 
 import { db } from "@/lib/db";
 import { zoekDubbeleFacturen } from "@/lib/dubbele-facturen";
-import type { DocumentLineItem } from "@/lib/db/schema";
 import { projectReceiptShares, splitProjectReceipts, type ReceiptLike } from "@/lib/receipts";
 import { alGedekt } from "@/lib/project-receipts";
 import { projectCostStreams, projectOwnProducts } from "@/lib/project-cost-streams";
@@ -280,13 +280,7 @@ export async function verzamelWeekcontrole(): Promise<Weekcontrole> {
   const docs = await db.execute<{ id: string; project_id: string; kind: string; status: string; subtotal: string; items: unknown }>(sql`
     select id, project_id, kind, status, subtotal_eur::text subtotal, items from documents
     where exists(select 1 from projects p where p.id=documents.project_id and p.status='active')`);
-  const kostRows = await db.execute<{ id: string; sku: string | null; cost: number | null }>(sql`
-    select id, sku, cost_eur::float8 cost from products`);
-  const kostPerId = new Map(kostRows.map((r) => [r.id, Number(r.cost ?? 0)]));
-  const kostPerSku = new Map(kostRows.filter((r) => r.sku).map((r) => [r.sku as string, Number(r.cost ?? 0)]));
-  const productCostOf = (it: DocumentLineItem) =>
-    (it.productId ? kostPerId.get(it.productId) : undefined) ??
-    (it.description ? kostPerSku.get(it.description.trim()) : undefined);
+  const productCostOf = await loadCatalogLineCost();
   for (const p of projecten) {
     const ownShareByDoc = projectReceiptShares(docs.filter(d=>d.project_id===p.id), p.payments, productCostOf);
     const streams=projectCostStreams(p.purchases,p.costs);

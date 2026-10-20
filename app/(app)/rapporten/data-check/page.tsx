@@ -50,6 +50,7 @@ export default async function DataCheckPage() {
       isActive: products.isActive,
       stockQty: products.stockQty,
       costEur: products.costEur,
+      additionalSizes: products.additionalSizes,
       priceEur: products.priceEur,
       imageUrl: products.imageUrl,
       barcode: products.barcode,
@@ -72,6 +73,15 @@ export default async function DataCheckPage() {
   const active = prods.filter((p) => p.isActive);
 
   const issues: Issue[] = [];
+
+  const variants = active.flatMap(p => (Array.isArray(p.additionalSizes) ? p.additionalSizes : []).map(size => ({ p, size })));
+  for (const check of [
+    { key: "variant-no-cost", title: uiT("Uitvoering zonder kostprijs"), why: "Deze uitvoering telt niet mee in de productmarge. Vul de bevestigde inkoop- en bijkomende kosten in.", test: (s: typeof variants[number]["size"]) => !(Number(s.costEur) > 0) },
+    { key: "variant-no-price", title: uiT("Uitvoering zonder verkoopprijs"), why: "Deze uitvoering kan pas uit de offertekiezer worden toegevoegd nadat de verkoopprijs is bevestigd.", test: (s: typeof variants[number]["size"]) => !(Number(s.priceEur) > 0) },
+    { key: "variant-loss", title: uiT("Uitvoering met kostprijs ≥ verkoopprijs"), why: "Controleer de kosten, verkoopprijs en geselecteerde maat voordat je een offerte verstuurt.", test: (s: typeof variants[number]["size"]) => Number(s.costEur) > 0 && Number(s.priceEur) > 0 && Number(s.costEur) >= Number(s.priceEur) },
+  ]) issues.push({ ...check, tone: "warning", items: variants.filter(({ size }) => check.test(size)).map(({ p, size }) => ({
+    label: `${p.name} — ${size.label}`, sub: `${size.sku || "Artikelcode ontbreekt"} · kost ${Number(size.costEur) > 0 ? eur(Number(size.costEur)) : "onbekend"} · verkoop ${Number(size.priceEur) > 0 ? eur(Number(size.priceEur)) : "onbekend"}`, href: prodHref(p.id),
+  })) });
 
   // 1. Negatieve voorraad
   const negStock = prods.filter((p) => p.stockQty != null && Number(p.stockQty) < 0);

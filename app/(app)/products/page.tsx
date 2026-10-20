@@ -432,10 +432,10 @@ export default async function ProductsPage({
                     ).filter((s) => s.sku || s.label);
                     const hasGrid = sizeRows.length >= 2;
                     const single = sizeRows.length === 1 ? sizeRows[0] : null;
-                    const dispPrice = single?.priceEur ?? (p.priceEur != null ? Number(p.priceEur) : null);
+                    const dispPrice = single ? (single.priceEur ?? null) : (p.priceEur != null ? Number(p.priceEur) : null);
                     const dispPurchase =
-                      single?.purchaseEur ?? (p.purchaseCostEur != null ? Number(p.purchaseCostEur) : null);
-                    const dispCost = single?.costEur ?? (p.costEur != null ? Number(p.costEur) : null);
+                      single ? (single.purchaseEur ?? null) : (p.purchaseCostEur != null ? Number(p.purchaseCostEur) : null);
+                    const dispCost = single ? (single.costEur ?? null) : (p.costEur != null ? Number(p.costEur) : null);
                     const dispStock = single ? (single.stockQty ?? 0) : stock;
                     const dispMargin = dispPrice != null && dispCost != null ? dispPrice - dispCost : null;
                     const dispMarginPct =

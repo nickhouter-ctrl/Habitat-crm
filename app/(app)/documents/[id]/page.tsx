@@ -1,3 +1,4 @@
+import { loadCatalogLineCost } from "@/lib/catalog-costs";
 import { TabsRoot, TabsBar, TabPanel } from "@/components/tabs";
 import { datumTaal } from "@/lib/i18n/server";
 import { tekst as uiTranslation } from '@/lib/i18n/server';
@@ -28,7 +29,6 @@ import { db } from "@/lib/db";
 import { brands, companies, deliveries, documents, holdedSyncMap, products } from "@/lib/db/schema";
 import { SubmitButton } from "@/components/submit-button";
 import { lineCostEur, lineNet, lineTax, normalizeDocItems } from "@/lib/documents";
-import { catalogLineCost } from "@/lib/catalog-line-cost";
 import { missingBillingFields } from "@/lib/invoice-validation";
 import { labelForCategory } from "@/lib/products";
 import { HOOFDSTUKKEN } from "@/lib/price-book";
@@ -339,7 +339,7 @@ export default async function DocumentDetailPage({
   let docCost = 0;
   let costedRevenue = 0;
   let costedLines = 0;
-  const productCostOf = catalogLineCost(costRows);
+  const productCostOf = await loadCatalogLineCost();
   for (const it of items) {
     const cost = lineCostEur(it, productCostOf); // regel-kostprijs > marge% > catalogus
     if (cost != null) {
