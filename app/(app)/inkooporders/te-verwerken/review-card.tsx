@@ -138,6 +138,9 @@ function InvoiceReviewCard({
   const [kind, setKind] = useState<"labor" | "material" | "">(data.kind ?? "");
   const [split, setSplit] = useState(data.lines.length > 1);
   const [extraRegels, setExtraRegels] = useState(0);
+  // Transport-/reiskosten: sleutels in plaats van een teller, zodat je er één
+  // tussenuit kunt halen zonder dat de rest verspringt.
+  const [kostenRegels, setKostenRegels] = useState<number[]>([]);
   const [rejecting, setRejecting] = useState(false);
   const [approveError, setApproveError] = useState<string | null>(null);
   const [sendMail, setSendMail] = useState(true);
@@ -391,9 +394,51 @@ function InvoiceReviewCard({
                   {uiT("+ werf toevoegen")} </button>
                 <p className="text-xs text-muted">
                   {uiT("Bedrag leeg laten mag: dan wordt")} {data.subtotal != null ? formatEUR(data.subtotal) : uiT("het bedrag ex. btw")}{" "}
-                  {uiT("over de werven verdeeld naar rato van de uren. Vul je ze wél in, dan horen ze samen op dat bedrag uit te komen. De inkooporder zelf blijft bij een verdeling ongekoppeld — anders telt het bedrag dubbel.")} </p>
+                  {uiT("over de werven verdeeld naar rato van de uren. Vul je ze wél in, dan horen ze samen op dat bedrag uit te komen. De inkooporder zelf blijft bij een verdeling ongekoppeld — anders telt het bedrag dubbel.")}
+                  {kostenRegels.length > 0 && <> {uiT("Transport- en reiskosten hieronder gaan daar eerst af.")}</>} </p>
               </div>
             )}
+          </div>
+
+          {/* Transport- of reiskosten op dezelfde factuur: die horen bij de
+              gekozen werven, niet op een eigen regel zonder werf. */}
+          <div className="rounded-md bg-surface/50 p-2.5">
+            {kostenRegels.length > 0 && (
+              <div className="mb-2 space-y-2">
+                {kostenRegels.map((k) => (
+                  <div key={k} className="grid items-center gap-2 sm:grid-cols-[1fr_8rem_auto]">
+                    <Select name={`extra_${k}_label`} defaultValue="Transportkosten" aria-label={uiT("Soort kosten")}>
+                      <option value="Transportkosten">{uiT("Transportkosten")}</option>
+                      <option value="Reiskosten">{uiT("Reiskosten")}</option>
+                      <option value="Overige kosten">{uiT("Overige kosten")}</option>
+                    </Select>
+                    <Input
+                      name={`extra_${k}_amount`}
+                      inputMode="decimal"
+                      placeholder={uiT("bedrag ex. btw")}
+                      className="text-right"
+                      required
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setKostenRegels((r) => r.filter((x) => x !== k))}
+                      className="px-1 text-muted hover:text-danger"
+                      aria-label={uiT("Kostenregel weghalen")}
+                    >
+                      ×
+                    </button>
+                  </div>
+                ))}
+                <p className="text-xs text-muted">
+                  {uiT("Wordt verdeeld over de gekozen werven, naar rato van de uren (zonder uren: naar rato van het bedrag). Komt als kostenregel op elk project.")} </p>
+              </div>
+            )}
+            <button
+              type="button"
+              onClick={() => setKostenRegels((r) => [...r, (r.at(-1) ?? -1) + 1])}
+              className="text-xs text-accent hover:underline"
+            >
+              {uiT("+ transport-/reiskosten toevoegen")} </button>
           </div>
 
           {kind === "labor" && (

@@ -112,3 +112,27 @@ function begrens<T extends { amount: number }>(delen: T[], totaalExBtw: number):
   }
   return delen;
 }
+
+/**
+ * Een losse kostenpost op de factuur — transport, reiskosten — over dezelfde
+ * werven verdelen als de rest. Naar rato van de uren als elke werf uren heeft
+ * (wie meer dagen op een werf stond, reed er ook vaker heen), anders naar rato
+ * van het bedrag per werf, en zonder iets bruikbaars gelijk op. Sluit op de cent.
+ *
+ * Wilhelmus 0-14: € 931,50 uren op Finca Lisa (5 u) en Thomas & Marit (29,5 u)
+ * plus € 180 reiskosten — die € 180 hoort bij die twee werven, niet op een
+ * derde regel zonder werf.
+ */
+export function verdeelOverWerven<T extends { hours?: number | null; amount: number }>(
+  werven: T[],
+  bedrag: number,
+): (T & { amount: number })[] {
+  if (werven.length === 0) return [];
+  const opUren = werven.every((w) => (w.hours ?? 0) > 0);
+  const opBedrag = werven.some((w) => w.amount > 0);
+  const gewogen = verdeelBedragen(
+    werven.map((w) => ({ w, hours: opUren ? w.hours : opBedrag ? Math.max(0, w.amount) : 1 })),
+    bedrag,
+  );
+  return gewogen.map((g) => ({ ...g.w, amount: g.amount }));
+}

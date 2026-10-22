@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { verdeelBedragen, verdelingFout } from "@/lib/verdeel-bedragen";
+import { verdeelBedragen, verdeelOverWerven, verdelingFout } from "@/lib/verdeel-bedragen";
 
 const som = (d: { amount: number }[]) => Math.round(d.reduce((s, x) => s + x.amount, 0) * 100) / 100;
 
@@ -102,5 +102,30 @@ describe("verdelingFout", () => {
 
   it("accepteert een verdeling die op de cent sluit", () => {
     expect(verdelingFout({ kind: "labor", verdelingen: [{ amount: 1010 }, { amount: 1010 }], exBtw: 2020, vrijgesteld: false })).toBeNull();
+  });
+});
+
+describe("verdeelOverWerven", () => {
+  it("verdeelt reiskosten naar rato van de uren (Wilhelmus 0-14)", () => {
+    const uit = verdeelOverWerven(
+      [{ projectId: "finca", hours: 5, amount: 135 }, { projectId: "thomas", hours: 29.5, amount: 796.5 }],
+      180,
+    );
+    expect(uit.map((d) => d.projectId)).toEqual(["finca", "thomas"]);
+    expect(som(uit)).toBe(180);
+    expect(uit[0].amount).toBeCloseTo(180 * (5 / 34.5), 1);
+  });
+
+  it("valt terug op het bedrag per werf als er geen uren zijn", () => {
+    const uit = verdeelOverWerven([{ amount: 300 }, { amount: 100 }], 40);
+    expect(uit.map((d) => d.amount)).toEqual([30, 10]);
+  });
+
+  it("sluit op de cent", () => {
+    expect(som(verdeelOverWerven([{ hours: 1, amount: 0 }, { hours: 1, amount: 0 }, { hours: 1, amount: 0 }], 100))).toBe(100);
+  });
+
+  it("geeft niets terug zonder werven", () => {
+    expect(verdeelOverWerven([], 50)).toEqual([]);
   });
 });

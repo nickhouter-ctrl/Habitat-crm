@@ -110,6 +110,16 @@ export async function approveReviewAction(reviewId: string, formData: FormData):
     });
   }
 
+  // Transport- of reiskosten die over de gekozen werven verdeeld worden.
+  const extras: NonNullable<ApprovalOverrides["extras"]> = [];
+  for (const [key, value] of formData.entries()) {
+    const m = key.match(/^extra_(\d+)_amount$/);
+    if (!m) continue;
+    const amount = amountOrNull(value);
+    if (amount == null || amount <= 0) continue;
+    extras.push({ label: String(formData.get(`extra_${m[1]}_label`) ?? "").trim() || "Transportkosten", amount });
+  }
+
   const overrides: ApprovalOverrides = {
     supplier: String(formData.get("supplier") ?? "").trim() || null,
     reference: String(formData.get("reference") ?? "").trim() || null,
@@ -122,6 +132,7 @@ export async function approveReviewAction(reviewId: string, formData: FormData):
     hoursAlreadyLogged: formData.get("hoursAlreadyLogged") === "on",
     overhead: formData.get("overhead") === "on",
     split: split.length > 1 ? split : undefined,
+    extras: extras.length ? extras : undefined,
   };
 
   const review = await db.query.purchaseInvoiceReviews.findFirst({ where: eq(purchaseInvoiceReviews.id, reviewId) });

@@ -37,7 +37,7 @@ import { rateToEur } from "@/lib/fx";
 import { evaluateInvoice, type Check, type InvoiceVerdict } from "@/lib/invoice-checks";
 import { matchProject, type ProjectNeedle } from "@/lib/project-match";
 import { matchWorkerByName, poExVatAssumingSpanishVat } from "@/lib/purchase-orders";
-import { VerdelingFoutError, verdeelBedragen, verdelingFout } from "@/lib/verdeel-bedragen";
+import { VerdelingFoutError, verdeelBedragen, verdeelOverWerven, verdelingFout } from "@/lib/verdeel-bedragen";
 import { sendEmail } from "@/lib/email";
 import { recordSentEmail } from "@/lib/sent-email";
 import { copyMailAttachmentToPoBucket, downloadMailAttachmentBuffer } from "@/lib/storage";
@@ -633,6 +633,12 @@ export type ApprovalOverrides = {
   /** Verdeling over meerdere werven; overschrijft `projectId` als 'ie gevuld is. */
   split?: { projectId: string; hours?: number | null; amount?: number | null }[];
   /**
+   * Losse kostenposten op de factuur (transport, reiskosten), bedrag ex btw.
+   * Ze gaan van het factuurbedrag af vóór de uren worden verdeeld, en komen als
+   * kostenregel op dezelfde werven — naar rato van de uren.
+   */
+  extras?: { label: string; amount: number }[];
+  /**
    * Vaste last (energie, telefonie, verzekering): hoort bij geen project. Zet de
    * leverancier op de overhead-lijst, zodat de volgende factuur van dezelfde
    * partij niet opnieuw om een werfreferentie vraagt.
@@ -793,7 +799,23 @@ export async function approveInvoiceReview(args: {
 
   // Kosten op de juiste plek zetten.
   const ex = poExVatAssumingSpanishVat({ subtotal, total, tax: null, items: [] });
-  const ruw = split ?? (projectId ? [{ projectId, hours: o.hours ?? null, amount: ex.amount }] : []);
+  // Transport en reiskosten eerst van de factuur af: de uren (of het
+  // materiaal) krijgen wat er overblijft, de extra posten gaan er daarna naar
+  // rato van de uren overheen. Zo staat bij Wilhelmus 0-14 de € 180 reiskosten
+  // op dezelfde twee werven als zijn uren, en niet op een regel zonder werf.
+  const extras = (o.extras ?? []).filter((x) => x.amount > 0);
+  const extraTotaal = Math.round(extras.reduce((s, x) => s + x.amount, 0) * 100) / 100;
+  if (extraTotaal > ex.amount + 0.01) {
+    await db
+      .update(purchaseInvoiceReviews)
+      .set({ status: "pending", decidedBy: null, decidedAt: null, decidedVia: null, updatedAt: new Date() })
+      .where(eq(purchaseInvoiceReviews.id, review.id));
+    throw new VerdelingFoutError(
+      `De extra kosten (€ ${extraTotaal.toFixed(2).replace(".", ",")}) zijn meer dan de factuur ex btw (€ ${ex.amount.toFixed(2).replace(".", ",")}).`,
+    );
+  }
+  const basis = Math.round((ex.amount - extraTotaal) * 100) / 100;
+  const ruw = split ?? (projectId ? [{ projectId, hours: o.hours ?? null, amount: basis }] : []);
 
   // Een verdeling kan nooit méér kosten dan de factuur ex btw waard is. Bij
   // Wilhelmus 0-05 telden de ingevulde bedragen op tot € 1.061,78 — het totaal
@@ -805,9 +827,12 @@ export async function approveInvoiceReview(args: {
   // Staat de leverancier als arbeider in de ploeg, dan is zijn uurtarief bekend
   // en volgt het bedrag per werf uit uren × tarief. Zo hoef je bij het
   // goedkeuren alleen de uren per werf in te vullen.
-  const verdelingen = verdeelBedragen(ruw, ex.amount, werker?.hourlyCostEur != null ? Number(werker.hourlyCostEur) : null);
+  const verdelingen = verdeelBedragen(ruw, basis, werker?.hourlyCostEur != null ? Number(werker.hourlyCostEur) : null);
+  const extraDelen = extras.flatMap((x) =>
+    verdeelOverWerven(verdelingen, x.amount).map((d) => ({ projectId: d.projectId, amount: d.amount, label: x.label })),
+  );
   const somDelen = ruw.reduce((s, d) => s + (d.amount ?? 0), 0);
-  if (somDelen > ex.amount + 0.01) {
+  if (somDelen > basis + 0.01) {
     console.warn(
       `[inkoop] verdeling van ${reference ?? supplier} telde op tot ${somDelen.toFixed(2)} terwijl de factuur ${ex.amount.toFixed(2)} ex btw is — teruggeschaald`,
     );
@@ -819,7 +844,7 @@ export async function approveInvoiceReview(args: {
   // man en het vervoer waren weg. Dan liever niet goedkeuren en het zeggen.
   const fout = verdelingFout({
     kind,
-    verdelingen,
+    verdelingen: [...verdelingen, ...extraDelen],
     exBtw: ex.amount,
     vrijgesteld: !!o.overhead || !!o.hoursAlreadyLogged || hasApprovedTimesheet,
   });
@@ -909,6 +934,24 @@ export async function approveInvoiceReview(args: {
     }
   }
 
+  // De extra posten als kostenregel per werf. Niet bij materiaal op één werf:
+  // dan hangt de inkooporder zelf aan dat project en telt het hele bedrag —
+  // transport incluis — daar al mee.
+  if (kind === "labor" || split) {
+    for (const d of extraDelen) {
+      if (d.amount === 0) continue;
+      await db.insert(projectCosts).values({
+        projectId: d.projectId,
+        date: review.proposedInvoiceDate ?? new Date().toISOString().slice(0, 10),
+        category: "other",
+        description: `${d.label} · inkoopfactuur ${reference ?? supplier}`,
+        supplier,
+        purchaseOrderId: po.id,
+        amountEur: d.amount.toFixed(2),
+      });
+    }
+  }
+
   await db
     .update(purchaseInvoiceReviews)
     .set({ purchaseOrderId: po.id, updatedAt: new Date() })
@@ -937,6 +980,7 @@ export async function approveInvoiceReview(args: {
     body:
       `€${total.toFixed(2)}${subtotal != null ? ` (ex. btw €${subtotal.toFixed(2)})` : ""}` +
       `${verdelingen.length ? ` · ${kind === "labor" ? "uren" : "materiaal"} op ${verdelingen.length} project(en)` : " · nog geen project"}` +
+      `${extras.length ? ` · ${extras.map((x) => `${x.label.toLowerCase()} €${x.amount.toFixed(2)}`).join(", ")} verdeeld over de werven` : ""}` +
       `${correcties.length ? ` · ${correcties.join(", ")}` : ""}` +
       `${args.via === "mail" ? " · goedgekeurd vanuit de meldingsmail" : ""}`,
     authorId: args.userId,
