@@ -12,7 +12,7 @@ import { and, count, eq, isNull, sql } from "drizzle-orm";
 import { magPad } from "@/lib/auth/modules";
 import { voorstelZichtbaarVoor, mailZichtbaarVoor } from "@/lib/mail-visibility";
 import { db } from "@/lib/db";
-import { emailInbox, inboxSuggestions, purchaseInvoiceReviews, quoteRequests, staffMessages } from "@/lib/db/schema";
+import { workerWeekSheets, emailInbox, inboxSuggestions, purchaseInvoiceReviews, quoteRequests, staffMessages } from "@/lib/db/schema";
 import { openVoorstellenFilter } from "@/lib/assistant/achterhaald";
 import { telAntwoordNodig } from "@/lib/followup-checklist-data";
 import { gewoneAanvragen } from "@/lib/aanvraag-selectie";
@@ -23,7 +23,7 @@ export async function verzamelNavBadges(rol?: string, userEmail?: string | null,
   const mag = (pad: string) => rol === undefined || magPad(rol, pad);
   const nul = [{ value: 0 }];
 
-  const [[pending], [inboxNew], [teKeuren], [suggestions], antwoordNodig, [teamUnread]] = await Promise.all([
+  const [[pending], [inboxNew], [teKeuren], [suggestions], antwoordNodig, [teamUnread], [weekPending], [invoicePending]] = await Promise.all([
     mag("/aanvragen")
       ? db.select({ value: count() }).from(quoteRequests).where(and(gewoneAanvragen, eq(quoteRequests.status, "pending")))
       : nul,
@@ -46,13 +46,17 @@ export async function verzamelNavBadges(rol?: string, userEmail?: string | null,
       : nul,
     // Klanten die op onze opvolgmail reageerden en nog op antwoord wachten.
     mag("/opvolging") ? rol === "sales" ? Promise.resolve(0) : telAntwoordNodig(userEmail) : 0,
-    mag("/teamberichten") && userId ? db.select({value:count()}).from(staffMessages).where(and(eq(staffMessages.recipientId,userId),isNull(staffMessages.readAt))) : nul,
+    mag("/teamberichten") && userId ? db.select({value:count()}).from(staffMessages).where(and(eq(staffMessages.recipientId,userId),isNull(staffMessages.readAt),isNull(staffMessages.recipientDismissedAt))) : nul,
+    mag("/projects") ? db.select({value:count()}).from(workerWeekSheets).where(eq(workerWeekSheets.status,"submitted")) : nul,
+    mag("/inkooporders") ? db.select({value:count()}).from(workerWeekSheets).where(eq(workerWeekSheets.invoiceStatus,"submitted")) : nul,
   ]);
   return {
     "/assistent": suggestions?.value ?? 0,
     "/aanvragen": pending?.value ?? 0,
     "/inbox": inboxNew?.value ?? 0,
-    "/inkooporders/te-verwerken": teKeuren?.value ?? 0,
+    "/inkooporders/te-verwerken": (teKeuren?.value ?? 0) + (invoicePending?.value ?? 0),
+    "/inkooporders": invoicePending?.value ?? 0,
+    "/projects": weekPending?.value ?? 0,
     "/opvolging": antwoordNodig,
     "/teamberichten": teamUnread?.value ?? 0,
   };

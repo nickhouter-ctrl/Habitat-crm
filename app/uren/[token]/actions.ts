@@ -1,122 +1,18 @@
 "use server";
-import { NOTIFY_TO, NOTIFY_RECIPIENTS } from "@/lib/mail-bcc";
-
+import { and,eq,isNotNull,isNull,sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
-import { headers } from "next/headers";
-import { and, eq, isNotNull, sql } from "drizzle-orm";
-
 import { db } from "@/lib/db";
 import { timeEntries } from "@/lib/db/schema";
-import { sendEmail } from "@/lib/email";
-import { portalLinkForToken, portalT } from "@/lib/worker-portal";
-
-export type LogHoursState = { ok?: string; error?: string } | null;
-
-/**
- * Urenregel vanuit het portaal: de token bepaalt arbeider ÉN project, nooit de
- * client. Een ploegbaas kan met `crewName` optioneel de naam van één van zijn
- * jongens invullen — de regel blijft aan hem (workerId) hangen, tegen zijn tarief.
- */
-export async function logHours(
-  token: string,
-  _prev: LogHoursState,
-  formData: FormData,
-): Promise<LogHoursState> {
-  const ctx = await portalLinkForToken(token);
-  if (!ctx) return { error: portalT(null).invalidLink };
-  const { worker, project } = ctx;
-  const t = portalT(worker.portalLang);
-
-  const date = String(formData.get("date") ?? "").trim();
-  const rawHours = String(formData.get("hours") ?? "").trim();
-  const crewName = String(formData.get("crewName") ?? "").trim().slice(0, 80);
-  const note = String(formData.get("note") ?? "").trim().slice(0, 500);
-
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return { error: t.errDate };
-  if (!rawHours) return { error: t.errHoursMissing };
-
-  const hours = Number(rawHours.replace(",", "."));
-  if (!Number.isFinite(hours) || hours <= 0 || hours > 16) return { error: t.errHoursRange };
-
-  const today = new Date().toISOString().slice(0, 10);
-  const monthAgo = new Date(Date.now() - 31 * 24 * 3600 * 1000).toISOString().slice(0, 10);
-  if (date > today) return { error: t.errFuture };
-  if (date < monthAgo) return { error: t.errTooOld };
-
-  // approvedAt blijft leeg: kantoor controleert eerst (goedkeuren op de projectpagina).
-  await db.insert(timeEntries).values({
-    projectId: project.id,
-    workerId: worker.id,
-    workerName: crewName || worker.name,
-    date,
-    hours: String(hours),
-    hourlyCostEur: worker.hourlyCostEur != null ? String(worker.hourlyCostEur) : "0",
-    paymentMethod: worker.defaultPaymentMethod,
-    selfLoggedAt: new Date(),
-    note: note || null,
-  });
-
-  // Melding naar kantoor — mag de invoer nooit blokkeren als de mail faalt.
-  try {
-    // Vaste APP_URL zodat de goedkeur-link in de mail altijd naar productie
-    // wijst — de Host-header kan een testserver zijn (localhost) of gespooft.
-    const fixed = process.env.APP_URL?.trim().replace(/\/$/, "");
-    let base = fixed;
-    if (!base) {
-      const h = await headers();
-      const host = h.get("host") ?? "localhost:3000";
-      const proto = h.get("x-forwarded-proto") ?? (host.includes("localhost") ? "http" : "https");
-      base = `${proto}://${host}`;
-    }
-    const projectUrl = `${base}/projects/${project.id}#uren`;
-    const who = crewName ? `${crewName} (via ${worker.name})` : worker.name;
-    const rows = [
-      ["Project", project.name],
-      ["Wie", who],
-      ["Datum", date],
-      ["Uren", String(hours)],
-      ...(note ? [["Notitie", note]] : []),
-    ]
-      .map(
-        ([k, v]) =>
-          `<tr><td style="padding:4px 12px 4px 0;color:#78716c">${k}</td><td style="padding:4px 0"><strong>${v}</strong></td></tr>`,
-      )
-      .join("");
-    await sendEmail({
-      to: NOTIFY_TO,
-      bcc: NOTIFY_RECIPIENTS.slice(1).join(", "),
-      interneMelding: true,
-      subject: `⏱ Uren te controleren — ${who}: ${hours}u op ${project.name}`,
-      html: `<p>Er zijn nieuwe uren ingevuld via het urenportaal. Ze tellen pas mee na goedkeuring.</p><table>${rows}</table><p><a href="${projectUrl}">Controleren en goedkeuren →</a></p>`,
-      text: `Nieuwe portaal-uren: ${who} — ${hours}u op ${date} (${project.name}). Goedkeuren: ${projectUrl}`,
-    });
-  } catch (e) {
-    console.error("[urenportaal] melding-mail mislukt:", e);
-  }
-
-  revalidatePath(`/uren/${token}`);
-  revalidatePath(`/projects/${project.id}`);
-  return { ok: t.saved };
+import { portalLinkForToken } from "@/lib/worker-portal";
+export type LogHoursState={ok?:string;error?:string}|null;
+/** Old browser tabs must refresh instead of bypassing mandatory weekly review. */
+export async function logHours(token:string,_prev:LogHoursState,_formData:FormData):Promise<LogHoursState> {
+ const ctx=await portalLinkForToken(token);
+ if(!ctx)return {error:"Link niet geldig / Enlace no válido"};
+ return {error:"Vernieuw de pagina en gebruik de weekstaat. / Actualiza la página y usa el parte semanal."};
 }
-
-/**
- * Eigen portaal-regel verwijderen (vergissing hersteld) — alleen eigen regels
- * op dit project, via het portaal ingevoerd én hoogstens 7 dagen oud.
- */
-export async function deleteOwnEntry(token: string, entryId: string): Promise<void> {
-  const ctx = await portalLinkForToken(token);
-  if (!ctx) return;
-  await db
-    .delete(timeEntries)
-    .where(
-      and(
-        eq(timeEntries.id, entryId),
-        eq(timeEntries.workerId, ctx.worker.id),
-        eq(timeEntries.projectId, ctx.project.id),
-        isNotNull(timeEntries.selfLoggedAt),
-        sql`${timeEntries.createdAt} > now() - interval '7 days'`,
-      ),
-    );
-  revalidatePath(`/uren/${token}`);
-  revalidatePath(`/projects/${ctx.project.id}`);
+export async function deleteOwnEntry(token:string,entryId:string):Promise<void> {
+ const ctx=await portalLinkForToken(token);if(!ctx || !/^[0-9a-f-]{36}$/.test(entryId))return;
+ await db.delete(timeEntries).where(and(eq(timeEntries.id,entryId),eq(timeEntries.workerId,ctx.worker.id),eq(timeEntries.projectId,ctx.project.id),isNotNull(timeEntries.selfLoggedAt),isNull(timeEntries.weekSheetId),isNull(timeEntries.approvedAt),isNull(timeEntries.purchaseOrderId),isNull(timeEntries.paidAt),sql`${timeEntries.createdAt} > now() - interval '7 days'`));
+ revalidatePath(`/uren/${token}`);revalidatePath(`/projects/${ctx.project.id}`);
 }

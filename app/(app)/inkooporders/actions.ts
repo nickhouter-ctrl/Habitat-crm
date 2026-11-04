@@ -8,7 +8,7 @@ import { requireModule } from "@/lib/auth/guards";
 
 import { auth } from "@/auth";
 import { db } from "@/lib/db";
-import { activities, emailInbox, mailAttachments, products, projectCosts, purchaseOrders, timeEntries, workers } from "@/lib/db/schema";
+import { workerWeekSheets, activities, emailInbox, mailAttachments, products, projectCosts, purchaseOrders, timeEntries, workers } from "@/lib/db/schema";
 import type { PurchaseOrderAttachment } from "@/lib/db/schema";
 import { isBtwKeuze, schaalVerdeling, splitsBtw } from "@/lib/inkoop-btw";
 import { urenUitTarief } from "@/lib/labor-hours";
@@ -107,6 +107,11 @@ async function requireUser() {
   return requireModule("inkoop");
 }
 
+async function assertNotApprovedPortalInvoice(id: string) {
+  const [sheet] = await db.select({id: workerWeekSheets.id}).from(workerWeekSheets).where(eq(workerWeekSheets.purchaseOrderId, id));
+  if (sheet) throw new Error("Deze factuur komt uit een goedgekeurde weekstaat. De factuur, uren en projectkoppeling staan vast; verwerk correcties als een afzonderlijk document.");
+}
+
 export async function createPurchaseOrder(formData: FormData) {
   const user = await requireUser();
   const parsed = schema.safeParse(Object.fromEntries(formData));
@@ -169,6 +174,7 @@ export async function createPurchaseOrder(formData: FormData) {
 
 export async function updatePurchaseOrder(id: string, formData: FormData) {
   const user = await requireUser();
+  await assertNotApprovedPortalInvoice(id);
   const parsed = schema.safeParse(Object.fromEntries(formData));
   if (!parsed.success) {
     throw new Error(parsed.error.issues.map((i) => i.message).join(", "));
@@ -225,6 +231,7 @@ export async function updatePurchaseOrder(id: string, formData: FormData) {
 /** Koppel deze inkooporder aan een project (of ontkoppel met lege waarde). */
 export async function setPurchaseOrderProject(id: string, formData: FormData) {
   await requireUser();
+  await assertNotApprovedPortalInvoice(id);
   const raw = String(formData.get("projectId") ?? "").trim();
   const projectId = raw.length === 36 ? raw : null;
   // Als materiaal koppelen: eventuele arbeid-markering, de bijhorende uren-regel
@@ -250,6 +257,7 @@ export async function setPurchaseOrderProject(id: string, formData: FormData) {
  *  maakt een uren-regel (arbeidskost) en telt de inkoop niet als materiaal. */
 export async function linkPurchaseOrderAsHours(id: string, formData: FormData) {
   await requireUser();
+  await assertNotApprovedPortalInvoice(id);
   const raw = String(formData.get("projectId") ?? "").trim();
   const projectId = raw.length === 36 ? raw : null;
   if (!projectId) {
@@ -337,6 +345,7 @@ async function koppelAlsUren(
             eq(timeEntries.workerId, worker.id),
             isNotNull(timeEntries.selfLoggedAt),
             isNull(timeEntries.purchaseOrderId),
+            isNull(timeEntries.weekSheetId),
             po.orderDate ? sql`${timeEntries.date} <= ${po.orderDate}` : undefined,
           ),
         )
@@ -377,6 +386,7 @@ async function koppelAlsUren(
  */
 export async function verdeelPurchaseOrder(id: string, formData: FormData) {
   await requireModule("inkoop");
+  await assertNotApprovedPortalInvoice(id);
   const po = await db.query.purchaseOrders.findFirst({ where: eq(purchaseOrders.id, id) });
   if (!po) return;
 
@@ -507,6 +517,7 @@ export async function verdeelPurchaseOrder(id: string, formData: FormData) {
 
 export async function setPurchaseOrderStatus(id: string, status: (typeof PO_STATUSES)[number]) {
   const user = await requireUser();
+  await assertNotApprovedPortalInvoice(id);
   const existing = await db.query.purchaseOrders.findFirst({
     where: eq(purchaseOrders.id, id),
   });
@@ -536,6 +547,7 @@ export async function setPurchaseOrderStatus(id: string, status: (typeof PO_STAT
 /** Keur een proforma goed: van concept ('draft') naar bevestigde inkooporder ('ordered'). */
 export async function approveProforma(id: string) {
   const user = await requireUser();
+  await assertNotApprovedPortalInvoice(id);
   const po = await db.query.purchaseOrders.findFirst({ where: eq(purchaseOrders.id, id) });
   if (!po) throw new Error("Inkooporder niet gevonden");
   if (po.status !== "draft") return; // al goedgekeurd / niet van toepassing
@@ -619,6 +631,7 @@ export async function createProductFromPoLine(
 
 export async function deletePurchaseOrder(id: string) {
   const user = await requireUser();
+  await assertNotApprovedPortalInvoice(id);
   const existing = await db.query.purchaseOrders.findFirst({
     where: eq(purchaseOrders.id, id),
     columns: { attachments: true, stockAppliedAt: true },
@@ -964,6 +977,7 @@ export async function dismissEmailFromQueue(emailId: string) {
  */
 export async function zetInkoopBtw(id: string, formData: FormData) {
   await requireModule("inkoop");
+  await assertNotApprovedPortalInvoice(id);
   const keuze = String(formData.get("btw") ?? "").trim();
   if (!isBtwKeuze(keuze)) throw new Error("Onbekend btw-tarief.");
 

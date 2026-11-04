@@ -1,10 +1,10 @@
 "use client";
-import { useActionState, useEffect, useState } from "react";
+import { useActionState, useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useT } from "@/components/taal-provider";
 import { Field, Input, Select, Textarea } from "@/components/ui";
-import { sendTeamMessage, markTeamMessageRead, type TeamMessageResult } from "./actions";
+import { sendTeamMessage, markTeamMessageRead, setTeamMessageDismissed, type TeamMessageResult } from "./actions";
 
 export function TeamMessageForm({ team, contact, recipientId = "", today, submissionId, currentUserId }: { team: { id: string; name: string | null; email: string }[]; contact?: { id: string; name: string } | null; recipientId?: string; today: string; submissionId:string; currentUserId?: string }) {
   const [makeTask,setMakeTask]=useState(true);
@@ -30,4 +30,27 @@ export function TeamMessageReadReceipt({ id }: { id: string }) {
   const router = useRouter();
   useEffect(() => { let active = true; void markTeamMessageRead(id).then(() => { if (active) router.refresh(); }).catch(()=>{}); return () => { active = false; }; }, [id, router]);
   return null;
+}
+
+export function TeamMessageCheckbox({ id, subject, folder, dismissed }: { id: string; subject: string; folder: "inbox" | "sent"; dismissed: boolean }) {
+  const router = useRouter(), t = useT();
+  const [pending, startTransition] = useTransition(), [error, setError] = useState(false);
+  function change() {
+    if (pending) return;
+    setError(false);
+    startTransition(async () => {
+      try {
+        const result = await setTeamMessageDismissed({ id, folder, dismissed: !dismissed });
+        if (result.error) { setError(true); return; }
+        router.refresh();
+      } catch { setError(true); }
+    });
+  }
+  const label = t(dismissed ? "Terugzetten: {onderwerp}" : "Afvinken: {onderwerp}", { onderwerp: subject });
+  return <div className="shrink-0 pt-3 pl-2">
+    <label className="flex min-h-11 min-w-11 cursor-pointer items-center justify-center rounded-lg hover:bg-accent/10" title={label}>
+      <input type="checkbox" aria-label={label} checked={dismissed} disabled={pending} onChange={change} className="size-5 cursor-pointer accent-accent disabled:cursor-wait"/>
+    </label>
+    {error && <p role="alert" className="max-w-36 px-2 pb-2 text-xs text-danger">{t("Bericht niet bijgewerkt. Probeer het opnieuw.")}</p>}
+  </div>;
 }

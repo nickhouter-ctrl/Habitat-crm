@@ -1,3 +1,4 @@
+import { WorkerWeekReviews } from "@/components/worker-week-reviews";
 import { datumTaal } from "@/lib/i18n/server";
 import { tekst as uiTranslation } from '@/lib/i18n/server';
 /**
@@ -214,6 +215,7 @@ export default async function FacturenKeurenPage() {
 
   return (
     <>
+      <WorkerWeekReviews invoicesOnly />
       <PageHeader
         title={uiT("Facturen keuren")}
         subtitle={

@@ -22,6 +22,7 @@ import {
   purchaseOrders,
   timeEntries,
   workerPortalLinks,
+  workerWeekSheets,
   workers,
   type DocumentLineItem,
   type DocumentPhase,
@@ -231,8 +232,9 @@ export async function updateTimeEntry(projectId: string, entryId: string, formDa
   // factuurbedrag zetten — vier keer € 3.016 in plaats van één keer.
   const bestaand = await db.query.timeEntries.findFirst({
     where: eq(timeEntries.id, entryId),
-    columns: { purchaseOrderId: true },
+    columns: { purchaseOrderId: true, weekSheetId: true },
   });
+  if (bestaand?.weekSheetId) throw new Error("Deze uren komen uit een goedgekeurde weekstaat en staan vast.");
   if (bestaand?.purchaseOrderId && uren > 0) {
     const [{ n }] = await db
       .select({ n: sql<number>`count(*)::int` })
@@ -260,13 +262,13 @@ export async function updateTimeEntry(projectId: string, entryId: string, formDa
       note: d.note?.trim() ? d.note : null,
       updatedAt: new Date(),
     })
-    .where(eq(timeEntries.id, entryId));
+    .where(and(eq(timeEntries.id, entryId), eq(timeEntries.projectId, projectId), isNull(timeEntries.weekSheetId)));
   revalidatePath(`/projects/${projectId}`);
 }
 
 export async function deleteTimeEntry(projectId: string, entryId: string) {
   await requireUser();
-  await db.delete(timeEntries).where(eq(timeEntries.id, entryId));
+  await db.delete(timeEntries).where(and(eq(timeEntries.id, entryId), eq(timeEntries.projectId, projectId), isNull(timeEntries.weekSheetId)));
   revalidatePath(`/projects/${projectId}`);
 }
 
@@ -276,7 +278,7 @@ export async function approveTimeEntry(projectId: string, entryId: string) {
   await db
     .update(timeEntries)
     .set({ approvedAt: new Date(), updatedAt: new Date() })
-    .where(eq(timeEntries.id, entryId));
+    .where(and(eq(timeEntries.id, entryId), eq(timeEntries.projectId, projectId), isNull(timeEntries.weekSheetId)));
   revalidatePath(`/projects/${projectId}`);
   revalidatePath("/");
 }
@@ -292,6 +294,7 @@ export async function approveAllPendingTimeEntries(projectId: string) {
         eq(timeEntries.projectId, projectId),
         isNotNull(timeEntries.selfLoggedAt),
         isNull(timeEntries.approvedAt),
+        isNull(timeEntries.weekSheetId),
       ),
     );
   revalidatePath(`/projects/${projectId}`);
@@ -316,7 +319,7 @@ export async function createWorkerPortalLink(projectId: string, formData: FormDa
 /** Portaal-link intrekken (de link werkt daarna direct niet meer). */
 export async function deleteWorkerPortalLink(projectId: string, linkId: string) {
   await requireUser();
-  await db.delete(workerPortalLinks).where(eq(workerPortalLinks.id, linkId));
+  await db.delete(workerPortalLinks).where(and(eq(workerPortalLinks.id, linkId), eq(workerPortalLinks.projectId, projectId)));
   revalidatePath(`/projects/${projectId}`);
 }
 
@@ -425,6 +428,7 @@ export async function linkPurchaseOrderToProject(projectId: string, formData: Fo
     revalidatePath(`/projects/${projectId}`);
     return;
   }
+  if ((await db.select({id: workerWeekSheets.id}).from(workerWeekSheets).where(eq(workerWeekSheets.purchaseOrderId, poId))).length) throw new Error("Deze factuur is gekoppeld aan een goedgekeurde weekstaat.");
   await db.update(purchaseOrders).set({ projectId, updatedAt: new Date() }).where(eq(purchaseOrders.id, poId));
   revalidatePath(`/projects/${projectId}`);
   revalidatePath(`/inkooporders/${poId}`);
@@ -432,6 +436,7 @@ export async function linkPurchaseOrderToProject(projectId: string, formData: Fo
 
 export async function unlinkPurchaseOrder(projectId: string, poId: string) {
   await requireUser();
+  if ((await db.select({id: workerWeekSheets.id}).from(workerWeekSheets).where(eq(workerWeekSheets.purchaseOrderId, poId))).length) throw new Error("Deze factuur is gekoppeld aan een goedgekeurde weekstaat.");
   await db.update(purchaseOrders).set({ projectId: null, updatedAt: new Date() }).where(eq(purchaseOrders.id, poId));
   revalidatePath(`/projects/${projectId}`);
   revalidatePath(`/inkooporders/${poId}`);

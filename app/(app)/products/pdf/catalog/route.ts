@@ -101,6 +101,9 @@ export async function GET(request: Request) {
     }
   }));
 
+  // Sort after attaching images so each photo stays with its product or size.
+  items.sort((a, b) => b.quantity - a.quantity);
+
   const generatedAt = new Date();
   const pdf = await renderProductStockCatalog({ items, locale, generatedAt, category: catalogLabel || undefined });
   const today = generatedAt.toISOString().slice(0, 10);

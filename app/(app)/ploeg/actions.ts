@@ -27,6 +27,7 @@ const workerSchema = z.object({
   hourlyCostCashEur: z.string().trim().optional(),
   defaultPaymentMethod: z.enum(["cash", "invoice"]).default("invoice"),
   portalLang: z.enum(["nl", "es", "en"]).default("es"),
+  portalInvoiceEnabled: z.preprocess(v => v === "on", z.boolean()),
   notes: z.string().trim().optional(),
 });
 
@@ -42,6 +43,7 @@ export async function createWorker(formData: FormData) {
     hourlyCostCashEur: moneyOrNull(d.hourlyCostCashEur),
     defaultPaymentMethod: d.defaultPaymentMethod,
     portalLang: d.portalLang,
+      portalInvoiceEnabled: d.portalInvoiceEnabled,
     notes: d.notes || null,
   });
   revalidatePath("/ploeg");
@@ -61,6 +63,7 @@ export async function updateWorker(id: string, formData: FormData) {
       hourlyCostCashEur: moneyOrNull(d.hourlyCostCashEur),
       defaultPaymentMethod: d.defaultPaymentMethod,
       portalLang: d.portalLang,
+      portalInvoiceEnabled: d.portalInvoiceEnabled,
       notes: d.notes || null,
       updatedAt: new Date(),
     })

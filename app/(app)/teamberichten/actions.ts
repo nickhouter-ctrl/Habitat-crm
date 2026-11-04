@@ -91,3 +91,23 @@ export async function markTeamMessageRead(id: string) {
   await db.update(staffMessages).set({ readAt: new Date(), updatedAt: new Date() }).where(and(eq(staffMessages.id, z.string().uuid().parse(id)), eq(staffMessages.recipientId, user.id),isNull(staffMessages.readAt)));
   revalidatePath("/", "layout");
 }
+
+/** Personal list state, like read receipts: never changes the colleague's list or task. */
+export async function setTeamMessageDismissed(input: unknown): Promise<{ error?: string }> {
+  const user = await requireModuleRead("teamberichten");
+  const parsed = z.object({ id: z.string().uuid(), folder: z.enum(["inbox", "sent"]), dismissed: z.boolean() }).safeParse(input);
+  if (!parsed.success) return { error: "Bericht niet bijgewerkt. Probeer het opnieuw." };
+  const { id, folder, dismissed } = parsed.data;
+  try {
+    const at = dismissed ? new Date() : null;
+    const [saved] = await db.update(staffMessages)
+      .set({ ...(folder === "sent" ? { senderDismissedAt: at } : { recipientDismissedAt: at }), updatedAt: new Date() })
+      .where(and(eq(staffMessages.id, id), eq(folder === "sent" ? staffMessages.senderId : staffMessages.recipientId, user.id)))
+      .returning({ id: staffMessages.id });
+    if (!saved) return { error: "Bericht niet bijgewerkt. Probeer het opnieuw." };
+  } catch {
+    return { error: "Bericht niet bijgewerkt. Probeer het opnieuw." };
+  }
+  revalidatePath("/", "layout");
+  return {};
+}

@@ -1,0 +1,2 @@
+ALTER TABLE "staff_messages" ADD COLUMN "sender_dismissed_at" timestamp with time zone;--> statement-breakpoint
+ALTER TABLE "staff_messages" ADD COLUMN "recipient_dismissed_at" timestamp with time zone;

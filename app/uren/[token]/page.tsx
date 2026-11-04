@@ -1,222 +1,46 @@
-import { and, desc, eq, gte } from "drizzle-orm";
-
+import { and, desc, eq, gte, isNull } from "drizzle-orm";
+import Link from "next/link";
 import { db } from "@/lib/db";
-import { timeEntries } from "@/lib/db/schema";
-import { portalLinkForToken, portalT } from "@/lib/worker-portal";
-import { WorkerHoursForm } from "@/components/worker-hours-form";
-import { deleteOwnEntry } from "./actions";
-
-export const dynamic = "force-dynamic";
-
-/** Projectspecifieke metadata → nette linkpreview in WhatsApp (titel + kaart). */
-export async function generateMetadata({ params }: { params: Promise<{ token: string }> }) {
-  const { token } = await params;
-  const ctx = await portalLinkForToken(token).catch(() => null);
-  if (!ctx) return { title: "Uren — Habitat One" };
-  const t = portalT(ctx.worker.portalLang);
-  const title = `${t.hours} — ${ctx.project.name}`;
-  const description =
-    ctx.worker.portalLang === "nl"
-      ? `Vul hier je gewerkte uren in voor ${ctx.project.name}.`
-      : ctx.worker.portalLang === "en"
-        ? `Log your hours for ${ctx.project.name} here.`
-        : `Apunta aquí tus horas de ${ctx.project.name}.`;
-  return {
-    title,
-    description,
-    openGraph: { title: `Habitat One — ${title}`, description },
-  };
+import { timeEntries, workerWeekSheets } from "@/lib/db/schema";
+import { portalLinkForToken } from "@/lib/worker-portal";
+import { WorkerWeekForm, WorkerInvoiceForm } from "@/components/worker-week-form";
+import { madridToday,mondayOf,addDays,isoWeek,emptyWeek,weekLang,totalWeekHours } from "@/lib/worker-week";
+import { weekT, type WeekCopyKey } from "@/lib/worker-week-i18n";
+export const dynamic="force-dynamic";
+type Props={params:Promise<{token:string}>;searchParams:Promise<{lang?:string;week?:string}>};
+export async function generateMetadata({params,searchParams}:Props) {
+  const {token}=await params,query=await searchParams;const ctx=await portalLinkForToken(token).catch(()=>null);
+  const lang=weekLang(query.lang??ctx?.worker.portalLang);
+  return {title:ctx?`${weekT(lang,"title")} — ${ctx.project.name}`:"Portal",robots:{index:false,follow:false},referrer:"no-referrer"};
 }
-
-/** Maandag van de week waar `d` (YYYY-MM-DD) in valt. */
-function mondayOf(d: string): string {
-  const date = new Date(`${d}T12:00:00Z`);
-  const day = (date.getUTCDay() + 6) % 7; // ma=0 … zo=6
-  date.setUTCDate(date.getUTCDate() - day);
-  return date.toISOString().slice(0, 10);
-}
-
-export default async function UrenPortaalPage({ params }: { params: Promise<{ token: string }> }) {
-  const { token } = await params;
-  const ctx = await portalLinkForToken(token);
-
-  if (!ctx) {
-    // Taal onbekend zonder geldige link — toon de melding meertalig.
-    return (
-      <main className="flex min-h-screen items-center justify-center bg-stone-50 px-4 py-16">
-        <div className="w-full max-w-md rounded-2xl border border-stone-200 bg-white p-8 text-center shadow-sm">
-          <p className="mb-6 text-[0.7rem] font-semibold uppercase tracking-[0.28em] text-stone-400">Habitat One</p>
-          <h1 className="text-xl font-semibold text-stone-800">Link niet geldig / Enlace no válido</h1>
-          <p className="mt-3 text-sm text-stone-500">
-            Vraag kantoor om een nieuwe link. / Pide un enlace nuevo a la oficina.
-          </p>
-        </div>
-      </main>
-    );
-  }
-
-  const { worker, project } = ctx;
-  const t = portalT(worker.portalLang);
-  const now = new Date();
-  const today = now.toISOString().slice(0, 10);
-  const weekStart = mondayOf(today);
-  const twoWeeksAgo = new Date(now.getTime() - 14 * 24 * 3600 * 1000).toISOString().slice(0, 10);
-  const fiveWeeksAgo = new Date(now.getTime() - 35 * 24 * 3600 * 1000).toISOString().slice(0, 10);
-
-  // Alleen de eigen uren op dít project — één link = één project.
-  const recent = await db
-    .select({
-      id: timeEntries.id,
-      date: timeEntries.date,
-      hours: timeEntries.hours,
-      note: timeEntries.note,
-      workerName: timeEntries.workerName,
-      selfLoggedAt: timeEntries.selfLoggedAt,
-      approvedAt: timeEntries.approvedAt,
-      createdAt: timeEntries.createdAt,
-      hourlyCostEur: timeEntries.hourlyCostEur,
-      purchaseOrderId: timeEntries.purchaseOrderId,
-    })
-    .from(timeEntries)
-    .where(
-      and(
-        eq(timeEntries.workerId, worker.id),
-        eq(timeEntries.projectId, project.id),
-        gte(timeEntries.date, fiveWeeksAgo),
-      ),
-    )
-    .orderBy(desc(timeEntries.date), desc(timeEntries.createdAt));
-
-  // Weektotalen (ma-zo) van de eigen portaal-uren — voor de weekfactuur van de
-  // bouwer: uren + bedrag ex btw, en of ze al aan een factuur gekoppeld zijn.
-  const weekAgg = new Map<string, { hours: number; amount: number; open: number; openAmount: number }>();
-  for (const e of recent) {
-    if (!e.selfLoggedAt) continue;
-    const wk = mondayOf(e.date);
-    const agg = weekAgg.get(wk) ?? { hours: 0, amount: 0, open: 0, openAmount: 0 };
-    const h = Number(e.hours);
-    const amt = h * Number(e.hourlyCostEur ?? 0);
-    agg.hours += h;
-    agg.amount += amt;
-    if (!e.purchaseOrderId) {
-      agg.open += h;
-      agg.openAmount += amt;
-    }
-    weekAgg.set(wk, agg);
-  }
-  const weekList = [...weekAgg.entries()].sort((a, b) => (a[0] < b[0] ? 1 : -1)).slice(0, 5);
-  const eur = (n: number) =>
-    new Intl.NumberFormat("nl-NL", { style: "currency", currency: "EUR" }).format(n);
-
-  const weekHours = recent
-    .filter((e) => e.date >= weekStart)
-    .reduce((s, e) => s + Number(e.hours), 0);
-  const weekAgoMs = now.getTime() - 7 * 24 * 3600 * 1000;
-  const firstName = worker.name.split(" ")[0];
-
-  return (
-    <main className="min-h-screen bg-stone-50 px-4 py-8">
-      <div className="mx-auto w-full max-w-md space-y-5">
-        <div className="text-center">
-          <p className="mb-2 text-[0.7rem] font-semibold uppercase tracking-[0.28em] text-stone-400">Habitat One</p>
-          <h1 className="text-2xl font-semibold text-stone-800">
-            {t.hello} {firstName} 👋
-          </h1>
-          <p className="mt-1 text-base font-medium text-stone-700">{project.name}</p>
-          <p className="mt-1 text-sm text-stone-500">
-            {t.thisWeek}:{" "}
-            <span className="font-semibold text-stone-700">
-              {weekHours % 1 === 0 ? weekHours : weekHours.toFixed(2)} {t.hoursUnit}
-            </span>
-          </p>
-        </div>
-
-        <section className="rounded-2xl border border-stone-200 bg-white p-5 shadow-sm">
-          <h2 className="mb-4 text-base font-semibold text-stone-800">{t.formTitle}</h2>
-          <WorkerHoursForm token={token} today={today} t={t} />
-        </section>
-
-        {weekList.length > 0 && (
-          <section className="rounded-2xl border border-stone-200 bg-white p-5 shadow-sm">
-            <h2 className="text-base font-semibold text-stone-800">{t.weekTotals}</h2>
-            <p className="mb-3 text-xs text-stone-400">{t.weekTotalsHint}</p>
-            <ul className="divide-y divide-stone-100">
-              {weekList.map(([wk, agg]) => {
-                const [, m, d] = wk.split("-");
-                const fullyInvoiced = agg.open === 0;
-                return (
-                  <li key={wk} className="flex items-center gap-3 py-2.5">
-                    <span className="w-20 shrink-0 text-sm text-stone-500">
-                      {t.weekWord} {d}/{m}
-                    </span>
-                    <span className="min-w-0 flex-1 text-sm text-stone-700">
-                      {agg.hours % 1 === 0 ? agg.hours : agg.hours.toFixed(2)} {t.hoursUnit}
-                    </span>
-                    <span className="shrink-0 text-sm font-semibold tabular-nums text-stone-800">
-                      {eur(agg.amount)}
-                    </span>
-                    <span
-                      className={`shrink-0 rounded-full px-2 py-0.5 text-[11px] font-medium ${
-                        fullyInvoiced ? "bg-emerald-50 text-emerald-700" : "bg-amber-50 text-amber-700"
-                      }`}
-                    >
-                      {fullyInvoiced ? `✓ ${t.invoiced}` : `${t.toInvoice}: ${eur(agg.openAmount)}`}
-                    </span>
-                  </li>
-                );
-              })}
-            </ul>
-          </section>
-        )}
-
-        <section className="rounded-2xl border border-stone-200 bg-white p-5 shadow-sm">
-          <h2 className="mb-3 text-base font-semibold text-stone-800">{t.recentTitle}</h2>
-          {recent.length === 0 ? (
-            <p className="text-sm text-stone-500">{t.empty}</p>
-          ) : (
-            <ul className="divide-y divide-stone-100">
-              {recent.filter((e) => e.date >= twoWeeksAgo).map((e) => {
-                const dayName = t.days[new Date(`${e.date}T12:00:00Z`).getUTCDay()];
-                const [, m, d] = e.date.split("-");
-                const crewLabel = e.workerName && e.workerName !== worker.name ? e.workerName : null;
-                const removable =
-                  e.selfLoggedAt != null &&
-                  e.createdAt != null &&
-                  new Date(e.createdAt).getTime() > weekAgoMs;
-                return (
-                  <li key={e.id} className="flex items-center gap-3 py-2.5">
-                    <span className="w-14 shrink-0 text-sm text-stone-500">
-                      {dayName} {d}/{m}
-                    </span>
-                    <span className="min-w-0 flex-1 truncate text-sm text-stone-700">
-                      {crewLabel ?? "—"}
-                      {e.note ? <span className="text-stone-400"> · {e.note}</span> : null}
-                    </span>
-                    <span className="shrink-0 text-sm font-semibold tabular-nums text-stone-800">
-                      {e.selfLoggedAt && !e.approvedAt ? "⏳ " : ""}
-                      {Number(e.hours) % 1 === 0 ? Number(e.hours) : e.hours}
-                      {t.hoursShort}
-                    </span>
-                    {removable && (
-                      <form action={deleteOwnEntry.bind(null, token, e.id)}>
-                        <button
-                          type="submit"
-                          aria-label={t.remove}
-                          className="rounded-lg px-2 py-1 text-stone-400 active:bg-stone-100"
-                        >
-                          ✕
-                        </button>
-                      </form>
-                    )}
-                  </li>
-                );
-              })}
-            </ul>
-          )}
-        </section>
-
-        <p className="text-center text-xs text-stone-400">{t.footer}</p>
-      </div>
-    </main>
-  );
+export default async function UrenPortaalPage({params,searchParams}:Props) {
+  const {token}=await params,query=await searchParams;const ctx=await portalLinkForToken(token);
+  if(!ctx)return <main className="p-10"><h1 className="text-xl">Link niet geldig / Enlace no válido</h1><p>Vraag kantoor om een nieuwe link. / Pide un enlace nuevo a la oficina.</p></main>;
+  const {worker,project}=ctx,lang=weekLang(query.lang??worker.portalLang),today=madridToday();
+  const t=(key:WeekCopyKey)=>weekT(lang,key);const current=mondayOf(today);
+  const weeks=Array.from({length:9},(_,i)=>addDays(current,-7*i));const selected=weeks.includes(query.week??"")?query.week!:current;
+  const [sheets,legacy]=await Promise.all([
+    db.select().from(workerWeekSheets).where(and(eq(workerWeekSheets.workerId,worker.id),eq(workerWeekSheets.projectId,project.id),gte(workerWeekSheets.weekStart,weeks[8]))).orderBy(desc(workerWeekSheets.weekStart)),
+    db.select({date:timeEntries.date,hours:timeEntries.hours,note:timeEntries.note}).from(timeEntries).where(and(eq(timeEntries.workerId,worker.id),eq(timeEntries.projectId,project.id),isNull(timeEntries.weekSheetId),gte(timeEntries.date,selected))).orderBy(desc(timeEntries.date)).limit(100),
+  ]);
+  const sheet=sheets.find(s=>s.weekStart===selected);const locked=!!sheet && ["submitted","approved"].includes(sheet.status);
+  const week=isoWeek(selected);const locale=lang==="nl"?"nl-NL":lang==="es"?"es-ES":"en-GB";
+  const date=(s:string)=>new Date(`${s}T12:00:00Z`).toLocaleDateString(locale,{day:"numeric",month:"short"});
+  const status=(s:string)=>t(s==="submitted"?"pending":s as WeekCopyKey);
+  return <main lang={lang} className="min-h-screen bg-[#f4f0e9] px-4 py-7 text-stone-900 sm:py-10"><div className="mx-auto max-w-2xl space-y-6">
+    <header className="space-y-4"><div className="flex flex-wrap items-center justify-between gap-3"><span className="text-xs font-semibold tracking-[.2em] text-stone-500">HABITAT ONE · {worker.name}</span><nav aria-label="Language" className="flex gap-1">{(["nl","es","en"] as const).map(l=><Link key={l} href={`?lang=${l}&week=${selected}`} className={`rounded-md px-3 py-2 text-sm ${lang===l?"bg-stone-800 text-white":"bg-white text-stone-700"}`}>{l==="es"?"Español":l==="nl"?"NL":"EN"}</Link>)}</nav></div>
+      <p className="text-sm font-medium text-[#a94f2d]">{project.name}</p><h1 className="text-3xl font-semibold tracking-tight">{t("title")}</h1><p className="text-sm leading-relaxed text-stone-600">{t("intro")}</p>
+    </header>
+    <section aria-label={t("choose")} className="rounded-xl border border-stone-200 bg-white p-4"><form method="get" className="flex flex-col items-end gap-3 sm:flex-row"><input type="hidden" name="lang" value={lang}/><label className="w-full min-w-0 flex-1 text-sm font-medium">{t("choose")}<select name="week" defaultValue={selected} className="mt-1 w-full rounded-lg border border-stone-300 px-3 py-3 text-base">{weeks.map(w=>{const n=isoWeek(w),s=sheets.find(row=>row.weekStart===w);return <option key={w} value={w}>{t("week")} {n.week} · {n.year} · {date(w)}–{date(addDays(w,6))}{s?` · ${status(s.status)}`:""}</option>;})}</select></label><button className="rounded-lg bg-stone-800 px-4 py-3 text-sm font-semibold text-white">{t("choose")}</button></form></section>
+    <div className="flex items-center justify-between"><div><h2 className="text-xl font-semibold">{t("week")} {week.week} · {week.year}</h2><p className="mt-1 text-sm text-stone-500">{date(selected)} – {date(addDays(selected,6))}</p></div><span className="rounded-full bg-white px-3 py-1 text-sm font-medium">{status(sheet?.status??"draft")}</span></div>
+    {sheet?.reviewNote && <p className="rounded-lg border border-amber-300 bg-amber-50 p-4 text-sm whitespace-pre-wrap">{sheet.reviewNote}</p>}
+    <WorkerWeekForm key={selected} token={token} lang={lang} monday={selected} version={sheet?.version??0} initialDays={sheet?.days??emptyWeek(selected)} locked={locked} today={today}/>
+    {worker.portalInvoiceEnabled && <section className="space-y-4 rounded-xl border border-stone-200 bg-white p-5"><h2 className="text-xl font-semibold">{t("invoice")}</h2>
+      {sheet?.invoiceStatus && <p className="font-medium">{status(sheet.invoiceStatus)}</p>}
+      {sheet?.invoiceReviewNote && <p className="rounded-lg bg-amber-50 p-3 text-sm whitespace-pre-wrap">{sheet.invoiceReviewNote}</p>}
+      {sheet?.invoice && <a className="inline-block rounded-lg border px-4 py-3 text-sm font-medium" href={`/uren/${token}/factuur/${sheet.id}`}>{t("pdf")}</a>}
+      {sheet?.status==="approved" && (!sheet.invoiceStatus || sheet.invoiceStatus==="returned")?<WorkerInvoiceForm key={sheet.version} token={token} lang={lang} id={sheet.id} version={sheet.version} hours={totalWeekHours(sheet.days)} rate={Number(sheet.hourlyRate)} today={today} previous={sheet.invoice}/>:<p className="text-sm text-stone-600">{t("invoiceIntro")}</p>}
+    </section>}
+    {legacy.filter(e=>e.date<=addDays(selected,6)).length>0 && <section className="space-y-3 rounded-xl border border-amber-200 bg-amber-50 p-5"><h2 className="font-semibold">{t("old")}</h2><p className="text-sm">{t("olderHint")}</p>{legacy.filter(e=>e.date<=addDays(selected,6)).map((e,i)=><p key={i} className="text-sm">{date(e.date)} · {e.hours} h · {e.note}</p>)}</section>}
+  </div></main>;
 }
