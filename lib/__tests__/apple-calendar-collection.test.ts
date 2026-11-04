@@ -9,10 +9,9 @@ function collection(href = url, type = "calendar") {
   return new Response(`<?xml version="1.0"?><d:multistatus xmlns:d="DAV:" xmlns:c="urn:ietf:params:xml:ns:caldav"><d:response><d:href>${href}</d:href><d:propstat><d:prop><d:resourcetype><d:collection/><c:${type}/></d:resourcetype></d:prop><d:status>HTTP/1.1 200 OK</d:status></d:propstat></d:response></d:multistatus>`,
     { status: 207, headers: { "content-type": "application/xml" } });
 }
-async function client() {
+function client() {
   const value = new DAVClient({ serverUrl: "https://caldav.icloud.com", authMethod: "Basic",
     credentials: { username: "fixture@example.invalid", password: "fixture" }, fetch: appleTransport(Date.now() + 15000) });
-  await value.authenticate(true);
   return value;
 }
 afterEach(() => { vi.unstubAllGlobals(); vi.restoreAllMocks(); });
