@@ -22,6 +22,7 @@ import {
   uuid,
   type AnyPgColumn,
 } from "drizzle-orm/pg-core";
+import type { WeekDay, WeekEvent, WorkerInvoice } from "@/lib/worker-week";
 import type { AdapterAccountType } from "next-auth/adapters";
 
 /* ------------------------------------------------------------------ helpers */
@@ -297,6 +298,8 @@ export const staffMessages = pgTable("staff_messages", {
   subject: text().notNull(),
   body: text().notNull(),
   readAt: timestamp({ withTimezone: true }),
+  senderDismissedAt: timestamp({ withTimezone: true }),
+  recipientDismissedAt: timestamp({ withTimezone: true }),
   ...timestamps,
 }, t => [index("staff_messages_recipient_idx").on(t.recipientId, t.readAt), index("staff_messages_sender_idx").on(t.senderId, t.createdAt)]).enableRLS();
 
@@ -1367,6 +1370,7 @@ export const workers = pgTable(
     defaultPaymentMethod: paymentMethod().notNull().default("cash"),
     /** Taal van het urenportaal voor deze arbeider: "nl" | "es" | "en". */
     portalLang: text().notNull().default("es"),
+    portalInvoiceEnabled: boolean().notNull().default(false),
     active: boolean().notNull().default(true),
     notes: text(),
     ...timestamps,
@@ -1400,6 +1404,37 @@ export const workerPortalLinks = pgTable(
   ],
 );
 
+/** Weekstaten blijven buiten de kosten/inkoop tot expliciete kantoorcontrole. */
+export const workerWeekSheets = pgTable("worker_week_sheets", {
+  id: uuid().primaryKey().default(sql`gen_random_uuid()`),
+  workerId: uuid().notNull().references(() => workers.id, { onDelete: "restrict" }),
+  projectId: uuid().notNull().references((): AnyPgColumn => projects.id, { onDelete: "restrict" }),
+  weekStart: date().notNull(),
+  status: text().notNull().default("draft"),
+  version: integer().notNull().default(1),
+  days: jsonb().$type<WeekDay[]>().notNull(),
+  hourlyRate: numeric({ precision: 12, scale: 6 }).notNull().default("0"),
+  paymentMethod: paymentMethod().notNull().default("invoice"),
+  submittedAt: timestamp({ withTimezone: true }),
+  reviewedAt: timestamp({ withTimezone: true }),
+  reviewedBy: uuid().references(() => users.id, { onDelete: "set null" }),
+  reviewNote: text(),
+  history: jsonb().$type<WeekEvent[]>().notNull().default(sql`'[]'::jsonb`),
+  invoice: jsonb().$type<WorkerInvoice>(),
+  invoiceStatus: text(),
+  invoiceKey: text(),
+  invoiceReviewNote: text(),
+  purchaseOrderId: uuid().references((): AnyPgColumn => purchaseOrders.id, { onDelete: "restrict" }),
+  ...timestamps,
+}, (t) => [
+  uniqueIndex("worker_week_unique_idx").on(t.workerId, t.projectId, t.weekStart),
+  uniqueIndex("worker_week_invoice_key_idx").on(t.invoiceKey),
+  index("worker_week_review_idx").on(t.status),
+  index("worker_week_invoice_review_idx").on(t.invoiceStatus),
+  check("worker_week_status_check", sql`${t.status} in ('draft','submitted','returned','approved')`),
+  check("worker_week_invoice_status_check", sql`${t.invoiceStatus} is null or ${t.invoiceStatus} in ('submitted','returned','approved')`),
+]).enableRLS();
+
 /**
  * Urenregistratie per project. Arbeidskost van een regel = `hours × hourlyCostEur`
  * (tarief-snapshot, los van latere tariefwijzigingen). `paymentMethod` is
@@ -1409,6 +1444,7 @@ export const workerPortalLinks = pgTable(
 export const timeEntries = pgTable(
   "time_entries",
   {
+    weekSheetId: uuid().references(() => workerWeekSheets.id, { onDelete: "restrict" }),
     id: uuid().primaryKey().default(sql`gen_random_uuid()`),
     projectId: uuid()
       .notNull()

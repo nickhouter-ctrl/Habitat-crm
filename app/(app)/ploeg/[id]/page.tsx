@@ -141,6 +141,7 @@ export default async function WorkerPage({ params }: { params: Promise<{ id: str
                     <option value="en">English</option>
                   </Select>
                 </Field>
+                <label className="flex items-start gap-2 text-sm"><input type="checkbox" name="portalInvoiceEnabled" defaultChecked={worker.portalInvoiceEnabled} className="mt-1 size-4"/><span>Eigen facturen via het urenportaal toestaan (zelfstandige / onderaannemer). Iedere factuur wordt eerst gecontroleerd.</span></label>
                 <Field label={uiT("Notities")}>
                   <Textarea name="notes" rows={3} defaultValue={worker.notes ?? ""} placeholder={uiT("optioneel")} />
                 </Field>

@@ -1,3 +1,4 @@
+import { WorkerWeekReviews } from "@/components/worker-week-reviews";
 import { datumTaal } from "@/lib/i18n/server";
 import { tekst as uiTranslation } from '@/lib/i18n/server';
 import { and, desc, eq, inArray, isNull, ne, sql } from "drizzle-orm";
@@ -204,6 +205,7 @@ export default async function PurchaseOrdersPage({
 
   return (
     <>
+      <WorkerWeekReviews invoicesOnly />
       <PageHeader
         title={uiT("Inkooporders")}
         subtitle={

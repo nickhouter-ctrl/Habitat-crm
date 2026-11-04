@@ -1,0 +1,63 @@
+/** Opt-in real PostgreSQL workflow test. All fixtures and writes roll back. */
+import { randomUUID } from "node:crypto";
+import { and,eq,inArray } from "drizzle-orm";
+import { afterAll,expect,it,vi } from "vitest";
+const m=vi.hoisted(()=>({current:null as unknown,user:null as unknown,allow:true}));
+vi.mock("server-only",()=>({}));vi.mock("next/cache",()=>({revalidatePath:vi.fn()}));
+vi.mock("@/lib/rate-limit",()=>({rateLimit:async()=>true}));
+vi.mock("@/lib/auth/guards",()=>({requireModule:async()=>{if(!m.allow)throw Error("DENIED");return m.user;}}));
+vi.mock("@/lib/db",async()=>{const real=await vi.importActual<typeof import("@/lib/db")>("@/lib/db");return {...real,db:new Proxy(real.db,{get(target,key){const active=(m.current??target) as typeof real.db;const value=Reflect.get(active,key);return typeof value==="function"?value.bind(active):value;}})};});
+import { workers,projects,users,workerPortalLinks,workerWeekSheets as sheets,timeEntries,purchaseOrders } from "../db/schema";
+import { saveWeekAction,submitWeekInvoiceAction } from "../../app/uren/[token]/week-actions";
+import { reviewWorkerWeek } from "../../app/(app)/projects/weekstaten/actions";
+import { deleteOwnEntry } from "../../app/uren/[token]/actions";
+import { emptyWeek,mondayOf,madridToday,addDays } from "../worker-week";
+const enabled=process.env.WORKER_WEEK_DB_TEST==="1";
+afterAll(async()=>{if(enabled)await(await vi.importActual<typeof import("@/lib/db")>("@/lib/db")).pgClient.end({timeout:1});});
+const fd=(data:Record<string,string>)=>{const form=new FormData();for(const [k,v]of Object.entries(data))form.set(k,v);return form;};
+it.skipIf(!enabled)("enforces token scope, review, stale submissions, invoice uniqueness and exactly-once labor booking",async()=>{
+ const real=await vi.importActual<typeof import("@/lib/db")>("@/lib/db");const workerId=randomUUID(),projectId=randomUUID(),otherProjectId=randomUUID(),owner=randomUUID();const token=randomUUID().replaceAll("-","")+randomUUID().replaceAll("-","");const otherToken=randomUUID().replaceAll("-","")+randomUUID().replaceAll("-","");const stop=new Error("ROLLBACK_WEEK_TEST");
+ try {await real.db.transaction(async tx=>{
+  m.current=tx;m.user={id:owner};
+  await tx.insert(users).values({id:owner,name:"Week test reviewer",email:`${owner}@example.invalid`,role:"admin"});
+  await tx.insert(workers).values({id:workerId,name:"Week test supplier",portalLang:"es",portalInvoiceEnabled:true,hourlyCostEur:"28",defaultPaymentMethod:"invoice"});
+  await tx.insert(projects).values([{id:projectId,name:"Week test project",status:"active"},{id:otherProjectId,name:"Other week test project",status:"active"}]);
+  await tx.insert(workerPortalLinks).values([{workerId,projectId,token},{workerId,projectId:otherProjectId,token:otherToken}]);
+  const monday=addDays(mondayOf(madridToday()),-7),days=emptyWeek(monday);for(const d of days)d.state="off";days[0]={date:monday,state:"work",note:"",crews:[{people:2,names:"Ana\nLuis",hours:8,zone:"Bathroom",description:"Installed eight square metres of wall tiles."}]};
+  const get=async()=> (await tx.select().from(sheets).where(and(eq(sheets.workerId,workerId),eq(sheets.projectId,projectId))))[0];
+  const form=(version:number,intent="submit",d=days)=>fd({monday,version:String(version),intent,days:JSON.stringify(d),lang:"es",confirmed:"on"});
+  expect((await saveWeekAction("bad-token",null,form(0)))?.error).toBeTruthy();
+  expect((await saveWeekAction(token,null,form(0,"draft")))?.ok).toBeTruthy();let s=await get();expect(s.status).toBe("draft");
+  expect((await saveWeekAction(token,null,form(0)))?.error).toBeTruthy();
+  expect((await saveWeekAction(token,null,form(s.version)))?.ok).toBeTruthy();s=await get();expect(s.status).toBe("submitted");
+  expect(await tx.select().from(timeEntries).where(eq(timeEntries.workerId,workerId))).toHaveLength(0);
+  const review=(version:number,decision="approve",pid=projectId)=>fd({id:s.id,projectId:pid,version:String(version),decision,reason:decision==="return"?"Describe the completed tiling in more detail.":"",confirmed:"on"});
+  expect((await reviewWorkerWeek(false,null,review(s.version,"approve",otherProjectId)))?.error).toBeTruthy();
+  m.allow=false;await expect(reviewWorkerWeek(false,null,review(s.version))).rejects.toThrow("DENIED");m.allow=true;
+  expect((await reviewWorkerWeek(false,null,review(s.version,"return")))?.ok).toBeTruthy();s=await get();expect(s.status).toBe("returned");
+  expect((await saveWeekAction(token,null,form(s.version)))?.ok).toBeTruthy();s=await get();
+  const approval=review(s.version);expect((await reviewWorkerWeek(false,null,approval))?.ok).toBeTruthy();expect((await reviewWorkerWeek(false,null,approval))?.error).toBeTruthy();s=await get();
+  let entries=await tx.select().from(timeEntries).where(eq(timeEntries.weekSheetId,s.id));expect(entries).toHaveLength(1);expect(Number(entries[0].hours)).toBe(16);expect(entries[0].approvedAt).toBeTruthy();
+  await deleteOwnEntry(token,entries[0].id);expect(await tx.select().from(timeEntries).where(eq(timeEntries.weekSheetId,s.id))).toHaveLength(1);
+  expect((await saveWeekAction(token,null,form(s.version)))?.error).toBeTruthy();
+  // A later rate change must not rewrite the already approved work.
+  await tx.update(workers).set({hourlyCostEur:"99"}).where(eq(workers.id,workerId));
+  const bill=(version:number)=>fd({id:s.id,version:String(version),lang:"es",legalName:"Week Test SL",taxId:`TEST${workerId.slice(0,8)}`,address:"Calle Test 1, 03000 Alicante, Spain",email:`${workerId}@example.invalid`,iban:"",number:`T-${workerId}`,date:madridToday(),vatRate:"21",withholdingRate:"15",taxNote:"",confirmed:"on"});
+  expect((await submitWeekInvoiceAction(otherToken,null,bill(s.version)))?.error).toBeTruthy();
+  expect((await submitWeekInvoiceAction(token,null,bill(s.version)))?.ok).toBeTruthy();s=await get();expect(s.invoice?.subtotal).toBe(448);expect(s.invoice?.total).toBe(474.88);expect(s.invoice?.rate).toBe(28);expect(s.purchaseOrderId).toBeNull();
+  expect(await tx.select().from(purchaseOrders).where(eq(purchaseOrders.reference,`T-${workerId}`))).toHaveLength(0);
+  const invoiceApproval=review(s.version);expect((await reviewWorkerWeek(true,null,invoiceApproval))?.ok).toBeTruthy();expect((await reviewWorkerWeek(true,null,invoiceApproval))?.error).toBeTruthy();s=await get();
+  const purchases=await tx.select().from(purchaseOrders).where(eq(purchaseOrders.reference,`T-${workerId}`));expect(purchases).toHaveLength(1);expect(purchases[0].countAsLabor).toBe(true);expect(purchases[0].projectId).toBe(projectId);expect(Number(purchases[0].subtotal)).toBe(448);expect(Number(purchases[0].total)).toBe(474.88);
+  entries=await tx.select().from(timeEntries).where(eq(timeEntries.weekSheetId,s.id));expect(entries).toHaveLength(1);expect(entries[0].purchaseOrderId).toBe(purchases[0].id);
+  expect(s.history.map(h=>h.action)).toEqual(["draft_saved","submitted","returned","submitted","approved","invoice_submitted","invoice_approved"]);
+  // A second project cannot reuse the same supplier number, even with a different total.
+  const d2=structuredClone(days);d2[0].crews[0].hours=4;expect((await saveWeekAction(otherToken,null,form(0,"submit",d2)))?.ok).toBeTruthy();
+  let [other]=await tx.select().from(sheets).where(and(eq(sheets.workerId,workerId),eq(sheets.projectId,otherProjectId)));
+  expect((await reviewWorkerWeek(false,null,fd({id:other.id,projectId:otherProjectId,version:String(other.version),decision:"approve",reason:"",confirmed:"on"})))?.ok).toBeTruthy();
+  [other]=await tx.select().from(sheets).where(eq(sheets.id,other.id));const duplicate=bill(other.version);duplicate.set("id",other.id);
+  expect((await submitWeekInvoiceAction(otherToken,null,duplicate))?.error).toContain("número");
+  await tx.delete(workerPortalLinks).where(eq(workerPortalLinks.token,token));expect((await saveWeekAction(token,null,form(0)))?.error).toBeTruthy();
+  throw stop;
+ });}catch(e){if(e!==stop)throw e;}finally{m.current=null;m.allow=true;}
+ expect(await real.db.select().from(projects).where(inArray(projects.id,[projectId,otherProjectId]))).toHaveLength(0);
+},60000);

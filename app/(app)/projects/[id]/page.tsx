@@ -1,3 +1,4 @@
+import { WorkerWeekReviews } from "@/components/worker-week-reviews";
 import { loadCatalogLineCost } from "@/lib/catalog-costs";
 import { FinancialDetailsProvider, FinancialInspect, FinancialTable, type FinancialDetail, type FinancialSection } from "@/components/project-financial-details";
 import { projectAdvanceLedger } from "@/lib/project-advance-ledger";
@@ -1696,7 +1697,7 @@ export default async function ProjectDetailPage({
                   </THead>
                   <TBody>
                     {zichtbareTimeRows.map((t) => {
-                      if (t.id === editEntryId) {
+                      if (t.id === editEntryId && !t.weekSheetId) {
                         // Bewerk-modus: hele regel als één formulier (datum/uren/tarief).
                         return (
                           <Tr key={t.id} className="bg-amber-50/50">
@@ -1760,12 +1761,13 @@ export default async function ProjectDetailPage({
                                     {uiT("Goedkeuren")} </SubmitButton>
                                 </form>
                               )}
-                              <Link href={`/projects/${id}?edit=${t.id}#uren`} title={uiT("Bewerk")} className="rounded px-1.5 py-1 text-muted hover:bg-muted/50">
+                              {!t.weekSheetId && <><Link href={`/projects/${id}?edit=${t.id}#uren`} title={uiT("Bewerk")} className="rounded px-1.5 py-1 text-muted hover:bg-muted/50">
                                 ✎
                               </Link>
                               <form action={deleteTimeEntry.bind(null, id, t.id)}>
                                 <SubmitButton size="sm" variant="ghost" className="text-muted" pendingLabel="…">{uiT("×")}</SubmitButton>
-                              </form>
+                              </form></>}
+                              {t.weekSheetId && <a href="#weekstaten" className="text-xs text-muted underline">Weekstaat</a>}
                             </div>
                           </Td>
                         </Tr>
@@ -1789,6 +1791,8 @@ export default async function ProjectDetailPage({
                 <TimeEntryForm workers={workerOptions} action={addTimeEntry.bind(null, id)} />
               )}
 
+              <WorkerWeekReviews projectId={id} />
+
               {/* Urenportaal: verwijs een arbeider/ploegbaas naar dit project — hij
                   krijgt een persoonlijke link en kan alleen hier uren invullen. */}
               <div className="mt-5 border-t pt-4">
@@ -1801,8 +1805,9 @@ export default async function ProjectDetailPage({
                   <ul className="mb-3 space-y-1.5">
                     {portalLinkRows.map((l) => (
                       <li key={l.id} className="flex flex-wrap items-center gap-2 text-sm">
-                        <span className="min-w-28">{l.workerName}</span>
-                        <CopyLinkButton url={`${portalBase}/${l.token}`} />
+                        <Link href={`/ploeg/${l.workerId}`} className="min-w-28 underline underline-offset-2">{l.workerName}</Link>
+                        <CopyLinkButton url={`${portalBase}/${l.token}?lang=nl`} label="Kopieer NL-link" />
+                        <CopyLinkButton url={`${portalBase}/${l.token}?lang=es`} label="Copiar enlace español" />
                         <form action={deleteWorkerPortalLink.bind(null, id, l.id)}>
                           <SubmitButton size="sm" variant="ghost" className="text-muted" pendingLabel="…">
                             {uiT("Intrekken")} </SubmitButton>

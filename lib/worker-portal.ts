@@ -10,7 +10,7 @@ import { projects, workerPortalLinks, workers } from "@/lib/db/schema";
  * archiveren trekt dus automatisch alle links van dat project in.
  */
 export async function portalLinkForToken(token: string) {
-  if (!token || token.length < 20) return null;
+  if (!/^[a-zA-Z0-9_-]{20,128}$/.test(token)) return null;
   const [row] = await db
     .select({ link: workerPortalLinks, worker: workers, project: projects })
     .from(workerPortalLinks)

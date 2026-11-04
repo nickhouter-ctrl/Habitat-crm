@@ -24,7 +24,7 @@ import {
   Tr,
 } from "@/components/ui";
 import { db } from "@/lib/db";
-import { projectCosts, products, projects, purchaseInvoiceReviews, purchaseOrders, timeEntries, users, workers } from "@/lib/db/schema";
+import { workerWeekSheets, projectCosts, products, projects, purchaseInvoiceReviews, purchaseOrders, timeEntries, users, workers } from "@/lib/db/schema";
 import { nextSequentialSku } from "@/lib/products";
 import {
   formatMoney,
@@ -83,6 +83,7 @@ export default async function PurchaseOrderPage({
   const verdeelBewerken = (await searchParams).verdeel === "1";
   const po = await db.query.purchaseOrders.findFirst({ where: eq(purchaseOrders.id, id) });
   if (!po) notFound();
+  const [portalWeek] = await db.select({id: workerWeekSheets.id}).from(workerWeekSheets).where(eq(workerWeekSheets.purchaseOrderId, id));
 
   // Wie heeft deze factuur goedgekeurd? Staat op de beoordeling uit de wachtrij;
   // inkopen van vóór de goedkeuringspoort (of uit Holded) hebben die niet.
@@ -196,7 +197,7 @@ export default async function PurchaseOrderPage({
   // Kosten/marges rekenen ex. btw; toon dat bedrag hier expliciet naast het totaal.
   const exVat = poExVat(po);
 
-  const statusAction = ({ status, label, variant = "secondary" }: { status: Parameters<typeof setPurchaseOrderStatus>[1]; label: string; variant?: "primary" | "secondary" }) => (
+  const statusAction = ({ status, label, variant = "secondary" }: { status: Parameters<typeof setPurchaseOrderStatus>[1]; label: string; variant?: "primary" | "secondary" }) => portalWeek ? null : (
     <form action={setPurchaseOrderStatus.bind(null, id, status)}>
       <SubmitButton variant={variant} size="sm" pendingLabel={uiT("Bezig…")}>
         {label}
@@ -207,6 +208,7 @@ export default async function PurchaseOrderPage({
   return (
     <>
 <TabsRoot defaultTab="order" ids={["order","projects","files","details"]} param="section">
+      {portalWeek && <a className="mb-4 inline-block text-accent underline" href={`/api/worker-weeks/${portalWeek.id}/invoice`}>Factuur uit urenportaal downloaden (PDF)</a>}
       <PageHeader
         title={
           <span className="flex items-center gap-2">
@@ -233,8 +235,8 @@ export default async function PurchaseOrderPage({
           <>
             <LinkButton href="/inkooporders" variant="ghost">
               {uiT("← Overzicht")} </LinkButton>
-            <LinkButton href={`/inkooporders/${id}/edit`} variant="secondary">
-              {uiT("Bewerken")} </LinkButton>
+            {!portalWeek && <LinkButton href={`/inkooporders/${id}/edit`} variant="secondary">
+              {uiT("Bewerken")} </LinkButton>}
           </>
         }
       />
@@ -410,7 +412,7 @@ export default async function PurchaseOrderPage({
               {uiT("bepaalt waar de kosten landen — materiaal telt als inkoop, uren als arbeid")} </span>
           </CardHeader>
           <CardContent>
-            <PurchaseProjectLink
+            {portalWeek ? <p className="text-sm">Deze factuur is gekoppeld aan de goedgekeurde weekstaat. <Link className="text-accent underline" href={`/projects/${po.projectId}#uren`}>Weekstaat bekijken</Link></p> : <PurchaseProjectLink
               projects={projectRows}
               workers={workerOptions}
               defaultWorkerId={gevondenWorker?.id ?? null}
@@ -443,7 +445,7 @@ export default async function PurchaseOrderPage({
                     }))
                   : undefined
               }
-            />
+            />}
           </CardContent>
         </Card></TabPanel>
         )}
@@ -516,13 +518,13 @@ export default async function PurchaseOrderPage({
 
           <TabPanel id="details"><Card>
             <CardContent className="pt-5">
-              <form action={remove}>
+              {!portalWeek && <form action={remove}>
                 <ConfirmSubmit
                   message={uiT("Inkooporder {v0} definitief verwijderen?", { v0: po.supplier })}
                   className="rounded-md px-3 py-2 text-sm font-medium text-danger transition-colors hover:bg-danger/10"
                 >
                   {uiT("Bestelling verwijderen")} </ConfirmSubmit>
-              </form>
+              </form>}
             </CardContent>
           </Card></TabPanel>
         </div>

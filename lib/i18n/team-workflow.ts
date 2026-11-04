@@ -1,5 +1,13 @@
 /** NL source, English, Spanish. CRM workflow and personal notification mail. */
 const rows:[string,string,string][]=[
+['Open berichten','Open messages','Mensajes pendientes'],
+['Afgevinkte berichten','Checked-off messages','Mensajes completados'],
+['Geen afgevinkte berichten.','No checked-off messages.','No hay mensajes completados.'],
+['Geen open teamberichten.','No open team messages.','No hay mensajes de equipo pendientes.'],
+['Afvinken: {onderwerp}','Check off: {onderwerp}','Marcar como completado: {onderwerp}'],
+['Terugzetten: {onderwerp}','Restore: {onderwerp}','Restaurar: {onderwerp}'],
+['Bericht niet bijgewerkt. Probeer het opnieuw.','Message not updated. Please try again.','No se ha actualizado el mensaje. Inténtalo de nuevo.'],
+['Afvinken haalt het bericht uit jouw lijst. Een gekoppelde taak blijft in de agenda.','Checking off removes the message from your list. A linked task stays in the calendar.','Marcar como completado quita el mensaje de tu lista. Una tarea vinculada permanece en la agenda.'],
 ["Meer filters & sorteren","More filters & sorting","Más filtros y ordenación"],
 ["Selecteer een bericht of maak een nieuw bericht / taak.","Select a message or create a new message / task.","Selecciona un mensaje o crea un nuevo mensaje o tarea."],
 ["Afspraak plannen","Schedule an appointment","Programar una cita"],["Wijzigingshistorie","Change history","Historial de cambios"],["Mail schrijven","Write an email","Escribir un correo"],["Historie","History","Historial"],
