@@ -37,3 +37,11 @@ Mogelijke vervolgstappen: dagfoto's per werkplek, vergelijking met begrote uren 
 - Nick ontvangt via zijn bestaande CRM-account een persoonlijke e-mail met weeknummer, medewerker, project, persoonsuren en een link naar de controle. Geen openbare medewerkerslink of gedeelde BCC.
 - De melding wordt in dezelfde database-transactie klaargezet. Dubbel klikken geeft geen dubbele mail; opnieuw indienen na een correctie geeft een nieuwe melding. Achterhaalde meldingen worden overgeslagen.
 - Verwerking probeert direct na de inzending te bezorgen; de bestaande notificatiecron verwerkt veilig achtergebleven jobs. Een onzekere SMTP-uitkomst wordt niet blind opnieuw verzonden.
+
+## Persoonlijk dashboard per klus
+
+- Een geldige persoonlijke link opent Overzicht, Weekstaten en Facturen voor uitsluitend die medewerker op dat project. De lijsten zijn gepagineerd; oude facturen verdwijnen niet na acht weken.
+- Facturen hebben een leesbare detailpagina, PDF bekijken en opnieuw downloaden. Het archief blijft beschikbaar als kantoor nieuwe facturen voor de medewerker uitschakelt.
+- Bij afgeronde projecten is alleen terugkijken/downloaden mogelijk. Inactieve medewerkers, gearchiveerde projecten en ingetrokken links blijven afgesloten.
+- Naam/bedrijfsnaam, NIF/CIF/NIE, adres, e-mail en IBAN worden uit de laatste ingediende factuur van dezelfde medewerker overgenomen. Alleen deze eigen identificatiegegevens worden hergebruikt; weekstaten en facturen van andere projecten blijven verborgen. Een nieuwe factuur vraagt altijd om een eigen nieuw nummer en bewuste btw/IRPF-keuze.
+- Niet ingediende factuurformulieren slaan de bedrijfsgegevens nog niet op; ingediende facturen bewaren een eigen snapshot zodat latere wijzigingen eerdere documenten niet veranderen.
