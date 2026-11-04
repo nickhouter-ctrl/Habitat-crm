@@ -29,3 +29,11 @@ Medewerkers openen hun bestaande projectspecifieke link. `?lang=nl`, `?lang=es` 
 - Browsercontrole: Spaanse mobiele invoer, foutvalidatie met behoud van invoer, concept, indienen, kantoorcontrole, leveranciersfactuur, PDF-download, inkoopgoedkeuring en weigeren van ongeauthenticeerde exports.
 
 Mogelijke vervolgstappen: dagfoto's per werkplek, vergelijking met begrote uren en steekproefsgewijze bevestiging door de uitvoerder. Een ingevoerde beschrijving alleen bewijst de aanwezigheid niet.
+
+## Meldingen bij indienen
+
+- Dagelijks **Concept opslaan** bewaart de weekstaat; alleen expliciet indienen geeft een melding.
+- Een melding bovenin het CRM opent `/projects/weekstaten`, met alle ingediende weekstaten ter controle. De teller blijft tot goedkeuren of terugsturen en vernieuwt bij focus of na maximaal één minuut.
+- Nick ontvangt via zijn bestaande CRM-account een persoonlijke e-mail met weeknummer, medewerker, project, persoonsuren en een link naar de controle. Geen openbare medewerkerslink of gedeelde BCC.
+- De melding wordt in dezelfde database-transactie klaargezet. Dubbel klikken geeft geen dubbele mail; opnieuw indienen na een correctie geeft een nieuwe melding. Achterhaalde meldingen worden overgeslagen.
+- Verwerking probeert direct na de inzending te bezorgen; de bestaande notificatiecron verwerkt veilig achtergebleven jobs. Een onzekere SMTP-uitkomst wordt niet blind opnieuw verzonden.

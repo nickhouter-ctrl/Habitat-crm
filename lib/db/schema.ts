@@ -309,7 +309,7 @@ export const staffNotifications = pgTable("staff_notifications", {
   id: uuid().primaryKey().defaultRandom(),
   eventKey: text().notNull().unique(),
   userId: uuid().notNull().references(() => users.id, { onDelete: "cascade" }),
-  kind: text().$type<"followup_assignment" | "task_assignment" | "appointment_assignment" | "team_message" | "daily_agenda">().notNull(),
+  kind: text().$type<"followup_assignment" | "task_assignment" | "appointment_assignment" | "team_message" | "daily_agenda" | "worker_week_submitted">().notNull(),
   entityId: uuid(),
   day: date(),
   actorId: uuid().references(() => users.id, { onDelete: "set null" }),
@@ -320,7 +320,7 @@ export const staffNotifications = pgTable("staff_notifications", {
   lastError: text(),
   ...timestamps,
 }, t => [index("staff_notifications_pending_idx").on(t.status, t.availableAt),
-  check("staff_notifications_kind_check", sql`${t.kind} in ('followup_assignment','task_assignment','appointment_assignment','team_message','daily_agenda')`),
+  check("staff_notifications_kind_check", sql`${t.kind} in ('followup_assignment','task_assignment','appointment_assignment','team_message','daily_agenda','worker_week_submitted')`),
   check("staff_notifications_status_check", sql`${t.status} in ('pending','sending','sent','skipped','unknown')`)]).enableRLS();
 
 /* ----------------------------------------------------------------- companies */

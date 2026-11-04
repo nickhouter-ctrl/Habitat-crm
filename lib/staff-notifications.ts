@@ -1,11 +1,12 @@
 import "server-only";
 import { and, asc, eq, inArray, isNull, lt, lte, sql } from "drizzle-orm";
 import { db } from "@/lib/db";
-import { activities, appointments, contacts, partnerProfiles, staffMessages, staffNotifications, users } from "@/lib/db/schema";
+import { activities, appointments, contacts, partnerProfiles, staffMessages, staffNotifications, users, workerWeekSheets, workers, projects } from "@/lib/db/schema";
 import { sendEmail } from "@/lib/email";
 import { agendaDateTime, agendaDay, shiftDay } from "@/lib/agenda-dates";
 import { madridDelen } from "@/lib/tz-madrid";
 import { salesTaskAccess, salesAppointmentAccess } from "@/lib/auth/sales-scope";
+import { isoWeek, totalWeekHours } from "@/lib/worker-week";
 import { magModule } from "@/lib/auth/modules";
 import { staffNotificationEmail, type StaffAgendaItem, type StaffMailContent } from "@/lib/staff-notification-email";
 
@@ -51,6 +52,14 @@ async function currentContent(n: typeof staffNotifications.$inferSelect): Promis
     return items.length ? { kind: n.kind, day: n.day, items } : null;
   }
   if (!n.entityId) return null;
+  if (n.kind === "worker_week_submitted") {
+    if(!magModule(recipient.role,"projects"))return null;
+    const [s]=await db.select({id:workerWeekSheets.id,version:workerWeekSheets.version,status:workerWeekSheets.status,week:workerWeekSheets.weekStart,days:workerWeekSheets.days,at:workerWeekSheets.submittedAt,workerName:workers.name,projectId:projects.id,projectName:projects.name}).from(workerWeekSheets).innerJoin(workers,eq(workers.id,workerWeekSheets.workerId)).innerJoin(projects,eq(projects.id,workerWeekSheets.projectId)).where(eq(workerWeekSheets.id,n.entityId));
+    // Do not send obsolete notifications after review or a newer submission.
+    if(!s || s.status!=="submitted" || n.eventKey!==`worker-week:${s.id}:${s.version}:${n.userId}`)return null;
+    const week=isoWeek(s.week);
+    return {kind:n.kind,title:`${s.workerName} · ${week.week}/${week.year}`,body:`${s.projectName} · ${totalWeekHours(s.days)} h`,at:s.at,sheetId:s.id};
+  }
   if (n.kind === "followup_assignment") {
     const [p] = await db.select({ ownerId: partnerProfiles.ownerId, stage: partnerProfiles.stage, title: partnerProfiles.nextAction, day: partnerProfiles.nextActionOn, contactName: contacts.name,tags:contacts.tags }).from(partnerProfiles).innerJoin(contacts, eq(contacts.id, partnerProfiles.contactId)).where(and(eq(partnerProfiles.contactId, n.entityId)));
     return p && p.ownerId === n.userId && p.stage !== "stopped" && !p.tags?.includes("opvolging:uitgesloten") ? { kind: n.kind, actorName: actor?.name, title: p.title ?? undefined, at: p.day ? agendaDateTime(p.day, "17:00") : null, contactId: n.entityId, contactName: p.contactName } : null;
@@ -82,7 +91,7 @@ export async function deliverStaffNotifications(ids?: string[]) {
     try {
       const [recipient] = await db.select({ name: users.name, email: users.email, locale: users.locale, role: users.role }).from(users).where(eq(users.id, row.userId));
       const content = await currentContent(row);
-      const requiredModule = row.kind === "team_message" ? "teamberichten" : row.kind === "followup_assignment" ? "klantopvolging" : "agenda";
+      const requiredModule = row.kind === "worker_week_submitted" ? "projects" : row.kind === "team_message" ? "teamberichten" : row.kind === "followup_assignment" ? "klantopvolging" : "agenda";
       if (!recipient || !isSystemMailRecipient(recipient.email) || !magModule(recipient.role, requiredModule) || !content) { await db.update(staffNotifications).set({ status: "skipped", updatedAt: new Date() }).where(eq(staffNotifications.id, row.id)); result.skipped++; continue; }
       const mail = staffNotificationEmail(content, recipient);
       smtpStarted = true;

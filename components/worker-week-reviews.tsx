@@ -7,16 +7,16 @@ import { isoWeek,totalWeekHours } from "@/lib/worker-week";
 import { formatEUR } from "@/lib/utils";
 import { WorkerWeekReviewForm } from "./worker-week-review-form";
 
-export async function WorkerWeekReviews({projectId,invoicesOnly=false}:{projectId?:string;invoicesOnly?:boolean}) {
+export async function WorkerWeekReviews({projectId,invoicesOnly=false,pendingOnly=false}:{projectId?:string;invoicesOnly?:boolean;pendingOnly?:boolean}) {
  const access=await requireModuleRead(invoicesOnly?"inkoop":"projects");
- const rows=await db.select({sheet:workerWeekSheets,workerName:workers.name,projectName:projects.name}).from(workerWeekSheets).innerJoin(workers,eq(workers.id,workerWeekSheets.workerId)).innerJoin(projects,eq(projects.id,workerWeekSheets.projectId)).where(and(projectId?eq(workerWeekSheets.projectId,projectId):undefined,invoicesOnly?eq(workerWeekSheets.invoiceStatus,"submitted"):ne(workerWeekSheets.status,"draft"))).orderBy(desc(workerWeekSheets.updatedAt)).limit(100);
- if(!rows.length)return null;
+ const rows=await db.select({sheet:workerWeekSheets,workerName:workers.name,projectName:projects.name}).from(workerWeekSheets).innerJoin(workers,eq(workers.id,workerWeekSheets.workerId)).innerJoin(projects,eq(projects.id,workerWeekSheets.projectId)).where(and(projectId?eq(workerWeekSheets.projectId,projectId):undefined,invoicesOnly?eq(workerWeekSheets.invoiceStatus,"submitted"):pendingOnly?eq(workerWeekSheets.status,"submitted"):ne(workerWeekSheets.status,"draft"))).orderBy(desc(workerWeekSheets.updatedAt)).limit(100);
+ if(!rows.length)return pendingOnly?<p className="rounded-xl border bg-surface p-6 text-sm text-muted">Er staan geen weekstaten klaar om te controleren.</p>:null;
  const actorIds=[...new Set(rows.flatMap(r=>r.sheet.history.map(h=>h.actor)).filter(a=>/^[0-9a-f-]{36}$/.test(a)))];
  const actorNames=new Map(actorIds.length?(await db.select({id:users.id,name:users.name}).from(users).where(inArray(users.id,actorIds))).map(u=>[u.id,u.name??"Kantoor"]):[]);
  const labels:Record<string,string>={submitted:"Te controleren",approved:"Goedgekeurd",returned:"Teruggestuurd"};
  return <section id="weekstaten" className="my-5 space-y-3"><h2 className="text-lg font-semibold">{invoicesOnly?"Facturen uit het urenportaal ter controle":"Weekstaten uit het urenportaal"} <span className="text-sm font-normal text-muted">({rows.length})</span></h2>
  <p className="text-sm text-muted">{invoicesOnly?"Pas na goedkeuring wordt de factuur geboekt. De bijbehorende uren worden gekoppeld, niet opnieuw aangemaakt.":"Controleer aanwezigheid en resultaat per dag. Goedgekeurde weekstaten blijven vaststaan; concepten en ingediende staten tellen nog niet mee in de kosten."}</p>
- {rows.map(({sheet:s,workerName,projectName})=>{const wk=isoWeek(s.weekStart);const late=s.submittedAt && new Date(s.submittedAt).getTime()-Date.parse(s.weekStart)>10*86400000;return <details key={`${s.id}:${s.version}`} open={invoicesOnly || s.status==="submitted"} className="rounded-xl border bg-surface p-4">
+ {rows.map(({sheet:s,workerName,projectName})=>{const wk=isoWeek(s.weekStart);const late=s.submittedAt && new Date(s.submittedAt).getTime()-Date.parse(s.weekStart)>10*86400000;return <details id={`weekstaat-${s.id}`} key={`${s.id}:${s.version}`} open={invoicesOnly || s.status==="submitted"} className="scroll-mt-24 rounded-xl border bg-surface p-4">
  <summary className="cursor-pointer font-medium">{workerName} · week {wk.week}/{wk.year} · {totalWeekHours(s.days)} persoonsuren · {labels[invoicesOnly?s.invoiceStatus!:s.status]}{s.invoice && ` · factuur ${s.invoice.number}`}</summary>
  <div className="mt-4 space-y-3"><Link href={`/projects/${s.projectId}#weekstaten`} className="text-sm text-accent underline">{projectName}</Link>
  <p className="text-sm text-muted">Ingediend: {s.submittedAt?.toLocaleString("nl-NL",{timeZone:"Europe/Madrid"})??"—"} · Tarief: {formatEUR(s.hourlyRate)}/u · Totaal arbeid: {formatEUR(totalWeekHours(s.days)*Number(s.hourlyRate))}</p>

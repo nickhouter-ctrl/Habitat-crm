@@ -10,4 +10,9 @@ describe('personal employee notification emails',()=>{
   const m=staffNotificationEmail({kind:'daily_agenda',day:'2026-10-04',items:[{id:'1',kind:'task',title:'Call Ana',body:null,at:new Date('2026-10-03T15:00:00Z'),contactId:null,contactName:null,overdue:true},{id:'2',kind:'appointment',title:'Visit project',body:null,at:new Date('2026-10-04T08:00:00Z'),contactId:null,contactName:null,location:'Bloemendaal'}]},{name:'Mourad',locale:'es'});
   expect(m.subject).toContain('Tu agenda');expect(m.text).toContain('Tarea atrasada');expect(m.text).toContain('Bloemendaal');expect(m.html).toContain('owner=mine');
  });
+ it('links a submitted timesheet directly to authenticated review, including in Spanish',()=>{
+  const m=staffNotificationEmail({kind:'worker_week_submitted',title:'<Supplier> · 45/2026',body:'Project bathroom · 80 h',sheetId:'00000000-0000-4000-8000-000000000001'},{name:'Nick',locale:'es'});
+  expect(m.subject).toContain('Parte semanal pendiente');expect(m.html).toContain('&lt;Supplier&gt;');expect(m.html).toContain('/projects/weekstaten#weekstaat-00000000-0000-4000-8000-000000000001');expect(m.text).toContain('Revisar parte semanal');expect(m.html).not.toContain('/uren/');
+ });
+
 });

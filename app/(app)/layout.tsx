@@ -1,3 +1,5 @@
+import Link from "next/link";
+import { maakT } from "@/lib/i18n";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 
@@ -40,6 +42,7 @@ export default async function AppLayout({
 
   const badges = await verzamelNavBadges(toegang.rol, toegang.email, toegang.id);
   const locale = isLocale(toegang.locale) ? toegang.locale : "nl";
+  const t=maakT(locale),weekCount=badges["/projects"]??0;
 
   return (
     <TaalProvider locale={locale}>
@@ -55,7 +58,9 @@ export default async function AppLayout({
               niet in zijn eigen taal ziet, vindt dat menu juist niet. */}
           <TaalKeuze huidig={locale} zet={zetTaal} compact className="ml-auto" />
         </header>
-        <main className="mx-auto max-w-[96rem] px-4 pb-10 pt-20 sm:px-6 lg:pt-6">{children}</main>
+        <main className="mx-auto max-w-[96rem] px-4 pb-10 pt-20 sm:px-6 lg:pt-6">
+          {toegang.magModule("projects") && weekCount>0 && <Link href="/projects/weekstaten" className="mb-5 flex items-center justify-between gap-3 rounded-xl border border-accent/30 bg-accent/5 px-4 py-3 text-sm font-medium text-accent"><span>{t("{n} weekstaten ter controle",{n:weekCount})}</span><span className="shrink-0 underline">{t("Bekijken")} →</span></Link>}
+          {children}</main>
       </div>
     </div>
     </TaalProvider>
