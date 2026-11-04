@@ -107,6 +107,11 @@ describe("calendar credentials and URL boundaries", () => {
     expect(eventUrl("one.ics", calendarUrl)).toBe(calendarUrl + "one.ics");
     for (const value of ["../private.ics", "%2e%2e/private.ics", "a%2fb.ics", "https://p02-caldav.icloud.com/123/calendars/work/one.ics"]) expect(() => eventUrl(value, calendarUrl)).toThrow();
   });
+  it("canonicalizes iCloud's central-host event aliases only inside the work collection", () => {
+    expect(eventUrl("https://caldav.icloud.com/123/calendars/work/one.ics", calendarUrl)).toBe(calendarUrl + "one.ics");
+    expect(() => eventUrl("https://caldav.icloud.com/999/calendars/work/one.ics", calendarUrl)).toThrow();
+    expect(() => eventUrl("https://caldav.icloud.com/123/calendars/private/one.ics", calendarUrl)).toThrow();
+  });
 });
 
 describe("Apple transport", () => {

@@ -1,7 +1,7 @@
 import "server-only";
 import type { DAVClient, DAVCalendar } from "tsdav";
 import { AppleCalendarError } from "./client";
-import { appleUrl } from "./security";
+import { appleUrl, sameAppleOrigin } from "./security";
 
 /** Probe only our reserved collection, without querying private/shared calendars. */
 export async function findWorkCalendar(client: Pick<DAVClient, "propfind">, calendarUrl: string): Promise<DAVCalendar | null> {
@@ -14,9 +14,7 @@ export async function findWorkCalendar(client: Pick<DAVClient, "propfind">, cale
   const actual = appleUrl(new URL(response.href, target).href);
   // iCloud can return the central hostname for a request to its partition host.
   // Identity still requires the exact account and collection path.
-  const sameHost = actual.hostname === target.hostname
-    || actual.hostname === "caldav.icloud.com" || target.hostname === "caldav.icloud.com";
-  if (!sameHost || actual.pathname.replace(/\/$/, "") !== target.pathname.replace(/\/$/, "")
+  if (!sameAppleOrigin(actual, target) || actual.pathname.replace(/\/$/, "") !== target.pathname.replace(/\/$/, "")
     || !Object.hasOwn(response.props?.resourcetype ?? {}, "calendar")) throw new AppleCalendarError("calendar-missing");
   return { url: target.href };
 }
