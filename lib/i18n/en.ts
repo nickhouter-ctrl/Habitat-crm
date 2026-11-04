@@ -1,4 +1,5 @@
 import { reportEnglish } from "./report-labels";
+import { appleCalendarEn } from "./apple-calendar";
 /**
  * English. Key = the Dutch source text; a missing key falls back to Dutch, so
  * an untranslated screen stays usable instead of showing key names.
@@ -12,6 +13,7 @@ import { teamWorkflowEn } from "./team-workflow";
 import { usabilityEn } from "./usability";
 
 export const en: Dictionary = {
+  ...appleCalendarEn,
   ...usabilityEn,
   ...reportEnglish,
   ...teamWorkflowEn,

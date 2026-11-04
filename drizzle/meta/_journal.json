@@ -624,6 +624,13 @@
       "when": 1793823265289,
       "tag": "0088_thick_wolfpack",
       "breakpoints": true
+    },
+    {
+      "idx": 89,
+      "version": "7",
+      "when": 1793823534593,
+      "tag": "0089_apple_calendar_sync",
+      "breakpoints": true
     }
   ]
 }
