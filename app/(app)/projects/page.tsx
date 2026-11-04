@@ -436,8 +436,9 @@ export default async function ProjectsPage({
       <PageHeader
         title={uiT("Projecten")}
         actions={
+          <><LinkButton href="/projects/weekstaten">{uiT("Weekstaat controleren")}</LinkButton>
           <LinkButton href="/projects/new" variant="primary">
-            {uiT("Nieuw project")} </LinkButton>
+            {uiT("Nieuw project")} </LinkButton></>
         }
       />
 

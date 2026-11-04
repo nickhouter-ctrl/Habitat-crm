@@ -42,7 +42,7 @@ export function validateWeek(raw: unknown, monday: string, today: string, submit
     const people=new Map<string,number>();
     for(const c of d.crews) {
       if(c.hours<=0 || Math.round(c.hours*4)!==c.hours*4)return {error:"hours"};
-      if(c.description.length<10 || !c.zone)return {error:"description"};
+      if(c.description.length<10)return {error:"description"};
       const names=crewNames(c.names);if(names.length!==c.people || new Set(names.map(n=>n.toLowerCase())).size!==names.length)return {error:"names"};
       for(const n of names) { const key=n.toLocaleLowerCase();people.set(key,(people.get(key)??0)+c.hours);if(people.get(key)!>16)return {error:"hours"}; }
     }

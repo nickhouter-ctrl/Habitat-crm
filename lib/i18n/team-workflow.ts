@@ -97,6 +97,10 @@ const rows:[string,string,string][]=[
 ['Bericht van {naam}: {titel}','Message from {naam}: {titel}','Mensaje de {naam}: {titel}'],['Je hebt een nieuw teambericht ontvangen.','You have received a new team message.','Has recibido un nuevo mensaje del equipo.'],['Lees het teambericht','Read team message','Leer mensaje del equipo'],
 ['Jouw agenda voor {datum}','Your calendar for {datum}','Tu agenda para el {datum}'],['Dit staat voor jou klaar: afspraken van vandaag, te volgen taken en achterstallige acties.','Here is your overview: today’s appointments, tasks to follow up and overdue actions.','Este es tu resumen: citas de hoy, tareas de seguimiento y acciones atrasadas.'],
 ['Hallo {naam},','Hello {naam},','Hola {naam}:'],['Hallo,','Hello,','Hola:'],['Toegewezen door {naam}','Assigned by {naam}','Asignado por {naam}'],['Wanneer','When','Cuándo'],['Open het klantdossier','Open customer file','Abrir ficha del cliente'],
+['Weekstaat ter controle: {titel}','Timesheet for review: {titel}','Parte semanal pendiente de revisión: {titel}'],
+['Een medewerker heeft een weekstaat ingediend. Controleer per dag de mensen, uren en werkzaamheden voordat je goedkeurt.','A worker submitted a weekly timesheet. Check the people, hours and work for each day before approving.','Un trabajador ha enviado un parte semanal. Revisa las personas, horas y trabajos de cada día antes de aprobar.'],
+['Weekstaat controleren','Review timesheet','Revisar parte semanal'],
+['{n} weekstaten ter controle','{n} timesheets to review','{n} partes semanales pendientes'],
 ];
 export const teamWorkflowEn=Object.fromEntries(rows.map(([nl,en])=>[nl,en]));
 export const teamWorkflowEs=Object.fromEntries(rows.map(([nl,,es])=>[nl,es]));

@@ -1,0 +1,2 @@
+ALTER TABLE "staff_notifications" DROP CONSTRAINT "staff_notifications_kind_check";--> statement-breakpoint
+ALTER TABLE "staff_notifications" ADD CONSTRAINT "staff_notifications_kind_check" CHECK ("staff_notifications"."kind" in ('followup_assignment','task_assignment','appointment_assignment','team_message','daily_agenda','worker_week_submitted'));

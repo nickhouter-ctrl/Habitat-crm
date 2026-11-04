@@ -1,9 +1,11 @@
 import "server-only";
 import { and, eq, gte, lte, sql } from "drizzle-orm";
 import { db } from "@/lib/db";
-import { workerWeekSheets as sheets, workers, timeEntries, purchaseOrders } from "@/lib/db/schema";
+import { workerWeekSheets as sheets, workers, timeEntries, purchaseOrders, users, staffNotifications } from "@/lib/db/schema";
 import { addDays, totalWeekHours, invoiceAmounts, invoiceKey, type WeekDay, type WorkerInvoice, type SupplierInvoiceInput, type WeekLang, type WeekEvent } from "@/lib/worker-week";
 import { COMPANY } from "@/lib/company";
+import { NICK_FREDERIQUE } from "@/lib/mail-bcc";
+import { magModule, heeftCap } from "@/lib/auth/modules";
 import { workerRate } from "@/lib/worker-rate";
 
 type Worker=typeof workers.$inferSelect;
@@ -24,8 +26,22 @@ export async function saveWeek(args:{worker:Worker;projectId:string;monday:strin
     const values={days:args.days,status:args.submit?"submitted":"draft",version,hourlyRate:String(rate),paymentMethod,
       submittedAt:args.submit?new Date():null,reviewNote:old?.reviewNote??null,
       history:history(old?.history??[],{action:args.submit?"submitted":"draft_saved",actor:args.worker.name,version,...(args.submit?{days:args.days}:{})}),updatedAt:new Date()};
-    if(old)await tx.update(sheets).set(values).where(eq(sheets.id,old.id));
-    else await tx.insert(sheets).values({...values,workerId:args.worker.id,projectId:args.projectId,weekStart:args.monday});
+    const [saved] = old
+      ? await tx.update(sheets).set(values).where(eq(sheets.id,old.id)).returning({id:sheets.id})
+      : await tx.insert(sheets).values({...values,workerId:args.worker.id,projectId:args.projectId,weekStart:args.monday}).returning({id:sheets.id});
+    const notificationIds:string[]=[];
+    // Persist the submission and its notification together. Drafts never notify.
+    // Local/preview verification with external effects disabled must not leave
+    // live mail jobs for the production cron to pick up from the shared DB.
+    if(args.submit && process.env.CRM_EXTERNAL_EFFECTS!=="disabled") {
+      const recipients=await tx.select({id:users.id,role:users.role}).from(users).where(sql`lower(${users.email}) = ${NICK_FREDERIQUE[0]}`);
+      for(const recipient of recipients) {
+        if(!magModule(recipient.role,"projects") || !heeftCap(recipient.role,"schrijven"))continue;
+        const notices=await tx.insert(staffNotifications).values({eventKey:`worker-week:${saved.id}:${version}:${recipient.id}`,kind:"worker_week_submitted",entityId:saved.id,userId:recipient.id}).onConflictDoNothing().returning({id:staffNotifications.id});
+        notificationIds.push(...notices.map(n=>n.id));
+      }
+    }
+    return {notificationIds};
   });
 }
 
@@ -37,7 +53,7 @@ export async function reviewWeek(args:{id:string;projectId:string;version:number
       // Existing daily/manual hours must be reconciled explicitly, never double-booked.
       const overlap=await tx.select({id:timeEntries.id}).from(timeEntries).where(and(eq(timeEntries.workerId,sheet.workerId),eq(timeEntries.projectId,sheet.projectId),gte(timeEntries.date,sheet.weekStart),lte(timeEntries.date,addDays(sheet.weekStart,6)))).limit(1);
       if(overlap.length)conflict("Er staan al uren voor deze arbeider in deze week op dit project. Controleer en verwerk die eerst om dubbel boeken te voorkomen.");
-      const rows=sheet.days.flatMap(d=>d.state==="work"?d.crews.map(c=>({weekSheetId:sheet.id,projectId:sheet.projectId,workerId:sheet.workerId,workerName:c.names,date:d.date,hours:(c.people*c.hours).toFixed(2),hourlyCostEur:sheet.hourlyRate,paymentMethod:sheet.paymentMethod,selfLoggedAt:sheet.submittedAt,approvedAt:new Date(),note:`${c.people} × ${c.hours} u · ${c.zone}\n${c.description}`})):[]);
+      const rows=sheet.days.flatMap(d=>d.state==="work"?d.crews.map(c=>({weekSheetId:sheet.id,projectId:sheet.projectId,workerId:sheet.workerId,workerName:c.names,date:d.date,hours:(c.people*c.hours).toFixed(2),hourlyCostEur:sheet.hourlyRate,paymentMethod:sheet.paymentMethod,selfLoggedAt:sheet.submittedAt,approvedAt:new Date(),note:`${c.people} × ${c.hours} u${c.zone?` · ${c.zone}`:""}\n${c.description}`})):[]);
       if(!rows.length)conflict("Weekstaat bevat geen uren.");
       await tx.insert(timeEntries).values(rows);
     }

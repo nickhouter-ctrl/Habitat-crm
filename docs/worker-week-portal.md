@@ -5,7 +5,7 @@ Medewerkers openen hun bestaande projectspecifieke link. `?lang=nl`, `?lang=es` 
 ## Gebruik
 
 1. Op het project staan aparte kopieerknoppen voor NL en Spaans. De medewerker kiest het ISO-weeknummer met jaartal en datumbereik.
-2. Per dag: gewerkt/niet gewerkt, aantal mensen, namen, uren per persoon exclusief pauzes, werkplek en concrete werkzaamheden/resultaat. Verschillende uren: meerdere regels. Het systeem berekent persoonsuren, maximaal 16 uur per genoemde persoon per dag.
+2. Per dag: gewerkt/niet gewerkt, aantal mensen, namen, uren per persoon exclusief pauzes, één verplichte beschrijving van de werkzaamheden en het resultaat (de plek kan daarin). Verschillende uren: meerdere regels. Het systeem berekent persoonsuren, maximaal 16 uur per genoemde persoon per dag.
 3. Tussentijds een concept opslaan. Pas de complete week indienen; toekomstige dagen kunnen alleen expliciet als niet gewerkt worden aangemerkt. Een ingediende weekstaat staat vast.
 4. Onder Uren op het project controleert kantoor de weekstaat. Terugsturen vereist een reden. Alleen goedkeuring maakt de urenregels en projectkosten aan. Bestaande losse uren van dezelfde arbeider/project/week blokkeren goedkeuring totdat kantoor die heeft vergeleken.
 5. Op de medewerkerkaart: **Eigen facturen via het urenportaal toestaan**. Standaard uit. Alleen voor zelfstandigen/onderaannemers die zelf factureren. Aan zetten gebruikt het factuurtarief voor nieuwe ingediende weekstaten.
@@ -29,3 +29,11 @@ Medewerkers openen hun bestaande projectspecifieke link. `?lang=nl`, `?lang=es` 
 - Browsercontrole: Spaanse mobiele invoer, foutvalidatie met behoud van invoer, concept, indienen, kantoorcontrole, leveranciersfactuur, PDF-download, inkoopgoedkeuring en weigeren van ongeauthenticeerde exports.
 
 Mogelijke vervolgstappen: dagfoto's per werkplek, vergelijking met begrote uren en steekproefsgewijze bevestiging door de uitvoerder. Een ingevoerde beschrijving alleen bewijst de aanwezigheid niet.
+
+## Meldingen bij indienen
+
+- Een apart werkplekveld is niet nodig; de medewerker neemt de plek op in de beschrijving. Dagelijks **Concept opslaan** bewaart de weekstaat; alleen expliciet indienen geeft een melding.
+- Een melding bovenin het CRM opent `/projects/weekstaten`, met alle ingediende weekstaten ter controle. De teller blijft tot goedkeuren of terugsturen en vernieuwt bij focus of na maximaal één minuut.
+- Nick ontvangt via zijn bestaande CRM-account een persoonlijke e-mail met weeknummer, medewerker, project, persoonsuren en een link naar de controle. Geen openbare medewerkerslink of gedeelde BCC.
+- De melding wordt in dezelfde database-transactie klaargezet. Dubbel klikken geeft geen dubbele mail; opnieuw indienen na een correctie geeft een nieuwe melding. Achterhaalde meldingen worden overgeslagen.
+- Verwerking probeert direct na de inzending te bezorgen; de bestaande notificatiecron verwerkt veilig achtergebleven jobs. Een onzekere SMTP-uitkomst wordt niet blind opnieuw verzonden.

@@ -617,6 +617,13 @@
       "when": 1793811474875,
       "tag": "0087_purple_the_twelve",
       "breakpoints": true
+    },
+    {
+      "idx": 88,
+      "version": "7",
+      "when": 1793823265289,
+      "tag": "0088_thick_wolfpack",
+      "breakpoints": true
     }
   ]
 }
