@@ -652,13 +652,38 @@ export async function pushDocumentToHolded(docId: string): Promise<string> {
   let contactEmail: string | undefined;
   let contactVat: string | undefined;
   let localParty: { type: "contact" | "company"; id: string } | undefined;
+  // Factuurgegevens van de klant. Zonder deze velden maakte Holded een kaal
+  // contact aan met alleen een naam, en moesten NIF en adres er elke keer met de
+  // hand bij (FAC-2026-0041, Matías y Blanca, 04-11-2026).
+  let adres: { address?: string; city?: string; cp?: string; province?: string; countryCode?: string } = {};
+  const adresVan = (r: { addressLine?: string | null; city?: string | null; postalCode?: string | null; province?: string | null; country?: string | null }) =>
+    r.addressLine || r.city || r.postalCode
+      ? {
+          address: r.addressLine?.trim() || undefined,
+          city: r.city?.trim() || undefined,
+          cp: r.postalCode?.trim() || undefined,
+          province: r.province?.trim() || undefined,
+          countryCode: r.country?.trim().toUpperCase() || undefined,
+        }
+      : {};
 
   if (doc.contactId) {
     const c = await db.query.contacts.findFirst({ where: eq(contacts.id, doc.contactId) });
     if (c) {
       contactName = c.name;
       contactEmail = c.email ?? undefined;
+      contactVat = c.taxId?.trim() || undefined;
+      adres = adresVan(c);
       localParty = { type: "contact", id: c.id };
+      // Ontbreekt er iets op de persoon, dan het bedrijf waar hij bij hoort.
+      if (c.companyId && (!contactVat || !adres.address)) {
+        const co = await db.query.companies.findFirst({ where: eq(companies.id, c.companyId) });
+        if (co) {
+          contactVat ??= co.vatNumber?.trim() || undefined;
+          if (!adres.address) adres = adresVan(co);
+          contactEmail ??= co.email ?? undefined;
+        }
+      }
     }
   }
   if (!localParty && doc.companyId) {
@@ -666,7 +691,8 @@ export async function pushDocumentToHolded(docId: string): Promise<string> {
     if (co) {
       contactName = co.name;
       contactEmail = co.email ?? undefined;
-      contactVat = co.vatNumber ?? undefined;
+      contactVat = co.vatNumber?.trim() || undefined;
+      adres = adresVan(co);
       localParty = { type: "company", id: co.id };
     }
   }
@@ -706,7 +732,57 @@ export async function pushDocumentToHolded(docId: string): Promise<string> {
     }
   }
 
-  // 2. Regels — koppel productIds aan Holded-product-id's waar mogelijk.
+  // 2. Regels, datums, nummer — gedeeld met "Bijwerken in Holded".
+  const body = await holdedDocumentBody(doc);
+  // Holded wil een geldig contact. Een gekoppeld id als we het hebben; anders
+  // het NIF (contactCode), waarmee Holded zelf een bestaand contact kiest; en
+  // pas als dat er niet is maakt Holded een nieuw contact — met álle
+  // factuurgegevens erbij in plaats van alleen de naam.
+  if (contactRef) body.contactId = contactRef;
+  else {
+    if (contactVat) body.contactCode = contactVat;
+    if (contactName) body.contactName = contactName;
+    if (contactEmail) body.contactEmail = contactEmail;
+    if (adres.address) body.contactAddress = adres.address;
+    if (adres.city) body.contactCity = adres.city;
+    if (adres.cp) body.contactCp = adres.cp;
+    if (adres.province) body.contactProvince = adres.province;
+    if (adres.countryCode) body.contactCountryCode = adres.countryCode;
+  }
+
+  const result = await holded.documents.create(docType, body);
+  if (!result?.id) {
+    throw new Error(`Holded gaf geen id terug — antwoord: ${JSON.stringify(result).slice(0, 200)}`);
+  }
+
+  await db.update(documents).set({ holdedId: result.id, updatedAt: new Date() }).where(eq(documents.id, docId));
+  await upsertSyncMap({ entityType: "document", localId: docId, holdedId: result.id, direction: "push" });
+
+  // Het contact dat Holded koos of aanmaakte vastleggen, zodat de volgende
+  // factuur van deze klant er rechtstreeks aan hangt.
+  if (localParty && !contactRef) {
+    try {
+      const created = await holded.documents.get(docType, result.id);
+      const hid = (created as { contact?: string } | null)?.contact;
+      if (hid) await upsertSyncMap({ entityType: localParty.type, localId: localParty.id, holdedId: hid, direction: "push" });
+    } catch {
+      /* best-effort */
+    }
+  }
+  return result.id;
+}
+
+/** Wettelijke vermelding bij btw-verlegging, zoals ook op de CRM-pdf. */
+const VERLEGD_NOTITIE =
+  "Operación con inversión del sujeto pasivo — art. 84.Uno.2º de la Ley 37/1992 del IVA. IVA a liquidar por el destinatario.";
+
+/**
+ * De inhoud van een verkoopdocument zoals Holded hem wil hebben: regels,
+ * datums, nummer, project en btw-verlegging. Gedeeld door pushen en bijwerken,
+ * zodat die twee nooit uit elkaar lopen.
+ */
+async function holdedDocumentBody(doc: typeof documents.$inferSelect): Promise<Record<string, unknown>> {
+  // Regels — koppel productIds aan Holded-product-id's waar mogelijk.
   const items = normalizeDocItems(doc.items);
   const localIds = items.map((i) => i.productId).filter((x): x is string => !!x);
   const productLookup = localIds.length
@@ -719,6 +795,11 @@ export async function pushDocumentToHolded(docId: string): Promise<string> {
         ).map((p) => [p.id, p.holdedProductId]),
       )
     : new Map<string, string | null>();
+  // Het project in Holded, per regel — dat werd steeds met de hand gezet.
+  const holdedProject = doc.projectId
+    ? (await db.query.projects.findFirst({ where: eq(projects.id, doc.projectId), columns: { holdedProjectId: true } }))
+        ?.holdedProjectId ?? null
+    : null;
   // Holded's create-API verwacht `items` met `subtotal` (stuksprijs ex. BTW) en
   // `tax` als getal. (Bij het uitlezen heet ditzelfde veld `products`/`price`.)
   const itemsBody = items.map((it) => {
@@ -729,37 +810,35 @@ export async function pushDocumentToHolded(docId: string): Promise<string> {
       ...(hid ? { productId: hid } : {}),
       units: Number(it.units) || 0,
       subtotal: Number(it.price) || 0,
-      tax: Number(it.taxRate ?? 21),
+      // Btw verlegd: geen btw op de regel, ook als de regel nog 21% zegt.
+      tax: doc.vatReverseCharge ? 0 : Number(it.taxRate ?? 21),
+      ...(doc.vatReverseCharge ? { taxes: [] } : {}),
       ...(it.discount ? { discount: Number(it.discount) } : {}),
+      ...(holdedProject ? { projectid: holdedProject } : {}),
     };
   });
 
-  // 3. Body.
   const dateUnix = doc.issueDate
     ? Math.floor(new Date(doc.issueDate).getTime() / 1000)
     : Math.floor(Date.now() / 1000);
   const dueUnix = doc.dueDate ? Math.floor(new Date(doc.dueDate).getTime() / 1000) : undefined;
-  const body: Record<string, unknown> = {
-    desc: doc.title ?? doc.docNumber ?? "",
+  const nummer = doc.docNumber?.trim() || null;
+  const notities = [doc.notes?.trim(), doc.vatReverseCharge ? VERLEGD_NOTITIE : null].filter(Boolean).join("\n\n");
+  return {
+    desc: doc.title ?? nummer ?? "",
     date: dateUnix,
     ...(dueUnix ? { dueDate: dueUnix } : {}),
     currency: (doc.currency ?? "EUR").toLowerCase(),
-    notes: doc.notes ?? "",
+    notes: notities,
     items: itemsBody,
-    ...(doc.docNumber ? { docNumber: doc.docNumber } : {}),
+    // Het nummer heet bij aanmaken `invoiceNum`. We stuurden `docNumber` — dat
+    // is de naam bij het UITLEZEN en Holded negeerde hem bij aanmaken. De
+    // factuur kwam dan zonder nummer binnen en kreeg bij goedkeuren het
+    // volgende nummer uit Holded's eigen reeks (F26xxxx), dat iemand dan weer
+    // met de hand naar FAC-… moest terugzetten. `docNumber` blijft erbij voor
+    // de zekerheid; bijwerken stuurt geen nummer mee.
+    ...(nummer ? { invoiceNum: nummer, docNumber: nummer } : {}),
   };
-  // Holded wil een geldig contact — id als we het hebben, anders naam (auto-aanmaak).
-  if (contactRef) body.contactId = contactRef;
-  else if (contactName) body.contactName = contactName;
-
-  const result = await holded.documents.create(docType, body);
-  if (!result?.id) {
-    throw new Error(`Holded gaf geen id terug — antwoord: ${JSON.stringify(result).slice(0, 200)}`);
-  }
-
-  await db.update(documents).set({ holdedId: result.id, updatedAt: new Date() }).where(eq(documents.id, docId));
-  await upsertSyncMap({ entityType: "document", localId: docId, holdedId: result.id, direction: "push" });
-  return result.id;
 }
 
 /**
@@ -777,42 +856,11 @@ export async function updateDocumentInHolded(docId: string): Promise<void> {
   const docType = DOC_KIND_TO_HOLDED[doc.kind];
   if (!docType) throw new Error(`Documenttype "${doc.kind}" kan niet naar Holded.`);
 
-  const items = normalizeDocItems(doc.items);
-  const localIds = items.map((i) => i.productId).filter((x): x is string => !!x);
-  const productLookup = localIds.length
-    ? new Map(
-        (
-          await db
-            .select({ id: products.id, holdedProductId: products.holdedProductId })
-            .from(products)
-            .where(inArray(products.id, localIds))
-        ).map((p) => [p.id, p.holdedProductId]),
-      )
-    : new Map<string, string | null>();
-  const itemsBody = items.map((it) => {
-    const hid = it.productId ? productLookup.get(it.productId) : null;
-    return {
-      name: it.name,
-      ...(it.description ? { desc: it.description } : {}),
-      ...(hid ? { productId: hid } : {}),
-      units: Number(it.units) || 0,
-      subtotal: Number(it.price) || 0,
-      tax: Number(it.taxRate ?? 21),
-      ...(it.discount ? { discount: Number(it.discount) } : {}),
-    };
-  });
-  const dateUnix = doc.issueDate
-    ? Math.floor(new Date(doc.issueDate).getTime() / 1000)
-    : Math.floor(Date.now() / 1000);
-  const dueUnix = doc.dueDate ? Math.floor(new Date(doc.dueDate).getTime() / 1000) : undefined;
-  const body: Record<string, unknown> = {
-    desc: doc.title ?? doc.docNumber ?? "",
-    date: dateUnix,
-    ...(dueUnix ? { dueDate: dueUnix } : {}),
-    currency: (doc.currency ?? "EUR").toLowerCase(),
-    notes: doc.notes ?? "",
-    items: itemsBody,
-  };
+  // Het nummer laten we bij bijwerken met rust (zie hierboven): een koppeling
+  // die naar een verkeerd Holded-document wijst zou dat anders hernummeren.
+  const body = await holdedDocumentBody(doc);
+  delete body.invoiceNum;
+  delete body.docNumber;
   try {
     await holded.documents.update(docType, doc.holdedId, body);
   } catch (err) {
