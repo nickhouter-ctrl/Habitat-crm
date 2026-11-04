@@ -10,6 +10,9 @@ vi.mock("@/lib/rate-limit",()=>({rateLimit:async()=>true}));
 vi.mock("@/lib/auth/guards",()=>({requireModule:async()=>{if(!m.allow)throw Error("DENIED");return m.user;}}));
 vi.mock("@/lib/db",async()=>{const real=await vi.importActual<typeof import("@/lib/db")>("@/lib/db");return {...real,db:new Proxy(real.db,{get(target,key){const active=(m.current??target) as typeof real.db;const value=Reflect.get(active,key);return typeof value==="function"?value.bind(active):value;}})};});
 import { workers,projects,users,workerPortalLinks,workerWeekSheets as sheets,timeEntries,purchaseOrders,staffNotifications } from "../db/schema";
+import { loadWorkerDashboard } from "../worker-portal-dashboard";
+import { portalLinkForToken } from "../worker-portal";
+import { GET as invoicePdf } from "../../app/uren/[token]/factuur/[id]/route";
 import { deliverStaffNotifications } from "../staff-notifications";
 import { saveWeekAction,submitWeekInvoiceAction } from "../../app/uren/[token]/week-actions";
 import { reviewWorkerWeek } from "../../app/(app)/projects/weekstaten/actions";
@@ -68,6 +71,21 @@ it.skipIf(!enabled)("enforces token scope, review, stale submissions, invoice un
   expect((await reviewWorkerWeek(false,null,fd({id:other.id,projectId:otherProjectId,version:String(other.version),decision:"approve",reason:"",confirmed:"on"})))?.ok).toBeTruthy();
   [other]=await tx.select().from(sheets).where(eq(sheets.id,other.id));const duplicate=bill(other.version);duplicate.set("id",other.id);
   expect((await submitWeekInvoiceAction(otherToken,null,duplicate))?.error).toContain("número");
+  // Invoice history has no eight-week cutoff and stays available when new
+  // invoicing is disabled. Links remain scoped to their own worker/project.
+  await tx.update(sheets).set({weekStart:"2025-01-06"}).where(eq(sheets.id,s.id));
+  await tx.update(workers).set({portalInvoiceEnabled:false}).where(eq(workers.id,workerId));
+  const dashboard=await loadWorkerDashboard(workerId,projectId,madridToday(),{view:"invoices"});
+  expect(dashboard.counts.invoices).toBe(1);expect(dashboard.rows.map(r=>r.id)).toEqual([s.id]);
+  expect(dashboard.profile?.taxId).toBe(`TEST${workerId.slice(0,8)}`);expect(dashboard.profile).not.toHaveProperty("number");expect(dashboard.profile).not.toHaveProperty("vatRate");
+  const historical=await loadWorkerDashboard(workerId,projectId,madridToday(),{view:"week",week:"2025-01-06"});expect(historical.sheet?.id).toBe(s.id);
+  expect((await loadWorkerDashboard(workerId,otherProjectId,madridToday(),{view:"invoice",invoice:s.id})).invoiceSheet).toBeUndefined();
+  expect((await invoicePdf(new Request("https://crm.example/"),{params:Promise.resolve({token:otherToken,id:s.id})})).status).toBe(404);
+  await tx.update(projects).set({status:"completed"}).where(eq(projects.id,projectId));
+  expect(await portalLinkForToken(token)).toBeNull();expect(await portalLinkForToken(token,{history:true})).toBeTruthy();
+  const download=await invoicePdf(new Request("https://crm.example/?view=inline"),{params:Promise.resolve({token,id:s.id})});expect(download.status).toBe(200);expect(download.headers.get("content-disposition")).toMatch(/^inline;/);expect(download.headers.get("cache-control")).toBe("private, no-store");
+  await tx.update(projects).set({status:"archived"}).where(eq(projects.id,projectId));expect(await portalLinkForToken(token,{history:true})).toBeNull();
+  await tx.update(projects).set({status:"active"}).where(eq(projects.id,projectId));
   await tx.delete(workerPortalLinks).where(eq(workerPortalLinks.token,token));expect((await saveWeekAction(token,null,form(0)))?.error).toBeTruthy();
   throw stop;
  });}catch(e){if(e!==stop)throw e;}finally{m.current=null;m.allow=true;vi.unstubAllEnvs();}

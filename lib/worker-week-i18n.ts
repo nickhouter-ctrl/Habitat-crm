@@ -1,5 +1,6 @@
 import type { WeekLang } from "./worker-week";
 const copy = {
+ profilePrefilled:["Je bewaarde factuurgegevens zijn alvast ingevuld. Controleer ze en vul je eigen nieuwe factuurnummer in.","Hemos rellenado tus datos de facturación guardados. Revísalos e introduce tu nuevo número de factura.","Your saved invoice details have been prefilled. Check them and enter your own new invoice number."],
  title:["Mijn weekstaat","Mi parte semanal","My weekly timesheet"],week:["Week","Semana","Week"],choose:["Kies een week","Elige una semana","Choose a week"],
  intro:["Vul vanaf maandag per dag in wie er waren en wat jullie hebben gedaan. Kantoor controleert je weekstaat vóór verwerking.","Indica desde el lunes quién trabajó cada día y qué hicisteis. La oficina revisa el parte antes de registrarlo.","Record who worked each day, starting Monday, and what you did. The office reviews your timesheet before booking it."],
  dayState:["Wat is er deze dag gebeurd?","¿Qué ocurrió este día?","What happened on this day?"],empty:["Nog niet ingevuld","Sin rellenar","Not filled in"],work:["Gewerkt","Se trabajó","Worked"],off:["Niet gewerkt","No se trabajó","No work"],

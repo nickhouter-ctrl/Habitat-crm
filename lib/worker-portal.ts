@@ -1,5 +1,5 @@
 import "server-only";
-import { and, eq } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 
 import { db } from "@/lib/db";
 import { projects, workerPortalLinks, workers } from "@/lib/db/schema";
@@ -8,8 +8,10 @@ import { projects, workerPortalLinks, workers } from "@/lib/db/schema";
  * Zoek de portaal-link (arbeider + project) bij een token. Null bij een
  * ongeldige link, een inactieve arbeider of een gearchiveerd project —
  * archiveren trekt dus automatisch alle links van dat project in.
+ * Afgeronde projecten geven met history alleen toegang tot het archief;
+ * schrijfacties blijven beperkt tot actieve projecten.
  */
-export async function portalLinkForToken(token: string) {
+export async function portalLinkForToken(token: string, options: { history?: boolean } = {}) {
   if (!/^[a-zA-Z0-9_-]{20,128}$/.test(token)) return null;
   const [row] = await db
     .select({ link: workerPortalLinks, worker: workers, project: projects })
@@ -20,7 +22,7 @@ export async function portalLinkForToken(token: string) {
       and(
         eq(workerPortalLinks.token, token),
         eq(workers.active, true),
-        eq(projects.status, "active"),
+        options.history ? inArray(projects.status,["active","completed"]) : eq(projects.status, "active"),
       ),
     )
     .limit(1);

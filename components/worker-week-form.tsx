@@ -2,6 +2,7 @@
 import { useActionState, useState } from "react";
 import { saveWeekAction, submitWeekInvoiceAction } from "@/app/uren/[token]/week-actions";
 import { totalWeekHours, invoiceAmounts, type WeekDay, type WeekLang, type WorkerInvoice } from "@/lib/worker-week";
+import type { SupplierDetails } from "@/lib/worker-portal-dashboard";
 import { weekT, type WeekCopyKey } from "@/lib/worker-week-i18n";
 
 const input="mt-1 w-full rounded-lg border border-stone-300 bg-white px-3 py-2.5 text-base text-stone-900 focus:border-orange-700 focus:outline-none focus:ring-2 focus:ring-orange-100 disabled:bg-stone-100";
@@ -48,18 +49,20 @@ export function WorkerWeekForm({token,lang,monday,version,initialDays,locked,tod
     </div>
   </form>;
 }
-export function WorkerInvoiceForm({token,lang,id,version,hours,rate,today,previous}:{token:string;lang:WeekLang;id:string;version:number;hours:number;rate:number;today:string;previous:WorkerInvoice|null}) {
+export function WorkerInvoiceForm({token,lang,id,version,hours,rate,today,previous,supplier}:{token:string;lang:WeekLang;id:string;version:number;hours:number;rate:number;today:string;previous:WorkerInvoice|null;supplier?:SupplierDetails}) {
   const t=(key:WeekCopyKey)=>weekT(lang,key);
   const [state,action,pending]=useActionState(submitWeekInvoiceAction.bind(null,token),null);
   const [vat,setVat]=useState(previous?String(previous.vatRate):"");const [withholding,setWithholding]=useState(previous?String(previous.withholdingRate):"");
   const amounts=invoiceAmounts(hours,rate,Number(vat),Number(withholding));
   const eur=(v:number)=>new Intl.NumberFormat(lang,{style:"currency",currency:"EUR"}).format(v);
+  const defaults:Partial<WorkerInvoice>={...supplier,date:today,...(previous??{})};
   const fields:[keyof WorkerInvoice,WeekCopyKey,string,number][]=[["legalName","legalName","text",180],["taxId","taxId","text",40],["address","address","text",350],["email","email","email",180],["iban","iban","text",40],["number","number","text",64],["date","invoiceDate","date",10]];
   return <form action={action} onReset={event=>event.preventDefault()} className="space-y-4">
     <input type="hidden" name="lang" value={lang}/><input type="hidden" name="id" value={id}/><input type="hidden" name="version" value={version}/>
     <p className="text-sm leading-relaxed text-stone-600">{t("invoiceIntro")}</p>
+    {supplier && !previous && <p className="rounded-lg bg-stone-100 p-3 text-sm text-stone-600">{t("profilePrefilled")}</p>}
     <fieldset disabled={pending} className="space-y-4"><legend className="mb-3 font-semibold">{t("issuer")}</legend>
-      {fields.map(([name,label,type,max])=><label key={name} className="block text-sm font-medium">{t(label)}<input className={input} name={name} type={type} maxLength={max} required={name!=="iban"} max={name==="date"?today:undefined} defaultValue={String(previous?.[name]??(name==="date"?today:""))}/></label>)}
+      {fields.map(([name,label,type,max])=><label key={name} className="block text-sm font-medium">{t(label)}<input className={input} name={name} type={type} maxLength={max} required={name!=="iban"} max={name==="date"?today:undefined} defaultValue={String(defaults[name]??"")}/></label>)}
       <div className="grid grid-cols-2 gap-3"><label className="text-sm font-medium">{t("vat")}<select aria-label={t("vat")} className={input} name="vatRate" value={vat} required onChange={e=>setVat(e.target.value)}><option value="">{t("taxChoice")}</option>{[0,4,10,21].map(v=><option key={v} value={v}>{v}%</option>)}</select></label>
       <label className="text-sm font-medium">{t("withholding")}<select aria-label={t("withholding")} className={input} name="withholdingRate" value={withholding} required onChange={e=>setWithholding(e.target.value)}><option value="">{t("taxChoice")}</option>{[0,7,15,19].map(v=><option key={v} value={v}>{v}%</option>)}</select></label></div>
       <label className="block text-sm font-medium">{t("taxNote")}<textarea className={input} name="taxNote" maxLength={500} rows={2} required={vat==="0"} defaultValue={previous?.taxNote??""}/></label>
