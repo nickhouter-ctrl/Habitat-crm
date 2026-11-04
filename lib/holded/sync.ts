@@ -632,7 +632,10 @@ export async function pushDocumentToHolded(docId: string): Promise<string> {
   if (doc.docNumber) {
     try {
       const existing = await holded.documents.list(docType, { docNumber: doc.docNumber });
-      const match = existing.find((d) => d.docNumber === doc.docNumber);
+      // Getrimd en zonder hoofdletterverschil: in Holded staan " FAC-2026-0026"
+      // en "Fac-2026-0039", met de hand aangemaakt.
+      const zelfde = (x?: string | null) => (x ?? "").trim().toUpperCase();
+      const match = existing.find((d) => zelfde(d.docNumber) === zelfde(doc.docNumber));
       if (match?.id) {
         await db.update(documents).set({ holdedId: match.id, updatedAt: new Date() }).where(eq(documents.id, docId));
         await upsertSyncMap({ entityType: "document", localId: docId, holdedId: match.id, direction: "push" });
@@ -643,112 +646,16 @@ export async function pushDocumentToHolded(docId: string): Promise<string> {
     }
   }
 
-  // 1. Contact/bedrijf koppelen aan Holded. Eerst de vaste koppeling (sync-map);
-  //    anders zoeken op naam, maar ALLEEN een ondubbelzinnige match accepteren
-  //    (e-mail of NIF, of een uniek-exacte naam). Nooit blind de eerste treffer
-  //    pakken — dat koppelde voorheen soms de verkeerde klant.
-  let contactRef: string | undefined;
-  let contactName = "";
-  let contactEmail: string | undefined;
-  let contactVat: string | undefined;
-  let localParty: { type: "contact" | "company"; id: string } | undefined;
-  // Factuurgegevens van de klant. Zonder deze velden maakte Holded een kaal
-  // contact aan met alleen een naam, en moesten NIF en adres er elke keer met de
-  // hand bij (FAC-2026-0041, Matías y Blanca, 04-11-2026).
-  let adres: { address?: string; city?: string; cp?: string; province?: string; countryCode?: string } = {};
-  const adresVan = (r: { addressLine?: string | null; city?: string | null; postalCode?: string | null; province?: string | null; country?: string | null }) =>
-    r.addressLine || r.city || r.postalCode
-      ? {
-          address: r.addressLine?.trim() || undefined,
-          city: r.city?.trim() || undefined,
-          cp: r.postalCode?.trim() || undefined,
-          province: r.province?.trim() || undefined,
-          countryCode: r.country?.trim().toUpperCase() || undefined,
-        }
-      : {};
+  // 1. De klant in Holded: gekoppeld, op NIF gevonden, of nieuw aangemaakt —
+  //    altijd met alle factuurgegevens (zie holdedKlantVoor).
+  const contactId = await holdedKlantVoor(doc);
 
-  if (doc.contactId) {
-    const c = await db.query.contacts.findFirst({ where: eq(contacts.id, doc.contactId) });
-    if (c) {
-      contactName = c.name;
-      contactEmail = c.email ?? undefined;
-      contactVat = c.taxId?.trim() || undefined;
-      adres = adresVan(c);
-      localParty = { type: "contact", id: c.id };
-      // Ontbreekt er iets op de persoon, dan het bedrijf waar hij bij hoort.
-      if (c.companyId && (!contactVat || !adres.address)) {
-        const co = await db.query.companies.findFirst({ where: eq(companies.id, c.companyId) });
-        if (co) {
-          contactVat ??= co.vatNumber?.trim() || undefined;
-          if (!adres.address) adres = adresVan(co);
-          contactEmail ??= co.email ?? undefined;
-        }
-      }
-    }
-  }
-  if (!localParty && doc.companyId) {
-    const co = await db.query.companies.findFirst({ where: eq(companies.id, doc.companyId) });
-    if (co) {
-      contactName = co.name;
-      contactEmail = co.email ?? undefined;
-      contactVat = co.vatNumber?.trim() || undefined;
-      adres = adresVan(co);
-      localParty = { type: "company", id: co.id };
-    }
-  }
-
-  if (localParty) {
-    const mapped = await getHoldedIdForLocal(localParty.type, localParty.id);
-    if (mapped) contactRef = mapped;
-    else if (contactName) {
-      try {
-        const matches = await holded.contacts.list({ q: contactName });
-        const norm = (s?: string | null) => (s ?? "").toLowerCase().trim();
-        let chosen: (typeof matches)[number] | undefined;
-        // Sterkste signaal eerst: e-mail, dan NIF/CIF.
-        if (contactEmail) chosen = matches.find((m) => norm(m.email) && norm(m.email) === norm(contactEmail));
-        if (!chosen && contactVat)
-          chosen = matches.find((m) => norm(m.vatnumber) && norm(m.vatnumber) === norm(contactVat));
-        // Anders alleen een exacte naam — en uitsluitend als die uniek is.
-        if (!chosen) {
-          const exacts = matches.filter((m) => norm(m.name) === norm(contactName));
-          if (exacts.length === 1) chosen = exacts[0];
-        }
-        if (chosen?.id) {
-          contactRef = chosen.id;
-          // Vastleggen zodat dezelfde klant voortaan deterministisch koppelt.
-          await upsertSyncMap({
-            entityType: localParty.type,
-            localId: localParty.id,
-            holdedId: chosen.id,
-            direction: "push",
-          });
-        }
-        // Geen ondubbelzinnige match? Dan sturen we hieronder de naam mee en laat
-        // Holded zelf aanmaken/koppelen — beter dan een willekeurige bestaande klant.
-      } catch {
-        /* zoeken is best-effort */
-      }
-    }
-  }
-
-  // 2. Regels, datums, nummer — gedeeld met "Bijwerken in Holded".
+  // 2. Regels, datums, nummer, project — gedeeld met "Bijwerken in Holded".
   const body = await holdedDocumentBody(doc);
-  // Holded wil een geldig contact. Een gekoppeld id als we het hebben; anders
-  // het NIF (contactCode), waarmee Holded zelf een bestaand contact kiest; en
-  // pas als dat er niet is maakt Holded een nieuw contact — met álle
-  // factuurgegevens erbij in plaats van alleen de naam.
-  if (contactRef) body.contactId = contactRef;
-  else {
-    if (contactVat) body.contactCode = contactVat;
-    if (contactName) body.contactName = contactName;
-    if (contactEmail) body.contactEmail = contactEmail;
-    if (adres.address) body.contactAddress = adres.address;
-    if (adres.city) body.contactCity = adres.city;
-    if (adres.cp) body.contactCp = adres.cp;
-    if (adres.province) body.contactProvince = adres.province;
-    if (adres.countryCode) body.contactCountryCode = adres.countryCode;
-  }
+  if (contactId) body.contactId = contactId;
+  // In Holded's eigen nummerreeks, zodat de teller daar meeloopt met het CRM.
+  const reeks = await nummerReeksVoor(docType, doc.docNumber);
+  if (reeks) body.numSerieId = reeks;
 
   const result = await holded.documents.create(docType, body);
   if (!result?.id) {
@@ -757,19 +664,156 @@ export async function pushDocumentToHolded(docId: string): Promise<string> {
 
   await db.update(documents).set({ holdedId: result.id, updatedAt: new Date() }).where(eq(documents.id, docId));
   await upsertSyncMap({ entityType: "document", localId: docId, holdedId: result.id, direction: "push" });
+  return result.id;
+}
 
-  // Het contact dat Holded koos of aanmaakte vastleggen, zodat de volgende
-  // factuur van deze klant er rechtstreeks aan hangt.
-  if (localParty && !contactRef) {
+/* ------------------------------------------------ klant naar Holded (push) */
+
+/** NIF/CIF/NIE vergelijkbaar maken: "B-19862853" en "b19862853" zijn dezelfde. */
+const nifNorm = (s?: string | null) => (s ?? "").toUpperCase().replace(/[^A-Z0-9]/g, "");
+/** "xxxx", "foreign ID" en leeg tellen niet als NIF. */
+const isEchtNif = (s?: string | null) => /\d/.test(s ?? "") && nifNorm(s).length >= 5;
+
+type KlantGegevens = {
+  partij: { type: "contact" | "company"; id: string };
+  naam: string;
+  nif?: string;
+  email?: string;
+  telefoon?: string;
+  mobiel?: string;
+  particulier: boolean;
+  adres?: { address?: string; city?: string; postalCode?: string; province?: string; countryCode?: string };
+};
+
+/**
+ * Alles wat het CRM van de klant van dit document weet, voor Holded. Een
+ * persoon die bij een bedrijf hoort, factureert op dat bedrijf als hij zelf
+ * geen NIF heeft; ontbrekende velden komen van het bedrijf.
+ */
+async function klantGegevens(doc: typeof documents.$inferSelect): Promise<KlantGegevens | null> {
+  const adresVan = (r: { addressLine?: string | null; city?: string | null; postalCode?: string | null; province?: string | null; country?: string | null }) =>
+    r.addressLine || r.city || r.postalCode
+      ? {
+          address: r.addressLine?.trim() || undefined,
+          city: r.city?.trim() || undefined,
+          postalCode: r.postalCode?.trim() || undefined,
+          province: r.province?.trim() || undefined,
+          countryCode: r.country?.trim().toUpperCase() || undefined,
+        }
+      : undefined;
+  const c = doc.contactId ? await db.query.contacts.findFirst({ where: eq(contacts.id, doc.contactId) }) : null;
+  const coId = doc.companyId ?? c?.companyId ?? null;
+  const co = coId ? await db.query.companies.findFirst({ where: eq(companies.id, coId) }) : null;
+  if (c) {
+    return {
+      partij: { type: "contact", id: c.id },
+      naam: c.name,
+      nif: (isEchtNif(c.taxId) ? c.taxId : co?.vatNumber)?.trim() || undefined,
+      email: c.email?.trim() || co?.email?.trim() || undefined,
+      telefoon: c.phone?.trim() || co?.phone?.trim() || undefined,
+      mobiel: c.mobile?.trim() || undefined,
+      particulier: !co,
+      adres: adresVan(c) ?? (co ? adresVan(co) : undefined),
+    };
+  }
+  if (co) {
+    return {
+      partij: { type: "company", id: co.id },
+      naam: co.name,
+      nif: co.vatNumber?.trim() || undefined,
+      email: co.email?.trim() || undefined,
+      telefoon: co.phone?.trim() || undefined,
+      particulier: false,
+      adres: adresVan(co),
+    };
+  }
+  return null;
+}
+
+/**
+ * Het Holded-contact voor de klant van dit document.
+ *
+ *  1. De vaste koppeling (sync-map), anders
+ *  2. een Holded-contact met hetzelfde NIF, of met hetzelfde e-mailadres, anders
+ *  3. een NIEUW contact met alle gegevens: NIF/CIF/NIE, e-mail, telefoon, adres,
+ *     particulier of bedrijf.
+ *
+ * Bij 1 en 2 vullen we in Holded aan wat daar leeg is — nooit overschrijven.
+ * Eerder ging alleen de naam mee en maakte Holded een kaal contact, waarna NIF
+ * en adres er bij elke nieuwe klant met de hand bij moesten (FAC-2026-0041).
+ */
+async function holdedKlantVoor(doc: typeof documents.$inferSelect): Promise<string | undefined> {
+  const k = await klantGegevens(doc);
+  if (!k) return undefined;
+
+  let hid = (await getHoldedIdForLocal(k.partij.type, k.partij.id)) ?? undefined;
+  if (!hid && (k.nif || k.email)) {
+    const alle = await holdedListAll((page) => holded.contacts.list({ page }));
+    const norm = (s?: string | null) => (s ?? "").toLowerCase().trim();
+    const opNif = k.nif ? alle.filter((m) => nifNorm(m.code ?? m.vatnumber) === nifNorm(k.nif)) : [];
+    const opMail = !opNif.length && k.email ? alle.filter((m) => norm(m.email) === norm(k.email)) : [];
+    const kandidaat = opNif.length === 1 ? opNif[0] : opMail.length === 1 ? opMail[0] : undefined;
+    hid = kandidaat?.id;
+  }
+
+  const adres = k.adres ? { ...k.adres, ...(k.adres.countryCode ? { country: k.adres.countryCode } : {}) } : undefined;
+  if (!hid) {
+    const nieuw = await holded.contacts.create({
+      name: k.naam,
+      ...(k.nif ? { code: k.nif } : {}),
+      ...(k.email ? { email: k.email } : {}),
+      ...(k.telefoon ? { phone: k.telefoon } : {}),
+      ...(k.mobiel ? { mobile: k.mobiel } : {}),
+      type: "client",
+      isperson: k.particulier,
+      ...(adres ? { billAddress: adres } : {}),
+    });
+    if (!nieuw?.id) throw new Error(`Holded maakte de klant niet aan — antwoord: ${JSON.stringify(nieuw).slice(0, 200)}`);
+    hid = nieuw.id;
+  } else {
+    // Aanvullen wat er in Holded nog niet staat.
     try {
-      const created = await holded.documents.get(docType, result.id);
-      const hid = (created as { contact?: string } | null)?.contact;
-      if (hid) await upsertSyncMap({ entityType: localParty.type, localId: localParty.id, holdedId: hid, direction: "push" });
-    } catch {
-      /* best-effort */
+      const h = await holded.contacts.get(hid);
+      const patch: Record<string, unknown> = {};
+      if (k.nif && !isEchtNif(h.code ?? h.vatnumber)) patch.code = k.nif;
+      if (k.email && !h.email?.trim()) patch.email = k.email;
+      if (k.telefoon && !h.phone?.trim()) patch.phone = k.telefoon;
+      if (k.mobiel && !h.mobile?.trim()) patch.mobile = k.mobiel;
+      if (adres?.address && !h.billAddress?.address?.trim()) patch.billAddress = adres;
+      if (Object.keys(patch).length) await holded.contacts.update(hid, patch);
+    } catch (err) {
+      console.warn(`[holded] klant ${k.naam} aanvullen mislukt:`, err);
     }
   }
-  return result.id;
+  await upsertSyncMap({ entityType: k.partij.type, localId: k.partij.id, holdedId: hid, direction: "push" });
+  return hid;
+}
+
+/* ------------------------------------------- nummerreeks en project (push) */
+
+/**
+ * De Holded-nummerreeks waar dit nummer in past. "FAC-[YYYY]-%%%%" past op
+ * FAC-2026-0041. Geen passende reeks: dan zonder, en houdt Holded het nummer
+ * zoals we het sturen.
+ */
+async function nummerReeksVoor(docType: HoldedDocType, nummer: string | null): Promise<string | undefined> {
+  const n = nummer?.trim();
+  if (!n) return undefined;
+  try {
+    const reeksen = await holded.request<{ id: string; format?: string }[]>(`/invoicing/v1/numberingseries/${docType}`);
+    const past = (reeksen ?? []).find((r) => {
+      if (!r.format) return false;
+      const re = r.format
+        .replace(/[.*+?^${}()|\\]/g, "\\$&")
+        .replace(/\[YYYY\]/g, "\\d{4}")
+        .replace(/\[YY\]/g, "\\d{2}")
+        .replace(/%+/g, "\\d+");
+      return new RegExp(`^${re}$`, "i").test(n);
+    });
+    return past?.id;
+  } catch {
+    return undefined;
+  }
 }
 
 /** Wettelijke vermelding bij btw-verlegging, zoals ook op de CRM-pdf. */
@@ -796,10 +840,7 @@ async function holdedDocumentBody(doc: typeof documents.$inferSelect): Promise<R
       )
     : new Map<string, string | null>();
   // Het project in Holded, per regel — dat werd steeds met de hand gezet.
-  const holdedProject = doc.projectId
-    ? (await db.query.projects.findFirst({ where: eq(projects.id, doc.projectId), columns: { holdedProjectId: true } }))
-        ?.holdedProjectId ?? null
-    : null;
+  const holdedProject = await holdedProjectVoor(doc.projectId);
   // Holded's create-API verwacht `items` met `subtotal` (stuksprijs ex. BTW) en
   // `tax` als getal. (Bij het uitlezen heet ditzelfde veld `products`/`price`.)
   const itemsBody = items.map((it) => {
@@ -889,6 +930,35 @@ function holdedDocumentGone(err: unknown): boolean {
   return /id not found/i.test(body);
 }
 
+/** Holded-projecten: id en naam. */
+export async function holdedProjecten(): Promise<{ id: string; name: string }[]> {
+  const lijst = await holded.request<HoldedProjectShape[]>("/projects/v1/projects");
+  return (lijst ?? []).map((p) => ({ id: p.id, name: (p.name ?? "").trim() })).sort((a, b) => a.name.localeCompare(b.name));
+}
+
+/**
+ * Het Holded-project bij een CRM-project. De koppeling zet je op de
+ * projectpagina; zonder koppeling zoeken we één keer op exact dezelfde naam en
+ * leggen die vast. Anders geen project — nooit raden: "Appartement Thomas &
+ * Marit" heet in Holded "Xione Thomas", en een gok zet omzet op de verkeerde werf.
+ */
+async function holdedProjectVoor(projectId: string | null): Promise<string | null> {
+  if (!projectId) return null;
+  const p = await db.query.projects.findFirst({ where: eq(projects.id, projectId), columns: { name: true, holdedProjectId: true } });
+  if (!p) return null;
+  if (p.holdedProjectId) return p.holdedProjectId;
+  try {
+    const gelijk = (await holdedProjecten()).filter((h) => normName(h.name) === normName(p.name));
+    if (gelijk.length !== 1) return null;
+    const bezet = await db.query.projects.findFirst({ where: eq(projects.holdedProjectId, gelijk[0].id), columns: { id: true } });
+    if (bezet) return null;
+    await db.update(projects).set({ holdedProjectId: gelijk[0].id }).where(eq(projects.id, projectId));
+    return gelijk[0].id;
+  } catch {
+    return null;
+  }
+}
+
 /* --------------------------------------------------------- projecten (pull) */
 
 interface HoldedProjectShape {
@@ -921,7 +991,8 @@ export async function pullProjectsFromHolded(): Promise<PullResult> {
       where: eq(projects.holdedProjectId, p.id),
     });
     if (existing) {
-      await db.update(projects).set(data).where(eq(projects.id, existing.id));
+      // Een gekoppeld CRM-project houdt zijn eigen naam en status: de koppeling
+      // is alleen voor de push ("Finca Lisa" heet in Holded "Villa finca Lisa").
       updated++;
     } else {
       await db.insert(projects).values(data);

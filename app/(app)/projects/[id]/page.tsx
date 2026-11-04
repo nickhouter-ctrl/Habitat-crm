@@ -44,6 +44,7 @@ import { TimeEntryForm } from "@/components/time-entry-form";
 import { TabsRoot, TabsBar, TabPanel } from "@/components/tabs";
 import { LayoutDashboard, Wallet, Clock, FileText, Settings, Check, ArrowLeft, RotateCcw, Printer, Send } from "lucide-react";
 import { db } from "@/lib/db";
+import { holdedProjecten } from "@/lib/holded/sync";
 import {
   contacts,
   documents,
@@ -166,6 +167,8 @@ export default async function ProjectDetailPage({
   const project = await db.query.projects.findFirst({ where: eq(projects.id, id) });
   if (!project) notFound();
 
+  // Holded-projecten voor de koppeling; Holded onbereikbaar = keuzelijst weg, pagina blijft werken.
+  const holdedProjectLijst = await holdedProjecten().catch(() => null);
   const [contactOpts, ownerOpts, propertyOpts, linkedDocs, unlinkedDocs, aliassen] = await Promise.all([
     db.select({ id: contacts.id, name: contacts.name }).from(contacts).orderBy(asc(contacts.name)),
     db.select({ id: users.id, name: users.name, email: users.email }).from(users).orderBy(asc(users.email)),
@@ -1024,6 +1027,20 @@ export default async function ProjectDetailPage({
                   clearable
                 />
               </Field>
+              {holdedProjectLijst && (
+                <Field
+                  label={uiT("Holded-project")}
+                  htmlFor="holdedProjectId"
+                  hint={uiT("facturen van dit project komen in Holded op dit project")}
+                >
+                  <Select id="holdedProjectId" name="holdedProjectId" defaultValue={project.holdedProjectId ?? ""}>
+                    <option value="">{uiT("— niet gekoppeld —")}</option>
+                    {holdedProjectLijst.map((h) => (
+                      <option key={h.id} value={h.id}>{h.name}</option>
+                    ))}
+                  </Select>
+                </Field>
+              )}
               <Field label={uiT("Startdatum")} htmlFor="startDate">
                 <Input id="startDate" name="startDate" type="date" defaultValue={project.startDate ?? ""} />
               </Field>
