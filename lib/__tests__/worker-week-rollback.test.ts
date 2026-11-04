@@ -27,7 +27,7 @@ it.skipIf(!enabled)("enforces token scope, review, stale submissions, invoice un
   await tx.insert(workers).values({id:workerId,name:"Week test supplier",portalLang:"es",portalInvoiceEnabled:true,hourlyCostEur:"28",defaultPaymentMethod:"invoice"});
   await tx.insert(projects).values([{id:projectId,name:"Week test project",status:"active"},{id:otherProjectId,name:"Other week test project",status:"active"}]);
   await tx.insert(workerPortalLinks).values([{workerId,projectId,token},{workerId,projectId:otherProjectId,token:otherToken}]);
-  const monday=addDays(mondayOf(madridToday()),-7),days=emptyWeek(monday);for(const d of days)d.state="off";days[0]={date:monday,state:"work",note:"",crews:[{people:2,names:"Ana\nLuis",hours:8,zone:"Bathroom",description:"Installed eight square metres of wall tiles."}]};
+  const monday=addDays(mondayOf(madridToday()),-7),days=emptyWeek(monday);for(const d of days)d.state="off";days[0]={date:monday,state:"work",note:"",crews:[{people:2,names:"Ana\nLuis",hours:8,zone:"",description:"Installed eight square metres of wall tiles."}]};
   const get=async()=> (await tx.select().from(sheets).where(and(eq(sheets.workerId,workerId),eq(sheets.projectId,projectId))))[0];
   const form=(version:number,intent="submit",d=days)=>fd({monday,version:String(version),intent,days:JSON.stringify(d),lang:"es",confirmed:"on"});
   expect((await saveWeekAction("bad-token",null,form(0)))?.error).toBeTruthy();

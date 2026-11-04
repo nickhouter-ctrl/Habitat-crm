@@ -53,7 +53,7 @@ export async function reviewWeek(args:{id:string;projectId:string;version:number
       // Existing daily/manual hours must be reconciled explicitly, never double-booked.
       const overlap=await tx.select({id:timeEntries.id}).from(timeEntries).where(and(eq(timeEntries.workerId,sheet.workerId),eq(timeEntries.projectId,sheet.projectId),gte(timeEntries.date,sheet.weekStart),lte(timeEntries.date,addDays(sheet.weekStart,6)))).limit(1);
       if(overlap.length)conflict("Er staan al uren voor deze arbeider in deze week op dit project. Controleer en verwerk die eerst om dubbel boeken te voorkomen.");
-      const rows=sheet.days.flatMap(d=>d.state==="work"?d.crews.map(c=>({weekSheetId:sheet.id,projectId:sheet.projectId,workerId:sheet.workerId,workerName:c.names,date:d.date,hours:(c.people*c.hours).toFixed(2),hourlyCostEur:sheet.hourlyRate,paymentMethod:sheet.paymentMethod,selfLoggedAt:sheet.submittedAt,approvedAt:new Date(),note:`${c.people} × ${c.hours} u · ${c.zone}\n${c.description}`})):[]);
+      const rows=sheet.days.flatMap(d=>d.state==="work"?d.crews.map(c=>({weekSheetId:sheet.id,projectId:sheet.projectId,workerId:sheet.workerId,workerName:c.names,date:d.date,hours:(c.people*c.hours).toFixed(2),hourlyCostEur:sheet.hourlyRate,paymentMethod:sheet.paymentMethod,selfLoggedAt:sheet.submittedAt,approvedAt:new Date(),note:`${c.people} × ${c.hours} u${c.zone?` · ${c.zone}`:""}\n${c.description}`})):[]);
       if(!rows.length)conflict("Weekstaat bevat geen uren.");
       await tx.insert(timeEntries).values(rows);
     }
