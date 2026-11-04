@@ -14,6 +14,7 @@ export type AppleFormState = { error?: string; success?: string };
 const errorText = (error: unknown): string => {
   if (error instanceof AppleCalendarError) {
     if (error.message === "credentials") return "Apple weigert de toegang. Controleer je Apple Account en app-specifieke wachtwoord.";
+    if (error.message === "forbidden") return "Apple heeft een bewerking op de werkagenda geweigerd. Dit betekent niet automatisch dat je wachtwoord onjuist is. Neem contact op met de beheerder.";
     if (error.message === "busy") return "Er loopt al een synchronisatie. Probeer het over enkele minuten opnieuw.";
     if (error.message === "different-account") return "Deze werkagenda is al aan een ander Apple Account gekoppeld. Gebruik het bestaande account.";
     if (error.message === "calendar-missing") return "De gekoppelde werkagenda is niet gevonden in iCloud. Er zijn geen afspraken verwijderd.";

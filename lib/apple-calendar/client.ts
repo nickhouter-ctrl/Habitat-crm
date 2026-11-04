@@ -26,9 +26,15 @@ export function appleTransport(deadline: number): typeof fetch {
         });
         continue;
       }
+      if (response.status >= 400) {
+        // Never log URLs, headers or Apple's response body: these can contain
+        // account identifiers, credentials or private calendar information.
+        console.warn("[apple-calendar] request rejected", { status: response.status,
+          method: init?.method ?? "GET" });
+      }
       if (response.status === 401 || response.status === 403) {
         await response.body?.cancel();
-        throw new AppleCalendarError("credentials");
+        throw new AppleCalendarError(response.status === 401 ? "credentials" : "forbidden");
       }
       // DAV XML and ICS are untrusted, including lengths and URLs supplied by Apple.
       const reader = response.body?.getReader(), chunks: Uint8Array[] = [];

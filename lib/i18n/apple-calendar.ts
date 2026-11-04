@@ -1,4 +1,5 @@
 const copy: [string, string, string][] = [
+  ["Apple heeft een bewerking op de werkagenda geweigerd. Dit betekent niet automatisch dat je wachtwoord onjuist is. Neem contact op met de beheerder.", "Apple refused an operation on the work calendar. This does not necessarily mean your password is incorrect. Contact the administrator.", "Apple ha rechazado una operación en el calendario de trabajo. Esto no significa necesariamente que la contraseña sea incorrecta. Contacta con el administrador."],
   ["Apple Agenda", "Apple Calendar", "Calendario de Apple"],
   ["Apple Agenda koppelen", "Connect Apple Calendar", "Conectar Calendario de Apple"],
   ["Apple Agenda verbinden", "Connect Apple Calendar", "Conectar Calendario de Apple"],
