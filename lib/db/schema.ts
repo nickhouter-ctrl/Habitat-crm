@@ -2046,6 +2046,7 @@ export const appointments = pgTable(
     quoteRequestId: uuid().references((): AnyPgColumn => quoteRequests.id, { onDelete: "set null" }),
     startsAt: timestamp({ withTimezone: true }).notNull(),
     endsAt: timestamp({ withTimezone: true }),
+    allDay: boolean().notNull().default(false),
     location: text(),
     notes: text(),
     /** scheduled | completed | cancelled */
@@ -2064,6 +2065,39 @@ export const appointments = pgTable(
     index("appointments_assignee_idx").on(t.assigneeId),
   ],
 );
+/** One shared work calendar. Credentials never leave the server. */
+export const appleCalendarConnections = pgTable("apple_calendar_connections", {
+  id: text().primaryKey().default("team"),
+  ownerId: uuid().notNull().references(() => users.id, { onDelete: "cascade" }),
+  appleAccount: text().notNull(),
+  encryptedPassword: text(),
+  calendarUrl: text().notNull(),
+  enabled: boolean().notNull().default(false),
+  lockToken: uuid(),
+  lockUntil: timestamp({ withTimezone: true }),
+  lastSyncedAt: timestamp({ withTimezone: true }),
+  lastError: text(),
+  ...timestamps,
+});
+
+/** Tombstones survive CRM deletion so that retries cannot recreate removed events. */
+export const appleCalendarEvents = pgTable("apple_calendar_events", {
+  id: uuid().primaryKey().default(sql`gen_random_uuid()`),
+  connectionId: text().notNull().references(() => appleCalendarConnections.id, { onDelete: "cascade" }),
+  appointmentId: uuid().references(() => appointments.id, { onDelete: "set null" }),
+  remoteUrl: text().notNull(),
+  uid: text().notNull(),
+  localHash: text(),
+  remoteHash: text(),
+  remoteDeleted: boolean().notNull().default(false),
+  issue: text(),
+  resolution: text(),
+  ...timestamps,
+}, (t) => [
+  uniqueIndex("apple_calendar_events_remote_idx").on(t.connectionId, t.remoteUrl),
+  uniqueIndex("apple_calendar_events_appointment_idx").on(t.connectionId, t.appointmentId),
+  uniqueIndex("apple_calendar_events_uid_idx").on(t.connectionId, t.uid),
+]);
 /**
  * Een afspraakvoorstel aan een klant, met een link waarop hij reageert.
  *

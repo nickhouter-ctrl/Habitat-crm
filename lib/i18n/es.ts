@@ -1,4 +1,5 @@
 import { reportSpanish } from "./report-labels";
+import { appleCalendarEs } from "./apple-calendar";
 /**
  * Español. La clave es el texto neerlandés original; si falta una clave se
  * muestra el neerlandés, de modo que una pantalla sin traducir sigue siendo
@@ -13,6 +14,7 @@ import { teamWorkflowEs } from "./team-workflow";
 import { usabilityEs } from "./usability";
 
 export const es: Dictionary = {
+  ...appleCalendarEs,
   ...usabilityEs,
   ...reportSpanish,
   ...teamWorkflowEs,

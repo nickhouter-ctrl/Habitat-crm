@@ -36,6 +36,10 @@
   ],
   "crons": [
     {
+      "path": "/api/cron/apple-calendar",
+      "schedule": "*/5 * * * *"
+    },
+    {
       "path": "/api/cron/staff-notifications",
       "schedule": "*/10 * * * *"
     },

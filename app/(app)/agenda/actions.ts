@@ -8,7 +8,7 @@ import { z } from "zod";
 import { heeftCap } from "@/lib/auth/modules";
 import { randomUUID } from "node:crypto";
 import { changeAgendaTask } from "@/lib/agenda-task-completion";
-import { agendaDateTime } from "@/lib/agenda-dates";
+import { agendaDateTime, shiftDay, validDay } from "@/lib/agenda-dates";
 import { sendQueuedStaffNotification } from "@/lib/staff-notifications";
 import { db } from "@/lib/db";
 import { activities, appointments, contacts, staffNotifications, users } from "@/lib/db/schema";
@@ -191,4 +191,24 @@ export async function deleteAppointment(id: string) {
   const user=await requireUser();
   await db.delete(appointments).where(and(eq(appointments.id, z.string().uuid().parse(id)),salesAppointmentAccess(user.role,user.id)));
   revalidatePath("/agenda");
+}
+
+export async function editAppointment(_state: { error?: string; success?: string }, form: FormData) {
+  const user = await requireUser();
+  const input = z.object({ id: z.string().uuid(), updatedAt: z.iso.datetime(), title: shortTitle,
+    date: z.string(), time: z.string(), endDate: z.string(), endTime: z.string(),
+    location: z.string().max(500), notes: z.string().max(5000) }).safeParse(Object.fromEntries(form));
+  if (!input.success) return { error: "Controleer de ingevulde afspraakgegevens." };
+  const v = input.data, allDay = form.get("allDay") === "on";
+  if (!validDay(v.date) || !validDay(v.endDate)) return { error: "Controleer de datum en eindtijd." };
+  const startsAt = agendaDateTime(v.date, allDay ? "00:00" : v.time);
+  const endsAt = agendaDateTime(allDay ? shiftDay(v.endDate, 1) : v.endDate, allDay ? "00:00" : v.endTime);
+  if (!startsAt || !endsAt || endsAt <= startsAt) return { error: "Controleer de datum en eindtijd." };
+  const [updated] = await db.update(appointments).set({ title: v.title, startsAt, endsAt, allDay,
+    location: v.location.trim() || null, notes: v.notes.trim() || null, updatedAt: new Date() })
+    .where(and(eq(appointments.id, v.id), salesAppointmentAccess(user.role, user.id),
+      sql`date_trunc('milliseconds', ${appointments.updatedAt}) = ${v.updatedAt}::timestamptz`)).returning({ id: appointments.id });
+  if (!updated) return { error: "De afspraak is inmiddels gewijzigd of niet toegankelijk. Vernieuw de pagina." };
+  revalidatePath("/agenda"); revalidatePath("/");
+  return { success: "Afspraak bijgewerkt." };
 }
