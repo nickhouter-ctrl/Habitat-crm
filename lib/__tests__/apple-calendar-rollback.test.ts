@@ -51,7 +51,7 @@ it.skipIf(!enabled)("syncs both ways, retries, deletions, conflicts, lost listin
   });
   const remove = vi.fn(async (url: string, _calendar: string, etag: string) => { expect(etag).toBe(remote.get(url)?.etag); remote.delete(url); });
   m.apple.mockResolvedValue({ client: {
-    fetchCalendars: async () => [{ url: calendarUrl }],
+    propfind: async () => [{ href: calendarUrl, status: 200, ok: true, props: { resourcetype: { calendar: {} } } }],
     fetchCalendarObjects: async () => {
       if (concurrentEdit) {
         concurrentEdit = false;

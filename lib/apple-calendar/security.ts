@@ -24,11 +24,18 @@ export function appleUrl(value: string): URL {
     || !/^(?:p\d+-)?caldav\.icloud\.com$/.test(url.hostname)) throw new Error("Invalid Apple calendar URL");
   return url;
 }
+/** Only the central iCloud host and one validated partition are interchangeable. */
+export function sameAppleOrigin(first: URL, second: URL): boolean {
+  appleUrl(first.href); appleUrl(second.href);
+  return first.origin === second.origin || first.hostname === "caldav.icloud.com" || second.hostname === "caldav.icloud.com";
+}
 export function eventUrl(value: string, calendarUrl: string): string {
   const calendar = appleUrl(calendarUrl), event = appleUrl(new URL(value, calendar).href);
-  if (event.origin !== calendar.origin || !calendar.pathname.endsWith("/") || !event.pathname.startsWith(calendar.pathname)
+  if (!sameAppleOrigin(event, calendar) || !calendar.pathname.endsWith("/") || !event.pathname.startsWith(calendar.pathname)
     || !event.pathname.slice(calendar.pathname.length) || /[/%\\]/.test(decodeURIComponent(event.pathname.slice(calendar.pathname.length)))) {
     throw new Error("Event outside work calendar");
   }
+  // Stable mapping keys even when an iCloud REPORT uses the central hostname.
+  event.hostname = calendar.hostname;
   return event.href;
 }

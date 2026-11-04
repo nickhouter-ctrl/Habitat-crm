@@ -5,6 +5,7 @@ import { db } from "@/lib/db";
 import { appleCalendarConnections as connections, appleCalendarEvents as mappings, appointments, users } from "@/lib/db/schema";
 import { heeftCap, magModule } from "@/lib/auth/modules";
 import { appleClient, AppleCalendarError } from "./client";
+import { ensureWorkCalendar, findWorkCalendar } from "./collection";
 import { appleUrl, decryptPassword, encryptPassword, eventUrl } from "./security";
 import { type CalendarEvent, eventHash, fromAppointment, parseEvent, serializeEvent, syncDecision } from "./events";
 
@@ -47,20 +48,16 @@ export async function connectApple(ownerId: string, account: string, password: s
     const calendarUrl = row.calendarUrl === "https://caldav.icloud.com/"
       ? new URL(`habitat-one-crm-${row.ownerId}/`, home.endsWith("/") ? home : home + "/").href : row.calendarUrl;
     appleUrl(calendarUrl);
-    let calendars = await client.fetchCalendars();
-    if (!calendars.some(c => c.url === calendarUrl)) {
-      if (row.lastSyncedAt) throw new AppleCalendarError("calendar-missing");
-      const result = await client.makeCalendar({ url: calendarUrl, props: {
-        "d:displayname": CALENDAR_NAME,
-        "c:supported-calendar-component-set": { "c:comp": { _attributes: { name: "VEVENT" } } },
-      } });
-      if (result.some(r => r.status >= 400)) throw new AppleCalendarError("unavailable");
-      calendars = await client.fetchCalendars();
-    }
-    if (!calendars.some(c => c.url === calendarUrl)) throw new AppleCalendarError("calendar-missing");
+    await ensureWorkCalendar(client, calendarUrl, CALENDAR_NAME, !!row.lastSyncedAt);
     await db.update(connections).set({ ownerId, encryptedPassword, calendarUrl, enabled: true, lastError: null })
       .where(and(eq(connections.id, "team"), eq(connections.lockToken, token)));
     console.info("[apple-calendar] connected", { actorId: ownerId });
+  } catch (error) {
+    const code = error instanceof AppleCalendarError ? error.message : "unavailable";
+    console.warn("[apple-calendar] connection setup failed", { code });
+    await db.update(connections).set({ lastError: code })
+      .where(and(eq(connections.id, "team"), eq(connections.lockToken, token)));
+    throw error;
   } finally { await release(token); }
 }
 
@@ -88,8 +85,7 @@ export async function syncAppleCalendar() {
     if (!connection.enabled || !connection.encryptedPassword) return result;
     await assertOwner(connection.ownerId);
     const apple = await appleClient(connection.appleAccount, decryptPassword(connection.encryptedPassword, connection.appleAccount, secret()), deadline);
-    const calendars = await apple.client.fetchCalendars();
-    const calendar = calendars.find(c => c.url === connection.calendarUrl);
+    const calendar = await findWorkCalendar(apple.client, connection.calendarUrl);
     // A missing collection is NOT proof that all its events were deleted.
     if (!calendar) throw new AppleCalendarError("calendar-missing");
     const remoteObjects = await apple.client.fetchCalendarObjects({ calendar });
