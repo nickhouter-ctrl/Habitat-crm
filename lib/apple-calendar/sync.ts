@@ -1,13 +1,16 @@
 import "server-only";
 import { randomUUID } from "node:crypto";
-import { and, eq, gte, inArray, isNull, lt, or, sql } from "drizzle-orm";
+import { and, eq, gte, inArray, isNotNull, isNull, lt, or, sql } from "drizzle-orm";
 import { db } from "@/lib/db";
-import { appleCalendarConnections as connections, appleCalendarEvents as mappings, appointments, users } from "@/lib/db/schema";
+import { appleCalendarConnections as connections, appleCalendarEvents as mappings, appointments, activities, contacts, users } from "@/lib/db/schema";
 import { heeftCap, magModule } from "@/lib/auth/modules";
 import { appleClient, AppleCalendarError } from "./client";
 import { ensureWorkCalendar, findWorkCalendar } from "./collection";
 import { appleUrl, decryptPassword, encryptPassword, eventUrl } from "./security";
-import { type CalendarEvent, eventHash, fromAppointment, parseEvent, serializeEvent, syncDecision } from "./events";
+import { type CalendarEvent, eventHash, fromAppointment, hasEventPresentation, parseEvent, serializeEvent, syncDecision } from "./events";
+import { agendaDay } from "@/lib/agenda-dates";
+import { eventPresentation } from "./presentation";
+import { fromTask, visibleAgendaTask } from "./tasks";
 
 export const CALENDAR_NAME = "Habitat One CRM";
 const secret = () => process.env.AUTH_SECRET ?? "";
@@ -102,7 +105,24 @@ export async function syncAppleCalendar() {
       gte(appointments.startsAt, new Date(Date.now() - 90 * 86400000)),
       linkedIds.length ? inArray(appointments.id, linkedIds) : undefined,
     )).limit(2001);
-    if (localRows.length > 2000 || links.length > 2000) throw new AppleCalendarError("too-large");
+    const linkedTaskIds = links.flatMap(m => m.taskId ? [m.taskId] : []);
+    const taskRows = await db.select().from(activities).where(and(eq(activities.type, "task"), or(
+      and(isNull(activities.completedAt), isNotNull(activities.dueAt), visibleAgendaTask),
+      linkedTaskIds.length ? inArray(activities.id, linkedTaskIds) : undefined,
+    ))).limit(2001);
+    if (localRows.length + taskRows.length > 2000 || links.length > 2000) throw new AppleCalendarError("too-large");
+    const customerIds = [...new Set([...localRows, ...taskRows].flatMap(r => r.contactId ? [r.contactId] : []))];
+    const [people, customers] = await Promise.all([
+      db.select({ id: users.id, name: users.name }).from(users),
+      customerIds.length ? db.select({ id: contacts.id, name: contacts.name }).from(contacts).where(inArray(contacts.id, customerIds)) : Promise.resolve([]),
+    ]);
+    const peopleById = new Map(people.map(p => [p.id, p.name])), customersById = new Map(customers.map(c => [c.id, c.name]));
+    const contextFor = (record: { id: string; contactId: string | null; assigneeId: string | null; createdBy?: string | null; authorId?: string | null; startsAt?: Date; dueAt?: Date | null }, kind: "appointment" | "task") => eventPresentation({
+      id: record.id, day: agendaDay(record.startsAt ?? record.dueAt ?? new Date()), kind, contactId: record.contactId,
+      contactName: record.contactId ? customersById.get(record.contactId) ?? null : null,
+      assigneeName: record.assigneeId ? peopleById.get(record.assigneeId) ?? null : null,
+      creatorName: peopleById.get(record.createdBy ?? record.authorId ?? "") ?? null,
+    });
     const linked = new Set(linkedIds);
     for (const local of localRows) {
       if (linked.has(local.id) || local.status === "cancelled" || local.completedAt) continue;
@@ -110,6 +130,12 @@ export async function syncAppleCalendar() {
       await db.insert(mappings).values({ connectionId: "team", appointmentId: local.id, uid, remoteUrl,
         localHash: eventHash(fromAppointment(local)) }).onConflictDoNothing();
     }
+    const linkedTasks = new Set(linkedTaskIds);
+    const newTasks = taskRows.filter(t => !linkedTasks.has(t.id) && !t.completedAt && t.dueAt).map(t => ({
+      connectionId: "team", kind: "task", taskId: t.id, uid: `task-${t.id}@habitat-one-crm`,
+      remoteUrl: eventUrl(`task-${t.id}.ics`, calendar.url),
+    }));
+    if (newTasks.length) await db.insert(mappings).values(newTasks).onConflictDoNothing();
     links = await db.select().from(mappings).where(eq(mappings.connectionId, "team")).orderBy(mappings.updatedAt);
     const knownUrls = new Set(links.map(m => m.remoteUrl)), knownUids = new Set(links.map(m => m.uid));
     const ambiguousUids = new Set<string>();
@@ -118,7 +144,7 @@ export async function syncAppleCalendar() {
       if (knownUrls.has(object.url)) continue;
       if (Date.now() > deadline - 10_000) { result.remaining = true; break; }
       let parsed;
-      try { parsed = parseEvent(object.data); } catch { result.issues++; continue; }
+      try { parsed = parseEvent(object.data, secret()); } catch { result.issues++; continue; }
       if (knownUids.has(parsed.uid)) { ambiguousUids.add(parsed.uid); result.issues++; continue; }
       const hash = eventHash(parsed.value);
       await db.transaction(async tx => {
@@ -137,13 +163,47 @@ export async function syncAppleCalendar() {
         await db.update(mappings).set({ issue: "unsupported" }).where(eq(mappings.id, link.id));
         continue;
       }
+      if (link.kind === "task") {
+        // A task is a view of CRM workflow. Apple edits/deletions must never
+        // complete, duplicate, or detach follow-up tasks and team checklists.
+        const [task] = link.taskId ? await db.select({ record: activities, visible: visibleAgendaTask }).from(activities)
+          .where(and(eq(activities.id, link.taskId), eq(activities.type, "task"))).limit(1) : [];
+        const object = remoteByUrl.get(link.remoteUrl) ?? await apple.get(link.remoteUrl, calendar.url);
+        let value: CalendarEvent | null;
+        try {
+          if (object && parseEvent(object.data, secret()).uid !== link.uid) throw new Error("uid-changed");
+          value = task && task.visible && !task.record.completedAt ? fromTask(task.record) : null;
+        } catch {
+          await db.update(mappings).set({ issue: "unsupported", updatedAt: new Date() }).where(eq(mappings.id, link.id));
+          result.issues++; continue;
+        }
+        try {
+          if (!value) {
+            if (object) await apple.remove(link.remoteUrl, calendar.url, object.etag);
+            await db.update(mappings).set({ localHash: null, remoteHash: null, remoteDeleted: true, issue: null, resolution: null, updatedAt: new Date() }).where(eq(mappings.id, link.id));
+            if (object) result.exported++;
+          } else {
+            const context = contextFor(task!.record, "task"), hash = eventHash(value);
+            if (!object || eventHash(parseEvent(object.data, secret()).value) !== hash || !hasEventPresentation(object.data, context, secret())) {
+              await apple.put(link.remoteUrl, calendar.url, serializeEvent(link.uid, value, object?.data, { context, key: secret() }), object?.etag);
+              result.exported++;
+            }
+            await db.update(mappings).set({ localHash: hash, remoteHash: hash, remoteDeleted: false, issue: null, resolution: null, updatedAt: new Date() }).where(eq(mappings.id, link.id));
+          }
+        } catch (error) {
+          if (!(error instanceof AppleCalendarError) || error.message !== "changed") throw error;
+          await db.update(mappings).set({ issue: "unsupported", updatedAt: new Date() }).where(eq(mappings.id, link.id));
+          result.issues++;
+        }
+        continue;
+      }
       const local = link.appointmentId ? await db.query.appointments.findFirst({ where: eq(appointments.id, link.appointmentId) }) : null;
       const localValue = local ? fromAppointment(local) : null;
       // Confirm each apparent deletion individually; incomplete REPORTs must never erase CRM data.
       const object = remoteByUrl.get(link.remoteUrl) ?? await apple.get(link.remoteUrl, calendar.url);
       let remote: ReturnType<typeof parseEvent> | null;
       try {
-        remote = object ? parseEvent(object.data) : null;
+        remote = object ? parseEvent(object.data, secret()) : null;
         if (remote && remote.uid !== link.uid) throw new Error("uid-changed");
       } catch {
         await db.update(mappings).set({ issue: "unsupported" }).where(eq(mappings.id, link.id));
@@ -159,7 +219,7 @@ export async function syncAppleCalendar() {
           result.issues++; continue;
         }
         if (decision === "push" && localValue) {
-          await apple.put(link.remoteUrl, calendar.url, serializeEvent(link.uid, localValue, object?.data), object?.etag);
+          await apple.put(link.remoteUrl, calendar.url, serializeEvent(link.uid, localValue, object?.data, { context: contextFor(local!, "appointment"), key: secret() }), object?.etag);
           // Both baselines reflect the exact snapshot sent. Concurrent CRM edits remain pending.
           await mark({ localHash: eventHash(localValue), remoteHash: eventHash(localValue), remoteDeleted: false });
           result.exported++;
@@ -188,6 +248,16 @@ export async function syncAppleCalendar() {
           });
           result.imported++;
         } else {
+          // Refresh names, responsibility and links without changing content
+          // baselines or overwriting an independent edit from Apple.
+          if (local && localValue && remote && object && !localValue.cancelled
+            && eventHash(localValue) === eventHash(remote.value)) {
+            const context = contextFor(local, "appointment");
+            if (!hasEventPresentation(object.data, context, secret())) {
+              await apple.put(link.remoteUrl, calendar.url, serializeEvent(link.uid, localValue, object.data, { context, key: secret() }), object.etag);
+              result.exported++;
+            }
+          }
           await mark({ localHash: localValue ? eventHash(localValue) : null, remoteHash: remote ? eventHash(remote.value) : null, remoteDeleted: !remote });
         }
       } catch (error) {

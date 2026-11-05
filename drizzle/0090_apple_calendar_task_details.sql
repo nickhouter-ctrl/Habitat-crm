@@ -1,0 +1,5 @@
+ALTER TABLE "apple_calendar_events" ADD COLUMN "task_id" uuid;--> statement-breakpoint
+ALTER TABLE "apple_calendar_events" ADD COLUMN "kind" text DEFAULT 'appointment' NOT NULL;--> statement-breakpoint
+ALTER TABLE "apple_calendar_events" ADD CONSTRAINT "apple_calendar_events_task_id_activities_id_fk" FOREIGN KEY ("task_id") REFERENCES "public"."activities"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
+CREATE UNIQUE INDEX "apple_calendar_events_task_idx" ON "apple_calendar_events" USING btree ("connection_id","task_id");--> statement-breakpoint
+ALTER TABLE "apple_calendar_events" ADD CONSTRAINT "apple_calendar_events_kind_check" CHECK (("apple_calendar_events"."kind" = 'appointment' AND "apple_calendar_events"."task_id" IS NULL) OR ("apple_calendar_events"."kind" = 'task' AND "apple_calendar_events"."appointment_id" IS NULL));
