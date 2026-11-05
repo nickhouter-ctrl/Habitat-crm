@@ -2085,6 +2085,8 @@ export const appleCalendarEvents = pgTable("apple_calendar_events", {
   id: uuid().primaryKey().default(sql`gen_random_uuid()`),
   connectionId: text().notNull().references(() => appleCalendarConnections.id, { onDelete: "cascade" }),
   appointmentId: uuid().references(() => appointments.id, { onDelete: "set null" }),
+  taskId: uuid().references((): AnyPgColumn => activities.id, { onDelete: "set null" }),
+  kind: text().notNull().default("appointment"),
   remoteUrl: text().notNull(),
   uid: text().notNull(),
   localHash: text(),
@@ -2096,6 +2098,8 @@ export const appleCalendarEvents = pgTable("apple_calendar_events", {
 }, (t) => [
   uniqueIndex("apple_calendar_events_remote_idx").on(t.connectionId, t.remoteUrl),
   uniqueIndex("apple_calendar_events_appointment_idx").on(t.connectionId, t.appointmentId),
+  uniqueIndex("apple_calendar_events_task_idx").on(t.connectionId, t.taskId),
+  check("apple_calendar_events_kind_check", sql`(${t.kind} = 'appointment' AND ${t.taskId} IS NULL) OR (${t.kind} = 'task' AND ${t.appointmentId} IS NULL)`),
   uniqueIndex("apple_calendar_events_uid_idx").on(t.connectionId, t.uid),
 ]);
 /**

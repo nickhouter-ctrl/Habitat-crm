@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import ICAL from "ical.js";
 import { z } from "zod";
 import { agendaDateTime, agendaDay, shiftDay } from "@/lib/agenda-dates";
+import { plainEventText, presentationMatches, writePresentation, type EventPresentation } from "./presentation";
 
 export const eventSchema = z.object({
   title: z.string().trim().min(1).max(250).regex(/^[^\r\n\0]+$/),
@@ -72,7 +73,7 @@ function date(time: ICAL.Time, calendar: ICAL.Component, component: ICAL.Compone
   return time.toJSDate();
 }
 
-export function parseEvent(data: string): { uid: string; value: CalendarEvent } {
+export function parseEvent(data: string, contextKey?: string): { uid: string; value: CalendarEvent } {
   const { calendar, component, event } = readCalendar(data);
   const uid = z.string().min(1).max(500).regex(/^[^\r\n\0]+$/).parse(event.uid);
   const start = event.startDate;
@@ -81,12 +82,12 @@ export function parseEvent(data: string): { uid: string; value: CalendarEvent } 
   let endsAt = date(event.endDate, calendar, component, "dtend");
   if (+endsAt === +startsAt) endsAt = start.isDate
     ? agendaDateTime(shiftDay(agendaDay(startsAt), 1))! : new Date(+startsAt + 3600000);
-  return { uid, value: eventSchema.parse({ title: event.summary || "Afspraak", startsAt, endsAt,
-    allDay: start.isDate, location: event.location || "", notes: event.description || "",
+  return { uid, value: eventSchema.parse({ ...plainEventText(component, uid, contextKey), startsAt, endsAt,
+    allDay: start.isDate, location: event.location || "",
     cancelled: component.getFirstPropertyValue("status") === "CANCELLED" }) };
 }
 
-export function serializeEvent(uid: string, value: CalendarEvent, existing?: string): string {
+export function serializeEvent(uid: string, value: CalendarEvent, existing?: string, display?: { context: EventPresentation; key: string }): string {
   const v = eventSchema.parse(value);
   const { calendar, component } = existing ? readCalendar(existing) : {
     calendar: new ICAL.Component("vcalendar"), component: new ICAL.Component("vevent"),
@@ -101,6 +102,7 @@ export function serializeEvent(uid: string, value: CalendarEvent, existing?: str
   component.updatePropertyWithValue("summary", v.title);
   component.updatePropertyWithValue("location", v.location);
   component.updatePropertyWithValue("description", v.notes);
+  if (display) writePresentation(component, uid, v.title, v.notes, display.context, display.key);
   // Recreate these properties to remove old TZID/VALUE parameters.
   for (const name of ["dtstart", "dtend", "duration"]) component.removeAllProperties(name);
   component.updatePropertyWithValue("dtstart", v.allDay ? ICAL.Time.fromDateString(agendaDay(v.startsAt)) : ICAL.Time.fromJSDate(v.startsAt, true));
@@ -110,6 +112,11 @@ export function serializeEvent(uid: string, value: CalendarEvent, existing?: str
   component.updatePropertyWithValue("last-modified", ICAL.Time.fromJSDate(new Date(), true));
   component.updatePropertyWithValue("sequence", Number(component.getFirstPropertyValue("sequence") || 0) + 1);
   return calendar.toString() + "\r\n";
+}
+
+export function hasEventPresentation(data: string, expected: EventPresentation, key: string): boolean {
+  const { component, event } = readCalendar(data);
+  return presentationMatches(component, event.uid, expected, key);
 }
 
 export type Baseline = { localHash: string | null; remoteHash: string | null; remoteDeleted: boolean; resolution?: string | null };
