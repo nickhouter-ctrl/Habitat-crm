@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { and, asc, eq, inArray, isNotNull, isNull, sql } from "drizzle-orm";
+import { and, asc, eq, inArray, isNotNull, isNull, ne, sql } from "drizzle-orm";
 import { z } from "zod";
 import { requireModule } from "@/lib/auth/guards";
 
@@ -110,6 +110,7 @@ const updateSchema = z.object({
   startDate: z.string().trim().optional(),
   endDate: z.string().trim().optional(),
   contractDate: z.string().trim().optional(),
+  holdedProjectId: z.string().trim().max(64).optional(),
 });
 
 function uuidOrNull(v?: string) {
@@ -124,9 +125,20 @@ export async function updateProject(id: string, formData: FormData) {
   const parsed = updateSchema.safeParse(Object.fromEntries(formData));
   if (!parsed.success) throw new Error(parsed.error.issues.map((i) => i.message).join(", "));
   const d = parsed.data;
+  // De keuzelijst staat er alleen als Holded bereikbaar was; anders laten we
+  // een bestaande koppeling met rust.
+  const holdedKoppeling = formData.has("holdedProjectId") ? { holdedProjectId: d.holdedProjectId || null } : {};
+  if (holdedKoppeling.holdedProjectId) {
+    const bezet = await db.query.projects.findFirst({
+      where: and(eq(projects.holdedProjectId, holdedKoppeling.holdedProjectId), ne(projects.id, id)),
+      columns: { name: true },
+    });
+    if (bezet) throw new Error(`Dat Holded-project hangt al aan "${bezet.name}". Ontkoppel het daar eerst.`);
+  }
   await db
     .update(projects)
     .set({
+      ...holdedKoppeling,
       name: d.name,
       description: d.description || null,
       code: d.code || null,

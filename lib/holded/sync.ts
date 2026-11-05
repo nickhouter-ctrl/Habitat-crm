@@ -650,7 +650,7 @@ export async function pushDocumentToHolded(docId: string): Promise<string> {
   //    altijd met alle factuurgegevens (zie holdedKlantVoor).
   const contactId = await holdedKlantVoor(doc);
 
-  // 2. Regels, datums, nummer — gedeeld met "Bijwerken in Holded".
+  // 2. Regels, datums, nummer, project — gedeeld met "Bijwerken in Holded".
   const body = await holdedDocumentBody(doc);
   if (contactId) body.contactId = contactId;
   // In Holded's eigen nummerreeks, zodat de teller daar meeloopt met het CRM.
@@ -789,7 +789,7 @@ async function holdedKlantVoor(doc: typeof documents.$inferSelect): Promise<stri
   return hid;
 }
 
-/* ------------------------------------------------- nummerreeks (push) */
+/* ------------------------------------------- nummerreeks en project (push) */
 
 /**
  * De Holded-nummerreeks waar dit nummer in past. "FAC-[YYYY]-%%%%" past op
@@ -822,8 +822,7 @@ const VERLEGD_NOTITIE =
 
 /**
  * De inhoud van een verkoopdocument zoals Holded hem wil hebben: regels,
- * datums, nummer en btw-verlegging. Geen project: Holded is alleen de
- * boekhouding (inkoop en verkoop); projecten leven in het CRM. Gedeeld door pushen en bijwerken,
+ * datums, nummer, project en btw-verlegging. Gedeeld door pushen en bijwerken,
  * zodat die twee nooit uit elkaar lopen.
  */
 async function holdedDocumentBody(doc: typeof documents.$inferSelect): Promise<Record<string, unknown>> {
@@ -840,6 +839,8 @@ async function holdedDocumentBody(doc: typeof documents.$inferSelect): Promise<R
         ).map((p) => [p.id, p.holdedProductId]),
       )
     : new Map<string, string | null>();
+  // Het project in Holded, per regel — dat werd steeds met de hand gezet.
+  const holdedProject = await holdedProjectVoor(doc.projectId);
   // Holded's create-API verwacht `items` met `subtotal` (stuksprijs ex. BTW) en
   // `tax` als getal. (Bij het uitlezen heet ditzelfde veld `products`/`price`.)
   const itemsBody = items.map((it) => {
@@ -854,6 +855,7 @@ async function holdedDocumentBody(doc: typeof documents.$inferSelect): Promise<R
       tax: doc.vatReverseCharge ? 0 : Number(it.taxRate ?? 21),
       ...(doc.vatReverseCharge ? { taxes: [] } : {}),
       ...(it.discount ? { discount: Number(it.discount) } : {}),
+      ...(holdedProject ? { projectid: holdedProject } : {}),
     };
   });
 
@@ -928,6 +930,35 @@ function holdedDocumentGone(err: unknown): boolean {
   return /id not found/i.test(body);
 }
 
+/** Holded-projecten: id en naam. */
+export async function holdedProjecten(): Promise<{ id: string; name: string }[]> {
+  const lijst = await holded.request<HoldedProjectShape[]>("/projects/v1/projects");
+  return (lijst ?? []).map((p) => ({ id: p.id, name: (p.name ?? "").trim() })).sort((a, b) => a.name.localeCompare(b.name));
+}
+
+/**
+ * Het BESTAANDE Holded-project bij een CRM-project — we maken er nooit een aan.
+ * De koppeling zet je op de projectpagina; zonder koppeling zoeken we één keer
+ * op exact dezelfde naam en leggen die vast. Anders geen project — nooit raden: "Appartement Thomas &
+ * Marit" heet in Holded "Xione Thomas", en een gok zet omzet op de verkeerde werf.
+ */
+async function holdedProjectVoor(projectId: string | null): Promise<string | null> {
+  if (!projectId) return null;
+  const p = await db.query.projects.findFirst({ where: eq(projects.id, projectId), columns: { name: true, holdedProjectId: true } });
+  if (!p) return null;
+  if (p.holdedProjectId) return p.holdedProjectId;
+  try {
+    const gelijk = (await holdedProjecten()).filter((h) => normName(h.name) === normName(p.name));
+    if (gelijk.length !== 1) return null;
+    const bezet = await db.query.projects.findFirst({ where: eq(projects.holdedProjectId, gelijk[0].id), columns: { id: true } });
+    if (bezet) return null;
+    await db.update(projects).set({ holdedProjectId: gelijk[0].id }).where(eq(projects.id, projectId));
+    return gelijk[0].id;
+  } catch {
+    return null;
+  }
+}
+
 /* --------------------------------------------------------- projecten (pull) */
 
 interface HoldedProjectShape {
@@ -960,7 +991,8 @@ export async function pullProjectsFromHolded(): Promise<PullResult> {
       where: eq(projects.holdedProjectId, p.id),
     });
     if (existing) {
-      await db.update(projects).set(data).where(eq(projects.id, existing.id));
+      // Een gekoppeld CRM-project houdt zijn eigen naam en status: de koppeling
+      // is alleen voor de push ("Finca Lisa" heet in Holded "Villa finca Lisa").
       updated++;
     } else {
       await db.insert(projects).values(data);
