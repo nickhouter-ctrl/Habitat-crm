@@ -1,0 +1,2 @@
+ALTER TABLE "appointments" ADD COLUMN "attendee_ids" uuid[] DEFAULT '{}'::uuid[] NOT NULL;--> statement-breakpoint
+CREATE INDEX "appointments_attendees_idx" ON "appointments" USING gin ("attendee_ids");

@@ -638,6 +638,13 @@
       "when": 1793827466495,
       "tag": "0090_apple_calendar_task_details",
       "breakpoints": true
+    },
+    {
+      "idx": 91,
+      "version": "7",
+      "when": 1794127424380,
+      "tag": "0091_appointment_attendees",
+      "breakpoints": true
     }
   ]
 }

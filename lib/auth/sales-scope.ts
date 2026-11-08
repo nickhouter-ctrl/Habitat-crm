@@ -17,8 +17,13 @@ export function salesTaskAccess(role: string | undefined, userId: string): SQL |
   return role === "sales" ? and(salesTaskFilter(role), sql`coalesce(${activities.assigneeId}, ${activities.authorId}) = ${userId}::uuid`) : undefined;
 }
 
+/** De afspraak hoort bij deze medewerker: verantwoordelijk (of zelf gemaakt) of ook aanwezig. */
+export function appointmentFor(userId: string): SQL {
+  return sql`(coalesce(${appointments.assigneeId}, ${appointments.createdBy}) = ${userId}::uuid or ${userId}::uuid = any(${appointments.attendeeIds}))`;
+}
+
 export function salesAppointmentAccess(role: string | undefined, userId: string): SQL | undefined {
-  return role === "sales" ? sql`coalesce(${appointments.assigneeId}, ${appointments.createdBy}) = ${userId}::uuid` : undefined;
+  return role === "sales" ? appointmentFor(userId) : undefined;
 }
 
 /** Own mailbox, plus customer replies addressed to this seller in their own sales thread. */

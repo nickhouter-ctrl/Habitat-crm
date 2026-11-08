@@ -5,7 +5,7 @@ import { activities, appointments, contacts, partnerProfiles, staffMessages, sta
 import { sendEmail } from "@/lib/email";
 import { agendaDateTime, agendaDay, shiftDay } from "@/lib/agenda-dates";
 import { madridDelen } from "@/lib/tz-madrid";
-import { salesTaskAccess, salesAppointmentAccess } from "@/lib/auth/sales-scope";
+import { salesTaskAccess, salesAppointmentAccess, appointmentFor } from "@/lib/auth/sales-scope";
 import { isoWeek, totalWeekHours } from "@/lib/worker-week";
 import { magModule } from "@/lib/auth/modules";
 import { staffNotificationEmail, type StaffAgendaItem, type StaffMailContent } from "@/lib/staff-notification-email";
@@ -22,7 +22,7 @@ export async function staffAgendaItems(userId: string, day: string): Promise<Sta
     db.select({ id: activities.id, title: activities.subject, body: activities.body, at: activities.dueAt, contactId: activities.contactId, contactName: contacts.name }).from(activities)
       .leftJoin(contacts, eq(activities.contactId, contacts.id)).where(and(eq(activities.type, "task"), isNull(activities.completedAt), sql`coalesce(${activities.assigneeId}, ${activities.authorId}) = ${userId}::uuid`, lt(activities.dueAt, end), openFollowup,salesTaskAccess(user.role,userId))).orderBy(asc(activities.dueAt)),
     db.select({ id: appointments.id, title: appointments.title, body: appointments.notes, at: appointments.startsAt, contactId: appointments.contactId, contactName: contacts.name, location: appointments.location }).from(appointments)
-      .leftJoin(contacts, eq(appointments.contactId, contacts.id)).where(and(eq(appointments.status, "scheduled"), isNull(appointments.completedAt), sql`coalesce(${appointments.assigneeId}, ${appointments.createdBy}) = ${userId}::uuid`, sql`${appointments.startsAt} >= ${start.toISOString()}::timestamptz`, lt(appointments.startsAt, end),salesAppointmentAccess(user.role,userId))).orderBy(asc(appointments.startsAt)),
+      .leftJoin(contacts, eq(appointments.contactId, contacts.id)).where(and(eq(appointments.status, "scheduled"), isNull(appointments.completedAt), appointmentFor(userId), sql`${appointments.startsAt} >= ${start.toISOString()}::timestamptz`, lt(appointments.startsAt, end),salesAppointmentAccess(user.role,userId))).orderBy(asc(appointments.startsAt)),
   ]);
   return [...tasks.filter(t => t.at).map(t => ({ ...t, title: t.title ?? "", at: t.at!, kind: "task" as const, overdue: agendaDay(t.at!) < day })), ...meetings.map(t => ({ ...t, kind: "appointment" as const }))].sort((a,b) => a.at.getTime()-b.at.getTime());
 }
@@ -72,8 +72,8 @@ async function currentContent(n: typeof staffNotifications.$inferSelect): Promis
     const [t] = await db.select({ assigneeId: activities.assigneeId, authorId: activities.authorId, completedAt: activities.completedAt, title: activities.subject, body: activities.body, at: activities.dueAt, contactId: activities.contactId, contactName: contacts.name }).from(activities).leftJoin(contacts, eq(contacts.id, activities.contactId)).where(and(eq(activities.id, n.entityId), eq(activities.type, "task"), openFollowup,salesTaskAccess(recipient.role,n.userId)));
     return t && (t.assigneeId ?? t.authorId) === n.userId && !t.completedAt ? { kind: n.kind, actorName: actor?.name, title: t.title ?? undefined, body: t.body, at: t.at, contactId: t.contactId, contactName: t.contactName } : null;
   }
-  const [a] = await db.select({ assigneeId: appointments.assigneeId, status: appointments.status, completedAt: appointments.completedAt, title: appointments.title, body: appointments.notes, at: appointments.startsAt, contactId: appointments.contactId, contactName: contacts.name }).from(appointments).leftJoin(contacts, eq(contacts.id, appointments.contactId)).where(and(eq(appointments.id, n.entityId),salesAppointmentAccess(recipient.role,n.userId)));
-  return a && a.assigneeId === n.userId && a.status === "scheduled" && !a.completedAt ? { kind: n.kind, actorName: actor?.name, title: a.title, body: a.body, at: a.at, contactId: a.contactId, contactName: a.contactName } : null;
+  const [a] = await db.select({ assigneeId: appointments.assigneeId, attendeeIds: appointments.attendeeIds, status: appointments.status, completedAt: appointments.completedAt, title: appointments.title, body: appointments.notes, at: appointments.startsAt, contactId: appointments.contactId, contactName: contacts.name }).from(appointments).leftJoin(contacts, eq(contacts.id, appointments.contactId)).where(and(eq(appointments.id, n.entityId),salesAppointmentAccess(recipient.role,n.userId)));
+  return a && (a.assigneeId === n.userId || a.attendeeIds.includes(n.userId)) && a.status === "scheduled" && !a.completedAt ? { kind: n.kind, actorName: actor?.name, title: a.title, body: a.body, at: a.at, contactId: a.contactId, contactName: a.contactName } : null;
 }
 
 export async function deliverStaffNotifications(ids?: string[]) {

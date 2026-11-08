@@ -38,6 +38,21 @@ async function checkReferences(tx: Tx, contactId: string, assigneeId: string) {
 
 const str = (fd: FormData, k: string) => String(fd.get(k) ?? "").trim();
 
+/** De aangevinkte "ook aanwezig"-medewerkers; de verantwoordelijke zelf telt niet mee. */
+async function attendeesFrom(tx: Tx, fd: FormData, assigneeId: string) {
+  const ids = [...new Set(fd.getAll("attendeeIds").map(String).filter(id => id && id !== assigneeId))];
+  const parsed = z.array(z.string().uuid()).max(50).parse(ids);
+  for (const id of parsed) await checkReferences(tx, "", id);
+  return parsed;
+}
+/** Eén uitnodiging per medewerker; de verantwoordelijke houdt de oude sleutel. */
+async function inviteAttendees(tx: Tx, appointmentId: string, userIds: string[], actorId: string) {
+  if (!userIds.length) return [];
+  const rows = await tx.insert(staffNotifications).values(userIds.map(userId => ({ eventKey: `appointment:${appointmentId}:${userId}`,
+    kind: "appointment_assignment" as const, entityId: appointmentId, userId, actorId }))).onConflictDoNothing().returning({ id: staffNotifications.id });
+  return rows.map(r => r.id);
+}
+
 /** Zelf een afspraak in de agenda zetten. */
 export async function createAppointment(formData: FormData) {
   await saveAppointment(formData);
@@ -54,8 +69,10 @@ async function saveAppointment(formData: FormData) {
     const existing=await existingRequest(tx,user.id,requestId,"appointment");if(existing)return existing.notificationId;
     if(user.role==='sales'&&assigneeId&&assigneeId!==user.id)throw new Error('Alleen eigen agenda.');
     await checkReferences(tx, contactId, assigneeId);
+    const attendeeIds = await attendeesFrom(tx, formData, assigneeId);
+    if(user.role==='sales'&&attendeeIds.length)throw new Error('Alleen eigen agenda.');
     const [appointment] = await tx.insert(appointments).values({
-    id:requestId,title,
+    id:requestId,title,attendeeIds,
     startsAt,
     location: z.string().max(500).parse(str(formData, "location")) || null,
     notes: z.string().max(5000).parse(str(formData, "notes")) || null,
@@ -65,9 +82,13 @@ async function saveAppointment(formData: FormData) {
     createdBy: user.id,
     status: "scheduled",
     }).returning({id:appointments.id});
-    if(assigneeId){const [notice]=await tx.insert(staffNotifications).values({eventKey:`appointment:${appointment.id}`,kind:'appointment_assignment',entityId:appointment.id,userId:assigneeId,actorId:user.id}).returning({id:staffNotifications.id});return notice.id;}
+    const ids=await inviteAttendees(tx,appointment.id,attendeeIds,user.id);
+    if(assigneeId){const [notice]=await tx.insert(staffNotifications).values({eventKey:`appointment:${appointment.id}`,kind:'appointment_assignment',entityId:appointment.id,userId:assigneeId,actorId:user.id}).returning({id:staffNotifications.id});ids.unshift(notice.id);}
+    return ids;
   });
-  const sent=notificationId?await sendQueuedStaffNotification(notificationId):false;
+  const ids=Array.isArray(notificationId)?notificationId:notificationId?[notificationId]:[];
+  let sent=false;
+  for(const id of ids) sent=(await sendQueuedStaffNotification(id))||sent;
   revalidatePath("/agenda");
   revalidatePath("/");
   return sent;
@@ -204,11 +225,26 @@ export async function editAppointment(_state: { error?: string; success?: string
   const startsAt = agendaDateTime(v.date, allDay ? "00:00" : v.time);
   const endsAt = agendaDateTime(allDay ? shiftDay(v.endDate, 1) : v.endDate, allDay ? "00:00" : v.endTime);
   if (!startsAt || !endsAt || endsAt <= startsAt) return { error: "Controleer de datum en eindtijd." };
-  const [updated] = await db.update(appointments).set({ title: v.title, startsAt, endsAt, allDay,
-    location: v.location.trim() || null, notes: v.notes.trim() || null, updatedAt: new Date() })
-    .where(and(eq(appointments.id, v.id), salesAppointmentAccess(user.role, user.id),
-      sql`date_trunc('milliseconds', ${appointments.updatedAt}) = ${v.updatedAt}::timestamptz`)).returning({ id: appointments.id });
-  if (!updated) return { error: "De afspraak is inmiddels gewijzigd of niet toegankelijk. Vernieuw de pagina." };
+  // Wie er ook bij is, staat alleen in het formulier als je dat mag wijzigen.
+  const metAanwezigen = form.get("attendeesSet") === "1" && user.role !== "sales";
+  let nieuw: string[] = [];
+  try {
+    nieuw = await db.transaction(async tx => {
+      const [before] = await tx.select({ assigneeId: appointments.assigneeId, attendeeIds: appointments.attendeeIds }).from(appointments)
+        .where(eq(appointments.id, v.id)).for("update");
+      const attendeeIds = metAanwezigen && before ? await attendeesFrom(tx, form, before.assigneeId ?? "") : undefined;
+      const [updated] = await tx.update(appointments).set({ title: v.title, startsAt, endsAt, allDay,
+        location: v.location.trim() || null, notes: v.notes.trim() || null, ...(attendeeIds ? { attendeeIds } : {}), updatedAt: new Date() })
+        .where(and(eq(appointments.id, v.id), salesAppointmentAccess(user.role, user.id),
+          sql`date_trunc('milliseconds', ${appointments.updatedAt}) = ${v.updatedAt}::timestamptz`)).returning({ id: appointments.id });
+      if (!updated) throw new Error("stale");
+      return inviteAttendees(tx, v.id, (attendeeIds ?? []).filter(id => !before!.attendeeIds.includes(id)), user.id);
+    });
+  } catch (e) {
+    if (e instanceof Error && e.message === "stale") return { error: "De afspraak is inmiddels gewijzigd of niet toegankelijk. Vernieuw de pagina." };
+    return { error: "Kies medewerkers die afspraken mogen doen." };
+  }
+  for (const id of nieuw) await sendQueuedStaffNotification(id);
   revalidatePath("/agenda"); revalidatePath("/");
   return { success: "Afspraak bijgewerkt." };
 }

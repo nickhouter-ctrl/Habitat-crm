@@ -2053,6 +2053,9 @@ export const appointments = pgTable(
     status: text().notNull().default("scheduled"),
     /** Wie de afspraak doet. Leeg = van de zaak, niemand in het bijzonder. */
     assigneeId: uuid().references((): AnyPgColumn => users.id, { onDelete: "set null" }),
+    /** Wie er verder bij is. Ziet de afspraak in zijn eigen agenda en krijgt de
+     *  uitnodigingsmail, net als de verantwoordelijke. */
+    attendeeIds: uuid().array().notNull().default(sql`'{}'::uuid[]`),
     /** Afgevinkt op. Net als bij een taak: het moment zelf is de administratie,
      *  `status` blijft het label dat ook de agenda-feed leest. */
     completedAt: timestamp({ withTimezone: true }),
@@ -2063,6 +2066,7 @@ export const appointments = pgTable(
     index("appointments_starts_idx").on(t.startsAt),
     index("appointments_contact_idx").on(t.contactId),
     index("appointments_assignee_idx").on(t.assigneeId),
+    index("appointments_attendees_idx").using("gin", t.attendeeIds),
   ],
 );
 /** One shared work calendar. Credentials never leave the server. */
