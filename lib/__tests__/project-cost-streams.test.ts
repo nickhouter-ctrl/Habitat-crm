@@ -48,6 +48,20 @@ describe("project cost streams",()=>{
 });
 
 describe("own product costs and margins",()=>{
+  it("counts Hanhai windows bought via Allpack as own windows, and a sent fondos with transport in its cost",()=>{
+    const notes="Goedgekeurd uit mail \"CI+PI-for HANH00260929003 Factory:Foshan Hanhai Home Furnishings Co Ltd\"";
+    const costs=projectCostStreams([
+      {supplier:"Allpack Enterprises Ltd",notes,subtotal:19745.51,items:[{name:"Allpack Enterprises Ltd HANH00260929003",units:1,unitPrice:19745.51}]},
+      {supplier:"Allpack Enterprises Ltd",notes,subtotal:2961.83,items:[{name:"Allpack Enterprises Ltd HANH00260929003",units:1,unitPrice:2961.83}]},
+    ],[]);
+    expect(costs.material).toBe(0);expect(costs.groups.get("windows")).toBe(22707.34);
+    const fondos={id:"pf1",kind:"fondos",items:[{name:"Kozijnen",units:1,price:35196.37,costEur:30605.54,category:"materiaal"}]};
+    expect(projectOwnProducts([{...fondos,status:"draft"}],costs.groups).bookedCost).toBe(22707.34);
+    const own=projectOwnProducts([{...fondos,status:"sent"}],costs.groups);
+    expect(own.revenue).toBe(35196.37);expect(own.cost).toBe(30605.54);expect(own.bookedCost).toBe(30605.54);
+    const settled=projectOwnProducts([{...fondos,status:"sent"},{kind:"invoice",status:"sent",items:[{name:"Kozijnen",units:1,price:35196.37,costEur:30605.54},{name:"Verrekening PF",units:1,price:-35196.37,advanceRef:"pf1"}]}],costs.groups);
+    expect(settled.revenue).toBe(35196.37);
+  });
   const invoice=(items:unknown)=>({kind:"invoice",status:"paid",items});
   it("splits booked cost per product group so the card total can be traced",()=>{
     const result=projectOwnProducts([invoice([{name:"Binnen deuren",units:1,price:3421.25,costEur:2357.05},{name:"Warmtepomp + airflows",units:1,price:13655.57}])],new Map([["windows",36946.87]]));

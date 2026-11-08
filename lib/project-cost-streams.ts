@@ -19,7 +19,10 @@ export function splitPurchaseCost(po: Purchase, amount = poExVatAmount(po)): Spl
   const explicitOwn = /\beigen (producten|voorraad)\b/i.test(po.notes ?? "");
   const total = lines.reduce((s,it)=>s+Math.abs(it.units*it.unitPrice),0);
   const classify = (item: DocumentLineItem) => isOwnProductLine(item) && (item.productId || ownSupplier) ? ownProductGroup(item) : service.test(item.name) ? "other" : explicitOwn ? ownProductGroup(item) : "material";
-  const context = classify(goods(po.notes ?? ""));
+  // Foshan Hanhai maakt alleen onze kozijnen/deuren. Via Allpack heet de regel
+  // alleen "Allpack Enterprises Ltd HANH…" (Xixona, Thomas & Marit) — zonder
+  // dit werd dat gewone inkoop in plaats van eigen product.
+  const context = /\bhanhai\b/i.test(`${po.supplier ?? ""} ${po.notes ?? ""}`) ? "windows" : classify(goods(po.notes ?? ""));
   const weights = new Map<string,number>();
   if (total > 0) for (const it of lines) {
     let group = classify(goods(it.name,it.productId,it.sku));
@@ -57,11 +60,17 @@ export function projectCostStreams(purchases: Purchase[], costs: Cost[]) {
 }
 
 /** Supplier cost replaces an absent sales-line cost. Never add both for the same goods. */
-export function projectOwnProducts(docs: {kind:string;status:string;items:unknown}[], booked: Map<string,number>, productCost?: (item:DocumentLineItem)=>number|undefined) {
+export function projectOwnProducts(docs: {id?:string;kind:string;status:string;items:unknown}[], booked: Map<string,number>, productCost?: (item:DocumentLineItem)=>number|undefined) {
   const groups = new Map<string,{revenue:number;cost:number;uncosted:number}>();
   const labels = new Map<string,string>();
+  // Een provisión de fondos is het verkoopstuk voor eigen producten (kozijnen
+  // Xixona, met de kostprijs incl. transport op de regel). Wordt hij later op een
+  // factuur verrekend, dan telt die factuur en de fondos niet meer.
+  const verrekend = new Set(docs.filter(d => d.kind === "invoice" && !["draft","void"].includes(d.status))
+    .flatMap(d => normalizeDocItems(d.items).flatMap(it => it.advanceRef ? [it.advanceRef] : [])));
   for (const d of docs) {
-    if (!["invoice","creditnote"].includes(d.kind) || ["draft","void"].includes(d.status)) continue;
+    if (!["invoice","creditnote","fondos"].includes(d.kind) || ["draft","void"].includes(d.status)) continue;
+    if (d.kind === "fondos" && d.id && verrekend.has(d.id)) continue;
     const sign=d.kind==="creditnote"?-1:1;
     for (const it of normalizeDocItems(d.items)) {
       if (!isOwnProductLine(it,productCost)) continue;
