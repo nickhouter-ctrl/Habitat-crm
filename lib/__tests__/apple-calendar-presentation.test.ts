@@ -15,6 +15,25 @@ function edit(data: string, operation: (event: ICAL.Component) => void) {
   const calendar = new ICAL.Component(ICAL.parse(data)); operation(calendar.getFirstSubcomponent("vevent")!); return calendar.toString();
 }
 describe("calendar details without round-trip pollution", () => {
+  it("normalizes imported CRLF and CR notes without growing or injecting properties", () => {
+    const source = { ...value, notes: "First\r\nSecond: details\rATTENDEE:mailto:fixture@example.test", location: "Street\r\nTown" };
+    const expected = { ...source, notes: "First\nSecond: details\nATTENDEE:mailto:fixture@example.test", location: "Street\nTown" };
+    let data: string | undefined;
+    for (let i = 0; i < 5; i++) {
+      data = serializeEvent(uid, source, data, { context, key });
+      // Only RFC content-line separators may contain actual carriage returns.
+      expect(data.replace(/\r\n/g, "")).not.toContain("\r");
+      // Model a server accepting both CR and CRLF content-line separators.
+      data = data.replace(/\r\n?/g, "\n").replace(/\n/g, "\r\n");
+      expect(parseEvent(data, key).value).toEqual(expected);
+      expect(eventHash(parseEvent(data, key).value)).toBe(eventHash(source));
+      const component = new ICAL.Component(ICAL.parse(data)).getFirstSubcomponent("vevent")!;
+      expect(component.hasProperty("attendee")).toBe(false);
+      expect(component.getAllProperties().every(p => /^[a-z0-9-]+$/.test(p.name))).toBe(true);
+      expect(Buffer.byteLength(data)).toBeLessThan(4000);
+    }
+    expect(fromTask({ subject: "Follow up", body: source.notes, dueAt: value.startsAt })?.notes).toBe(expected.notes);
+  });
   it("shows the customer, owner and CRM links but keeps the core hash unchanged", () => {
     const data = rendered(), event = new ICAL.Component(ICAL.parse(data)).getFirstSubcomponent("vevent")!;
     expect(event.getFirstPropertyValue("summary")).toBe("Showroombezoek — Salvadores Moles — Teresa");

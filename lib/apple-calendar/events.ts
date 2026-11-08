@@ -4,13 +4,16 @@ import { z } from "zod";
 import { agendaDateTime, agendaDay, shiftDay } from "@/lib/agenda-dates";
 import { plainEventText, presentationMatches, writePresentation, type EventPresentation } from "./presentation";
 
+// ical.js escapes LF but leaves CR untouched. A bare CR can split a property
+// on Apple's server, turning note fragments into accumulating bogus fields.
+const normalizeLines = (value: string) => value.replace(/\r\n?/g, "\n");
 export const eventSchema = z.object({
   title: z.string().trim().min(1).max(250).regex(/^[^\r\n\0]+$/),
   startsAt: z.date().min(new Date("2000-01-01")).max(new Date("2101-01-01")),
   endsAt: z.date(),
   allDay: z.boolean(),
-  location: z.string().max(500),
-  notes: z.string().max(5000),
+  location: z.string().transform(normalizeLines).pipe(z.string().max(500)),
+  notes: z.string().transform(normalizeLines).pipe(z.string().max(5000)),
   cancelled: z.boolean(),
 }).refine(v => v.endsAt > v.startsAt && v.endsAt < new Date("2101-01-01"));
 export type CalendarEvent = z.infer<typeof eventSchema>;
@@ -27,7 +30,7 @@ export function eventHash(event: CalendarEvent): string {
   return createHash("sha256").update(JSON.stringify([
     // iCalendar timestamps have second precision; Postgres can have microseconds.
     event.title, Math.floor(+event.startsAt / 1000), Math.floor(+event.endsAt / 1000),
-    event.allDay, event.location, event.notes, event.cancelled,
+    event.allDay, normalizeLines(event.location), normalizeLines(event.notes), event.cancelled,
   ])).digest("hex");
 }
 
