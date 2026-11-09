@@ -24,8 +24,6 @@ const s=StyleSheet.create({
  bold:{fontFamily:"Helvetica-Bold"},
  th:{flexDirection:"row",backgroundColor:accent,color:"#ffffff",paddingVertical:6,paddingHorizontal:6,marginTop:16,fontFamily:"Helvetica-Bold",fontSize:8},
  tr:{flexDirection:"row",paddingVertical:7,paddingHorizontal:6,borderBottomWidth:.5,borderBottomColor:line},
- detailHead:{marginTop:26,fontSize:7,color:muted,textTransform:"uppercase",letterSpacing:1},
- dRow:{flexDirection:"row",paddingVertical:4,borderBottomWidth:.5,borderBottomColor:line,fontSize:8},
  cDate:{width:62},cDesc:{flex:1,paddingRight:8},cNum:{width:46,textAlign:"right"},cAmt:{width:70,textAlign:"right"},
  totals:{marginTop:14,marginLeft:"auto",width:230},
  tRow:{flexDirection:"row",justifyContent:"space-between",paddingVertical:3},
@@ -92,14 +90,6 @@ export async function renderWorkerInvoice(invoice:WorkerInvoice,days:WeekDay[],s
      <Text>Transferencia bancaria</Text>{i.iban?<View style={{flexDirection:"row",marginTop:3}}><Text style={{width:60,color:muted}}>Titular</Text><Text style={s.bold}>{i.legalName}</Text></View>:null}{i.iban?<View style={{flexDirection:"row"}}><Text style={{width:60,color:muted}}>IBAN</Text><Text style={[s.bold,{letterSpacing:.5}]}>{i.iban}</Text></View>:null}
      {i.taxNote?<Text style={{marginTop:10,fontFamily:"Helvetica-Oblique"}}>{i.taxNote}</Text>:null}
    </View>
-   {rows.length>0 && <View>
-     <Text style={s.detailHead}>Detalle de horas</Text>
-     {rows.map(r=><View key={r.date} style={s.dRow} wrap={false}>
-       <Text style={[s.cDate,{textTransform:"capitalize"}]}>{dia(r.date)}</Text>
-       <View style={s.cDesc}><Text>{r.desc||"Mano de obra"}</Text>{r.names.length?<Text style={s.small}>{r.names.join(", ")}</Text>:null}</View>
-       <Text style={s.cNum}>{r.people} pers.</Text><Text style={s.cNum}>{num(r.hours)} h</Text>
-     </View>)}
-   </View>}
    <View style={s.footer} fixed><Text>{i.legalName} · NIF {i.taxId}</Text><Text render={({pageNumber,totalPages})=>`Factura ${i.number} · ${pageNumber}/${totalPages}`}/></View>
  </Page></Document>);
 }
