@@ -1,51 +1,70 @@
 "use client";
-import { useActionState, useState } from "react";
+import { useActionState, useState, useEffect, useRef } from "react";
 import { saveWeekAction, submitWeekInvoiceAction } from "@/app/uren/[token]/week-actions";
-import { totalWeekHours, invoiceAmounts, type WeekDay, type WeekLang, type WorkerInvoice } from "@/lib/worker-week";
+import { totalWeekHours, invoiceAmounts, validateWeek, type WeekDay, type WeekLang, type WorkerInvoice } from "@/lib/worker-week";
 import type { SupplierDetails } from "@/lib/worker-portal-dashboard";
-import { weekT, type WeekCopyKey } from "@/lib/worker-week-i18n";
+import { weekT, weekError, type WeekCopyKey } from "@/lib/worker-week-i18n";
+
+import { weekRoster, dayDescription, personHours, gridDay } from "@/lib/worker-week-grid";
 
 const input="mt-1 w-full rounded-lg border border-stone-300 bg-white px-3 py-2.5 text-base text-stone-900 focus:border-orange-700 focus:outline-none focus:ring-2 focus:ring-orange-100 disabled:bg-stone-100";
 const button="rounded-lg bg-[#a94f2d] px-5 py-3 text-sm font-semibold text-white disabled:opacity-50";
 const secondary="rounded-lg border border-stone-300 px-4 py-3 text-sm font-medium disabled:opacity-50";
-export function WorkerWeekForm({token,lang,monday,version,initialDays,locked,today}:{token:string;lang:WeekLang;monday:string;version:number;initialDays:WeekDay[];locked:boolean;today:string}) {
+export function WorkerWeekForm({token,lang,monday,version,initialDays,initialRoster=[],locked,today}:{token:string;lang:WeekLang;monday:string;version:number;initialDays:WeekDay[];initialRoster?:string[];locked:boolean;today:string}) {
   const t=(key:WeekCopyKey)=>weekT(lang,key);
   const [days,setDays]=useState(initialDays);
-  const [state,action,pending]=useActionState(saveWeekAction.bind(null,token),null);
-  const changeDay=(index:number,update:Partial<WeekDay>)=>setDays(old=>old.map((d,i)=>i===index?{...d,...update}:d));
+  const [names,setNames]=useState(()=>weekRoster(initialDays,initialRoster));
+  const [newName,setNewName]=useState("");
+  const [review,setReview]=useState(false);
+  const [error,setError]=useState("");
+  const [saved,setSaved]=useState(()=>JSON.stringify({days:initialDays,names:weekRoster(initialDays,initialRoster)}));
+  const [active,setActive]=useState(()=>Math.max(0,initialDays.findIndex(d=>d.date===today)));
+  const formRef=useRef<HTMLFormElement>(null);
+  const snapshot=JSON.stringify({days,names}),dirty=snapshot!==saved;
+  const [state,action,pending]=useActionState(async(prev:Awaited<ReturnType<typeof saveWeekAction>>,form:FormData)=>{
+    const result=await saveWeekAction(token,prev,form);
+    if(result?.ok){setSaved(JSON.stringify({days:JSON.parse(String(form.get("days"))),names:JSON.parse(String(form.get("roster")))}));setReview(false);}
+    return result;
+  },null);
+  useEffect(()=>{
+    if(!dirty||locked)return;
+    const before=(e:BeforeUnloadEvent)=>{e.preventDefault();};
+    const click=(e:MouseEvent)=>{if((e.target as Element).closest("a[href]")&&!window.confirm(weekT(lang,"leave"))){e.preventDefault();e.stopPropagation();}};
+    const submit=(e:Event)=>{if(e.target!==formRef.current&&!window.confirm(weekT(lang,"leave"))){e.preventDefault();e.stopPropagation();}};
+    window.addEventListener("beforeunload",before);document.addEventListener("click",click,true);document.addEventListener("submit",submit,true);
+    return()=>{window.removeEventListener("beforeunload",before);document.removeEventListener("click",click,true);document.removeEventListener("submit",submit,true);};
+  },[dirty,locked,lang]);
   const locale=lang==="nl"?"nl-NL":lang==="es"?"es-ES":"en-GB";
-  const total=totalWeekHours(days);
-  return <form action={action} onReset={event=>event.preventDefault()} className="space-y-5">
-    <input type="hidden" name="lang" value={lang}/><input type="hidden" name="monday" value={monday}/><input type="hidden" name="version" value={version}/><input type="hidden" name="days" value={JSON.stringify(days)}/>
-    <p className="text-sm leading-relaxed text-stone-600">{t("example")}</p>
-    {days.map((day,i)=>{
-      const future=day.date>today,disabled=locked||pending;
-      return <fieldset key={day.date} disabled={disabled} className="rounded-xl border border-stone-200 bg-white p-4 sm:p-5 disabled:opacity-70">
-        <legend className="px-2 text-base font-semibold capitalize">{new Date(`${day.date}T12:00:00Z`).toLocaleDateString(locale,{weekday:"long",day:"numeric",month:"short"})}</legend>
-        {future && <p className="mb-3 text-sm text-stone-500">{t("future")}</p>}<>
-          <label className="block text-sm font-medium">{t("dayState")}<select aria-label={`${t("dayState")} ${day.date}`} className={input} value={day.state} onChange={e=>{const v=e.target.value as WeekDay["state"];changeDay(i,{state:v,crews:v==="work"?(day.crews.length?day.crews:[{people:1,names:"",hours:8,description:"",zone:""}]):[]});}}>
-            <option value="empty">{t("empty")}</option><option value="work" disabled={future}>{t("work")}</option><option value="off">{t("off")}</option>
-          </select></label>
-          {day.state==="work" && <div className="mt-4 space-y-4">{day.crews.map((crew,j)=>{
-            const update=(field:string,value:string|number)=>changeDay(i,{crews:day.crews.map((c,k)=>k===j?{...c,[field]:value}:c)});
-            return <div key={j} className="space-y-3 border-t border-stone-200 pt-4">
-              <div className="grid grid-cols-2 gap-3"><label className="text-sm font-medium">{t("people")}<input aria-label={`${t("people")} ${day.date} ${j+1}`} type="number" min="1" max="30" step="1" value={crew.people} onChange={e=>update("people",Number(e.target.value))} className={input}/></label>
-              <label className="text-sm font-medium">{t("hours")}<input aria-label={`${t("hours")} ${day.date} ${j+1}`} type="number" inputMode="decimal" min="0.25" max="16" step="0.25" value={crew.hours} onChange={e=>update("hours",Number(e.target.value))} className={input}/></label></div>
-              <label className="block text-sm font-medium">{t("names")}<textarea aria-label={t("names")} rows={Math.min(crew.people,4)} maxLength={1500} value={crew.names} onChange={e=>update("names",e.target.value)} className={input}/></label>
-              <label className="block text-sm font-medium">{t("description")}<textarea aria-label={t("description")} rows={3} maxLength={2000} value={crew.description} placeholder={t("descriptionHint")} onChange={e=>update("description",e.target.value)} className={input}/></label>
-              <div className="flex flex-wrap items-center justify-between gap-3"><span className="text-sm font-medium tabular-nums">{crew.people} × {crew.hours} = {(crew.people*crew.hours).toLocaleString(locale)} h</span>{!locked && <button type="button" className="text-sm text-red-700 underline" onClick={()=>changeDay(i,{crews:day.crews.filter((_,k)=>k!==j)})}>{t("remove")}</button>}</div>
-            </div>;
-          })}{!locked && day.crews.length<12 && <button type="button" className={secondary} onClick={()=>changeDay(i,{crews:[...day.crews,{people:1,names:"",hours:8,description:"",zone:""}]})}>+ {t("add")}</button>}</div>}
-          {day.state==="off" && <label className="mt-3 block text-sm">{t("note")}<input className={input} maxLength={500} value={day.note} onChange={e=>changeDay(i,{note:e.target.value})}/></label>}
-        </>
-      </fieldset>;
+  const change=(i:number,day:WeekDay)=>{setDays(old=>old.map((d,n)=>n===i?day:d));setReview(false);setError("");};
+  const check=()=>{const result=validateWeek(days,monday,today,true);if(result.error){setError(weekError(lang,result.error));const i=days.findIndex(d=>d.state==="empty"||d.state==="work"&&d.crews.some(c=>c.description.length<10));if(i>=0)setActive(i);return;}setError("");setReview(true);};
+  return <form ref={formRef} action={action} onReset={event=>event.preventDefault()} className="space-y-4 pb-4">
+    <input type="hidden" name="lang" value={lang}/><input type="hidden" name="monday" value={monday}/><input type="hidden" name="version" value={Math.max(version,state?.version??0)}/><input type="hidden" name="days" value={JSON.stringify(days)}/><input type="hidden" name="roster" value={JSON.stringify(names)}/>
+    <fieldset disabled={locked||pending} className="rounded-2xl border border-stone-200 bg-white p-4 sm:p-5">
+      <legend className="px-2 font-semibold">{t("team")}</legend><p className="mb-3 text-sm text-stone-600">{t("teamHint")}</p>
+      <div className="flex flex-wrap gap-2">{names.map(name=><span key={name} className="inline-flex items-center gap-2 rounded-lg bg-stone-100 px-3 py-2 font-medium">{name}{!locked&&<button type="button" aria-label={`${t("remove")} ${name}`} disabled={days.some(d=>personHours(d,name)>0)} className="px-1 text-stone-500 disabled:hidden" onClick={()=>setNames(old=>old.filter(n=>n!==name))}>×</button>}</span>)}</div>
+      {!locked&&<div className="mt-3 flex items-end gap-2"><label className="min-w-0 flex-1 text-sm font-medium">{t("personName")}<input className={input} value={newName} maxLength={100} onChange={e=>setNewName(e.target.value)} onKeyDown={e=>{if(e.key==="Enter"){e.preventDefault();formRef.current?.querySelector<HTMLButtonElement>("[data-add-person]")?.click();}}}/></label><button data-add-person type="button" className={secondary} disabled={!newName.trim()||names.length>=30} onClick={()=>{const name=newName.trim();if(names.some(n=>n.toLowerCase()===name.toLowerCase()))return;if(/[\n;,]/.test(name))return;setNames(old=>[...old,name]);setNewName("");}}>{t("addPerson")}</button></div>}
+    </fieldset>
+    <p className="text-sm text-stone-600">{t("hoursHint")}</p>
+    {days.map((day,i)=>{const future=day.date>today,description=dayDescription(day),hours=names.map(n=>personHours(day,n));const dayTotal=totalWeekHours([day]);
+      return <section key={day.date} className="overflow-hidden rounded-2xl border border-stone-200 bg-white">
+        <button type="button" aria-expanded={active===i} aria-controls={`day-${i}`} onClick={()=>setActive(active===i?-1:i)} className="flex w-full items-center justify-between gap-3 p-4 text-left"><span><span className="block font-semibold capitalize">{new Date(`${day.date}T12:00:00Z`).toLocaleDateString(locale,{weekday:"long",day:"numeric",month:"short"})}</span><span className={`mt-1 block text-sm ${day.state==="empty"?"text-stone-500":day.state==="work"&&description.length<10?"text-amber-800":"text-emerald-800"}`}>{day.state==="empty"?t("empty"):day.state==="off"?t("off"):`${dayTotal.toLocaleString(locale)} h · ${description.length<10?t("descriptionNeeded"):t("filled")}`}</span></span><span aria-hidden="true">{active===i?"−":"+"}</span></button>
+        {active===i&&<fieldset id={`day-${i}`} disabled={locked||pending} className="space-y-4 border-t border-stone-200 p-4">
+          {future?<p className="text-sm text-stone-500">{t("future")}</p>:<>
+            {!names.length&&<p className="text-sm text-stone-600">{t("addNamesFirst")}</p>}
+            {names.map((name,j)=><label key={name} className="flex items-center justify-between gap-3"><span className="font-medium">{name}</span><span className="flex items-center gap-2"><input aria-label={`${name} ${day.date}`} className={`${input} !mt-0 !w-24 text-center font-semibold`} type="number" inputMode="decimal" min="0" max="16" step="0.25" value={hours[j]||""} placeholder="0" onChange={e=>{const next=[...hours];next[j]=Number(e.target.value);change(i,gridDay(day,names,next,description));}}/><span className="text-sm">h</span></span></label>)}
+            {(day.state==="work"||dayTotal>0)&&<label className="block text-sm font-semibold">{t("description")} <span className="text-[#a94f2d]">*</span><textarea aria-label={`${t("description")} ${day.date}`} className={input} rows={3} maxLength={2000} value={description} placeholder={t("descriptionHint")} onChange={e=>change(i,gridDay(day,names,hours,e.target.value))}/></label>}
+          </>}
+          {!locked&&<button type="button" className={secondary} onClick={()=>{if(dayTotal>0&&!window.confirm(t("clearDay")))return;change(i,{...day,state:"off",crews:[]});}}>{t("off")}</button>}
+          {day.note&&<p className="text-sm text-stone-500">{day.note}</p>}
+        </fieldset>}
+      </section>;
     })}
-    <div className="rounded-xl border border-stone-200 bg-[#ede7dd] p-5"><div className="flex justify-between gap-4 font-semibold"><span>{t("total")}</span><span className="text-xl tabular-nums">{total.toLocaleString(locale)} h</span></div>
-      {locked?<p className="mt-3 text-sm text-stone-600">{t("locked")}</p>:<>
-        <label className="mt-4 flex items-start gap-3 text-sm"><input type="checkbox" name="confirmed" className="mt-1 size-5 accent-[#a94f2d]"/>{t("confirm")}</label>
-        <div className="mt-4 flex flex-wrap gap-3"><button className={secondary} type="submit" name="intent" value="draft" disabled={pending}>{pending?t("busy"):t("save")}</button><button className={button} type="submit" name="intent" value="submit" disabled={pending}>{pending?t("busy"):t("submit")}</button></div>
-      </>}
-      {state?.error && <p role="alert" className="mt-3 text-sm font-medium text-red-800">{state.error}</p>}{state?.ok && <p role="status" className="mt-3 text-sm font-medium text-green-800">{state.ok}</p>}
+    {error&&<p role="alert" className="rounded-xl bg-amber-50 p-4 font-medium text-amber-900">{error}</p>}
+    {review&&!locked&&<section className="space-y-4 rounded-2xl border-2 border-[#a94f2d] bg-white p-5"><h3 className="text-xl font-semibold">{t("reviewTitle")}</h3><p>{totalWeekHours(days).toLocaleString(locale)} h · {t("reviewHint")}</p><label className="flex items-start gap-3 text-sm"><input type="checkbox" name="confirmed" required className="mt-1 size-5 shrink-0 accent-[#a94f2d]"/>{t("confirm")}</label><button type="submit" name="intent" value="submit" className={`${button} w-full`} disabled={pending}>{pending?t("busy"):t("submit")}</button><button type="button" className={`${secondary} w-full`} onClick={()=>setReview(false)}>{t("backToEdit")}</button></section>}
+    <div className="sticky bottom-0 z-10 rounded-2xl border border-stone-300 bg-[#f4f0e9] p-4 shadow-lg">
+      <div className="mb-3 flex justify-between gap-3"><span className="text-sm font-semibold">{t("total")}</span><strong>{totalWeekHours(days).toLocaleString(locale)} h</strong></div>
+      {locked?<p className="text-sm text-stone-600">{t("locked")}</p>:<><button type="submit" name="intent" value="draft" formNoValidate disabled={pending} className={`${button} w-full`}>{pending?t("busy"):t("save")}</button><p role="status" className={`mt-2 text-center text-sm ${dirty?"text-amber-900":"text-emerald-800"}`}>{dirty?t("unsaved"):state?.ok??t("saveHint")}</p>{!review&&<button type="button" disabled={pending} onClick={check} className="mt-3 w-full py-2 text-sm font-semibold text-[#a94f2d] underline">{t("submit")}</button>}</>}
+      {state?.error&&<p role="alert" className="mt-3 text-sm font-medium text-red-800">{state.error}</p>}
     </div>
   </form>;
 }

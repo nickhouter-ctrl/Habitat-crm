@@ -10,7 +10,7 @@ export type PortalQuery = Record<string, string | string[] | undefined>;
 export const portalValue = (value: string | string[] | undefined) => typeof value === "string" ? value : undefined;
 export function portalView(query: PortalQuery): PortalView {
   const view=portalValue(query.view);
-  return view==="week" || view==="invoices" || view==="invoice" ? view : view==="overview" ? "overview" : query.week ? "week" : "overview";
+  return view==="week" || view==="invoices" || view==="invoice" ? view : view==="overview" ? "overview" : "week";
 }
 function validWeek(value:string|undefined): value is string {
   if(!value || !/^\d{4}-\d{2}-\d{2}$/.test(value))return false;
@@ -34,6 +34,7 @@ export async function loadWorkerDashboard(workerId:string,projectId:string,today
     db.select({legalName:sql<string>`${sheets.invoice}->>'legalName'`,taxId:sql<string>`${sheets.invoice}->>'taxId'`,address:sql<string>`${sheets.invoice}->>'address'`,email:sql<string>`${sheets.invoice}->>'email'`,iban:sql<string>`${sheets.invoice}->>'iban'`}).from(sheets).where(and(eq(sheets.workerId,workerId),isNotNull(sheets.invoice))).orderBy(desc(sql`coalesce((select max(event->>'at') from jsonb_array_elements(${sheets.history}) event where event->>'action'='invoice_submitted'),${sheets.createdAt}::text)`),desc(sheets.createdAt)).limit(1),
     db.select({weekStart:sheets.weekStart,status:sheets.status}).from(sheets).where(and(scope,sql`${sheets.weekStart} >= ${recentWeeks[8]}`)).orderBy(desc(sheets.weekStart)),
   ]);
+  const [lastTeam]=await db.select({days:sheets.days,roster:sheets.roster}).from(sheets).where(scope).orderBy(desc(sheets.weekStart)).limit(1);
   const count=view==="invoices"?counts.invoices:counts.total;
   const pageSize=20,pages=Math.max(1,Math.ceil(count/pageSize));
   const rawPage=Number(portalValue(query.page));
@@ -43,5 +44,5 @@ export async function loadWorkerDashboard(workerId:string,projectId:string,today
   const selected=recentWeeks.includes(requested)||selectedRows.length?requested:current;
   const sheet=selectedRows[0];
   const selectedSheet=selected===requested?sheet:(await db.select().from(sheets).where(and(scope,eq(sheets.weekStart,current))).limit(1))[0];
-  return {view,current,recentWeeks,recentStates,selected,sheet:selectedSheet,invoiceSheet:invoiceRows[0],profile:profileRows[0] as SupplierDetails|undefined,counts,rows,page,pages};
+  return {lastTeam,view,current,recentWeeks,recentStates,selected,sheet:selectedSheet,invoiceSheet:invoiceRows[0],profile:profileRows[0] as SupplierDetails|undefined,counts,rows,page,pages};
 }

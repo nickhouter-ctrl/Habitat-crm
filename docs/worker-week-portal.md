@@ -45,3 +45,14 @@ Mogelijke vervolgstappen: dagfoto's per werkplek, vergelijking met begrote uren 
 - Bij afgeronde projecten is alleen terugkijken/downloaden mogelijk. Inactieve medewerkers, gearchiveerde projecten en ingetrokken links blijven afgesloten.
 - Naam/bedrijfsnaam, NIF/CIF/NIE, adres, e-mail en IBAN worden uit de laatste ingediende factuur van dezelfde medewerker overgenomen. Alleen deze eigen identificatiegegevens worden hergebruikt; weekstaten en facturen van andere projecten blijven verborgen. Een nieuwe factuur vraagt altijd om een eigen nieuw nummer en bewuste btw/IRPF-keuze.
 - Niet ingediende factuurformulieren slaan de bedrijfsgegevens nog niet op; ingediende facturen bewaren een eigen snapshot zodat latere wijzigingen eerdere documenten niet veranderen.
+
+## Vereenvoudigde daginvoer en automatische Holded-verwerking
+
+- De persoonlijke link opent direct de werkweek. Namen worden eenmaal toegevoegd en als team bewaard; de volgende week neemt alleen de namen over, nooit uren.
+- Een dag openklappen toont uren achter elke naam. Leeg/0 betekent afwezig binnen een ingevulde werkdag. Een volledig vrije dag wordt expliciet als niet gewerkt gemarkeerd. Verschillende uren per persoon blijven behouden.
+- Eén werkbeschrijving per gewerkte dag is verplicht bij doorsturen. **Opslaan en later verder** bewaart ook een onvolledig concept. De knop blijft onderin bereikbaar. Een waarschuwing beschermt niet opgeslagen wijzigingen bij verlaten van de pagina.
+- **Week doorsturen** opent eerst een controle en bevestiging. De factuursectie verschijnt pas na goedkeuring van de uren. Inkoop blijft een afzonderlijke goedkeuring.
+- Factuurgoedkeuring zet in dezelfde transactie een Holded-taak klaar. De bestaande notificatiecron probeert achtergebleven taken opnieuw; een eerste poging volgt meteen na goedkeuring. Afzender/NIF, eigen nummer, uren/tarief, IVA en IRPF komen uit de goedgekeurde snapshot. De oorspronkelijke PDF blijft via de inkoopfactuur beschikbaar.
+- `purchase_orders.holded_id` koppelt de inkoopfactuur. Leveranciers worden op fiscale identiteit gevonden, niet alleen op naam. Een eigen CRM-tag herkent een eerder aangemaakt document.
+- De status is zichtbaar bij de weekstaat en de inkoopfactuur. Bij een onzekere POST-uitkomst wordt uitsluitend gezocht naar het aangemaakte document; er volgt geen blinde tweede boeking. Handmatige controle is nodig als de uitkomst onzeker blijft.
+- Tests gebruiken mocks voor Holded, een verplichte SQL-rollback voor de workflow, en lokale bestanden voor mobiele UI-tests. Gebruik nooit de echte factuurnummering voor browserfixtures.

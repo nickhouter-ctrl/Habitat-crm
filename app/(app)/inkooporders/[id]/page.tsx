@@ -83,7 +83,7 @@ export default async function PurchaseOrderPage({
   const verdeelBewerken = (await searchParams).verdeel === "1";
   const po = await db.query.purchaseOrders.findFirst({ where: eq(purchaseOrders.id, id) });
   if (!po) notFound();
-  const [portalWeek] = await db.select({id: workerWeekSheets.id}).from(workerWeekSheets).where(eq(workerWeekSheets.purchaseOrderId, id));
+  const [portalWeek] = await db.select({id: workerWeekSheets.id, holdedSyncStatus: workerWeekSheets.holdedSyncStatus, holdedSyncError: workerWeekSheets.holdedSyncError}).from(workerWeekSheets).where(eq(workerWeekSheets.purchaseOrderId, id));
 
   // Wie heeft deze factuur goedgekeurd? Staat op de beoordeling uit de wachtrij;
   // inkopen van vóór de goedkeuringspoort (of uit Holded) hebben die niet.
@@ -208,6 +208,7 @@ export default async function PurchaseOrderPage({
   return (
     <>
 <TabsRoot defaultTab="order" ids={["order","projects","files","details"]} param="section">
+      {portalWeek && <p className="mb-3 text-sm">{portalWeek.holdedSyncStatus==="sent"?"✓ Factuur staat in Holded":portalWeek.holdedSyncError??"Wordt automatisch naar Holded gestuurd."}</p>}
       {portalWeek && <a className="mb-4 inline-block text-accent underline" href={`/api/worker-weeks/${portalWeek.id}/invoice`}>Factuur uit urenportaal downloaden (PDF)</a>}
       <PageHeader
         title={

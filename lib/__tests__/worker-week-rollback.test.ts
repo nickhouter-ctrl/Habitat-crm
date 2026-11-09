@@ -2,14 +2,17 @@
 import { randomUUID } from "node:crypto";
 import { and,eq,inArray } from "drizzle-orm";
 import { afterAll,expect,it,vi } from "vitest";
-const m=vi.hoisted(()=>({current:null as unknown,user:null as unknown,allow:true,mail:vi.fn(async()=>({sent:true}))}));
+const m=vi.hoisted(()=>({current:null as unknown,user:null as unknown,allow:true,mail:vi.fn(async()=>({sent:true})),holded:{contacts:{list:vi.fn(async()=>[]),get:vi.fn(),create:vi.fn(async()=>({id:"test-supplier"}))},documents:{list:vi.fn(async()=>[]),create:vi.fn(async()=>({id:"test-remote-invoice"})),get:vi.fn()}}}));
 vi.mock("@/lib/mail-bcc",async()=>({...await vi.importActual<typeof import("@/lib/mail-bcc")>("@/lib/mail-bcc"),NICK_FREDERIQUE:["week-notify@example.invalid"],isSystemMailRecipient:(email:string)=>email==="week-notify@example.invalid"}));
 vi.mock("@/lib/email",async()=>({...await vi.importActual<typeof import("@/lib/email")>("@/lib/email"),sendEmail:m.mail}));
+vi.mock("@/lib/holded/client",()=>({holded:m.holded}));
 vi.mock("next/server",()=>({after:vi.fn()}));vi.mock("server-only",()=>({}));vi.mock("next/cache",()=>({revalidatePath:vi.fn()}));
 vi.mock("@/lib/rate-limit",()=>({rateLimit:async()=>true}));
 vi.mock("@/lib/auth/guards",()=>({requireModule:async()=>{if(!m.allow)throw Error("DENIED");return m.user;}}));
 vi.mock("@/lib/db",async()=>{const real=await vi.importActual<typeof import("@/lib/db")>("@/lib/db");return {...real,db:new Proxy(real.db,{get(target,key){const active=(m.current??target) as typeof real.db;const value=Reflect.get(active,key);return typeof value==="function"?value.bind(active):value;}})};});
 import { workers,projects,users,workerPortalLinks,workerWeekSheets as sheets,timeEntries,purchaseOrders,staffNotifications } from "../db/schema";
+import { pullPurchaseOrdersFromHolded } from "../holded/sync";
+import { syncWorkerInvoice } from "../worker-holded-sync";
 import { loadWorkerDashboard } from "../worker-portal-dashboard";
 import { portalLinkForToken } from "../worker-portal";
 import { GET as invoicePdf } from "../../app/uren/[token]/factuur/[id]/route";
@@ -34,7 +37,7 @@ it.skipIf(!enabled)("enforces token scope, review, stale submissions, invoice un
   const get=async()=> (await tx.select().from(sheets).where(and(eq(sheets.workerId,workerId),eq(sheets.projectId,projectId))))[0];
   const form=(version:number,intent="submit",d=days)=>fd({monday,version:String(version),intent,days:JSON.stringify(d),lang:"es",confirmed:"on"});
   expect((await saveWeekAction("bad-token",null,form(0)))?.error).toBeTruthy();
-  expect((await saveWeekAction(token,null,form(0,"draft")))?.ok).toBeTruthy();let s=await get();expect(s.status).toBe("draft");expect(s.days).toEqual(days);
+  expect((await saveWeekAction(token,null,form(0,"draft")))?.ok).toBeTruthy();let s=await get();expect(s.status).toBe("draft");expect(s.days).toEqual(days);expect(s.roster).toEqual(["Ana","Luis"]);
   const notices=()=>tx.select().from(staffNotifications).where(eq(staffNotifications.entityId,s.id));
   expect(await notices()).toHaveLength(0);
   expect((await saveWeekAction(token,null,form(0)))?.error).toBeTruthy();
@@ -62,6 +65,17 @@ it.skipIf(!enabled)("enforces token scope, review, stale submissions, invoice un
   expect(await tx.select().from(purchaseOrders).where(eq(purchaseOrders.reference,`T-${workerId}`))).toHaveLength(0);
   const invoiceApproval=review(s.version);expect((await reviewWorkerWeek(true,null,invoiceApproval))?.ok).toBeTruthy();expect((await reviewWorkerWeek(true,null,invoiceApproval))?.error).toBeTruthy();s=await get();
   const purchases=await tx.select().from(purchaseOrders).where(eq(purchaseOrders.reference,`T-${workerId}`));expect(purchases).toHaveLength(1);expect(purchases[0].countAsLabor).toBe(true);expect(purchases[0].projectId).toBe(projectId);expect(Number(purchases[0].subtotal)).toBe(448);expect(Number(purchases[0].total)).toBe(474.88);
+  expect(s.holdedSyncStatus).toBe("pending");
+  m.holded.documents.get.mockResolvedValue({id:"test-remote-invoice",docNumber:s.invoice!.number,subtotal:448,total:474.88});
+  await syncWorkerInvoice(s.id);await syncWorkerInvoice(s.id);
+  expect(m.holded.documents.create).toHaveBeenCalledTimes(1);s=await get();expect(s.holdedSyncStatus).toBe("sent");
+  expect((await tx.select().from(purchaseOrders).where(eq(purchaseOrders.id,purchases[0].id)))[0].holdedId).toBe("test-remote-invoice");
+  // Simulate the remote invoice arriving before its local mapping is saved.
+  await tx.update(purchaseOrders).set({holdedId:null}).where(eq(purchaseOrders.id,purchases[0].id));
+  m.holded.documents.list.mockResolvedValue([{id:"test-remote-invoice",docNumber:s.invoice!.number,subtotal:448,tax:26.88,total:474.88,tags:[`crm-worker-${s.id}`]}] as never);
+  await pullPurchaseOrdersFromHolded();
+  const afterPull=await tx.select().from(purchaseOrders).where(eq(purchaseOrders.reference,s.invoice!.number));
+  expect(afterPull).toHaveLength(1);expect(afterPull[0].holdedId).toBe("test-remote-invoice");expect(Number(afterPull[0].tax)).toBe(94.08);expect(afterPull[0].projectId).toBe(projectId);expect(afterPull[0].countAsLabor).toBe(true);
   entries=await tx.select().from(timeEntries).where(eq(timeEntries.weekSheetId,s.id));expect(entries).toHaveLength(1);expect(entries[0].purchaseOrderId).toBe(purchases[0].id);
   expect((await deliverStaffNotifications([secondNotice.id])).skipped).toBe(1);expect(m.mail).toHaveBeenCalledTimes(1);
   expect(s.history.map(h=>h.action)).toEqual(["draft_saved","submitted","returned","submitted","approved","invoice_submitted","invoice_approved"]);

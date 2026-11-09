@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 import { db } from "@/lib/db";
 import { timeEntries } from "@/lib/db/schema";
 import { portalLinkForToken } from "@/lib/worker-portal";
+import { weekRoster } from "@/lib/worker-week-grid";
 import { WorkerWeekForm, WorkerInvoiceForm } from "@/components/worker-week-form";
 import { WorkerInvoiceDetail } from "@/components/worker-invoice-detail";
 import { madridToday,addDays,emptyWeek,weekLang,totalWeekHours,weekRange } from "@/lib/worker-week";
@@ -63,15 +64,15 @@ export default async function UrenPortaalPage({params,searchParams}:Props) {
       <div className="flex flex-wrap items-center justify-between gap-3"><div><h2 className="text-xl font-semibold">{weekRange(selected,lang)}</h2><p className="mt-1 text-sm text-stone-500">{selected.slice(0,4)}</p></div>{pill(sheet?.status??"draft")}</div>
       {old && <p className="rounded-xl bg-stone-200/60 p-4 text-sm">{d("older")}</p>}
       {sheet?.reviewNote && <p className="rounded-xl border border-amber-300 bg-amber-50 p-4 text-sm whitespace-pre-wrap">{sheet.reviewNote}</p>}
-      <WorkerWeekForm key={selected} token={token} lang={lang} monday={selected} version={sheet?.version??0} initialDays={sheet?.days??emptyWeek(selected)} locked={locked} today={today}/>
-      {(worker.portalInvoiceEnabled || sheet?.invoice) && <section className={`${panel} space-y-4`}><h2 className="text-xl font-semibold">{sheet?.invoice?d("document"):t("invoice")}</h2>
+      <WorkerWeekForm key={selected} token={token} lang={lang} monday={selected} version={sheet?.version??0} initialRoster={sheet?.roster?.length?sheet.roster:weekRoster(data.lastTeam?.days??[],data.lastTeam?.roster??[])} initialDays={sheet?.days??emptyWeek(selected)} locked={locked} today={today}/>
+      {(sheet?.invoice || worker.portalInvoiceEnabled && sheet?.status==="approved") && <section className={`${panel} space-y-4`}><h2 className="text-xl font-semibold">{sheet?.invoice?d("document"):t("invoice")}</h2>
         {sheet?.invoiceStatus && pill(sheet.invoiceStatus)}
         {sheet?.invoiceReviewNote && <p className="rounded-lg bg-amber-50 p-3 text-sm whitespace-pre-wrap">{sheet.invoiceReviewNote}</p>}
         {sheet?.invoice && <div><p className="mb-3 font-medium">{sheet.invoice.number} · {eur(sheet.invoice.total)}</p><div className="flex flex-wrap gap-2"><Link className={secondary} href={href({view:"invoice",invoice:sheet.id})}>{d("view")}</Link><a className={secondary} href={pdf(sheet.id)}>{t("pdf")}</a></div></div>}
         {active && worker.portalInvoiceEnabled && sheet?.status==="approved" && (!sheet.invoiceStatus || sheet.invoiceStatus==="returned")?<WorkerInvoiceForm key={`${sheet.id}:${sheet.version}`} token={token} lang={lang} id={sheet.id} version={sheet.version} hours={totalWeekHours(sheet.days)} rate={Number(sheet.hourlyRate)} today={today} previous={sheet.invoice} supplier={data.profile}/>:!sheet?.invoice && active?<p className="text-sm leading-relaxed text-stone-600">{t("invoiceIntro")}</p>:null}
       </section>}
       {legacy.length>0 && <section className="space-y-3 rounded-xl border border-amber-200 bg-amber-50 p-5"><h2 className="font-semibold">{t("old")}</h2><p className="text-sm">{t("olderHint")}</p>{legacy.map((e,i)=><p key={i} className="text-sm">{date(e.date)} · {e.hours} h · {e.note}</p>)}</section>}
-      <section className={panel}><h2 className="mb-5 text-lg font-semibold">{d("history")}</h2>{data.rows.length?rows:<p className="text-sm text-stone-500">{d("noWeeks")}</p>}</section>{pagination}
+      <details className={panel}><summary className="cursor-pointer font-semibold">{d("history")}</summary><div className="mt-5">{data.rows.length?rows:<p className="text-sm text-stone-500">{d("noWeeks")}</p>}</div></details>{pagination}
     </>}
 
     {view==="invoices" && <>

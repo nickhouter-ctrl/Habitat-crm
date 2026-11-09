@@ -13,7 +13,7 @@ export class WeekConflict extends Error {}
 const conflict=(message="conflict"):never=>{throw new WeekConflict(message);};
 const history=(old:WeekEvent[],event:Omit<WeekEvent,"at">):WeekEvent[]=>[...old,{...event,at:new Date().toISOString()}];
 
-export async function saveWeek(args:{worker:Worker;projectId:string;monday:string;version:number;days:WeekDay[];submit:boolean}) {
+export async function saveWeek(args:{worker:Worker;projectId:string;monday:string;version:number;days:WeekDay[];roster?:string[];submit:boolean}) {
   return db.transaction(async tx=>{
     // Serialise all writes for this worker, including stale browser tabs.
     await tx.select({id:workers.id}).from(workers).where(eq(workers.id,args.worker.id)).for("update");
@@ -23,7 +23,7 @@ export async function saveWeek(args:{worker:Worker;projectId:string;monday:strin
     const paymentMethod=args.worker.portalInvoiceEnabled?"invoice":args.worker.defaultPaymentMethod;
     const rate=workerRate(args.worker,paymentMethod)??0;
     const version=(old?.version??0)+1;
-    const values={days:args.days,status:args.submit?"submitted":"draft",version,hourlyRate:String(rate),paymentMethod,
+    const values={days:args.days,...(args.roster?{roster:args.roster}:{}),status:args.submit?"submitted":"draft",version,hourlyRate:String(rate),paymentMethod,
       submittedAt:args.submit?new Date():null,reviewNote:old?.reviewNote??null,
       history:history(old?.history??[],{action:args.submit?"submitted":"draft_saved",actor:args.worker.name,version,...(args.submit?{days:args.days}:{})}),updatedAt:new Date()};
     const [saved] = old
@@ -41,7 +41,7 @@ export async function saveWeek(args:{worker:Worker;projectId:string;monday:strin
         notificationIds.push(...notices.map(n=>n.id));
       }
     }
-    return {notificationIds};
+    return {notificationIds,version};
   });
 }
 
@@ -97,6 +97,6 @@ export async function reviewWeekInvoice(args:{id:string;projectId:string;version
       poId=po.id;
       await tx.update(timeEntries).set({purchaseOrderId:poId,paymentMethod:"invoice",updatedAt:new Date()}).where(eq(timeEntries.weekSheetId,sheet.id));
     }
-    await tx.update(sheets).set({invoiceStatus:args.approve?"approved":"returned",purchaseOrderId:poId,invoiceReviewNote:args.reason||null,version:sheet.version+1,history:history(sheet.history,{action:args.approve?"invoice_approved":"invoice_returned",actor:args.userId,version:sheet.version,reason:args.reason}),updatedAt:new Date()}).where(eq(sheets.id,sheet.id));
+    await tx.update(sheets).set({invoiceStatus:args.approve?"approved":"returned",purchaseOrderId:poId,holdedSyncStatus:args.approve?"pending":null,holdedSyncError:null,invoiceReviewNote:args.reason||null,version:sheet.version+1,history:history(sheet.history,{action:args.approve?"invoice_approved":"invoice_returned",actor:args.userId,version:sheet.version,reason:args.reason}),updatedAt:new Date()}).where(eq(sheets.id,sheet.id));
   });
 }
