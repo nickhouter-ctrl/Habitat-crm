@@ -61,6 +61,7 @@ import {
   timeEntries,
   users,
   workerPortalLinks,
+  workerWeekSheets,
   workers,
 } from "@/lib/db/schema";
 import { isOwnProductLine, ownProductGroup, lineNet, docProductMargin, lineCostEur, lineMaterialCostEur, normalizeDocItems } from "@/lib/documents";
@@ -536,6 +537,28 @@ export default async function ProjectDetailPage({
   const zichtbareTimeRows = urenFilter
     ? timeRows.filter((t) => (t.paymentMethod === "cash") === (urenFilter === "contant"))
     : timeRows;
+  // Uren uit één weekstaat staan als één regel: periode, bouwer, factuur. Per
+  // dag uitklappen; de losse dagregels maakten de lijst onleesbaar lang.
+  const weekSheetIds = [...new Set(zichtbareTimeRows.flatMap((t) => (t.weekSheetId ? [t.weekSheetId] : [])))];
+  const weekSheetInfo = new Map(
+    (weekSheetIds.length
+      ? await db
+          .select({ id: workerWeekSheets.id, weekStart: workerWeekSheets.weekStart, days: workerWeekSheets.days, worker: workers.name,
+            invoiceNumber: sql<string | null>`${workerWeekSheets.invoice}->>'number'`, invoiceStatus: workerWeekSheets.invoiceStatus })
+          .from(workerWeekSheets)
+          .innerJoin(workers, eq(workers.id, workerWeekSheets.workerId))
+          .where(inArray(workerWeekSheets.id, weekSheetIds))
+      : []
+    ).map((w) => [w.id, w]),
+  );
+  type UrenRegel = (typeof zichtbareTimeRows)[number];
+  const urenGroepen: ({ week: null; t: UrenRegel } | { week: string; rows: UrenRegel[] })[] = [];
+  for (const t of zichtbareTimeRows) {
+    if (!t.weekSheetId || !weekSheetInfo.has(t.weekSheetId)) { urenGroepen.push({ week: null, t }); continue; }
+    const groep = urenGroepen.find((g) => g.week === t.weekSheetId);
+    if (groep && groep.week) groep.rows.push(t);
+    else urenGroepen.push({ week: t.weekSheetId, rows: [t] });
+  }
 
   const kostenPer = (wijze: "cash" | "invoice") =>
     costRows.filter((c) => c.paymentMethod === wijze).reduce((sum, c) => sum + Number(c.amountEur ?? 0), 0);
@@ -1713,7 +1736,47 @@ export default async function ProjectDetailPage({
                     </tr>
                   </THead>
                   <TBody>
-                    {zichtbareTimeRows.map((t) => {
+                    {urenGroepen.map((g) => {
+                      if (g.week !== null) {
+                        const w = weekSheetInfo.get(g.week)!;
+                        const uren = g.rows.reduce((sum, r) => sum + Number(r.hours), 0);
+                        const kosten = g.rows.reduce((sum, r) => sum + Number(r.hours) * Number(r.hourlyCostEur), 0);
+                        const dag = (d: string | Date, opts: Intl.DateTimeFormatOptions = { day: "numeric", month: "short" }) => new Date(d).toLocaleDateString(uiDateLocale, opts);
+                        const tot = w.days.at(-1)?.date ?? w.weekStart;
+                        const perDag = [...g.rows].sort((a, b) => String(a.date).localeCompare(String(b.date)));
+                        return (
+                          <Tr key={g.week}>
+                            <Td className="whitespace-nowrap align-top">{dag(w.weekStart)} – {dag(tot)}</Td>
+                            <Td className="align-top">
+                              <span className="font-medium">{w.worker}</span>
+                              <Badge tone={g.rows[0].paymentMethod === "cash" ? "warning" : "neutral"} className="ml-2">{PAY_LABEL[g.rows[0].paymentMethod]}</Badge>
+                              {w.invoiceNumber && <Badge tone={w.invoiceStatus === "approved" ? "success" : "info"} className="ml-2">{uiT("Factuur {n}", { n: w.invoiceNumber })}{w.invoiceStatus === "approved" ? "" : ` · ${uiT("te controleren")}`}</Badge>}
+                              <details className="mt-1 text-xs">
+                                <summary className="cursor-pointer text-muted hover:text-foreground">{uiT("Weekstaat · {n} dagen bekijken", { n: new Set(perDag.map((r) => String(r.date).slice(0, 10))).size })}</summary>
+                                <ul className="mt-2 space-y-2">
+                                  {perDag.map((r) => (
+                                    <li key={r.id} className="grid grid-cols-[5.5rem_1fr_auto] gap-3">
+                                      <span className="capitalize text-muted">{dag(r.date, { weekday: "short", day: "numeric", month: "short" })}</span>
+                                      <span>{r.workerName ? <span className="block">{r.workerName}</span> : null}{r.note ? <span className="block whitespace-pre-line text-muted">{r.note}</span> : null}</span>
+                                      <span className="tabular-nums">{Number(r.hours).toLocaleString(uiDateLocale)} u</span>
+                                    </li>
+                                  ))}
+                                </ul>
+                              </details>
+                            </Td>
+                            <Td className="text-right align-top tabular-nums">{uren.toLocaleString(uiDateLocale)}</Td>
+                            <Td className="text-right align-top tabular-nums text-muted">{formatEUR(g.rows[0].hourlyCostEur)}</Td>
+                            <Td className="text-right align-top tabular-nums font-medium">{formatEUR(kosten)}</Td>
+                            <Td className="text-right align-top whitespace-nowrap">
+                              <div className="flex items-center justify-end gap-3 text-xs">
+                                {w.invoiceNumber && <a href={`/api/worker-weeks/${g.week}/invoice`} target="_blank" rel="noopener" className="text-accent underline">{uiT("Factuur openen")}</a>}
+                                <a href="#weekstaten" className="text-muted underline">{uiT("Weekstaat")}</a>
+                              </div>
+                            </Td>
+                          </Tr>
+                        );
+                      }
+                      const t = g.t;
                       if (t.id === editEntryId && !t.weekSheetId) {
                         // Bewerk-modus: hele regel als één formulier (datum/uren/tarief).
                         return (
