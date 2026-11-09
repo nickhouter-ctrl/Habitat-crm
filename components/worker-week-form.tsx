@@ -1,5 +1,5 @@
 "use client";
-import { useActionState, useState } from "react";
+import { useActionState, useEffect, useRef, useState } from "react";
 import { saveWeekAction, submitWeekInvoiceAction } from "@/app/uren/[token]/week-actions";
 import { totalWeekHours, invoiceAmounts, type WeekDay, type WeekLang, type WorkerInvoice } from "@/lib/worker-week";
 import type { SupplierDetails } from "@/lib/worker-portal-dashboard";
@@ -15,17 +15,32 @@ export function WorkerWeekForm({token,lang,monday,version,initialDays,locked,tod
   const changeDay=(index:number,update:Partial<WeekDay>)=>setDays(old=>old.map((d,i)=>i===index?{...d,...update}:d));
   const locale=lang==="nl"?"nl-NL":lang==="es"?"es-ES":"en-GB";
   const total=totalWeekHours(days);
+  // De dag om nu in te vullen: vandaag, op zondag de zaterdag ervoor.
+  const focusDate=days.some(d=>d.date===today)?(new Date(`${today}T12:00:00Z`).getUTCDay()===0?days[5].date:today):null;
+  const focusRef=useRef<HTMLFieldSetElement>(null);
+  useEffect(()=>{if(!locked)focusRef.current?.scrollIntoView({block:"start",behavior:"smooth"});},[locked]);
+  // "Gewerkt" neemt de ploeg van de laatste werkdag ervoor over (zonder omschrijving).
+  const setState=(i:number,state:WeekDay["state"])=>setDays(old=>old.map((d,k)=>{
+    if(k!==i)return d;
+    if(state!=="work")return {...d,state,crews:[]};
+    const vorige=[...old.slice(0,i)].reverse().find(p=>p.state==="work"&&p.crews.length);
+    return {...d,state,crews:d.crews.length?d.crews:vorige?vorige.crews.map(c=>({...c,description:""})):[{people:1,names:"",hours:8,description:"",zone:""}]};
+  }));
   return <form action={action} onReset={event=>event.preventDefault()} className="space-y-5">
     <input type="hidden" name="lang" value={lang}/><input type="hidden" name="monday" value={monday}/><input type="hidden" name="version" value={version}/><input type="hidden" name="days" value={JSON.stringify(days)}/>
     <p className="text-sm leading-relaxed text-stone-600">{t("example")}</p>
     {days.map((day,i)=>{
-      const future=day.date>today,disabled=locked||pending;
-      return <fieldset key={day.date} disabled={disabled} className="rounded-xl border border-stone-200 bg-white p-4 sm:p-5 disabled:opacity-70">
-        <legend className="px-2 text-base font-semibold capitalize">{new Date(`${day.date}T12:00:00Z`).toLocaleDateString(locale,{weekday:"long",day:"numeric",month:"short"})}</legend>
+      // Zondag alleen als er iets is ingevuld.
+      if(i===6 && day.state==="empty")return null;
+      const future=day.date>today,disabled=locked||pending,isFocus=day.date===focusDate;
+      const copied=day.state==="work" && i>0 && day.crews.length>0 && day.crews.every(c=>!c.description) && days.slice(0,i).some(p=>p.state==="work");
+      return <fieldset key={day.date} ref={isFocus?focusRef:undefined} disabled={disabled} className={`scroll-mt-4 rounded-xl border bg-white p-4 sm:p-5 disabled:opacity-70 ${isFocus?"border-[#a94f2d] ring-2 ring-orange-100":"border-stone-200"}`}>
+        <legend className="px-2 text-base font-semibold capitalize">{new Date(`${day.date}T12:00:00Z`).toLocaleDateString(locale,{weekday:"long",day:"numeric",month:"short"})}{isFocus && <span className="ml-2 rounded-full bg-[#a94f2d] px-2 py-0.5 text-xs font-medium normal-case text-white">{t("today")}</span>}</legend>
         {future && <p className="mb-3 text-sm text-stone-500">{t("future")}</p>}<>
-          <label className="block text-sm font-medium">{t("dayState")}<select aria-label={`${t("dayState")} ${day.date}`} className={input} value={day.state} onChange={e=>{const v=e.target.value as WeekDay["state"];changeDay(i,{state:v,crews:v==="work"?(day.crews.length?day.crews:[{people:1,names:"",hours:8,description:"",zone:""}]):[]});}}>
-            <option value="empty">{t("empty")}</option><option value="work" disabled={future}>{t("work")}</option><option value="off">{t("off")}</option>
-          </select></label>
+          <div role="group" aria-label={`${t("dayState")} ${day.date}`} className="grid grid-cols-2 gap-2">
+            {(["work","off"] as const).map(s=><button key={s} type="button" aria-pressed={day.state===s} disabled={s==="work"&&future} onClick={()=>setState(i,day.state===s?"empty":s)} className={`rounded-lg border px-3 py-3 text-sm font-semibold disabled:opacity-40 ${day.state===s?"border-[#a94f2d] bg-[#a94f2d] text-white":"border-stone-300 bg-white text-stone-800"}`}>{t(s)}</button>)}
+          </div>
+          {copied && <p className="mt-3 text-sm text-stone-500">{t("sameCrew")}</p>}
           {day.state==="work" && <div className="mt-4 space-y-4">{day.crews.map((crew,j)=>{
             const update=(field:string,value:string|number)=>changeDay(i,{crews:day.crews.map((c,k)=>k===j?{...c,[field]:value}:c)});
             return <div key={j} className="space-y-3 border-t border-stone-200 pt-4">

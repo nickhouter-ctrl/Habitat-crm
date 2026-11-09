@@ -10,7 +10,8 @@ export type PortalQuery = Record<string, string | string[] | undefined>;
 export const portalValue = (value: string | string[] | undefined) => typeof value === "string" ? value : undefined;
 export function portalView(query: PortalQuery): PortalView {
   const view=portalValue(query.view);
-  return view==="week" || view==="invoices" || view==="invoice" ? view : view==="overview" ? "overview" : query.week ? "week" : "overview";
+  // Wie de link opent, wil uren invullen: zonder keuze direct de huidige week.
+  return view==="invoices" || view==="invoice" || view==="overview" ? view : "week";
 }
 function validWeek(value:string|undefined): value is string {
   if(!value || !/^\d{4}-\d{2}-\d{2}$/.test(value))return false;
