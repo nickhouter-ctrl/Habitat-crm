@@ -14,12 +14,12 @@ it("preserves previous grouped people, work descriptions and site zones",()=>{
  const d=emptyWeek("2026-11-02")[0];d.state="work";d.crews=[{people:2,names:"Ana\nLuis",hours:8,description:"Tiled wall",zone:"Bathroom"},{people:1,names:"Ana",hours:1,description:"Cleaning",zone:""}];
  expect(weekRoster([d],["Luis"])).toEqual(["Luis","Ana"]);expect(personHours(d,"Ana")).toBe(9);expect(dayDescription(d)).toContain("Bathroom: Tiled wall");expect(dayDescription(d)).toContain("Cleaning");
 });
-it("saves incomplete daily drafts but requires description and explicit remaining days before sending",()=>{
+it("saves incomplete daily drafts but requires a description and normalizes empty days on final submission",()=>{
  const days=emptyWeek("2026-11-02");days[0]=gridDay(days[0],["Morad"],[8],"");
  expect(validateWeek(days,"2026-11-02","2026-11-09",false).error).toBeUndefined();
  expect(validateWeek(days,"2026-11-02","2026-11-09",true).error).toBe("description");
  days[0].crews[0].description="Wanden van de badkamer betegeld.";
- expect(validateWeek(days,"2026-11-02","2026-11-09",true).error).toBe("missingDay");
+ expect(validateWeek(days,"2026-11-02","2026-11-09",true).days?.[6].state).toBe("off");
  for(let i=1;i<7;i++)days[i]=gridDay(days[i],["Morad"],[0],"");
  expect(validateWeek(days,"2026-11-02","2026-11-09",true).error).toBeUndefined();
 });

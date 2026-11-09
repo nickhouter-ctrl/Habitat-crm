@@ -49,7 +49,7 @@ Mogelijke vervolgstappen: dagfoto's per werkplek, vergelijking met begrote uren 
 ## Vereenvoudigde daginvoer en automatische Holded-verwerking
 
 - De persoonlijke link opent direct de werkweek. Namen worden eenmaal toegevoegd en als team bewaard; de volgende week neemt alleen de namen over, nooit uren.
-- Een dag openklappen toont uren achter elke naam. Leeg/0 betekent afwezig binnen een ingevulde werkdag. Een volledig vrije dag wordt expliciet als niet gewerkt gemarkeerd. Verschillende uren per persoon blijven behouden.
+- Een dag openklappen toont uren achter elke naam. Leeg/0 betekent afwezig binnen een ingevulde werkdag. Een volledig vrije dag kan als niet gewerkt worden gemarkeerd; bij definitief doorsturen bevestigt de medewerker dat lege dagen niet gewerkt zijn. Verschillende uren per persoon blijven behouden.
 - Eén werkbeschrijving per gewerkte dag is verplicht bij doorsturen. **Opslaan en later verder** bewaart ook een onvolledig concept. De knop blijft onderin bereikbaar. Een waarschuwing beschermt niet opgeslagen wijzigingen bij verlaten van de pagina.
 - **Week doorsturen** opent eerst een controle en bevestiging. De factuursectie verschijnt pas na goedkeuring van de uren. Inkoop blijft een afzonderlijke goedkeuring.
 - Factuurgoedkeuring zet in dezelfde transactie een Holded-taak klaar. De bestaande notificatiecron probeert achtergebleven taken opnieuw; een eerste poging volgt meteen na goedkeuring. Afzender/NIF, eigen nummer, uren/tarief, IVA en IRPF komen uit de goedgekeurde snapshot. De oorspronkelijke PDF blijft via de inkoopfactuur beschikbaar.

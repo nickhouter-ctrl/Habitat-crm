@@ -41,13 +41,14 @@ export function emptyWeek(monday: string): WeekDay[] { return Array.from({length
 export function validateWeek(raw: unknown, monday: string, today: string, submit: boolean): { days?: WeekDay[]; error?: string } {
   if (!dateSchema.safeParse(monday).success || mondayOf(monday)!==monday || monday>today || monday<addDays(mondayOf(today),-56)) return {error:"week"};
   const result=weekDaysSchema.safeParse(raw);if(!result.success)return {error:"fields"};
-  const days=result.data;
+  // Bij indienen telt een lege dag als niet gewerkt: niemand hoeft de zondag
+  // of een vrije dag apart aan te klikken.
+  const days=submit?result.data.map(d=>d.state==="empty"?{...d,state:"off" as const}:d):result.data;
   for(let i=0;i<7;i++) {
     const d=days[i];if(d.date!==addDays(monday,i))return {error:"week"};
     if(d.date>today && d.state==="work")return {error:"future"};
     if(d.state!=="work" && d.crews.length)return {error:"fields"};
     if(!submit)continue;
-    if(d.state==="empty")return {error:"missingDay"};
     if(d.state!=="work")continue;
     if(!d.crews.length)return {error:"fields"};
     const people=new Map<string,number>();
