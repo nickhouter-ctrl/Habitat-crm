@@ -22,9 +22,11 @@ import {
   products,
   projects,
   purchaseOrders,
+  workerWeekSheets,
   type DocumentLineItem,
   type PurchaseOrderLineItem,
 } from "@/lib/db/schema";
+import { verifyWorkerPurchase, workerInvoiceTag } from "@/lib/worker-holded-delivery";
 import { parsePoLineItems } from "@/lib/purchase-orders";
 import { normalizeDocItems } from "@/lib/documents";
 import { behoudLokaleRegelinfo } from "@/lib/holded/regels-behouden";
@@ -408,6 +410,9 @@ export async function pullDocumentsFromHolded(
  * already-invoiced purchases, so we don't touch stock.
  */
 export async function pullPurchaseOrdersFromHolded(): Promise<PullResult> {
+  const portalInvoices = await db.select({id:workerWeekSheets.id,purchaseOrderId:workerWeekSheets.purchaseOrderId,invoice:workerWeekSheets.invoice}).from(workerWeekSheets).where(eq(workerWeekSheets.invoiceStatus,"approved"));
+  const byTag=new Map(portalInvoices.map(s=>[workerInvoiceTag(s.id),s]));
+  const byPurchase=new Map(portalInvoices.filter(s=>s.purchaseOrderId).map(s=>[s.purchaseOrderId!,s]));
   const remote = await holded.documents.list("purchase");
   let created = 0;
   let updated = 0;
@@ -455,9 +460,22 @@ export async function pullPurchaseOrdersFromHolded(): Promise<PullResult> {
       paidAt: d.status === 1 ? new Date() : null,
     };
 
-    const existing = await db.query.purchaseOrders.findFirst({
+    let existing = await db.query.purchaseOrders.findFirst({
       where: eq(purchaseOrders.holdedId, d.id),
     });
+    // A webhook/pull can arrive before the push saves its Holded ID. Resolve
+    // our stable tag first, so it never imports a second purchase/labor cost.
+    const tag=d.tags?.find(t=>t.startsWith("crm-worker-"))??d.notes?.match(/crm-worker-[0-9a-f-]{36}/i)?.[0];
+    const portal=tag?byTag.get(tag):existing?byPurchase.get(existing.id):undefined;
+    if(tag&&!portal)continue;
+    if(portal?.invoice&&portal.purchaseOrderId){
+      verifyWorkerPurchase(d,portal.invoice);
+      existing=await db.query.purchaseOrders.findFirst({where:eq(purchaseOrders.id,portal.purchaseOrderId)});
+      if(!existing||existing.holdedId&&existing.holdedId!==d.id)throw Error("Worker invoice mapping conflict");
+      // Approved supplier snapshots and IVA/IRPF remain immutable locally.
+      await db.update(purchaseOrders).set({holdedId:d.id,paidAt:existing.paidAt??data.paidAt,paidEur:data.paidEur??existing.paidEur,updatedAt:new Date()}).where(eq(purchaseOrders.id,existing.id));
+      updated++;continue;
+    }
     if (existing) {
       // Lokale staat beschermen bij her-pull:
       //  - stockAppliedAt NOOIT aanpassen (nullen → dubbele boeking bij opnieuw
@@ -508,6 +526,15 @@ export async function pushPurchaseOrderToHolded(poId: string): Promise<string> {
   });
   if (!po) throw new Error("Inkooporder niet gevonden.");
   if (po.holdedId) return po.holdedId; // al gekoppeld
+  // Worker invoices carry their own tax/withholding snapshot. Never send them
+  // through the generic stock-order path (which has no invoice tax lines).
+  const [week] = await db.select({id:workerWeekSheets.id}).from(workerWeekSheets).where(eq(workerWeekSheets.purchaseOrderId,poId));
+  if (week) {
+    await (await import("@/lib/worker-holded-sync")).syncWorkerInvoice(week.id);
+    const refreshed=await db.query.purchaseOrders.findFirst({where:eq(purchaseOrders.id,poId)});
+    if(refreshed?.holdedId)return refreshed.holdedId;
+    throw new Error("De factuur wordt via het urenportaal naar Holded verwerkt. Bekijk daar de verzendstatus.");
+  }
 
   // 0. Voorkom duplicaten: kijk eerst of Holded al een purchase-doc heeft
   //    met deze docNumber. Zo ja, link onze PO aan die bestaande Holded-doc

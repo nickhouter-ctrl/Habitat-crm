@@ -3,7 +3,7 @@ import Link from "next/link";
 import { db } from "@/lib/db";
 import { workerWeekSheets, workers, projects, users } from "@/lib/db/schema";
 import { requireModuleRead } from "@/lib/auth/guards";
-import { totalWeekHours,weekRange } from "@/lib/worker-week";
+import { totalWeekHours,periodRange } from "@/lib/worker-week";
 import { formatEUR } from "@/lib/utils";
 import { WorkerWeekReviewForm } from "./worker-week-review-form";
 
@@ -17,7 +17,7 @@ export async function WorkerWeekReviews({projectId,invoicesOnly=false,pendingOnl
  return <section id="weekstaten" className="my-5 space-y-3"><h2 className="text-lg font-semibold">{invoicesOnly?"Facturen uit het urenportaal ter controle":"Weekstaten uit het urenportaal"} <span className="text-sm font-normal text-muted">({rows.length})</span></h2>
  <p className="text-sm text-muted">{invoicesOnly?"Pas na goedkeuring wordt de factuur geboekt. De bijbehorende uren worden gekoppeld, niet opnieuw aangemaakt.":"Controleer aanwezigheid en resultaat per dag. Goedgekeurde weekstaten blijven vaststaan; concepten en ingediende staten tellen nog niet mee in de kosten."}</p>
  {rows.map(({sheet:s,workerName,projectName})=>{const late=s.submittedAt && new Date(s.submittedAt).getTime()-Date.parse(s.weekStart)>10*86400000;return <details id={`weekstaat-${s.id}`} key={`${s.id}:${s.version}`} open={invoicesOnly || s.status==="submitted"} className="scroll-mt-24 rounded-xl border bg-surface p-4">
- <summary className="cursor-pointer font-medium">{workerName} · {weekRange(s.weekStart,"nl")} · {totalWeekHours(s.days)} persoonsuren · {labels[invoicesOnly?s.invoiceStatus!:s.status]}{s.invoice && ` · factuur ${s.invoice.number}`}</summary>
+ <summary className="cursor-pointer font-medium">{workerName} · {periodRange(s.weekStart,"nl",s.days.at(-1)?.date)} · {totalWeekHours(s.days)} persoonsuren · {labels[invoicesOnly?s.invoiceStatus!:s.status]}{s.invoice && ` · factuur ${s.invoice.number}`}</summary>
  <div className="mt-4 space-y-3"><Link href={`/projects/${s.projectId}#weekstaten`} className="text-sm text-accent underline">{projectName}</Link>
  <p className="text-sm text-muted">Ingediend: {s.submittedAt?.toLocaleString("nl-NL",{timeZone:"Europe/Madrid"})??"—"} · Tarief: {formatEUR(s.hourlyRate)}/u · Totaal arbeid: {formatEUR(totalWeekHours(s.days)*Number(s.hourlyRate))}</p>
  {late && <p className="text-sm font-medium text-amber-700">Late invoer: meer dan 3 dagen na het einde van de week. Extra controle aanbevolen.</p>}
@@ -27,6 +27,7 @@ export async function WorkerWeekReviews({projectId,invoicesOnly=false,pendingOnl
  {s.invoice && <div className="space-y-2 rounded-lg bg-background p-4"><h3 className="font-semibold">Factuur {s.invoice.number} · {labels[s.invoiceStatus!]}</h3><p className="text-sm whitespace-pre-wrap">{s.invoice.legalName} · {s.invoice.taxId}<br/>{s.invoice.address}<br/>{s.invoice.email}<br/>IBAN: {s.invoice.iban||"—"}</p><p className="text-sm">Excl. btw: {formatEUR(s.invoice.subtotal)} · IVA {s.invoice.vatRate}%: {formatEUR(s.invoice.vat)} · IRPF {s.invoice.withholdingRate}%: {formatEUR(s.invoice.withholding)} · Te betalen: <strong>{formatEUR(s.invoice.total)}</strong></p><p className="text-sm whitespace-pre-wrap">{s.invoice.taxNote}</p>
  <a className="inline-block text-sm text-accent underline" href={`/api/worker-weeks/${s.id}/invoice`}>Factuur-PDF bekijken</a>
  {s.purchaseOrderId && <Link className="ml-3 text-sm text-accent underline" href={`/inkooporders/${s.purchaseOrderId}`}>Geboekte inkoopfactuur</Link>}
+ {s.invoiceStatus==="approved" && <p className="text-sm">{s.holdedSyncStatus==="sent"?"✓ Factuur staat in Holded":s.holdedSyncError??"Wordt automatisch naar Holded gestuurd."}</p>}
  {s.invoiceReviewNote && <p className="text-sm whitespace-pre-wrap">{s.invoiceReviewNote}</p>}
  {invoicesOnly && s.invoiceStatus==="submitted" && access.heeftCap("schrijven") && <WorkerWeekReviewForm id={s.id} projectId={s.projectId} version={s.version} invoice/>}
  {!invoicesOnly && s.invoiceStatus==="submitted" && <Link className="block text-sm text-accent underline" href="/inkooporders/te-verwerken">Factuur controleren in Inkoop</Link>}

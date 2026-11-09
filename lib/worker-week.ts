@@ -19,9 +19,13 @@ export function isoWeek(date: string) {
 /** Werkweek als datums, maandag t/m zaterdag: "9 t/m 14 november". Zondag
  *  telt niet mee; een jaar alleen als de week over de jaarwissel loopt. */
 export function weekRange(date: string, lang: WeekLang) {
-  const from = mondayOf(date), to = addDays(from, 5);
+  return periodRange(mondayOf(date), lang, addDays(mondayOf(date), 5));
+}
+/** Actual dates, including periods that cross calendar weeks and skip days. */
+export function periodRange(from: string, lang: WeekLang, to = from) {
   const locale = lang === "nl" ? "nl-NL" : lang === "es" ? "es-ES" : "en-GB";
   const d = (s: string, opts: Intl.DateTimeFormatOptions) => new Date(`${s}T12:00:00Z`).toLocaleDateString(locale, { timeZone: "UTC", ...opts });
+  if (from === to) return d(from, { day: "numeric", month: "long", year: "numeric" });
   const sameYear = from.slice(0, 4) === to.slice(0, 4), sameMonth = sameYear && from.slice(5, 7) === to.slice(5, 7);
   const start = sameMonth ? d(from, { day: "numeric" }) : d(from, sameYear ? { day: "numeric", month: "long" } : { day: "numeric", month: "long", year: "numeric" });
   const end = d(to, sameYear ? { day: "numeric", month: "long" } : { day: "numeric", month: "long", year: "numeric" });
@@ -32,20 +36,20 @@ const crewSchema = z.object({
   people: z.number().int().min(1).max(30), names: z.string().trim().max(1500),
   hours: z.number().min(0).max(16), description: z.string().trim().max(2000), zone: z.string().trim().max(200),
 });
-export const weekDaysSchema = z.array(z.object({ date: dateSchema, state: z.enum(["empty", "work", "off"]), crews: z.array(crewSchema).max(12), note: z.string().trim().max(500) })).length(7);
+export const weekDaysSchema = z.array(z.object({ date: dateSchema, state: z.enum(["empty", "work", "off"]), crews: z.array(crewSchema).max(12), note: z.string().trim().max(500) })).min(1).max(31);
 export type WeekDay = z.infer<typeof weekDaysSchema>[number];
 export type WeekCrew = z.infer<typeof crewSchema>;
 export const crewNames = (s: string) => s.split(/[\n;,]/).map(n => n.trim()).filter(Boolean);
 export const totalWeekHours = (days: WeekDay[]) => Math.round(days.reduce((sum,d)=>sum+(d.state === "work" ? d.crews.reduce((s,c)=>s+c.people*c.hours,0):0),0)*100)/100;
 export function emptyWeek(monday: string): WeekDay[] { return Array.from({length:7},(_,i)=>({date:addDays(monday,i),state:"empty",crews:[],note:""})); }
 export function validateWeek(raw: unknown, monday: string, today: string, submit: boolean): { days?: WeekDay[]; error?: string } {
-  if (!dateSchema.safeParse(monday).success || mondayOf(monday)!==monday || monday>today || monday<addDays(mondayOf(today),-56)) return {error:"week"};
+  if (!dateSchema.safeParse(monday).success || monday>today || monday<addDays(mondayOf(today),-56)) return {error:"week"};
   const result=weekDaysSchema.safeParse(raw);if(!result.success)return {error:"fields"};
   // Bij indienen telt een lege dag als niet gewerkt: niemand hoeft de zondag
   // of een vrije dag apart aan te klikken.
   const days=submit?result.data.map(d=>d.state==="empty"?{...d,state:"off" as const}:d):result.data;
-  for(let i=0;i<7;i++) {
-    const d=days[i];if(d.date!==addDays(monday,i))return {error:"week"};
+  for(let i=0;i<days.length;i++) {
+    const d=days[i];if((i===0 && d.date!==monday) || (i>0 && d.date<=days[i-1].date) || d.date>addDays(monday,56))return {error:"week"};
     if(d.date>today && d.state==="work")return {error:"future"};
     if(d.state!=="work" && d.crews.length)return {error:"fields"};
     if(!submit)continue;

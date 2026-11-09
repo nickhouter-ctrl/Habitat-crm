@@ -1,5 +1,7 @@
 "use server";
 import { requireModule } from "@/lib/auth/guards";
+import { after } from "next/server";
+import { syncWorkerInvoice } from "@/lib/worker-holded-sync";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { reviewWeek, reviewWeekInvoice, WeekConflict } from "@/lib/worker-week-service";
@@ -13,6 +15,7 @@ export async function reviewWorkerWeek(invoice:boolean,_prev:WeekActionState,for
   if(d.decision==="approve" && d.confirmed!=="on")return {error:"Bevestig dat je de gegevens en het tarief hebt gecontroleerd."};
   try {await (invoice?reviewWeekInvoice:reviewWeek)({...d,approve:d.decision==="approve",userId:user.id});}
   catch(e){return {error:e instanceof WeekConflict?e.message:"Verwerken is niet gelukt. Probeer het opnieuw."};}
+  if(invoice&&d.decision==="approve")after(async()=>{try{await syncWorkerInvoice(d.id);}catch{console.warn("[worker-invoice] sync pending");}});
   revalidatePath(`/projects/${d.projectId}`);revalidatePath("/inkooporders");revalidatePath("/inkooporders/te-verwerken");revalidatePath("/uren/[token]","page");revalidatePath("/ploeg");revalidatePath("/projects/weekstaten");revalidatePath("/","layout");
-  return {ok:d.decision==="approve"?"Goedgekeurd en verwerkt.":"Teruggestuurd naar de medewerker."};
+  return {ok:d.decision==="approve"?(invoice?"Goedgekeurd en geboekt. De factuur wordt automatisch naar Holded gestuurd.":"Goedgekeurd en verwerkt."):"Teruggestuurd naar de medewerker."};
 }
