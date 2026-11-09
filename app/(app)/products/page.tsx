@@ -536,14 +536,15 @@ export default async function ProductsPage({
                             if (reserved <= 0) return null;
                             const free = (dispStock ?? 0) - reserved;
                             return (
-                              <span
-                                className="block text-[10px] font-normal text-warning"
-                                title={uiT("Gereserveerd in geaccepteerde offertes · vrij = fysiek − gereserveerd")}
+                              <Link
+                                href={`/products/${p.id}/edit#reserveringen`}
+                                className="block text-[10px] font-normal text-warning hover:underline"
+                                title={uiT("Bekijk voor welke klant of welk project deze voorraad gereserveerd is")}
                               >
                                 {reserved.toLocaleString(uiDateLocale)} {uiT("geres. ·")}{" "}
                                 <span className={cn(free < 0 && "font-semibold text-danger")}>
                                   {free.toLocaleString(uiDateLocale)} {uiT("vrij")} </span>
-                              </span>
+                              </Link>
                             );
                           })()}
                           {(() => {
