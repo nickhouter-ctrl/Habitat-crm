@@ -14,8 +14,10 @@ const s=StyleSheet.create({
  cellValue:{fontSize:11,fontFamily:"Helvetica-Bold",lineHeight:1.3,marginTop:3},
   small:{fontSize:8,color:muted},
  title:{fontSize:28,fontFamily:"Helvetica-Bold",color:accent,letterSpacing:2,lineHeight:1,marginBottom:8},
- parties:{flexDirection:"row",gap:16,marginTop:18},
- box:{flex:1,backgroundColor:band,borderRadius:4,padding:12},
+ parties:{flexDirection:"row",gap:24,marginTop:22,marginBottom:4},
+ party:{flex:1,borderLeftWidth:3,borderLeftColor:accent,paddingLeft:12,paddingVertical:2},
+ partyName:{fontSize:12,fontFamily:"Helvetica-Bold",marginBottom:4},
+ partyId:{flexDirection:"row",marginTop:6,paddingTop:5,borderTopWidth:.5,borderTopColor:line},
  boxLabel:{fontSize:7,color:muted,textTransform:"uppercase",letterSpacing:1,marginBottom:4},
  bold:{fontFamily:"Helvetica-Bold"},
  th:{flexDirection:"row",backgroundColor:accent,color:"#ffffff",paddingVertical:6,paddingHorizontal:6,marginTop:16,fontFamily:"Helvetica-Bold",fontSize:8},
@@ -30,6 +32,8 @@ const s=StyleSheet.create({
  status:{fontSize:8,color:accent,textAlign:"right",borderWidth:.75,borderColor:accent,borderRadius:3,paddingVertical:3,paddingHorizontal:6},
  footer:{position:"absolute",bottom:24,left:44,right:44,flexDirection:"row",justifyContent:"space-between",fontSize:7,color:muted},
 });
+/** "Calle 1, Local 2, 03730 Jávea (Alicante), España" → straat / postcode + plaats. */
+const adres=(a:string)=>{const m=a.match(/^(.*?),\s*(\d{5}\b.*)$/);return m?[m[1],m[2]]:[a];};
 const fecha=(d:string)=>{const [y,m,dd]=d.split("-");return `${dd}/${m}/${y}`;};
 const dia=(d:string)=>new Date(`${d}T12:00:00Z`).toLocaleDateString("es-ES",{timeZone:"UTC",weekday:"short",day:"2-digit",month:"2-digit"});
 export async function renderWorkerInvoice(invoice:WorkerInvoice,days:WeekDay[],status:string) {
@@ -54,8 +58,13 @@ export async function renderWorkerInvoice(invoice:WorkerInvoice,days:WeekDay[],s
      <View style={[s.cell,{borderRightWidth:0}]}><Text style={s.boxLabel}>Total a pagar</Text><Text style={[s.cellValue,{color:accent}]}>{eur(i.total)}</Text></View>
    </View>
    <View style={s.parties}>
-     <View style={s.box}><Text style={s.boxLabel}>Emisor</Text><Text style={s.bold}>{i.legalName}</Text><Text>NIF/NIE {i.taxId}</Text><Text>{i.address}</Text></View>
-     <View style={s.box}><Text style={s.boxLabel}>Cliente</Text><Text style={s.bold}>{i.customer.name}</Text><Text>NIF {i.customer.taxId}</Text><Text>{i.customer.address}</Text></View>
+     {[{label:"Emisor",name:i.legalName,idLabel:"NIF/NIE",id:i.taxId,address:i.address,extra:i.email},{label:"Cliente",name:i.customer.name,idLabel:"NIF",id:i.customer.taxId,address:i.customer.address,extra:""}].map(p=><View key={p.label} style={s.party}>
+       <Text style={s.boxLabel}>{p.label}</Text>
+       <Text style={s.partyName}>{p.name}</Text>
+       {adres(p.address).map((l,n)=><Text key={n}>{l}</Text>)}
+       <View style={s.partyId}><Text style={{color:muted,width:42}}>{p.idLabel}</Text><Text style={s.bold}>{p.id}</Text></View>
+       {p.extra?<Text style={{color:muted,marginTop:2}}>{p.extra}</Text>:null}
+     </View>)}
    </View>
    <View style={s.th}><Text style={s.cDesc}>Concepto</Text><Text style={s.cNum}>Horas</Text><Text style={s.cAmt}>Precio/hora</Text><Text style={s.cAmt}>Importe</Text></View>
    <View style={s.tr}>
