@@ -470,4 +470,13 @@ export const es: Dictionary = {
   "{n} zonder": "{n} sin",
   "{naam} en alles wat we op de beurs van hem vastlegden verwijderen?":
     "¿Eliminar a {naam} y todo lo que anotamos en la feria?",
+  "Alle goederen retour; vergoeding over": "Todos los productos devueltos; queda una compensación",
+  "Maakt de conceptcreditnota volledig en zet alleen de vergoeding op een aparte eindfactuur. Beide blijven concept. De eindfactuur boekt geen producten af.": "Completa el borrador de la factura rectificativa y crea una factura final separada solo para la compensación. Ambas siguen como borradores. La factura final no descuenta existencias.",
+  "Eindfactuur voor vergoeding": "Factura final de la compensación",
+  "Ongeldige aanvraag.": "Solicitud no válida.",
+  "Deze factuur kan niet worden omgezet.": "Esta factura no se puede convertir.",
+  "Gebruik één onbewerkte conceptcreditnota en een factuur zonder betalingen of verrekeningen.": "Utiliza un solo borrador de factura rectificativa no emitido y una factura sin pagos ni liquidaciones.",
+  "Factuur en creditnota horen niet bij dezelfde klant, valuta en klus.": "La factura y la rectificativa no tienen el mismo cliente, moneda y proyecto.",
+  "De factuur of creditnota is gewijzigd. Vernieuw de pagina en controleer het bedrag opnieuw.": "La factura o la rectificativa ha cambiado. Actualiza la página y vuelve a comprobar el importe.",
+  "De creditnota moet alle originele regels bevatten, plus een negatieve vergoedingsregel zonder productkoppeling.": "La factura rectificativa debe contener todas las líneas originales y una línea negativa de compensación sin vínculo a un producto.",
 };

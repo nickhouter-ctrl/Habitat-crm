@@ -469,4 +469,13 @@ export const en: Dictionary = {
   "{n} zonder": "{n} without",
   "{naam} en alles wat we op de beurs van hem vastlegden verwijderen?":
     "Delete {naam} and everything we logged about them at the fair?",
+  "Alle goederen retour; vergoeding over": "All goods returned; fee remains",
+  "Maakt de conceptcreditnota volledig en zet alleen de vergoeding op een aparte eindfactuur. Beide blijven concept. De eindfactuur boekt geen producten af.": "Completes the draft credit note and creates a separate final invoice for the fee only. Both remain drafts. The final invoice does not deduct stock.",
+  "Eindfactuur voor vergoeding": "Final invoice for fee",
+  "Ongeldige aanvraag.": "Invalid request.",
+  "Deze factuur kan niet worden omgezet.": "This invoice cannot be converted.",
+  "Gebruik één onbewerkte conceptcreditnota en een factuur zonder betalingen of verrekeningen.": "Use one unissued draft credit note and an invoice without payments or settlements.",
+  "Factuur en creditnota horen niet bij dezelfde klant, valuta en klus.": "The invoice and credit note do not share the same customer, currency and project.",
+  "De factuur of creditnota is gewijzigd. Vernieuw de pagina en controleer het bedrag opnieuw.": "The invoice or credit note changed. Refresh the page and check the amount again.",
+  "De creditnota moet alle originele regels bevatten, plus een negatieve vergoedingsregel zonder productkoppeling.": "The credit note must contain all original lines plus a negative fee line without a product link.",
 };
