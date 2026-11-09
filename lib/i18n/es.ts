@@ -477,6 +477,7 @@ export const es: Dictionary = {
   "{n} zonder": "{n} sin",
   "{naam} en alles wat we op de beurs van hem vastlegden verwijderen?":
     "¿Eliminar a {naam} y todo lo que anotamos en la feria?",
+  "Nog te betalen: {bedrag}": "Pendiente de pago: {bedrag}",
   "Alle goederen retour; vergoeding over": "Todos los productos devueltos; queda una compensación",
   "Maakt de conceptcreditnota volledig en zet alleen de vergoeding op een aparte eindfactuur. Beide blijven concept. De eindfactuur boekt geen producten af.": "Completa el borrador de la factura rectificativa y crea una factura final separada solo para la compensación. Ambas siguen como borradores. La factura final no descuenta existencias.",
   "Eindfactuur voor vergoeding": "Factura final de la compensación",

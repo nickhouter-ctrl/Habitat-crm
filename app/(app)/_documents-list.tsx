@@ -375,6 +375,11 @@ export async function DocumentsList({
                   ? uiT("waarvan {v0} verrekend", { v0: formatEUR(creditBedrag) })
                   : uiT("verrekend")}
               </span>
+              {d.status !== "void" && (
+                <span className="mt-1 block font-semibold text-foreground">
+                  {uiT("Nog te betalen: {bedrag}", { bedrag: formatEUR(openNetto(d)) })}
+                </span>
+              )}
             </>
           ) : (
             // `|| 0` voorkomt "€ -0,00" bij creditnota's zonder betaald bedrag.
