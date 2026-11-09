@@ -1,7 +1,7 @@
 import "server-only";
 import { and, desc, eq, gte, inArray, isNotNull, lte, sql } from "drizzle-orm";
 import { db } from "@/lib/db";
-import { workerWeekSheets as sheets, workers } from "@/lib/db/schema";
+import { workerWeekSheets as sheets, workers, purchaseOrders } from "@/lib/db/schema";
 import { addDays, mondayOf, type WorkerInvoice } from "@/lib/worker-week";
 
 export type SupplierDetails = Pick<WorkerInvoice, "legalName" | "taxId" | "address" | "email" | "iban"> & Partial<Pick<WorkerInvoice, "vatRate" | "withholdingRate" | "taxNote">> & { lastNumber?: string | null; triedNumber?: string | null };
@@ -47,9 +47,19 @@ export async function loadWorkerDashboard(workerId:string,projectId:string,today
   const sheet=selectedRows[0];
   const selectedSheet=selected===requested?sheet:(await db.select().from(sheets).where(and(scope,eq(sheets.weekStart,current))).limit(1))[0];
   // Bewaarde gegevens van de bouwer zelf gaan voor; anders die van zijn laatste factuur.
-  const [own]=await db.select({p:workers.invoiceProfile}).from(workers).where(eq(workers.id,workerId));
+  const [own]=await db.select({p:workers.invoiceProfile,name:workers.name}).from(workers).where(eq(workers.id,workerId));
+  // Nog nooit via het portaal gefactureerd? Dan het laatste nummer uit Inkoop
+  // ("Zerghini Abdelmjid 22" → volgende is 23).
+  let lastFromPurchases:string|null=null;
+  if(!profileRows[0]?.lastNumber && own?.name){
+    const [po]=await db.select({ref:purchaseOrders.reference}).from(purchaseOrders)
+      .where(and(eq(purchaseOrders.countAsLabor,true),sql`(lower(${purchaseOrders.supplier}) = lower(${own.name}) or lower(${purchaseOrders.reference}) like lower(${own.name}) || ' %') and exists (select 1 from time_entries t where t.purchase_order_id = ${purchaseOrders.id})`))
+      .orderBy(desc(purchaseOrders.orderDate),desc(purchaseOrders.createdAt)).limit(1);
+    lastFromPurchases=po?.ref?.match(/(\d+)\s*$/)?.[1]??null;
+  }
   const num=(x:unknown)=>x===""||x==null?undefined:Number(x);
   const profile:SupplierDetails|undefined=own?.p?{...(profileRows[0] as SupplierDetails|undefined),...Object.fromEntries(Object.entries(own.p).filter(([,v])=>v!==""&&v!=null)),
     vatRate:num(own.p.vatRate)??profileRows[0]?.vatRate,withholdingRate:num(own.p.withholdingRate)??profileRows[0]?.withholdingRate} as SupplierDetails:profileRows[0] as SupplierDetails|undefined;
-  return {lastTeam,view,current,earliest,recentStates,selected,sheet:selectedSheet,invoiceSheet:invoiceRows[0],profile,counts,rows,page,pages};
+  const profileMetNummer:SupplierDetails|undefined=lastFromPurchases?{...(profile??{} as SupplierDetails),lastNumber:profile?.lastNumber??lastFromPurchases}:profile;
+  return {lastTeam,view,current,earliest,recentStates,selected,sheet:selectedSheet,invoiceSheet:invoiceRows[0],profile:profileMetNummer,counts,rows,page,pages};
 }
