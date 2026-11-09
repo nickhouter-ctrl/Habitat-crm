@@ -40,7 +40,7 @@ export async function syncWorkerInvoice(id:string) {
       const contacts=await holded.contacts.list();const matches=contacts.filter(c=>supplierMatches(c,invoice));
       if(matches.length>1)throw Error("Multiple supplier tax identities");
       let contact=matches[0]?.id;
-      if(!contact){const result=await holded.contacts.create({name:invoice.legalName,code:invoice.taxId,type:"supplier",email:invoice.email,iban:invoice.iban,billAddress:{address:invoice.address}});if(!result.id)throw Error("No supplier ID");contact=result.id;}
+      if(!contact){const result=await holded.contacts.create({name:invoice.legalName,code:invoice.taxId,type:"supplier",...(invoice.email?{email:invoice.email}:{}),iban:invoice.iban,billAddress:{address:invoice.address}});if(!result.id)throw Error("No supplier ID");contact=result.id;}
       return workerPurchaseBody(id,invoice,contact);
     },
     posting:async()=>{const owned=await db.update(sheets).set({holdedSyncStatus:"posting"}).where(and(eq(sheets.id,id),eq(sheets.holdedSyncAttemptAt,attemptAt))).returning({id:sheets.id});if(!owned.length)throw Error("Sync claim expired");},

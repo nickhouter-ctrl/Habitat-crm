@@ -68,7 +68,7 @@ export function validateWeek(raw: unknown, monday: string, today: string, submit
 }
 export const supplierInvoiceSchema=z.object({
   legalName:z.string().trim().min(2).max(180),taxId:z.string().trim().min(5).max(40),address:z.string().trim().min(8).max(350),
-  email:z.email().max(180),iban:z.string().trim().max(40).refine(s=>!s || validIban(s)),
+  email:z.union([z.email().max(180),z.literal("")]),iban:z.string().trim().max(40).refine(s=>!s || validIban(s)),
   number:z.string().trim().min(1).max(64).regex(/^[\p{L}\p{N} ._\/-]+$/u),date:dateSchema,
   vatRate:z.union([z.literal(0),z.literal(4),z.literal(10),z.literal(21)]),
   withholdingRate:z.union([z.literal(0),z.literal(7),z.literal(15),z.literal(19)]),taxNote:z.string().trim().max(500),
