@@ -1444,6 +1444,30 @@ export const workerWeekSheets = pgTable("worker_week_sheets", {
 ]).enableRLS();
 
 /**
+ * Losse factuur uit het urenportaal, zonder uren: aanneemwerk tegen een vaste
+ * prijs ("badkamer boven betegeld"). Kantoor keurt hem op de projectpagina goed;
+ * dan komt hij als inkoopfactuur (geen uren) op het project.
+ */
+export const workerLumpInvoices = pgTable("worker_lump_invoices", {
+  id: uuid().primaryKey().default(sql`gen_random_uuid()`),
+  workerId: uuid().notNull().references(() => workers.id, { onDelete: "restrict" }),
+  projectId: uuid().notNull().references((): AnyPgColumn => projects.id, { onDelete: "restrict" }),
+  status: text().notNull().default("submitted"),
+  version: integer().notNull().default(1),
+  invoice: jsonb().$type<WorkerInvoice>().notNull(),
+  invoiceKey: text().notNull(),
+  reviewNote: text(),
+  reviewedAt: timestamp({ withTimezone: true }),
+  reviewedBy: uuid().references(() => users.id, { onDelete: "set null" }),
+  purchaseOrderId: uuid().references((): AnyPgColumn => purchaseOrders.id, { onDelete: "restrict" }),
+  ...timestamps,
+}, (t) => [
+  uniqueIndex("worker_lump_invoice_key_idx").on(t.invoiceKey),
+  index("worker_lump_invoice_project_idx").on(t.projectId, t.status),
+  check("worker_lump_invoice_status_check", sql`${t.status} in ('submitted','returned','approved')`),
+]).enableRLS();
+
+/**
  * Urenregistratie per project. Arbeidskost van een regel = `hours × hourlyCostEur`
  * (tarief-snapshot, los van latere tariefwijzigingen). `paymentMethod` is
  * informatief + afrekenstatus (`paidAt`); het telt nooit dubbel — arbeid wordt

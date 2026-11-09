@@ -5,7 +5,7 @@ import { db } from "@/lib/db";
 import { timeEntries } from "@/lib/db/schema";
 import { portalLinkForToken } from "@/lib/worker-portal";
 import { weekRoster } from "@/lib/worker-week-grid";
-import { WorkerWeekForm, WorkerInvoiceForm } from "@/components/worker-week-form";
+import { WorkerWeekForm, WorkerInvoiceForm, WorkerLumpInvoiceForm } from "@/components/worker-week-form";
 import { workerRate } from "@/lib/worker-rate";
 import { WorkerInvoiceDetail } from "@/components/worker-invoice-detail";
 import { madridToday,emptyWeek,weekLang,totalWeekHours,periodRange } from "@/lib/worker-week";
@@ -45,6 +45,16 @@ export default async function UrenPortaalPage({params,searchParams}:Props) {
   const rows=<div className="divide-y divide-stone-200">{data.rows.map(row=>{return <Link key={row.id} href={href({view:"week",week:row.weekStart})} className="flex flex-wrap items-center justify-between gap-3 py-4 first:pt-0 last:pb-0"><div><p className="font-semibold">{periodRange(row.weekStart,lang,row.days.at(-1)?.date)}</p><p className="mt-1 text-xs text-stone-500">{row.weekStart.slice(0,4)} · {totalWeekHours(row.days)} h</p></div><div className="flex items-center gap-3">{pill(row.status)}<span aria-hidden="true" className="text-stone-400">→</span></div></Link>;})}</div>;
   const pagination=data.pages>1?<nav aria-label={d("page")} className="flex items-center justify-between gap-3 text-sm">{data.page>1?<Link className={secondary} href={href({view,page:data.page-1,...(view==="week"?{week:selected}:{})})}>← {d("previous")}</Link>:<span/>}<span className="text-stone-500">{d("page")} {data.page} / {data.pages}</span>{data.page<data.pages?<Link className={secondary} href={href({view,page:data.page+1,...(view==="week"?{week:selected}:{})})}>{d("next")} →</Link>:<span/>}</nav>:null;
   const legacy=view==="week"?await db.select({date:timeEntries.date,hours:timeEntries.hours,note:timeEntries.note}).from(timeEntries).where(and(eq(timeEntries.workerId,worker.id),eq(timeEntries.projectId,project.id),isNull(timeEntries.weekSheetId),gte(timeEntries.date,selected),lte(timeEntries.date,sheet?.days.at(-1)?.date??selected))).orderBy(desc(timeEntries.date)).limit(100):[];
+  // Losse facturen zonder uren (vaste prijs): lijst + formulier, ingeklapt.
+  const lumpSection=worker.portalInvoiceEnabled||data.lumps.length?<section className={`${panel} space-y-4`}>
+    <div><h2 className="text-xl font-semibold">{t("lumpTitle")}</h2><p className="mt-1 text-sm text-stone-600">{t("lumpHint")}</p></div>
+    {data.lumps.map(l=><div key={l.id} className="space-y-3 rounded-xl border border-stone-200 p-4">
+      <div className="flex flex-wrap items-start justify-between gap-3"><div><p className="font-semibold">{l.invoice.number} · {l.invoice.concept}</p><p className="text-xs text-stone-500">{date(l.invoice.date)}</p></div><div className="text-right"><p className="font-semibold tabular-nums">{eur(l.invoice.total)}</p>{pill(l.status)}</div></div>
+      <a className={secondary} href={pdf(l.id)}>{t("pdf")}</a>
+      {l.status==="returned"&&<>{l.reviewNote&&<p className="rounded-lg bg-amber-50 p-3 text-sm whitespace-pre-wrap">{l.reviewNote}</p>}{active&&worker.portalInvoiceEnabled&&<WorkerLumpInvoiceForm token={token} lang={lang} today={today} supplier={data.profile} previous={l.invoice} replaceId={l.id}/>}</>}
+    </div>)}
+    {active&&worker.portalInvoiceEnabled&&<details className="rounded-xl border border-dashed border-stone-300 p-4"><summary className="cursor-pointer font-semibold text-[#a94f2d]">{t("lumpOpen")}</summary><div className="mt-4"><WorkerLumpInvoiceForm token={token} lang={lang} today={today} supplier={data.profile}/></div></details>}
+  </section>:null;
   return <main lang={lang} className="min-h-screen bg-[#f4f0e9] px-4 py-7 text-stone-900 sm:py-10"><div className="mx-auto max-w-3xl space-y-6">
     <header className="space-y-5"><div className="flex flex-wrap items-center justify-between gap-3"><span className="text-xs font-semibold tracking-[.16em] text-stone-500">HABITAT ONE · {worker.name}</span><nav aria-label="Language" className="flex gap-1">{(["nl","es","en"] as const).map(l=><Link key={l} href={href({view,lang:l,week:selected,page:data.page,...(data.invoiceSheet?{invoice:data.invoiceSheet.id}:{})})} className={`rounded-md px-3 py-2 text-sm ${lang===l?"bg-stone-800 text-white":"bg-white text-stone-700"}`}>{l==="es"?"Español":l==="nl"?"NL":"EN"}</Link>)}</nav></div>
       <div><p className="mb-2 text-sm font-medium text-[#a94f2d]">{project.name}</p><h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">{view==="week"?t("title"):view==="invoices"?d("invoiceTitle"):view==="invoice"?d("document"):d("title")}</h1><p className="mt-3 max-w-xl text-sm leading-relaxed text-stone-600">{view==="week"?t("intro"):d("intro")}</p></div>
@@ -72,6 +82,7 @@ export default async function UrenPortaalPage({params,searchParams}:Props) {
         {sheet?.invoice && <div><p className="mb-3 font-medium">{sheet.invoice.number} · {eur(sheet.invoice.total)}</p><div className="flex flex-wrap gap-2"><Link className={secondary} href={href({view:"invoice",invoice:sheet.id})}>{d("view")}</Link><a className={secondary} href={pdf(sheet.id)}>{t("pdf")}</a></div></div>}
         {active && worker.portalInvoiceEnabled && (sheet?.status==="approved"||sheet?.status==="submitted") && (!sheet.invoiceStatus || sheet.invoiceStatus==="returned")?<WorkerInvoiceForm key={`${sheet.id}:${sheet.version}`} token={token} lang={lang} id={sheet.id} version={sheet.version} hours={totalWeekHours(sheet.days)} rate={Number(sheet.hourlyRate)} today={today} previous={sheet.invoice} supplier={data.profile}/>:!sheet?.invoice && active?<p className="text-sm leading-relaxed text-stone-600">{t("invoiceIntro")}</p>:null}
       </section>}
+      {lumpSection}
       {legacy.length>0 && <section className="space-y-3 rounded-xl border border-amber-200 bg-amber-50 p-5"><h2 className="font-semibold">{t("old")}</h2><p className="text-sm">{t("olderHint")}</p>{legacy.map((e,i)=><p key={i} className="text-sm">{date(e.date)} · {e.hours} h · {e.note}</p>)}</section>}
 
       <details className={panel}><summary className="cursor-pointer font-semibold">{d("history")}</summary><div className="mt-5">{data.rows.length?rows:<p className="text-sm text-stone-500">{d("noWeeks")}</p>}</div></details>{pagination}
@@ -79,6 +90,7 @@ export default async function UrenPortaalPage({params,searchParams}:Props) {
 
     {view==="invoices" && <>
       <p className="text-sm leading-relaxed text-stone-600">{d("invoiceHint")}</p>
+      {lumpSection}
       {data.rows.length?<div className="space-y-3">{data.rows.map(row=>{return <article key={row.id} className={panel}><div className="flex flex-wrap items-start justify-between gap-3"><div><p className="text-xs text-stone-500">{date(row.date??row.weekStart)} · {periodRange(row.weekStart,lang,row.days.at(-1)?.date)}</p><h2 className="mt-1 break-words text-xl font-semibold">{row.number}</h2></div><div className="text-right"><p className="mb-2 text-lg font-semibold tabular-nums">{eur(Number(row.amount))}</p>{pill(row.invoiceStatus??"submitted")}</div></div><div className="mt-4 flex flex-wrap gap-2"><Link className={secondary} href={href({view:"invoice",invoice:row.id})}>{d("view")}</Link><a className={secondary} href={pdf(row.id)}>{t("pdf")}</a></div></article>;})}</div>:<p className={panel}>{d("noInvoices")}</p>}{pagination}
     </>}
 

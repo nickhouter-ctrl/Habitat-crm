@@ -1,6 +1,6 @@
 "use client";
 import { useActionState, useState, useEffect, useRef } from "react";
-import { saveWeekAction, submitWeekInvoiceAction } from "@/app/uren/[token]/week-actions";
+import { saveWeekAction, submitWeekInvoiceAction, submitLumpInvoiceAction } from "@/app/uren/[token]/week-actions";
 import { addDays, periodRange, totalWeekHours, invoiceAmounts, validateWeek, type WeekDay, type WeekLang, type WorkerInvoice } from "@/lib/worker-week";
 import type { SupplierDetails } from "@/lib/worker-portal-dashboard";
 import { weekT, weekError, type WeekCopyKey } from "@/lib/worker-week-i18n";
@@ -80,7 +80,7 @@ export function nextInvoiceNumber(last?:string|null) {
   const n=String(Number(m[2])+1).padStart(m[2].length,"0");
   return `${m[1]}${n}${m[3]}`;
 }
-function InvoiceFields({lang,hours,rate,today,previous,supplier,confirmName}:{lang:WeekLang;hours:number;rate:number;today:string;previous:WorkerInvoice|null;supplier?:SupplierDetails;confirmName:string}) {
+function InvoiceFields({lang,hours,rate,today,previous,supplier,confirmName,lump=false}:{lang:WeekLang;hours:number;rate:number;today:string;previous:WorkerInvoice|null;supplier?:SupplierDetails;confirmName:string;lump?:boolean}) {
   const t=(key:WeekCopyKey)=>weekT(lang,key);
   const vorige=previous??(supplier?{...supplier}:null);
   const [vat,setVat]=useState(vorige?.vatRate!=null&&!Number.isNaN(vorige.vatRate)?String(vorige.vatRate):"");const [withholding,setWithholding]=useState(vorige?.withholdingRate!=null&&!Number.isNaN(vorige.withholdingRate)?String(vorige.withholdingRate):"");
@@ -94,7 +94,7 @@ function InvoiceFields({lang,hours,rate,today,previous,supplier,confirmName}:{la
     <div className="grid grid-cols-2 gap-3"><label className="text-sm font-medium">{t("vat")}<select aria-label={t("vat")} className={input} name="vatRate" value={vat} required onChange={e=>setVat(e.target.value)}><option value="">{t("taxChoice")}</option>{[0,4,10,21].map(v=><option key={v} value={v}>{v}%</option>)}</select></label>
     <label className="text-sm font-medium">{t("withholding")}<select aria-label={t("withholding")} className={input} name="withholdingRate" value={withholding} required onChange={e=>setWithholding(e.target.value)}><option value="">{t("taxChoice")}</option>{[0,7,15,19].map(v=><option key={v} value={v}>{v}%</option>)}</select></label></div>
     <label className="block text-sm font-medium">{t("taxNote")}<textarea className={input} name="taxNote" maxLength={500} rows={2} required={vat==="0"} defaultValue={previous?.taxNote??supplier?.taxNote??""}/></label>
-    <dl className="space-y-2 rounded-lg bg-stone-100 p-4 text-sm">{[[t("rate"),eur(rate)],[t("total"),`${hours} h`],[t("subtotal"),eur(amounts.subtotal)],[t("vat"),eur(amounts.vat)],[t("withholding"),`− ${eur(amounts.withholding)}`],[t("amount"),eur(amounts.total)]].map(([label,value])=><div className="flex justify-between gap-3" key={label}><dt>{label}</dt><dd className="font-semibold">{value}</dd></div>)}</dl>
+    <dl className="space-y-2 rounded-lg bg-stone-100 p-4 text-sm">{[...(lump?[]:[[t("rate"),eur(rate)],[t("total"),`${hours} h`]]),[t("subtotal"),eur(amounts.subtotal)],[t("vat"),eur(amounts.vat)],[t("withholding"),`− ${eur(amounts.withholding)}`],[t("amount"),eur(amounts.total)]].map(([label,value])=><div className="flex justify-between gap-3" key={label}><dt>{label}</dt><dd className="font-semibold">{value}</dd></div>)}</dl>
     <label className="flex items-start gap-3 text-sm"><input className="mt-1 size-5 shrink-0 accent-[#a94f2d]" type="checkbox" name={confirmName} required/>{t("invoiceConfirm")}</label>
   </>;
 }
@@ -109,5 +109,26 @@ export function WorkerInvoiceForm({token,lang,id,version,hours,rate,today,previo
       <button className={button} disabled={pending||rate<=0}>{pending?t("busy"):t("sendInvoice")}</button>
     </fieldset>
     {state?.error && <p role="alert" className="text-sm text-red-800">{state.error}</p>}{state?.ok && <p role="status" className="text-sm text-green-800">{state.ok}</p>}
+  </form>;
+}
+
+/** Losse factuur zonder uren: omschrijving + bedrag, verder dezelfde gegevens als altijd. */
+export function WorkerLumpInvoiceForm({token,lang,today,supplier,previous,replaceId}:{token:string;lang:WeekLang;today:string;supplier?:SupplierDetails;previous?:WorkerInvoice|null;replaceId?:string}) {
+  const t=(key:WeekCopyKey)=>weekT(lang,key);
+  const [state,action,pending]=useActionState(submitLumpInvoiceAction.bind(null,token),null);
+  const [amount,setAmount]=useState(previous?String(previous.subtotal):"");
+  const value=Number(amount.replace(",","."))||0;
+  if(state?.ok)return <p role="status" className="rounded-xl bg-emerald-50 p-4 text-sm font-medium text-emerald-900">{state.ok}</p>;
+  return <form action={action} onReset={event=>event.preventDefault()} className="space-y-4">
+    <input type="hidden" name="lang" value={lang}/>{replaceId&&<input type="hidden" name="replaceId" value={replaceId}/>}
+    <fieldset disabled={pending} className="space-y-4">
+      <label className="block text-sm font-semibold">{t("concept")}<textarea className={input} name="concept" rows={2} required minLength={5} maxLength={500} placeholder={t("conceptHint")} defaultValue={previous?.concept??""}/></label>
+      <label className="block text-sm font-semibold">{t("amountEx")}<input className={`${input} text-lg font-semibold`} name="amount" inputMode="decimal" required value={amount} onChange={e=>setAmount(e.target.value)} placeholder="0,00"/></label>
+      <details className="rounded-lg border border-stone-200 p-3" open={!supplier}><summary className="cursor-pointer text-sm font-medium">{t("issuer")}{supplier?` · ${supplier.legalName}`:""}</summary><div className="mt-3 space-y-4">
+        <InvoiceFields lang={lang} hours={1} rate={value} today={today} previous={previous??null} supplier={supplier} confirmName="confirmed" lump/>
+      </div></details>
+      <button className={`${button} w-full`} disabled={pending||value<=0}>{pending?t("busy"):replaceId?t("lumpResubmit"):t("sendInvoice")}</button>
+    </fieldset>
+    {state?.error&&<p role="alert" className="text-sm font-medium text-red-800">{state.error}</p>}
   </form>;
 }

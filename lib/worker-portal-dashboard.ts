@@ -1,7 +1,7 @@
 import "server-only";
 import { and, desc, eq, gte, inArray, isNotNull, lte, sql } from "drizzle-orm";
 import { db } from "@/lib/db";
-import { workerWeekSheets as sheets, workers, purchaseOrders } from "@/lib/db/schema";
+import { workerWeekSheets as sheets, workers, purchaseOrders, workerLumpInvoices } from "@/lib/db/schema";
 import { addDays, mondayOf, type WorkerInvoice } from "@/lib/worker-week";
 
 export type SupplierDetails = Pick<WorkerInvoice, "legalName" | "taxId" | "address" | "email" | "iban"> & Partial<Pick<WorkerInvoice, "vatRate" | "withholdingRate" | "taxNote">> & { lastNumber?: string | null; triedNumber?: string | null };
@@ -61,5 +61,7 @@ export async function loadWorkerDashboard(workerId:string,projectId:string,today
   const profile:SupplierDetails|undefined=own?.p?{...(profileRows[0] as SupplierDetails|undefined),...Object.fromEntries(Object.entries(own.p).filter(([,v])=>v!==""&&v!=null)),
     vatRate:num(own.p.vatRate)??profileRows[0]?.vatRate,withholdingRate:num(own.p.withholdingRate)??profileRows[0]?.withholdingRate} as SupplierDetails:profileRows[0] as SupplierDetails|undefined;
   const profileMetNummer:SupplierDetails|undefined=lastFromPurchases?{...(profile??{} as SupplierDetails),lastNumber:profile?.lastNumber??lastFromPurchases}:profile;
-  return {lastTeam,view,current,earliest,recentStates,selected,sheet:selectedSheet,invoiceSheet:invoiceRows[0],profile:profileMetNummer,counts,rows,page,pages};
+  const lumps=await db.select({id:workerLumpInvoices.id,status:workerLumpInvoices.status,invoice:workerLumpInvoices.invoice,reviewNote:workerLumpInvoices.reviewNote}).from(workerLumpInvoices)
+    .where(and(eq(workerLumpInvoices.workerId,workerId),eq(workerLumpInvoices.projectId,projectId))).orderBy(desc(workerLumpInvoices.createdAt)).limit(20);
+  return {lumps,lastTeam,view,current,earliest,recentStates,selected,sheet:selectedSheet,invoiceSheet:invoiceRows[0],profile:profileMetNummer,counts,rows,page,pages};
 }

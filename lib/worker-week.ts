@@ -75,7 +75,7 @@ export const supplierInvoiceSchema=z.object({
   confirmed:z.literal(true),
 }).refine(v=>v.vatRate!==0 || v.taxNote.length>=10,{path:["taxNote"]});
 export type SupplierInvoiceInput=z.infer<typeof supplierInvoiceSchema>;
-export type WorkerInvoice=SupplierInvoiceInput & { customer:{name:string;taxId:string;address:string};hours:number;rate:number;subtotal:number;vat:number;withholding:number;total:number;language:WeekLang;projectName:string;weekStart:string };
+export type WorkerInvoice=SupplierInvoiceInput & { /** Alleen bij een losse factuur zonder uren: wat er gefactureerd wordt. */ concept?:string; customer:{name:string;taxId:string;address:string};hours:number;rate:number;subtotal:number;vat:number;withholding:number;total:number;language:WeekLang;projectName:string;weekStart:string };
 export function validIban(raw:string) {
   const s=raw.replace(/\s/g,"").toUpperCase();if(!/^[A-Z]{2}\d{2}[A-Z0-9]{11,30}$/.test(s))return false;
   const moved=s.slice(4)+s.slice(0,4);let remainder=0;

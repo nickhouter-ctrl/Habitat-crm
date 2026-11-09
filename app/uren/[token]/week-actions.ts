@@ -12,6 +12,7 @@ import { rateLimit } from "@/lib/rate-limit";
 import { madridToday, weekLang, validateWeek, supplierInvoiceSchema, type WeekDay } from "@/lib/worker-week";
 import { weekError, weekT } from "@/lib/worker-week-i18n";
 import { saveWeek, submitWeekInvoice, WeekConflict } from "@/lib/worker-week-service";
+import { submitLumpInvoice } from "@/lib/worker-lump-invoice";
 
 /** Wat de bouwer invulde meteen bij hem bewaren — ook als de rest nog niet
  *  klopt of indienen mislukt. Volgende keer staat het er gewoon weer. */
@@ -73,4 +74,20 @@ export async function submitWeekInvoiceAction(token:string,_prev:WeekActionState
   catch(e){return {error:weekError(lang,e instanceof WeekConflict?e.message:"failure")};}
   revalidatePath(`/uren/${token}`);revalidatePath(`/projects/${ctx.project.id}`);revalidatePath("/inkooporders");revalidatePath("/inkooporders/te-verwerken");
   return {ok:weekT(lang,"invoiceSent"),savedAt:Date.now()};
+}
+
+export async function submitLumpInvoiceAction(token:string,_prev:WeekActionState,form:FormData):Promise<WeekActionState> {
+  const ctx=await portalLinkForToken(token);const lang=weekLang(form.get("lang")??ctx?.worker.portalLang);
+  if(!ctx || !await rateLimit(`worker-invoice:${ctx.link.id}`,20,3600,{strikt:true}))return {error:weekT(lang,"unavailable")};
+  await rememberInvoiceProfile(ctx.worker.id,form);
+  const concept=String(form.get("concept")??"").trim(),amount=Number(String(form.get("amount")??"").replace(/\s/g,"").replace(/\.(?=\d{3}(\D|$))/g,"").replace(",","."));
+  const replaceId=String(form.get("replaceId")??"")||undefined;
+  if(concept.length<5||concept.length>500||!(amount>0)||amount>1_000_000||(replaceId&&!/^[0-9a-f-]{36}$/.test(replaceId)))return {error:weekT(lang,"fields")};
+  const input=invoiceInput(form);
+  if(!input)return {error:weekT(lang,"fields")};
+  if(input.date>madridToday())return {error:weekError(lang,"invoiceDate")};
+  try{await submitLumpInvoice({worker:ctx.worker,projectId:ctx.project.id,projectName:ctx.project.name,input,concept,amount:Math.round(amount*100)/100,language:lang,replaceId});}
+  catch(e){return {error:weekError(lang,e instanceof WeekConflict?e.message:"failure")};}
+  revalidatePath(`/uren/${token}`);revalidatePath(`/projects/${ctx.project.id}`);
+  return {ok:weekT(lang,"lumpSent"),savedAt:Date.now()};
 }

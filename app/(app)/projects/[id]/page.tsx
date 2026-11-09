@@ -1,4 +1,5 @@
 import { WorkerWeekReviews } from "@/components/worker-week-reviews";
+import { WorkerLumpInvoiceReviews } from "@/components/worker-lump-invoice-reviews";
 import { loadCatalogLineCost } from "@/lib/catalog-costs";
 import { FinancialDetailsProvider, FinancialInspect, FinancialTable, type FinancialDetail, type FinancialSection } from "@/components/project-financial-details";
 import { projectAdvanceLedger } from "@/lib/project-advance-ledger";
@@ -1872,6 +1873,7 @@ export default async function ProjectDetailPage({
               )}
 
               <WorkerWeekReviews projectId={id} />
+              <WorkerLumpInvoiceReviews projectId={id} />
 
               {/* Urenportaal: verwijs een arbeider/ploegbaas naar dit project — hij
                   krijgt een persoonlijke link en kan alleen hier uren invullen. */}

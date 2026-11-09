@@ -1,5 +1,7 @@
 import React from "react";
-import { Document,Page,Text,View,StyleSheet,renderToBuffer } from "@react-pdf/renderer";
+import { Document,Page,Text,View,StyleSheet,Font,renderToBuffer } from "@react-pdf/renderer";
+// Geen afbreekstreepjes midden in namen ("Gersh-win").
+Font.registerHyphenationCallback(word=>[word]);
 import { periodRange, type WorkerInvoice, type WeekDay } from "@/lib/worker-week";
 
 // Altijd in het Spaans: het is een Spaanse factuur van een Spaanse zelfstandige
@@ -54,7 +56,7 @@ export async function renderWorkerInvoice(invoice:WorkerInvoice,days:WeekDay[],s
    <View style={s.strip}>
      <View style={s.cell}><Text style={s.boxLabel}>Factura nº</Text><Text style={s.number}>{i.number}</Text></View>
      <View style={s.cell}><Text style={s.boxLabel}>Fecha de factura</Text><Text style={s.cellValue}>{fecha(i.date)}</Text></View>
-     <View style={s.cell}><Text style={s.boxLabel}>Periodo</Text><Text style={s.cellValue}>{fecha(i.weekStart)} – {fecha(last??i.weekStart)}</Text></View>
+     {i.concept?<View style={s.cell}><Text style={s.boxLabel}>Obra</Text><Text style={s.cellValue}>{i.projectName}</Text></View>:<View style={s.cell}><Text style={s.boxLabel}>Periodo</Text><Text style={s.cellValue}>{fecha(i.weekStart)} – {fecha(last??i.weekStart)}</Text></View>}
      <View style={[s.cell,{borderRightWidth:0}]}><Text style={s.boxLabel}>Total a pagar</Text><Text style={[s.cellValue,{color:accent}]}>{eur(i.total)}</Text></View>
    </View>
    <View style={s.parties}>
@@ -67,15 +69,18 @@ export async function renderWorkerInvoice(invoice:WorkerInvoice,days:WeekDay[],s
      </View>)}
    </View>
    <View style={s.th}><Text style={s.cDesc}>Concepto</Text><Text style={s.cNum}>Horas</Text><Text style={s.cAmt}>Precio/hora</Text><Text style={s.cAmt}>Importe</Text></View>
-   <View style={s.tr}>
+   {i.concept?<View style={s.tr}>
+     <View style={s.cDesc}><Text style={s.bold}>{i.concept}</Text><Text style={s.small}>Obra: {i.projectName} · precio cerrado</Text></View>
+     <Text style={s.cNum}>—</Text><Text style={s.cAmt}>—</Text><Text style={[s.cAmt,s.bold]}>{eur(i.subtotal)}</Text>
+   </View>:<View style={s.tr}>
      <View style={s.cDesc}><Text style={s.bold}>Mano de obra — {i.projectName}</Text><Text style={s.small}>Periodo {periodRange(i.weekStart,"es",last)} · {rows.length} {rows.length===1?"día":"días"} trabajados</Text></View>
      <Text style={s.cNum}>{num(i.hours)}</Text><Text style={s.cAmt}>{eur(i.rate)}</Text><Text style={[s.cAmt,s.bold]}>{eur(i.subtotal)}</Text>
-   </View>
+   </View>}
    <View style={s.totals} wrap={false}>
-     <View style={s.tRow}><Text style={{color:muted}}>Total horas</Text><Text style={s.bold}>{num(i.hours)} h</Text></View>
+     {i.concept?null:<View style={s.tRow}><Text style={{color:muted}}>Total horas</Text><Text style={s.bold}>{num(i.hours)} h</Text></View>}
      <View style={s.tRow}><Text style={{color:muted}}>Base imponible</Text><Text style={s.bold}>{eur(i.subtotal)}</Text></View>
      <View style={s.tRow}><Text style={{color:muted}}>IVA {num(i.vatRate)}%</Text><Text style={s.bold}>{eur(i.vat)}</Text></View>
-     {i.withholdingRate>0 && <View style={s.tRow}><Text style={{color:muted}}>Retención IRPF {num(i.withholdingRate)}%</Text><Text style={s.bold}>− {eur(i.withholding)}</Text></View>}
+     {i.withholdingRate>0 && <View style={s.tRow}><Text style={{color:muted}}>Retención IRPF {num(i.withholdingRate)}%</Text><Text style={s.bold}>- {eur(i.withholding)}</Text></View>}
      <View style={s.grand}><Text>Total a pagar</Text><Text>{eur(i.total)}</Text></View>
    </View>
    <View style={s.pay} wrap={false}>
