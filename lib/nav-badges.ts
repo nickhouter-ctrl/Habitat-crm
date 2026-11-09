@@ -48,7 +48,7 @@ export async function verzamelNavBadges(rol?: string, userEmail?: string | null,
     mag("/opvolging") ? rol === "sales" ? Promise.resolve(0) : telAntwoordNodig(userEmail) : 0,
     mag("/teamberichten") && userId ? db.select({value:count()}).from(staffMessages).where(and(eq(staffMessages.recipientId,userId),isNull(staffMessages.readAt),isNull(staffMessages.recipientDismissedAt))) : nul,
     mag("/projects") ? db.select({value:count()}).from(workerWeekSheets).where(eq(workerWeekSheets.status,"submitted")) : nul,
-    mag("/inkooporders") ? db.select({value:count()}).from(workerWeekSheets).where(eq(workerWeekSheets.invoiceStatus,"submitted")) : nul,
+    mag("/inkooporders") ? db.select({value:count()}).from(workerWeekSheets).where(and(eq(workerWeekSheets.invoiceStatus,"submitted"),eq(workerWeekSheets.status,"approved"))) : nul,
   ]);
   return {
     "/assistent": suggestions?.value ?? 0,

@@ -41,7 +41,7 @@ export async function saveWeek(args:{worker:Worker;projectId:string;monday:strin
         notificationIds.push(...notices.map(n=>n.id));
       }
     }
-    return {notificationIds,version};
+    return {notificationIds,version,id:saved.id};
   });
 }
 
@@ -61,7 +61,9 @@ export async function reviewWeek(args:{id:string;projectId:string;version:number
       if(!rows.length)conflict("Weekstaat bevat geen uren.");
       await tx.insert(timeEntries).values(rows);
     }
-    await tx.update(sheets).set({status:args.approve?"approved":"returned",version:sheet.version+1,reviewedAt:new Date(),reviewedBy:args.userId,reviewNote:args.reason||null,history:history(sheet.history,{action:args.approve?"approved":"returned",actor:args.userId,version:sheet.version,reason:args.reason}),updatedAt:new Date()}).where(eq(sheets.id,sheet.id));
+    // Week terug = factuur ook terug: de uren veranderen, dus het bedrag ook.
+    const invoiceBack=!args.approve && sheet.invoiceStatus==="submitted"?{invoiceStatus:"returned" as const,invoiceReviewNote:args.reason||null}:{};
+    await tx.update(sheets).set({...invoiceBack,status:args.approve?"approved":"returned",version:sheet.version+1,reviewedAt:new Date(),reviewedBy:args.userId,reviewNote:args.reason||null,history:history(sheet.history,{action:args.approve?"approved":"returned",actor:args.userId,version:sheet.version,reason:args.reason}),updatedAt:new Date()}).where(eq(sheets.id,sheet.id));
   });
 }
 
@@ -70,7 +72,8 @@ export async function submitWeekInvoice(args:{id:string;worker:Worker;projectId:
     const [currentWorker]=await tx.select().from(workers).where(eq(workers.id,args.worker.id)).for("update");
     if(!currentWorker?.portalInvoiceEnabled)conflict("invoiceDisabled");
     const [sheet]=await tx.select().from(sheets).where(and(eq(sheets.id,args.id),eq(sheets.workerId,args.worker.id),eq(sheets.projectId,args.projectId))).for("update");
-    if(!sheet || sheet.version!==args.version || sheet.status!=="approved" || (sheet.invoiceStatus && sheet.invoiceStatus!=="returned") || sheet.purchaseOrderId)conflict();
+    // Factuur gaat mee met het indienen van de week (of later, na goedkeuring).
+    if(!sheet || sheet.version!==args.version || !["submitted","approved"].includes(sheet.status) || (sheet.invoiceStatus && sheet.invoiceStatus!=="returned") || sheet.purchaseOrderId)conflict();
     const key=invoiceKey(args.input.taxId,args.input.number);
     await tx.execute(sql`select pg_advisory_xact_lock(hashtextextended(${key}, 0))`);
     const duplicate=await tx.select({id:sheets.id}).from(sheets).where(eq(sheets.invoiceKey,key));

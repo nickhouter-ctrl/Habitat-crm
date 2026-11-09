@@ -10,6 +10,12 @@ import { madridToday, weekLang, validateWeek, supplierInvoiceSchema, type WeekDa
 import { weekError, weekT } from "@/lib/worker-week-i18n";
 import { saveWeek, submitWeekInvoice, WeekConflict } from "@/lib/worker-week-service";
 
+/** Factuurvelden uit het formulier; null = ongeldig. */
+function invoiceInput(form:FormData) {
+  const raw=Object.fromEntries(form);
+  const parsed=supplierInvoiceSchema.safeParse({...raw,vatRate:raw.vatRate===""?NaN:Number(raw.vatRate),withholdingRate:raw.withholdingRate===""?NaN:Number(raw.withholdingRate),confirmed:raw.invoiceConfirmed==="on"||raw.confirmed==="on"});
+  return parsed.success?parsed.data:null;
+}
 export type WeekActionState={error?:string;ok?:string;savedAt?:number;version?:number;days?:WeekDay[]}|null;
 export async function saveWeekAction(token:string,_prev:WeekActionState,form:FormData):Promise<WeekActionState> {
   const ctx=await portalLinkForToken(token);const lang=weekLang(form.get("lang")??ctx?.worker.portalLang);
@@ -19,25 +25,36 @@ export async function saveWeekAction(token:string,_prev:WeekActionState,form:For
   let raw:unknown;try{const value=String(form.get("days")??"");if(value.length>150000)throw Error();raw=JSON.parse(value);}catch{return {error:weekT(lang,"fields")};}
   const result=validateWeek(raw,monday,madridToday(),submit);if(result.error || !result.days)return {error:weekError(lang,result.error??"fields")};
   if(submit && form.get("confirmed")!=="on")return {error:weekT(lang,"confirm")};
+  // Factuur meteen mee ter controle: eerst controleren, dan pas de week indienen.
+  const withInvoice=submit && form.get("withInvoice")==="1" && ctx.worker.portalInvoiceEnabled;
+  const invoice=withInvoice?invoiceInput(form):null;
+  if(withInvoice && (!invoice || form.get("invoiceConfirmed")!=="on"))return {error:weekT(lang,"fields")};
+  if(invoice && invoice.date>madridToday())return {error:weekError(lang,"invoiceDate")};
   let roster:string[];
   try {const raw=form.get("roster");const parsed=z.array(z.string().trim().min(1).max(100).regex(/^[^\n;,]+$/)).max(30).safeParse(raw?JSON.parse(String(raw)):weekRoster(result.days));if(!parsed.success || new Set(parsed.data.map(n=>n.toLowerCase())).size!==parsed.data.length)return {error:weekT(lang,"errNames")};roster=parsed.data;}catch{return {error:weekT(lang,"fields")};}
-  let notificationIds:string[]=[],savedVersion=version;
-  try {({notificationIds,version:savedVersion}=await saveWeek({worker:ctx.worker,projectId:ctx.project.id,monday,version,days:result.days,roster,submit}));}
+  let notificationIds:string[]=[],savedVersion=version,sheetId="";
+  try {({notificationIds,version:savedVersion,id:sheetId}=await saveWeek({worker:ctx.worker,projectId:ctx.project.id,monday,version,days:result.days,roster,submit}));}
   catch(e){return {error:weekError(lang,e instanceof WeekConflict?e.message:"failure")};}
+  let invoiceError:string|undefined;
+  if(invoice) {
+    try{await submitWeekInvoice({id:sheetId,worker:ctx.worker,projectId:ctx.project.id,projectName:ctx.project.name,version:savedVersion,input:invoice,language:lang});savedVersion++;}
+    catch(e){invoiceError=`${weekT(lang,"submitted")} ${weekT(lang,"invoiceRetry")} ${weekError(lang,e instanceof WeekConflict?e.message:"failure")}`;}
+  }
   if(notificationIds.length)after(async()=>{try{await deliverStaffNotifications(notificationIds);}catch{console.warn("[worker-week] queued-notification-pending");}});
   revalidatePath(`/uren/${token}`);revalidatePath(`/projects/${ctx.project.id}`);revalidatePath("/projects/weekstaten");revalidatePath("/","layout");
-  return {ok:weekT(lang,submit?"submitted":"saved"),savedAt:Date.now(),version:savedVersion,days:result.days};
+  if(invoice)revalidatePath("/inkooporders/te-verwerken");
+  if(invoiceError)return {error:invoiceError,version:savedVersion,days:result.days};
+  return {ok:invoice?weekT(lang,"submittedWithInvoice"):weekT(lang,submit?"submitted":"saved"),savedAt:Date.now(),version:savedVersion,days:result.days};
 }
 export async function submitWeekInvoiceAction(token:string,_prev:WeekActionState,form:FormData):Promise<WeekActionState> {
   const ctx=await portalLinkForToken(token);const lang=weekLang(form.get("lang")??ctx?.worker.portalLang);
   if(!ctx || !await rateLimit(`worker-invoice:${ctx.link.id}`,20,3600,{strikt:true}))return {error:weekT(lang,"unavailable")};
   const id=String(form.get("id")??""),version=Number(form.get("version"));
   if(!/^[0-9a-f-]{36}$/.test(id)||!Number.isSafeInteger(version)||version<1)return {error:weekT(lang,"conflict")};
-  const raw=Object.fromEntries(form);
-  const parsed=supplierInvoiceSchema.safeParse({...raw,vatRate:raw.vatRate===""?NaN:Number(raw.vatRate),withholdingRate:raw.withholdingRate===""?NaN:Number(raw.withholdingRate),confirmed:raw.confirmed==="on"});
-  if(!parsed.success)return {error:weekT(lang,"fields")};
-  if(parsed.data.date>madridToday())return {error:weekError(lang,"invoiceDate")};
-  try{await submitWeekInvoice({id,worker:ctx.worker,projectId:ctx.project.id,projectName:ctx.project.name,version,input:parsed.data,language:lang});}
+  const input=invoiceInput(form);
+  if(!input)return {error:weekT(lang,"fields")};
+  if(input.date>madridToday())return {error:weekError(lang,"invoiceDate")};
+  try{await submitWeekInvoice({id,worker:ctx.worker,projectId:ctx.project.id,projectName:ctx.project.name,version,input,language:lang});}
   catch(e){return {error:weekError(lang,e instanceof WeekConflict?e.message:"failure")};}
   revalidatePath(`/uren/${token}`);revalidatePath(`/projects/${ctx.project.id}`);revalidatePath("/inkooporders");revalidatePath("/inkooporders/te-verwerken");
   return {ok:weekT(lang,"invoiceSent"),savedAt:Date.now()};

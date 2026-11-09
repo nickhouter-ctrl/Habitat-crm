@@ -6,6 +6,7 @@ import { timeEntries } from "@/lib/db/schema";
 import { portalLinkForToken } from "@/lib/worker-portal";
 import { weekRoster } from "@/lib/worker-week-grid";
 import { WorkerWeekForm, WorkerInvoiceForm } from "@/components/worker-week-form";
+import { workerRate } from "@/lib/worker-rate";
 import { WorkerInvoiceDetail } from "@/components/worker-invoice-detail";
 import { madridToday,emptyWeek,weekLang,totalWeekHours,periodRange } from "@/lib/worker-week";
 import { weekT, type WeekCopyKey } from "@/lib/worker-week-i18n";
@@ -64,12 +65,12 @@ export default async function UrenPortaalPage({params,searchParams}:Props) {
       {old && <p className="rounded-xl bg-stone-200/60 p-4 text-sm">{d("older")}</p>}
       {sheet?.reviewNote && <p className="rounded-xl border border-amber-300 bg-amber-50 p-4 text-sm whitespace-pre-wrap">{sheet.reviewNote}</p>}
       <details open={!sheet} className={panel}><summary className="cursor-pointer font-semibold">{t("newPeriod")}</summary><form method="get" className="mt-3 flex flex-col items-end gap-3 sm:flex-row"><input type="hidden" name="lang" value={lang}/><input type="hidden" name="view" value="week"/><label className="w-full min-w-0 flex-1 text-sm font-medium">{t("startDate")}<input type="date" name="week" min={data.earliest} max={today} defaultValue={selected} required className="mt-1 w-full rounded-lg border border-stone-300 px-3 py-3 text-base"/></label><button className="rounded-lg bg-stone-800 px-4 py-3 text-sm font-semibold text-white">{t("start")}</button></form></details>
-      <WorkerWeekForm key={selected} token={token} lang={lang} monday={selected} version={sheet?.version??0} initialRoster={sheet?.roster?.length?sheet.roster:weekRoster(data.lastTeam?.days??[],data.lastTeam?.roster??[])} initialDays={sheet?.days??emptyWeek(selected).slice(0,1)} locked={locked} today={today}/>
+      <WorkerWeekForm key={selected} token={token} lang={lang} monday={selected} version={sheet?.version??0} initialRoster={sheet?.roster?.length?sheet.roster:weekRoster(data.lastTeam?.days??[],data.lastTeam?.roster??[])} initialDays={sheet?.days??emptyWeek(selected).slice(0,1)} locked={locked} today={today} invoice={worker.portalInvoiceEnabled?{rate:workerRate(worker,"invoice")??0,previous:sheet?.invoice??null,supplier:data.profile}:undefined}/>
       {(sheet?.invoice || worker.portalInvoiceEnabled && sheet?.status==="approved") && <section className={`${panel} space-y-4`}><h2 className="text-xl font-semibold">{sheet?.invoice?d("document"):t("invoice")}</h2>
         {sheet?.invoiceStatus && pill(sheet.invoiceStatus)}
         {sheet?.invoiceReviewNote && <p className="rounded-lg bg-amber-50 p-3 text-sm whitespace-pre-wrap">{sheet.invoiceReviewNote}</p>}
         {sheet?.invoice && <div><p className="mb-3 font-medium">{sheet.invoice.number} · {eur(sheet.invoice.total)}</p><div className="flex flex-wrap gap-2"><Link className={secondary} href={href({view:"invoice",invoice:sheet.id})}>{d("view")}</Link><a className={secondary} href={pdf(sheet.id)}>{t("pdf")}</a></div></div>}
-        {active && worker.portalInvoiceEnabled && sheet?.status==="approved" && (!sheet.invoiceStatus || sheet.invoiceStatus==="returned")?<WorkerInvoiceForm key={`${sheet.id}:${sheet.version}`} token={token} lang={lang} id={sheet.id} version={sheet.version} hours={totalWeekHours(sheet.days)} rate={Number(sheet.hourlyRate)} today={today} previous={sheet.invoice} supplier={data.profile}/>:!sheet?.invoice && active?<p className="text-sm leading-relaxed text-stone-600">{t("invoiceIntro")}</p>:null}
+        {active && worker.portalInvoiceEnabled && (sheet?.status==="approved"||sheet?.status==="submitted") && (!sheet.invoiceStatus || sheet.invoiceStatus==="returned")?<WorkerInvoiceForm key={`${sheet.id}:${sheet.version}`} token={token} lang={lang} id={sheet.id} version={sheet.version} hours={totalWeekHours(sheet.days)} rate={Number(sheet.hourlyRate)} today={today} previous={sheet.invoice} supplier={data.profile}/>:!sheet?.invoice && active?<p className="text-sm leading-relaxed text-stone-600">{t("invoiceIntro")}</p>:null}
       </section>}
       {legacy.length>0 && <section className="space-y-3 rounded-xl border border-amber-200 bg-amber-50 p-5"><h2 className="font-semibold">{t("old")}</h2><p className="text-sm">{t("olderHint")}</p>{legacy.map((e,i)=><p key={i} className="text-sm">{date(e.date)} · {e.hours} h · {e.note}</p>)}</section>}
 
