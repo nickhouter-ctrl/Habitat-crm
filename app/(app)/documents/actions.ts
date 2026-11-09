@@ -12,6 +12,7 @@ import { db } from "@/lib/db";
 import { activities, companies, contacts, deals, deliveries, documents, holdedSyncMap, products, projectPayments, type DocumentLineItem } from "@/lib/db/schema";
 import { syncDealFromDocument } from "@/lib/deals";
 import { missingBillingFields } from "@/lib/invoice-validation";
+import { invoiceOutstanding } from "@/lib/invoice-outstanding";
 import { syncProjectReceiptFromDocument } from "@/lib/project-receipts";
 import {
   billingAddressLines,
@@ -552,7 +553,11 @@ export async function sendPaymentReminderNow(
   });
   if (!doc) return { ok: false, error: "Factuur niet gevonden." };
   if (doc.status === "void") return { ok: false, error: "Factuur is geannuleerd." };
-  const open = Number(doc.totalEur ?? 0) - Number(doc.paidEur ?? 0);
+  const credits = await db.query.documents.findMany({
+    where: and(eq(documents.kind, "creditnote"), eq(documents.sourceDocumentId, id)),
+    columns: { totalEur: true, status: true },
+  });
+  const open = invoiceOutstanding(doc, credits);
   if (open <= 0.01) return { ok: false, error: "Deze factuur is al volledig betaald." };
   const email = doc.contact?.email;
   if (!email) return { ok: false, error: "Geen e-mailadres bij de klant bekend." };
