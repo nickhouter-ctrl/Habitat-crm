@@ -6,7 +6,7 @@ import { sendEmail } from "@/lib/email";
 import { agendaDateTime, agendaDay, shiftDay } from "@/lib/agenda-dates";
 import { madridDelen } from "@/lib/tz-madrid";
 import { salesTaskAccess, salesAppointmentAccess, appointmentFor } from "@/lib/auth/sales-scope";
-import { totalWeekHours, weekRange } from "@/lib/worker-week";
+import { totalWeekHours, periodRange } from "@/lib/worker-week";
 import { magModule } from "@/lib/auth/modules";
 import { staffNotificationEmail, type StaffAgendaItem, type StaffMailContent } from "@/lib/staff-notification-email";
 
@@ -57,7 +57,7 @@ async function currentContent(n: typeof staffNotifications.$inferSelect): Promis
     const [s]=await db.select({id:workerWeekSheets.id,version:workerWeekSheets.version,status:workerWeekSheets.status,week:workerWeekSheets.weekStart,days:workerWeekSheets.days,at:workerWeekSheets.submittedAt,workerName:workers.name,projectId:projects.id,projectName:projects.name}).from(workerWeekSheets).innerJoin(workers,eq(workers.id,workerWeekSheets.workerId)).innerJoin(projects,eq(projects.id,workerWeekSheets.projectId)).where(eq(workerWeekSheets.id,n.entityId));
     // Do not send obsolete notifications after review or a newer submission.
     if(!s || s.status!=="submitted" || n.eventKey!==`worker-week:${s.id}:${s.version}:${n.userId}`)return null;
-    return {kind:n.kind,title:`${s.workerName} · ${weekRange(s.week,"nl")}`,body:`${s.projectName} · ${totalWeekHours(s.days)} h`,at:s.at,sheetId:s.id};
+    return {kind:n.kind,title:`${s.workerName} · ${periodRange(s.week,"nl",s.days.at(-1)?.date)}`,body:`${s.projectName} · ${totalWeekHours(s.days)} h`,at:s.at,sheetId:s.id};
   }
   if (n.kind === "followup_assignment") {
     const [p] = await db.select({ ownerId: partnerProfiles.ownerId, stage: partnerProfiles.stage, title: partnerProfiles.nextAction, day: partnerProfiles.nextActionOn, contactName: contacts.name,tags:contacts.tags }).from(partnerProfiles).innerJoin(contacts, eq(contacts.id, partnerProfiles.contactId)).where(and(eq(partnerProfiles.contactId, n.entityId)));

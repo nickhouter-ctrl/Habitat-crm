@@ -86,6 +86,21 @@ it.skipIf(!enabled)("enforces token scope, review, stale submissions, invoice un
   expect((await reviewWorkerWeek(false,null,fd({id:other.id,projectId:otherProjectId,version:String(other.version),decision:"approve",reason:"",confirmed:"on"})))?.ok).toBeTruthy();
   [other]=await tx.select().from(sheets).where(eq(sheets.id,other.id));const duplicate=bill(other.version);duplicate.set("id",other.id);
   expect((await submitWeekInvoiceAction(otherToken,null,duplicate))?.error).toContain("número");
+  // Flexible periods resume across Monday; duplicate worked dates cannot be approved.
+  const start=addDays(monday,-2),flex=emptyWeek(start).slice(0,1);
+  flex[0]={...days[0],date:start};
+  const flexForm=(version:number,intent:string)=>fd({monday:start,version:String(version),intent,days:JSON.stringify(flex),lang:"es",confirmed:"on"});
+  expect((await saveWeekAction(token,null,flexForm(0,"draft")))?.ok).toBeTruthy();
+  let resumed=await loadWorkerDashboard(workerId,projectId,madridToday(),{});
+  expect(resumed.selected).toBe(start);expect(resumed.sheet?.days).toEqual(flex);
+  flex.push({...days[0],date:monday});
+  expect((await saveWeekAction(token,null,flexForm(resumed.sheet!.version,"draft")))?.ok).toBeTruthy();
+  resumed=await loadWorkerDashboard(workerId,projectId,madridToday(),{week:start});
+  expect(resumed.sheet?.days.map(d=>d.date)).toEqual([start,monday]);
+  expect((await saveWeekAction(token,null,flexForm(resumed.sheet!.version,"submit")))?.ok).toBeTruthy();
+  resumed=await loadWorkerDashboard(workerId,projectId,madridToday(),{week:start});
+  expect((await reviewWorkerWeek(false,null,fd({id:resumed.sheet!.id,projectId,version:String(resumed.sheet!.version),decision:"approve",reason:"",confirmed:"on"})))?.error).toContain("dubbel boeken");
+  expect(await tx.select().from(timeEntries).where(eq(timeEntries.weekSheetId,resumed.sheet!.id))).toHaveLength(0);
   // Invoice history has no eight-week cutoff and stays available when new
   // invoicing is disabled. Links remain scoped to their own worker/project.
   await tx.update(sheets).set({weekStart:"2025-01-06"}).where(eq(sheets.id,s.id));

@@ -9,7 +9,7 @@ export function workerPurchaseBody(id:string,invoice:WorkerInvoice,contact:strin
   return {contact,docNumber:invoice.number,date:Math.floor(Date.parse(invoice.date)/1000),currency:"eur",draft:false,
     desc:`${invoice.projectName} · ${invoice.weekStart}`,tags:[workerInvoiceTag(id)],
     notes:`${workerInvoiceTag(id)}\nLeverancier: ${invoice.legalName} · NIF/CIF: ${invoice.taxId}\n${invoice.address}\n${invoice.email}\nIBAN: ${invoice.iban||"—"}\nProject: ${invoice.projectName}\n${invoice.taxNote}`,
-    products:[{name:`Trabajo · ${invoice.projectName}`,desc:`Semana ${invoice.weekStart} · ${invoice.hours} horas`,units:invoice.hours,price:invoice.rate,taxes:[`p_iva_${invoice.vatRate}`,...(invoice.withholdingRate?[`p_ret_${invoice.withholdingRate}`]:[])]}],
+    products:[{name:`Trabajo · ${invoice.projectName}`,desc:`Periodo desde ${invoice.weekStart} · ${invoice.hours} horas`,units:invoice.hours,price:invoice.rate,taxes:[`p_iva_${invoice.vatRate}`,...(invoice.withholdingRate?[`p_ret_${invoice.withholdingRate}`]:[])]}],
   };
 }
 export function supplierMatches(contact:HoldedContact,invoice:WorkerInvoice) {return [contact.code,contact.vatnumber].some(v=>normal(v)===normal(invoice.taxId));}

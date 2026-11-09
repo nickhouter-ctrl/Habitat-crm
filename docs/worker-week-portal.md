@@ -34,7 +34,7 @@ Mogelijke vervolgstappen: dagfoto's per werkplek, vergelijking met begrote uren 
 
 - Een apart werkplekveld is niet nodig; de medewerker neemt de plek op in de beschrijving. Dagelijks **Concept opslaan** bewaart de weekstaat; alleen expliciet indienen geeft een melding.
 - Een melding bovenin het CRM opent `/projects/weekstaten`, met alle ingediende weekstaten ter controle. De teller blijft tot goedkeuren of terugsturen en vernieuwt bij focus of na maximaal één minuut.
-- Nick ontvangt via zijn bestaande CRM-account een persoonlijke e-mail met weeknummer, medewerker, project, persoonsuren en een link naar de controle. Geen openbare medewerkerslink of gedeelde BCC.
+- Nick ontvangt via zijn bestaande CRM-account een persoonlijke e-mail met periode, medewerker, project, persoonsuren en een link naar de controle. Geen openbare medewerkerslink of gedeelde BCC.
 - De melding wordt in dezelfde database-transactie klaargezet. Dubbel klikken geeft geen dubbele mail; opnieuw indienen na een correctie geeft een nieuwe melding. Achterhaalde meldingen worden overgeslagen.
 - Verwerking probeert direct na de inzending te bezorgen; de bestaande notificatiecron verwerkt veilig achtergebleven jobs. Een onzekere SMTP-uitkomst wordt niet blind opnieuw verzonden.
 
@@ -48,11 +48,13 @@ Mogelijke vervolgstappen: dagfoto's per werkplek, vergelijking met begrote uren 
 
 ## Vereenvoudigde daginvoer en automatische Holded-verwerking
 
-- De persoonlijke link opent direct de werkweek. Namen worden eenmaal toegevoegd en als team bewaard; de volgende week neemt alleen de namen over, nooit uren.
+- De persoonlijke link hervat het recentst opgeslagen concept voor deze klus, ook na maandag. Een nieuwe staat begint op een zelfgekozen datum (bijvoorbeeld 31 oktober). **Dag toevoegen** voegt de volgende gekozen werkdag toe (bijvoorbeeld 2 november); vrije dagen kunnen worden overgeslagen. Maximaal 31 dagen per staat, begindatum binnen de afgelopen acht weken. Namen worden eenmaal toegevoegd en als team bewaard; een nieuwe staat neemt alleen namen over, nooit uren.
 - Een dag openklappen toont uren achter elke naam. Leeg/0 betekent afwezig binnen een ingevulde werkdag. Een volledig vrije dag kan als niet gewerkt worden gemarkeerd; bij definitief doorsturen bevestigt de medewerker dat lege dagen niet gewerkt zijn. Verschillende uren per persoon blijven behouden.
 - Eén werkbeschrijving per gewerkte dag is verplicht bij doorsturen. **Opslaan en later verder** bewaart ook een onvolledig concept. De knop blijft onderin bereikbaar. Een waarschuwing beschermt niet opgeslagen wijzigingen bij verlaten van de pagina.
-- **Week doorsturen** opent eerst een controle en bevestiging. De factuursectie verschijnt pas na goedkeuring van de uren. Inkoop blijft een afzonderlijke goedkeuring.
+- **Uren doorsturen** opent eerst een controle en bevestiging. De factuursectie verschijnt pas na goedkeuring van de uren. Inkoop blijft een afzonderlijke goedkeuring.
 - Factuurgoedkeuring zet in dezelfde transactie een Holded-taak klaar. De bestaande notificatiecron probeert achtergebleven taken opnieuw; een eerste poging volgt meteen na goedkeuring. Afzender/NIF, eigen nummer, uren/tarief, IVA en IRPF komen uit de goedgekeurde snapshot. De oorspronkelijke PDF blijft via de inkoopfactuur beschikbaar.
 - `purchase_orders.holded_id` koppelt de inkoopfactuur. Leveranciers worden op fiscale identiteit gevonden, niet alleen op naam. Een eigen CRM-tag herkent een eerder aangemaakt document.
 - De status is zichtbaar bij de weekstaat en de inkoopfactuur. Bij een onzekere POST-uitkomst wordt uitsluitend gezocht naar het aangemaakte document; er volgt geen blinde tweede boeking. Handmatige controle is nodig als de uitkomst onzeker blijft.
 - Tests gebruiken mocks voor Holded, een verplichte SQL-rollback voor de workflow, en lokale bestanden voor mobiele UI-tests. Gebruik nooit de echte factuurnummering voor browserfixtures.
+
+- `weekStart` blijft de interne sleutel voor de begindatum; bestaande zevendaagse staten blijven leesbaar. Dagen zijn uniek en oplopend. Goedkeuring controleert overlap op de werkelijk gewerkte datums en vergrendelt de medewerker tegen gelijktijdig dubbel boeken.

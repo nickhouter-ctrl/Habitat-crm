@@ -1,7 +1,7 @@
 "use client";
 import { useActionState, useState, useEffect, useRef } from "react";
 import { saveWeekAction, submitWeekInvoiceAction } from "@/app/uren/[token]/week-actions";
-import { totalWeekHours, invoiceAmounts, validateWeek, type WeekDay, type WeekLang, type WorkerInvoice } from "@/lib/worker-week";
+import { addDays, periodRange, totalWeekHours, invoiceAmounts, validateWeek, type WeekDay, type WeekLang, type WorkerInvoice } from "@/lib/worker-week";
 import type { SupplierDetails } from "@/lib/worker-portal-dashboard";
 import { weekT, weekError, type WeekCopyKey } from "@/lib/worker-week-i18n";
 
@@ -14,6 +14,7 @@ export function WorkerWeekForm({token,lang,monday,version,initialDays,initialRos
   const t=(key:WeekCopyKey)=>weekT(lang,key);
   const [days,setDays]=useState(initialDays);
   const [names,setNames]=useState(()=>weekRoster(initialDays,initialRoster));
+  const [nextDate,setNextDate]=useState(()=>addDays(initialDays.at(-1)!.date,1));
   const [newName,setNewName]=useState("");
   const [review,setReview]=useState(false);
   const [error,setError]=useState("");
@@ -44,7 +45,7 @@ export function WorkerWeekForm({token,lang,monday,version,initialDays,initialRos
       <div className="flex flex-wrap gap-2">{names.map(name=><span key={name} className="inline-flex items-center gap-2 rounded-lg bg-stone-100 px-3 py-2 font-medium">{name}{!locked&&<button type="button" aria-label={`${t("remove")} ${name}`} disabled={days.some(d=>personHours(d,name)>0)} className="px-1 text-stone-500 disabled:hidden" onClick={()=>setNames(old=>old.filter(n=>n!==name))}>×</button>}</span>)}</div>
       {!locked&&<div className="mt-3 flex items-end gap-2"><label className="min-w-0 flex-1 text-sm font-medium">{t("personName")}<input className={input} value={newName} maxLength={100} onChange={e=>setNewName(e.target.value)} onKeyDown={e=>{if(e.key==="Enter"){e.preventDefault();formRef.current?.querySelector<HTMLButtonElement>("[data-add-person]")?.click();}}}/></label><button data-add-person type="button" className={secondary} disabled={!newName.trim()||names.length>=30} onClick={()=>{const name=newName.trim();if(names.some(n=>n.toLowerCase()===name.toLowerCase()))return;if(/[\n;,]/.test(name))return;setNames(old=>[...old,name]);setNewName("");}}>{t("addPerson")}</button></div>}
     </fieldset>
-    <p className="text-sm text-stone-600">{t("hoursHint")}</p>
+    <div><p className="mb-2 font-semibold">{periodRange(monday,lang,days.at(-1)?.date)}</p><p className="text-sm text-stone-600">{t("hoursHint")}</p></div>
     {days.map((day,i)=>{const future=day.date>today,description=dayDescription(day),hours=names.map(n=>personHours(day,n));const dayTotal=totalWeekHours([day]);
       return <section key={day.date} className="overflow-hidden rounded-2xl border border-stone-200 bg-white">
         <button type="button" aria-expanded={active===i} aria-controls={`day-${i}`} onClick={()=>setActive(active===i?-1:i)} className="flex w-full items-center justify-between gap-3 p-4 text-left"><span><span className="block font-semibold capitalize">{new Date(`${day.date}T12:00:00Z`).toLocaleDateString(locale,{weekday:"long",day:"numeric",month:"short"})}{day.date===today&&<span className="ml-2 rounded-full bg-[#a94f2d] px-2 py-1 text-xs text-white">{t("today")}</span>}</span><span className={`mt-1 block text-sm ${day.state==="empty"?"text-stone-500":day.state==="work"&&description.length<10?"text-amber-800":"text-emerald-800"}`}>{day.state==="empty"?t("empty"):day.state==="off"?t("off"):`${dayTotal.toLocaleString(locale)} h · ${description.length<10?t("descriptionNeeded"):t("filled")}`}</span></span><span aria-hidden="true">{active===i?"−":"+"}</span></button>
@@ -55,10 +56,12 @@ export function WorkerWeekForm({token,lang,monday,version,initialDays,initialRos
             {(day.state==="work"||dayTotal>0)&&<label className="block text-sm font-semibold">{t("description")} <span className="text-[#a94f2d]">*</span><textarea aria-label={`${t("description")} ${day.date}`} className={input} rows={3} maxLength={2000} value={description} placeholder={t("descriptionHint")} onChange={e=>change(i,gridDay(day,names,hours,e.target.value))}/></label>}
           </>}
           {!locked&&<button type="button" className={secondary} onClick={()=>{if(dayTotal>0&&!window.confirm(t("clearDay")))return;change(i,{...day,state:"off",crews:[]});}}>{t("off")}</button>}
+          {!locked&&i===days.length-1&&i>0&&<button type="button" className="ml-3 text-sm text-stone-600 underline" onClick={()=>{if(dayTotal>0&&!window.confirm(t("clearDay")))return;setDays(old=>old.slice(0,-1));setNextDate(day.date);setActive(i-1);setReview(false);setError("");}}>{t("removeDay")}</button>}
           {day.note&&<p className="text-sm text-stone-500">{day.note}</p>}
         </fieldset>}
       </section>;
     })}
+    {!locked&&<fieldset disabled={pending} className="rounded-2xl border border-stone-200 bg-white p-4"><div className="flex flex-col items-end gap-3 sm:flex-row"><label className="w-full min-w-0 flex-1 text-sm font-medium">{t("nextDate")}<input className={input} type="date" value={nextDate} onChange={e=>setNextDate(e.target.value)}/></label><button type="button" className={secondary} disabled={days.length>=31||!nextDate||nextDate<=days.at(-1)!.date||nextDate>today||nextDate>addDays(monday,56)} onClick={()=>{setDays(old=>[...old,{date:nextDate,state:"empty",crews:[],note:""}]);setActive(days.length);setNextDate(addDays(nextDate,1));setReview(false);setError("");}}>{t("addDay")}</button></div><p className="mt-2 text-sm text-stone-500">{t("addDayHint")}</p></fieldset>}
     {error&&<p role="alert" className="rounded-xl bg-amber-50 p-4 font-medium text-amber-900">{error}</p>}
     {review&&!locked&&<section className="space-y-4 rounded-2xl border-2 border-[#a94f2d] bg-white p-5"><h3 className="text-xl font-semibold">{t("reviewTitle")}</h3><p>{totalWeekHours(days).toLocaleString(locale)} h · {t("reviewHint")}</p><label className="flex items-start gap-3 text-sm"><input type="checkbox" name="confirmed" required className="mt-1 size-5 shrink-0 accent-[#a94f2d]"/>{t("confirm")}</label><button type="submit" name="intent" value="submit" className={`${button} w-full`} disabled={pending}>{pending?t("busy"):t("submit")}</button><button type="button" className={`${secondary} w-full`} onClick={()=>setReview(false)}>{t("backToEdit")}</button></section>}
     <div className="sticky bottom-0 z-10 rounded-2xl border border-stone-300 bg-[#f4f0e9] p-4 shadow-lg">

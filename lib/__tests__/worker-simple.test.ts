@@ -1,5 +1,5 @@
 import {expect,it} from "vitest";
-import {emptyWeek,totalWeekHours,validateWeek} from "../worker-week";
+import {emptyWeek,periodRange,totalWeekHours,validateWeek} from "../worker-week";
 import {weekRoster,personHours,gridDay,dayDescription} from "../worker-week-grid";
 it("converts a paper-style crew with absences and different hours without changing totals",()=>{
  const days=emptyWeek("2026-11-02");const names=["Morad","Bilal","Yasir","Mohamed","Mounir"];
@@ -22,4 +22,19 @@ it("saves incomplete daily drafts but requires a description and normalizes empt
  expect(validateWeek(days,"2026-11-02","2026-11-09",true).days?.[6].state).toBe("off");
  for(let i=1;i<7;i++)days[i]=gridDay(days[i],["Morad"],[0],"");
  expect(validateWeek(days,"2026-11-02","2026-11-09",true).error).toBeUndefined();
+});
+
+it("starts on Saturday 31 October, skips Sunday and continues into November",()=>{
+ const names=["Morad","Bilal","Yasir","Mohamed","Mounir"];
+ const dates=["2026-10-31","2026-11-02","2026-11-03","2026-11-04","2026-11-05","2026-11-06"];
+ const hours=[[0,0,8,0,8],[8,8,8,8,8],[8,8,8,8,8],[8,8,0,8,0],[8,8,8,8,0],[8,8,8,8,8]];
+ const days=dates.map((date,i)=>gridDay(emptyWeek(date)[0],names,hours[i],"Badkamerwanden voorbereid en betegeld."));
+ expect(validateWeek(days,dates[0],"2026-11-09",true).days).toEqual(days);
+ expect(totalWeekHours(days)).toBe(192);
+ expect(periodRange(dates[0],"nl",dates.at(-1))).toBe("31 oktober t/m 6 november");
+ expect(periodRange(dates[0],"es",dates.at(-1))).toBe("31 de octubre al 6 de noviembre");
+ expect(validateWeek([days[0]],dates[0],"2026-11-09",false).days).toHaveLength(1);
+ expect(validateWeek([days[0],days[0]],dates[0],"2026-11-09",false).error).toBe("week");
+ expect(validateWeek([days[1],days[0]],dates[1],"2026-11-09",false).error).toBe("week");
+ expect(validateWeek(days,dates[1],"2026-11-09",false).error).toBe("week");
 });
