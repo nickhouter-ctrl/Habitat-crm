@@ -35,7 +35,6 @@ const s=StyleSheet.create({
 /** "Calle 1, Local 2, 03730 Jávea (Alicante), España" → straat / postcode + plaats. */
 const adres=(a:string)=>{const m=a.match(/^(.*?),\s*(\d{5}\b.*)$/);return m?[m[1],m[2]]:[a];};
 const fecha=(d:string)=>{const [y,m,dd]=d.split("-");return `${dd}/${m}/${y}`;};
-const dia=(d:string)=>new Date(`${d}T12:00:00Z`).toLocaleDateString("es-ES",{timeZone:"UTC",weekday:"short",day:"2-digit",month:"2-digit"});
 export async function renderWorkerInvoice(invoice:WorkerInvoice,days:WeekDay[],status:string) {
  const i=invoice,eur=(v:number)=>new Intl.NumberFormat("es-ES",{style:"currency",currency:"EUR",useGrouping:"always"}).format(v),num=(v:number)=>v.toLocaleString("es-ES",{maximumFractionDigits:2});
  // Eén regel per werkdag: omschrijving, wie er waren, uren × tarief.
