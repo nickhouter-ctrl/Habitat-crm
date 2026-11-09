@@ -7,12 +7,13 @@ import { periodRange, type WorkerInvoice, type WeekDay } from "@/lib/worker-week
 const ink="#1b2333",muted="#6a7383",line="#dde2ea",band="#f2f5f9",accent="#1f3864";
 const s=StyleSheet.create({
  page:{paddingTop:40,paddingBottom:56,paddingHorizontal:44,fontFamily:"Helvetica",fontSize:9,color:ink,lineHeight:1.4},
- head:{flexDirection:"row",justifyContent:"space-between",alignItems:"flex-start",borderBottomWidth:2,borderBottomColor:accent,paddingBottom:14},
+ head:{flexDirection:"row",justifyContent:"space-between",alignItems:"flex-end",paddingBottom:14},
+ strip:{flexDirection:"row",backgroundColor:band,borderTopWidth:3,borderTopColor:accent,borderRadius:3,marginTop:2},
+ cell:{flex:1,paddingVertical:10,paddingHorizontal:12,borderRightWidth:.5,borderRightColor:line},
+ number:{fontSize:18,fontFamily:"Helvetica-Bold",color:accent,lineHeight:1.1},
+ cellValue:{fontSize:11,fontFamily:"Helvetica-Bold",lineHeight:1.3,marginTop:3},
   small:{fontSize:8,color:muted},
  title:{fontSize:28,fontFamily:"Helvetica-Bold",color:accent,letterSpacing:2,lineHeight:1,marginBottom:8},
- meta:{flexDirection:"row",justifyContent:"flex-end",marginTop:4},
- metaLabel:{width:70,textAlign:"right",color:muted,marginRight:8},
- metaValue:{width:100,textAlign:"right",fontFamily:"Helvetica-Bold"},
  parties:{flexDirection:"row",gap:16,marginTop:18},
  box:{flex:1,backgroundColor:band,borderRadius:4,padding:12},
  boxLabel:{fontSize:7,color:muted,textTransform:"uppercase",letterSpacing:1,marginBottom:4},
@@ -26,7 +27,7 @@ const s=StyleSheet.create({
  tRow:{flexDirection:"row",justifyContent:"space-between",paddingVertical:3},
  grand:{flexDirection:"row",justifyContent:"space-between",backgroundColor:accent,color:"#ffffff",padding:8,marginTop:6,borderRadius:3,fontFamily:"Helvetica-Bold",fontSize:11},
  pay:{marginTop:22,borderTopWidth:.5,borderTopColor:line,paddingTop:10},
- status:{marginTop:4,fontSize:8,color:muted},
+ status:{fontSize:8,color:accent,textAlign:"right",borderWidth:.75,borderColor:accent,borderRadius:3,paddingVertical:3,paddingHorizontal:6},
  footer:{position:"absolute",bottom:24,left:44,right:44,flexDirection:"row",justifyContent:"space-between",fontSize:7,color:muted},
 });
 const fecha=(d:string)=>{const [y,m,dd]=d.split("-");return `${dd}/${m}/${y}`;};
@@ -43,12 +44,14 @@ export async function renderWorkerInvoice(invoice:WorkerInvoice,days:WeekDay[],s
  const last=days.at(-1)?.date;
  return renderToBuffer(<Document title={`Factura ${i.number}`} author={i.legalName} language="es"><Page size="A4" style={s.page}>
    <View style={s.head}>
-     <View><Text style={s.title}>FACTURA</Text>{status!=="approved" && <Text style={s.status}>Pendiente de revisión por el cliente</Text>}</View>
-     <View style={{paddingTop:4}}>
-       <View style={s.meta}><Text style={s.metaLabel}>Nº factura</Text><Text style={s.metaValue}>{i.number}</Text></View>
-       <View style={s.meta}><Text style={s.metaLabel}>Fecha</Text><Text style={s.metaValue}>{fecha(i.date)}</Text></View>
-       <View style={s.meta}><Text style={s.metaLabel}>Periodo</Text><Text style={s.metaValue}>{fecha(i.weekStart).slice(0,5)} – {fecha(last??i.weekStart)}</Text></View>
-     </View>
+     <View><Text style={s.title}>FACTURA</Text><Text style={{color:muted}}>{i.legalName} · NIF/NIE {i.taxId}</Text></View>
+     {status!=="approved" && <Text style={s.status}>Pendiente de revisión{"\n"}por el cliente</Text>}
+   </View>
+   <View style={s.strip}>
+     <View style={s.cell}><Text style={s.boxLabel}>Factura nº</Text><Text style={s.number}>{i.number}</Text></View>
+     <View style={s.cell}><Text style={s.boxLabel}>Fecha de factura</Text><Text style={s.cellValue}>{fecha(i.date)}</Text></View>
+     <View style={s.cell}><Text style={s.boxLabel}>Periodo</Text><Text style={s.cellValue}>{fecha(i.weekStart)} – {fecha(last??i.weekStart)}</Text></View>
+     <View style={[s.cell,{borderRightWidth:0}]}><Text style={s.boxLabel}>Total a pagar</Text><Text style={[s.cellValue,{color:accent}]}>{eur(i.total)}</Text></View>
    </View>
    <View style={s.parties}>
      <View style={s.box}><Text style={s.boxLabel}>Emisor</Text><Text style={s.bold}>{i.legalName}</Text><Text>NIF/NIE {i.taxId}</Text><Text>{i.address}</Text></View>
