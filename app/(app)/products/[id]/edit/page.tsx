@@ -24,8 +24,10 @@ import {
   Tr,
 } from "@/components/ui";
 import { db } from "@/lib/db";
-import { companies, contacts, documents, products, projects } from "@/lib/db/schema";
+import { companies, contacts, documents, products, projects, users } from "@/lib/db/schema";
 import { normalizeDocItems } from "@/lib/documents";
+import { isReservedEstimate, reservedStockGroups } from "@/lib/stock-reservations";
+import { requireModuleRead } from "@/lib/auth/guards";
 import { getProductCategories, getProductCollections, listBrands } from "../../../_options";
 import { VariantMatrixEditor } from "@/components/variant-matrix-editor";
 import { SubmitButton } from "@/components/submit-button";
@@ -52,6 +54,7 @@ export default async function EditProductPage({
   params: Promise<{ id: string }>;
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
+  await requireModuleRead("producten");
   const uiT = await uiTranslation();
   const { id } = await params;
   const sp = await searchParams;
@@ -93,6 +96,11 @@ export default async function EditProductPage({
   // (facturen − creditnota's)? Per project optellen.
   const refDocs = await db
     .select({
+      id: documents.id,
+      docNumber: documents.docNumber,
+      reservedAt: documents.reservedAt,
+      stockAppliedAt: documents.stockAppliedAt,
+      responsibleName: users.name,
       kind: documents.kind,
       status: documents.status,
       items: documents.items,
@@ -103,11 +111,12 @@ export default async function EditProductPage({
     })
     .from(documents)
     .leftJoin(projects, eq(documents.projectId, projects.id))
+    .leftJoin(users, eq(projects.ownerId, users.id))
     .leftJoin(contacts, eq(documents.contactId, contacts.id))
     .leftJoin(companies, eq(documents.companyId, companies.id))
     .where(
       and(
-        inArray(documents.kind, ["estimate", "invoice", "creditnote"]),
+        inArray(documents.kind, ["estimate", "invoice", "creditnote", "deliverynote"]),
         sql`${documents.items}::text like ${"%" + id + "%"}`,
       ),
     );
@@ -116,6 +125,7 @@ export default async function EditProductPage({
     { name: string; reserved: number; sold: number; clients: Set<string> }
   >();
   for (const d of refDocs) {
+    if ((!isReservedEstimate(d) && !["invoice", "creditnote"].includes(d.kind)) || d.status === "void") continue;
     const key = d.projectId ?? "__none__";
     for (const it of normalizeDocItems(d.items)) {
       if (it.productId !== id || !it.units) continue;
@@ -125,14 +135,15 @@ export default async function EditProductPage({
       const client = d.companyName ?? d.contactName;
       if (client) e.clients.add(client);
       const u = Number(it.units) || 0;
-      if (d.kind === "estimate" && d.status === "accepted") e.reserved += u;
+      if (isReservedEstimate(d)) e.reserved += u;
       else if (d.kind === "invoice") e.sold += u;
       else if (d.kind === "creditnote") e.sold -= u;
       perProject.set(key, e);
     }
   }
+  const reservedByProject = new Map(reservedStockGroups(refDocs).filter(g => g.productId === id).map(g => [g.projectId ?? "__none__", g.remaining]));
   const allocation = [...perProject.entries()]
-    .map(([projectId, e]) => ({ projectId, ...e, reservedNet: Math.max(0, e.reserved - e.sold) }))
+    .map(([projectId, e]) => ({ projectId, ...e, reservedNet: reservedByProject.get(projectId) ?? 0 }))
     .filter((e) => e.reservedNet > 0 || e.sold !== 0)
     .sort((a, b) => b.reservedNet + b.sold - (a.reservedNet + a.sold));
   const totReserved = allocation.reduce((s, e) => s + e.reservedNet, 0);
@@ -245,9 +256,9 @@ export default async function EditProductPage({
       </Card></TabPanel>
 
       {allocation.length > 0 && (
-        <TabPanel id="stock"><Card className="mb-4 max-w-2xl overflow-hidden">
+        <section id="reserveringen" className="scroll-mt-20"><Card className="mb-4 max-w-5xl overflow-hidden">
           <CardHeader>
-            <CardTitle>{uiT("Per project — gereserveerd / verkocht")}</CardTitle>
+            <CardTitle>{uiT("Reserveringen en verkopen")}</CardTitle>
             <span className="text-xs text-muted">
               {totReserved > 0 && (
                 <span className="font-medium text-warning">{totReserved} {unit} {uiT("gereserveerd")}</span>
@@ -261,7 +272,9 @@ export default async function EditProductPage({
           <Table>
             <THead>
               <Tr>
-                <Th>{uiT("Project")}</Th>
+                <Th>{uiT("Klant / project")}</Th>
+                <Th>{uiT("Gereserveerd via offerte")}</Th>
+                <Th>{uiT("Projectverantwoordelijke")}</Th>
                 <Th className="text-right">{uiT("Gereserveerd")}</Th>
                 <Th className="text-right">{uiT("Verkocht")}</Th>
               </Tr>
@@ -285,6 +298,11 @@ export default async function EditProductPage({
                       </span>
                     )}
                   </Td>
+                  <Td>
+                    {e.reservedNet > 0 ? refDocs.filter(d => (d.projectId ?? "__none__") === e.projectId && isReservedEstimate(d))
+                      .map(d => <Link key={d.id} href={`/documents/${d.id}`} className="block text-accent hover:underline">{d.docNumber ?? uiT("Offerte")}</Link>) : "—"}
+                  </Td>
+                  <Td>{refDocs.find(d => (d.projectId ?? "__none__") === e.projectId)?.responsibleName ?? uiT("Niet vastgelegd")}</Td>
                   <Td className="text-right tabular-nums">
                     {e.reservedNet > 0 ? (
                       <span className="text-warning">{e.reservedNet} {unit}</span>
@@ -304,9 +322,9 @@ export default async function EditProductPage({
             </TBody>
           </Table>
           <p className="px-5 py-3 text-xs text-muted">
-            {uiT("Gereserveerd = uit geaccepteerde offertes; verkocht = uit facturen (− creditnota's). Voorraad nu:")} {product.stockQty != null ? `${Number(product.stockQty)} ${unit}` : "—"}.
+            {uiT("Gereserveerd = geaccepteerde of handmatig gereserveerde offertes, minus afgeboekte leveringen. Verkocht = facturen min creditnota's. Voorraad nu:")} {product.stockQty != null ? `${Number(product.stockQty)} ${unit}` : "—"}.
           </p>
-        </Card></TabPanel>
+        </Card></section>
       )}
 
       {(variants.length > 0 || setComponents.length > 0) && (

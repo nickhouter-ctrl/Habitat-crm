@@ -14,6 +14,13 @@ import { teamWorkflowEs } from "./team-workflow";
 import { usabilityEs } from "./usability";
 
 export const es: Dictionary = {
+  "Reserveringen en verkopen": "Reservas y ventas",
+  "Klant / project": "Cliente / proyecto",
+  "Gereserveerd via offerte": "Reservado mediante presupuesto",
+  "Projectverantwoordelijke": "Responsable del proyecto",
+  "Niet vastgelegd": "No registrado",
+  "Bekijk voor welke klant of welk project deze voorraad gereserveerd is": "Ver para qué cliente o proyecto está reservado este stock",
+  "Gereserveerd = geaccepteerde of handmatig gereserveerde offertes, minus afgeboekte leveringen. Verkocht = facturen min creditnota's. Voorraad nu:": "Reservado = presupuestos aceptados o reservados manualmente, menos las salidas de stock. Vendido = facturas menos abonos. Stock actual:",
   ...appleCalendarEs,
   ...usabilityEs,
   ...reportSpanish,

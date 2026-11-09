@@ -13,6 +13,13 @@ import { teamWorkflowEn } from "./team-workflow";
 import { usabilityEn } from "./usability";
 
 export const en: Dictionary = {
+  "Reserveringen en verkopen": "Reservations and sales",
+  "Klant / project": "Customer / project",
+  "Gereserveerd via offerte": "Reserved via quote",
+  "Projectverantwoordelijke": "Project lead",
+  "Niet vastgelegd": "Not recorded",
+  "Bekijk voor welke klant of welk project deze voorraad gereserveerd is": "View the customer or project this stock is reserved for",
+  "Gereserveerd = geaccepteerde of handmatig gereserveerde offertes, minus afgeboekte leveringen. Verkocht = facturen min creditnota's. Voorraad nu:": "Reserved = accepted or manually reserved quotes, less stock already issued. Sold = invoices less credit notes. Current stock:",
   ...appleCalendarEn,
   ...usabilityEn,
   ...reportEnglish,

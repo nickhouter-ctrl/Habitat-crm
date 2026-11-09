@@ -10,6 +10,7 @@ import { and, eq, inArray, isNotNull, ne, notInArray, or } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { documents, products } from "@/lib/db/schema";
 import { normalizeDocItems } from "@/lib/documents";
+import { reservedStockGroups } from "@/lib/stock-reservations";
 
 /**
  * Per set-product (met uitvoeringen): aantal verkochte stuks (facturen −
@@ -62,45 +63,21 @@ export async function getReservedStockByProduct(): Promise<Map<string, number>> 
         notInArray(documents.status, ["rejected", "void"]),
         or(eq(documents.status, "accepted"), isNotNull(documents.reservedAt)),
       ),
-      columns: { items: true, projectId: true },
+      columns: { kind: true, status: true, items: true, projectId: true, reservedAt: true, stockAppliedAt: true },
     }),
     db.query.documents.findMany({
       where: and(
         inArray(documents.kind, ["invoice", "deliverynote"]),
         isNotNull(documents.stockAppliedAt),
       ),
-      columns: { items: true, projectId: true },
+      columns: { kind: true, status: true, items: true, projectId: true, reservedAt: true, stockAppliedAt: true },
     }),
   ]);
 
-  // Per (product, project) netto rekenen: een gereserveerde offerte die binnen
-  // hetzelfde project al is afgeboekt (factuur/pakbon) telt niet meer mee. Zo
-  // voorkomen we dubbeltelling bij multi-product-projecten (bv. vloer gereserveerd
-  // + deuren al verkocht in hetzelfde project).
-  const estByPP = new Map<string, number>();
-  const bookByPP = new Map<string, number>();
-  const productOfKey = new Map<string, string>();
-  const tally = (
-    map: Map<string, number>,
-    doc: { items: unknown; projectId: string | null },
-  ) => {
-    const proj = doc.projectId ?? "__none__";
-    for (const it of normalizeDocItems(doc.items)) {
-      if (!it.productId || !it.units) continue;
-      const key = `${it.productId}|${proj}`;
-      map.set(key, (map.get(key) ?? 0) + Number(it.units));
-      productOfKey.set(key, it.productId);
-    }
-  };
-  for (const e of estimates) tally(estByPP, e);
-  for (const b of booked) tally(bookByPP, b);
-
   const reserved = new Map<string, number>();
-  for (const [key, est] of estByPP) {
-    const net = Math.max(0, est - (bookByPP.get(key) ?? 0));
-    if (net <= 0) continue;
-    const pid = productOfKey.get(key)!;
-    reserved.set(pid, (reserved.get(pid) ?? 0) + net);
+  for (const group of reservedStockGroups([...estimates, ...booked])) {
+    if (group.remaining <= 0) continue;
+    reserved.set(group.productId, (reserved.get(group.productId) ?? 0) + group.remaining);
   }
   return reserved;
 }
