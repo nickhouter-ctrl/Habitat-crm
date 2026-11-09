@@ -4,12 +4,13 @@ export const workerInvoiceTag=(id:string)=>`crm-worker-${id}`;
 const normal=(s:string|undefined)=>s?.replace(/[^a-z0-9]/gi,"").toUpperCase()??"";
 export function workerPurchaseBody(id:string,invoice:WorkerInvoice,contact:string) {
   supplierInvoiceSchema.parse(invoice);
-  const amounts=invoiceAmounts(invoice.hours,invoice.rate,invoice.vatRate,invoice.withholdingRate);
+  const amounts=invoiceAmounts(invoice.hours,invoice.rate,invoice.vatRate,invoice.withholdingRate,invoice.extras??[]);
   if(!Number.isFinite(invoice.hours)||invoice.hours<=0||!Number.isFinite(invoice.rate)||invoice.rate<=0||Object.entries(amounts).some(([key,value])=>Math.abs(value-invoice[key as keyof typeof amounts])>.001))throw Error("Factuurbedragen sluiten niet aan.");
   return {contact,docNumber:invoice.number,date:Math.floor(Date.parse(invoice.date)/1000),currency:"eur",draft:false,
     desc:`${invoice.projectName} · ${invoice.weekStart}`,tags:[workerInvoiceTag(id)],
     notes:`${workerInvoiceTag(id)}\nLeverancier: ${invoice.legalName} · NIF/CIF: ${invoice.taxId}\n${invoice.address}${invoice.email?`\n${invoice.email}`:""}\nIBAN: ${invoice.iban||"—"}\nProject: ${invoice.projectName}\n${invoice.taxNote}`,
-    products:[{name:`Trabajo · ${invoice.projectName}`,desc:`Periodo desde ${invoice.weekStart} · ${invoice.hours} horas`,units:invoice.hours,price:invoice.rate,taxes:[`p_iva_${invoice.vatRate}`,...(invoice.withholdingRate?[`p_ret_${invoice.withholdingRate}`]:[])]}],
+    products:[{name:`Trabajo · ${invoice.projectName}`,desc:`Periodo desde ${invoice.weekStart} · ${invoice.hours} horas`,units:invoice.hours,price:invoice.rate,taxes:[`p_iva_${invoice.vatRate}`,...(invoice.withholdingRate?[`p_ret_${invoice.withholdingRate}`]:[])]},
+      ...(invoice.extras??[]).map(e=>({name:e.description,units:1,price:e.amount,taxes:[`p_iva_${e.vatRate}`]}))],
   };
 }
 export function supplierMatches(contact:HoldedContact,invoice:WorkerInvoice) {return [contact.code,contact.vatnumber].some(v=>normal(v)===normal(invoice.taxId));}

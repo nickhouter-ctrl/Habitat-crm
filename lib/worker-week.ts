@@ -72,9 +72,13 @@ export const supplierInvoiceSchema=z.object({
   number:z.string().trim().min(1).max(64).regex(/^[\p{L}\p{N} ._\/-]+$/u),date:dateSchema,
   vatRate:z.union([z.literal(0),z.literal(4),z.literal(10),z.literal(21)]),
   withholdingRate:z.union([z.literal(0),z.literal(7),z.literal(15),z.literal(19)]),taxNote:z.string().trim().max(500),
+  /** Extra regels naast de uren, bv. zelf gekochte materialen, elk met eigen btw. */
+  extras:z.array(z.object({description:z.string().trim().min(3).max(300),amount:z.number().positive().max(1_000_000),
+    vatRate:z.union([z.literal(0),z.literal(4),z.literal(10),z.literal(21)])})).max(10).default([]),
   confirmed:z.literal(true),
 }).refine(v=>v.vatRate!==0 || v.taxNote.length>=10,{path:["taxNote"]});
-export type SupplierInvoiceInput=z.infer<typeof supplierInvoiceSchema>;
+// Oudere facturen hebben nog geen extra regels: optioneel in het type.
+export type SupplierInvoiceInput=Omit<z.infer<typeof supplierInvoiceSchema>,"extras">&{extras?:InvoiceExtra[]};
 export type WorkerInvoice=SupplierInvoiceInput & { /** Alleen bij een losse factuur zonder uren: wat er gefactureerd wordt. */ concept?:string; customer:{name:string;taxId:string;address:string};hours:number;rate:number;subtotal:number;vat:number;withholding:number;total:number;language:WeekLang;projectName:string;weekStart:string };
 export function validIban(raw:string) {
   const s=raw.replace(/\s/g,"").toUpperCase();if(!/^[A-Z]{2}\d{2}[A-Z0-9]{11,30}$/.test(s))return false;
@@ -83,8 +87,25 @@ export function validIban(raw:string) {
   return remainder===1;
 }
 export function invoiceKey(taxId:string,number:string) {return `${taxId.replace(/[^a-z0-9]/gi,"").toUpperCase()}:${number.replace(/[^\p{L}\p{N}]/gu,"").toUpperCase()}`;}
-export function invoiceAmounts(hours:number,rate:number,vatRate:number,withholdingRate:number) {
-  const cents=Math.round((hours*rate+Number.EPSILON)*100);const vat=Math.round(cents*vatRate/100),withholding=Math.round(cents*withholdingRate/100);
+export type InvoiceExtra={description:string;amount:number;vatRate:0|4|10|21};
+/**
+ * Factuurbedragen. Uren × tarief krijgen de btw en IRPF van de factuur; extra
+ * regels (materiaal) elk hun eigen btw en géén IRPF — retentie hoort bij de
+ * arbeid, niet bij doorberekende inkopen.
+ */
+export function invoiceAmounts(hours:number,rate:number,vatRate:number,withholdingRate:number,extras:readonly {amount:number;vatRate:number}[]=[]) {
+  const labor=Math.round((hours*rate+Number.EPSILON)*100);
+  const extraCents=extras.map(e=>({cents:Math.round((e.amount+Number.EPSILON)*100),vat:e.vatRate}));
+  const cents=labor+extraCents.reduce((s,e)=>s+e.cents,0);
+  const vat=Math.round(labor*vatRate/100)+extraCents.reduce((s,e)=>s+Math.round(e.cents*e.vat/100),0),withholding=Math.round(labor*withholdingRate/100);
   return {subtotal:cents/100,vat:vat/100,withholding:withholding/100,total:(cents+vat-withholding)/100};
+}
+/** Btw per tarief, voor de factuur: arbeid + extra regels samen per percentage. */
+export function vatByRate(i:{hours:number;rate:number;vatRate:number;extras?:readonly {amount:number;vatRate:number}[]}) {
+  const m=new Map<number,{base:number;vat:number}>();
+  const add=(rate:number,cents:number)=>{const r=m.get(rate)??{base:0,vat:0};r.base+=cents;r.vat+=Math.round(cents*rate/100);m.set(rate,r);};
+  const labor=Math.round((i.hours*i.rate+Number.EPSILON)*100);if(labor)add(i.vatRate,labor);
+  for(const e of i.extras??[])add(e.vatRate,Math.round((e.amount+Number.EPSILON)*100));
+  return [...m].sort((a,b)=>b[0]-a[0]).map(([rate,v])=>({rate,base:v.base/100,vat:v.vat/100}));
 }
 export type WeekEvent={at:string;action:string;actor:string;version:number;reason?:string;days?:WeekDay[];invoice?:WorkerInvoice};

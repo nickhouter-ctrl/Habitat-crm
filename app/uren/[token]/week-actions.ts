@@ -27,7 +27,8 @@ async function rememberInvoiceProfile(workerId:string,form:FormData) {
 /** Factuurvelden uit het formulier; null = ongeldig. */
 function invoiceInput(form:FormData) {
   const raw=Object.fromEntries(form);
-  const parsed=supplierInvoiceSchema.safeParse({...raw,vatRate:raw.vatRate===""?NaN:Number(raw.vatRate),withholdingRate:raw.withholdingRate===""?NaN:Number(raw.withholdingRate),confirmed:raw.invoiceConfirmed==="on"||raw.confirmed==="on"});
+  let extras:unknown=[];try{const v=String(raw.extras??"");if(v.length>20000)return null;extras=v?JSON.parse(v):[];}catch{return null;}
+  const parsed=supplierInvoiceSchema.safeParse({...raw,extras,vatRate:raw.vatRate===""?NaN:Number(raw.vatRate),withholdingRate:raw.withholdingRate===""?NaN:Number(raw.withholdingRate),confirmed:raw.invoiceConfirmed==="on"||raw.confirmed==="on"});
   return parsed.success?parsed.data:null;
 }
 export type WeekActionState={error?:string;ok?:string;savedAt?:number;version?:number;days?:WeekDay[]}|null;

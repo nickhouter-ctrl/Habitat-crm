@@ -1,5 +1,5 @@
 import { describe,it,expect } from "vitest";
-import { addDays,emptyWeek,isoWeek,weekRange,madridToday,mondayOf,validateWeek,totalWeekHours,invoiceAmounts,invoiceKey,supplierInvoiceSchema,validIban } from "../worker-week";
+import { addDays,emptyWeek,isoWeek,weekRange,madridToday,mondayOf,validateWeek,totalWeekHours,invoiceAmounts,vatByRate,invoiceKey,supplierInvoiceSchema,validIban } from "../worker-week";
 const monday="2026-11-02",today="2026-11-04";
 function completed() {const d=emptyWeek(monday);d[0]={date:monday,state:"work",note:"",crews:[{people:2,names:"Ana\nLuis",hours:8,zone:"",description:"Installed eight square metres of wall tiles."}]};for(let i=1;i<7;i++)d[i].state="off";return d;}
 describe("worker timesheet accounting boundaries",()=>{
@@ -14,4 +14,12 @@ describe("worker timesheet accounting boundaries",()=>{
  it("accepts an invoice without an email address",()=>{expect(supplierInvoiceSchema.safeParse({legalName:"Example SL",taxId:"B12345678",address:"Calle Test 1, 03000 Alicante, Spain",email:"",iban:"",number:"OWN/2026/001",date:today,vatRate:21,withholdingRate:0,taxNote:"",confirmed:true}).success).toBe(true);});
  it.each(["legalName","taxId","address","number","date"])("blocks an invoice with missing supplier field %s",field=>{const inv={legalName:"Example SL",taxId:"B12345678",address:"Calle Test 1, 03000 Alicante, Spain",email:"test@example.invalid",iban:"",number:"OWN/2026/001",date:today,vatRate:21,withholdingRate:0,taxNote:"",confirmed:true};expect(supplierInvoiceSchema.safeParse(inv).success).toBe(true);expect(supplierInvoiceSchema.safeParse({...inv,[field]:""}).success).toBe(false);});
 
+});
+
+describe("invoice extra lines",()=>{
+  it("adds materials with their own VAT and keeps IRPF on labour only",()=>{
+    const a=invoiceAmounts(10,26,0,15,[{amount:100,vatRate:21}]);
+    expect(a).toEqual({subtotal:360,vat:21,withholding:39,total:342});
+    expect(vatByRate({hours:10,rate:26,vatRate:0,extras:[{amount:100,vatRate:21}]})).toEqual([{rate:21,base:100,vat:21},{rate:0,base:260,vat:0}]);
+  });
 });

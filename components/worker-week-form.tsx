@@ -80,11 +80,16 @@ export function nextInvoiceNumber(last?:string|null) {
   const n=String(Number(m[2])+1).padStart(m[2].length,"0");
   return `${m[1]}${n}${m[3]}`;
 }
+type ExtraRow={description:string;amount:string;vatRate:string};
 function InvoiceFields({lang,hours,rate,today,previous,supplier,confirmName,lump=false}:{lang:WeekLang;hours:number;rate:number;today:string;previous:WorkerInvoice|null;supplier?:SupplierDetails;confirmName:string;lump?:boolean}) {
+  // Extra regels naast de uren: zelf gekochte materialen, elk met eigen btw.
+  const [extras,setExtras]=useState<ExtraRow[]>(()=>(previous?.extras??[]).map(e=>({description:e.description,amount:String(e.amount),vatRate:String(e.vatRate)})));
+  const extraValues=extras.map(e=>({description:e.description.trim(),amount:Math.round((Number(e.amount.replace(",","."))||0)*100)/100,vatRate:Number(e.vatRate) as 0|4|10|21})).filter(e=>e.amount>0);
+  const setExtra=(n:number,patch:Partial<ExtraRow>)=>setExtras(old=>old.map((e,k)=>k===n?{...e,...patch}:e));
   const t=(key:WeekCopyKey)=>weekT(lang,key);
   const vorige=previous??(supplier?{...supplier}:null);
   const [vat,setVat]=useState(vorige?.vatRate!=null&&!Number.isNaN(vorige.vatRate)?String(vorige.vatRate):"");const [withholding,setWithholding]=useState(vorige?.withholdingRate!=null&&!Number.isNaN(vorige.withholdingRate)?String(vorige.withholdingRate):"");
-  const amounts=invoiceAmounts(hours,rate,Number(vat),Number(withholding));
+  const amounts=invoiceAmounts(hours,rate,Number(vat),Number(withholding),extraValues);
   const eur=(v:number)=>new Intl.NumberFormat(lang,{style:"currency",currency:"EUR"}).format(v);
   const defaults:Partial<WorkerInvoice>={...supplier,number:supplier?.triedNumber&&supplier.triedNumber!==supplier.lastNumber?supplier.triedNumber:nextInvoiceNumber(supplier?.lastNumber),date:today,...(previous??{})};
   const fields:[keyof WorkerInvoice,WeekCopyKey,string,number][]=[["legalName","legalName","text",180],["taxId","taxId","text",40],["address","address","text",350],["email","email","email",180],["iban","iban","text",40],["number","number","text",64],["date","invoiceDate","date",10]];
@@ -94,7 +99,16 @@ function InvoiceFields({lang,hours,rate,today,previous,supplier,confirmName,lump
     <div className="grid grid-cols-2 gap-3"><label className="text-sm font-medium">{t("vat")}<select aria-label={t("vat")} className={input} name="vatRate" value={vat} required onChange={e=>setVat(e.target.value)}><option value="">{t("taxChoice")}</option>{[0,4,10,21].map(v=><option key={v} value={v}>{v}%</option>)}</select></label>
     <label className="text-sm font-medium">{t("withholding")}<select aria-label={t("withholding")} className={input} name="withholdingRate" value={withholding} required onChange={e=>setWithholding(e.target.value)}><option value="">{t("taxChoice")}</option>{[0,7,15,19].map(v=><option key={v} value={v}>{v}%</option>)}</select></label></div>
     <label className="block text-sm font-medium">{t("taxNote")}<textarea className={input} name="taxNote" maxLength={500} rows={2} required={vat==="0"} defaultValue={previous?.taxNote??supplier?.taxNote??""}/></label>
-    <dl className="space-y-2 rounded-lg bg-stone-100 p-4 text-sm">{[...(lump?[]:[[t("rate"),eur(rate)],[t("total"),`${hours} h`]]),[t("subtotal"),eur(amounts.subtotal)],[t("vat"),eur(amounts.vat)],[t("withholding"),`− ${eur(amounts.withholding)}`],[t("amount"),eur(amounts.total)]].map(([label,value])=><div className="flex justify-between gap-3" key={label}><dt>{label}</dt><dd className="font-semibold">{value}</dd></div>)}</dl>
+    {!lump&&<div className="space-y-3"><input type="hidden" name="extras" value={JSON.stringify(extraValues)}/>
+      {extras.map((e,n)=><div key={n} className="space-y-2 rounded-lg border border-stone-200 p-3">
+        <label className="block text-sm font-medium">{t("extraDescription")}<input className={input} value={e.description} maxLength={300} required placeholder={t("extraDescriptionHint")} onChange={ev=>setExtra(n,{description:ev.target.value})}/></label>
+        <div className="grid grid-cols-2 gap-3"><label className="text-sm font-medium">{t("extraAmount")}<input className={input} inputMode="decimal" value={e.amount} required placeholder="0,00" onChange={ev=>setExtra(n,{amount:ev.target.value})}/></label>
+        <label className="text-sm font-medium">{t("extraVat")}<select className={input} value={e.vatRate} onChange={ev=>setExtra(n,{vatRate:ev.target.value})}>{[21,10,4,0].map(v=><option key={v} value={v}>{v}%</option>)}</select></label></div>
+        <button type="button" className="text-sm text-red-700 underline" onClick={()=>setExtras(old=>old.filter((_,k)=>k!==n))}>{t("remove")}</button>
+      </div>)}
+      {extras.length<10&&<button type="button" className={secondary} onClick={()=>setExtras(old=>[...old,{description:"",amount:"",vatRate:"21"}])}>{t("extraAdd")}</button>}
+    </div>}
+    <dl className="space-y-2 rounded-lg bg-stone-100 p-4 text-sm">{[...(lump?[]:[[t("rate"),eur(rate)],[t("total"),`${hours} h`],...(extraValues.length?[[t("labour"),eur(hours*rate)],...extraValues.map(e=>[`${e.description||"—"} (${e.vatRate}%)`,eur(e.amount)])]:[])]),[t("subtotal"),eur(amounts.subtotal)],[t("vat"),eur(amounts.vat)],[t("withholding"),`− ${eur(amounts.withholding)}`],[t("amount"),eur(amounts.total)]].map(([label,value])=><div className="flex justify-between gap-3" key={label}><dt>{label}</dt><dd className="font-semibold">{value}</dd></div>)}</dl>
     <label className="flex items-start gap-3 text-sm"><input className="mt-1 size-5 shrink-0 accent-[#a94f2d]" type="checkbox" name={confirmName} required/>{t("invoiceConfirm")}</label>
   </>;
 }

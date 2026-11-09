@@ -2,7 +2,7 @@ import React from "react";
 import { Document,Page,Text,View,StyleSheet,Font,renderToBuffer } from "@react-pdf/renderer";
 // Geen afbreekstreepjes midden in namen ("Gersh-win").
 Font.registerHyphenationCallback(word=>[word]);
-import { periodRange, type WorkerInvoice, type WeekDay } from "@/lib/worker-week";
+import { periodRange, vatByRate, type WorkerInvoice, type WeekDay } from "@/lib/worker-week";
 
 // Altijd in het Spaans: het is een Spaanse factuur van een Spaanse zelfstandige
 // aan Habitat One SL, ongeacht de taal waarin de bouwer het portaal gebruikt.
@@ -74,12 +74,16 @@ export async function renderWorkerInvoice(invoice:WorkerInvoice,days:WeekDay[],s
      <Text style={s.cNum}>—</Text><Text style={s.cAmt}>—</Text><Text style={[s.cAmt,s.bold]}>{eur(i.subtotal)}</Text>
    </View>:<View style={s.tr}>
      <View style={s.cDesc}><Text style={s.bold}>Mano de obra — {i.projectName}</Text><Text style={s.small}>Periodo {periodRange(i.weekStart,"es",last)} · {rows.length} {rows.length===1?"día":"días"} trabajados</Text></View>
-     <Text style={s.cNum}>{num(i.hours)}</Text><Text style={s.cAmt}>{eur(i.rate)}</Text><Text style={[s.cAmt,s.bold]}>{eur(i.subtotal)}</Text>
+     <Text style={s.cNum}>{num(i.hours)}</Text><Text style={s.cAmt}>{eur(i.rate)}</Text><Text style={[s.cAmt,s.bold]}>{eur(i.hours*i.rate)}</Text>
    </View>}
+   {(i.extras??[]).map((e,n)=><View key={n} style={s.tr} wrap={false}>
+     <View style={s.cDesc}><Text style={s.bold}>{e.description}</Text><Text style={s.small}>IVA {num(e.vatRate)}%</Text></View>
+     <Text style={s.cNum}>1</Text><Text style={s.cAmt}>{eur(e.amount)}</Text><Text style={[s.cAmt,s.bold]}>{eur(e.amount)}</Text>
+   </View>)}
    <View style={s.totals} wrap={false}>
      {i.concept?null:<View style={s.tRow}><Text style={{color:muted}}>Total horas</Text><Text style={s.bold}>{num(i.hours)} h</Text></View>}
      <View style={s.tRow}><Text style={{color:muted}}>Base imponible</Text><Text style={s.bold}>{eur(i.subtotal)}</Text></View>
-     <View style={s.tRow}><Text style={{color:muted}}>IVA {num(i.vatRate)}%</Text><Text style={s.bold}>{eur(i.vat)}</Text></View>
+     {(i.extras?.length?vatByRate(i):[{rate:i.vatRate,base:i.subtotal,vat:i.vat}]).map(v=><View key={v.rate} style={s.tRow}><Text style={{color:muted}}>IVA {num(v.rate)}%{i.extras?.length?` sobre ${eur(v.base)}`:""}</Text><Text style={s.bold}>{eur(v.vat)}</Text></View>)}
      {i.withholdingRate>0 && <View style={s.tRow}><Text style={{color:muted}}>Retención IRPF {num(i.withholdingRate)}%</Text><Text style={s.bold}>- {eur(i.withholding)}</Text></View>}
      <View style={s.grand}><Text>Total a pagar</Text><Text>{eur(i.total)}</Text></View>
    </View>

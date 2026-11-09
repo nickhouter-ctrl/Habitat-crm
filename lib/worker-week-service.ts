@@ -1,7 +1,7 @@
 import "server-only";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { db } from "@/lib/db";
-import { workerWeekSheets as sheets, workers, timeEntries, purchaseOrders, users, staffNotifications } from "@/lib/db/schema";
+import { workerWeekSheets as sheets, workers, timeEntries, purchaseOrders, projectCosts, users, staffNotifications } from "@/lib/db/schema";
 import { totalWeekHours, invoiceAmounts, invoiceKey, type WeekDay, type WorkerInvoice, type SupplierInvoiceInput, type WeekLang, type WeekEvent } from "@/lib/worker-week";
 import { COMPANY } from "@/lib/company";
 import { NICK_FREDERIQUE } from "@/lib/mail-bcc";
@@ -84,7 +84,7 @@ export async function submitWeekInvoice(args:{id:string;worker:Worker;projectId:
     if(rate<=0)conflict("rateMissing");
     const lastWork=sheet.days.filter(d=>d.state==="work").at(-1)!.date;
     if(args.input.date<lastWork)conflict("invoiceDate");
-    const invoice:WorkerInvoice={...args.input,customer:{name:COMPANY.legalName,taxId:COMPANY.vatNumber,address:COMPANY.address},hours,rate,...invoiceAmounts(hours,rate,args.input.vatRate,args.input.withholdingRate),language:args.language,projectName:args.projectName,weekStart:sheet.weekStart};
+    const invoice:WorkerInvoice={...args.input,customer:{name:COMPANY.legalName,taxId:COMPANY.vatNumber,address:COMPANY.address},hours,rate,...invoiceAmounts(hours,rate,args.input.vatRate,args.input.withholdingRate,args.input.extras),language:args.language,projectName:args.projectName,weekStart:sheet.weekStart};
     await tx.update(sheets).set({invoice,invoiceKey:key,invoiceStatus:"submitted",invoiceReviewNote:null,version:sheet.version+1,history:history(sheet.history,{action:"invoice_submitted",actor:args.worker.name,version:sheet.version,invoice}),updatedAt:new Date()}).where(eq(sheets.id,sheet.id));
   });
 }
@@ -99,10 +99,14 @@ export async function reviewWeekInvoice(args:{id:string;projectId:string;version
       const existing=await tx.select({id:purchaseOrders.id}).from(purchaseOrders).where(and(eq(purchaseOrders.reference,inv.number),sql`lower(trim(${purchaseOrders.supplier})) = ${inv.legalName.toLowerCase()}`)).limit(1);
       if(existing.length)conflict("Deze leverancier en dit factuurnummer staan al in Inkoop. Controleer de bestaande factuur.");
       const hours=await tx.select().from(timeEntries).where(eq(timeEntries.weekSheetId,sheet.id)).for("update");
-      if(!hours.length || hours.some(h=>h.purchaseOrderId || !h.approvedAt) || Math.abs(hours.reduce((s,h)=>s+Number(h.hours)*Number(h.hourlyCostEur),0)-inv.subtotal)>.011)conflict("Uren en factuur sluiten niet meer aan. Controleer de weekstaat.");
+      if(!hours.length || hours.some(h=>h.purchaseOrderId || !h.approvedAt) || Math.abs(hours.reduce((s,h)=>s+Number(h.hours)*Number(h.hourlyCostEur),0)-(inv.subtotal-(inv.extras??[]).reduce((s,e)=>s+e.amount,0)))>.011)conflict("Uren en factuur sluiten niet meer aan. Controleer de weekstaat.");
       const [po]=await tx.insert(purchaseOrders).values({kind:"invoice",status:"received",supplier:inv.legalName,reference:inv.number,projectId:sheet.projectId,countAsLabor:true,currency:"EUR",orderDate:inv.date,subtotal:inv.subtotal.toFixed(2),tax:inv.vat.toFixed(2),total:inv.total.toFixed(2),notes:`Via urenportaal · periode ${sheet.weekStart} t/m ${sheet.days.at(-1)?.date??sheet.weekStart}\nLeverancier: ${inv.legalName}\nNIF/BTW: ${inv.taxId}\n${inv.address}\n${inv.email}\nIBAN: ${inv.iban || "—"}\nIVA ${inv.vatRate}%: € ${inv.vat.toFixed(2)}\nIRPF ${inv.withholdingRate}%: € ${inv.withholding.toFixed(2)}\n${inv.taxNote}\nUren reeds geboekt via weekstaat ${sheet.id}. Niet nogmaals als uren boeken.`}).returning({id:purchaseOrders.id});
       poId=po.id;
       await tx.update(timeEntries).set({purchaseOrderId:poId,paymentMethod:"invoice",updatedAt:new Date()}).where(eq(timeEntries.weekSheetId,sheet.id));
+      // Extra regels (zelf gekocht materiaal) tellen als projectkosten, ex. btw;
+      // de uren tellen al via de urenregels.
+      if(inv.extras?.length)await tx.insert(projectCosts).values(inv.extras.map(e=>({projectId:sheet.projectId,date:inv.date,category:"material" as const,
+        description:`${e.description} (factuur ${inv.number})`,supplier:inv.legalName,purchaseOrderId:poId,amountEur:e.amount.toFixed(2),paymentMethod:"invoice" as const})));
     }
     await tx.update(sheets).set({invoiceStatus:args.approve?"approved":"returned",purchaseOrderId:poId,holdedSyncStatus:args.approve?"pending":null,holdedSyncError:null,invoiceReviewNote:args.reason||null,version:sheet.version+1,history:history(sheet.history,{action:args.approve?"invoice_approved":"invoice_returned",actor:args.userId,version:sheet.version,reason:args.reason}),updatedAt:new Date()}).where(eq(sheets.id,sheet.id));
   });
