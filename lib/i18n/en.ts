@@ -476,6 +476,7 @@ export const en: Dictionary = {
   "{n} zonder": "{n} without",
   "{naam} en alles wat we op de beurs van hem vastlegden verwijderen?":
     "Delete {naam} and everything we logged about them at the fair?",
+  "Nog te betalen: {bedrag}": "Remaining to pay: {bedrag}",
   "Alle goederen retour; vergoeding over": "All goods returned; fee remains",
   "Maakt de conceptcreditnota volledig en zet alleen de vergoeding op een aparte eindfactuur. Beide blijven concept. De eindfactuur boekt geen producten af.": "Completes the draft credit note and creates a separate final invoice for the fee only. Both remain drafts. The final invoice does not deduct stock.",
   "Eindfactuur voor vergoeding": "Final invoice for fee",
