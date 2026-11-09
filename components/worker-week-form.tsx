@@ -86,7 +86,7 @@ function InvoiceFields({lang,hours,rate,today,previous,supplier,confirmName}:{la
   const [vat,setVat]=useState(vorige?.vatRate!=null&&!Number.isNaN(vorige.vatRate)?String(vorige.vatRate):"");const [withholding,setWithholding]=useState(vorige?.withholdingRate!=null&&!Number.isNaN(vorige.withholdingRate)?String(vorige.withholdingRate):"");
   const amounts=invoiceAmounts(hours,rate,Number(vat),Number(withholding));
   const eur=(v:number)=>new Intl.NumberFormat(lang,{style:"currency",currency:"EUR"}).format(v);
-  const defaults:Partial<WorkerInvoice>={...supplier,number:nextInvoiceNumber(supplier?.lastNumber),date:today,...(previous??{})};
+  const defaults:Partial<WorkerInvoice>={...supplier,number:supplier?.triedNumber&&supplier.triedNumber!==supplier.lastNumber?supplier.triedNumber:nextInvoiceNumber(supplier?.lastNumber),date:today,...(previous??{})};
   const fields:[keyof WorkerInvoice,WeekCopyKey,string,number][]=[["legalName","legalName","text",180],["taxId","taxId","text",40],["address","address","text",350],["email","email","email",180],["iban","iban","text",40],["number","number","text",64],["date","invoiceDate","date",10]];
   return <>
     {supplier && !previous && <p className="rounded-lg bg-stone-100 p-3 text-sm text-stone-600">{t("profilePrefilled")}</p>}

@@ -652,6 +652,13 @@
       "when": 1794226370718,
       "tag": "0092_big_greymalkin",
       "breakpoints": true
+    },
+    {
+      "idx": 93,
+      "version": "7",
+      "when": 1794229764715,
+      "tag": "0093_worker_invoice_profile",
+      "breakpoints": true
     }
   ]
 }

@@ -1,10 +1,10 @@
 import "server-only";
 import { and, desc, eq, gte, inArray, isNotNull, lte, sql } from "drizzle-orm";
 import { db } from "@/lib/db";
-import { workerWeekSheets as sheets } from "@/lib/db/schema";
+import { workerWeekSheets as sheets, workers } from "@/lib/db/schema";
 import { addDays, mondayOf, type WorkerInvoice } from "@/lib/worker-week";
 
-export type SupplierDetails = Pick<WorkerInvoice, "legalName" | "taxId" | "address" | "email" | "iban"> & Partial<Pick<WorkerInvoice, "vatRate" | "withholdingRate" | "taxNote">> & { lastNumber?: string | null };
+export type SupplierDetails = Pick<WorkerInvoice, "legalName" | "taxId" | "address" | "email" | "iban"> & Partial<Pick<WorkerInvoice, "vatRate" | "withholdingRate" | "taxNote">> & { lastNumber?: string | null; triedNumber?: string | null };
 export type PortalView = "overview" | "week" | "invoices" | "invoice";
 export type PortalQuery = Record<string, string | string[] | undefined>;
 export const portalValue = (value: string | string[] | undefined) => typeof value === "string" ? value : undefined;
@@ -46,5 +46,10 @@ export async function loadWorkerDashboard(workerId:string,projectId:string,today
   const selected=requested>=earliest && requested<=today || selectedRows.length?requested:current;
   const sheet=selectedRows[0];
   const selectedSheet=selected===requested?sheet:(await db.select().from(sheets).where(and(scope,eq(sheets.weekStart,current))).limit(1))[0];
-  return {lastTeam,view,current,earliest,recentStates,selected,sheet:selectedSheet,invoiceSheet:invoiceRows[0],profile:profileRows[0] as SupplierDetails|undefined,counts,rows,page,pages};
+  // Bewaarde gegevens van de bouwer zelf gaan voor; anders die van zijn laatste factuur.
+  const [own]=await db.select({p:workers.invoiceProfile}).from(workers).where(eq(workers.id,workerId));
+  const num=(x:unknown)=>x===""||x==null?undefined:Number(x);
+  const profile:SupplierDetails|undefined=own?.p?{...(profileRows[0] as SupplierDetails|undefined),...Object.fromEntries(Object.entries(own.p).filter(([,v])=>v!==""&&v!=null)),
+    vatRate:num(own.p.vatRate)??profileRows[0]?.vatRate,withholdingRate:num(own.p.withholdingRate)??profileRows[0]?.withholdingRate} as SupplierDetails:profileRows[0] as SupplierDetails|undefined;
+  return {lastTeam,view,current,earliest,recentStates,selected,sheet:selectedSheet,invoiceSheet:invoiceRows[0],profile,counts,rows,page,pages};
 }

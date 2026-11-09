@@ -1371,6 +1371,10 @@ export const workers = pgTable(
     /** Taal van het urenportaal voor deze arbeider: "nl" | "es" | "en". */
     portalLang: text().notNull().default("es"),
     portalInvoiceEnabled: boolean().notNull().default(false),
+    /** Factuurgegevens die de bouwer in het urenportaal invulde (naam, NIF,
+     *  adres, IBAN, btw/IRPF, laatste nummer). Bewaard bij elke poging, zodat
+     *  hij ze nooit opnieuw hoeft te typen — ook als indienen mislukte. */
+    invoiceProfile: jsonb().$type<Record<string, string | number | null>>(),
     active: boolean().notNull().default(true),
     notes: text(),
     ...timestamps,

@@ -1,5 +1,8 @@
 "use server";
 import { z } from "zod";
+import { eq } from "drizzle-orm";
+import { db } from "@/lib/db";
+import { workers } from "@/lib/db/schema";
 import { weekRoster } from "@/lib/worker-week-grid";
 import { revalidatePath } from "next/cache";
 import { after } from "next/server";
@@ -10,6 +13,16 @@ import { madridToday, weekLang, validateWeek, supplierInvoiceSchema, type WeekDa
 import { weekError, weekT } from "@/lib/worker-week-i18n";
 import { saveWeek, submitWeekInvoice, WeekConflict } from "@/lib/worker-week-service";
 
+/** Wat de bouwer invulde meteen bij hem bewaren — ook als de rest nog niet
+ *  klopt of indienen mislukt. Volgende keer staat het er gewoon weer. */
+async function rememberInvoiceProfile(workerId:string,form:FormData) {
+  const v=(k:string,max:number)=>String(form.get(k)??"").trim().slice(0,max);
+  const profile={legalName:v("legalName",180),taxId:v("taxId",40),address:v("address",350),email:v("email",180),iban:v("iban",40),
+    vatRate:v("vatRate",3),withholdingRate:v("withholdingRate",3),taxNote:v("taxNote",500),triedNumber:v("number",64)};
+  if(!Object.values(profile).some(Boolean))return;
+  try{await db.update(workers).set({invoiceProfile:profile,updatedAt:new Date()}).where(eq(workers.id,workerId));}
+  catch{console.warn("[worker-week] invoice-profile-not-saved");}
+}
 /** Factuurvelden uit het formulier; null = ongeldig. */
 function invoiceInput(form:FormData) {
   const raw=Object.fromEntries(form);
@@ -27,6 +40,7 @@ export async function saveWeekAction(token:string,_prev:WeekActionState,form:For
   if(submit && form.get("confirmed")!=="on")return {error:weekT(lang,"confirm")};
   // Factuur meteen mee ter controle: eerst controleren, dan pas de week indienen.
   const withInvoice=submit && form.get("withInvoice")==="1" && ctx.worker.portalInvoiceEnabled;
+  if(withInvoice)await rememberInvoiceProfile(ctx.worker.id,form);
   const invoice=withInvoice?invoiceInput(form):null;
   if(withInvoice && (!invoice || form.get("invoiceConfirmed")!=="on"))return {error:weekT(lang,"fields")};
   if(invoice && invoice.date>madridToday())return {error:weekError(lang,"invoiceDate")};
@@ -51,6 +65,7 @@ export async function submitWeekInvoiceAction(token:string,_prev:WeekActionState
   if(!ctx || !await rateLimit(`worker-invoice:${ctx.link.id}`,20,3600,{strikt:true}))return {error:weekT(lang,"unavailable")};
   const id=String(form.get("id")??""),version=Number(form.get("version"));
   if(!/^[0-9a-f-]{36}$/.test(id)||!Number.isSafeInteger(version)||version<1)return {error:weekT(lang,"conflict")};
+  await rememberInvoiceProfile(ctx.worker.id,form);
   const input=invoiceInput(form);
   if(!input)return {error:weekT(lang,"fields")};
   if(input.date>madridToday())return {error:weekError(lang,"invoiceDate")};
