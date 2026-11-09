@@ -1,3 +1,6 @@
+import { ReturnFeeForm } from "../return-fee-form";
+import { planReturnFee } from "@/lib/return-fee";
+import { returnFeeVersion } from "@/lib/return-fee-service";
 import { loadCatalogLineCost } from "@/lib/catalog-costs";
 import { TabsRoot, TabsBar, TabPanel } from "@/components/tabs";
 import { datumTaal } from "@/lib/i18n/server";
@@ -172,7 +175,6 @@ export default async function DocumentDetailPage({
             eq(documents.kind, "creditnote"),
             ne(documents.status, "void"),
           ),
-          columns: { id: true, docNumber: true, status: true, totalEur: true },
           orderBy: [asc(documents.issueDate)],
         })
       : [];
@@ -194,6 +196,9 @@ export default async function DocumentDetailPage({
           columns: { id: true, docNumber: true, status: true },
         })
       : [];
+  const feeCredit=linkedCreditNotes.filter(c=>c.status!=="rejected");
+  const feePlan=doc.kind==="invoice" && !["void","rejected"].includes(doc.status) && !doc.isExternal && !doc.lockedAt && !doc.isAdvance && Number(doc.paidEur)===0 && replacementInvoices.length===0 && feeCredit.length===1 && feeCredit[0].status==="draft" && !feeCredit[0].sentAt && !feeCredit[0].holdedId && !feeCredit[0].stockAppliedAt && !feeCredit[0].isExternal && !feeCredit[0].lockedAt
+    ? planReturnFee(doc,feeCredit[0]) : null;
   // Pakbonnen die bij deze factuur horen (met afgeleverd-status).
   const linkedDeliveryNotes =
     doc.kind === "invoice"
@@ -1047,6 +1052,7 @@ export default async function DocumentDetailPage({
                     {uiT("→ Maak creditnota")} </SubmitButton>
                 </form>
               )}
+              {feePlan && <ReturnFeeForm invoiceId={id} version={returnFeeVersion(doc,feeCredit)} amount={formatEUR(feePlan.totals.total)} subtotal={formatEUR(feePlan.totals.subtotal)} />}
               {doc.kind === "invoice" &&
                 creditedEur > 0.01 &&
                 restNaCredit > 0.01 &&

@@ -65,10 +65,20 @@ export async function insertNumberedDocument(
   year = new Date().getFullYear(),
   onInserted?: (tx: Parameters<Parameters<typeof db.transaction>[0]>[0], document: { id: string; docNumber: string }) => Promise<void>,
 ): Promise<{ id: string; docNumber: string }> {
+  return db.transaction(tx => insertNumberedDocumentInTransaction(tx, kind, values, year, onInserted));
+}
+
+/** Use the same numbering lock when a document and related corrections must commit together. */
+export async function insertNumberedDocumentInTransaction(
+  tx: Parameters<Parameters<typeof db.transaction>[0]>[0],
+  kind: DocKind,
+  values: Omit<DocumentInsert, "docNumber"> & { docNumber?: string | null },
+  year = new Date().getFullYear(),
+  onInserted?: (tx: Parameters<Parameters<typeof db.transaction>[0]>[0], document: { id: string; docNumber: string }) => Promise<void>,
+): Promise<{ id: string; docNumber: string }> {
   const prefix = `${DOC_KIND_PREFIX[kind]}-${year}-`;
   const custom = isAutoNumber(values.docNumber, prefix) ? null : values.docNumber!.trim();
 
-  return db.transaction(async (tx) => {
     // Serialiseer nummer-uitgifte per soort+jaar over alle connecties heen.
     await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${prefix}))`);
     // Callers may supply a stable request-scoped id. Retries then return the
@@ -84,5 +94,4 @@ export async function insertNumberedDocument(
       .returning({ id: documents.id });
     if (onInserted) await onInserted(tx, {id:row.id,docNumber});
     return { id: row.id, docNumber };
-  });
 }
