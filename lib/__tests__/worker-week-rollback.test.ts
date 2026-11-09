@@ -41,7 +41,8 @@ it.skipIf(!enabled)("enforces token scope, review, stale submissions, invoice un
   const notices=()=>tx.select().from(staffNotifications).where(eq(staffNotifications.entityId,s.id));
   expect(await notices()).toHaveLength(0);
   expect((await saveWeekAction(token,null,form(0)))?.error).toBeTruthy();
-  expect((await saveWeekAction(token,null,form(s.version)))?.ok).toBeTruthy();s=await get();expect(s.status).toBe("submitted");
+  const incompleteDays=structuredClone(days);incompleteDays[6].state="empty";
+  const sent=await saveWeekAction(token,null,form(s.version,"submit",incompleteDays));expect(sent?.ok).toBeTruthy();expect(sent?.days?.[6].state).toBe("off");s=await get();expect(s.status).toBe("submitted");
   expect(await notices()).toHaveLength(1);const firstNotice=(await notices())[0];expect(firstNotice.userId).toBe(owner);
   expect((await saveWeekAction(token,null,form(s.version)))?.error).toBeTruthy();expect(await notices()).toHaveLength(1);
   expect((await deliverStaffNotifications([firstNotice.id])).sent).toBe(1);await deliverStaffNotifications([firstNotice.id]);expect(m.mail).toHaveBeenCalledTimes(1);

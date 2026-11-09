@@ -23,7 +23,7 @@ export function WorkerWeekForm({token,lang,monday,version,initialDays,initialRos
   const snapshot=JSON.stringify({days,names}),dirty=snapshot!==saved;
   const [state,action,pending]=useActionState(async(prev:Awaited<ReturnType<typeof saveWeekAction>>,form:FormData)=>{
     const result=await saveWeekAction(token,prev,form);
-    if(result?.ok){setSaved(JSON.stringify({days:JSON.parse(String(form.get("days"))),names:JSON.parse(String(form.get("roster")))}));setReview(false);}
+    if(result?.ok){const savedDays=result.days??JSON.parse(String(form.get("days")));setDays(savedDays);setSaved(JSON.stringify({days:savedDays,names:JSON.parse(String(form.get("roster")))}));setReview(false);}
     return result;
   },null);
   useEffect(()=>{

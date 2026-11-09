@@ -6,11 +6,11 @@ import { after } from "next/server";
 import { deliverStaffNotifications } from "@/lib/staff-notifications";
 import { portalLinkForToken } from "@/lib/worker-portal";
 import { rateLimit } from "@/lib/rate-limit";
-import { madridToday, weekLang, validateWeek, supplierInvoiceSchema } from "@/lib/worker-week";
+import { madridToday, weekLang, validateWeek, supplierInvoiceSchema, type WeekDay } from "@/lib/worker-week";
 import { weekError, weekT } from "@/lib/worker-week-i18n";
 import { saveWeek, submitWeekInvoice, WeekConflict } from "@/lib/worker-week-service";
 
-export type WeekActionState={error?:string;ok?:string;savedAt?:number;version?:number}|null;
+export type WeekActionState={error?:string;ok?:string;savedAt?:number;version?:number;days?:WeekDay[]}|null;
 export async function saveWeekAction(token:string,_prev:WeekActionState,form:FormData):Promise<WeekActionState> {
   const ctx=await portalLinkForToken(token);const lang=weekLang(form.get("lang")??ctx?.worker.portalLang);
   if(!ctx || !await rateLimit(`worker-week:${ctx.link.id}`,60,3600,{strikt:true}))return {error:weekT(lang,"unavailable")};
@@ -26,7 +26,7 @@ export async function saveWeekAction(token:string,_prev:WeekActionState,form:For
   catch(e){return {error:weekError(lang,e instanceof WeekConflict?e.message:"failure")};}
   if(notificationIds.length)after(async()=>{try{await deliverStaffNotifications(notificationIds);}catch{console.warn("[worker-week] queued-notification-pending");}});
   revalidatePath(`/uren/${token}`);revalidatePath(`/projects/${ctx.project.id}`);revalidatePath("/projects/weekstaten");revalidatePath("/","layout");
-  return {ok:weekT(lang,submit?"submitted":"saved"),savedAt:Date.now(),version:savedVersion};
+  return {ok:weekT(lang,submit?"submitted":"saved"),savedAt:Date.now(),version:savedVersion,days:result.days};
 }
 export async function submitWeekInvoiceAction(token:string,_prev:WeekActionState,form:FormData):Promise<WeekActionState> {
   const ctx=await portalLinkForToken(token);const lang=weekLang(form.get("lang")??ctx?.worker.portalLang);
