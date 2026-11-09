@@ -3,7 +3,7 @@ import Link from "next/link";
 import { db } from "@/lib/db";
 import { workerWeekSheets, workers, projects, users } from "@/lib/db/schema";
 import { requireModuleRead } from "@/lib/auth/guards";
-import { isoWeek,totalWeekHours } from "@/lib/worker-week";
+import { totalWeekHours,weekRange } from "@/lib/worker-week";
 import { formatEUR } from "@/lib/utils";
 import { WorkerWeekReviewForm } from "./worker-week-review-form";
 
@@ -16,8 +16,8 @@ export async function WorkerWeekReviews({projectId,invoicesOnly=false,pendingOnl
  const labels:Record<string,string>={submitted:"Te controleren",approved:"Goedgekeurd",returned:"Teruggestuurd"};
  return <section id="weekstaten" className="my-5 space-y-3"><h2 className="text-lg font-semibold">{invoicesOnly?"Facturen uit het urenportaal ter controle":"Weekstaten uit het urenportaal"} <span className="text-sm font-normal text-muted">({rows.length})</span></h2>
  <p className="text-sm text-muted">{invoicesOnly?"Pas na goedkeuring wordt de factuur geboekt. De bijbehorende uren worden gekoppeld, niet opnieuw aangemaakt.":"Controleer aanwezigheid en resultaat per dag. Goedgekeurde weekstaten blijven vaststaan; concepten en ingediende staten tellen nog niet mee in de kosten."}</p>
- {rows.map(({sheet:s,workerName,projectName})=>{const wk=isoWeek(s.weekStart);const late=s.submittedAt && new Date(s.submittedAt).getTime()-Date.parse(s.weekStart)>10*86400000;return <details id={`weekstaat-${s.id}`} key={`${s.id}:${s.version}`} open={invoicesOnly || s.status==="submitted"} className="scroll-mt-24 rounded-xl border bg-surface p-4">
- <summary className="cursor-pointer font-medium">{workerName} · week {wk.week}/{wk.year} · {totalWeekHours(s.days)} persoonsuren · {labels[invoicesOnly?s.invoiceStatus!:s.status]}{s.invoice && ` · factuur ${s.invoice.number}`}</summary>
+ {rows.map(({sheet:s,workerName,projectName})=>{const late=s.submittedAt && new Date(s.submittedAt).getTime()-Date.parse(s.weekStart)>10*86400000;return <details id={`weekstaat-${s.id}`} key={`${s.id}:${s.version}`} open={invoicesOnly || s.status==="submitted"} className="scroll-mt-24 rounded-xl border bg-surface p-4">
+ <summary className="cursor-pointer font-medium">{workerName} · {weekRange(s.weekStart,"nl")} · {totalWeekHours(s.days)} persoonsuren · {labels[invoicesOnly?s.invoiceStatus!:s.status]}{s.invoice && ` · factuur ${s.invoice.number}`}</summary>
  <div className="mt-4 space-y-3"><Link href={`/projects/${s.projectId}#weekstaten`} className="text-sm text-accent underline">{projectName}</Link>
  <p className="text-sm text-muted">Ingediend: {s.submittedAt?.toLocaleString("nl-NL",{timeZone:"Europe/Madrid"})??"—"} · Tarief: {formatEUR(s.hourlyRate)}/u · Totaal arbeid: {formatEUR(totalWeekHours(s.days)*Number(s.hourlyRate))}</p>
  {late && <p className="text-sm font-medium text-amber-700">Late invoer: meer dan 3 dagen na het einde van de week. Extra controle aanbevolen.</p>}

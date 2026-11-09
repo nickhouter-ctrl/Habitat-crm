@@ -16,6 +16,17 @@ export function isoWeek(date: string) {
   const year = d.getUTCFullYear();
   return { year, week: 1 + Math.round((Date.parse(`${mondayOf(date)}T12:00:00Z`) - Date.parse(`${mondayOf(`${year}-01-04`)}T12:00:00Z`)) / 604800000) };
 }
+/** Werkweek als datums, maandag t/m zaterdag: "9 t/m 14 november". Zondag
+ *  telt niet mee; een jaar alleen als de week over de jaarwissel loopt. */
+export function weekRange(date: string, lang: WeekLang) {
+  const from = mondayOf(date), to = addDays(from, 5);
+  const locale = lang === "nl" ? "nl-NL" : lang === "es" ? "es-ES" : "en-GB";
+  const d = (s: string, opts: Intl.DateTimeFormatOptions) => new Date(`${s}T12:00:00Z`).toLocaleDateString(locale, { timeZone: "UTC", ...opts });
+  const sameYear = from.slice(0, 4) === to.slice(0, 4), sameMonth = sameYear && from.slice(5, 7) === to.slice(5, 7);
+  const start = sameMonth ? d(from, { day: "numeric" }) : d(from, sameYear ? { day: "numeric", month: "long" } : { day: "numeric", month: "long", year: "numeric" });
+  const end = d(to, sameYear ? { day: "numeric", month: "long" } : { day: "numeric", month: "long", year: "numeric" });
+  return `${start} ${lang === "nl" ? "t/m" : lang === "es" ? "al" : "–"} ${end}`;
+}
 const dateSchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/).refine(s => !Number.isNaN(Date.parse(s)) && new Date(`${s}T12:00:00Z`).toISOString().slice(0, 10) === s);
 const crewSchema = z.object({
   people: z.number().int().min(1).max(30), names: z.string().trim().max(1500),
