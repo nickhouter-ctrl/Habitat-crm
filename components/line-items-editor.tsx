@@ -554,7 +554,9 @@ export function LineItemsEditor({
                   <td className="px-1 py-2">
                     <Input
                       value={r.name}
-                      onChange={(e) => patchRow(i, { name: e.target.value, productId: "" })}
+                      // De naam aanpassen ("+ 10% snijverlies") houdt de productkoppeling:
+                      // anders boekt de factuur geen voorraad af (FAC-2026-0044).
+                      onChange={(e) => patchRow(i, { name: e.target.value })}
                       placeholder={uiT("Artikel of werkzaamheid")}
                       className="mb-1"
                     />
@@ -571,6 +573,12 @@ export function LineItemsEditor({
                       className="mt-1 text-xs"
                       list="doc-phase-suggestions"
                     />
+                    {r.productId && (
+                      <p className="mt-1 flex flex-wrap items-center gap-2 text-xs text-muted">
+                        {uiT("Gekoppeld aan {product}", { product: products.find((p) => p.id === r.productId)?.sku ?? products.find((p) => p.id === r.productId)?.name ?? uiT("product") })}
+                        <button type="button" className="text-accent hover:underline" onClick={() => patchRow(i, { productId: "" })}>{uiT("ontkoppelen")}</button>
+                      </p>
+                    )}
                     {m == null && r.productId && <p className="mt-1 text-xs text-warning">{uiT("Kostprijs ontbreekt — marge onbekend.")}</p>}
                     {r.productId && !(Number(r.price) > 0) && <p className="mt-1 text-xs text-danger">{uiT("Verkoopprijs ontbreekt — controleer vóór verzending.")}</p>}
                     {m != null && (

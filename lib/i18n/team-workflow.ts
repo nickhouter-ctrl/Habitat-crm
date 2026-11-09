@@ -31,6 +31,8 @@ const rows:[string,string,string][]=[
 ['Jouw afspraken, taken en klantopvolging op één plek.','Your appointments, tasks and customer follow-up in one place.','Tus citas, tareas y seguimiento de clientes en un solo lugar.'],
 ['Afspraak / taak toevoegen','Add appointment / task','Añadir cita / tarea'],
 ['Ook aanwezig','Also attending','También asisten'],
+['Gekoppeld aan {product}','Linked to {product}','Vinculado a {product}'],
+['ontkoppelen','unlink','desvincular'],
 ['ook aanwezig: {namen}','also attending: {namen}','también asisten: {namen}'],
 ['Iedereen die je aanvinkt ziet de afspraak in zijn agenda en krijgt een e-mail.','Everyone you tick sees the appointment in their calendar and receives an email.','Todas las personas que marques verán la cita en su agenda y recibirán un correo.'],
 ['Zo werkt de opvolging','How follow-up works','Cómo funciona el seguimiento'],
