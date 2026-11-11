@@ -1,5 +1,5 @@
 {
-  "id": "40dd34fd-6534-4796-be1f-4cbad37def3a",
+  "id": "2ae3efff-4d62-4b96-b07c-c72036921ae8",
   "prevId": "c0ac1a6f-d7f6-471f-9f1b-31bf2c455713",
   "version": "7",
   "dialect": "postgresql",
@@ -14218,6 +14218,24 @@
         "purchase_order_id": {
           "name": "purchase_order_id",
           "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "holded_sync_status": {
+          "name": "holded_sync_status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "holded_sync_error": {
+          "name": "holded_sync_error",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "holded_sync_attempt_at": {
+          "name": "holded_sync_attempt_at",
+          "type": "timestamp with time zone",
           "primaryKey": false,
           "notNull": false
         },

@@ -2,7 +2,7 @@
 import { requireModule } from "@/lib/auth/guards";
 import { magModule } from "@/lib/auth/modules";
 import { after } from "next/server";
-import { syncWorkerInvoice } from "@/lib/worker-holded-sync";
+import { syncLumpInvoice, syncWorkerInvoice } from "@/lib/worker-holded-sync";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { eq } from "drizzle-orm";
@@ -33,8 +33,8 @@ export async function reviewWorkerWeek(invoice:boolean,_prev:WeekActionState,for
   if((invoice||factuurMee)&&d.decision==="approve")after(async()=>{try{await syncWorkerInvoice(d.id);}catch{console.warn("[worker-invoice] sync pending");}});
   revalidatePath(`/projects/${d.projectId}`);revalidatePath("/inkooporders");revalidatePath("/inkooporders/te-verwerken");revalidatePath("/uren/[token]","page");revalidatePath("/ploeg");revalidatePath("/projects/weekstaten");revalidatePath("/","layout");
   if(factuurFout)return {error:`Uren goedgekeurd. De factuur nog niet: ${factuurFout} Keur hem goed in Inkoop → te verwerken.`};
-  if(factuurMee)return {ok:"Uren en factuur goedgekeurd en geboekt. De factuur wordt automatisch naar Holded gestuurd."};
-  return {ok:d.decision==="approve"?(invoice?"Goedgekeurd en geboekt. De factuur wordt automatisch naar Holded gestuurd.":"Goedgekeurd en verwerkt."):"Teruggestuurd naar de medewerker."};
+  if(factuurMee)return {ok:"Uren en factuur goedgekeurd en geboekt. De factuur gaat als concept naar Holded."};
+  return {ok:d.decision==="approve"?(invoice?"Goedgekeurd en geboekt. De factuur gaat als concept naar Holded.":"Goedgekeurd en verwerkt."):"Teruggestuurd naar de medewerker."};
 }
 
 /** Losse factuur zonder uren goedkeuren (→ inkoopfactuur op het project) of terugsturen. */
@@ -46,6 +46,7 @@ export async function reviewLumpInvoiceAction(_prev:WeekActionState,form:FormDat
   if(d.decision==="approve" && d.confirmed!=="on")return {error:"Bevestig dat je de factuur hebt gecontroleerd."};
   try{await reviewLumpInvoice({...d,approve:d.decision==="approve",userId:user.id});}
   catch(e){return {error:e instanceof WeekConflict?e.message:"Verwerken is niet gelukt. Probeer het opnieuw."};}
-  revalidatePath(`/projects/${d.projectId}`);revalidatePath("/inkooporders");revalidatePath("/uren/[token]","page");
-  return {ok:d.decision==="approve"?"Goedgekeurd en als inkoopfactuur op het project geboekt.":"Teruggestuurd naar de medewerker."};
+  if(d.decision==="approve")after(async()=>{try{await syncLumpInvoice(d.id);}catch{console.warn("[worker-lump] sync pending");}});
+  revalidatePath(`/projects/${d.projectId}`);revalidatePath("/inkooporders");revalidatePath("/uren/[token]","page");revalidatePath("/projects/weekstaten");revalidatePath("/","layout");
+  return {ok:d.decision==="approve"?"Goedgekeurd en als inkoopfactuur op het project geboekt. De factuur gaat als concept naar Holded.":"Teruggestuurd naar de medewerker."};
 }

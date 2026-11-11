@@ -3814,7 +3814,9 @@ const rows: [string,string,string][] = [
   ["Koppel aan die factuur", "Vincular a esa factura", "Link to that invoice"],
   ["De vorige verzending naar Holded kreeg geen duidelijk antwoord. Om dubbel boeken te voorkomen wordt er niets opnieuw verstuurd tot dit is uitgezocht.", "El envío anterior a Holded no recibió una respuesta clara. Para no contabilizarla dos veces, no se reenvía nada hasta aclararlo.", "The previous send to Holded got no clear answer. To avoid double booking, nothing is resent until this is resolved."],
   ["Zoek terug in Holded", "Buscar en Holded", "Look it up in Holded"],
-  ["Ik heb gekeken: hij staat niet in Holded", "He comprobado: no está en Holded", "I checked: it is not in Holded"]
+  ["Ik heb gekeken: hij staat niet in Holded", "He comprobado: no está en Holded", "I checked: it is not in Holded"],
+  ["✓ Factuur staat in Holded","✓ La factura está en Holded","✓ Invoice is in Holded"],
+  ["Gaat automatisch als concept naar Holded.","Se envía automáticamente a Holded como borrador.","Goes to Holded automatically as a draft."]
 ];
 export const crmEs = Object.fromEntries(rows.map(([key,es])=>[key,es]));
 export const crmEn = Object.fromEntries(rows.map(([key,,en])=>[key,en]));

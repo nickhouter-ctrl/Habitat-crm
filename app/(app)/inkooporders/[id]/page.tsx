@@ -86,7 +86,7 @@ export default async function PurchaseOrderPage({
   const [portalWeek] = await db.select({id: workerWeekSheets.id, holdedSyncStatus: workerWeekSheets.holdedSyncStatus, holdedSyncError: workerWeekSheets.holdedSyncError}).from(workerWeekSheets).where(eq(workerWeekSheets.purchaseOrderId, id));
   // Een goedgekeurde factuur zonder uren uit het portaal heeft geen bestand in
   // de bijlagen: de PDF wordt net als bij een weekfactuur op aanvraag gemaakt.
-  const [portalLump] = portalWeek ? [] : await db.select({ id: workerLumpInvoices.id, number: sql<string>`${workerLumpInvoices.invoice}->>'number'` }).from(workerLumpInvoices).where(eq(workerLumpInvoices.purchaseOrderId, id));
+  const [portalLump] = portalWeek ? [] : await db.select({ id: workerLumpInvoices.id, number: sql<string>`${workerLumpInvoices.invoice}->>'number'`, holdedSyncStatus: workerLumpInvoices.holdedSyncStatus, holdedSyncError: workerLumpInvoices.holdedSyncError }).from(workerLumpInvoices).where(eq(workerLumpInvoices.purchaseOrderId, id));
   const portalPdf = portalWeek ? { href: `/api/worker-weeks/${portalWeek.id}/invoice`, name: "Factuur uit urenportaal (PDF)" }
     : portalLump ? { href: `/api/worker-weeks/${portalLump.id}/invoice`, name: `Factuur ${portalLump.number} uit urenportaal (PDF)` } : null;
 
@@ -213,7 +213,7 @@ export default async function PurchaseOrderPage({
   return (
     <>
 <TabsRoot defaultTab="order" ids={["order","projects","files","details"]} param="section">
-      {portalWeek && <p className="mb-3 text-sm">{portalWeek.holdedSyncStatus==="sent"?"✓ Factuur staat in Holded":portalWeek.holdedSyncError??"Wordt automatisch naar Holded gestuurd."}</p>}
+      {(portalWeek ?? portalLump) && (() => { const p = (portalWeek ?? portalLump)!; return <p className="mb-3 text-sm">{p.holdedSyncStatus==="sent"?uiT("✓ Factuur staat in Holded"):p.holdedSyncError??uiT("Gaat automatisch als concept naar Holded.")}</p>; })()}
       {portalPdf && <a className="mb-4 inline-block text-accent underline" href={portalPdf.href} target="_blank" rel="noopener noreferrer">{uiT("Factuur uit urenportaal downloaden (PDF)")}</a>}
       <PageHeader
         title={

@@ -1474,6 +1474,10 @@ export const workerLumpInvoices = pgTable("worker_lump_invoices", {
   reviewedAt: timestamp({ withTimezone: true }),
   reviewedBy: uuid().references(() => users.id, { onDelete: "set null" }),
   purchaseOrderId: uuid().references((): AnyPgColumn => purchaseOrders.id, { onDelete: "restrict" }),
+  /** Na goedkeuring als concept naar Holded — zelfde statussen als bij een weekfactuur. */
+  holdedSyncStatus: text(),
+  holdedSyncError: text(),
+  holdedSyncAttemptAt: timestamp({ withTimezone: true }),
   ...timestamps,
 }, (t) => [
   uniqueIndex("worker_lump_invoice_key_idx").on(t.invoiceKey),

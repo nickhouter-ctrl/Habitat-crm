@@ -83,6 +83,7 @@ export async function reviewLumpInvoice(args: { id: string; projectId: string; v
       poId = po.id;
     }
     await tx.update(lumps).set({ status: args.approve ? "approved" : "returned", purchaseOrderId: poId, reviewNote: args.reason || null,
+      ...(args.approve ? { holdedSyncStatus: "pending", holdedSyncError: null } : {}),
       reviewedAt: new Date(), reviewedBy: args.userId, version: l!.version + 1, updatedAt: new Date() }).where(eq(lumps.id, l!.id));
   });
 }

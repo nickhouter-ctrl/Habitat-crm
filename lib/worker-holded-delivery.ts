@@ -2,15 +2,44 @@ import { invoiceAmounts, supplierInvoiceSchema, type WorkerInvoice } from "./wor
 import type { HoldedDocument, HoldedContact } from "./holded/types";
 export const workerInvoiceTag=(id:string)=>`crm-worker-${id}`;
 const normal=(s:string|undefined)=>s?.replace(/[^a-z0-9]/gi,"").toUpperCase()??"";
-export function workerPurchaseBody(id:string,invoice:WorkerInvoice,contact:string) {
+
+/**
+ * Hoe de factuur in Holded geboekt wordt — zoals jullie het met de hand doen:
+ * het Holded-project van de werf, de grootboekrekening die voor deze werker
+ * gebruikt wordt, en btw/IRPF. Materiaalregels krijgen hun eigen rekening.
+ */
+export type WorkerBooking={projectId:string;main:{account:string;vat:string;retention:string|null};extraAccount:string};
+
+/** Uitzondering die vóór het posten optreedt en een duidelijke melding verdient. */
+export class PrepareError extends Error {}
+
+/** Losse factuur zonder uren: geen uren × tarief, maar één bedrag met een omschrijving. */
+const isLump=(invoice:WorkerInvoice)=>!!invoice.concept;
+
+export function workerPurchaseBody(id:string,invoice:WorkerInvoice,contact:string,booking?:WorkerBooking) {
   supplierInvoiceSchema.parse(invoice);
-  const amounts=invoiceAmounts(invoice.hours,invoice.rate,invoice.vatRate,invoice.withholdingRate,invoice.extras??[]);
-  if(!Number.isFinite(invoice.hours)||invoice.hours<=0||!Number.isFinite(invoice.rate)||invoice.rate<=0||Object.entries(amounts).some(([key,value])=>Math.abs(value-invoice[key as keyof typeof amounts])>.001))throw Error("Factuurbedragen sluiten niet aan.");
-  return {contact,docNumber:invoice.number,date:Math.floor(Date.parse(invoice.date)/1000),currency:"eur",draft:false,
+  const extras=isLump(invoice)?[]:invoice.extras??[];
+  const laborUnits=isLump(invoice)?1:invoice.hours;
+  const laborPrice=isLump(invoice)?Math.round((invoice.subtotal-extras.reduce((s,e)=>s+e.amount,0))*100)/100:invoice.rate;
+  const amounts=invoiceAmounts(laborUnits,laborPrice,invoice.vatRate,invoice.withholdingRate,extras);
+  if(!Number.isFinite(laborUnits)||laborUnits<=0||!Number.isFinite(laborPrice)||laborPrice<=0||Object.entries(amounts).some(([key,value])=>Math.abs(value-invoice[key as keyof typeof amounts])>.001))throw Error("Factuurbedragen sluiten niet aan.");
+  const project=booking?{projectid:booking.projectId}:{};
+  const main={
+    name:isLump(invoice)?invoice.projectName:`Trabajo · ${invoice.projectName}`,
+    desc:isLump(invoice)?invoice.concept!:`Periodo desde ${invoice.weekStart} · ${invoice.hours} horas`,
+    units:laborUnits,price:laborPrice,
+    taxes:booking?[booking.main.vat,...(booking.main.retention?[booking.main.retention]:[])]:[`p_iva_${invoice.vatRate}`,...(invoice.withholdingRate?[`p_ret_${invoice.withholdingRate}`]:[])],
+    ...(booking?{account:booking.main.account}:{}),...project,
+  };
+  // Zelf gekochte materialen: eigen btw, geen IRPF (die hoort bij de arbeid).
+  const extraLines=extras.map(e=>({name:invoice.projectName,desc:e.description,units:1,price:e.amount,taxes:[`p_iva_${e.vatRate}`],
+    ...(booking?{account:booking.extraAccount}:{}),...project}));
+  return {contact,docNumber:invoice.number,date:Math.floor(Date.parse(invoice.date)/1000),currency:"eur",
+    // Concept: in Holded nog één keer goedkeuren (Nick, 11-11-2026).
+    draft:true,
     desc:`${invoice.projectName} · ${invoice.weekStart}`,tags:[workerInvoiceTag(id)],
-    notes:`${workerInvoiceTag(id)}\nLeverancier: ${invoice.legalName} · NIF/CIF: ${invoice.taxId}\n${invoice.address}${invoice.email?`\n${invoice.email}`:""}\nIBAN: ${invoice.iban||"—"}\nProject: ${invoice.projectName}\n${invoice.taxNote}`,
-    products:[{name:`Trabajo · ${invoice.projectName}`,desc:`Periodo desde ${invoice.weekStart} · ${invoice.hours} horas`,units:invoice.hours,price:invoice.rate,taxes:[`p_iva_${invoice.vatRate}`,...(invoice.withholdingRate?[`p_ret_${invoice.withholdingRate}`]:[])]},
-      ...(invoice.extras??[]).map(e=>({name:e.description,units:1,price:e.amount,taxes:[`p_iva_${e.vatRate}`]}))],
+    notes:`${workerInvoiceTag(id)}\nLeverancier: ${invoice.legalName} · NIF/CIF: ${invoice.taxId}\n${invoice.address}${invoice.email?`\n${invoice.email}`:""}\nIBAN: ${invoice.iban||"—"}${invoice.accountHolder?` · titular ${invoice.accountHolder}`:""}\nProject: ${invoice.projectName}\n${invoice.taxNote}`,
+    products:[main,...extraLines],
   };
 }
 export function supplierMatches(contact:HoldedContact,invoice:WorkerInvoice) {return [contact.code,contact.vatnumber].some(v=>normal(v)===normal(invoice.taxId));}
@@ -30,7 +59,9 @@ export async function deliverWorkerPurchase(io:DeliveryIO,knownId:string|null,un
     }
     await io.remember(id);await io.verify(id);
     return {status:"sent",error:null};
-  } catch {
+  } catch(e) {
+    // Iets dat vóór het posten ontbreekt (project niet gekoppeld, geen rekening): zeg wat.
+    if(!posted&&e instanceof PrepareError)return {status:"error",error:e.message};
     return {status:posted?"unknown":"error",error:posted?"Verzending moet worden gecontroleerd in Holded; er wordt niet opnieuw geboekt.":"Holded niet bereikbaar of gegevens niet passend. Automatisch opnieuw proberen."};
   }
 }
