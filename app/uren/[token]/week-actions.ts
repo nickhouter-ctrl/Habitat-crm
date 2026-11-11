@@ -18,7 +18,7 @@ import { submitLumpInvoice } from "@/lib/worker-lump-invoice";
  *  klopt of indienen mislukt. Volgende keer staat het er gewoon weer. */
 async function rememberInvoiceProfile(workerId:string,form:FormData) {
   const v=(k:string,max:number)=>String(form.get(k)??"").trim().slice(0,max);
-  const profile={legalName:v("legalName",180),taxId:v("taxId",40),address:v("address",350),email:v("email",180),iban:v("iban",40),
+  const profile={legalName:v("legalName",180),taxId:v("taxId",40),address:v("address",350),email:v("email",180),iban:v("iban",40),accountHolder:v("accountHolder",180),
     vatRate:v("vatRate",3),withholdingRate:v("withholdingRate",3),taxNote:v("taxNote",500),triedNumber:v("number",64)};
   if(!Object.values(profile).some(Boolean))return;
   try{await db.update(workers).set({invoiceProfile:profile,updatedAt:new Date()}).where(eq(workers.id,workerId));}

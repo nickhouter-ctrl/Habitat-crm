@@ -4,7 +4,7 @@ import { db } from "@/lib/db";
 import { workerWeekSheets as sheets, workers, purchaseOrders, workerLumpInvoices } from "@/lib/db/schema";
 import { addDays, mondayOf, type WorkerInvoice } from "@/lib/worker-week";
 
-export type SupplierDetails = Pick<WorkerInvoice, "legalName" | "taxId" | "address" | "email" | "iban"> & Partial<Pick<WorkerInvoice, "vatRate" | "withholdingRate" | "taxNote">> & { lastNumber?: string | null; triedNumber?: string | null };
+export type SupplierDetails = Pick<WorkerInvoice, "legalName" | "taxId" | "address" | "email" | "iban" | "accountHolder"> & Partial<Pick<WorkerInvoice, "vatRate" | "withholdingRate" | "taxNote">> & { lastNumber?: string | null; triedNumber?: string | null };
 export type PortalView = "overview" | "week" | "invoices" | "invoice";
 export type PortalQuery = Record<string, string | string[] | undefined>;
 export const portalValue = (value: string | string[] | undefined) => typeof value === "string" ? value : undefined;
@@ -33,7 +33,7 @@ export async function loadWorkerDashboard(workerId:string,projectId:string,today
     view==="invoice" && invoiceValid ? db.select().from(sheets).where(and(scope,eq(sheets.id,invoiceId),isNotNull(sheets.invoice))).limit(1) : Promise.resolve([]),
     // Reuse only this worker's supplier identity, never another project's hours,
     // invoice number or tax choices. Last submitted profile wins, not last reviewed.
-    db.select({legalName:sql<string>`${sheets.invoice}->>'legalName'`,taxId:sql<string>`${sheets.invoice}->>'taxId'`,address:sql<string>`${sheets.invoice}->>'address'`,email:sql<string>`${sheets.invoice}->>'email'`,iban:sql<string>`${sheets.invoice}->>'iban'`,lastNumber:sql<string|null>`${sheets.invoice}->>'number'`,vatRate:sql<number>`(${sheets.invoice}->>'vatRate')::float8`,withholdingRate:sql<number>`(${sheets.invoice}->>'withholdingRate')::float8`,taxNote:sql<string|null>`${sheets.invoice}->>'taxNote'`}).from(sheets).where(and(eq(sheets.workerId,workerId),isNotNull(sheets.invoice))).orderBy(desc(sql`coalesce((select max(event->>'at') from jsonb_array_elements(${sheets.history}) event where event->>'action'='invoice_submitted'),${sheets.createdAt}::text)`),desc(sheets.createdAt)).limit(1),
+    db.select({legalName:sql<string>`${sheets.invoice}->>'legalName'`,taxId:sql<string>`${sheets.invoice}->>'taxId'`,address:sql<string>`${sheets.invoice}->>'address'`,email:sql<string>`${sheets.invoice}->>'email'`,iban:sql<string>`${sheets.invoice}->>'iban'`,accountHolder:sql<string|null>`${sheets.invoice}->>'accountHolder'`,lastNumber:sql<string|null>`${sheets.invoice}->>'number'`,vatRate:sql<number>`(${sheets.invoice}->>'vatRate')::float8`,withholdingRate:sql<number>`(${sheets.invoice}->>'withholdingRate')::float8`,taxNote:sql<string|null>`${sheets.invoice}->>'taxNote'`}).from(sheets).where(and(eq(sheets.workerId,workerId),isNotNull(sheets.invoice))).orderBy(desc(sql`coalesce((select max(event->>'at') from jsonb_array_elements(${sheets.history}) event where event->>'action'='invoice_submitted'),${sheets.createdAt}::text)`),desc(sheets.createdAt)).limit(1),
     db.select({weekStart:sheets.weekStart,status:sheets.status}).from(sheets).where(and(scope,sql`${sheets.weekStart} >= ${earliest}`)).orderBy(desc(sheets.weekStart)),
   ]);
   const [lastTeam]=await db.select({days:sheets.days,roster:sheets.roster}).from(sheets).where(scope).orderBy(desc(sheets.weekStart)).limit(1);

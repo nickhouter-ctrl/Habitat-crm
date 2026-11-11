@@ -86,7 +86,7 @@ export async function renderWorkerInvoice(invoice:WorkerInvoice,days:WeekDay[],s
    </View>
    <View style={s.pay} wrap={false}>
      <Text style={s.boxLabel}>Forma de pago</Text>
-     <Text>Transferencia bancaria</Text>{i.iban?<View style={{flexDirection:"row",marginTop:3}}><Text style={{width:60,color:muted}}>Titular</Text><Text style={s.bold}>{i.legalName}</Text></View>:null}{i.iban?<View style={{flexDirection:"row"}}><Text style={{width:60,color:muted}}>IBAN</Text><Text style={[s.bold,{letterSpacing:.5}]}>{i.iban}</Text></View>:null}
+     <Text>Transferencia bancaria</Text>{i.iban?<View style={{flexDirection:"row",marginTop:3}}><Text style={{width:60,color:muted}}>Titular</Text><Text style={s.bold}>{i.accountHolder||i.legalName}</Text></View>:null}{i.iban?<View style={{flexDirection:"row"}}><Text style={{width:60,color:muted}}>IBAN</Text><Text style={[s.bold,{letterSpacing:.5}]}>{i.iban}</Text></View>:null}
      {i.taxNote?<Text style={{marginTop:10,fontFamily:"Helvetica-Oblique"}}>{i.taxNote}</Text>:null}
    </View>
    <View style={s.footer} fixed><Text>{i.legalName} · NIF {i.taxId}</Text><Text render={({pageNumber,totalPages})=>`Factura ${i.number} · ${pageNumber}/${totalPages}`}/></View>

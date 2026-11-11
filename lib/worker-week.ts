@@ -68,7 +68,8 @@ export function validateWeek(raw: unknown, monday: string, today: string, submit
 }
 export const supplierInvoiceSchema=z.object({
   legalName:z.string().trim().min(2).max(180),taxId:z.string().trim().min(5).max(40),address:z.string().trim().min(8).max(350),
-  email:z.union([z.email().max(180),z.literal("")]),iban:z.string().trim().max(40).refine(s=>!s || validIban(s)),
+  // Bankgegevens zijn verplicht: zonder IBAN en rekeninghouder kan kantoor niet betalen.
+  email:z.union([z.email().max(180),z.literal("")]),iban:z.string().trim().min(15).max(40).refine(validIban),accountHolder:z.string().trim().min(2).max(180),
   number:z.string().trim().min(1).max(64).regex(/^[\p{L}\p{N} ._\/-]+$/u),date:dateSchema,
   vatRate:z.union([z.literal(0),z.literal(4),z.literal(10),z.literal(21)]),
   withholdingRate:z.union([z.literal(0),z.literal(7),z.literal(15),z.literal(19)]),taxNote:z.string().trim().max(500),
@@ -78,7 +79,8 @@ export const supplierInvoiceSchema=z.object({
   confirmed:z.literal(true),
 }).refine(v=>v.vatRate!==0 || v.taxNote.length>=10,{path:["taxNote"]});
 // Oudere facturen hebben nog geen extra regels: optioneel in het type.
-export type SupplierInvoiceInput=Omit<z.infer<typeof supplierInvoiceSchema>,"extras">&{extras?:InvoiceExtra[]};
+// Oudere facturen hebben nog geen rekeninghouder: optioneel in het type (val terug op legalName).
+export type SupplierInvoiceInput=Omit<z.infer<typeof supplierInvoiceSchema>,"extras"|"accountHolder">&{extras?:InvoiceExtra[];accountHolder?:string};
 export type WorkerInvoice=SupplierInvoiceInput & { /** Alleen bij een losse factuur zonder uren: wat er gefactureerd wordt. */ concept?:string; customer:{name:string;taxId:string;address:string};hours:number;rate:number;subtotal:number;vat:number;withholding:number;total:number;language:WeekLang;projectName:string;weekStart:string };
 export function validIban(raw:string) {
   const s=raw.replace(/\s/g,"").toUpperCase();if(!/^[A-Z]{2}\d{2}[A-Z0-9]{11,30}$/.test(s))return false;

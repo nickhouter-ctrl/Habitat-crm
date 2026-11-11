@@ -92,10 +92,12 @@ function InvoiceFields({lang,hours,rate,today,previous,supplier,confirmName,lump
   const amounts=invoiceAmounts(hours,rate,Number(vat),Number(withholding),extraValues);
   const eur=(v:number)=>new Intl.NumberFormat(lang,{style:"currency",currency:"EUR"}).format(v);
   const defaults:Partial<WorkerInvoice>={...supplier,number:supplier?.triedNumber&&supplier.triedNumber!==supplier.lastNumber?supplier.triedNumber:nextInvoiceNumber(supplier?.lastNumber),date:today,...(previous??{})};
-  const fields:[keyof WorkerInvoice,WeekCopyKey,string,number][]=[["legalName","legalName","text",180],["taxId","taxId","text",40],["address","address","text",350],["email","email","email",180],["iban","iban","text",40],["number","number","text",64],["date","invoiceDate","date",10]];
+  // Rekeninghouder is meestal de eigen naam; alleen invullen als het anders is.
+  if(!defaults.accountHolder)defaults.accountHolder=defaults.legalName;
+  const fields:[keyof WorkerInvoice,WeekCopyKey,string,number][]=[["legalName","legalName","text",180],["taxId","taxId","text",40],["address","address","text",350],["email","email","email",180],["iban","iban","text",40],["accountHolder","accountHolder","text",180],["number","number","text",64],["date","invoiceDate","date",10]];
   return <>
     {supplier && !previous && <p className="rounded-lg bg-stone-100 p-3 text-sm text-stone-600">{t("profilePrefilled")}</p>}
-    {fields.map(([name,label,type,max])=><label key={name} className="block text-sm font-medium">{t(label)}<input className={input} name={name} type={type} maxLength={max} required={name!=="iban"&&name!=="email"} max={name==="date"?today:undefined} defaultValue={String(defaults[name]??"")}/></label>)}
+    {fields.map(([name,label,type,max])=><label key={name} className="block text-sm font-medium">{t(label)}<input className={input} name={name} type={type} maxLength={max} required={name!=="email"} max={name==="date"?today:undefined} defaultValue={String(defaults[name]??"")}/></label>)}
     <div className="grid grid-cols-2 gap-3"><label className="text-sm font-medium">{t("vat")}<select aria-label={t("vat")} className={input} name="vatRate" value={vat} required onChange={e=>setVat(e.target.value)}><option value="">{t("taxChoice")}</option>{[0,4,10,21].map(v=><option key={v} value={v}>{v}%</option>)}</select></label>
     <label className="text-sm font-medium">{t("withholding")}<select aria-label={t("withholding")} className={input} name="withholdingRate" value={withholding} required onChange={e=>setWithholding(e.target.value)}><option value="">{t("taxChoice")}</option>{[0,7,15,19].map(v=><option key={v} value={v}>{v}%</option>)}</select></label></div>
     <label className="block text-sm font-medium">{t("taxNote")}<textarea className={input} name="taxNote" maxLength={500} rows={2} required={vat==="0"} defaultValue={previous?.taxNote??supplier?.taxNote??""}/></label>
