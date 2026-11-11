@@ -27,19 +27,23 @@ export function workerPurchaseBody(id:string,invoice:WorkerInvoice,contact:strin
   const main={
     name:isLump(invoice)?invoice.projectName:`Trabajo · ${invoice.projectName}`,
     desc:isLump(invoice)?invoice.concept!:`Periodo desde ${invoice.weekStart} · ${invoice.hours} horas`,
-    units:laborUnits,price:laborPrice,
+    // Aanmaken: `subtotal` is de stuksprijs ex btw, `tax` het btw-percentage (uitlezen heet het `price`).
+    units:laborUnits,subtotal:laborPrice,tax:invoice.vatRate,
     taxes:booking?[booking.main.vat,...(booking.main.retention?[booking.main.retention]:[])]:[`p_iva_${invoice.vatRate}`,...(invoice.withholdingRate?[`p_ret_${invoice.withholdingRate}`]:[])],
-    ...(booking?{account:booking.main.account}:{}),...project,
+    // v1 neemt de rekening alleen als `accountingAccountId` (getest 11-11); het project per regel
+    // neemt v1 niet over — dat kan pas met een v2-sleutel (items[].project_id).
+    ...(booking?{accountingAccountId:booking.main.account}:{}),...project,
   };
   // Zelf gekochte materialen: eigen btw, geen IRPF (die hoort bij de arbeid).
-  const extraLines=extras.map(e=>({name:invoice.projectName,desc:e.description,units:1,price:e.amount,taxes:[`p_iva_${e.vatRate}`],
-    ...(booking?{account:booking.extraAccount}:{}),...project}));
-  return {contact,docNumber:invoice.number,date:Math.floor(Date.parse(invoice.date)/1000),currency:"eur",
-    // Concept: in Holded nog één keer goedkeuren (Nick, 11-11-2026).
-    draft:true,
+  const extraLines=extras.map(e=>({name:invoice.projectName,desc:e.description,units:1,subtotal:e.amount,tax:e.vatRate,taxes:[`p_iva_${e.vatRate}`],
+    ...(booking?{accountingAccountId:booking.extraAccount}:{}),...project}));
+  // Holded wil "contactId"; met "contact" weigert hij de factuur (400).
+  // Bij aanmaken heet het nummer `invoiceNum` en de regels `items` (uitlezen: docNumber/products).
+  // Een nieuw document is in Holded standaard een concept: daar nog goedkeuren (Nick, 11-11-2026).
+  return {contactId:contact,invoiceNum:invoice.number,docNumber:invoice.number,date:Math.floor(Date.parse(invoice.date)/1000),currency:"eur",
     desc:`${invoice.projectName} · ${invoice.weekStart}`,tags:[workerInvoiceTag(id)],
     notes:`${workerInvoiceTag(id)}\nLeverancier: ${invoice.legalName} · NIF/CIF: ${invoice.taxId}\n${invoice.address}${invoice.email?`\n${invoice.email}`:""}\nIBAN: ${invoice.iban||"—"}${invoice.accountHolder?` · titular ${invoice.accountHolder}`:""}\nProject: ${invoice.projectName}\n${invoice.taxNote}`,
-    products:[main,...extraLines],
+    items:[main,...extraLines],
   };
 }
 export function supplierMatches(contact:HoldedContact,invoice:WorkerInvoice) {return [contact.code,contact.vatnumber].some(v=>normal(v)===normal(invoice.taxId));}

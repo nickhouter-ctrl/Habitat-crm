@@ -4,7 +4,7 @@ import type {WorkerInvoice} from "../worker-week";
 const invoice:WorkerInvoice={legalName:"Test Supplier",taxId:"B12345678",address:"Calle Test 1, Alicante, Spain",email:"test@example.invalid",iban:"ES91 2100 0418 4502 0005 1332",accountHolder:"Example SL",number:"OWN/15",date:"2026-11-08",vatRate:21,withholdingRate:15,taxNote:"",confirmed:true,customer:{name:"Habitat",taxId:"B00000000",address:"Customer address"},hours:16,rate:28,subtotal:448,vat:94.08,withholding:67.2,total:474.88,language:"es",projectName:"Test project",weekStart:"2026-11-02"};
 const io=():DeliveryIO=>({find:vi.fn(async()=>null),prepare:vi.fn(async()=>({})),posting:vi.fn(async()=>{}),create:vi.fn(async()=>"remote"),remember:vi.fn(async()=>{}),verify:vi.fn(async()=>{})});
 it("sends supplier identity, own numbering, project, VAT and retention independently",()=>{
- const body=workerPurchaseBody("sheet",invoice,"supplier");expect(body.contact).toBe("supplier");expect(body.docNumber).toBe("OWN/15");expect(body.draft).toBe(true);expect(body.products[0].taxes).toEqual(["p_iva_21","p_ret_15"]);expect(body.notes).toContain("B12345678");expect(body.desc).toContain("Test project");
+ const body=workerPurchaseBody("sheet",invoice,"supplier");expect(body.contactId).toBe("supplier");expect(body.docNumber).toBe("OWN/15");expect(body.invoiceNum).toBe("OWN/15");expect(body.items[0].taxes).toEqual(["p_iva_21","p_ret_15"]);expect(body.notes).toContain("B12345678");expect(body.desc).toContain("Test project");
  expect(supplierMatches({id:"s",name:invoice.legalName,code:"OTHER"},invoice)).toBe(false);expect(supplierMatches({id:"s",code:"B-12345678"},invoice)).toBe(true);
  expect(()=>workerPurchaseBody("sheet",{...invoice,total:999},"supplier")).toThrow();
 });
@@ -19,16 +19,16 @@ const booking={projectId:"hproj",main:{account:"acc602",vat:"p_iva_21",retention
 it("books like the manual Holded entries: project, ledger account and taxes per line, materials separately",()=>{
  const withExtra={...invoice,extras:[{description:"Tornillos",amount:100,vatRate:21 as const}],subtotal:548,vat:115.08,total:595.88};
  const body=workerPurchaseBody("sheet",withExtra,"supplier",booking);
- expect(body.products).toEqual([
-  expect.objectContaining({units:16,price:28,taxes:["p_iva_21","p_ret_15"],account:"acc602",projectid:"hproj"}),
-  expect.objectContaining({desc:"Tornillos",units:1,price:100,taxes:["p_iva_21"],account:"acc600",projectid:"hproj"}),
+ expect(body.items).toEqual([
+  expect.objectContaining({units:16,subtotal:28,tax:21,taxes:["p_iva_21","p_ret_15"],accountingAccountId:"acc602",projectid:"hproj"}),
+  expect.objectContaining({desc:"Tornillos",units:1,subtotal:100,tax:21,taxes:["p_iva_21"],accountingAccountId:"acc600",projectid:"hproj"}),
  ]);
 });
 it("books a fixed-price invoice without hours as one line with its description (Abdelmjid 24)",()=>{
  const lump={...invoice,concept:"Mano de obra — Het palijsje",hours:0,rate:0,vatRate:0 as const,withholdingRate:0 as const,taxNote:"Inversión del sujeto pasivo art. 84",subtotal:1038.83,vat:0,withholding:0,total:1038.83};
  const body=workerPurchaseBody("lump",lump,"supplier",{...booking,main:{account:"acc602",vat:"p_iva_0",retention:null}});
- expect(body.products).toEqual([expect.objectContaining({desc:"Mano de obra — Het palijsje",units:1,price:1038.83,taxes:["p_iva_0"],account:"acc602",projectid:"hproj"})]);
- expect(body.draft).toBe(true);
+ expect(body.items).toEqual([expect.objectContaining({desc:"Mano de obra — Het palijsje",units:1,subtotal:1038.83,tax:0,taxes:["p_iva_0"],accountingAccountId:"acc602",projectid:"hproj"})]);
+ expect(body).not.toHaveProperty("draft");expect(body).not.toHaveProperty("products");
 });
 it("explains a missing Holded project instead of a generic error, and never posts",async()=>{
  const x=io();vi.mocked(x.prepare).mockRejectedValueOnce(new PrepareError("Project niet gekoppeld"));

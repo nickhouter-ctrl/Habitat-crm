@@ -116,8 +116,8 @@ describe("totalen en controle op de cent", () => {
 describe("body en controle achteraf", () => {
   it("concept, met rekening, project en btw/IRPF per regel en de CRM-markering", () => {
     const b = holdedPurchaseBody({ poId: "p1", contactId: "c1", docNumber: " 15 ", date: "2026-11-02", supplier: "Wilhelmus", lines: [line({ retention: "p_ret_15" })] });
-    expect(b).toMatchObject({ contact: "c1", docNumber: "15", draft: true, tags: ["crm-po-p1"] });
-    expect((b.products as unknown[])[0]).toEqual({ name: "Silvestre", desc: "", units: 1, price: 100, taxes: ["p_iva_21", "p_ret_15"], account: "acc", projectid: "h1" });
+    expect(b).toMatchObject({ contactId: "c1", invoiceNum: "15", docNumber: "15", tags: ["crm-po-p1"] });
+    expect((b.items as unknown[])[0]).toEqual({ name: "Silvestre", desc: "", units: 1, subtotal: 100, tax: 21, taxes: ["p_iva_21", "p_ret_15"], accountingAccountId: "acc", projectid: "h1" });
   });
   it("meldt als Holded een ander bedrag, rekening of project heeft opgeslagen", () => {
     const sent = { docNumber: "15", lines: [line({})], totals: { subtotal: 100, vat: 21, retention: 0, total: 121 } };

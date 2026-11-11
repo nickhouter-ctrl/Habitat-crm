@@ -203,23 +203,28 @@ export function holdedPurchaseBody(args: {
   lines: HoldedPushLine[];
 }): Record<string, unknown> {
   return {
-    contact: args.contactId,
+    // Holded wil "contactId"; met "contact" weigert hij de factuur (400).
+    contactId: args.contactId,
+    // Bij aanmaken heet het nummer `invoiceNum` en de regels `items` (uitlezen:
+    // docNumber/products). Een nieuw document is in Holded standaard een concept.
+    invoiceNum: args.docNumber.trim(),
     docNumber: args.docNumber.trim(),
     date: Math.floor(Date.parse(`${args.date}T12:00:00Z`) / 1000),
     currency: "eur",
-    // Concept: in Holded nog één keer goedkeuren. Later — als het altijd goed
-    // gaat — kan dit definitief.
-    draft: true,
     desc: `${args.supplier} · ${args.docNumber.trim()}`,
     tags: [purchaseTag(args.poId)],
     notes: `${purchaseTag(args.poId)}\nGeboekt vanuit het CRM (inkoopfactuur goedgekeurd).`,
-    products: args.lines.map((l) => ({
+    items: args.lines.map((l) => ({
       name: l.name,
       desc: l.desc,
       units: l.units,
-      price: l.price,
+      subtotal: l.price,
+      tax: Number(l.vat.match(/_(\d+)(?:_2)?$/)?.[1] ?? 0),
       taxes: [l.vat, ...(l.retention ? [l.retention] : [])],
-      account: l.account,
+      // v1 neemt de rekening alleen als `accountingAccountId` (getest 11-11-2026).
+      accountingAccountId: l.account,
+      // Het project per regel neemt v1 niet over (ook niet bij verkoopfacturen);
+      // dat kan pas met een v2-sleutel (items[].project_id). Meesturen kan geen kwaad.
       ...(l.holdedProjectId ? { projectid: l.holdedProjectId } : {}),
     })),
   };
@@ -240,7 +245,7 @@ export function verifyRemote(
     const r = rp[i];
     if (!r) return;
     if (r.account !== l.account) p.push(`Regel ${i + 1}: grootboekrekening is in Holded anders opgeslagen.`);
-    if ((r.projectid ?? null) !== (l.holdedProjectId ?? null)) p.push(`Regel ${i + 1}: project is in Holded anders opgeslagen.`);
+    if (l.holdedProjectId && (r.projectid ?? null) !== l.holdedProjectId) p.push(`Regel ${i + 1}: zet in Holded het project (${l.name}) — dat neemt de Holded-API nog niet over.`);
   });
   return p;
 }

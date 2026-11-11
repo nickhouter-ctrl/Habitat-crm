@@ -615,7 +615,7 @@ export async function pushPurchaseOrderToHolded(poId: string): Promise<string> {
     ...(po.reference ? { docNumber: po.reference } : {}),
     draft: true, // markeer als concept tot ie definitief is
   };
-  if (contactRef) body.contact = contactRef;
+  if (contactRef) body.contactId = contactRef;
   else body.contactName = po.supplier;
 
   const result = await holded.documents.create("purchase", body);
