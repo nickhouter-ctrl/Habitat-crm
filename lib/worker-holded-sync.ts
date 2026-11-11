@@ -23,7 +23,7 @@ export async function syncWorkerInvoice(id:string) {
   const result=await deliverWorkerPurchase({
     find:async()=>{
       const docs=await holded.documents.list("purchase");
-      const tagged=docs.filter(d=>d.tags?.includes(workerInvoiceTag(id))||d.notes?.includes(workerInvoiceTag(id)));
+      const tagged=docs.filter(d=>d.tags?.includes(workerInvoiceTag(id))||String(d.notes??"").includes(workerInvoiceTag(id)));
       if(tagged.length>1)throw Error("Multiple matching documents");
       if(tagged[0])return tagged[0].id;
       // A manually imported invoice may already exist. Match tax identity too,

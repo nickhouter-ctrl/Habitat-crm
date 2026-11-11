@@ -243,6 +243,11 @@ export default async function PurchaseOrderPage({
               {uiT("← Overzicht")} </LinkButton>
             {!portalWeek && <LinkButton href={`/inkooporders/${id}/edit`} variant="secondary">
               {uiT("Bewerken")} </LinkButton>}
+            {!portalWeek && po.kind === "invoice" && (
+              <LinkButton href={`/inkooporders/${id}/holded`} variant={po.holdedId ? "ghost" : "primary"}>
+                {po.holdedId ? uiT("In Holded ✓") : po.holdedPushStatus === "unknown" || po.holdedPushStatus === "posting" ? uiT("Holded: controleren") : uiT("Boek in Holded")}
+              </LinkButton>
+            )}
           </>
         }
       />

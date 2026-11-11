@@ -23,6 +23,7 @@ import {
   type AnyPgColumn,
 } from "drizzle-orm/pg-core";
 import type { WeekDay, WeekEvent, WorkerInvoice } from "@/lib/worker-week";
+import type { HoldedPushSnapshot } from "@/lib/holded/purchase-booking";
 import type { AdapterAccountType } from "next-auth/adapters";
 
 /* ------------------------------------------------------------------ helpers */
@@ -1309,6 +1310,19 @@ export const purchaseOrders = pgTable(
     stockAppliedAt: timestamp({ withTimezone: true }),
     /** When this PO mirrors a Holded purchase document, its id (for idempotent sync). */
     holdedId: text(),
+    /**
+     * Handmatige boeking naar Holded (knop "Boek in Holded"), als concept.
+     * posting = POST onderweg; unknown = antwoord kwijt (nooit opnieuw posten,
+     * alleen terugzoeken); sent = staat erin en bedragen gecontroleerd.
+     */
+    holdedPushStatus: text(),
+    holdedPushAt: timestamp({ withTimezone: true }),
+    holdedPushError: text(),
+    /** De regels zoals ze naar Holded gingen (rekening, btw, project per regel). */
+    holdedPushLines: jsonb().$type<HoldedPushSnapshot>(),
+    /** Het voorstel van het systeem — verschil met holdedPushLines = hoe vaak het
+     *  voorstel aangepast moest worden (maatstaf voor later automatisch boeken). */
+    holdedPushProposed: jsonb().$type<HoldedPushSnapshot>(),
     /** Container nummer (bv. YMMU1441857) — voor auto-link van facturen. */
     containerRef: text(),
     /** Shipment / booking referentie (bv. ZMI2600251) — voor auto-link. */

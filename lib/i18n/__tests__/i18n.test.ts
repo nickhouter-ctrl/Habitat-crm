@@ -139,7 +139,12 @@ describe("woordenboeken", () => {
   "{v0} m²",
   "Broadcast",
   "30 min",
-  "Showroom Jávea"
+  "Showroom Jávea",
+  "In Holded ✓",
+  "Contact in Holded",
+  "Project in Holded",
+  "Transport",
+  "IRPF"
 ]);
     const dezelfdeTaal = { es: new Set([
   "Fase",

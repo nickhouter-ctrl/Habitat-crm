@@ -193,7 +193,7 @@ export function mapHoldedDocumentToLocal(
     totalEur: String(d.total ?? 0),
     paidEur: String(d.paymentsTotal ?? 0),
     items,
-    notes: d.notes ?? null,
+    notes: d.notes != null ? String(d.notes) : null,
     holdedId: d.id,
   };
 }
@@ -447,8 +447,8 @@ export async function pullPurchaseOrdersFromHolded(): Promise<PullResult> {
       tax: String(toEur((d as { tax?: number }).tax)),
       items,
       notes:
-        [d.desc, d.notes].map((s) => s?.trim()).filter(Boolean).join(" — ")
-        + (isEur ? "" : `${[d.desc, d.notes].some((s) => s?.trim()) ? " — " : ""}Origineel: ${Number(d.total ?? 0).toLocaleString("nl-NL")} ${origCurrency} (koers ${rate})`)
+        [d.desc, d.notes].map((s) => (s == null ? "" : String(s)).trim()).filter(Boolean).join(" — ")
+        + (isEur ? "" : `${[d.desc, d.notes].some((s) => (s == null ? "" : String(s)).trim()) ? " — " : ""}Origineel: ${Number(d.total ?? 0).toLocaleString("nl-NL")} ${origCurrency} (koers ${rate})`)
         || null,
       // Invoice-style imports: niet als nieuwe voorraad markeren behalve als 'ie definitief is.
       stockAppliedAt: isDraft ? null : new Date(),
@@ -465,7 +465,7 @@ export async function pullPurchaseOrdersFromHolded(): Promise<PullResult> {
     });
     // A webhook/pull can arrive before the push saves its Holded ID. Resolve
     // our stable tag first, so it never imports a second purchase/labor cost.
-    const tag=d.tags?.find(t=>t.startsWith("crm-worker-"))??d.notes?.match(/crm-worker-[0-9a-f-]{36}/i)?.[0];
+    const tag=d.tags?.find(t=>t.startsWith("crm-worker-"))??String(d.notes??"").match(/crm-worker-[0-9a-f-]{36}/i)?.[0];
     const portal=tag?byTag.get(tag):existing?byPurchase.get(existing.id):undefined;
     if(tag&&!portal)continue;
     if(portal?.invoice&&portal.purchaseOrderId){

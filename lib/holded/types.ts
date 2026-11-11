@@ -102,6 +102,31 @@ export interface HoldedDocumentItem {
   discount?: number;
   sku?: string;
   productId?: string;
+  /** Grootboekrekening (Holded account-id) — bij inkoop per regel ingesteld. */
+  account?: string;
+  /** Holded-project van deze regel. Let op: kleine letters, zo levert Holded het. */
+  projectid?: string | null;
+  /** IRPF-bedrag/percentage zoals Holded het teruggeeft (meestal 0; de inhouding zit in `taxes`). */
+  retention?: number;
+}
+
+/** Eén rekening uit Holded's rekeningschema (`/accounting/v1/chartofaccounts`). */
+export interface HoldedAccount {
+  id: string;
+  num: number;
+  name: string;
+  group?: string;
+}
+
+/** Eén belastingsleutel uit `/invoicing/v1/taxes` (bv. `p_iva_21`, `p_ret_15`). */
+export interface HoldedTax {
+  key: string;
+  name: string;
+  /** Percentage als tekst; negatief bij een inhouding, null bij een ISP-tegenboeking. */
+  amount: string | null;
+  scope: string;
+  group: string;
+  status?: boolean;
 }
 
 /**
@@ -116,7 +141,8 @@ export interface HoldedDocument {
   desc?: string;
   date?: number; // unix seconds
   dueDate?: number; // unix seconds
-  notes?: string;
+  /** Meestal tekst, maar Holded levert soms een getal (gezien 09-11-2026) — altijd via String(). */
+  notes?: string | number;
   docNumber?: string;
   currency?: string;
   currencyChange?: number;
@@ -129,6 +155,8 @@ export interface HoldedDocument {
   status?: number;
   /** True for concept-/draft-documenten in Holded. `status` is *payment*-status, niet approval. */
   draft?: boolean;
+  /** Unix-seconden waarop het document in Holded definitief is gemaakt; leeg = concept. */
+  approvedAt?: number | null;
   paymentsTotal?: number;
   paymentsPending?: number;
   products?: HoldedDocumentItem[];
