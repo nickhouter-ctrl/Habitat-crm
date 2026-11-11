@@ -666,6 +666,13 @@
       "when": 1794231623189,
       "tag": "0094_worker_lump_invoices",
       "breakpoints": true
+    },
+    {
+      "idx": 95,
+      "version": "7",
+      "when": 1794384685802,
+      "tag": "0095_inkoop_holded_push",
+      "breakpoints": true
     }
   ]
 }
