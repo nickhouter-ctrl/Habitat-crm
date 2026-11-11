@@ -2,7 +2,7 @@ import "server-only";
 import { randomUUID } from "node:crypto";
 import { and, eq, gte, inArray, isNotNull, isNull, lt, or, sql } from "drizzle-orm";
 import { db } from "@/lib/db";
-import { appleCalendarConnections as connections, appleCalendarEvents as mappings, appointments, activities, contacts, users } from "@/lib/db/schema";
+import { appleCalendarConnections as connections, appleCalendarEvents as mappings, appointments, activities, contacts, staffMessages, users } from "@/lib/db/schema";
 import { heeftCap, magModule } from "@/lib/auth/modules";
 import { appleClient, AppleCalendarError } from "./client";
 import { ensureWorkCalendar, findWorkCalendar } from "./collection";
@@ -10,7 +10,7 @@ import { appleUrl, decryptPassword, encryptPassword, eventUrl } from "./security
 import { type CalendarEvent, eventHash, fromAppointment, hasEventPresentation, parseEvent, serializeEvent, syncDecision } from "./events";
 import { agendaDay } from "@/lib/agenda-dates";
 import { eventPresentation } from "./presentation";
-import { fromTask, visibleAgendaTask } from "./tasks";
+import { fromTask, teamTaskGroups, visibleAgendaTask } from "./tasks";
 
 export const CALENDAR_NAME = "Habitat One CRM";
 const secret = () => process.env.AUTH_SECRET ?? "";
@@ -111,16 +111,25 @@ export async function syncAppleCalendar() {
       linkedTaskIds.length ? inArray(activities.id, linkedTaskIds) : undefined,
     ))).limit(2001);
     if (localRows.length + taskRows.length > 2000 || links.length > 2000) throw new AppleCalendarError("too-large");
+    // Teamtaken (één kopie per collega) maar één keer in de gedeelde agenda.
+    const teamTaskIds = new Set(taskRows.length ? (await db.select({ id: staffMessages.taskId }).from(staffMessages)
+      .where(inArray(staffMessages.taskId, taskRows.map(t => t.id)))).flatMap(r => r.id ? [r.id] : []) : []);
+    const team = teamTaskGroups(taskRows, teamTaskIds);
     const customerIds = [...new Set([...localRows, ...taskRows].flatMap(r => r.contactId ? [r.contactId] : []))];
     const [people, customers] = await Promise.all([
       db.select({ id: users.id, name: users.name }).from(users),
       customerIds.length ? db.select({ id: contacts.id, name: contacts.name }).from(contacts).where(inArray(contacts.id, customerIds)) : Promise.resolve([]),
     ]);
     const peopleById = new Map(people.map(p => [p.id, p.name])), customersById = new Map(customers.map(c => [c.id, c.name]));
+    const teamNames = (id: string) => {
+      const ids = team.assignees.get(id);
+      if (!ids || ids.length < 2) return null;
+      return ids.map(a => (peopleById.get(a) ?? "").trim().split(/\s+/)[0]).filter(Boolean).join(", ");
+    };
     const contextFor = (record: { id: string; contactId: string | null; assigneeId: string | null; createdBy?: string | null; authorId?: string | null; startsAt?: Date; dueAt?: Date | null }, kind: "appointment" | "task") => eventPresentation({
       id: record.id, day: agendaDay(record.startsAt ?? record.dueAt ?? new Date()), kind, contactId: record.contactId,
       contactName: record.contactId ? customersById.get(record.contactId) ?? null : null,
-      assigneeName: record.assigneeId ? peopleById.get(record.assigneeId) ?? null : null,
+      assigneeName: (kind === "task" ? teamNames(record.id) : null) ?? (record.assigneeId ? peopleById.get(record.assigneeId) ?? null : null),
       creatorName: peopleById.get(record.createdBy ?? record.authorId ?? "") ?? null,
     });
     const linked = new Set(linkedIds);
@@ -131,7 +140,7 @@ export async function syncAppleCalendar() {
         localHash: eventHash(fromAppointment(local)) }).onConflictDoNothing();
     }
     const linkedTasks = new Set(linkedTaskIds);
-    const newTasks = taskRows.filter(t => !linkedTasks.has(t.id) && !t.completedAt && t.dueAt).map(t => ({
+    const newTasks = taskRows.filter(t => !linkedTasks.has(t.id) && !t.completedAt && t.dueAt && !team.hidden.has(t.id)).map(t => ({
       connectionId: "team", kind: "task", taskId: t.id, uid: `task-${t.id}@habitat-one-crm`,
       remoteUrl: eventUrl(`task-${t.id}.ics`, calendar.url),
     }));
@@ -172,7 +181,8 @@ export async function syncAppleCalendar() {
         let value: CalendarEvent | null;
         try {
           if (object && parseEvent(object.data, secret()).uid !== link.uid) throw new Error("uid-changed");
-          value = task && task.visible && !task.record.completedAt ? fromTask(task.record) : null;
+          // Een teamkopie die niet de zichtbare is, gaat uit de gedeelde agenda.
+          value = task && task.visible && !task.record.completedAt && !team.hidden.has(task.record.id) ? fromTask(task.record) : null;
         } catch {
           await db.update(mappings).set({ issue: "unsupported", updatedAt: new Date() }).where(eq(mappings.id, link.id));
           result.issues++; continue;
