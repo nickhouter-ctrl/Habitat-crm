@@ -24,7 +24,7 @@ import {
   Tr,
 } from "@/components/ui";
 import { db } from "@/lib/db";
-import { workerWeekSheets, projectCosts, products, projects, purchaseInvoiceReviews, purchaseOrders, timeEntries, users, workers } from "@/lib/db/schema";
+import { workerWeekSheets, workerLumpInvoices, projectCosts, products, projects, purchaseInvoiceReviews, purchaseOrders, timeEntries, users, workers } from "@/lib/db/schema";
 import { nextSequentialSku } from "@/lib/products";
 import {
   formatMoney,
@@ -84,6 +84,11 @@ export default async function PurchaseOrderPage({
   const po = await db.query.purchaseOrders.findFirst({ where: eq(purchaseOrders.id, id) });
   if (!po) notFound();
   const [portalWeek] = await db.select({id: workerWeekSheets.id, holdedSyncStatus: workerWeekSheets.holdedSyncStatus, holdedSyncError: workerWeekSheets.holdedSyncError}).from(workerWeekSheets).where(eq(workerWeekSheets.purchaseOrderId, id));
+  // Een goedgekeurde factuur zonder uren uit het portaal heeft geen bestand in
+  // de bijlagen: de PDF wordt net als bij een weekfactuur op aanvraag gemaakt.
+  const [portalLump] = portalWeek ? [] : await db.select({ id: workerLumpInvoices.id, number: sql<string>`${workerLumpInvoices.invoice}->>'number'` }).from(workerLumpInvoices).where(eq(workerLumpInvoices.purchaseOrderId, id));
+  const portalPdf = portalWeek ? { href: `/api/worker-weeks/${portalWeek.id}/invoice`, name: "Factuur uit urenportaal (PDF)" }
+    : portalLump ? { href: `/api/worker-weeks/${portalLump.id}/invoice`, name: `Factuur ${portalLump.number} uit urenportaal (PDF)` } : null;
 
   // Wie heeft deze factuur goedgekeurd? Staat op de beoordeling uit de wachtrij;
   // inkopen van vóór de goedkeuringspoort (of uit Holded) hebben die niet.
@@ -209,7 +214,7 @@ export default async function PurchaseOrderPage({
     <>
 <TabsRoot defaultTab="order" ids={["order","projects","files","details"]} param="section">
       {portalWeek && <p className="mb-3 text-sm">{portalWeek.holdedSyncStatus==="sent"?"✓ Factuur staat in Holded":portalWeek.holdedSyncError??"Wordt automatisch naar Holded gestuurd."}</p>}
-      {portalWeek && <a className="mb-4 inline-block text-accent underline" href={`/api/worker-weeks/${portalWeek.id}/invoice`}>Factuur uit urenportaal downloaden (PDF)</a>}
+      {portalPdf && <a className="mb-4 inline-block text-accent underline" href={portalPdf.href} target="_blank" rel="noopener noreferrer">{uiT("Factuur uit urenportaal downloaden (PDF)")}</a>}
       <PageHeader
         title={
           <span className="flex items-center gap-2">
@@ -467,12 +472,17 @@ export default async function PurchaseOrderPage({
             </CardContent>
           </Card></TabPanel>
 
-          {attachments.length > 0 && (
+          {(attachments.length > 0 || portalPdf) && (
             <TabPanel id="files"><Card>
               <CardHeader>
                 <CardTitle>{uiT("Bijlagen")}</CardTitle>
               </CardHeader>
               <CardContent className="space-y-1.5 text-sm">
+                {portalPdf && (
+                  <div className="flex items-center justify-between gap-2">
+                    <a href={portalPdf.href} target="_blank" rel="noopener noreferrer" className="truncate text-accent hover:underline">{portalPdf.name}</a>
+                  </div>
+                )}
                 {attachments.map((a) => (
                   <div key={a.path} className="flex items-center justify-between gap-2">
                     {a.url ? (

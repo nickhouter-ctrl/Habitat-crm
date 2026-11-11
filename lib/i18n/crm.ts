@@ -3782,7 +3782,8 @@ const rows: [string,string,string][] = [
   ["Uren goedkeuren en registreren","Aprobar y registrar horas","Approve and register hours"],
   ["Alleen na goedkeuring tellen de uren mee in de projectkosten.","Las horas solo cuentan en los costes del proyecto después de aprobarlas.","Hours count toward project costs only after approval."],
   ["{n} urenstaten klaar voor controle","{n} partes de horas pendientes de revisión","{n} timesheets ready for review"],
-  ["{n} facturen ({total}) en {v0} urenstaten klaar voor controle","{n} facturas ({total}) y {v0} partes de horas pendientes de revisión","{n} invoices ({total}) and {v0} timesheets ready for review"]
+  ["{n} facturen ({total}) en {v0} urenstaten klaar voor controle","{n} facturas ({total}) y {v0} partes de horas pendientes de revisión","{n} invoices ({total}) and {v0} timesheets ready for review"],
+  ["Factuur uit urenportaal downloaden (PDF)","Descargar factura del portal de horas (PDF)","Download invoice from the hours portal (PDF)"]
 ];
 export const crmEs = Object.fromEntries(rows.map(([key,es])=>[key,es]));
 export const crmEn = Object.fromEntries(rows.map(([key,,en])=>[key,en]));
