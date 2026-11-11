@@ -1,7 +1,7 @@
 import "server-only";
 import { and, asc, eq, inArray, isNull, lt, lte, sql } from "drizzle-orm";
 import { db } from "@/lib/db";
-import { activities, appointments, contacts, partnerProfiles, staffMessages, staffNotifications, users, workerWeekSheets, workers, projects } from "@/lib/db/schema";
+import { activities, appointments, contacts, partnerProfiles, staffMessages, staffNotifications, users, workerWeekSheets, workerLumpInvoices, workers, projects } from "@/lib/db/schema";
 import { sendEmail } from "@/lib/email";
 import { agendaDateTime, agendaDay, shiftDay } from "@/lib/agenda-dates";
 import { madridDelen } from "@/lib/tz-madrid";
@@ -52,6 +52,14 @@ async function currentContent(n: typeof staffNotifications.$inferSelect): Promis
     return items.length ? { kind: n.kind, day: n.day, items } : null;
   }
   if (!n.entityId) return null;
+  if (n.kind === "worker_week_submitted" && n.eventKey.startsWith("worker-lump:")) {
+    if(!magModule(recipient.role,"projects"))return null;
+    const [l]=await db.select({id:workerLumpInvoices.id,version:workerLumpInvoices.version,status:workerLumpInvoices.status,invoice:workerLumpInvoices.invoice,at:workerLumpInvoices.updatedAt,workerName:workers.name,projectName:projects.name}).from(workerLumpInvoices).innerJoin(workers,eq(workers.id,workerLumpInvoices.workerId)).innerJoin(projects,eq(projects.id,workerLumpInvoices.projectId)).where(eq(workerLumpInvoices.id,n.entityId));
+    // Al beoordeeld of opnieuw ingediend: deze melding is achterhaald.
+    if(!l || l.status!=="submitted" || n.eventKey!==`worker-lump:${l.id}:${l.version}:${n.userId}`)return null;
+    const bedrag=l.invoice.subtotal.toLocaleString("nl-NL",{style:"currency",currency:"EUR"});
+    return {kind:n.kind,title:`${l.workerName} · ${l.invoice.number} · ${bedrag}`,body:`${l.projectName} · ${l.invoice.concept ?? ""}`.trim(),at:l.at,lumpId:l.id};
+  }
   if (n.kind === "worker_week_submitted") {
     if(!magModule(recipient.role,"projects"))return null;
     const [s]=await db.select({id:workerWeekSheets.id,version:workerWeekSheets.version,status:workerWeekSheets.status,week:workerWeekSheets.weekStart,days:workerWeekSheets.days,at:workerWeekSheets.submittedAt,workerName:workers.name,projectId:projects.id,projectName:projects.name}).from(workerWeekSheets).innerJoin(workers,eq(workers.id,workerWeekSheets.workerId)).innerJoin(projects,eq(projects.id,workerWeekSheets.projectId)).where(eq(workerWeekSheets.id,n.entityId));

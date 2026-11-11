@@ -87,8 +87,10 @@ export async function submitLumpInvoiceAction(token:string,_prev:WeekActionState
   const input=invoiceInput(form);
   if(!input)return {error:weekT(lang,"fields")};
   if(input.date>madridToday())return {error:weekError(lang,"invoiceDate")};
-  try{await submitLumpInvoice({worker:ctx.worker,projectId:ctx.project.id,projectName:ctx.project.name,input,concept,amount:Math.round(amount*100)/100,language:lang,replaceId});}
+  let notificationIds:string[]=[];
+  try{({notificationIds}=await submitLumpInvoice({worker:ctx.worker,projectId:ctx.project.id,projectName:ctx.project.name,input,concept,amount:Math.round(amount*100)/100,language:lang,replaceId}));}
   catch(e){return {error:weekError(lang,e instanceof WeekConflict?e.message:"failure")};}
-  revalidatePath(`/uren/${token}`);revalidatePath(`/projects/${ctx.project.id}`);
+  if(notificationIds.length)after(async()=>{try{await deliverStaffNotifications(notificationIds);}catch{console.warn("[worker-lump] queued-notification-pending");}});
+  revalidatePath(`/uren/${token}`);revalidatePath(`/projects/${ctx.project.id}`);revalidatePath("/projects/weekstaten");revalidatePath("/","layout");
   return {ok:weekT(lang,"lumpSent"),savedAt:Date.now()};
 }

@@ -1,7 +1,9 @@
 import "server-only";
 import { and, eq, ne, sql } from "drizzle-orm";
 import { db } from "@/lib/db";
-import { workerLumpInvoices as lumps, workerWeekSheets as sheets, workers, purchaseOrders } from "@/lib/db/schema";
+import { workerLumpInvoices as lumps, workerWeekSheets as sheets, workers, purchaseOrders, staffNotifications, users } from "@/lib/db/schema";
+import { heeftCap, magModule } from "@/lib/auth/modules";
+import { NICK_FREDERIQUE } from "@/lib/mail-bcc";
 import { invoiceAmounts, invoiceKey, type SupplierInvoiceInput, type WeekLang, type WorkerInvoice } from "@/lib/worker-week";
 import { COMPANY } from "@/lib/company";
 import { WeekConflict } from "@/lib/worker-week-service";
@@ -32,11 +34,33 @@ export async function submitLumpInvoice(args: { worker: { id: string; name: stri
       const [old] = await tx.select().from(lumps).where(and(eq(lumps.id, args.replaceId), eq(lumps.workerId, args.worker.id), eq(lumps.projectId, args.projectId))).for("update");
       if (!old || old.status !== "returned") conflict();
       await tx.update(lumps).set({ invoice, invoiceKey: key, status: "submitted", version: old!.version + 1, updatedAt: new Date() }).where(eq(lumps.id, old!.id));
-      return old!.id;
+      return { id: old!.id, notificationIds: await queueLumpNotice(tx, old!.id, old!.version + 1) };
     }
-    const [row] = await tx.insert(lumps).values({ workerId: args.worker.id, projectId: args.projectId, invoice, invoiceKey: key }).returning({ id: lumps.id });
-    return row.id;
+    const [row] = await tx.insert(lumps).values({ workerId: args.worker.id, projectId: args.projectId, invoice, invoiceKey: key }).returning({ id: lumps.id, version: lumps.version });
+    return { id: row.id, notificationIds: await queueLumpNotice(tx, row.id, row.version) };
   });
+}
+
+type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
+
+/**
+ * Melding voor kantoor, net als bij een ingediende weekstaat (zelfde ontvanger,
+ * zelfde mailsoort). De eventKey begint met "worker-lump:" — zo weet de
+ * verzending dat het om een factuur zonder uren gaat. Geen eigen soort, want
+ * die vraagt een migratie van de check-constraint.
+ */
+async function queueLumpNotice(tx: Tx, id: string, version: number): Promise<string[]> {
+  // Lokaal/preview met externe effecten uit mag geen mail klaarzetten in de gedeelde database.
+  if (process.env.CRM_EXTERNAL_EFFECTS === "disabled") return [];
+  const recipients = await tx.select({ id: users.id, role: users.role }).from(users).where(sql`lower(${users.email}) = ${NICK_FREDERIQUE[0]}`);
+  const ids: string[] = [];
+  for (const r of recipients) {
+    if (!magModule(r.role, "projects") || !heeftCap(r.role, "schrijven")) continue;
+    const rows = await tx.insert(staffNotifications).values({ eventKey: `worker-lump:${id}:${version}:${r.id}`, kind: "worker_week_submitted", entityId: id, userId: r.id })
+      .onConflictDoNothing().returning({ id: staffNotifications.id });
+    ids.push(...rows.map((x) => x.id));
+  }
+  return ids;
 }
 
 /** Goedkeuren = als inkoopfactuur (aanneemwerk, geen uren) op het project boeken. */

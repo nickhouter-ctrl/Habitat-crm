@@ -15,4 +15,9 @@ describe('personal employee notification emails',()=>{
   expect(m.subject).toContain('Parte semanal pendiente');expect(m.html).toContain('&lt;Supplier&gt;');expect(m.html).toContain('/projects/weekstaten#weekstaat-00000000-0000-4000-8000-000000000001');expect(m.text).toContain('Revisar parte semanal');expect(m.html).not.toContain('/uren/');
  });
 
+ it('links a fixed-price invoice without hours to its review card',()=>{
+  const m=staffNotificationEmail({kind:'worker_week_submitted',title:'Gershwin · 24 · 1.038,83 €',body:'Het palijsje · Mano de obra',lumpId:'00000000-0000-4000-8000-000000000002'},{name:'Nick',locale:'nl'});
+  expect(m.subject).toBe('Factuur zonder uren ter controle: Gershwin · 24 · 1.038,83 €');expect(m.html).toContain('/projects/weekstaten#losse-factuur-00000000-0000-4000-8000-000000000002');expect(m.text).toContain('Factuur controleren');expect(m.html).not.toContain('weekstaat-');
+ });
+
 });

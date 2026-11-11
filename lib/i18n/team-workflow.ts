@@ -106,6 +106,9 @@ const rows:[string,string,string][]=[
 ['Een medewerker heeft een weekstaat ingediend. Controleer per dag de mensen, uren en werkzaamheden voordat je goedkeurt.','A worker submitted a weekly timesheet. Check the people, hours and work for each day before approving.','Un trabajador ha enviado un parte semanal. Revisa las personas, horas y trabajos de cada día antes de aprobar.'],
 ['Weekstaat controleren','Review timesheet','Revisar parte semanal'],
 ['{n} weekstaten ter controle','{n} timesheets to review','{n} partes semanales pendientes'],
+['Factuur zonder uren ter controle: {titel}','Fixed-price invoice for review: {titel}','Factura sin horas pendiente de revisión: {titel}'],
+['Een medewerker heeft een factuur zonder uren (vaste prijs) ingediend. Controleer de omschrijving en het bedrag voordat je goedkeurt.','A worker submitted a fixed-price invoice without hours. Check the description and amount before approving.','Un trabajador ha enviado una factura sin horas (precio cerrado). Revisa la descripción y el importe antes de aprobar.'],
+['Factuur controleren','Review invoice','Revisar factura'],
 ];
 export const teamWorkflowEn=Object.fromEntries(rows.map(([nl,en])=>[nl,en]));
 export const teamWorkflowEs=Object.fromEntries(rows.map(([nl,,es])=>[nl,es]));

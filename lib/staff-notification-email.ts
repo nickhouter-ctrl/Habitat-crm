@@ -4,7 +4,7 @@ import { dateLocale, isLocale, maakT } from "@/lib/i18n";
 import { AGENDA_TIME_ZONE } from "@/lib/agenda-dates";
 
 export type StaffAgendaItem = { id: string; kind: "task" | "appointment"; title: string; body: string | null; at: Date; contactId: string | null; contactName: string | null; location?: string | null; overdue?: boolean };
-export type StaffMailContent = { kind: "followup_assignment" | "task_assignment" | "appointment_assignment" | "team_message" | "daily_agenda" | "worker_week_submitted"; title?: string; body?: string | null; at?: Date | null; actorName?: string | null; contactId?: string | null; contactName?: string | null; messageId?: string; sheetId?: string; day?: string; items?: StaffAgendaItem[] };
+export type StaffMailContent = { kind: "followup_assignment" | "task_assignment" | "appointment_assignment" | "team_message" | "daily_agenda" | "worker_week_submitted"; title?: string; body?: string | null; at?: Date | null; actorName?: string | null; contactId?: string | null; contactName?: string | null; messageId?: string; sheetId?: string; lumpId?: string; day?: string; items?: StaffAgendaItem[] };
 
 export function staffNotificationEmail(content: StaffMailContent, recipient: { name: string | null; locale: string }) {
   const locale = isLocale(recipient.locale) ? recipient.locale : "nl", t = maakT(locale), base = crmUrl();
@@ -12,7 +12,8 @@ export function staffNotificationEmail(content: StaffMailContent, recipient: { n
   const day = content.day ? new Date(`${content.day}T12:00:00Z`).toLocaleDateString(dateLocale(locale), { day: "numeric", month: "long", year: "numeric" }) : "";
   let subject: string, intro: string, href: string, label: string;
   switch (content.kind) {
-    case "worker_week_submitted": subject=t("Weekstaat ter controle: {titel}",{titel:content.title??""});intro=t("Een medewerker heeft een weekstaat ingediend. Controleer per dag de mensen, uren en werkzaamheden voordat je goedkeurt.");href=`/projects/weekstaten#weekstaat-${content.sheetId}`;label=t("Weekstaat controleren");break;
+    case "worker_week_submitted": if(content.lumpId){subject=t("Factuur zonder uren ter controle: {titel}",{titel:content.title??""});intro=t("Een medewerker heeft een factuur zonder uren (vaste prijs) ingediend. Controleer de omschrijving en het bedrag voordat je goedkeurt.");href=`/projects/weekstaten#losse-factuur-${content.lumpId}`;label=t("Factuur controleren");break;}
+      subject=t("Weekstaat ter controle: {titel}",{titel:content.title??""});intro=t("Een medewerker heeft een weekstaat ingediend. Controleer per dag de mensen, uren en werkzaamheden voordat je goedkeurt.");href=`/projects/weekstaten#weekstaat-${content.sheetId}`;label=t("Weekstaat controleren");break;
     case "followup_assignment": subject = t("Nieuwe opvolging toegewezen: {naam}", { naam: content.contactName ?? content.title ?? "" }); intro = t("Je bent nu verantwoordelijk voor de opvolging van deze klant."); href = `/opvolging/${content.contactId}`; label = t("Open het opvolgdossier"); break;
     case "task_assignment": subject = t("Nieuwe taak voor jou: {titel}", { titel: content.title ?? "" }); intro = t("Er is een taak aan jou toegewezen."); href = "/agenda"; label = t("Open je agenda"); break;
     case "appointment_assignment": subject = t("Nieuwe afspraak voor jou: {titel}", { titel: content.title ?? "" }); intro = t("Er is een afspraak aan jou toegewezen."); href = "/agenda"; label = t("Open je agenda"); break;
