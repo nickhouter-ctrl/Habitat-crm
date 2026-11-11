@@ -217,17 +217,8 @@ async function attachPdf(holdedId: string, po: typeof purchaseOrders.$inferSelec
   try {
     const buf = await downloadPurchaseOrderBuffer(pdf.path);
     if (!buf) return "Bijlage niet gevonden in de opslag.";
-    const form = new FormData();
-    form.append("file", new Blob([new Uint8Array(buf)]), pdf.name);
-    form.append("setMain", "true");
-    const base = (process.env.HOLDED_API_BASE ?? "https://api.holded.com/api").replace(/\/$/, "");
-    const res = await fetch(`${base}/invoicing/v1/documents/purchase/${holdedId}/attach`, {
-      method: "POST",
-      headers: { key: process.env.HOLDED_API_KEY ?? "" },
-      body: form,
-      signal: AbortSignal.timeout(20000),
-    });
-    return res.ok ? null : `PDF niet meegestuurd (Holded ${res.status}) — voeg hem in Holded toe.`;
+    await holded.documents.attach("purchase", holdedId, new Uint8Array(buf), pdf.name);
+    return null;
   } catch {
     return "PDF niet meegestuurd — voeg hem in Holded toe.";
   }

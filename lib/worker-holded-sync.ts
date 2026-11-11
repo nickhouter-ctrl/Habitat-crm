@@ -5,7 +5,8 @@ import { workerWeekSheets as sheets,workerLumpInvoices as lumps,purchaseOrders,p
 import { holded, holdedListAll } from "@/lib/holded/client";
 import type { HoldedDocument, HoldedTax } from "@/lib/holded/types";
 import { suggestBooking, type HistoryLine } from "@/lib/holded/purchase-learning";
-import type { WorkerInvoice } from "@/lib/worker-week";
+import type { WeekDay, WorkerInvoice } from "@/lib/worker-week";
+import { renderWorkerInvoice } from "@/lib/worker-invoice-pdf";
 import { deliverWorkerPurchase,PrepareError,supplierMatches,verifyWorkerPurchase,workerInvoiceTag,workerPurchaseBody,type WorkerBooking } from "@/lib/worker-holded-delivery";
 
 /**
@@ -28,7 +29,7 @@ async function bookingFor(invoice:WorkerInvoice,projectId:string,contact:string,
   return {projectId:p.holdedProjectId,main:{account:main.account,vat:main.vat,retention:main.retention},extraAccount:extra.account};
 }
 
-type Source={id:string;invoice:WorkerInvoice;projectId:string;poId:string;status:string;attemptAt:Date};
+type Source={id:string;invoice:WorkerInvoice;projectId:string;poId:string;status:string;attemptAt:Date;days:WeekDay[];reviewStatus:string};
 
 async function deliver(src:Source,knownHoldedId:string|null,setStatus:(status:string,error:string|null)=>Promise<void>,claimPosting:()=>Promise<boolean>) {
   const invoice=src.invoice;
@@ -65,6 +66,21 @@ async function deliver(src:Source,knownHoldedId:string|null,setStatus:(status:st
     verify:async remoteId=>{verifyWorkerPurchase(await holded.documents.get("purchase",remoteId),invoice);},
   },knownHoldedId,["posting","unknown"].includes(src.status));
   await setStatus(result.status,result.error);
+  if(result.status==="sent")await attachInvoicePdf(src);
+}
+
+/**
+ * De factuur-PDF als bijlage in Holded — alleen als er nog geen bijlage hangt,
+ * zodat een met de hand geboekte factuur (met zijn eigen PDF) geen tweede krijgt.
+ * Mislukt dit, dan staat de factuur er wel; de PDF kan er dan met de hand bij.
+ */
+async function attachInvoicePdf(src:Source) {
+  try{
+    const [po]=await db.select({holdedId:purchaseOrders.holdedId}).from(purchaseOrders).where(eq(purchaseOrders.id,src.poId));
+    if(!po?.holdedId||(await holded.documents.attachments("purchase",po.holdedId)).length)return;
+    const pdf=await renderWorkerInvoice(src.invoice,src.days,src.reviewStatus);
+    await holded.documents.attach("purchase",po.holdedId,pdf,`Factura-${src.invoice.number.replace(/[^\p{L}\p{N}._-]/gu,"-")}.pdf`);
+  }catch(e){console.warn("[worker-invoice] pdf-niet-bijgevoegd",{id:src.id,error:e instanceof Error?e.message:String(e)});}
 }
 
 export async function syncWorkerInvoice(id:string) {
@@ -83,7 +99,7 @@ export async function syncWorkerInvoice(id:string) {
   const [po]=await db.select().from(purchaseOrders).where(eq(purchaseOrders.id,poId));
   if(!po||po.projectId!==claimed.projectId||po.reference!==invoice.number){await db.update(sheets).set({holdedSyncStatus:"error",holdedSyncError:"Inkoopfactuur en weekstaat sluiten niet aan."}).where(eq(sheets.id,id));return;}
   const mine=and(eq(sheets.id,id),eq(sheets.holdedSyncAttemptAt,attemptAt));
-  await deliver({id,invoice,projectId:claimed.projectId,poId,status:claimed.holdedSyncStatus!,attemptAt},po.holdedId,
+  await deliver({id,invoice,projectId:claimed.projectId,poId,status:claimed.holdedSyncStatus!,attemptAt,days:claimed.days,reviewStatus:claimed.invoiceStatus!},po.holdedId,
     async(status,error)=>{await db.update(sheets).set({holdedSyncStatus:status,holdedSyncError:error}).where(mine);},
     async()=>(await db.update(sheets).set({holdedSyncStatus:"posting"}).where(mine).returning({id:sheets.id})).length>0);
 }
@@ -105,7 +121,7 @@ export async function syncLumpInvoice(id:string) {
   const [po]=await db.select().from(purchaseOrders).where(eq(purchaseOrders.id,poId));
   if(!po||po.projectId!==claimed.projectId||po.reference!==claimed.invoice.number){await db.update(lumps).set({holdedSyncStatus:"error",holdedSyncError:"Inkoopfactuur en losse factuur sluiten niet aan."}).where(eq(lumps.id,id));return;}
   const mine=and(eq(lumps.id,id),eq(lumps.holdedSyncAttemptAt,attemptAt));
-  await deliver({id,invoice:claimed.invoice,projectId:claimed.projectId,poId,status:claimed.holdedSyncStatus!,attemptAt},po.holdedId,
+  await deliver({id,invoice:claimed.invoice,projectId:claimed.projectId,poId,status:claimed.holdedSyncStatus!,attemptAt,days:[],reviewStatus:claimed.status},po.holdedId,
     async(status,error)=>{await db.update(lumps).set({holdedSyncStatus:status,holdedSyncError:error}).where(mine);},
     async()=>(await db.update(lumps).set({holdedSyncStatus:"posting"}).where(mine).returning({id:lumps.id})).length>0);
 }

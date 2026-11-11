@@ -162,6 +162,22 @@ export const holded = {
         method: "PUT",
         body,
       }),
+    /** Bijlagen van een document (bestandsnamen). */
+    attachments: async (docType: HoldedDocType, id: string) =>
+      (await request<{ attachments?: string[] }>(`/invoicing/v1/documents/${docType}/${id}/attachments/list`)).attachments ?? [],
+    /**
+     * Hang een bestand aan een document (multipart, veld "file"). Getest 11-11-2026
+     * op een inkoopfactuur: 201 "Attachment uploaded".
+     */
+    attach: async (docType: HoldedDocType, id: string, file: Uint8Array, filename: string, contentType = "application/pdf") => {
+      const form = new FormData();
+      form.append("file", new Blob([new Uint8Array(file)], { type: contentType }), filename);
+      form.append("setMain", "true");
+      const res = await fetch(`${BASE}/invoicing/v1/documents/${docType}/${id}/attach`, {
+        method: "POST", headers: { key: apiKey() }, body: form, cache: "no-store", signal: AbortSignal.timeout(30000),
+      });
+      if (!res.ok) throw new HoldedError(res.status, await res.text(), `Holded POST attach → ${res.status}`);
+    },
     /** Registreer een betaling op een document (date = unix-seconden). */
     pay: (docType: HoldedDocType, id: string, body: { date: number; amount: number; desc?: string }) =>
       request<HoldedWriteResult>(`/invoicing/v1/documents/${docType}/${id}/pay`, {
