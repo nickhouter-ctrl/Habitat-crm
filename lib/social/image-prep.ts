@@ -53,8 +53,8 @@ export function coverCrop(
   return { left, top, width, height };
 }
 
-/** Merk: ~38% van de beeldbreedte, marge 5% van de breedte, linksonder. */
-export const LOCKUP_WIDTH_RATIO = 0.38;
+/** Merk: ~48% van de beeldbreedte, marge 5% van de breedte, linksonder. */
+export const LOCKUP_WIDTH_RATIO = 0.48;
 export const LOCKUP_MARGIN_RATIO = 0.05;
 
 export function lockupPlacement(
@@ -67,6 +67,48 @@ export function lockupPlacement(
   const height = Math.round((lockupHeight / lockupWidth) * width);
   const margin = Math.round(imageWidth * LOCKUP_MARGIN_RATIO);
   return { width, height, left: margin, top: Math.max(0, imageHeight - margin - height) };
+}
+
+/**
+ * Donkere verloopvlek linksonder, zodat het witte merk ook op lichte steen
+ * leesbaar blijft: zwart, max ~45% dekking in de hoek, ~75% breed × 30% hoog,
+ * zacht uitlopend naar transparant.
+ */
+export const SCRIM_MAX_OPACITY = 0.45;
+export const SCRIM_WIDTH_RATIO = 0.75;
+export const SCRIM_HEIGHT_RATIO = 0.3;
+
+export function scrimGeometry(imageWidth: number, imageHeight: number): { rx: number; ry: number } {
+  return { rx: Math.round(imageWidth * SCRIM_WIDTH_RATIO), ry: Math.round(imageHeight * SCRIM_HEIGHT_RATIO) };
+}
+
+/**
+ * SVG (zonder tekst, dus geen fonts nodig): een zwarte ellips met de hoek
+ * linksonder als middelpunt, sterk vervaagd. librsvg vervaagt alleen wat op
+ * het canvas staat, dus het canvas is aan alle kanten `pad` groter; daarna
+ * snijdt `renderScrim` het beeldformaat eruit — zo houdt de hoek zelf volle
+ * dekking en loopt de rand zacht uit naar transparant.
+ */
+export function scrimSvg(imageWidth: number, imageHeight: number): { svg: string; pad: number } {
+  const { rx, ry } = scrimGeometry(imageWidth, imageHeight);
+  const blur = Math.round(ry * 0.3);
+  const pad = blur * 3;
+  const w = imageWidth + 2 * pad;
+  const h = imageHeight + 2 * pad;
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}">
+  <defs>
+    <filter id="b" filterUnits="userSpaceOnUse" x="0" y="0" width="${w}" height="${h}"><feGaussianBlur stdDeviation="${blur}"/></filter>
+  </defs>
+  <ellipse cx="${pad}" cy="${imageHeight + pad}" rx="${rx}" ry="${ry}" fill="#000" fill-opacity="${SCRIM_MAX_OPACITY}" filter="url(#b)"/>
+</svg>`;
+  return { svg, pad };
+}
+
+/** De verloopvlek als PNG op beeldformaat. */
+async function renderScrim(imageWidth: number, imageHeight: number): Promise<Buffer> {
+  const sharp = (await import("sharp")).default;
+  const { svg, pad } = scrimSvg(imageWidth, imageHeight);
+  return sharp(Buffer.from(svg)).extract({ left: pad, top: pad, width: imageWidth, height: imageHeight }).png().toBuffer();
 }
 
 const LOCKUP_PATH = path.join(process.cwd(), "public", "brand", "flex-surfaces-lockup.png");
@@ -102,7 +144,10 @@ export async function prepareSocialImage(
       const meta = await sharp(lockup).metadata();
       const place = lockupPlacement(tw, th, meta.width ?? 1, meta.height ?? 1);
       const resized = await sharp(lockup).resize(place.width, place.height).png().toBuffer();
-      img = sharp(await img.toBuffer()).composite([{ input: resized, left: place.left, top: place.top }]);
+      img = sharp(await img.toBuffer()).composite([
+        { input: await renderScrim(tw, th), left: 0, top: 0 },
+        { input: resized, left: place.left, top: place.top },
+      ]);
     }
   }
   return img.jpeg({ quality: 88, mozjpeg: true }).toBuffer();
