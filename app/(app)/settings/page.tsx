@@ -83,7 +83,7 @@ export default async function SettingsPage() {
   return (
     <>
 <TabsRoot defaultTab="account" ids={["account","team","clients","integration"]} param="section">
-      <PageHeader title={uiT("Instellingen")} subtitle={uiT("Medewerkers, integraties en account")} />
+      <PageHeader title={uiT("Instellingen")} subtitle={uiT("Medewerkers, integraties en account")} actions={isAdmin ? <Link href="/settings/api" className={buttonClass({ variant: "secondary", size: "sm" })}>{uiT("API-sleutels")}</Link> : undefined} />
 <TabsBar tabs={[{id:"account",label:uiT("Account")},...(isAdmin ? [{id:"team",label:uiT("Medewerkers")}] : []),...(ik?.magModule("klantaccounts") ? [{id:"clients",label:uiT("Klanttoegang")}] : []),...(isAdmin ? [{id:"integration",label:uiT("Integraties")}] : [])]}/>
       {ik?.magModule("klantaccounts") && <TabPanel id="clients"><Card className="mb-5"><CardHeader><CardTitle>{uiT("Klanttoegang")}</CardTitle></CardHeader><div className="flex flex-wrap gap-4 px-5 pb-5 text-sm"><Link className="underline" href="/accounts">{uiT("Website-accounts en aanvragen")}</Link><Link className="underline" href="/windows-accounts">{uiT("Windows-accounts en aanvragen")}</Link><Link className="underline" href="/contacts">{uiT("Toegang beheren via een contact")}</Link></div></Card></TabPanel>}
 

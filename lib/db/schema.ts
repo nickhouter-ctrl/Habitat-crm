@@ -3317,6 +3317,23 @@ export const assetMediaType = pgEnum("asset_media_type", ["image", "video"]);
  * gekopieerd naar eigen Storage (`storagePath`) — bron-URL's (zeker die van
  * Instagram) verlopen; `sourceUrl` is alleen herkomst-administratie.
  */
+/**
+ * API-sleutels voor externe partijen (/api/v1). Alleen de SHA-256 van de sleutel
+ * staat hier; de sleutel zelf zie je één keer bij aanmaken. Intrekken = revokedAt.
+ */
+export const apiKeys = pgTable("api_keys", {
+  id: uuid().primaryKey().default(sql`gen_random_uuid()`),
+  name: text().notNull(),
+  keyHash: text().notNull(),
+  /** Eerste tekens ("hab_3fK9…"), om de sleutel in de lijst te herkennen. */
+  prefix: text().notNull(),
+  scopes: text().array().notNull().default(sql`'{content:read,content:write}'::text[]`),
+  createdBy: uuid().references(() => users.id, { onDelete: "set null" }),
+  lastUsedAt: timestamp({ withTimezone: true }),
+  revokedAt: timestamp({ withTimezone: true }),
+  ...timestamps,
+}, (t) => [uniqueIndex("api_keys_hash_idx").on(t.keyHash)]).enableRLS();
+
 export const assets = pgTable(
   "assets",
   {

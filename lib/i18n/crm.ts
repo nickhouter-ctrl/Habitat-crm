@@ -912,6 +912,7 @@ const rows: [string,string,string][] = [
   ["Factuur {n}","Factura {n}","Invoice {n}"],
   ["Weekstaat · {n} dagen bekijken","Parte semanal · ver {n} días","Timesheet · view {n} days"],
   ["Factuur openen","Abrir factura","Open invoice"],
+  ["API-sleutels","Claves API","API keys"],
   ["Soort kosten","Tipo de gasto","Cost type"],
   ["Transportkosten","Gastos de transporte","Transport costs"],
   ["Reiskosten","Gastos de desplazamiento","Travel costs"],

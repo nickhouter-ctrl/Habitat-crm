@@ -29,6 +29,7 @@ export const authConfig = {
         pathname.startsWith("/login") ||
         pathname.startsWith("/api/auth") ||
         pathname.startsWith("/api/webhooks") ||
+        pathname.startsWith("/api/v1") || // externe API: elke route controleert zelf de API-sleutel
         pathname.startsWith("/offerte") || // public accept/reject page for clients
         pathname.startsWith("/book") || // public "pick an appointment slot" page
         pathname.startsWith("/afspraak") || // klant reageert op een afspraakbevestiging (token-link)
