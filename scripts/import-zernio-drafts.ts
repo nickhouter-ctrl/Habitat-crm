@@ -59,7 +59,7 @@ async function main() {
     await db.insert(socialPosts).values({
       weekStart: p.weekStart,
       plannedDate: p.date,
-      publishTime: "19:00",
+      publishTime: "08:00",
       slot: p.slot,
       theme: p.theme,
       kind: p.kind,

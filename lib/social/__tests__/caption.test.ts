@@ -122,7 +122,7 @@ describe("config", () => {
   it("weekdagen en tijd", () => {
     expect(parseWeekdays(undefined)).toEqual([1, 3, 5]);
     expect(parseWeekdays("5, 1,1,9")).toEqual([1, 5]);
-    expect(parsePublishTime("25:00")).toBe("19:00");
+    expect(parsePublishTime("25:00")).toBe("08:00");
     expect(parsePublishTime("08:30")).toBe("08:30");
     expect(socialConfig({ SOCIAL_EXCLUDE_KEYWORDS: "a, B" }).excludeKeywords).toEqual(["a", "b"]);
     expect(socialConfig({}).excludeKeywords).toContain("marquina");

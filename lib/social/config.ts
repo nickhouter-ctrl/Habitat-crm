@@ -16,10 +16,10 @@ export function parseWeekdays(raw: string | undefined | null): number[] {
   return unique.length ? unique : [1, 3, 5];
 }
 
-/** "HH:MM" of de standaard 19:00. */
+/** "HH:MM" of de standaard 08:00. */
 export function parsePublishTime(raw: string | undefined | null): string {
   const v = (raw ?? "").trim();
-  return /^(?:[01]\d|2[0-3]):[0-5]\d$/.test(v) ? v : "19:00";
+  return /^(?:[01]\d|2[0-3]):[0-5]\d$/.test(v) ? v : "08:00";
 }
 
 /**
