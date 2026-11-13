@@ -15,7 +15,7 @@ const nextConfig: NextConfig = {
     serverActions: { bodySizeLimit: "25mb" },
   },
   // @react-pdf/renderer is Node-only — don't try to bundle it.
-  serverExternalPackages: ["@react-pdf/renderer"],
+  serverExternalPackages: ["@react-pdf/renderer", "ffmpeg-static"],
   // PDF fonts are read from public/fonts at runtime — trace them into the bundle.
   outputFileTracingIncludes: {
     "/**/*": ["./public/fonts/**/*", "./public/docs/flexible-stone-technical-data-sheet*.pdf", "./public/mail/followup/*.jpg"],
@@ -25,8 +25,9 @@ const nextConfig: NextConfig = {
     "/products/pdf/catalog": ["./node_modules/sharp/**/*", "./node_modules/@img/sharp-*/**/*"],
     "/prijslijst/distributeur/pdf": ["./node_modules/sharp/**/*", "./node_modules/@img/sharp-*/**/*"],
     // Social-weekplanning: bijsnijden + Flex-Surfaces-merk erop (lib/social/image-prep.ts).
-    "/api/cron/social-weekly": ["./node_modules/sharp/**/*", "./node_modules/@img/sharp-*/**/*", "./public/brand/**/*"],
-    "/marketing/social": ["./node_modules/sharp/**/*", "./node_modules/@img/sharp-*/**/*", "./public/brand/**/*"],
+    // Video's: logo + muziek met ffmpeg-static (binary + public/brand/music).
+    "/api/cron/social-weekly": ["./node_modules/sharp/**/*", "./node_modules/@img/sharp-*/**/*", "./public/brand/**/*", "./node_modules/ffmpeg-static/ffmpeg"],
+    "/marketing/social": ["./node_modules/sharp/**/*", "./node_modules/@img/sharp-*/**/*", "./public/brand/**/*", "./node_modules/ffmpeg-static/ffmpeg"],
   },
   // De handtekening-generator is één los HTML-bestand in public/. Zo houdt het
   // personeel een korte link en blijft het bestand gewoon te openen en te

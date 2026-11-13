@@ -262,7 +262,7 @@ async function ensureZernioMedia(post: SocialPostRow): Promise<{ urls: string[];
     if (!source) return null;
     const res = await fetch(source, { cache: "no-store" });
     if (!res.ok) throw new Error(`Video ophalen mislukt (${res.status}).`);
-    const bytes = await brandVideo(new Uint8Array(await res.arrayBuffer()));
+    const bytes = await brandVideo(new Uint8Array(await res.arrayBuffer()), post.id);
     urls = [await uploadMedia(bytes, `habitat-${post.plannedDate}.mp4`, "video/mp4")];
   } else {
     const images = await assetRows(post.assetIds);

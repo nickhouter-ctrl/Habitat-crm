@@ -79,3 +79,12 @@ describe("prepareSocialImage", () => {
     expect(Math.max(...data)).toBeGreaterThan(230);
   });
 });
+
+describe("parseFfmpegInfo", () => {
+  it("leest formaat en duur", async () => {
+    const { parseFfmpegInfo } = await import("../image-prep");
+    const err = "  Duration: 00:00:10.04, start: 0.000000, bitrate: 2000 kb/s\n    Stream #0:0(und): Video: h264 (High) (avc1 / 0x31637661), yuv420p(progressive), 720x1280 [SAR 1:1 DAR 9:16], 24 fps";
+    expect(parseFfmpegInfo(err)).toEqual({ width: 720, height: 1280, seconds: 10.04 });
+    expect(parseFfmpegInfo("garbage")).toBeNull();
+  });
+});
