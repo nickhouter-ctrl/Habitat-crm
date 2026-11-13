@@ -6,6 +6,7 @@ import { appleCalendarEn } from "./apple-calendar";
  */
 import type { Dictionary } from "@/lib/i18n";
 import { crmEn } from './crm';
+import { socialEn } from './social';
 import { workflowEn } from './workflow';
 import { dealerPricingEn } from './dealer-pricing';
 
@@ -13,6 +14,8 @@ import { teamWorkflowEn } from "./team-workflow";
 import { usabilityEn } from "./usability";
 
 export const en: Dictionary = {
+  // Eerst: bestaande vertalingen van dezelfde sleutel gaan voor.
+  ...socialEn,
   "Reserveringen en verkopen": "Reservations and sales",
   "Klant / project": "Customer / project",
   "Gereserveerd via offerte": "Reserved via quote",

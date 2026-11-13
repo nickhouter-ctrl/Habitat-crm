@@ -3918,3 +3918,99 @@ export const partnerContracts = pgTable("partner_contracts", {
 }, t => [uniqueIndex("partner_contracts_version_idx").on(t.contactId, t.version),
   check("partner_contracts_dates_check", sql`${t.validUntil} >= ${t.validFrom}`),
   check("partner_contracts_radius_check", sql`not ${t.exclusive} or (${t.radiusKm} > 0 and ${t.latitude} between -90 and 90 and ${t.longitude} between -180 and 180)`)]);
+
+/* ------------------------------------------------------- social media (weekplan) */
+
+/** Soort social-post: carrousel, losse foto, uitleg/montage (carrousel) of video (Reel). */
+export const socialPostKind = pgEnum("social_post_kind", ["carousel", "single", "howto", "video"]);
+
+/**
+ * Levenscyclus: `draft` (klaargezet, staat als concept in Zernio) → `approved`
+ * (akkoord, inplannen nog niet gelukt) → `scheduled` (ingepland in Zernio) →
+ * `published`. Er gaat NIETS online zonder akkoord van de eigenaar.
+ */
+export const socialPostStatus = pgEnum("social_post_status", [
+  "draft",
+  "approved",
+  "scheduled",
+  "published",
+  "rejected",
+  "failed",
+]);
+
+/**
+ * Eén geplande Instagram/Facebook-post (lib/social). De wekelijkse cron zet de
+ * posts voor de volgende week klaar; uniek op `plannedDate`, zodat opnieuw
+ * draaien nooit een week dubbel aanmaakt.
+ */
+export const socialPosts = pgTable(
+  "social_posts",
+  {
+    id: uuid().primaryKey().default(sql`gen_random_uuid()`),
+    /** Maandag van de week waar deze post bij hoort (Europe/Madrid). */
+    weekStart: date().notNull(),
+    plannedDate: date().notNull(),
+    /** Publicatietijd, klok in Madrid ("19:00"). */
+    publishTime: text().notNull().default("19:00"),
+    /** Volgnummer binnen de week (0 = eerste postdag). */
+    slot: integer().notNull(),
+    /** Afgeleid thema (lib/social/themes.ts), bv. "shower" of "installation". */
+    theme: text().notNull(),
+    kind: socialPostKind().notNull(),
+    caption: text().notNull().default(""),
+    /** Gekozen beelden uit de bibliotheek, in carrouselvolgorde. */
+    assetIds: uuid().array().notNull().default(sql`'{}'::uuid[]`),
+    /** Bronbeeld voor de AI-video (videopost). */
+    videoSourceAssetId: uuid(),
+    /** Video uit de bibliotheek (handmatig gekoppeld). */
+    videoAssetId: uuid(),
+    /** Publieke mp4-URL (Higgsfield-resultaat of handmatig geplakt). */
+    videoUrl: text(),
+    /** Prompt waarmee de video wordt/werd gegenereerd. */
+    videoPrompt: text(),
+    /** Lopende Higgsfield-job; null als er geen job loopt. */
+    videoJob: jsonb().$type<{ requestId: string; statusUrl: string; submittedAt: string }>(),
+    /** Bevat AI-gegenereerd beeld/video → Instagram-label "AI-gegenereerd". */
+    aiGenerated: boolean().notNull().default(false),
+    status: socialPostStatus().notNull().default("draft"),
+    /** Zernio-post (één post met beide platforms). */
+    zernioPostId: text(),
+    /** Zernio-media-URL's van de voorbereide (bijgesneden) beelden/video. */
+    zernioMediaUrls: jsonb().$type<string[]>(),
+    /** Platform → Zernio-account-id waarop de post staat. */
+    zernioAccounts: jsonb().$type<Record<string, string>>(),
+    error: text(),
+    approvedBy: uuid().references(() => users.id, { onDelete: "set null" }),
+    approvedAt: timestamp({ withTimezone: true }),
+    /** Het moment waarop Zernio publiceert (na akkoord). */
+    scheduledFor: timestamp({ withTimezone: true }),
+    publishedAt: timestamp({ withTimezone: true }),
+    /** Wanneer de eigenaar de weekmail over deze post kreeg. */
+    notifiedAt: timestamp({ withTimezone: true }),
+    ...timestamps,
+  },
+  (t) => [
+    uniqueIndex("social_posts_planned_date_idx").on(t.plannedDate),
+    index("social_posts_week_idx").on(t.weekStart),
+    index("social_posts_status_idx").on(t.status),
+  ],
+).enableRLS();
+
+/**
+ * Welk beeld wanneer in een social-post zat — de planner slaat recent
+ * gebruikte beelden over. Afgewezen posts geven hun beelden weer vrij.
+ */
+export const socialAssetUsage = pgTable(
+  "social_asset_usage",
+  {
+    id: uuid().primaryKey().default(sql`gen_random_uuid()`),
+    assetId: uuid().notNull().references(() => assets.id, { onDelete: "cascade" }),
+    postId: uuid().notNull().references(() => socialPosts.id, { onDelete: "cascade" }),
+    usedOn: date().notNull(),
+    createdAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    uniqueIndex("social_asset_usage_post_asset_idx").on(t.postId, t.assetId),
+    index("social_asset_usage_asset_idx").on(t.assetId, t.usedOn),
+  ],
+).enableRLS();

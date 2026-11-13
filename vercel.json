@@ -112,6 +112,14 @@
       "schedule": "2-57/5 * * * *"
     },
     {
+      "path": "/api/cron/social-weekly",
+      "schedule": "0 6 * * 4"
+    },
+    {
+      "path": "/api/cron/social-weekly?poll=1",
+      "schedule": "20 * * * *"
+    },
+    {
       "path": "/api/cron/partner-sent",
       "schedule": "* * * * *"
     }

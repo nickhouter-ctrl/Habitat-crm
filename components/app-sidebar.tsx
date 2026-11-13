@@ -45,6 +45,7 @@ import {
   Send,
   TrendingUp,
   Radar,
+  Share2,
   AppWindow,
   QrCode,
 } from "lucide-react";
@@ -216,6 +217,7 @@ const NAV_GROUPS: { id: string; label: string | null; items: NavItem[] }[] = [
     items: [
       { href: "/leads", label: "Leads", icon: Megaphone },
       { href: "/broadcast", label: "Broadcast", icon: Send },
+      { href: "/marketing/social", label: "Social media", icon: Share2 },
       { href: "/marketing/campaigns", label: "Campagnes", icon: Send },
       { href: "/marketing/creatives", label: "Creatives", icon: Palette },
       { href: "/marketing/assets", label: "Beeldbibliotheek", icon: Images },

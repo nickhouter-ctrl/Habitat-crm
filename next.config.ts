@@ -24,6 +24,9 @@ const nextConfig: NextConfig = {
     "/wederverkopers/prijzen": ["./node_modules/sharp/**/*", "./node_modules/@img/sharp-*/**/*"],
     "/products/pdf/catalog": ["./node_modules/sharp/**/*", "./node_modules/@img/sharp-*/**/*"],
     "/prijslijst/distributeur/pdf": ["./node_modules/sharp/**/*", "./node_modules/@img/sharp-*/**/*"],
+    // Social-weekplanning: bijsnijden + Flex-Surfaces-merk erop (lib/social/image-prep.ts).
+    "/api/cron/social-weekly": ["./node_modules/sharp/**/*", "./node_modules/@img/sharp-*/**/*", "./public/brand/**/*"],
+    "/marketing/social": ["./node_modules/sharp/**/*", "./node_modules/@img/sharp-*/**/*", "./public/brand/**/*"],
   },
   // De handtekening-generator is één los HTML-bestand in public/. Zo houdt het
   // personeel een korte link en blijft het bestand gewoon te openen en te

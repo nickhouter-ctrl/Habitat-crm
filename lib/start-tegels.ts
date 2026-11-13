@@ -37,6 +37,7 @@ import {
   Palette,
   Percent,
   Radar,
+  Share2,
   Receipt,
   ScanLine,
   Send,
@@ -122,6 +123,7 @@ export const START_TEGELS: StartTegel[] = [
   t("/wederverkopers", "Wederverkopers", "Dealers en hun condities", Store, "Producten & voorraad"),
   // 7 — Marketing.
   t("/marketing/assets", "Beeldbibliotheek", "Foto's en video's voor campagnes", Images, "Marketing"),
+  t("/marketing/social", "Social media", "Weekposts voor Instagram en Facebook", Share2, "Marketing"),
   t("/marketing/creatives", "Creatives", "Advertentiebeelden maken", Palette, "Marketing"),
   t("/marketing/campaigns", "Campagnes", "Meta-campagnes beheren", Send, "Marketing"),
   t("/marketing/insights", "Wat werkt", "Welke advertenties presteren", TrendingUp, "Marketing"),
