@@ -231,6 +231,37 @@ Return ONLY a JSON object (no markdown): {"en": "...", "es": "...", "tags": ["#.
   }
 }
 
+/**
+ * Herschrijft een bestaande caption volgens een aanwijzing van de eigenaar
+ * ("korter", "noem de showroom eerder", in elke taal). Houdt het vaste formaat
+ * (EN — ES, locatieregel, hashtags) en de verboden-claims-regel aan.
+ * Null bij ontbrekende key of fout.
+ */
+export async function reviseCaption(current: string, instruction: string): Promise<string | null> {
+  const key = process.env.ANTHROPIC_API_KEY;
+  if (!key) return null;
+  const prompt = `Here is the current caption:\n<caption>\n${current}\n</caption>\n\nThe owner asks for this change (may be written in Dutch): "${instruction}".\nRewrite the caption applying exactly that change and nothing else. Keep the same structure: English text first, then a line with only "${SEPARATOR}", then the Spanish text with the same meaning, then the line "${LOCATION_LINE}", then the hashtags line. Keep any showroom link that is in it unless asked to remove it. Return ONLY the full new caption text, no explanation.`;
+  try {
+    const res = await fetch(API_URL, {
+      method: "POST",
+      headers: { "x-api-key": key, "anthropic-version": "2023-06-01", "content-type": "application/json" },
+      body: JSON.stringify({ model: MODEL, max_tokens: 1200, temperature: 0.4, system: SYSTEM, messages: [{ role: "user", content: prompt }] }),
+      cache: "no-store",
+    });
+    if (!res.ok) {
+      console.warn("[social] AI-aanpassing faalde:", res.status, await res.text().catch(() => ""));
+      return null;
+    }
+    const data = (await res.json()) as { content?: { type: string; text?: string }[] };
+    const text = (data.content ?? []).filter((b) => b.type === "text" && b.text).map((b) => b.text!).join("\n").trim();
+    if (!text) return null;
+    return text.replace(/^<caption>\s*|\s*<\/caption>$/g, "").trim().slice(0, 2200);
+  } catch (err) {
+    console.warn("[social] AI-aanpassing error:", err);
+    return null;
+  }
+}
+
 /** Prompt voor de AI-video (Higgsfield image-to-video): uitleggend, villa-stijl, geen tekst in beeld. */
 export function videoPrompt(theme: string): string {
   const subject: Record<string, string> = {

@@ -19,6 +19,7 @@ import {
   regenerateCaptionAction,
   rejectPostAction,
   reopenPostAction,
+  reviseCaptionAction,
   saveCaptionAction,
 } from "@/app/(app)/marketing/social/actions";
 import { Badge, Button, Input, Select, Textarea, type BadgeTone } from "@/components/ui";
@@ -70,6 +71,14 @@ export function SocialPostCard({ post, videoOptions }: { post: SocialPostView; v
   const { pending, error, run } = useAction();
   const [caption, setCaption] = useState(post.caption);
   const [time, setTime] = useState(post.publishTime);
+  const [instruction, setInstruction] = useState("");
+  // Na "Aanpassen"/"Nieuwe caption" komt er een nieuwe caption van de server:
+  // neem die over in het tekstvak (state afleiden tijdens render).
+  const [serverCaption, setServerCaption] = useState(post.caption);
+  if (post.caption !== serverCaption) {
+    setServerCaption(post.caption);
+    setCaption(post.caption);
+  }
   const editable = post.status === "draft" || post.status === "failed" || post.status === "approved";
   const dirty = caption !== post.caption || time !== post.publishTime;
 
@@ -196,6 +205,34 @@ export function SocialPostCard({ post, videoOptions }: { post: SocialPostView; v
         )}
       </div>
       {editable && dirty && <p className="text-xs text-muted">{uiT("Sla eerst op; daarna kun je akkoord geven.")}</p>}
+      {editable && !dirty && (
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-start">
+          <Textarea
+            value={instruction}
+            onChange={(e) => setInstruction(e.target.value)}
+            rows={2}
+            disabled={pending}
+            placeholder={uiT("Aanpassing doorgeven, bv. \"korter\" of \"noem de showroom eerder\"")}
+            className="text-sm"
+            aria-label={uiT("Aanpassing doorgeven")}
+          />
+          <Button
+            variant="secondary"
+            size="sm"
+            disabled={pending || instruction.trim().length < 2}
+            onClick={() =>
+              run(async () => {
+                const err = await reviseCaptionAction(post.id, instruction);
+                if (!err) setInstruction("");
+                return err;
+              })
+            }
+          >
+            <Sparkles className="size-4" aria-hidden />
+            {uiT("Aanpassen")}
+          </Button>
+        </div>
+      )}
       {(error ?? post.error) && <p className="text-sm text-danger">{error ?? post.error}</p>}
     </div>
   );

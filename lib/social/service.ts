@@ -17,7 +17,7 @@ import { assets, socialAssetUsage, socialPosts } from "@/lib/db/schema";
 import { sendEmail } from "@/lib/email";
 import { marketingStorage } from "@/lib/marketing/storage";
 
-import { fallbackCaption, generateCaption, videoPrompt } from "./caption";
+import { fallbackCaption, generateCaption, reviseCaption, videoPrompt } from "./caption";
 import { SOCIAL_TIME_ZONE, socialConfig } from "./config";
 import { socialWeekEmail } from "./email";
 import { higgsfieldConfigured, pollVideoJob, submitImageToVideo } from "./higgsfield";
@@ -350,6 +350,18 @@ export async function regenerateCaption(id: string): Promise<void> {
   const post = await getPost(id);
   assertEditable(post);
   const caption = await makeCaption(post);
+  const [updated] = await db.update(socialPosts).set({ caption, status: "draft" }).where(eq(socialPosts.id, id)).returning();
+  await syncZernioDraft(updated).catch(async (err) => {
+    await db.update(socialPosts).set({ error: `Zernio: ${errorText(err)}` }).where(eq(socialPosts.id, id));
+  });
+}
+
+/** Aanpassing doorgeven: de AI herschrijft de caption volgens de aanwijzing. */
+export async function reviseCaptionWithInstruction(id: string, instruction: string): Promise<void> {
+  const post = await getPost(id);
+  assertEditable(post);
+  const caption = await reviseCaption(post.caption, instruction);
+  if (!caption) throw new Error("De AI kon de tekst nu niet aanpassen; probeer het opnieuw of pas hem zelf aan.");
   const [updated] = await db.update(socialPosts).set({ caption, status: "draft" }).where(eq(socialPosts.id, id)).returning();
   await syncZernioDraft(updated).catch(async (err) => {
     await db.update(socialPosts).set({ error: `Zernio: ${errorText(err)}` }).where(eq(socialPosts.id, id));

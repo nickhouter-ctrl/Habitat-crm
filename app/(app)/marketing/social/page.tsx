@@ -59,8 +59,17 @@ export default async function SocialPage({ searchParams }: { searchParams: Promi
       status: p.status,
       statusLabel: uiT(STATUS_LABELS[p.status]),
       caption: p.caption,
-      images: imageIds.map((id) => ({ id, url: previews.get(id)?.url ?? null, name: previews.get(id)?.name ?? null })),
-      videoUrl: p.videoUrl ?? (p.videoAssetId ? (videoPreview.get(p.videoAssetId)?.url ?? null) : null),
+      // Posts die buiten de planner om zijn gemaakt (direct in Zernio) hebben
+      // geen bibliotheekbeelden: toon dan de al voorbereide Zernio-media.
+      images: imageIds.length
+        ? imageIds.map((id) => ({ id, url: previews.get(id)?.url ?? null, name: previews.get(id)?.name ?? null }))
+        : p.kind === "video"
+          ? []
+          : (p.zernioMediaUrls ?? []).map((url, i) => ({ id: `${p.id}-${i}`, url, name: null })),
+      videoUrl:
+        p.videoUrl ??
+        (p.videoAssetId ? (videoPreview.get(p.videoAssetId)?.url ?? null) : null) ??
+        (p.kind === "video" ? (p.zernioMediaUrls?.[0] ?? null) : null),
       needsVideo: needsVideo(p),
       videoPending: Boolean(p.videoJob),
       videoPrompt: p.videoPrompt,

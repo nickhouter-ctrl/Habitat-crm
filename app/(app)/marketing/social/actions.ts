@@ -18,6 +18,7 @@ import {
   regenerateCaption,
   rejectPost,
   reopenPost,
+  reviseCaptionWithInstruction,
   saveCaption,
   weekPosts,
 } from "@/lib/social/service";
@@ -75,6 +76,13 @@ export async function reopenPostAction(postId: string): Promise<string | null> {
 export async function regenerateCaptionAction(postId: string): Promise<string | null> {
   await requireModule("advertenties");
   return run(() => regenerateCaption(id.parse(postId)));
+}
+
+export async function reviseCaptionAction(postId: string, instruction: string): Promise<string | null> {
+  await requireModule("advertenties");
+  const parsed = z.string().trim().min(2, "Schrijf wat er anders moet.").max(500, "Houd de aanwijzing kort (max 500 tekens).").safeParse(instruction);
+  if (!parsed.success) return parsed.error.issues[0]?.message ?? "Ongeldige invoer.";
+  return run(() => reviseCaptionWithInstruction(id.parse(postId), parsed.data));
 }
 
 export async function saveCaptionAction(postId: string, caption: string, publishTime: string): Promise<string | null> {
