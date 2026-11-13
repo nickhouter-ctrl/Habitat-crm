@@ -241,10 +241,13 @@ export function SocialPostCard({ post, videoOptions }: { post: SocialPostView; v
 export function SocialWeekActions({
   weekStart,
   hasPosts,
+  missingDays,
   hasPendingVideo,
 }: {
   weekStart: string;
   hasPosts: boolean;
+  /** Postdagen (labels) waarvoor nog geen post is. */
+  missingDays: string[];
   hasPendingVideo: boolean;
 }) {
   const uiT = useUiTranslation();
@@ -256,6 +259,16 @@ export function SocialWeekActions({
           <Button variant="secondary" disabled={pending} onClick={() => run(() => pollVideosAction())}>
             <RefreshCw className="size-4" aria-hidden />
             {uiT("Video's ophalen")}
+          </Button>
+        )}
+        {hasPosts && missingDays.length > 0 && (
+          <Button variant="secondary" disabled={pending} title={missingDays.join(", ")} onClick={() => run(() => planWeekAction(weekStart))}>
+            <Sparkles className="size-4" aria-hidden />
+            {pending
+              ? uiT("Bezig…")
+              : missingDays.length === 1
+                ? `${uiT("Post maken voor")} ${missingDays[0]}`
+                : `${uiT("Ontbrekende dagen plannen")} (${missingDays.length})`}
           </Button>
         )}
         {hasPosts ? (

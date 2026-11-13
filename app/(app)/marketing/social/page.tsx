@@ -13,7 +13,7 @@ import { aiCaptionConfigured } from "@/lib/social/caption";
 import { socialConfig } from "@/lib/social/config";
 import { higgsfieldConfigured } from "@/lib/social/higgsfield";
 import { isoWeekday, nextWeekStart, shiftDate, weekStartOf } from "@/lib/social/planner";
-import { assetPreviews, needsVideo, recentVideoAssets, weekPosts } from "@/lib/social/service";
+import { assetPreviews, missingPostDays, needsVideo, recentVideoAssets, weekPosts } from "@/lib/social/service";
 import { THEME_LABELS, isSocialTheme } from "@/lib/social/themes";
 import { zernioConfigured } from "@/lib/social/zernio";
 
@@ -92,7 +92,12 @@ export default async function SocialPage({ searchParams }: { searchParams: Promi
         title={uiT("Social media")}
         subtitle={uiT("Elke donderdag worden de posts voor de week erna klaargezet en krijg je een mail. Niets gaat online zonder jouw akkoord.")}
         actions={
-          <SocialWeekActions weekStart={weekStart} hasPosts={posts.length > 0} hasPendingVideo={posts.some((p) => p.videoJob)} />
+          <SocialWeekActions
+            weekStart={weekStart}
+            hasPosts={posts.length > 0}
+            missingDays={missingPostDays(weekStart, posts.map((p) => p.plannedDate)).map(dayLabel)}
+            hasPendingVideo={posts.some((p) => p.videoJob)}
+          />
         }
       />
 

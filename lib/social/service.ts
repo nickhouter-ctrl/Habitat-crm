@@ -80,24 +80,27 @@ export interface BuildWeekResult {
 }
 
 /**
- * Zet de posts voor een week klaar. Idempotent: bestaat er voor die week al
- * iets, dan wordt er niets bijgemaakt (uniek op plannedDate vangt ook een
+ * Zet de posts voor een week klaar. Idempotent: alleen postdagen zonder post
+ * worden aangevuld; is de week compleet, dan wordt er niets bijgemaakt (uniek op plannedDate vangt ook een
  * gelijktijdige tweede run af). Dagen in het verleden worden overgeslagen.
  */
 export async function buildWeek(weekStart: string, now = new Date()): Promise<BuildWeekResult> {
   const config = socialConfig();
   const existing = await weekPosts(weekStart);
-  if (existing.length) return { weekStart, created: 0, posts: existing };
+  const missing = missingPostDays(weekStart, existing.map((p) => p.plannedDate), now);
+  if (!missing.length) return { weekStart, created: 0, posts: existing };
 
   const today = madridDay(now);
   const weekdays = config.weekdays.filter((d) => shiftDate(weekStart, d - 1) > today);
+  // Plan de hele week (zelfde soortenverdeling als altijd) en houd alleen de
+  // dagen over die nog geen post hebben — zo vult dit ook een gat op.
   const plan = planWeek({
     weekStart,
     weekdays,
     assets: await plannerAssets(),
     reuseAfterDays: config.reuseAfterDays,
     excludeKeywords: config.excludeKeywords,
-  });
+  }).filter((p) => missing.includes(p.plannedDate));
 
   const createdIds = await db.transaction(async (tx) => {
     const ids: string[] = [];
@@ -133,6 +136,15 @@ export async function buildWeek(weekStart: string, now = new Date()): Promise<Bu
   // Captions, video-jobs en Zernio-concepten per post; een fout blijft bij die post.
   for (const id of createdIds) await prepareDraft(id);
   return { weekStart, created: createdIds.length, posts: await weekPosts(weekStart) };
+}
+
+/** Postdagen van de week (nog in de toekomst) waarvoor nog geen post bestaat. */
+export function missingPostDays(weekStart: string, existingDates: string[], now = new Date()): string[] {
+  const today = madridDay(now);
+  const have = new Set(existingDates);
+  return socialConfig()
+    .weekdays.map((d) => shiftDate(weekStart, d - 1))
+    .filter((day) => day > today && !have.has(day));
 }
 
 export async function weekPosts(weekStart: string): Promise<SocialPostRow[]> {
