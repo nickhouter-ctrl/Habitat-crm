@@ -6,7 +6,7 @@ import { useT as useUiTranslation } from "@/components/taal-provider";
  * beelden, bewerkbare caption en de knoppen Akkoord / Afwijzen / Nieuwe
  * caption; en de weekknoppen (alles akkoord, week plannen, video's ophalen).
  */
-import { Check, Clapperboard, RefreshCw, RotateCcw, Sparkles, X } from "lucide-react";
+import { Check, Clapperboard, Images, RefreshCw, RotateCcw, Sparkles, X } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 
@@ -21,6 +21,7 @@ import {
   reopenPostAction,
   reviseCaptionAction,
   saveCaptionAction,
+  swapPhotosAction,
 } from "@/app/(app)/marketing/social/actions";
 import { Badge, Button, Input, Select, Textarea, type BadgeTone } from "@/components/ui";
 
@@ -191,6 +192,12 @@ export function SocialPostCard({ post, videoOptions }: { post: SocialPostView; v
               <Sparkles className="size-4" aria-hidden />
               {uiT("Nieuwe caption")}
             </Button>
+            {post.kind !== "video" && (
+              <Button variant="ghost" size="sm" disabled={pending} onClick={() => run(() => swapPhotosAction(post.id))}>
+                <Images className="size-4" aria-hidden />
+                {uiT("Andere foto's")}
+              </Button>
+            )}
             <Button variant="danger" size="sm" disabled={pending} onClick={() => run(() => rejectPostAction(post.id))}>
               <X className="size-4" aria-hidden />
               {uiT("Afwijzen")}
@@ -212,7 +219,7 @@ export function SocialPostCard({ post, videoOptions }: { post: SocialPostView; v
             onChange={(e) => setInstruction(e.target.value)}
             rows={2}
             disabled={pending}
-            placeholder={uiT("Aanpassing doorgeven, bv. \"korter\" of \"noem de showroom eerder\"")}
+            placeholder={uiT("Aanpassing doorgeven, bv. \"voeg meer foto's toe\", \"andere foto's met een zwembad\" of \"tekst korter\"")}
             className="text-sm"
             aria-label={uiT("Aanpassing doorgeven")}
           />
@@ -229,7 +236,7 @@ export function SocialPostCard({ post, videoOptions }: { post: SocialPostView; v
             }
           >
             <Sparkles className="size-4" aria-hidden />
-            {uiT("Aanpassen")}
+            {pending ? uiT("Bezig…") : uiT("Aanpassen")}
           </Button>
         </div>
       )}

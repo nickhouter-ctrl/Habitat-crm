@@ -46,6 +46,9 @@ export interface PlanWeekInput {
   excludeKeywords: string[];
 }
 
+/** Close-ups zonder ruimte eromheen: als losse foto te kaal, liever een sfeerbeeld. */
+export const CLOSE_UP_THEMES: SocialTheme[] = ["texture", "product"];
+
 export const CAROUSEL_MIN = 3;
 export const CAROUSEL_MAX = 5;
 
@@ -236,7 +239,7 @@ export function planWeek(input: PlanWeekInput): PlannedPost[] {
       const preferred =
         kind === "video"
           ? candidates.filter((a) => ["texture", "installation", "interior", "curved", "column", "shower"].includes(a.theme))
-          : candidates;
+          : candidates.filter((a) => !CLOSE_UP_THEMES.includes(a.theme));
       const best =
         preferred.find((a) => !a.recent && !usedThemes.has(a.theme)) ??
         candidates.find((a) => !a.recent && !usedThemes.has(a.theme)) ??
@@ -261,4 +264,65 @@ export function planWeek(input: PlanWeekInput): PlannedPost[] {
     });
   });
   return posts.sort((a, b) => a.slot - b.slot);
+}
+
+/* ------------------------------------------------- beelden van één post wisselen */
+
+export interface PickAssetsInput {
+  assets: PlannerAsset[];
+  count: number;
+  /** Gewenst thema; zonder thema kiest de picker het beste thema met genoeg beelden. */
+  theme?: SocialTheme | null;
+  /** Deze beelden niet kiezen (de huidige van de post, of al gekozen). */
+  avoidIds: string[];
+  excludeKeywords: string[];
+  /** Beelden met lastUsedOn >= deze datum gelden als recent gebruikt. */
+  reuseCutoff: string;
+  /** Seed voor de volgorde bij gelijke score (bv. post-id + tijdstip). */
+  seed: string;
+}
+
+/**
+ * Kies `count` beelden voor een bestaande post (andere foto's / meer foto's).
+ * Liefst één thema, niet recent gebruikt, geen close-ups als het er maar één is.
+ */
+export function pickAssets(input: PickAssetsInput): { ids: string[]; theme: SocialTheme | "mixed" } {
+  const count = Math.max(1, Math.min(CAROUSEL_MAX, Math.round(input.count)));
+  const avoid = new Set(input.avoidIds);
+  const rng = mulberry32(hashString(input.seed));
+  const pool: Scored[] = input.assets
+    .filter((a) => !avoid.has(a.id) && !isExcluded(a.name, a.tags, input.excludeKeywords))
+    .map((a) => ({
+      ...a,
+      theme: deriveTheme(a.name, a.tags),
+      score: preferenceScore(a),
+      jitter: rng(),
+      recent: Boolean(a.lastUsedOn && a.lastUsedOn >= input.reuseCutoff),
+    }))
+    .sort(byPreference);
+
+  let candidates = input.theme ? pool.filter((a) => a.theme === input.theme) : pool;
+  if (!candidates.length) candidates = pool;
+  if (!input.theme && count === 1) {
+    const scenes = candidates.filter((a) => !CLOSE_UP_THEMES.includes(a.theme));
+    if (scenes.length) candidates = scenes;
+  }
+  const fresh = candidates.filter((a) => !a.recent);
+
+  if (!input.theme && count > 1) {
+    // Beste thema met genoeg verse beelden; anders gemengd.
+    const groups = new Map<SocialTheme, Scored[]>();
+    for (const a of fresh) groups.set(a.theme, [...(groups.get(a.theme) ?? []), a]);
+    const best = [...groups.values()]
+      .filter((l) => l.length >= count)
+      .sort((la, lb) => {
+        const avg = (l: Scored[]) => l.slice(0, count).reduce((t, x) => t + x.score, 0) / count;
+        return avg(lb) - avg(la) || rng() - 0.5;
+      })[0];
+    if (best) return { ids: best.slice(0, count).map((a) => a.id), theme: best[0].theme };
+  }
+
+  const chosen = [...fresh, ...candidates.filter((a) => a.recent)].slice(0, count);
+  const theme = chosen.length && chosen.every((a) => a.theme === chosen[0].theme) ? chosen[0].theme : "mixed";
+  return { ids: chosen.map((a) => a.id), theme };
 }

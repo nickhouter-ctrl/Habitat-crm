@@ -17,12 +17,13 @@ import { assets, socialAssetUsage, socialPosts } from "@/lib/db/schema";
 import { sendEmail } from "@/lib/email";
 import { marketingStorage } from "@/lib/marketing/storage";
 
-import { fallbackCaption, generateCaption, reviseCaption, videoPrompt } from "./caption";
+import { fallbackCaption, generateCaption, interpretPostChange, reviseCaption, videoPrompt, type PostChange } from "./caption";
 import { SOCIAL_TIME_ZONE, socialConfig } from "./config";
 import { socialWeekEmail } from "./email";
 import { higgsfieldConfigured, pollVideoJob, submitImageToVideo } from "./higgsfield";
 import { brandVideo, prepareSocialImage, type SocialFormat } from "./image-prep";
-import { madridDay, planWeek, shiftDate, type PlannerAsset } from "./planner";
+import { CAROUSEL_MAX, madridDay, pickAssets, planWeek, shiftDate, type PlannerAsset } from "./planner";
+import { isSocialTheme } from "./themes";
 import { createDraftPost, schedulePost, updateDraftPost, uploadMedia, zernioAccounts, zernioConfigured, type ZernioPostInput } from "./zernio";
 
 export type SocialPostRow = typeof socialPosts.$inferSelect;
@@ -184,6 +185,26 @@ async function makeCaption(post: SocialPostRow): Promise<string> {
   return ai ?? fallbackCaption(post.theme, post.kind);
 }
 
+/**
+ * Bronbeeld voor de Reel: bijgesneden tot 9:16 (zonder merk; dat komt op de
+ * video zelf), want het videomodel neemt het formaat van het beeld over. Het
+ * bijgesneden beeld gaat via Zernio-media naar een publieke URL; lukt dat niet,
+ * dan het originele beeld.
+ */
+async function reelSourceUrl(post: SocialPostRow, original: string | null): Promise<string> {
+  if (!original) throw new Error("Bronbeeld heeft geen publieke URL.");
+  if (!zernioConfigured()) return original;
+  try {
+    const res = await fetch(original, { cache: "no-store" });
+    if (!res.ok) return original;
+    const cropped = await prepareSocialImage(new Uint8Array(await res.arrayBuffer()), "story", { brand: false });
+    return await uploadMedia(cropped, `habitat-${post.plannedDate}-reel-bron.jpg`, "image/jpeg");
+  } catch (err) {
+    console.warn("[social] 9:16-bronbeeld mislukt, origineel gebruikt:", err);
+    return original;
+  }
+}
+
 /** Caption, video-job en Zernio-concept voor één post. Fouten → post.error. */
 export async function prepareDraft(id: string): Promise<void> {
   let post = await getPost(id);
@@ -200,8 +221,7 @@ export async function prepareDraft(id: string): Promise<void> {
   if (post.kind === "video" && needsVideo(post) && !post.videoJob && higgsfieldConfigured() && post.videoSourceAssetId) {
     try {
       const [source] = await assetRows([post.videoSourceAssetId]);
-      const imageUrl = assetUrl(source?.storagePath);
-      if (!imageUrl) throw new Error("Bronbeeld heeft geen publieke URL.");
+      const imageUrl = await reelSourceUrl(post, assetUrl(source?.storagePath));
       const prompt = videoPrompt(post.theme);
       const job = await submitImageToVideo(imageUrl, prompt, socialConfig().videoSeconds);
       [post] = await db
@@ -368,13 +388,84 @@ export async function regenerateCaption(id: string): Promise<void> {
   });
 }
 
-/** Aanpassing doorgeven: de AI herschrijft de caption volgens de aanwijzing. */
+/**
+ * Aanpassing doorgeven: de AI leest wat de eigenaar wil. Foto's wisselen of
+ * aanvullen ("voeg meer foto's toe", "andere foto's", "zwembad") én/of de
+ * tekst aanpassen ("korter"). Nieuwe foto's → ook een nieuwe caption.
+ */
 export async function reviseCaptionWithInstruction(id: string, instruction: string): Promise<void> {
   const post = await getPost(id);
   assertEditable(post);
+  const change = await interpretPostChange(instruction, { kind: post.kind, photoCount: post.assetIds.length, theme: post.theme });
+  if (change.photos !== "keep" && post.kind !== "video") {
+    await changePhotos(id, change);
+    return;
+  }
+  if (change.photos !== "keep" && post.kind === "video") {
+    throw new Error("Bij een videopost wissel je de video via \"Video koppelen\"; de tekst kan ik wel aanpassen.");
+  }
   const caption = await reviseCaption(post.caption, instruction);
   if (!caption) throw new Error("De AI kon de tekst nu niet aanpassen; probeer het opnieuw of pas hem zelf aan.");
   const [updated] = await db.update(socialPosts).set({ caption, status: "draft" }).where(eq(socialPosts.id, id)).returning();
+  await syncZernioDraft(updated).catch(async (err) => {
+    await db.update(socialPosts).set({ error: `Zernio: ${errorText(err)}` }).where(eq(socialPosts.id, id));
+  });
+}
+
+/** Andere / meer / minder foto's voor een (foto- of carrousel)post, met verse caption. */
+export async function changePhotos(id: string, change: Pick<PostChange, "photos" | "count" | "theme" | "captionInstruction">): Promise<void> {
+  const post = await getPost(id);
+  assertEditable(post);
+  if (post.kind === "video") throw new Error("Bij een videopost wissel je de video via \"Video koppelen\".");
+  const config = socialConfig();
+  const current = post.assetIds;
+  const wantedTheme = change.theme && isSocialTheme(change.theme) ? change.theme : null;
+  const base = {
+    assets: await plannerAssets(),
+    excludeKeywords: config.excludeKeywords,
+    reuseCutoff: shiftDate(post.plannedDate, -config.reuseAfterDays),
+    seed: `${post.id}:${Date.now()}`,
+  };
+
+  let ids: string[];
+  let theme: string = post.theme;
+  if (change.photos === "fewer") {
+    ids = current.slice(0, Math.max(1, change.count ?? current.length - 1));
+  } else if (change.photos === "more") {
+    const target = Math.min(CAROUSEL_MAX, Math.max(change.count ?? current.length + 2, current.length + 1, 3));
+    const extra = pickAssets({
+      ...base,
+      count: target - current.length,
+      theme: wantedTheme ?? (isSocialTheme(post.theme) ? post.theme : null),
+      avoidIds: current,
+    });
+    ids = [...current, ...extra.ids];
+    if (wantedTheme) theme = wantedTheme;
+  } else {
+    // Andere foto's: zelfde aantal (of het gevraagde), andere beelden; zonder thema ook een ander onderwerp.
+    const picked = pickAssets({ ...base, count: change.count ?? Math.max(1, current.length), theme: wantedTheme, avoidIds: current });
+    ids = picked.ids;
+    theme = picked.theme;
+  }
+  if (!ids.length) throw new Error("Geen geschikte andere foto's gevonden in de beeldbibliotheek.");
+  const kind = post.kind === "howto" && ids.length > 1 ? "howto" : ids.length > 1 ? "carousel" : "single";
+
+  let [updated] = await db.transaction(async (tx) => {
+    await tx.delete(socialAssetUsage).where(eq(socialAssetUsage.postId, id));
+    await tx
+      .insert(socialAssetUsage)
+      .values(ids.map((assetId) => ({ assetId, postId: id, usedOn: post.plannedDate })))
+      .onConflictDoNothing();
+    return tx
+      .update(socialPosts)
+      .set({ assetIds: ids, kind, theme, zernioMediaUrls: null, status: "draft", error: null })
+      .where(eq(socialPosts.id, id))
+      .returning();
+  });
+
+  let caption = await makeCaption(updated);
+  if (change.captionInstruction) caption = (await reviseCaption(caption, change.captionInstruction)) ?? caption;
+  [updated] = await db.update(socialPosts).set({ caption }).where(eq(socialPosts.id, id)).returning();
   await syncZernioDraft(updated).catch(async (err) => {
     await db.update(socialPosts).set({ error: `Zernio: ${errorText(err)}` }).where(eq(socialPosts.id, id));
   });

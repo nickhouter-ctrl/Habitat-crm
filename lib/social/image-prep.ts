@@ -10,11 +10,13 @@
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 
-export type SocialFormat = "portrait" | "square";
+export type SocialFormat = "portrait" | "square" | "story";
 
 export const FORMAT_SIZE: Record<SocialFormat, { width: number; height: number }> = {
   portrait: { width: 1080, height: 1350 },
   square: { width: 1080, height: 1080 },
+  /** 9:16 — bronbeeld voor de Reel (het videomodel neemt het formaat van het beeld over). */
+  story: { width: 1080, height: 1920 },
 };
 
 export interface CropBox {

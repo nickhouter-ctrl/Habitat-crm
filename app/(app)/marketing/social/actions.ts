@@ -14,6 +14,7 @@ import {
   approvePost,
   attachVideo,
   buildWeek,
+  changePhotos,
   pollVideoJobs,
   regenerateCaption,
   rejectPost,
@@ -83,6 +84,12 @@ export async function reviseCaptionAction(postId: string, instruction: string): 
   const parsed = z.string().trim().min(2, "Schrijf wat er anders moet.").max(500, "Houd de aanwijzing kort (max 500 tekens).").safeParse(instruction);
   if (!parsed.success) return parsed.error.issues[0]?.message ?? "Ongeldige invoer.";
   return run(() => reviseCaptionWithInstruction(id.parse(postId), parsed.data));
+}
+
+/** Andere foto's voor deze post (zelfde aantal, andere beelden, verse tekst). */
+export async function swapPhotosAction(postId: string): Promise<string | null> {
+  await requireModule("advertenties");
+  return run(() => changePhotos(id.parse(postId), { photos: "replace", count: null, theme: null, captionInstruction: null }));
 }
 
 export async function saveCaptionAction(postId: string, caption: string, publishTime: string): Promise<string | null> {

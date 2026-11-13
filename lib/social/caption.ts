@@ -262,6 +262,83 @@ export async function reviseCaption(current: string, instruction: string): Promi
   }
 }
 
+/** Wat de eigenaar met een post wil: foto's wisselen/aanvullen en/of de tekst aanpassen. */
+export interface PostChange {
+  photos: "keep" | "replace" | "more" | "fewer";
+  /** Gewenst aantal foto's (1–5), als genoemd. */
+  count: number | null;
+  /** Gewenst thema (een van THEME_LABELS-sleutels), als genoemd. */
+  theme: string | null;
+  /** Wat er aan de tekst moet veranderen (los van de foto's), of null. */
+  captionInstruction: string | null;
+}
+
+const THEME_KEYS = ["installation", "texture", "column", "shower", "bathroom", "kitchen", "curved", "outdoor", "benefit", "interior", "product", "general"];
+
+/** Zonder AI: herken de gangbare foto-verzoeken in het Nederlands, Engels en Spaans. */
+export function heuristicPostChange(instruction: string): PostChange {
+  const t = instruction.toLowerCase();
+  const num = t.match(/\b([1-5])\b/);
+  const photoWord = /(foto|beeld|plaatje|afbeelding|photo|picture|image|imagen|fotos)/.test(t);
+  let photos: PostChange["photos"] = "keep";
+  if (photoWord && /(meer|extra|toevoeg|erbij|more|add|añad|más)/.test(t)) photos = "more";
+  else if (photoWord && /(minder|weg|less|fewer|menos|alleen de eerste)/.test(t)) photos = "fewer";
+  else if (/(andere|nieuwe|ander|other|different|new|otra|distint)/.test(t) && (photoWord || /\bpost\b/.test(t))) photos = "replace";
+  const textWord = /(tekst|caption|zin|korter|langer|toon|text|shorter|longer|texto|showroom|hashtag)/.test(t);
+  return {
+    photos,
+    count: num ? Number(num[1]) : null,
+    theme: null,
+    captionInstruction: photos === "keep" || textWord ? instruction : null,
+  };
+}
+
+export function parsePostChange(text: string, instruction: string): PostChange | null {
+  try {
+    const raw = JSON.parse(stripFences(text)) as Partial<Record<keyof PostChange, unknown>>;
+    const photos = ["keep", "replace", "more", "fewer"].includes(String(raw.photos)) ? (raw.photos as PostChange["photos"]) : "keep";
+    const n = Number(raw.count);
+    const theme = typeof raw.theme === "string" && THEME_KEYS.includes(raw.theme) ? raw.theme : null;
+    const ci = typeof raw.captionInstruction === "string" && raw.captionInstruction.trim() ? raw.captionInstruction.trim().slice(0, 500) : null;
+    return {
+      photos,
+      count: Number.isInteger(n) && n >= 1 && n <= 5 ? n : null,
+      theme,
+      captionInstruction: photos === "keep" ? (ci ?? instruction) : ci,
+    };
+  } catch {
+    return null;
+  }
+}
+
+/** Lees uit de aanwijzing van de eigenaar wat er moet gebeuren (AI, met vaste regels als vangnet). */
+export async function interpretPostChange(instruction: string, current: { kind: SocialPostKind; photoCount: number; theme: string }): Promise<PostChange> {
+  const key = process.env.ANTHROPIC_API_KEY;
+  if (!key) return heuristicPostChange(instruction);
+  const prompt = `A social media post currently has ${current.photoCount} photo(s), kind "${current.kind}", theme "${current.theme}".
+The owner gives this instruction (often in Dutch): "${instruction}".
+Decide what to change. Reply with ONLY a JSON object:
+{"photos": "keep" | "replace" | "more" | "fewer", "count": number 1-5 or null, "theme": one of ${JSON.stringify(THEME_KEYS)} or null, "captionInstruction": string or null}
+- "replace" = other/different/new photos (or "a different post"); "more" = add photos; "fewer" = remove photos; otherwise "keep".
+- count = the total number of photos wanted if stated or implied, else null.
+- theme only if the owner names a subject (e.g. pool/outdoor, bathroom, kitchen, columns, curved walls, shower, interior, installation).
+- captionInstruction = the part of the instruction about the text, rewritten as a short English instruction; null if the instruction is only about photos. If photos change the caption is rewritten anyway.`;
+  try {
+    const res = await fetch(API_URL, {
+      method: "POST",
+      headers: { "x-api-key": key, "anthropic-version": "2023-06-01", "content-type": "application/json" },
+      body: JSON.stringify({ model: MODEL, max_tokens: 300, temperature: 0, messages: [{ role: "user", content: prompt }] }),
+      cache: "no-store",
+    });
+    if (!res.ok) return heuristicPostChange(instruction);
+    const data = (await res.json()) as { content?: { type: string; text?: string }[] };
+    const text = (data.content ?? []).filter((b) => b.type === "text" && b.text).map((b) => b.text!).join("\n");
+    return parsePostChange(text, instruction) ?? heuristicPostChange(instruction);
+  } catch {
+    return heuristicPostChange(instruction);
+  }
+}
+
 /** Prompt voor de AI-video (Higgsfield image-to-video): uitleggend, villa-stijl, geen tekst in beeld. */
 export function videoPrompt(theme: string): string {
   const subject: Record<string, string> = {
