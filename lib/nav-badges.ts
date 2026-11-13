@@ -1,18 +1,18 @@
 /**
  * Badge-tellers voor de navigatie (zijbalk + starttegels): open aanvragen,
  * nieuwe mails, inkoopfacturen die op goedkeuring wachten en klanten die op
- * onze opvolgmail reageerden.
+ * onze opvolgmail reageerden, en social-posts die op akkoord wachten.
  *
  * De vroegere "te betalen inkoop"-badge op /inkooporders is bewust weg:
  * betaalstatus van inkoop leeft alleen in Holded (keuze Nick 24-08-2026).
  */
 import "server-only";
-import { and, count, eq, isNull, sql } from "drizzle-orm";
+import { and, count, eq, gte, isNull, sql } from "drizzle-orm";
 
 import { magPad } from "@/lib/auth/modules";
 import { voorstelZichtbaarVoor, mailZichtbaarVoor } from "@/lib/mail-visibility";
 import { db } from "@/lib/db";
-import { workerWeekSheets, workerLumpInvoices, emailInbox, inboxSuggestions, purchaseInvoiceReviews, quoteRequests, staffMessages } from "@/lib/db/schema";
+import { workerWeekSheets, workerLumpInvoices, emailInbox, inboxSuggestions, purchaseInvoiceReviews, quoteRequests, staffMessages, socialPosts } from "@/lib/db/schema";
 import { openVoorstellenFilter } from "@/lib/assistant/achterhaald";
 import { telAntwoordNodig } from "@/lib/followup-checklist-data";
 import { gewoneAanvragen } from "@/lib/aanvraag-selectie";
@@ -23,7 +23,7 @@ export async function verzamelNavBadges(rol?: string, userEmail?: string | null,
   const mag = (pad: string) => rol === undefined || magPad(rol, pad);
   const nul = [{ value: 0 }];
 
-  const [[pending], [inboxNew], [teKeuren], [suggestions], antwoordNodig, [teamUnread], [weekPending], [invoicePending], [lumpPending]] = await Promise.all([
+  const [[pending], [inboxNew], [teKeuren], [suggestions], antwoordNodig, [teamUnread], [weekPending], [invoicePending], [lumpPending], [socialPending]] = await Promise.all([
     mag("/aanvragen")
       ? db.select({ value: count() }).from(quoteRequests).where(and(gewoneAanvragen, eq(quoteRequests.status, "pending")))
       : nul,
@@ -51,6 +51,10 @@ export async function verzamelNavBadges(rol?: string, userEmail?: string | null,
     mag("/inkooporders") ? db.select({value:count()}).from(workerWeekSheets).where(and(eq(workerWeekSheets.invoiceStatus,"submitted"),eq(workerWeekSheets.status,"approved"))) : nul,
     // Facturen zonder uren wachten op dezelfde plek als weekstaten op controle.
     mag("/projects") ? db.select({value:count()}).from(workerLumpInvoices).where(eq(workerLumpInvoices.status,"submitted")) : nul,
+    // Social-posts die nog op akkoord wachten (vandaag of later gepland).
+    mag("/marketing/social")
+      ? db.select({ value: count() }).from(socialPosts).where(and(eq(socialPosts.status, "draft"), gte(socialPosts.plannedDate, sql`current_date`)))
+      : nul,
   ]);
   return {
     "/assistent": suggestions?.value ?? 0,
@@ -61,5 +65,6 @@ export async function verzamelNavBadges(rol?: string, userEmail?: string | null,
     "/projects": (weekPending?.value ?? 0) + (lumpPending?.value ?? 0),
     "/opvolging": antwoordNodig,
     "/teamberichten": teamUnread?.value ?? 0,
+    "/marketing/social": socialPending?.value ?? 0,
   };
 }
