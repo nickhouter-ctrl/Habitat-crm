@@ -49,6 +49,13 @@ export function needsVideo(post: Pick<SocialPostRow, "kind" | "videoUrl" | "vide
 
 /* ------------------------------------------------------------- bibliotheek */
 
+/** Tag op beelden die met AI zijn gemaakt (Codex/ChatGPT, Higgsfield): de post krijgt dan het AI-label. */
+export const AI_ASSET_TAG = "ai-generated";
+
+function usesAiAssets(ids: string[], byId: Map<string, PlannerAsset>): boolean {
+  return ids.some((id) => byId.get(id)?.tags?.includes(AI_ASSET_TAG));
+}
+
 /** Alle bruikbare beelden + wanneer ze voor het laatst in een social-post zaten. */
 async function plannerAssets(): Promise<PlannerAsset[]> {
   const lastUse = db
@@ -95,10 +102,12 @@ export async function buildWeek(weekStart: string, now = new Date()): Promise<Bu
   const weekdays = config.weekdays.filter((d) => shiftDate(weekStart, d - 1) > today);
   // Plan de hele week (zelfde soortenverdeling als altijd) en houd alleen de
   // dagen over die nog geen post hebben — zo vult dit ook een gat op.
+  const libraryAssets = await plannerAssets();
+  const assetsById = new Map(libraryAssets.map((a) => [a.id, a]));
   const plan = planWeek({
     weekStart,
     weekdays,
-    assets: await plannerAssets(),
+    assets: libraryAssets,
     reuseAfterDays: config.reuseAfterDays,
     excludeKeywords: config.excludeKeywords,
   }).filter((p) => missing.includes(p.plannedDate));
@@ -117,6 +126,7 @@ export async function buildWeek(weekStart: string, now = new Date()): Promise<Bu
           kind: p.kind,
           assetIds: p.assetIds,
           videoSourceAssetId: p.videoSourceAssetId,
+          aiGenerated: usesAiAssets([...p.assetIds, ...(p.videoSourceAssetId ? [p.videoSourceAssetId] : [])], assetsById),
           caption: "",
         })
         .onConflictDoNothing({ target: socialPosts.plannedDate })
@@ -420,8 +430,9 @@ export async function changePhotos(id: string, change: Pick<PostChange, "photos"
   const config = socialConfig();
   const current = post.assetIds;
   const wantedTheme = change.theme && isSocialTheme(change.theme) ? change.theme : null;
+  const libraryAssets = await plannerAssets();
   const base = {
-    assets: await plannerAssets(),
+    assets: libraryAssets,
     excludeKeywords: config.excludeKeywords,
     reuseCutoff: shiftDate(post.plannedDate, -config.reuseAfterDays),
     seed: `${post.id}:${Date.now()}`,
@@ -458,7 +469,15 @@ export async function changePhotos(id: string, change: Pick<PostChange, "photos"
       .onConflictDoNothing();
     return tx
       .update(socialPosts)
-      .set({ assetIds: ids, kind, theme, zernioMediaUrls: null, status: "draft", error: null })
+      .set({
+        assetIds: ids,
+        kind,
+        theme,
+        aiGenerated: usesAiAssets(ids, new Map(libraryAssets.map((a) => [a.id, a]))),
+        zernioMediaUrls: null,
+        status: "draft",
+        error: null,
+      })
       .where(eq(socialPosts.id, id))
       .returning();
   });
