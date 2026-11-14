@@ -4,6 +4,7 @@
  */
 import Link from "next/link";
 
+import { AdPreview } from "@/components/ad-preview";
 import { AutoRefresh } from "@/components/auto-refresh";
 import {
   Badge,
@@ -20,7 +21,7 @@ import {
 } from "@/components/ui";
 import { tekst as uiTranslation } from "@/lib/i18n/server";
 import { metaErrorMessage } from "@/lib/meta/client";
-import { getLiveStats, parsePeriod, PERIODS, type LiveStats } from "@/lib/meta/live-stats";
+import { getLiveStats, parsePeriod, PERIODS, type AdCard, type LiveStats } from "@/lib/meta/live-stats";
 import { formatEUR } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
@@ -47,6 +48,83 @@ function statusBadge(status: string) {
   if (status === "PENDING_REVIEW" || status === "IN_PROCESS") return <Badge tone="warning">in beoordeling</Badge>;
   if (status === "DISAPPROVED" || status === "WITH_ISSUES") return <Badge tone="danger">probleem</Badge>;
   return <Badge>{status.toLowerCase() || "—"}</Badge>;
+}
+
+function dateRange(start: string | null, stop: string | null): string {
+  const f = (d: string) => new Date(d).toLocaleDateString("nl-NL", { day: "numeric", month: "short" });
+  if (!start) return "—";
+  return stop && stop !== start ? `${f(start)} – ${f(stop)}` : f(start);
+}
+
+function AdCardView({
+  ad,
+  uiT,
+  periodLabel,
+}: {
+  ad: AdCard;
+  uiT: (s: string) => string;
+  /** Alleen bij lopende advertenties: cijfers van de gekozen periode tonen. */
+  periodLabel?: string;
+}) {
+  const L = ad.lifetime;
+  return (
+    <Card className="flex flex-col gap-3 p-4">
+      <div className="flex flex-wrap items-start justify-between gap-2">
+        <div className="min-w-0">
+          <p className="truncate font-semibold">{ad.name}</p>
+          <p className="text-xs text-muted">
+            {ad.campaign} · {dateRange(L.start, L.stop)}
+          </p>
+        </div>
+        {statusBadge(ad.status)}
+      </div>
+      {ad.preview ? (
+        <AdPreview
+          images={ad.preview.images}
+          caption={ad.preview.caption}
+          likes={ad.preview.likes}
+          comments={ad.preview.comments}
+          cta={ad.preview.cta}
+        />
+      ) : (
+        <p className="text-sm text-muted">{uiT("Geen voorvertoning beschikbaar.")}</p>
+      )}
+      {periodLabel && (
+        <div>
+          <p className="mb-1 text-xs font-medium text-muted">{periodLabel}</p>
+          <dl className="grid grid-cols-4 gap-2 text-sm">
+            <div><dt className="text-xs text-muted">{uiT("Weergaven")}</dt><dd className="font-medium">{nl(ad.impressions)}</dd></div>
+            <div><dt className="text-xs text-muted">{uiT("Klikken")}</dt><dd className="font-medium">{nl(ad.clicks)}</dd></div>
+            <div><dt className="text-xs text-muted">{uiT("Leads")}</dt><dd className="font-medium">{nl(ad.leads)}</dd></div>
+            <div><dt className="text-xs text-muted">{uiT("Uitgegeven")}</dt><dd className="font-medium">{formatEUR(ad.spend.toFixed(2))}</dd></div>
+          </dl>
+        </div>
+      )}
+      <div>
+        <p className="mb-1 text-xs font-medium text-muted">{uiT("Totaal sinds de start")}</p>
+        <dl className="grid grid-cols-3 gap-2 text-sm sm:grid-cols-6">
+          <div><dt className="text-xs text-muted">{uiT("Bereik")}</dt><dd className="font-medium">{nl(L.reach)}</dd></div>
+          <div><dt className="text-xs text-muted">{uiT("Weergaven")}</dt><dd className="font-medium">{nl(L.impressions)}</dd></div>
+          <div><dt className="text-xs text-muted">{uiT("Klikken")}</dt><dd className="font-medium">{nl(L.clicks)}</dd></div>
+          <div><dt className="text-xs text-muted">{uiT("Leads")}</dt><dd className="font-medium">{nl(L.leads)}</dd></div>
+          <div><dt className="text-xs text-muted">{uiT("Uitgegeven")}</dt><dd className="font-medium">{formatEUR(L.spend.toFixed(2))}</dd></div>
+          <div><dt className="text-xs text-muted">{uiT("Per klik")}</dt><dd className="font-medium">{L.clicks ? formatEUR((L.spend / L.clicks).toFixed(2)) : "—"}</dd></div>
+        </dl>
+      </div>
+      <div className="flex flex-wrap gap-3 text-sm">
+        {ad.previewLink && (
+          <a href={ad.previewLink} target="_blank" rel="noreferrer" className="text-accent underline-offset-2 hover:underline">
+            {uiT("Voorvertoning bij Meta")}
+          </a>
+        )}
+        {ad.preview?.permalink && (
+          <a href={ad.preview.permalink} target="_blank" rel="noreferrer" className="text-accent underline-offset-2 hover:underline">
+            {uiT("Post op Instagram")}
+          </a>
+        )}
+      </div>
+    </Card>
+  );
 }
 
 export default async function AdvertentiesLivePage({
@@ -96,59 +174,9 @@ export default async function AdvertentiesLivePage({
           {stats.activeAds.length > 0 && (
             <section className="space-y-3">
               <h2 className="text-sm font-semibold uppercase tracking-wide text-muted">{uiT("Nu actief")}</h2>
-              <div className="grid gap-4 lg:grid-cols-2">
+              <div className="grid gap-4 md:grid-cols-2 2xl:grid-cols-3">
                 {stats.activeAds.map((ad) => (
-                  <Card key={ad.id} className="p-4">
-                    <div className="mb-3 flex flex-wrap items-start justify-between gap-2">
-                      <div>
-                        <p className="font-semibold">{ad.name}</p>
-                        <p className="text-xs text-muted">{ad.campaign}</p>
-                      </div>
-                      {statusBadge(ad.status)}
-                    </div>
-                    <div className="grid gap-3 sm:grid-cols-2">
-                      {[
-                        { label: "Instagram", src: ad.instagramPreview },
-                        { label: "Facebook", src: ad.facebookPreview },
-                      ].map((v) => (
-                        <div key={v.label}>
-                          <p className="mb-1 text-xs font-medium text-muted">{v.label}</p>
-                          {v.src ? (
-                            <iframe
-                              src={v.src}
-                              title={`${ad.name} – ${v.label}`}
-                              className="h-[560px] w-full rounded-lg border bg-white"
-                              loading="lazy"
-                              scrolling="no"
-                            />
-                          ) : ad.thumbnail ? (
-                            // eslint-disable-next-line @next/next/no-img-element -- Meta-CDN
-                            <img src={ad.thumbnail} alt="" className="w-full rounded-lg border object-cover" />
-                          ) : (
-                            <p className="text-sm text-muted">{uiT("Geen voorvertoning beschikbaar.")}</p>
-                          )}
-                        </div>
-                      ))}
-                    </div>
-                    <dl className="mt-3 grid grid-cols-4 gap-2 text-sm">
-                      <div><dt className="text-xs text-muted">{uiT("Weergaven")}</dt><dd className="font-medium">{nl(ad.impressions)}</dd></div>
-                      <div><dt className="text-xs text-muted">{uiT("Klikken")}</dt><dd className="font-medium">{nl(ad.clicks)}</dd></div>
-                      <div><dt className="text-xs text-muted">{uiT("Leads")}</dt><dd className="font-medium">{nl(ad.leads)}</dd></div>
-                      <div><dt className="text-xs text-muted">{uiT("Uitgegeven")}</dt><dd className="font-medium">{formatEUR(ad.spend.toFixed(2))}</dd></div>
-                    </dl>
-                    <div className="mt-3 flex flex-wrap gap-3 text-sm">
-                      {ad.previewLink && (
-                        <a href={ad.previewLink} target="_blank" rel="noreferrer" className="text-accent underline-offset-2 hover:underline">
-                          {uiT("Voorvertoning openen bij Meta")}
-                        </a>
-                      )}
-                      {ad.instagramUrl && (
-                        <a href={ad.instagramUrl} target="_blank" rel="noreferrer" className="text-accent underline-offset-2 hover:underline">
-                          {uiT("Post op Instagram")}
-                        </a>
-                      )}
-                    </div>
-                  </Card>
+                  <AdCardView key={ad.id} ad={ad} uiT={uiT} periodLabel={uiT(PERIODS[period])} />
                 ))}
               </div>
             </section>
@@ -253,6 +281,17 @@ export default async function AdvertentiesLivePage({
                 ))}
               </div>
             </Card>
+          )}
+
+          {stats.pastAds.length > 0 && (
+            <section className="space-y-3">
+              <h2 className="text-sm font-semibold uppercase tracking-wide text-muted">{uiT("Eerdere advertenties")}</h2>
+              <div className="grid gap-4 md:grid-cols-2 2xl:grid-cols-3">
+                {stats.pastAds.map((ad) => (
+                  <AdCardView key={ad.id} ad={ad} uiT={uiT} />
+                ))}
+              </div>
+            </section>
           )}
 
           <Card>

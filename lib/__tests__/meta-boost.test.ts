@@ -74,3 +74,26 @@ describe("periodQuery", () => {
     expect(periodQuery("today")).toEqual({ date_preset: "today" });
   });
 });
+
+import { mediaImages, splitAds } from "@/lib/meta/live-stats";
+
+describe("ad cards", () => {
+  it("splits running and past ads", () => {
+    const r = splitAds([{ status: "ACTIVE" }, { status: "PAUSED" }, { status: "PENDING_REVIEW" }, { status: "ADSET_PAUSED" }]);
+    expect(r.active.map((a) => a.status)).toEqual(["ACTIVE", "PENDING_REVIEW"]);
+    expect(r.past.map((a) => a.status)).toEqual(["PAUSED", "ADSET_PAUSED"]);
+  });
+  it("uses carousel children and video thumbnails", () => {
+    expect(mediaImages({ media_type: "CAROUSEL_ALBUM", children: { data: [{ media_type: "IMAGE", media_url: "a" }, { media_type: "VIDEO", thumbnail_url: "b" }] } })).toEqual(["a", "b"]);
+    expect(mediaImages({ media_type: "VIDEO", thumbnail_url: "t" })).toEqual(["t"]);
+  });
+});
+
+import { postImageList } from "@/lib/meta/live-stats";
+
+describe("postImageList", () => {
+  it("prefers carousel subattachments", () => {
+    expect(postImageList({ attachments: { data: [{ subattachments: { data: [{ media: { image: { src: "1" } } }, { media: { image: { src: "2" } } }] } }] } })).toEqual(["1", "2"]);
+    expect(postImageList({ full_picture: "f" })).toEqual(["f"]);
+  });
+});

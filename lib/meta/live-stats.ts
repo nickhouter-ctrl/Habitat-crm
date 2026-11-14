@@ -129,25 +129,72 @@ export type InstagramStats = {
   recent: InstagramPost[];
 };
 
-const PREVIEW_TTL_MS = 60 * 60 * 1000;
-const previewCache = new Map<string, { src: string; until: number }>();
+type IgMedia = {
+  media_type?: string;
+  media_url?: string;
+  thumbnail_url?: string;
+  caption?: string;
+  like_count?: number;
+  comments_count?: number;
+  permalink?: string;
+  children?: { data?: { media_url?: string; media_type?: string; thumbnail_url?: string }[] };
+};
 
-export type ActiveAd = Metrics & {
+type FbPost = {
+  full_picture?: string;
+  attachments?: { data?: { media?: { image?: { src?: string } }; subattachments?: { data?: { media?: { image?: { src?: string } } }[] } }[] };
+};
+
+/** Alle beelden van een Facebook-post (carrouselkaarten, anders de hoofdfoto). */
+export function postImageList(p: FbPost): string[] {
+  const att = p.attachments?.data?.[0];
+  const kids = (att?.subattachments?.data ?? []).map((d) => d.media?.image?.src).filter(Boolean) as string[];
+  if (kids.length) return kids;
+  const one = att?.media?.image?.src ?? p.full_picture;
+  return one ? [one] : [];
+}
+
+/** Beelden van een Instagram-post; bij een carrousel alle kaarten, bij video de thumbnail. */
+export function mediaImages(m: IgMedia): string[] {
+  const pick = (x: { media_url?: string; media_type?: string; thumbnail_url?: string }) =>
+    x.media_type === "VIDEO" ? (x.thumbnail_url ?? null) : (x.media_url ?? null);
+  const kids = (m.children?.data ?? []).map(pick).filter(Boolean) as string[];
+  if (kids.length) return kids;
+  const one = pick(m);
+  return one ? [one] : [];
+}
+
+export type AdPreview = {
+  images: string[];
+  caption: string;
+  likes: number;
+  comments: number;
+  permalink: string | null;
+  cta: string | null;
+};
+
+export type AdCard = Metrics & {
   id: string;
   name: string;
   campaign: string;
   status: string;
-  thumbnail: string | null;
   previewLink: string | null;
-  instagramUrl: string | null;
-  /** iframe-src van Meta's eigen voorvertoning. */
-  instagramPreview: string | null;
-  facebookPreview: string | null;
+  preview: AdPreview | null;
+  /** Totaal sinds de start (los van de gekozen periode). */
+  lifetime: Metrics & { start: string | null; stop: string | null };
 };
+
+const ACTIVE_STATES = new Set(["ACTIVE", "PENDING_REVIEW", "IN_PROCESS"]);
+
+/** Splits advertenties in lopend en eerder (gepauzeerd/gestopt/afgekeurd). */
+export function splitAds<T extends { status: string }>(ads: T[]): { active: T[]; past: T[] } {
+  return { active: ads.filter((a) => ACTIVE_STATES.has(a.status)), past: ads.filter((a) => !ACTIVE_STATES.has(a.status)) };
+}
 
 export type LiveStats = {
   total: Metrics;
-  activeAds: ActiveAd[];
+  activeAds: AdCard[];
+  pastAds: AdCard[];
   extras: AdExtras;
   facebook: FacebookStats;
   instagram: InstagramStats;
@@ -261,11 +308,11 @@ export async function getLiveStats(period: Period): Promise<LiveStats> {
         effective_status: string;
         preview_shareable_link?: string;
         campaign?: { name?: string };
-        creative?: { thumbnail_url?: string; image_url?: string; instagram_permalink_url?: string };
+        creative?: { thumbnail_url?: string; image_url?: string; effective_instagram_media_id?: string; call_to_action_type?: string; object_story_id?: string };
       }[];
     }>(`/${adAccountPath()}/ads`, {
       query: {
-        fields: "id,name,effective_status,preview_shareable_link,campaign{name},creative{thumbnail_url,image_url,instagram_permalink_url}",
+        fields: "id,name,effective_status,preview_shareable_link,campaign{name},creative{thumbnail_url,image_url,effective_instagram_media_id,call_to_action_type,object_story_id}",
         limit: 200,
       },
     }),
@@ -300,49 +347,101 @@ export async function getLiveStats(period: Period): Promise<LiveStats> {
   };
 
   const adInsight = new Map(adRows.map((r) => [r.ad_id, r]));
-  const previewSrc = async (adId: string, format: string): Promise<string | null> => {
-    const key = `${adId}:${format}`;
-    const hit = previewCache.get(key);
-    if (hit && hit.until > Date.now()) return hit.src;
+  const allAds = (adMeta.data ?? []).slice(0, 30);
+
+  // Totalen per advertentie sinds de start + de echte Instagram-post erachter.
+  const [lifetimeRows, mediaById] = await Promise.all([
+    meta
+      .request<{ data?: (Row & { date_start?: string; date_stop?: string })[] }>(`/${adAccountPath()}/insights`, {
+        query: { level: "ad", date_preset: "maximum", fields: `ad_id,${FIELDS}`, limit: 100 },
+      })
+      .then((r) => r.data ?? [])
+      .catch(() => []),
+    (async () => {
+      const ids = [...new Set(allAds.map((a) => a.creative?.effective_instagram_media_id).filter(Boolean))] as string[];
+      if (!ids.length) return {} as Record<string, IgMedia>;
+      // Per post opvragen: het `ids`-batchveld is in nieuwere Graph-versies afgeschaft.
+      const entries = await Promise.all(
+        ids.map(async (id) => {
+          try {
+            const m = await meta.request<IgMedia>(`/${id}`, {
+              query: {
+                fields: "media_type,media_url,thumbnail_url,caption,like_count,comments_count,permalink,children{media_url,media_type,thumbnail_url}",
+              },
+            });
+            return [id, m] as const;
+          } catch {
+            return null;
+          }
+        }),
+      );
+      return Object.fromEntries(entries.filter(Boolean) as (readonly [string, IgMedia])[]);
+    })(),
+  ]);
+  const lifetimeById = new Map(lifetimeRows.map((r) => [r.ad_id, r]));
+
+  // Instagram geeft voor de advertentie-kopie vaak maar één beeld; de
+  // Facebook-post erachter heeft alle carrouselkaarten.
+  const postImages = new Map<string, string[]>();
+  const storyIds = [...new Set(allAds.map((a) => a.creative?.object_story_id).filter(Boolean))] as string[];
+  const pageId = process.env.META_PAGE_ID;
+  if (storyIds.length && pageId) {
     try {
-      const res = await meta.request<{ data?: { body?: string }[] }>(`/${adId}/previews`, { query: { ad_format: format } });
-      const m = res.data?.[0]?.body?.match(/src="([^"]+)"/);
-      const src = m ? m[1].replace(/&amp;/g, "&") : null;
-      // Meta geeft elke call een nieuwe ondertekende URL; cachen voorkomt dat de
-      // iframes bij elke auto-refresh (30 s) opnieuw laden.
-      if (src) previewCache.set(key, { src, until: Date.now() + PREVIEW_TTL_MS });
-      return src;
+      const { access_token: pageToken } = await meta.request<{ access_token?: string }>(`/${pageId}`, {
+        query: { fields: "access_token" },
+      });
+      if (pageToken) {
+        // Eén call per post: het `ids`-batchveld weigert Meta voor paginatokens.
+        await Promise.all(
+          storyIds.map(async (id) => {
+            const r = await fetch(
+              `https://graph.facebook.com/${process.env.META_GRAPH_VERSION ?? "v23.0"}/${id}?` +
+                new URLSearchParams({ fields: "full_picture,attachments{media{image{src}},subattachments{media{image{src}}}}" }),
+              { headers: { authorization: `Bearer ${pageToken}` }, cache: "no-store", signal: AbortSignal.timeout(20_000) },
+            );
+            if (r.ok) postImages.set(id, postImageList((await r.json()) as FbPost));
+          }),
+        );
+      }
     } catch {
-      return null;
+      // voorvertoning valt terug op het Instagram-beeld
     }
-  };
-  const activeAds: ActiveAd[] = await Promise.all(
-    (adMeta.data ?? [])
-      .filter((a) => a.effective_status === "ACTIVE" || a.effective_status === "PENDING_REVIEW" || a.effective_status === "IN_PROCESS")
-      .slice(0, 8)
-      .map(async (a) => {
-        const [instagramPreview, facebookPreview] = await Promise.all([
-          previewSrc(a.id, "INSTAGRAM_STANDARD"),
-          previewSrc(a.id, "MOBILE_FEED_STANDARD"),
-        ]);
+  }
+
+  const cards: AdCard[] = allAds.map((a) => {
+    const media = a.creative?.effective_instagram_media_id ? mediaById[a.creative.effective_instagram_media_id] : undefined;
+    const fbImages = a.creative?.object_story_id ? (postImages.get(a.creative.object_story_id) ?? []) : [];
+    const life = lifetimeById.get(a.id);
+    return {
+      id: a.id,
+      name: a.name,
+      campaign: a.campaign?.name ?? "",
+      status: a.effective_status,
+      previewLink: a.preview_shareable_link ?? null,
+      preview: (() => {
+        const igImages = media ? mediaImages(media) : [];
+        const creativeImage = a.creative?.image_url ?? a.creative?.thumbnail_url;
+        const images = fbImages.length > igImages.length ? fbImages : igImages.length ? igImages : creativeImage ? [creativeImage] : [];
+        if (!images.length) return null;
         return {
-          id: a.id,
-          name: a.name,
-          campaign: a.campaign?.name ?? "",
-          status: a.effective_status,
-          thumbnail: a.creative?.image_url ?? a.creative?.thumbnail_url ?? null,
-          previewLink: a.preview_shareable_link ?? null,
-          instagramUrl: a.creative?.instagram_permalink_url ?? null,
-          instagramPreview,
-          facebookPreview,
-          ...toMetrics(adInsight.get(a.id) ?? {}),
+          images,
+          caption: media?.caption ?? "",
+          likes: media?.like_count ?? 0,
+          comments: media?.comments_count ?? 0,
+          permalink: media?.permalink ?? null,
+          cta: a.creative?.call_to_action_type ?? null,
         };
-      }),
-  );
+      })(),
+      lifetime: { ...toMetrics(life ?? {}), start: life?.date_start ?? null, stop: life?.date_stop ?? null },
+      ...toMetrics(adInsight.get(a.id) ?? {}),
+    };
+  });
+  const { active: activeAds, past: pastAds } = splitAds(cards);
 
   return {
     total: toMetrics(totalRows[0] ?? {}),
     activeAds,
+    pastAds,
     extras,
     facebook,
     instagram,
