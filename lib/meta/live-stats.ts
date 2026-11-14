@@ -49,9 +49,26 @@ export function toMetrics(r: Row): Metrics {
 
 const FIELDS = "reach,impressions,inline_link_clicks,spend,actions";
 
+/** YYYY-MM-DD in de tijdzone van het advertentieaccount (Europe/Amsterdam). */
+function ymd(d: Date): string {
+  return new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Amsterdam" }).format(d);
+}
+
+/**
+ * Meta's `last_7d` telt vandaag níet mee (7 volle dagen vóór vandaag) — voor een
+ * live-pagina verwarrend. Daarom "laatste 7 dagen" = vandaag + 6 dagen terug.
+ */
+export function periodQuery(period: Period, now = new Date()): Record<string, string> {
+  if (period === "last_7d") {
+    const since = new Date(now.getTime() - 6 * 24 * 60 * 60 * 1000);
+    return { time_range: JSON.stringify({ since: ymd(since), until: ymd(now) }) };
+  }
+  return { date_preset: period };
+}
+
 async function insights(period: Period, extra: Record<string, string>): Promise<Row[]> {
   const res = await meta.request<{ data?: Row[] }>(`/${adAccountPath()}/insights`, {
-    query: { date_preset: period, limit: 100, ...extra },
+    query: { ...periodQuery(period), limit: 100, ...extra },
   });
   return res.data ?? [];
 }
@@ -60,7 +77,7 @@ export type LiveStats = {
   total: Metrics;
   campaigns: (Metrics & { id: string; name: string; status: string; dailyBudget: number | null })[];
   ads: (Metrics & { id: string; name: string; campaign: string; status: string })[];
-  platforms: { platform: string; impressions: number }[];
+  platforms: (Metrics & { platform: string })[];
   followers: number | null;
 };
 
@@ -69,7 +86,7 @@ export async function getLiveStats(period: Period): Promise<LiveStats> {
     insights(period, { fields: FIELDS }),
     insights(period, { level: "campaign", fields: `campaign_id,campaign_name,${FIELDS}` }),
     insights(period, { level: "ad", fields: `ad_id,ad_name,campaign_name,${FIELDS}` }),
-    insights(period, { fields: "impressions", breakdowns: "publisher_platform" }),
+    insights(period, { fields: FIELDS, breakdowns: "publisher_platform" }),
     meta.request<{ data?: { id: string; name: string; effective_status: string; adsets?: { data?: { daily_budget?: string }[] } }[] }>(
       `/${adAccountPath()}/campaigns`,
       { query: { fields: "id,name,effective_status,adsets{daily_budget}", limit: 50 } },
@@ -120,7 +137,7 @@ export async function getLiveStats(period: Period): Promise<LiveStats> {
       }))
       .sort((a, b) => b.impressions - a.impressions),
     platforms: platformRows
-      .map((r) => ({ platform: r.publisher_platform ?? "?", impressions: Number(r.impressions ?? 0) }))
+      .map((r) => ({ platform: r.publisher_platform ?? "?", ...toMetrics(r) }))
       .sort((a, b) => b.impressions - a.impressions),
     followers,
   };

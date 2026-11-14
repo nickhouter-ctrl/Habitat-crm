@@ -105,22 +105,28 @@ export default async function AdvertentiesLivePage({
           </div>
 
           <Card className="p-5">
-            <h2 className="mb-3 text-sm font-semibold">{uiT("Waar zijn de advertenties gezien?")}</h2>
+            <h2 className="mb-3 text-sm font-semibold">{uiT("Facebook en Instagram")}</h2>
             {stats.platforms.length === 0 ? (
               <p className="text-sm text-muted">{uiT("Nog geen weergaven in deze periode.")}</p>
             ) : (
-              <div className="space-y-2">
+              <div className="grid gap-3 md:grid-cols-2">
                 {stats.platforms.map((p) => {
                   const share = stats!.total.impressions ? (p.impressions / stats!.total.impressions) * 100 : 0;
                   return (
-                    <div key={p.platform} className="flex items-center gap-3 text-sm">
-                      <span className="w-32 shrink-0">{PLATFORM[p.platform] ?? p.platform}</span>
-                      <div className="h-2 flex-1 overflow-hidden rounded-full bg-background">
+                    <div key={p.platform} className="rounded-lg border p-4">
+                      <div className="mb-2 flex items-center justify-between">
+                        <span className="font-semibold">{PLATFORM[p.platform] ?? p.platform}</span>
+                        <span className="text-sm text-muted">{Math.round(share)}% {uiT("van de weergaven")}</span>
+                      </div>
+                      <div className="mb-3 h-2 overflow-hidden rounded-full bg-background">
                         <div className="h-full rounded-full bg-accent" style={{ width: `${share}%` }} />
                       </div>
-                      <span className="w-28 shrink-0 text-right text-muted">
-                        {nl(p.impressions)} ({Math.round(share)}%)
-                      </span>
+                      <dl className="grid grid-cols-4 gap-2 text-sm">
+                        <div><dt className="text-xs text-muted">{uiT("Bereik")}</dt><dd className="font-medium">{nl(p.reach)}</dd></div>
+                        <div><dt className="text-xs text-muted">{uiT("Weergaven")}</dt><dd className="font-medium">{nl(p.impressions)}</dd></div>
+                        <div><dt className="text-xs text-muted">{uiT("Klikken")}</dt><dd className="font-medium">{nl(p.clicks)}</dd></div>
+                        <div><dt className="text-xs text-muted">{uiT("Uitgegeven")}</dt><dd className="font-medium">{formatEUR(p.spend.toFixed(2))}</dd></div>
+                      </dl>
                     </div>
                   );
                 })}

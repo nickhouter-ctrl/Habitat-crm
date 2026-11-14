@@ -64,3 +64,13 @@ describe("live ad stats", () => {
     expect(toMetrics({})).toEqual({ reach: 0, impressions: 0, clicks: 0, leads: 0, spend: 0 });
   });
 });
+
+import { periodQuery } from "@/lib/meta/live-stats";
+
+describe("periodQuery", () => {
+  it("includes today in the last 7 days", () => {
+    const q = periodQuery("last_7d", new Date("2026-11-14T15:00:00Z"));
+    expect(JSON.parse(q.time_range)).toEqual({ since: "2026-11-08", until: "2026-11-14" });
+    expect(periodQuery("today")).toEqual({ date_preset: "today" });
+  });
+});
