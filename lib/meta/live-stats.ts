@@ -470,7 +470,7 @@ export async function getLiveStats(period: Period): Promise<LiveStats> {
 /* ------------------------------------------------------------------ cache */
 
 /** Hoe lang opgehaalde cijfers gedeeld worden tussen alle kijkers/tabbladen. */
-export const LIVE_CACHE_MS = 60_000;
+export const LIVE_CACHE_MS = 5 * 60_000;
 
 const liveCache = new Map<Period, { at: number; data: LiveStats }>();
 const inflight = new Map<Period, Promise<LiveStats>>();
@@ -478,7 +478,7 @@ const inflight = new Map<Period, Promise<LiveStats>>();
 export type CachedLiveStats = { data: LiveStats | null; fetchedAt: number | null; error: string | null };
 
 /**
- * Live-cijfers met een gedeelde cache van een minuut: alle open tabbladen en
+ * Live-cijfers met een gedeelde cache van 5 minuten: alle open tabbladen en
  * gebruikers delen één ophaalronde, zodat we Meta's limiet per advertentie-
  * account niet raken. Weigert Meta (limiet/storing), dan de laatst bekende
  * cijfers mét foutmelding in plaats van een hangende pagina.

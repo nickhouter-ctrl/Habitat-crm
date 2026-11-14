@@ -1,6 +1,6 @@
 /**
  * Marketing → Advertenties live: cijfers rechtstreeks uit Meta (geen opslag),
- * ververst elke minuut. Periode via ?p=today|yesterday|last_7d|this_month|maximum.
+ * ververst elke 5 minuten. Periode via ?p=today|yesterday|last_7d|this_month|maximum.
  */
 import Link from "next/link";
 
@@ -141,10 +141,10 @@ export default async function AdvertentiesLivePage({
 
   return (
     <>
-      <AutoRefresh seconds={60} />
+      <AutoRefresh seconds={300} />
       <PageHeader
         title={uiT("Advertenties live")}
-        subtitle={uiT("Rechtstreeks uit Meta (Facebook + Instagram), ververst elke minuut. Meta loopt zelf een paar minuten achter.")}
+        subtitle={uiT("Rechtstreeks uit Meta (Facebook + Instagram), ververst elke 5 minuten. Meta loopt zelf een paar minuten achter.")}
         actions={
           <div className="flex flex-wrap gap-1.5">
             {(Object.keys(PERIODS) as (keyof typeof PERIODS)[]).map((p) => (
@@ -166,10 +166,10 @@ export default async function AdvertentiesLivePage({
       {error && (
         <div className="mb-4 rounded-lg border border-warning/40 bg-warning/10 px-4 py-3 text-sm">
           {stats
-            ? uiT("Meta laat ons even wachten (te veel aanvragen of storing). Je ziet de cijfers van {v0}; over een minuut probeert de pagina het opnieuw.", {
+            ? uiT("Meta laat ons even wachten (te veel aanvragen of storing). Je ziet de cijfers van {v0}; over een paar minuten probeert de pagina het opnieuw.", {
                 v0: fetchedAt ? fetchedAt.toLocaleTimeString("nl-NL", { hour: "2-digit", minute: "2-digit" }) : "eerder",
               })
-            : uiT("Meta laat ons even wachten (te veel aanvragen of storing). Over een minuut probeert de pagina het opnieuw.")}
+            : uiT("Meta laat ons even wachten (te veel aanvragen of storing). Over een paar minuten probeert de pagina het opnieuw.")}
         </div>
       )}
       {!stats ? (
