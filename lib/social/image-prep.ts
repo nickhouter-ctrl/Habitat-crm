@@ -57,76 +57,61 @@ export function coverCrop(
   return { left, top, width, height };
 }
 
-/** Merk: ~48% van de beeldbreedte, marge 5% van de breedte, linksonder. */
-export const LOCKUP_WIDTH_RATIO = 0.48;
-export const LOCKUP_MARGIN_RATIO = 0.05;
+/**
+ * Officieel Flex-Surfaces-logo (zwart vlak met crème letters, "BY HABITAT-ONE"
+ * eronder) bovenaan in het midden, ~40% van de beeldbreedte. Twee versies: met
+ * zwarte onderregel voor een lichte ondergrond, met crème onderregel (en zachte
+ * schaduw) voor een donkere — gekozen op de helderheid van het beeld daar.
+ */
+export const LOGO_WIDTH_RATIO = 0.4;
+export const LOGO_TOP_RATIO = 0.03;
 
-export function lockupPlacement(
+export function logoPlacement(
   imageWidth: number,
   imageHeight: number,
-  lockupWidth: number,
-  lockupHeight: number,
+  logoWidth: number,
+  logoHeight: number,
 ): { width: number; height: number; left: number; top: number } {
-  const width = Math.round(imageWidth * LOCKUP_WIDTH_RATIO);
-  const height = Math.round((lockupHeight / lockupWidth) * width);
-  const margin = Math.round(imageWidth * LOCKUP_MARGIN_RATIO);
-  return { width, height, left: margin, top: Math.max(0, imageHeight - margin - height) };
+  const width = Math.round(imageWidth * LOGO_WIDTH_RATIO);
+  const height = Math.round((logoHeight / logoWidth) * width);
+  return { width, height, left: Math.round((imageWidth - width) / 2), top: Math.round(imageHeight * LOGO_TOP_RATIO) };
 }
 
-/**
- * Donkere verloopvlek linksonder, zodat het witte merk ook op lichte steen
- * leesbaar blijft: zwart, max ~45% dekking in de hoek, ~75% breed × 30% hoog,
- * zacht uitlopend naar transparant.
- */
-export const SCRIM_MAX_OPACITY = 0.45;
-export const SCRIM_WIDTH_RATIO = 0.75;
-export const SCRIM_HEIGHT_RATIO = 0.3;
+export type LogoVariant = "sub-dark" | "sub-cream";
 
-export function scrimGeometry(imageWidth: number, imageHeight: number): { rx: number; ry: number } {
-  return { rx: Math.round(imageWidth * SCRIM_WIDTH_RATIO), ry: Math.round(imageHeight * SCRIM_HEIGHT_RATIO) };
+/** Gemiddelde helderheid (0–255) onder de onderregel → welke versie leesbaar is. */
+export function logoVariantFor(luminance: number): LogoVariant {
+  return luminance > 140 ? "sub-dark" : "sub-cream";
 }
 
-/**
- * SVG (zonder tekst, dus geen fonts nodig): een zwarte ellips met de hoek
- * linksonder als middelpunt, sterk vervaagd. librsvg vervaagt alleen wat op
- * het canvas staat, dus het canvas is aan alle kanten `pad` groter; daarna
- * snijdt `renderScrim` het beeldformaat eruit — zo houdt de hoek zelf volle
- * dekking en loopt de rand zacht uit naar transparant.
- */
-export function scrimSvg(imageWidth: number, imageHeight: number): { svg: string; pad: number } {
-  const { rx, ry } = scrimGeometry(imageWidth, imageHeight);
-  const blur = Math.round(ry * 0.3);
-  const pad = blur * 3;
-  const w = imageWidth + 2 * pad;
-  const h = imageHeight + 2 * pad;
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}">
-  <defs>
-    <filter id="b" filterUnits="userSpaceOnUse" x="0" y="0" width="${w}" height="${h}"><feGaussianBlur stdDeviation="${blur}"/></filter>
-  </defs>
-  <ellipse cx="${pad}" cy="${imageHeight + pad}" rx="${rx}" ry="${ry}" fill="#000" fill-opacity="${SCRIM_MAX_OPACITY}" filter="url(#b)"/>
-</svg>`;
-  return { svg, pad };
-}
+const logoCache = new Map<LogoVariant, Buffer | null>();
 
-/** De verloopvlek als PNG op beeldformaat. */
-async function renderScrim(imageWidth: number, imageHeight: number): Promise<Buffer> {
-  const sharp = (await import("sharp")).default;
-  const { svg, pad } = scrimSvg(imageWidth, imageHeight);
-  return sharp(Buffer.from(svg)).extract({ left: pad, top: pad, width: imageWidth, height: imageHeight }).png().toBuffer();
-}
-
-const LOCKUP_PATH = path.join(process.cwd(), "public", "brand", "flex-surfaces-lockup.png");
-let lockupCache: Buffer | null = null;
-
-async function loadLockup(): Promise<Buffer | null> {
-  if (lockupCache) return lockupCache;
+async function loadLogo(variant: LogoVariant): Promise<Buffer | null> {
+  if (logoCache.has(variant)) return logoCache.get(variant)!;
+  const file = path.join(process.cwd(), "public", "brand", `flex-surfaces-logo-${variant}-social.png`);
   try {
-    lockupCache = await readFile(LOCKUP_PATH);
-    return lockupCache;
+    const buf = await readFile(file);
+    logoCache.set(variant, buf);
+    return buf;
   } catch {
-    console.warn("[social] merk-PNG niet gevonden:", LOCKUP_PATH);
+    console.warn("[social] logo niet gevonden:", file);
+    logoCache.set(variant, null);
     return null;
   }
+}
+
+/** Het juiste logo, geschaald en geplaatst op een beeld van width×height (`base` = het beeld zelf). */
+async function logoLayer(base: Buffer, width: number, height: number): Promise<{ input: Buffer; left: number; top: number } | null> {
+  const sharp = (await import("sharp")).default;
+  const probe = await loadLogo("sub-dark");
+  if (!probe) return null;
+  const meta = await sharp(probe).metadata();
+  const place = logoPlacement(width, height, meta.width ?? 1, meta.height ?? 1);
+  const band = { left: place.left, top: place.top + Math.round(place.height * 0.7), width: place.width, height: Math.max(1, Math.round(place.height * 0.2)) };
+  const stats = await sharp(base).resize(width, height, { fit: "fill" }).extract(band).greyscale().stats();
+  const logo = (await loadLogo(logoVariantFor(stats.channels[0].mean))) ?? probe;
+  const input = await sharp(logo).resize(place.width, place.height).png().toBuffer();
+  return { input, left: place.left, top: place.top };
 }
 
 /** Snijd bij, schaal naar het formaat en zet het merk erop. Geeft JPEG terug. */
@@ -143,16 +128,10 @@ export async function prepareSocialImage(
   let img = sharp(oriented.data).extract(crop).resize(tw, th, { fit: "fill" });
 
   if (opts.brand !== false) {
-    const lockup = await loadLockup();
-    if (lockup) {
-      const meta = await sharp(lockup).metadata();
-      const place = lockupPlacement(tw, th, meta.width ?? 1, meta.height ?? 1);
-      const resized = await sharp(lockup).resize(place.width, place.height).png().toBuffer();
-      img = sharp(await img.toBuffer()).composite([
-        { input: await renderScrim(tw, th), left: 0, top: 0 },
-        { input: resized, left: place.left, top: place.top },
-      ]);
-    }
+    const baseBuf = await img.png().toBuffer();
+    const layer = await logoLayer(baseBuf, tw, th);
+    img = sharp(baseBuf);
+    if (layer) img = img.composite([layer]);
   }
   return img.jpeg({ quality: 88, mozjpeg: true }).toBuffer();
 }
@@ -161,19 +140,14 @@ export async function prepareSocialImage(
 
 const MUSIC_DIR = path.join(process.cwd(), "public", "brand", "music");
 
-/** Logo + verloopvlek als transparante PNG op videoformaat (zelfde opmaak als de foto's). */
-async function renderVideoOverlay(width: number, height: number): Promise<Buffer | null> {
+/** Het logo als transparante PNG op videoformaat; `frame` (een still) bepaalt welke versie. */
+async function renderVideoOverlay(width: number, height: number, frame: Buffer | null): Promise<Buffer | null> {
   const sharp = (await import("sharp")).default;
-  const lockup = await loadLockup();
-  if (!lockup) return null;
-  const meta = await sharp(lockup).metadata();
-  const place = lockupPlacement(width, height, meta.width ?? 1, meta.height ?? 1);
-  const resized = await sharp(lockup).resize(place.width, place.height).png().toBuffer();
+  const base = frame ?? (await sharp({ create: { width, height, channels: 3, background: { r: 128, g: 128, b: 128 } } }).png().toBuffer());
+  const layer = await logoLayer(base, width, height);
+  if (!layer) return null;
   return sharp({ create: { width, height, channels: 4, background: { r: 0, g: 0, b: 0, alpha: 0 } } })
-    .composite([
-      { input: await renderScrim(width, height), left: 0, top: 0 },
-      { input: resized, left: place.left, top: place.top },
-    ])
+    .composite([layer])
     .png()
     .toBuffer();
 }
@@ -203,8 +177,8 @@ function runFfmpeg(bin: string, args: string[]): Promise<{ code: number; stderr:
 }
 
 /**
- * Merk + muziek op de video: Flex-Surfaces-logo linksonder (met dezelfde
- * verloopvlek als op de foto's) en een rustig instrumentaal nummer met
+ * Merk + muziek op de video: het officiële Flex-Surfaces-logo bovenaan in het
+ * midden (zelfde opmaak als de foto's) en een rustig instrumentaal nummer met
  * fade-in/-out. Lukt het niet (geen ffmpeg, kapotte video), dan gaat de video
  * ongewijzigd door — de post blijft dan bruikbaar.
  */
@@ -227,7 +201,10 @@ export async function brandVideo(bytes: Uint8Array, seed = ""): Promise<Uint8Arr
     await writeFile(input, bytes);
     const info = parseFfmpegInfo((await runFfmpeg(bin, ["-hide_banner", "-i", input])).stderr);
     if (!info) throw new Error("videoformaat niet te lezen");
-    const png = await renderVideoOverlay(info.width, info.height);
+    const still = path.join(dir, "still.png");
+    const grabbed = await runFfmpeg(bin, ["-hide_banner", "-loglevel", "error", "-y", "-ss", String(Math.min(1, info.seconds / 2)), "-i", input, "-frames:v", "1", still]);
+    const frame = grabbed.code === 0 ? await readFile(still).catch(() => null) : null;
+    const png = await renderVideoOverlay(info.width, info.height, frame);
     if (!png) return bytes;
     await writeFile(overlay, png);
 

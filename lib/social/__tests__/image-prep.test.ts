@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { FORMAT_SIZE, SCRIM_MAX_OPACITY, coverCrop, lockupPlacement, prepareSocialImage, scrimGeometry, scrimSvg } from "../image-prep";
+import { FORMAT_SIZE, coverCrop, logoPlacement, logoVariantFor, prepareSocialImage } from "../image-prep";
 
 describe("coverCrop", () => {
   it("snijdt een liggend beeld bij tot 4:5 rond het midden", () => {
@@ -34,24 +34,17 @@ describe("coverCrop", () => {
   });
 });
 
-describe("lockupPlacement", () => {
-  it("~48% breed, 5% marge, linksonder", () => {
-    const p = lockupPlacement(1080, 1350, 1422, 246);
-    expect(p.width).toBe(518);
-    expect(p.left).toBe(54);
-    expect(p.top + p.height).toBe(1350 - 54);
-    expect(Math.abs(p.height / p.width - 246 / 1422)).toBeLessThan(0.01);
+describe("logoPlacement", () => {
+  it("40% breed, bovenaan in het midden", () => {
+    const p = logoPlacement(1080, 1350, 2022, 640);
+    expect(p.width).toBe(432);
+    expect(p.left).toBe(324);
+    expect(p.top).toBe(41);
+    expect(Math.abs(p.height / p.width - 640 / 2022)).toBeLessThan(0.01);
   });
-});
-
-describe("scrim", () => {
-  it("~75% breed × 30% hoog, max 45% dekking, verlopend naar transparant", () => {
-    expect(scrimGeometry(1080, 1350)).toEqual({ rx: 810, ry: 405 });
-    const { svg } = scrimSvg(1080, 1350);
-    expect(svg).toContain(`fill-opacity="${SCRIM_MAX_OPACITY}"`);
-    expect(svg).toContain('rx="810" ry="405"');
-    expect(svg).toContain("feGaussianBlur");
-    expect(svg).not.toContain("<text");
+  it("kiest de leesbare versie", () => {
+    expect(logoVariantFor(220)).toBe("sub-dark");
+    expect(logoVariantFor(60)).toBe("sub-cream");
   });
 });
 
@@ -62,21 +55,16 @@ describe("prepareSocialImage", () => {
     return data[0];
   }
 
-  it("levert een JPEG op het juiste formaat, met merk en donkere hoek", async () => {
+  it("levert een JPEG op het juiste formaat, met het logo bovenaan in het midden", async () => {
     const sharp = (await import("sharp")).default;
-    // Lichte steen: het lastigste geval voor een wit merk.
     const src = await sharp({ create: { width: 3000, height: 2000, channels: 3, background: "#e8e0d2" } }).jpeg().toBuffer();
     const out = await prepareSocialImage(src, "portrait");
     const meta = await sharp(out).metadata();
     expect(meta.format).toBe("jpeg");
     expect([meta.width, meta.height]).toEqual([FORMAT_SIZE.portrait.width, FORMAT_SIZE.portrait.height]);
-    // Linksonder (naast het merk) donkerder dan rechtsboven; rechtsboven onaangetast.
-    const corner = await pixel(out, 10, 1340);
-    const far = await pixel(out, 1070, 10);
-    expect(far - corner).toBeGreaterThan(40);
-    // Het witte merk zelf is er nog.
-    const { data } = await sharp(out).extract({ left: 54, top: 1350 - 54 - 90, width: 518, height: 90 }).greyscale().raw().toBuffer({ resolveWithObject: true });
-    expect(Math.max(...data)).toBeGreaterThan(230);
+    // Het zwarte logovlak staat bovenaan in het midden; onderin is het beeld onaangetast.
+    expect(await pixel(out, 540, 41 + 40)).toBeLessThan(60);
+    expect(await pixel(out, 540, 1300)).toBeGreaterThan(200);
   });
 });
 
