@@ -129,8 +129,25 @@ export type InstagramStats = {
   recent: InstagramPost[];
 };
 
+const PREVIEW_TTL_MS = 60 * 60 * 1000;
+const previewCache = new Map<string, { src: string; until: number }>();
+
+export type ActiveAd = Metrics & {
+  id: string;
+  name: string;
+  campaign: string;
+  status: string;
+  thumbnail: string | null;
+  previewLink: string | null;
+  instagramUrl: string | null;
+  /** iframe-src van Meta's eigen voorvertoning. */
+  instagramPreview: string | null;
+  facebookPreview: string | null;
+};
+
 export type LiveStats = {
   total: Metrics;
+  activeAds: ActiveAd[];
   extras: AdExtras;
   facebook: FacebookStats;
   instagram: InstagramStats;
@@ -237,8 +254,20 @@ export async function getLiveStats(period: Period): Promise<LiveStats> {
       `/${adAccountPath()}/campaigns`,
       { query: { fields: "id,name,effective_status,adsets{daily_budget}", limit: 50 } },
     ),
-    meta.request<{ data?: { id: string; effective_status: string }[] }>(`/${adAccountPath()}/ads`, {
-      query: { fields: "id,effective_status", limit: 200 },
+    meta.request<{
+      data?: {
+        id: string;
+        name: string;
+        effective_status: string;
+        preview_shareable_link?: string;
+        campaign?: { name?: string };
+        creative?: { thumbnail_url?: string; image_url?: string; instagram_permalink_url?: string };
+      }[];
+    }>(`/${adAccountPath()}/ads`, {
+      query: {
+        fields: "id,name,effective_status,preview_shareable_link,campaign{name},creative{thumbnail_url,image_url,instagram_permalink_url}",
+        limit: 200,
+      },
     }),
     getFacebook(period),
     getInstagram(),
@@ -270,8 +299,50 @@ export async function getLiveStats(period: Period): Promise<LiveStats> {
     engagements: actionValue(t.actions, "post_engagement"),
   };
 
+  const adInsight = new Map(adRows.map((r) => [r.ad_id, r]));
+  const previewSrc = async (adId: string, format: string): Promise<string | null> => {
+    const key = `${adId}:${format}`;
+    const hit = previewCache.get(key);
+    if (hit && hit.until > Date.now()) return hit.src;
+    try {
+      const res = await meta.request<{ data?: { body?: string }[] }>(`/${adId}/previews`, { query: { ad_format: format } });
+      const m = res.data?.[0]?.body?.match(/src="([^"]+)"/);
+      const src = m ? m[1].replace(/&amp;/g, "&") : null;
+      // Meta geeft elke call een nieuwe ondertekende URL; cachen voorkomt dat de
+      // iframes bij elke auto-refresh (30 s) opnieuw laden.
+      if (src) previewCache.set(key, { src, until: Date.now() + PREVIEW_TTL_MS });
+      return src;
+    } catch {
+      return null;
+    }
+  };
+  const activeAds: ActiveAd[] = await Promise.all(
+    (adMeta.data ?? [])
+      .filter((a) => a.effective_status === "ACTIVE" || a.effective_status === "PENDING_REVIEW" || a.effective_status === "IN_PROCESS")
+      .slice(0, 8)
+      .map(async (a) => {
+        const [instagramPreview, facebookPreview] = await Promise.all([
+          previewSrc(a.id, "INSTAGRAM_STANDARD"),
+          previewSrc(a.id, "MOBILE_FEED_STANDARD"),
+        ]);
+        return {
+          id: a.id,
+          name: a.name,
+          campaign: a.campaign?.name ?? "",
+          status: a.effective_status,
+          thumbnail: a.creative?.image_url ?? a.creative?.thumbnail_url ?? null,
+          previewLink: a.preview_shareable_link ?? null,
+          instagramUrl: a.creative?.instagram_permalink_url ?? null,
+          instagramPreview,
+          facebookPreview,
+          ...toMetrics(adInsight.get(a.id) ?? {}),
+        };
+      }),
+  );
+
   return {
     total: toMetrics(totalRows[0] ?? {}),
+    activeAds,
     extras,
     facebook,
     instagram,

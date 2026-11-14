@@ -93,6 +93,67 @@ export default async function AdvertentiesLivePage({
         <EmptyState title={uiT("Cijfers niet beschikbaar")} description={error ?? undefined} />
       ) : (
         <div className="space-y-6">
+          {stats.activeAds.length > 0 && (
+            <section className="space-y-3">
+              <h2 className="text-sm font-semibold uppercase tracking-wide text-muted">{uiT("Nu actief")}</h2>
+              <div className="grid gap-4 lg:grid-cols-2">
+                {stats.activeAds.map((ad) => (
+                  <Card key={ad.id} className="p-4">
+                    <div className="mb-3 flex flex-wrap items-start justify-between gap-2">
+                      <div>
+                        <p className="font-semibold">{ad.name}</p>
+                        <p className="text-xs text-muted">{ad.campaign}</p>
+                      </div>
+                      {statusBadge(ad.status)}
+                    </div>
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      {[
+                        { label: "Instagram", src: ad.instagramPreview },
+                        { label: "Facebook", src: ad.facebookPreview },
+                      ].map((v) => (
+                        <div key={v.label}>
+                          <p className="mb-1 text-xs font-medium text-muted">{v.label}</p>
+                          {v.src ? (
+                            <iframe
+                              src={v.src}
+                              title={`${ad.name} – ${v.label}`}
+                              className="h-[560px] w-full rounded-lg border bg-white"
+                              loading="lazy"
+                              scrolling="no"
+                            />
+                          ) : ad.thumbnail ? (
+                            // eslint-disable-next-line @next/next/no-img-element -- Meta-CDN
+                            <img src={ad.thumbnail} alt="" className="w-full rounded-lg border object-cover" />
+                          ) : (
+                            <p className="text-sm text-muted">{uiT("Geen voorvertoning beschikbaar.")}</p>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                    <dl className="mt-3 grid grid-cols-4 gap-2 text-sm">
+                      <div><dt className="text-xs text-muted">{uiT("Weergaven")}</dt><dd className="font-medium">{nl(ad.impressions)}</dd></div>
+                      <div><dt className="text-xs text-muted">{uiT("Klikken")}</dt><dd className="font-medium">{nl(ad.clicks)}</dd></div>
+                      <div><dt className="text-xs text-muted">{uiT("Leads")}</dt><dd className="font-medium">{nl(ad.leads)}</dd></div>
+                      <div><dt className="text-xs text-muted">{uiT("Uitgegeven")}</dt><dd className="font-medium">{formatEUR(ad.spend.toFixed(2))}</dd></div>
+                    </dl>
+                    <div className="mt-3 flex flex-wrap gap-3 text-sm">
+                      {ad.previewLink && (
+                        <a href={ad.previewLink} target="_blank" rel="noreferrer" className="text-accent underline-offset-2 hover:underline">
+                          {uiT("Voorvertoning openen bij Meta")}
+                        </a>
+                      )}
+                      {ad.instagramUrl && (
+                        <a href={ad.instagramUrl} target="_blank" rel="noreferrer" className="text-accent underline-offset-2 hover:underline">
+                          {uiT("Post op Instagram")}
+                        </a>
+                      )}
+                    </div>
+                  </Card>
+                ))}
+              </div>
+            </section>
+          )}
+
           <section className="space-y-3">
             <h2 className="text-sm font-semibold uppercase tracking-wide text-muted">{uiT("Advertenties")}</h2>
             <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-5">
