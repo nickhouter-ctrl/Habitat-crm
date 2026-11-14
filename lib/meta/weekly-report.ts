@@ -1,7 +1,7 @@
 /**
  * Wekelijkse advertentie-mail (maandagochtend): per campagne bereik,
  * weergaven, klikken, leads en uitgaven van de afgelopen 7 dagen, plus het
- * aantal Instagram-volgers. Gaat alleen naar Nick (systeemmelding).
+ * aantal Instagram-volgers. Gaat naar Nick, Frederique, Hans en Elles.
  */
 import "server-only";
 
@@ -17,6 +17,14 @@ export type CampaignInsight = {
   spend?: string;
   actions?: Action[];
 };
+
+/** Nick, Frederique, Hans en Elles (hi@ = Elles). */
+export const REPORT_RECIPIENTS = [
+  "nick@habitat-one.com",
+  "frederique@habitat-one.com",
+  "hans@habitat-one.com",
+  "hi@habitat-one.com",
+] as const;
 
 const LEAD_TYPES = new Set(["offsite_conversion.fb_pixel_lead", "lead", "onsite_conversion.lead_grouped"]);
 
@@ -86,11 +94,13 @@ export async function sendWeeklyAdReport(): Promise<{ ok: boolean; emailed: bool
   }
   const { text, html, total } = renderReport(res.data ?? [], followers);
   const mail = await sendEmail({
-    to: process.env.META_REPORT_TO ?? "nick@habitat-one.com",
+    to: process.env.META_REPORT_TO ?? REPORT_RECIPIENTS.join(", "),
     subject: `Advertenties deze week — ${total.leads} leads, ${eur(total.spend)} uitgegeven`,
     html,
     text,
-    interneMelding: true,
+    // Bewust géén interneMelding: die filtert hi@ (= Elles) eruit. Vaste lijst,
+    // dus ook geen extra bedrijfs-BCC of contact-uitbreiding nodig.
+    noCompanyBcc: true,
   });
   return { ok: true, emailed: mail.sent, total };
 }
