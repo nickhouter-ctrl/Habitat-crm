@@ -73,17 +73,163 @@ async function insights(period: Period, extra: Record<string, string>): Promise<
   return res.data ?? [];
 }
 
+/** Datumbereik (YYYY-MM-DD, `until` exclusief) voor pagina-insights per periode. */
+export function periodRange(period: Period, now = new Date()): { since: string; until: string } {
+  const day = 24 * 60 * 60 * 1000;
+  const today = ymd(now);
+  const tomorrow = ymd(new Date(now.getTime() + day));
+  switch (period) {
+    case "today":
+      return { since: today, until: tomorrow };
+    case "yesterday":
+      return { since: ymd(new Date(now.getTime() - day)), until: today };
+    case "last_7d":
+      return { since: ymd(new Date(now.getTime() - 6 * day)), until: tomorrow };
+    case "this_month":
+      return { since: `${today.slice(0, 8)}01`, until: tomorrow };
+    default:
+      // Meta staat maximaal ±90 dagen per pagina-insights-call toe.
+      return { since: ymd(new Date(now.getTime() - 89 * day)), until: tomorrow };
+  }
+}
+
+export type AdExtras = {
+  frequency: number;
+  linkCtr: number;
+  cpc: number;
+  cpm: number;
+  landingPageViews: number;
+  engagements: number;
+};
+
+export type FacebookStats = {
+  followers: number | null;
+  /** Som over de periode; null als Meta de metric niet gaf. */
+  reached: number | null;
+  views: number | null;
+  engagements: number | null;
+  newFollows: number | null;
+};
+
+export type InstagramPost = {
+  id: string;
+  permalink: string;
+  image: string | null;
+  caption: string;
+  timestamp: string;
+  likes: number;
+  comments: number;
+  kind: string;
+};
+
+export type InstagramStats = {
+  followers: number | null;
+  follows: number | null;
+  posts: number | null;
+  recent: InstagramPost[];
+};
+
 export type LiveStats = {
   total: Metrics;
+  extras: AdExtras;
+  facebook: FacebookStats;
+  instagram: InstagramStats;
   campaigns: (Metrics & { id: string; name: string; status: string; dailyBudget: number | null })[];
   ads: (Metrics & { id: string; name: string; campaign: string; status: string })[];
   platforms: (Metrics & { platform: string })[];
-  followers: number | null;
 };
 
+const actionValue = (actions: Action[] | undefined, type: string) =>
+  Number(actions?.find((a) => a.action_type === type)?.value ?? 0);
+
+async function getFacebook(period: Period): Promise<FacebookStats> {
+  const pageId = process.env.META_PAGE_ID;
+  const empty: FacebookStats = { followers: null, reached: null, views: null, engagements: null, newFollows: null };
+  if (!pageId) return empty;
+  try {
+    const { access_token: pageToken } = await meta.request<{ access_token?: string }>(`/${pageId}`, {
+      query: { fields: "access_token" },
+    });
+    if (!pageToken) return empty;
+    const base = `https://graph.facebook.com/${process.env.META_GRAPH_VERSION ?? "v23.0"}/${pageId}`;
+    const get = async (path: string) => {
+      const r = await fetch(`${base}${path}`, {
+        headers: { authorization: `Bearer ${pageToken}` },
+        cache: "no-store",
+        signal: AbortSignal.timeout(20_000),
+      });
+      return r.ok ? r.json() : null;
+    };
+    const { since, until } = periodRange(period);
+    const metrics = "page_total_media_view_unique,page_media_view,page_post_engagements,page_daily_follows_unique";
+    const [page, ins] = await Promise.all([
+      get(`?fields=followers_count`),
+      get(`/insights?${new URLSearchParams({ metric: metrics, period: "day", since, until })}`),
+    ]);
+    const sum = (name: string): number | null => {
+      const m = (ins?.data as { name: string; values?: { value?: number }[] }[] | undefined)?.find((d) => d.name === name);
+      return m ? (m.values ?? []).reduce((n, v) => n + (typeof v.value === "number" ? v.value : 0), 0) : null;
+    };
+    return {
+      followers: typeof page?.followers_count === "number" ? page.followers_count : null,
+      reached: sum("page_total_media_view_unique"),
+      views: sum("page_media_view"),
+      engagements: sum("page_post_engagements"),
+      newFollows: sum("page_daily_follows_unique"),
+    };
+  } catch {
+    return empty;
+  }
+}
+
+async function getInstagram(): Promise<InstagramStats> {
+  const igId = process.env.META_IG_ACCOUNT_ID;
+  const empty: InstagramStats = { followers: null, follows: null, posts: null, recent: [] };
+  if (!igId) return empty;
+  try {
+    const [profile, media] = await Promise.all([
+      meta.request<{ followers_count?: number; follows_count?: number; media_count?: number }>(`/${igId}`, {
+        query: { fields: "followers_count,follows_count,media_count" },
+      }),
+      meta.request<{
+        data?: {
+          id: string;
+          caption?: string;
+          media_type: string;
+          media_url?: string;
+          thumbnail_url?: string;
+          permalink: string;
+          timestamp: string;
+          like_count?: number;
+          comments_count?: number;
+        }[];
+      }>(`/${igId}/media`, {
+        query: { fields: "id,caption,media_type,media_url,thumbnail_url,permalink,timestamp,like_count,comments_count", limit: 6 },
+      }),
+    ]);
+    return {
+      followers: profile.followers_count ?? null,
+      follows: profile.follows_count ?? null,
+      posts: profile.media_count ?? null,
+      recent: (media.data ?? []).map((m) => ({
+        id: m.id,
+        permalink: m.permalink,
+        image: m.media_type === "VIDEO" ? (m.thumbnail_url ?? null) : (m.media_url ?? null),
+        caption: (m.caption ?? "").split("\n")[0].slice(0, 90),
+        timestamp: m.timestamp,
+        likes: m.like_count ?? 0,
+        comments: m.comments_count ?? 0,
+        kind: m.media_type,
+      })),
+    };
+  } catch {
+    return empty;
+  }
+}
+
 export async function getLiveStats(period: Period): Promise<LiveStats> {
-  const [totalRows, campaignRows, adRows, platformRows, campaignMeta, adMeta] = await Promise.all([
-    insights(period, { fields: FIELDS }),
+  const [totalRows, campaignRows, adRows, platformRows, campaignMeta, adMeta, facebook, instagram] = await Promise.all([
+    insights(period, { fields: `${FIELDS},frequency,inline_link_click_ctr,cpc,cpm` }),
     insights(period, { level: "campaign", fields: `campaign_id,campaign_name,${FIELDS}` }),
     insights(period, { level: "ad", fields: `ad_id,ad_name,campaign_name,${FIELDS}` }),
     insights(period, { fields: FIELDS, breakdowns: "publisher_platform" }),
@@ -94,6 +240,8 @@ export async function getLiveStats(period: Period): Promise<LiveStats> {
     meta.request<{ data?: { id: string; effective_status: string }[] }>(`/${adAccountPath()}/ads`, {
       query: { fields: "id,effective_status", limit: 200 },
     }),
+    getFacebook(period),
+    getInstagram(),
   ]);
 
   const insightByCampaign = new Map(campaignRows.map((r) => [r.campaign_id, r]));
@@ -112,20 +260,21 @@ export async function getLiveStats(period: Period): Promise<LiveStats> {
       };
     });
 
-  let followers: number | null = null;
-  const igId = process.env.META_IG_ACCOUNT_ID;
-  if (igId) {
-    try {
-      followers =
-        (await meta.request<{ followers_count?: number }>(`/${igId}`, { query: { fields: "followers_count" } }))
-          .followers_count ?? null;
-    } catch {
-      followers = null;
-    }
-  }
+  const t = (totalRows[0] ?? {}) as Row & { frequency?: string; inline_link_click_ctr?: string; cpc?: string; cpm?: string };
+  const extras: AdExtras = {
+    frequency: Number(t.frequency ?? 0),
+    linkCtr: Number(t.inline_link_click_ctr ?? 0),
+    cpc: Number(t.cpc ?? 0),
+    cpm: Number(t.cpm ?? 0),
+    landingPageViews: actionValue(t.actions, "landing_page_view"),
+    engagements: actionValue(t.actions, "post_engagement"),
+  };
 
   return {
     total: toMetrics(totalRows[0] ?? {}),
+    extras,
+    facebook,
+    instagram,
     campaigns,
     ads: adRows
       .map((r) => ({
@@ -139,6 +288,5 @@ export async function getLiveStats(period: Period): Promise<LiveStats> {
     platforms: platformRows
       .map((r) => ({ platform: r.publisher_platform ?? "?", ...toMetrics(r) }))
       .sort((a, b) => b.impressions - a.impressions),
-    followers,
   };
 }
