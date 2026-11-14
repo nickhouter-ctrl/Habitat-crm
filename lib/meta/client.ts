@@ -229,11 +229,22 @@ async function request<T>(
     form?: Record<string, string>;
     /** Harde timeout in ms — de fetch wordt dan ECHT afgebroken (abort). */
     timeoutMs?: number;
+    /**
+     * Niet wachten bij een hoge benutting maar meteen een rate-limitfout geven
+     * (voor pagina's die een gebruiker live bekijkt: liever oude cijfers dan
+     * een minuut hangen).
+     */
+    noWait?: boolean;
   } = {},
 ): Promise<T> {
   // Zelfrem vóór de call, op basis van de laatst gemelde benutting (§7).
   const brake = throttleDelayMs(lastUsage.pct);
-  if (brake > 0) await defaultSleep(brake);
+  if (brake > 0) {
+    if (init.noWait) {
+      throw new MetaError(429, null, "Meta-limiet bijna bereikt — even wachten", 17);
+    }
+    await defaultSleep(brake);
+  }
 
   const url = new URL(`${GRAPH_BASE}/${graphVersion()}${path}`);
   for (const [k, v] of Object.entries(init.query ?? {})) {

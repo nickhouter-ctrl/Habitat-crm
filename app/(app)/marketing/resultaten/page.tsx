@@ -1,6 +1,6 @@
 /**
  * Marketing → Advertenties live: cijfers rechtstreeks uit Meta (geen opslag),
- * ververst elke 30 seconden. Periode via ?p=today|yesterday|last_7d|this_month|maximum.
+ * ververst elke minuut. Periode via ?p=today|yesterday|last_7d|this_month|maximum.
  */
 import Link from "next/link";
 
@@ -20,8 +20,7 @@ import {
   Tr,
 } from "@/components/ui";
 import { tekst as uiTranslation } from "@/lib/i18n/server";
-import { metaErrorMessage } from "@/lib/meta/client";
-import { getLiveStats, parsePeriod, PERIODS, type AdCard, type LiveStats } from "@/lib/meta/live-stats";
+import { getLiveStatsCached, parsePeriod, PERIODS, type AdCard, type LiveStats } from "@/lib/meta/live-stats";
 import { formatEUR } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
@@ -135,20 +134,17 @@ export default async function AdvertentiesLivePage({
   const uiT = await uiTranslation();
   const period = parsePeriod((await searchParams).p);
 
-  let stats: LiveStats | null = null;
-  let error: string | null = null;
-  try {
-    stats = await getLiveStats(period);
-  } catch (e) {
-    error = metaErrorMessage(e);
-  }
+  const cached = await getLiveStatsCached(period);
+  const stats: LiveStats | null = cached.data;
+  const error: string | null = cached.error;
+  const fetchedAt = cached.fetchedAt ? new Date(cached.fetchedAt) : null;
 
   return (
     <>
-      <AutoRefresh seconds={30} />
+      <AutoRefresh seconds={60} />
       <PageHeader
         title={uiT("Advertenties live")}
-        subtitle={uiT("Rechtstreeks uit Meta (Facebook + Instagram), ververst elke 30 seconden. Meta loopt zelf een paar minuten achter.")}
+        subtitle={uiT("Rechtstreeks uit Meta (Facebook + Instagram), ververst elke minuut. Meta loopt zelf een paar minuten achter.")}
         actions={
           <div className="flex flex-wrap gap-1.5">
             {(Object.keys(PERIODS) as (keyof typeof PERIODS)[]).map((p) => (
@@ -167,8 +163,17 @@ export default async function AdvertentiesLivePage({
         }
       />
 
-      {error || !stats ? (
-        <EmptyState title={uiT("Cijfers niet beschikbaar")} description={error ?? undefined} />
+      {error && (
+        <div className="mb-4 rounded-lg border border-warning/40 bg-warning/10 px-4 py-3 text-sm">
+          {stats
+            ? uiT("Meta laat ons even wachten (te veel aanvragen of storing). Je ziet de cijfers van {v0}; over een minuut probeert de pagina het opnieuw.", {
+                v0: fetchedAt ? fetchedAt.toLocaleTimeString("nl-NL", { hour: "2-digit", minute: "2-digit" }) : "eerder",
+              })
+            : uiT("Meta laat ons even wachten (te veel aanvragen of storing). Over een minuut probeert de pagina het opnieuw.")}
+        </div>
+      )}
+      {!stats ? (
+        <EmptyState title={uiT("Cijfers nog niet beschikbaar")} description={error ?? undefined} />
       ) : (
         <div className="space-y-6">
           {stats.activeAds.length > 0 && (

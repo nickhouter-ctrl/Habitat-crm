@@ -5,7 +5,13 @@
  */
 import "server-only";
 
-import { adAccountPath, meta } from "./client";
+import { adAccountPath, meta as metaClient } from "./client";
+
+/** Zelfde client, maar zonder te wachten bij een hoge benutting (zie getLiveStatsCached). */
+const meta = {
+  request: <T>(path: string, init: Parameters<typeof metaClient.request>[1] = {}) =>
+    metaClient.request<T>(path, { ...init, noWait: true }),
+};
 import { leadCount } from "./weekly-report";
 
 export const PERIODS = {
@@ -459,4 +465,39 @@ export async function getLiveStats(period: Period): Promise<LiveStats> {
       .map((r) => ({ platform: r.publisher_platform ?? "?", ...toMetrics(r) }))
       .sort((a, b) => b.impressions - a.impressions),
   };
+}
+
+/* ------------------------------------------------------------------ cache */
+
+/** Hoe lang opgehaalde cijfers gedeeld worden tussen alle kijkers/tabbladen. */
+export const LIVE_CACHE_MS = 60_000;
+
+const liveCache = new Map<Period, { at: number; data: LiveStats }>();
+const inflight = new Map<Period, Promise<LiveStats>>();
+
+export type CachedLiveStats = { data: LiveStats | null; fetchedAt: number | null; error: string | null };
+
+/**
+ * Live-cijfers met een gedeelde cache van een minuut: alle open tabbladen en
+ * gebruikers delen één ophaalronde, zodat we Meta's limiet per advertentie-
+ * account niet raken. Weigert Meta (limiet/storing), dan de laatst bekende
+ * cijfers mét foutmelding in plaats van een hangende pagina.
+ */
+export async function getLiveStatsCached(period: Period): Promise<CachedLiveStats> {
+  const hit = liveCache.get(period);
+  if (hit && Date.now() - hit.at < LIVE_CACHE_MS) return { data: hit.data, fetchedAt: hit.at, error: null };
+  let p = inflight.get(period);
+  if (!p) {
+    p = getLiveStats(period).finally(() => inflight.delete(period));
+    inflight.set(period, p);
+  }
+  try {
+    const data = await p;
+    const at = Date.now();
+    liveCache.set(period, { at, data });
+    return { data, fetchedAt: at, error: null };
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    return { data: hit?.data ?? null, fetchedAt: hit?.at ?? null, error: msg };
+  }
 }
