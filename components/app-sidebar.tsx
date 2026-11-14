@@ -221,6 +221,7 @@ const NAV_GROUPS: { id: string; label: string | null; items: NavItem[] }[] = [
       { href: "/marketing/campaigns", label: "Campagnes", icon: Send },
       { href: "/marketing/creatives", label: "Creatives", icon: Palette },
       { href: "/marketing/assets", label: "Beeldbibliotheek", icon: Images },
+      { href: "/marketing/resultaten", label: "Advertenties live", icon: Activity },
       { href: "/marketing/insights", label: "Wat werkt", icon: TrendingUp },
       { href: "/marketing/competitors", label: "Concurrenten", icon: Radar },
     ],

@@ -126,6 +126,7 @@ export const START_TEGELS: StartTegel[] = [
   t("/marketing/social", "Social media", "Weekposts voor Instagram en Facebook", Share2, "Marketing"),
   t("/marketing/creatives", "Creatives", "Advertentiebeelden maken", Palette, "Marketing"),
   t("/marketing/campaigns", "Campagnes", "Meta-campagnes beheren", Send, "Marketing"),
+  t("/marketing/resultaten", "Advertenties live", "Bereik, klikken, leads en uitgaven uit Meta", Activity, "Marketing"),
   t("/marketing/insights", "Wat werkt", "Welke advertenties presteren", TrendingUp, "Marketing"),
   t("/marketing/competitors", "Concurrenten", "Wat de concurrentie adverteert", Radar, "Marketing"),
   // 8 — Rapporten & beheer.

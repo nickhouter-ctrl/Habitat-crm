@@ -49,3 +49,18 @@ describe("weekly ad report", () => {
     expect(r.text).toContain("Instagram-volgers nu: 140");
   });
 });
+
+import { parsePeriod, toMetrics } from "@/lib/meta/live-stats";
+
+describe("live ad stats", () => {
+  it("falls back to last 7 days for unknown periods", () => {
+    expect(parsePeriod("today")).toBe("today");
+    expect(parsePeriod("nonsense")).toBe("last_7d");
+    expect(parsePeriod(undefined)).toBe("last_7d");
+  });
+  it("maps a Meta row to numbers", () => {
+    expect(toMetrics({ reach: "28", impressions: "30", inline_link_clicks: "2", spend: "0.15", actions: [{ action_type: "lead", value: "1" }] }))
+      .toEqual({ reach: 28, impressions: 30, clicks: 2, leads: 1, spend: 0.15 });
+    expect(toMetrics({})).toEqual({ reach: 0, impressions: 0, clicks: 0, leads: 0, spend: 0 });
+  });
+});
