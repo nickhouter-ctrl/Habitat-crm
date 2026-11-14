@@ -122,6 +122,14 @@
     {
       "path": "/api/cron/partner-sent",
       "schedule": "* * * * *"
+    },
+    {
+      "path": "/api/cron/meta-boost",
+      "schedule": "0 9 * * *"
+    },
+    {
+      "path": "/api/cron/meta-report",
+      "schedule": "0 7 * * 1"
     }
   ]
 }
