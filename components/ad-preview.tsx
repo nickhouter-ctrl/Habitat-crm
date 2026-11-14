@@ -25,6 +25,7 @@ export function AdPreview({
   cta,
   logo = "https://www.habitat-one.com/logo-habitat.png",
   handle = "habitatonejavea",
+  pageName = "Habitat One Javea",
 }: {
   images: string[];
   caption: string;
@@ -33,13 +34,96 @@ export function AdPreview({
   cta: string | null;
   logo?: string;
   handle?: string;
+  pageName?: string;
 }) {
   const [i, setI] = useState(0);
   const [open, setOpen] = useState(false);
+  const [platform, setPlatform] = useState<"instagram" | "facebook">("instagram");
   const n = images.length;
   const text = caption.split("\n—")[0].trim();
 
+  const tabs = (
+    <div className="mb-2 inline-flex rounded-full border p-0.5 text-xs">
+      {(["instagram", "facebook"] as const).map((p) => (
+        <button
+          key={p}
+          type="button"
+          onClick={() => setPlatform(p)}
+          className={`rounded-full px-3 py-1 ${platform === p ? "bg-accent text-white" : "text-muted"}`}
+        >
+          {p === "instagram" ? "Instagram" : "Facebook"}
+        </button>
+      ))}
+    </div>
+  );
+
+  const carousel = (
+    <div className="relative aspect-square bg-neutral-100">
+      {n > 0 ? (
+        // eslint-disable-next-line @next/next/no-img-element -- Meta-CDN
+        <img src={images[i]} alt="" className="h-full w-full object-cover" />
+      ) : null}
+      {n > 1 && (
+        <>
+          <span className="absolute right-2 top-2 rounded-full bg-black/60 px-2 py-0.5 text-[11px] text-white">
+            {i + 1}/{n}
+          </span>
+          {i > 0 && (
+            <button type="button" onClick={() => setI(i - 1)} className="absolute left-2 top-1/2 flex size-7 -translate-y-1/2 items-center justify-center rounded-full bg-white/85 shadow" aria-label="Vorige">‹</button>
+          )}
+          {i < n - 1 && (
+            <button type="button" onClick={() => setI(i + 1)} className="absolute right-2 top-1/2 flex size-7 -translate-y-1/2 items-center justify-center rounded-full bg-white/85 shadow" aria-label="Volgende">›</button>
+          )}
+        </>
+      )}
+    </div>
+  );
+
+  if (platform === "facebook") {
+    return (
+      <div>
+        {tabs}
+        <div className="overflow-hidden rounded-xl border bg-white text-[13px] text-neutral-900 shadow-sm">
+          <div className="flex items-center gap-2 px-3 pt-3">
+            {/* eslint-disable-next-line @next/next/no-img-element -- extern logo */}
+            <img src={logo} alt="" className="size-9 rounded-full border bg-white object-contain p-0.5" />
+            <div className="leading-tight">
+              <p className="font-semibold">{pageName}</p>
+              <p className="text-[11px] text-neutral-500">Gesponsord · 🌐</p>
+            </div>
+            <span className="ml-auto text-neutral-500">••• ✕</span>
+          </div>
+          {text && (
+            <div className="px-3 py-2">
+              <p className={open ? "whitespace-pre-line" : "line-clamp-3"}>{text}</p>
+              {text.length > 160 && (
+                <button type="button" onClick={() => setOpen(!open)} className="font-semibold text-neutral-500">
+                  {open ? "Minder weergeven" : "Meer weergeven"}
+                </button>
+              )}
+            </div>
+          )}
+          {carousel}
+          <div className="flex items-center justify-between gap-2 border-b bg-neutral-100 px-3 py-2">
+            <div className="min-w-0 leading-tight">
+              <p className="text-[11px] uppercase text-neutral-500">habitat-one.com</p>
+              <p className="truncate font-semibold">Showroom Jávea</p>
+            </div>
+            <span className="shrink-0 rounded-md bg-neutral-200 px-3 py-1.5 font-semibold">{CTA[cta ?? ""] ?? "Meer informatie"}</span>
+          </div>
+          <div className="flex justify-around px-3 py-2 text-neutral-600">
+            <span>👍 Vind ik leuk</span>
+            <span>💬 Reageren</span>
+            <span>↗ Delen</span>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
+    <div>
+    {tabs}
     <div className="overflow-hidden rounded-xl border bg-white text-[13px] text-neutral-900 shadow-sm">
       <div className="flex items-center gap-2 px-3 py-2">
         {/* eslint-disable-next-line @next/next/no-img-element -- extern logo */}
@@ -51,39 +135,7 @@ export function AdPreview({
         <span className="ml-auto text-neutral-500">•••</span>
       </div>
 
-      <div className="relative aspect-square bg-neutral-100">
-        {n > 0 ? (
-          // eslint-disable-next-line @next/next/no-img-element -- Instagram-CDN
-          <img src={images[i]} alt="" className="h-full w-full object-cover" />
-        ) : null}
-        {n > 1 && (
-          <>
-            <span className="absolute right-2 top-2 rounded-full bg-black/60 px-2 py-0.5 text-[11px] text-white">
-              {i + 1}/{n}
-            </span>
-            {i > 0 && (
-              <button
-                type="button"
-                onClick={() => setI(i - 1)}
-                className="absolute left-2 top-1/2 flex size-7 -translate-y-1/2 items-center justify-center rounded-full bg-white/85 shadow"
-                aria-label="Vorige"
-              >
-                ‹
-              </button>
-            )}
-            {i < n - 1 && (
-              <button
-                type="button"
-                onClick={() => setI(i + 1)}
-                className="absolute right-2 top-1/2 flex size-7 -translate-y-1/2 items-center justify-center rounded-full bg-white/85 shadow"
-                aria-label="Volgende"
-              >
-                ›
-              </button>
-            )}
-          </>
-        )}
-      </div>
+      {carousel}
 
       {cta && (
         <div className="flex items-center justify-between border-b bg-neutral-50 px-3 py-2 font-semibold">
@@ -119,6 +171,7 @@ export function AdPreview({
           </button>
         )}
       </div>
+    </div>
     </div>
   );
 }

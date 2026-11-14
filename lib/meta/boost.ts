@@ -12,6 +12,13 @@
  *
  * Advertenties ouder dan {@link BOOST_MAX_AGE_DAYS} dagen worden gepauzeerd,
  * zodat het (vaste dag-)budget naar verse content gaat.
+ *
+ * Doorschuiven naar de klantencampagne (`META_CUSTOMERS_ADSET_ID`): heeft die
+ * al {@link PROMOTE_INTERVAL_DAYS} dagen geen nieuwe advertentie gekregen, dan
+ * gaat de best scorende post uit de bekendheidscampagne (laatste 7 dagen,
+ * genoeg weergaven, hoogste klik+interactie-ratio) erin; de vorige
+ * klantenadvertentie gaat dan op pauze. Zo draait de klantencampagne steeds op
+ * bewezen content en verschilt hij van de bekendheidscampagne.
  */
 import "server-only";
 
@@ -50,6 +57,35 @@ export function adsToPause(ads: BoostAd[], now: Date): BoostAd[] {
   return ads.filter((a) => a.status === "ACTIVE" && new Date(a.created_time).getTime() < cutoff);
 }
 
+/** Om de zoveel dagen krijgt de klantencampagne een (bewezen) nieuwe post. */
+export const PROMOTE_INTERVAL_DAYS = 7;
+/** Minimaal aantal weergaven voordat een post als "bewezen" telt. */
+export const PROMOTE_MIN_IMPRESSIONS = 300;
+
+export type AdPerf = { adId: string; objectStoryId: string | null; impressions: number; clicks: number; engagements: number };
+
+/** Score = (klikken + interacties) per weergave; kliks tellen dubbel want dat is het doel. */
+export function promoteScore(p: AdPerf): number {
+  return p.impressions ? (2 * p.clicks + p.engagements) / p.impressions : 0;
+}
+
+/**
+ * Welke bekendheidspost naar de klantencampagne mag, of null als dat (nog)
+ * niet hoeft: er draait daar al een advertentie van < interval oud, of er is
+ * geen post met genoeg data die er nog niet in zat.
+ */
+export function pickPromotion(perf: AdPerf[], customerAds: BoostAd[], now: Date): AdPerf | null {
+  const recent = customerAds.some(
+    (a) => a.status === "ACTIVE" && now.getTime() - new Date(a.created_time).getTime() < PROMOTE_INTERVAL_DAYS * DAY,
+  );
+  if (recent) return null;
+  const used = new Set(customerAds.map((a) => a.objectStoryId).filter(Boolean));
+  const candidates = perf
+    .filter((p) => p.objectStoryId && !used.has(p.objectStoryId) && p.impressions >= PROMOTE_MIN_IMPRESSIONS)
+    .sort((a, b) => promoteScore(b) - promoteScore(a));
+  return candidates[0] ?? null;
+}
+
 type Paged<T> = { data?: T[] };
 
 function env(name: string): string {
@@ -62,11 +98,12 @@ export type BoostResult = {
   ok: boolean;
   boosted: string[];
   paused: string[];
+  promoted: string | null;
   errors: string[];
 };
 
 export async function runMetaBoost(now = new Date()): Promise<BoostResult> {
-  const result: BoostResult = { ok: true, boosted: [], paused: [], errors: [] };
+  const result: BoostResult = { ok: true, boosted: [], paused: [], promoted: null, errors: [] };
   const adSetId = process.env.META_BOOST_ADSET_ID;
   if (!adSetId) return { ...result, errors: ["META_BOOST_ADSET_ID ontbreekt — niets gedaan"] };
   const pageId = env("META_PAGE_ID");
@@ -95,25 +132,9 @@ export async function runMetaBoost(now = new Date()): Promise<BoostResult> {
     objectStoryId: a.creative?.object_story_id ?? null,
   }));
 
-  const pixelId = process.env.META_PIXEL_ID;
   for (const post of postsToBoost(posts, ads, now)) {
     try {
-      const creative = await meta.adCreatives.create({
-        name: `Post ${post.id.split("_")[1] ?? post.id}`,
-        object_story_id: post.id,
-      });
-      await meta.request(`/${adAccountPath()}/ads`, {
-        method: "POST",
-        body: {
-          name: `Post ${post.created_time.slice(0, 10)}`,
-          adset_id: adSetId,
-          creative: { creative_id: creative.id },
-          status: "ACTIVE",
-          ...(pixelId
-            ? { tracking_specs: [{ "action.type": ["offsite_conversion"], fb_pixel: [pixelId] }] }
-            : {}),
-        },
-      });
+      await createPostAd(post.id, adSetId, `Post ${post.created_time.slice(0, 10)}`);
       result.boosted.push(post.id);
     } catch (e) {
       result.ok = false;
@@ -130,5 +151,66 @@ export async function runMetaBoost(now = new Date()): Promise<BoostResult> {
       result.errors.push(`pauzeren ${ad.id}: ${e instanceof Error ? e.message : String(e)}`);
     }
   }
+
+  const customersAdSetId = process.env.META_CUSTOMERS_ADSET_ID;
+  if (customersAdSetId) {
+    try {
+      const [perfRaw, customerRaw] = await Promise.all([
+        meta.request<Paged<{ ad_id: string; impressions?: string; inline_link_clicks?: string; actions?: { action_type: string; value: string }[] }>>(
+          `/${adSetId}/insights`,
+          { query: { level: "ad", date_preset: "last_7d", fields: "ad_id,impressions,inline_link_clicks,actions", limit: 100 } },
+        ),
+        meta.request<Paged<{ id: string; created_time: string; status: string; creative?: { object_story_id?: string } }>>(
+          `/${customersAdSetId}/ads`,
+          { query: { fields: "id,created_time,status,creative{object_story_id}", limit: 100 } },
+        ),
+      ]);
+      const storyByAd = new Map(ads.map((a) => [a.id, a.objectStoryId]));
+      const perf: AdPerf[] = (perfRaw.data ?? []).map((r) => ({
+        adId: r.ad_id,
+        objectStoryId: storyByAd.get(r.ad_id) ?? null,
+        impressions: Number(r.impressions ?? 0),
+        clicks: Number(r.inline_link_clicks ?? 0),
+        engagements: Number(r.actions?.find((a) => a.action_type === "post_engagement")?.value ?? 0),
+      }));
+      const customerAds: BoostAd[] = (customerRaw.data ?? []).map((a) => ({
+        id: a.id,
+        created_time: a.created_time,
+        status: a.status,
+        objectStoryId: a.creative?.object_story_id ?? null,
+      }));
+      const pick = pickPromotion(perf, customerAds, now);
+      if (pick?.objectStoryId) {
+        await createPostAd(pick.objectStoryId, customersAdSetId, `Doorgeschoven ${now.toISOString().slice(0, 10)}`);
+        result.promoted = pick.objectStoryId;
+        for (const old of customerAds.filter((a) => a.status === "ACTIVE")) {
+          await meta.request(`/${old.id}`, { method: "POST", body: { status: "PAUSED" } });
+          result.paused.push(old.id);
+        }
+      }
+    } catch (e) {
+      result.ok = false;
+      result.errors.push(`doorschuiven: ${e instanceof Error ? e.message : String(e)}`);
+    }
+  }
   return result;
+}
+
+/** Maak een actieve advertentie op een bestaande paginapost, met pixel-tracking. */
+async function createPostAd(objectStoryId: string, adSetId: string, name: string): Promise<void> {
+  const creative = await meta.adCreatives.create({
+    name: `Post ${objectStoryId.split("_")[1] ?? objectStoryId}`,
+    object_story_id: objectStoryId,
+  });
+  const pixelId = process.env.META_PIXEL_ID;
+  await meta.request(`/${adAccountPath()}/ads`, {
+    method: "POST",
+    body: {
+      name,
+      adset_id: adSetId,
+      creative: { creative_id: creative.id },
+      status: "ACTIVE",
+      ...(pixelId ? { tracking_specs: [{ "action.type": ["offsite_conversion"], fb_pixel: [pixelId] }] } : {}),
+    },
+  });
 }

@@ -97,3 +97,23 @@ describe("postImageList", () => {
     expect(postImageList({ full_picture: "f" })).toEqual(["f"]);
   });
 });
+
+import { pickPromotion } from "@/lib/meta/boost";
+
+describe("pickPromotion", () => {
+  const now = new Date("2026-11-21T12:00:00Z");
+  const perf = [
+    { adId: "a", objectStoryId: "p_1", impressions: 1000, clicks: 5, engagements: 10 },
+    { adId: "b", objectStoryId: "p_2", impressions: 800, clicks: 20, engagements: 30 },
+    { adId: "c", objectStoryId: "p_3", impressions: 100, clicks: 50, engagements: 50 }, // te weinig data
+  ];
+  it("promotes the best proven post when the customer ad is a week old", () => {
+    const customer = [{ id: "x", created_time: "2026-11-14T10:00:00+0000", status: "ACTIVE", objectStoryId: "p_0" }];
+    expect(pickPromotion(perf, customer, now)?.objectStoryId).toBe("p_2");
+  });
+  it("waits while the customer ad is fresh and skips posts already used", () => {
+    expect(pickPromotion(perf, [{ id: "x", created_time: "2026-11-18T10:00:00+0000", status: "ACTIVE", objectStoryId: "p_0" }], now)).toBeNull();
+    const used = [{ id: "y", created_time: "2026-11-01T00:00:00+0000", status: "PAUSED", objectStoryId: "p_2" }];
+    expect(pickPromotion(perf, used, now)?.objectStoryId).toBe("p_1");
+  });
+});
