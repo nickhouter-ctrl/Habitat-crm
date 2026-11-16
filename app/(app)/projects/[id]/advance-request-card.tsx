@@ -19,7 +19,7 @@ import { companies, contacts, users } from "@/lib/db/schema";
 import { buildAdvanceReminderEmail, buildAdvanceRequestEmail, buildAdvanceStatusEmail } from "@/lib/advance-request";
 import type { AdvanceCover } from "@/lib/project-financials";
 import { formatEUR } from "@/lib/utils";
-import { sendAdvanceRequest } from "../actions";
+import { addProjectPayment, sendAdvanceRequest } from "../actions";
 import { loadProjectAdvanceRequests } from "@/lib/project-advance-requests";
 
 /**
@@ -77,6 +77,8 @@ export async function AdvanceRequestCard({
   // Tekort afgerond op duizendtallen: een voorschot vraag je niet op de cent.
   const tekortAfgerond = cover.suggestedRequestEur;
   const amount = parseAmount(params.vbedrag);
+  // Vandaag in Spaanse tijd (YYYY-MM-DD) als standaard-ontvangstdatum.
+  const vandaag = new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Madrid" }).format(new Date());
   const termLabel = params.vtermijn?.trim() || "";
   const agreementDate = params.vdatum?.trim() || contractDate;
 
@@ -284,6 +286,37 @@ export async function AdvanceRequestCard({
                     </div>
                   )}
 
+                  {open != null && open > 0.01 && (
+                    // Betaling in één klik vastleggen — boekt een ontvangst bij
+                    // dit verzoek (zelfde als via Ontvangen geld), datum vandaag.
+                    <div className="mt-3 flex flex-wrap items-end gap-2 rounded-md border border-success/30 bg-success/5 p-2">
+                      <form action={addProjectPayment.bind(null, projectId)}>
+                        <input type="hidden" name="advanceRequestId" value={m.id} />
+                        <input type="hidden" name="amountEur" value={String(open)} />
+                        <input type="hidden" name="date" value={vandaag} />
+                        <input type="hidden" name="description" value={`Voorschot ${termijnUit(m.subject)}`} />
+                        <SubmitButton size="sm" pendingLabel={uiT("Bezig…")}>
+                          {uiT("✓ Betaald")} ({formatEUR(open)})
+                        </SubmitButton>
+                      </form>
+                      <form action={addProjectPayment.bind(null, projectId)} className="flex items-end gap-2">
+                        <input type="hidden" name="advanceRequestId" value={m.id} />
+                        <input type="hidden" name="description" value={`Voorschot ${termijnUit(m.subject)} (deel)`} />
+                        <label className="text-xs text-muted">
+                          {uiT("Deel ontvangen")}
+                          <Input name="amountEur" inputMode="decimal" placeholder="€" className="mt-0.5 h-8 w-28" required />
+                        </label>
+                        <label className="text-xs text-muted">
+                          {uiT("Datum")}
+                          <Input name="date" type="date" defaultValue={vandaag} className="mt-0.5 h-8 w-36" />
+                        </label>
+                        <SubmitButton size="sm" variant="secondary" pendingLabel={uiT("Bezig…")}>
+                          {uiT("Boeken")}
+                        </SubmitButton>
+                      </form>
+                    </div>
+                  )}
+
                   <div className="mt-3 flex flex-wrap items-center gap-2">
                     {binnen > 0 && !voldaan && (
                       <>
@@ -325,7 +358,7 @@ export async function AdvanceRequestCard({
               );
             })}
             <p className="text-xs text-muted">
-              {uiT("Deel ontvangen? Boek dat bedrag bij Ontvangen betalingen en kies daar dit verzoek — dan loopt de stand hierboven mee. Het formele stuk (provisión de fondos) maak je pas als alles binnen is.")} </p>
+              {uiT("Betaald? Klik op ✓ Betaald, of vul bij een deelbetaling het bedrag in. Het komt dan vanzelf bij Ontvangen geld te staan. Het formele stuk (provisión de fondos) maak je pas als alles binnen is.")} </p>
           </div>
         )}
 

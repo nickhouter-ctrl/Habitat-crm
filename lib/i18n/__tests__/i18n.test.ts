@@ -72,6 +72,8 @@ describe("woordenboeken", () => {
     // international words keep their spelling. Each target also has source
     // labels already written in that language (e.g. Spanish “Fase”).
     const gelijk = new Set([
+  "Accounts",
+  "Posts",
   "· IP",
   "CC:",
   "kB ·",
