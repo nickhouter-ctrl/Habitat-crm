@@ -32,7 +32,7 @@ import { db } from "@/lib/db";
 import { brands, companies, deliveries, documents, holdedSyncMap, products } from "@/lib/db/schema";
 import { SubmitButton } from "@/components/submit-button";
 import { lineCostEur, lineNet, lineTax, normalizeDocItems } from "@/lib/documents";
-import { missingBillingFields } from "@/lib/invoice-validation";
+import { blockingBillingFields, missingBillingFields } from "@/lib/invoice-validation";
 import { labelForCategory } from "@/lib/products";
 import { HOOFDSTUKKEN } from "@/lib/price-book";
 import { formatDate, formatEUR } from "@/lib/utils";
@@ -398,6 +398,10 @@ export default async function DocumentDetailPage({
       : null);
   const invoiceMissing =
     doc.kind === "invoice" || doc.kind === "creditnote" ? missingBillingFields(doc.contact, billingCompany) : [];
+  // Deelverzameling die het versturen echt tegenhoudt. Staat die leeg, dan mag
+  // de factuur weg en is de melding niet meer dan een aantekening.
+  const invoiceBlocking =
+    doc.kind === "invoice" || doc.kind === "creditnote" ? blockingBillingFields(doc.contact, billingCompany) : [];
 
   // Alleen facturen met productregels kunnen daadwerkelijk geleverd of opgehaald
   // worden — een factuur voor uren heeft niets om mee te geven.
@@ -485,7 +489,10 @@ export default async function DocumentDetailPage({
       {invoiceMissing.length > 0 && (
         <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900">
           <span>
-            <strong>{uiT("Klantgegevens onvolledig")}</strong> {uiT("— deze factuur kan niet verstuurd of goedgekeurd worden. Ontbreekt:")}{" "}
+            <strong>{uiT("Klantgegevens onvolledig")}</strong>{" "}
+            {invoiceBlocking.length
+              ? uiT("— deze factuur kan niet verstuurd of goedgekeurd worden. Ontbreekt:")
+              : uiT("— versturen kan wel, maar vul dit nog aan. Ontbreekt:")}{" "}
             <strong>{invoiceMissing.join(", ")}</strong>.
           </span>
           {doc.contact?.id && (

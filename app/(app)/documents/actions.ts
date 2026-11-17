@@ -11,7 +11,7 @@ import { requireModule } from "@/lib/auth/guards";
 import { db } from "@/lib/db";
 import { activities, companies, contacts, deals, deliveries, documents, holdedSyncMap, products, projectPayments, type DocumentLineItem } from "@/lib/db/schema";
 import { syncDealFromDocument } from "@/lib/deals";
-import { missingBillingFields } from "@/lib/invoice-validation";
+import { blockingBillingFields } from "@/lib/invoice-validation";
 import { invoiceOutstanding } from "@/lib/invoice-outstanding";
 import { syncProjectReceiptFromDocument } from "@/lib/project-receipts";
 import {
@@ -788,7 +788,9 @@ async function assertInvoiceClientComplete(docId: string) {
         columns: { name: true, vatNumber: true, addressLine: true, postalCode: true, city: true, country: true },
       })
     : null;
-  const missing = missingBillingFields(contact, company);
+  // Alleen de identificerende velden houden het versturen tegen; postcode en
+  // plaats worden wel gemeld op de factuur, maar blokkeren niet meer.
+  const missing = blockingBillingFields(contact, company);
   if (missing.length) {
     redirect(`/documents/${docId}?fout=${encodeURIComponent(`Klantgegevens onvolledig — vul eerst aan: ${missing.join(", ")}`)}`);
   }

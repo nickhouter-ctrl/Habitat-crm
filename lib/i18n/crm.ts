@@ -506,6 +506,7 @@ const rows: [string,string,string][] = [
   ["Controleer de gegevens (minstens één regel met een omschrijving).","Comprueba los datos: al menos una línea debe tener descripción.","Check the details: at least one line must have a description."],
   ["Klantgegevens onvolledig","Datos del cliente incompletos","Incomplete customer details"],
   ["— deze factuur kan niet verstuurd of goedgekeurd worden. Ontbreekt:","— no se puede enviar ni aprobar esta factura. Falta:","— this invoice cannot be sent or approved. Missing:"],
+  ["— versturen kan wel, maar vul dit nog aan. Ontbreekt:","— se puede enviar, pero conviene completarlo. Falta:","— sending is possible, but please complete this. Missing:"],
   ["Klant aanvullen","Completar cliente","Complete customer details"],
   ["stuks","unidades","units"],
   ["Zodra de klant akkoord is, staat hier de bestelopdracht.","La orden de compra aparecerá aquí cuando el cliente acepte.","The purchase instruction appears here once the customer accepts."],
