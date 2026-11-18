@@ -33,7 +33,7 @@ it("bewaart een nieuw punt met het formulier-id, zodat twee keer versturen één
 });
 
 it("weigert een alleen-lezen account als verantwoordelijke", async () => {
-  mocks.query.mockResolvedValueOnce({ rows: [["viewer"]] });
+  mocks.query.mockResolvedValueOnce({ rows: [["viewer", "hans@habitat-one.com"]] });
   const result = await bewaarActiepunt({}, velden({ assigneeId: collega }));
   expect(result.error).toContain("Kies een andere verantwoordelijke");
   expect(mocks.query).toHaveBeenCalledTimes(1);
@@ -41,20 +41,29 @@ it("weigert een alleen-lezen account als verantwoordelijke", async () => {
 });
 
 it("accepteert een verantwoordelijke die op de ledenlijst staat", async () => {
-  mocks.query.mockResolvedValueOnce({ rows: [["admin"]] });
+  mocks.query.mockResolvedValueOnce({ rows: [["admin", "hans@habitat-one.com"]] });
   const result = await bewaarActiepunt({}, velden({ assigneeId: collega, dueDate: "2026-12-01" }));
   expect(result.error).toBeUndefined();
   expect(mocks.query.mock.calls[1][1]).toContain(collega);
   expect(mocks.query.mock.calls[1][1]).toContain("2026-12-01");
 });
 
-it("accepteert ook een collega die de lijst zelf niet bijhoudt", async () => {
-  // Teresa mag de lijst niet in, maar kan wel verantwoordelijk zijn: zij ziet
-  // het punt via de agenda.
-  mocks.query.mockResolvedValueOnce({ rows: [["admin"]] });
-  const result = await bewaarActiepunt({}, velden({ assigneeId: collega, dueDate: "2026-12-01" }));
+it("weigert een collega die de lijst niet bijhoudt", async () => {
+  // Teresa is beheerder, maar de actielijst is niet van haar.
+  mocks.query.mockResolvedValueOnce({ rows: [["admin", "teresa@habitat-one.com"]] });
+  const result = await bewaarActiepunt({}, velden({ assigneeId: collega }));
+  expect(result.error).toContain("Kies een andere verantwoordelijke");
+  expect(mocks.query).toHaveBeenCalledTimes(1);
+});
+
+it("legt ‘hele team’ vast zonder iemand aan te wijzen", async () => {
+  const result = await bewaarActiepunt({}, velden({ assigneeId: "team", dueDate: "2026-12-01" }));
   expect(result.error).toBeUndefined();
-  expect(mocks.query.mock.calls[1][1]).toContain(collega);
+  // Geen controlevraag over een medewerker: er is er geen.
+  expect(mocks.query.mock.calls[0][0]).toContain('insert into "action_items"');
+  const params = mocks.query.mock.calls[0][1] as unknown[];
+  expect(params).toContain(true);
+  expect(params).not.toContain(collega);
 });
 
 it("wijst een onmogelijke deadline af voordat er iets wordt opgeslagen", async () => {
@@ -104,9 +113,9 @@ it("laat de herinnering staan als het punt terugkomt in de lijst", async () => {
 // De rij zoals stemTaakAf hem uitleest: id, titel, toelichting, groep,
 // subgroep, deadline, status, verantwoordelijke, aangemaakt door, gearchiveerd,
 // taak-id.
-const puntRij = (over: Partial<{ dueDate: string | null; status: string; taskId: string | null; archivedAt: Date | null }> = {}) => {
-  const r = { id, title: "Stalenkast opruimen", description: null, groupName: "Showroom", subgroup: "Stalen", dueDate: "2026-12-01", status: "open", assigneeId: collega, createdById: userId, archivedAt: null, taskId: taak, ...over };
-  return [[r.id, r.title, r.description, r.groupName, r.subgroup, r.dueDate, r.status, r.assigneeId, r.createdById, r.archivedAt, r.taskId]];
+const puntRij = (over: Partial<{ dueDate: string | null; status: string; taskId: string | null; archivedAt: Date | null; teamwide: boolean; assigneeId: string | null }> = {}) => {
+  const r = { id, title: "Stalenkast opruimen", description: null, groupName: "Showroom", subgroup: "Stalen", dueDate: "2026-12-01", status: "open", assigneeId: collega, teamwide: false, createdById: userId, archivedAt: null, taskId: taak, ...over };
+  return [[r.id, r.title, r.description, r.groupName, r.subgroup, r.dueDate, r.status, r.assigneeId, r.teamwide, r.createdById, r.archivedAt, r.taskId]];
 };
 const taak = "00000000-0000-4000-8000-000000000009";
 
@@ -130,6 +139,16 @@ it("maakt een agendataak aan voor een punt dat er nog geen heeft", async () => {
   expect(sqls[2]).toContain('insert into "activities"');
   expect(sqls[3]).toContain('"task_id" = $1');
   expect(mocks.query.mock.calls[3][1][0]).toBe(taak);
+});
+
+it("hangt de agendataak van een teampunt aan niemand in het bijzonder", async () => {
+  mocks.query.mockResolvedValueOnce({ rows: [[id]] }).mockResolvedValueOnce({ rows: puntRij({ teamwide: true, assigneeId: null }) }).mockResolvedValueOnce({ rows: [[taak]] });
+  expect(await zetActieKlaar({ id, klaar: false })).toEqual({});
+  const [agendaSql, agendaParams] = mocks.query.mock.calls[2];
+  expect(agendaSql).toContain('update "activities"');
+  // Geen verantwoordelijke op de taak; de maker blijft de auteur.
+  expect(agendaParams).toContain(userId);
+  expect(agendaParams).not.toContain(collega);
 });
 
 it("haalt de agendataak weg als de deadline eraf gaat", async () => {

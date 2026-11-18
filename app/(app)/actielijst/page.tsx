@@ -1,16 +1,12 @@
 import { randomUUID } from "node:crypto";
 import Link from "next/link";
-import { and, asc, eq, inArray, isNotNull, isNull, ne, sql } from "drizzle-orm";
-import { alias } from "drizzle-orm/pg-core";
 import { CheckSquare, Plus } from "lucide-react";
 import { z } from "zod";
 import { requireModuleRead } from "@/lib/auth/guards";
-import { db } from "@/lib/db";
-import { actionItemComments, actionItems, users } from "@/lib/db/schema";
 import { datumTaal, tekst } from "@/lib/i18n/server";
 import { agendaDay, AGENDA_TIME_ZONE } from "@/lib/agenda-dates";
 import { actieKleur, bestaandeIndeling, deadlineTekst, groepeer, isAchterstallig } from "@/lib/actielijst";
-import { toewijsbareMedewerkers } from "@/lib/actielijst-db";
+import { laadActielijst, toewijsbareMedewerkers } from "@/lib/actielijst-db";
 import { Badge, Card, CardContent, CardHeader, CardTitle, EmptyState, PageHeader, StatTile, Table, TBody, Td, Th, THead, Tr } from "@/components/ui";
 import { WorkflowModal } from "@/components/workflow-modal";
 import { ActiepuntForm, ActieArchiefKnop, ActieKlaarVinkje, LinkKopieerKnop, OpmerkingForm } from "./forms";
@@ -27,29 +23,12 @@ export default async function ActielijstPage({ searchParams }: { searchParams: P
   const mag = ik.heeftCap("schrijven"), vandaag = agendaDay(new Date());
   const weergave = sp.weergave === "alles" || sp.weergave === "archief" ? sp.weergave : "open";
   const alleenIk = sp.wie === "mij", geselecteerd = uuid(sp.taak), nieuw = sp.nieuw === "1";
-  const toegewezen = alias(users, "action_assignee");
-  const filter = and(
-    weergave === "archief" ? isNotNull(actionItems.archivedAt) : isNull(actionItems.archivedAt),
-    weergave === "open" ? ne(actionItems.status, "done") : undefined,
-    alleenIk ? eq(actionItems.assigneeId, ik.id) : undefined,
-  );
-  const kolommen = { id: actionItems.id, groupName: actionItems.groupName, subgroup: actionItems.subgroup, title: actionItems.title, description: actionItems.description, helpers: actionItems.helpers, dueDate: actionItems.dueDate, status: actionItems.status, assigneeId: actionItems.assigneeId, assigneeName: toegewezen.name, assigneeEmail: toegewezen.email, doneAt: actionItems.doneAt, archivedAt: actionItems.archivedAt, createdAt: actionItems.createdAt };
-  const [rijen, alles, selectieRijen, medewerkers] = await Promise.all([
-    db.select(kolommen).from(actionItems).leftJoin(toegewezen, eq(toegewezen.id, actionItems.assigneeId)).where(filter)
-      .orderBy(asc(actionItems.groupName), sql`${actionItems.subgroup} nulls first`, sql`case when ${actionItems.status} = 'done' then 1 else 0 end`, sql`${actionItems.dueDate} asc nulls last`, asc(actionItems.createdAt)).limit(500),
-    // De indeling en de tellers horen bij de hele lijst, niet bij dit filter.
-    db.select({ groupName: actionItems.groupName, subgroup: actionItems.subgroup, status: actionItems.status, dueDate: actionItems.dueDate, assigneeId: actionItems.assigneeId }).from(actionItems).where(isNull(actionItems.archivedAt)).limit(2000),
-    geselecteerd ? db.select(kolommen).from(actionItems).leftJoin(toegewezen, eq(toegewezen.id, actionItems.assigneeId)).where(eq(actionItems.id, geselecteerd)) : [],
+  // Dezelfde query als de persoonlijke link gebruikt, zodat de twee ingangen
+  // niet uit elkaar kunnen lopen.
+  const [{ rijen, alles, opmerkingen, selectie }, medewerkers] = await Promise.all([
+    laadActielijst({ weergave, alleenVoor: alleenIk ? ik.id : null, punt: geselecteerd }),
     toewijsbareMedewerkers(),
   ]);
-  const zichtbaar = rijen.map(r => r.id);
-  const opmerkingen = zichtbaar.length || geselecteerd
-    ? await db.select({ id: actionItemComments.id, itemId: actionItemComments.itemId, body: actionItemComments.body, createdAt: actionItemComments.createdAt, authorName: users.name })
-        .from(actionItemComments).leftJoin(users, eq(users.id, actionItemComments.authorId))
-        .where(inArray(actionItemComments.itemId, [...new Set([...zichtbaar, ...(geselecteerd ? [geselecteerd] : [])])]))
-        .orderBy(asc(actionItemComments.createdAt))
-    : [];
-  const selectie = selectieRijen[0] ?? null;
   const indeling = bestaandeIndeling(alles);
   // De persoonlijke links staan hier, want hier beheer je ze ook.
   const links = mag ? await zorgVoorActielijstLinks() : [];
@@ -95,8 +74,8 @@ export default async function ActielijstPage({ searchParams }: { searchParams: P
                   {rij.helpers && <span className="text-xs text-muted">{t("Samen met")}: {rij.helpers}</span>}
                 </span>
                 {/* Op een telefoon staat alles onder elkaar in plaats van in kolommen. */}
-                <span className="mt-1 block text-xs text-muted sm:hidden">{rij.assigneeName ?? t("Nog niemand")}{rij.dueDate ? ` · ${kort(rij.dueDate)}` : ""}{aantal ? ` · ${aantal}×` : ""}</span></Td>
-              <Td className="hidden text-sm sm:table-cell">{rij.assigneeName ?? rij.assigneeEmail ?? <span className="text-xs text-muted">{t("Nog niemand")}</span>}</Td>
+                <span className="mt-1 block text-xs text-muted sm:hidden">{rij.teamwide ? t("Hele team") : rij.assigneeName ?? t("Nog niemand")}{rij.dueDate ? ` · ${kort(rij.dueDate)}` : ""}{aantal ? ` · ${aantal}×` : ""}</span></Td>
+              <Td className="hidden text-sm sm:table-cell">{rij.teamwide ? t("Hele team") : rij.assigneeName ?? rij.assigneeEmail ?? <span className="text-xs text-muted">{t("Nog niemand")}</span>}</Td>
               <Td className={`hidden text-sm sm:table-cell ${kleur === "achterstallig" ? "font-semibold text-danger" : ""}`}>{rij.dueDate ? kort(rij.dueDate) : <span className="text-xs text-muted">—</span>}</Td>
               <Td className="hidden lg:table-cell"><Link href={`${lijstHref}&taak=${rij.id}`} className="block text-xs leading-relaxed text-muted hover:text-accent">{laatste ? <>{aantal > 1 && <span className="mr-1 font-semibold">{aantal}×</span>}<span className="line-clamp-2">{laatste.body}</span></> : t("Opmerking plaatsen")}</Link></Td>
             </Tr>;
@@ -126,8 +105,8 @@ export default async function ActielijstPage({ searchParams }: { searchParams: P
     {selectie && <WorkflowModal title={selectie.title} closeHref={lijstHref}>
       <div className="space-y-6">
         {mag ? <ActiepuntForm submissionId={selectie.id} team={medewerkers} indeling={indeling} vandaag={vandaag} sluitHref={lijstHref}
-          punt={{ id: selectie.id, groupName: selectie.groupName, subgroup: selectie.subgroup, title: selectie.title, description: selectie.description, assigneeId: selectie.assigneeId, helpers: selectie.helpers, dueDate: selectie.dueDate, status: selectie.status }}/>
-          : <div className="space-y-2 text-sm"><p className="text-muted">{selectie.groupName}{selectie.subgroup ? ` · ${selectie.subgroup}` : ""}</p>{selectie.description && <p className="whitespace-pre-wrap leading-relaxed">{selectie.description}</p>}<p>{t("Wie")}: {selectie.assigneeName ?? t("Nog niemand")}</p>{selectie.dueDate && <p>{t("Deadline")}: {deadlineTekst(selectie.dueDate, locale)}</p>}</div>}
+          punt={{ id: selectie.id, groupName: selectie.groupName, subgroup: selectie.subgroup, title: selectie.title, description: selectie.description, assigneeId: selectie.assigneeId, teamwide: selectie.teamwide, helpers: selectie.helpers, dueDate: selectie.dueDate, status: selectie.status }}/>
+          : <div className="space-y-2 text-sm"><p className="text-muted">{selectie.groupName}{selectie.subgroup ? ` · ${selectie.subgroup}` : ""}</p>{selectie.description && <p className="whitespace-pre-wrap leading-relaxed">{selectie.description}</p>}<p>{t("Wie")}: {selectie.teamwide ? t("Hele team") : selectie.assigneeName ?? t("Nog niemand")}</p>{selectie.dueDate && <p>{t("Deadline")}: {deadlineTekst(selectie.dueDate, locale)}</p>}</div>}
         {selectie.dueDate && isAchterstallig(selectie, vandaag) && <p className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-danger">{selectie.assigneeId ? t("De deadline van {datum} is verstreken. De verantwoordelijke krijgt hierover een mail.", { datum: deadlineTekst(selectie.dueDate, locale) }) : t("De deadline van {datum} is verstreken. Zonder verantwoordelijke gaat er geen mail uit.", { datum: deadlineTekst(selectie.dueDate, locale) })}</p>}
         <div className="space-y-3 border-t pt-5">
           <p className="text-sm font-semibold">{t("Opmerkingen")}</p>

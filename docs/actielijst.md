@@ -34,13 +34,11 @@ Alleen-lezen accounts kunnen niets wijzigen en worden ook niet als
 verantwoordelijke geaccepteerd: een mail over een punt dat je niet kunt
 afvinken heeft geen zin.
 
-**Toewijzen mag wél aan iedere medewerker**, ook aan wie de lijst niet mag
-openen (keuze Nick 18-11-2026). Zo iemand ziet het punt niet in de lijst, maar
-wel in de agenda — daar komt een punt met een deadline toch al terecht — en de
-herinneringsmail wijst hem naar `/agenda` in plaats van naar de lijst. De
-keuzelijst staat daarom in twee groepen: wie de lijst bijhoudt en wie het
-alleen in zijn agenda ziet. Zonder deadline komt het punt bij zo'n collega
-nergens langs; dat staat ook bij het formulier.
+Toewijzen kan alleen aan die vier (keuze Nick 18-11-2026: Teresa, Mourad en
+Daan horen er niet in). Naast de namen staat **Hele team** in de keuzelijst:
+dan hangt het punt aan niemand in het bijzonder, krijgt iedereen die de lijst
+bijhoudt de herinnering, en staat het bij iedereen onder "alleen van mij".
+In de database is dat `action_items.teamwide`; `assignee_id` blijft dan leeg.
 
 ## De persoonlijke link
 
@@ -70,7 +68,8 @@ lopen. De dag van de deadline zelf is nog op tijd.
 
 Een punt met een deadline krijgt een gewone taak in `activities`
 (`type = "task"`, deadline om 17:00 Madrid, bij de verantwoordelijke — zonder
-verantwoordelijke bij degene die het punt aanmaakte). Daardoor staat het punt
+verantwoordelijke, en bij een punt van het hele team, bij degene die het punt
+aanmaakte). Daardoor staat het punt
 vanzelf in `/agenda`, in het ochtendoverzicht van 08:00 én in de Apple-agenda
 van die medewerker, via de bestaande sync (`lib/apple-calendar/sync.ts` pakt elke
 open taak met een deadline op). In de taak staat de groep en een link terug naar
@@ -93,9 +92,11 @@ het punt.
   aangeroepen door de bestaande cron `/api/cron/staff-notifications` (elke tien
   minuten; de functie doet alleen iets om 08:00 Madrid). Geen extra cron in
   `vercel.json`.
-- Sleutel: `actie:<id>:<deadline>:w<week>`. De mail komt één keer de dag na de
-  deadline en daarna één keer per week zolang het punt openstaat. Een verzette
-  deadline is een nieuwe sleutel en mag opnieuw melden.
+- Sleutel: `actie:<id>:<deadline>:w<week>:<ontvanger>`. De mail komt één keer de
+  dag na de deadline en daarna één keer per week zolang het punt openstaat. Een
+  verzette deadline is een nieuwe sleutel en mag opnieuw melden; bij een punt
+  van het hele team heeft iedereen zijn eigen sleutel, anders zou de eerste
+  melding de rest van het team wegdrukken.
 - Vlak voor verzenden wordt het punt opnieuw gelezen: afgevinkt, gearchiveerd,
   aan iemand anders gegeven of met een andere deadline → de melding vervalt.
 - **Zonder verantwoordelijke gaat er geen mail uit.** Dat staat ook bij het punt
@@ -107,11 +108,13 @@ het punt.
 
 ## Tabellen
 
-- `action_items` — groep, subgroep, titel, toelichting, verantwoordelijke, samen
-  met, deadline, status (`open` / `in_progress` / `done`), afgevinkt door/op,
-  aangemaakt door, gearchiveerd op, en `task_id` naar de agendataak.
+- `action_items` — groep, subgroep, titel, toelichting, verantwoordelijke of
+  `teamwide`, samen met, deadline, status (`open` / `in_progress` / `done`),
+  afgevinkt door/op, aangemaakt door, gearchiveerd op, en `task_id` naar de
+  agendataak.
 - `action_item_comments` — punt, auteur, tekst.
 - `action_list_links` — medewerker, token, laatst geopend.
 
-Migratie `drizzle/0098_oval_tony_stark.sql`; die breidt ook de `kind`-check van
-`staff_notifications` uit met `action_overdue`.
+Migraties `drizzle/0098_oval_tony_stark.sql` (de drie tabellen; breidt ook de
+`kind`-check van `staff_notifications` uit met `action_overdue`) en
+`drizzle/0099_*.sql` (`teamwide`).

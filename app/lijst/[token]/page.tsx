@@ -82,11 +82,10 @@ export default async function ActielijstViaLink({ params, searchParams }: Props)
     </label>
     <div className="grid grid-cols-2 gap-3">
       <label className="block text-sm font-medium text-stone-700">Wie
-        <select name="assigneeId" defaultValue={rij?.assigneeId ?? ""} className={`mt-1 ${veld}`}>
+        <select name="assigneeId" defaultValue={rij?.teamwide ? "team" : rij?.assigneeId ?? ""} className={`mt-1 ${veld}`}>
           <option value="">Nog niemand</option>
-          {/* Wie de lijst niet bijhoudt, ziet het punt alleen in zijn agenda. */}
-          <optgroup label="Houdt de lijst bij">{medewerkers.filter(m => m.inLijst).map(m => <option key={m.id} value={m.id}>{voornaam(m.name) || m.email}</option>)}</optgroup>
-          <optgroup label="Overig (ziet het in de agenda)">{medewerkers.filter(m => !m.inLijst).map(m => <option key={m.id} value={m.id}>{voornaam(m.name) || m.email}</option>)}</optgroup>
+          <option value="team">Hele team</option>
+          {medewerkers.map(m => <option key={m.id} value={m.id}>{voornaam(m.name) || m.email}</option>)}
         </select>
       </label>
       <label className="block text-sm font-medium text-stone-700">Deadline
@@ -151,7 +150,7 @@ export default async function ActielijstViaLink({ params, searchParams }: Props)
               <summary className="cursor-pointer list-none px-1 py-2">
                 <p className={`font-medium leading-snug ${rij.status === "done" ? "text-stone-500 line-through" : ""}`}>{rij.title}</p>
                 <p className="mt-0.5 text-sm text-stone-500">
-                  {rij.assigneeName ? voornaam(rij.assigneeName) : "nog niemand"}
+                  {rij.teamwide ? "hele team" : rij.assigneeName ? voornaam(rij.assigneeName) : "nog niemand"}
                   {rij.dueDate && <> · <span className={kleur === "achterstallig" ? "font-semibold text-red-700" : ""}>{kort(rij.dueDate)}</span></>}
                   {rij.status === "in_progress" && " · bezig"}
                   {eigen.length ? ` · ${eigen.length} opmerking${eigen.length === 1 ? "" : "en"}` : ""}

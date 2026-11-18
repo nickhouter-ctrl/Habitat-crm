@@ -57,14 +57,15 @@ export function dagenTeLaat(dueDate: string, vandaag: string): number {
 }
 
 /**
- * De sleutel van de herinneringsmail. Er zit drie dingen in: het punt, de
- * gemiste deadline en de week erna. Daarmee komt de mail één keer de dag na de
- * deadline, daarna één keer per week zolang het punt openblijft, en stuurt een
- * cron die twee keer op dezelfde dag langskomt er geen tweede. Een verzette
- * deadline is een nieuwe sleutel, dus die mag opnieuw melden.
+ * De sleutel van de herinneringsmail. Er zitten vier dingen in: het punt, de
+ * gemiste deadline, de week erna en de ontvanger. Daarmee komt de mail één keer
+ * de dag na de deadline, daarna één keer per week zolang het punt openblijft,
+ * en stuurt een cron die twee keer op dezelfde dag langskomt er geen tweede.
+ * Een verzette deadline is een nieuwe sleutel en mag opnieuw melden; bij een
+ * punt van het hele team krijgt iedereen zijn eigen sleutel.
  */
-export function actieMailSleutel(itemId: string, dueDate: string, vandaag: string): string {
-  return `actie:${itemId}:${dueDate}:w${Math.floor(dagenTeLaat(dueDate, vandaag) / 7)}`;
+export function actieMailSleutel(itemId: string, dueDate: string, vandaag: string, userId: string): string {
+  return `actie:${itemId}:${dueDate}:w${Math.floor(dagenTeLaat(dueDate, vandaag) / 7)}:${userId}`;
 }
 
 /** Groep → subgroep → regels, in de volgorde waarin ze op het scherm staan. */
