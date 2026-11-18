@@ -42,12 +42,27 @@ export const klaarInvoer = z.object({ id: z.string().uuid(), klaar: z.boolean() 
 export const archiefInvoer = z.object({ id: z.string().uuid(), archief: z.boolean() });
 
 /**
- * De verantwoordelijke moet de lijst zelf kunnen openen en bijwerken: anders
- * krijgt iemand een mail over een punt dat hij niet kan afvinken.
+ * Iedere medewerker die iets mag wijzigen kan verantwoordelijk zijn — ook wie
+ * de lijst zelf niet mag openen (keuze Nick 18-11-2026). Zo'n collega ziet het
+ * punt niet in de lijst maar wél in de agenda, want een punt met een deadline
+ * is ook een taak. Alleen-lezen accounts vallen af: die kunnen niets afvinken.
  */
 export async function isGeldigeVerantwoordelijke(id: string): Promise<boolean> {
-  const [gebruiker] = await db.select({ role: users.role, email: users.email }).from(users).where(eq(users.id, id));
-  return !!gebruiker && magModuleAls(gebruiker.role, gebruiker.email, "actielijst") && heeftCap(gebruiker.role, "schrijven");
+  const [gebruiker] = await db.select({ role: users.role }).from(users).where(eq(users.id, id));
+  return !!gebruiker && heeftCap(gebruiker.role, "schrijven");
+}
+
+export type Medewerker = { id: string; name: string | null; email: string; inLijst: boolean };
+
+/**
+ * Wie je kunt toewijzen, in twee groepen: de mensen die de lijst zelf bijhouden
+ * en de overige collega's. Die scheiding staat ook op het scherm, zodat je weet
+ * wie het punt in de lijst ziet en wie alleen in zijn agenda.
+ */
+export async function toewijsbareMedewerkers(): Promise<Medewerker[]> {
+  const team = await db.select({ id: users.id, name: users.name, email: users.email, role: users.role }).from(users).orderBy(asc(users.name));
+  return team.filter(u => heeftCap(u.role, "schrijven"))
+    .map(u => ({ id: u.id, name: u.name, email: u.email, inLijst: magModuleAls(u.role, u.email, "actielijst") }));
 }
 
 

@@ -4,7 +4,7 @@ import { dateLocale, isLocale, maakT } from "@/lib/i18n";
 import { AGENDA_TIME_ZONE } from "@/lib/agenda-dates";
 
 export type StaffAgendaItem = { id: string; kind: "task" | "appointment"; title: string; body: string | null; at: Date; contactId: string | null; contactName: string | null; location?: string | null; overdue?: boolean };
-export type StaffMailContent = { kind: "followup_assignment" | "task_assignment" | "appointment_assignment" | "team_message" | "daily_agenda" | "worker_week_submitted" | "action_overdue"; title?: string; body?: string | null; at?: Date | null; actorName?: string | null; contactId?: string | null; contactName?: string | null; messageId?: string; sheetId?: string; lumpId?: string; itemId?: string; linkToken?: string; day?: string; items?: StaffAgendaItem[] };
+export type StaffMailContent = { kind: "followup_assignment" | "task_assignment" | "appointment_assignment" | "team_message" | "daily_agenda" | "worker_week_submitted" | "action_overdue"; title?: string; body?: string | null; at?: Date | null; actorName?: string | null; contactId?: string | null; contactName?: string | null; messageId?: string; sheetId?: string; lumpId?: string; itemId?: string; linkToken?: string; inLijst?: boolean; day?: string; items?: StaffAgendaItem[] };
 
 export function staffNotificationEmail(content: StaffMailContent, recipient: { name: string | null; locale: string }) {
   const locale = isLocale(recipient.locale) ? recipient.locale : "nl", t = maakT(locale), base = crmUrl();
@@ -22,7 +22,7 @@ export function staffNotificationEmail(content: StaffMailContent, recipient: { n
     // Aparte mail, los van het ochtendoverzicht: één gemiste deadline, één bericht.
     // De persoonlijke link opent zonder inloggen; die werkt op de telefoon.
     // Geen link bekend? Dan de pagina in het CRM, achter de login.
-    case "action_overdue": subject = t("Actie nodig – {taak} is nog niet uitgevoerd", { taak: content.title ?? "" }); intro = t("Deze taak uit de gedeelde actielijst staat na de deadline nog open. Vink hem af zodra hij klaar is, of zet er een nieuwe deadline op."); href = content.linkToken ? `/lijst/${content.linkToken}#punt-${content.itemId}` : `/actielijst?taak=${content.itemId}`; label = t("Open het actiepunt"); break;
+    case "action_overdue": subject = t("Actie nodig – {taak} is nog niet uitgevoerd", { taak: content.title ?? "" }); intro = t("Deze taak uit de gedeelde actielijst staat na de deadline nog open. Vink hem af zodra hij klaar is, of zet er een nieuwe deadline op."); href = content.linkToken ? `/lijst/${content.linkToken}#punt-${content.itemId}` : content.inLijst ? `/actielijst?taak=${content.itemId}` : "/agenda?owner=mine"; label = t(content.linkToken || content.inLijst ? "Open het actiepunt" : "Open je agenda"); break;
   }
   const lines = [recipient.name ? t("Hallo {naam},", { naam: recipient.name }) : t("Hallo,"), intro];
   const parts = [`<p>${escapeHtml(lines[0])}</p><p>${escapeHtml(intro)}</p>`];

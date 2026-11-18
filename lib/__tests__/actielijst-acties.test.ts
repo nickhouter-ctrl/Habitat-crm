@@ -32,8 +32,8 @@ it("bewaart een nieuw punt met het formulier-id, zodat twee keer versturen één
   expect(mocks.invalidate).toHaveBeenCalledWith("/actielijst");
 });
 
-it("weigert een verantwoordelijke die de actielijst niet mag bijwerken", async () => {
-  mocks.query.mockResolvedValueOnce({ rows: [["viewer", "hans@habitat-one.com"]] });
+it("weigert een alleen-lezen account als verantwoordelijke", async () => {
+  mocks.query.mockResolvedValueOnce({ rows: [["viewer"]] });
   const result = await bewaarActiepunt({}, velden({ assigneeId: collega }));
   expect(result.error).toContain("Kies een andere verantwoordelijke");
   expect(mocks.query).toHaveBeenCalledTimes(1);
@@ -41,19 +41,20 @@ it("weigert een verantwoordelijke die de actielijst niet mag bijwerken", async (
 });
 
 it("accepteert een verantwoordelijke die op de ledenlijst staat", async () => {
-  mocks.query.mockResolvedValueOnce({ rows: [["admin", "hans@habitat-one.com"]] });
+  mocks.query.mockResolvedValueOnce({ rows: [["admin"]] });
   const result = await bewaarActiepunt({}, velden({ assigneeId: collega, dueDate: "2026-12-01" }));
   expect(result.error).toBeUndefined();
   expect(mocks.query.mock.calls[1][1]).toContain(collega);
   expect(mocks.query.mock.calls[1][1]).toContain("2026-12-01");
 });
 
-it("weigert een beheerder die niet op de ledenlijst van de actielijst staat", async () => {
-  // Teresa is beheerder, maar de actielijst is niet van haar.
-  mocks.query.mockResolvedValueOnce({ rows: [["admin", "teresa@habitat-one.com"]] });
-  const result = await bewaarActiepunt({}, velden({ assigneeId: collega }));
-  expect(result.error).toContain("Kies een andere verantwoordelijke");
-  expect(mocks.query).toHaveBeenCalledTimes(1);
+it("accepteert ook een collega die de lijst zelf niet bijhoudt", async () => {
+  // Teresa mag de lijst niet in, maar kan wel verantwoordelijk zijn: zij ziet
+  // het punt via de agenda.
+  mocks.query.mockResolvedValueOnce({ rows: [["admin"]] });
+  const result = await bewaarActiepunt({}, velden({ assigneeId: collega, dueDate: "2026-12-01" }));
+  expect(result.error).toBeUndefined();
+  expect(mocks.query.mock.calls[1][1]).toContain(collega);
 });
 
 it("wijst een onmogelijke deadline af voordat er iets wordt opgeslagen", async () => {

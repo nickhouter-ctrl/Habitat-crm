@@ -46,11 +46,28 @@ describe("herinnering bij een gemiste deadline", () => {
     expect(actieMailSleutel("abc", "2026-12-01", "2026-12-02")).not.toBe(actieMailSleutel("abc", "2026-11-17", "2026-12-02"));
   });
 
-  it("noemt de taak en de gemiste deadline, met een link naar het punt", () => {
-    const m = staffNotificationEmail({ kind: "action_overdue", itemId: "00000000-0000-4000-8000-000000000001", title: "Stalenkast opruimen", body: "Showroom · Stalen", day: "2026-11-17" }, { name: "Mourad", locale: "nl" });
+  const punt = { kind: "action_overdue" as const, itemId: "00000000-0000-4000-8000-000000000001", title: "Stalenkast opruimen", body: "Showroom · Stalen", day: "2026-11-17" };
+
+  it("noemt de taak en de gemiste deadline", () => {
+    const m = staffNotificationEmail({ ...punt, inLijst: true }, { name: "Hans", locale: "nl" });
     expect(m.subject).toBe("Actie nodig – Stalenkast opruimen is nog niet uitgevoerd");
     expect(m.text).toContain("Gemiste deadline: 17 november 2026");
     expect(m.html).toContain("/actielijst?taak=00000000-0000-4000-8000-000000000001");
+  });
+
+  it("stuurt wie de lijst bijhoudt naar zijn persoonlijke link, bij het punt zelf", () => {
+    const m = staffNotificationEmail({ ...punt, inLijst: true, linkToken: "Zm9vYmFyLXRva2VuLTEyMzQ1Njc4OTAx" }, { name: "Hans", locale: "nl" });
+    expect(m.html).toContain("/lijst/Zm9vYmFyLXRva2VuLTEyMzQ1Njc4OTAx#punt-00000000-0000-4000-8000-000000000001");
+    expect(m.html).not.toContain("/actielijst?taak=");
+    expect(m.text).toContain("Open het actiepunt");
+  });
+
+  it("stuurt een collega buiten de lijst naar zijn agenda, want daar staat het punt", () => {
+    const m = staffNotificationEmail({ ...punt, inLijst: false }, { name: "Teresa", locale: "nl" });
+    expect(m.html).toContain("/agenda?owner=mine");
+    expect(m.html).not.toContain("/actielijst");
+    expect(m.html).not.toContain("/lijst/");
+    expect(m.text).toContain("Open je agenda");
   });
 
   it("vertaalt de mail en laat geen regeleinde in het onderwerp staan", () => {
