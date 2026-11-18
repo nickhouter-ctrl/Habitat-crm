@@ -56,10 +56,13 @@ export function TegelGrid({
   badges = {},
   saveAction,
   rol,
+  email,
 }: {
   prefs: StartPrefs | null;
   /** Rol van de ingelogde gebruiker: tegels buiten haar modules vallen weg. */
   rol?: string;
+  /** Adres van de ingelogde gebruiker: voor modules met een ledenlijst. */
+  email?: string | null;
   /** Per href een teller (zelfde bron als de zijbalk-badges). */
   badges?: Record<string, number>;
   saveAction: (prefs: StartPrefs | null) => Promise<void>;
@@ -69,7 +72,7 @@ export function TegelGrid({
   const [bewerken, setBewerken] = useState(false);
   const [pending, start] = useTransition();
 
-  const view = useMemo(() => applyStartPrefs(prefs, rol), [prefs, rol]);
+  const view = useMemo(() => applyStartPrefs(prefs, rol, email), [prefs, rol, email]);
 
   const move = (key: string, richting: -1 | 1) => {
     const orde = view.volgorde.map((x) => x.key);

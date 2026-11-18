@@ -41,6 +41,7 @@ export type ModuleKey =
   | "assistent"
   | "agenda"
   | "teamberichten"
+  | "actielijst"
   | "advertenties"
   // afgeschermd
   | "projects"
@@ -97,6 +98,9 @@ export const MODULES: ModuleDef[] = [
   { key: "assistent", label: "Assistent", paths: ["/assistent"] },
   { key: "agenda", label: "Agenda", paths: ["/agenda"] },
   { key: "teamberichten", label: "Teamberichten", paths: ["/teamberichten"] },
+  // Open voor de rollen die overal mogen komen, en daarbinnen alleen voor de
+  // ledenlijst hieronder — niet voor marketing of verkoop.
+  { key: "actielijst", label: "Actielijst", paths: ["/actielijst"] },
   { key: "advertenties", label: "Advertenties", paths: ["/marketing"] },
 
   { key: "projects", label: "Projecten", paths: ["/projects", "/ploeg", "/deals"] },
@@ -132,6 +136,43 @@ export const MODULES: ModuleDef[] = [
   // Geen eigen pad: het medewerkersblok zit binnen /settings.
   { key: "teambeheer", label: "Medewerkers", paths: [] },
 ];
+
+/**
+ * Modules met een persoonlijke ledenlijst: de rol zegt het niet, het
+ * e-mailadres wel.
+ *
+ * De actielijst is intern teamwerk van vier mensen (keuze Nick 18-11-2026).
+ * Rollen helpen daar niet: Teresa en Daan zijn beheerder, en beheerder mag
+ * normaal bij alles. Vandaar deze lijst, in code en niet in de database, om
+ * dezelfde redenen als `ROLE_MODULES` hierboven: de edge-laag kan geen
+ * database raken, en een naam erbij of eraf is één regel in een pull request.
+ *
+ * Een module zonder ledenlijst blijft zuiver op rol werken.
+ */
+const LEDENLIJSTEN: Partial<Record<ModuleKey, readonly string[]>> = {
+  actielijst: ["nick@habitat-one.com", "frederique@habitat-one.com", "hans@habitat-one.com", "hi@habitat-one.com"],
+};
+
+export function heeftLedenlijst(key: ModuleKey): boolean {
+  return key in LEDENLIJSTEN;
+}
+
+/** Staat dit adres op de ledenlijst van deze module? Geen lijst = iedereen mag. */
+export function isLid(key: ModuleKey, email: string | null | undefined): boolean {
+  const lijst = LEDENLIJSTEN[key];
+  if (!lijst) return true;
+  const adres = (email ?? "").trim().toLowerCase();
+  return !!adres && lijst.includes(adres);
+}
+
+/** De volledige controle: rol én, waar die bestaat, de ledenlijst. */
+export function magModuleAls(rol: unknown, email: string | null | undefined, key: ModuleKey): boolean {
+  return magModule(rol, key) && isLid(key, email);
+}
+
+export function magPadAls(rol: unknown, email: string | null | undefined, pathname: string): boolean {
+  return magModuleAls(rol, email, moduleVoorPad(pathname));
+}
 
 /** Onbekend pad: dicht voor de beperkte rollen. */
 export const FALLBACK_MODULE: ModuleKey = "dashboard";

@@ -1,13 +1,14 @@
 import "server-only";
-import { and, asc, eq, inArray, isNull, lt, lte, sql } from "drizzle-orm";
+import { and, asc, eq, inArray, isNotNull, isNull, lt, lte, ne, sql } from "drizzle-orm";
 import { db } from "@/lib/db";
-import { activities, appointments, contacts, partnerProfiles, staffMessages, staffNotifications, users, workerWeekSheets, workerLumpInvoices, workers, projects } from "@/lib/db/schema";
+import { actionItems, actionListLinks, activities, appointments, contacts, partnerProfiles, staffMessages, staffNotifications, users, workerWeekSheets, workerLumpInvoices, workers, projects } from "@/lib/db/schema";
 import { sendEmail } from "@/lib/email";
 import { agendaDateTime, agendaDay, shiftDay } from "@/lib/agenda-dates";
 import { madridDelen } from "@/lib/tz-madrid";
 import { salesTaskAccess, salesAppointmentAccess, appointmentFor } from "@/lib/auth/sales-scope";
 import { totalWeekHours, periodRange } from "@/lib/worker-week";
-import { magModule } from "@/lib/auth/modules";
+import { heeftCap, magModule, magModuleAls } from "@/lib/auth/modules";
+import { actieMailSleutel, isAchterstallig } from "@/lib/actielijst";
 import { staffNotificationEmail, type StaffAgendaItem, type StaffMailContent } from "@/lib/staff-notification-email";
 
 import { isSystemMailRecipient } from "@/lib/mail-bcc";
@@ -42,8 +43,32 @@ export async function queueDailyAgenda(now = new Date()) {
   return queued;
 }
 
+/**
+ * De aparte mail bij een gemiste deadline in de actielijst. Eén keer per dag
+ * klaarzetten, niet bij elke cron-tik, en alleen voor een punt met een
+ * verantwoordelijke: zonder naam is er niemand om te mailen (dat staat ook zo
+ * op het scherm). De sleutel bevat de deadline en de week, dus een punt dat
+ * openblijft meldt zich wekelijks en nooit twee keer op één dag.
+ */
+export async function queueOverdueActionItems(now = new Date()) {
+  if (madridDelen(now).uur !== 8) return 0;
+  const vandaag = agendaDay(now);
+  const rows = await db.select({ id: actionItems.id, dueDate: actionItems.dueDate, status: actionItems.status, assigneeId: actionItems.assigneeId, role: users.role, email: users.email })
+    .from(actionItems).innerJoin(users, eq(users.id, actionItems.assigneeId))
+    .where(and(isNull(actionItems.archivedAt), ne(actionItems.status, "done"), isNotNull(actionItems.dueDate), lt(actionItems.dueDate, vandaag)));
+  let queued = 0;
+  for (const row of rows) {
+    if (!row.dueDate || !row.assigneeId) continue;
+    // Alleen-lezen kan een punt niet afvinken; dan is een herinnering zinloos.
+    if (!magModuleAls(row.role, row.email, "actielijst") || !heeftCap(row.role, "schrijven") || !isSystemMailRecipient(row.email)) continue;
+    const inserted = await db.insert(staffNotifications).values({ eventKey: actieMailSleutel(row.id, row.dueDate, vandaag), kind: "action_overdue", entityId: row.id, userId: row.assigneeId, day: row.dueDate }).onConflictDoNothing().returning({ id: staffNotifications.id });
+    queued += inserted.length;
+  }
+  return queued;
+}
+
 async function currentContent(n: typeof staffNotifications.$inferSelect): Promise<StaffMailContent | null> {
-  const [recipient] = await db.select({role:users.role}).from(users).where(eq(users.id,n.userId));
+  const [recipient] = await db.select({role:users.role,email:users.email}).from(users).where(eq(users.id,n.userId));
   if(!recipient)return null;
   const [actor] = n.actorId ? await db.select({ name: users.name }).from(users).where(eq(users.id, n.actorId)) : [];
   if (n.kind === "daily_agenda") {
@@ -52,6 +77,18 @@ async function currentContent(n: typeof staffNotifications.$inferSelect): Promis
     return items.length ? { kind: n.kind, day: n.day, items } : null;
   }
   if (!n.entityId) return null;
+  if (n.kind === "action_overdue") {
+    if(!magModuleAls(recipient.role,recipient.email,"actielijst")||!heeftCap(recipient.role,"schrijven"))return null;
+    const [item] = await db.select({ id: actionItems.id, title: actionItems.title, description: actionItems.description, groupName: actionItems.groupName, subgroup: actionItems.subgroup, dueDate: actionItems.dueDate, status: actionItems.status, assigneeId: actionItems.assigneeId, archivedAt: actionItems.archivedAt }).from(actionItems).where(eq(actionItems.id, n.entityId));
+    // Afgevinkt, uit de lijst gehaald, aan iemand anders gegeven of met een
+    // nieuwe deadline: dan is deze melding achterhaald.
+    if (!item || item.archivedAt || item.assigneeId !== n.userId || item.dueDate !== n.day || !isAchterstallig(item, agendaDay(new Date()))) return null;
+    const plek = [item.groupName, item.subgroup].filter(Boolean).join(" · ");
+    // De persoonlijke link opent zonder inloggen — precies wat je op de
+    // telefoon wil als je zo'n mail om acht uur 's ochtends leest.
+    const [link] = await db.select({ token: actionListLinks.token }).from(actionListLinks).where(eq(actionListLinks.userId, n.userId));
+    return { kind: n.kind, itemId: item.id, title: item.title, body: [plek, item.description].filter(Boolean).join("\n\n") || null, day: item.dueDate ?? undefined, linkToken: link?.token };
+  }
   if (n.kind === "worker_week_submitted" && n.eventKey.startsWith("worker-lump:")) {
     if(!magModule(recipient.role,"projects"))return null;
     const [l]=await db.select({id:workerLumpInvoices.id,version:workerLumpInvoices.version,status:workerLumpInvoices.status,invoice:workerLumpInvoices.invoice,at:workerLumpInvoices.updatedAt,workerName:workers.name,projectName:projects.name}).from(workerLumpInvoices).innerJoin(workers,eq(workers.id,workerLumpInvoices.workerId)).innerJoin(projects,eq(projects.id,workerLumpInvoices.projectId)).where(eq(workerLumpInvoices.id,n.entityId));
@@ -98,7 +135,7 @@ export async function deliverStaffNotifications(ids?: string[]) {
     try {
       const [recipient] = await db.select({ name: users.name, email: users.email, locale: users.locale, role: users.role }).from(users).where(eq(users.id, row.userId));
       const content = await currentContent(row);
-      const requiredModule = row.kind === "worker_week_submitted" ? "projects" : row.kind === "team_message" ? "teamberichten" : row.kind === "followup_assignment" ? "klantopvolging" : "agenda";
+      const requiredModule = row.kind === "worker_week_submitted" ? "projects" : row.kind === "team_message" ? "teamberichten" : row.kind === "followup_assignment" ? "klantopvolging" : row.kind === "action_overdue" ? "actielijst" : "agenda";
       if (!recipient || !isSystemMailRecipient(recipient.email) || !magModule(recipient.role, requiredModule) || !content) { await db.update(staffNotifications).set({ status: "skipped", updatedAt: new Date() }).where(eq(staffNotifications.id, row.id)); result.skipped++; continue; }
       const mail = staffNotificationEmail(content, recipient);
       smtpStarted = true;

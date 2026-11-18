@@ -34,6 +34,7 @@ export const authConfig = {
         pathname.startsWith("/book") || // public "pick an appointment slot" page
         pathname.startsWith("/afspraak") || // klant reageert op een afspraakbevestiging (token-link)
         pathname.startsWith("/uren") || // zzp-urenportaal (personal token links)
+        pathname.startsWith("/lijst") || // actielijst via een persoonlijke link (token)
         pathname.startsWith("/inkoop/keuren") || // inkoopfactuur keuren via de knop in de melding
         pathname === "/verkooppunten" ||
         pathname === "/handtekening" || // handtekening-generator voor het personeel (geen gegevens, alleen bedrijfsinfo)

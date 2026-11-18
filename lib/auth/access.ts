@@ -15,7 +15,7 @@ import { eq } from "drizzle-orm";
 import { auth } from "@/auth";
 import { db } from "@/lib/db";
 import { users } from "@/lib/db/schema";
-import { type Capability, type ModuleKey, type Role, heeftCap, magModule, magPad } from "@/lib/auth/modules";
+import { type Capability, type ModuleKey, type Role, heeftCap, isLid, magModule, magPad, moduleVoorPad } from "@/lib/auth/modules";
 
 export interface Toegang {
   id: string;
@@ -52,8 +52,10 @@ export const huidigeToegangOfNull = cache(async (): Promise<Toegang | null> => {
     name: rij.name,
     rol,
     locale: rij.locale ?? "nl",
-    magModule: (key) => magModule(rol, key),
-    magPad: (pathname) => magPad(rol, pathname),
+    // Een module met een ledenlijst (de actielijst) kijkt ook naar het adres:
+    // beheerder zijn is daar niet genoeg.
+    magModule: (key) => magModule(rol, key) && isLid(key, rij.email),
+    magPad: (pathname) => magPad(rol, pathname) && isLid(moduleVoorPad(pathname), rij.email),
     heeftCap: (cap) => heeftCap(rol, cap),
   };
 });

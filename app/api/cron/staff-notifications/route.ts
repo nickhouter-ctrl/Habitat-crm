@@ -1,6 +1,6 @@
 import { syncPendingWorkerInvoices } from "@/lib/worker-holded-sync";
 import { requireCron } from "@/lib/auth/require-cron";
-import { deliverStaffNotifications, queueDailyAgenda, staffAgendaItems } from "@/lib/staff-notifications";
+import { deliverStaffNotifications, queueDailyAgenda, queueOverdueActionItems, staffAgendaItems } from "@/lib/staff-notifications";
 import { db } from "@/lib/db";
 import { staffNotifications, users } from "@/lib/db/schema";
 import { count, eq } from "drizzle-orm";
@@ -23,8 +23,9 @@ export async function GET(req: Request) {
   }
     const workerInvoices = await syncPendingWorkerInvoices();
     const queued = await queueDailyAgenda();
+    const overdueActions = await queueOverdueActionItems();
     const result = await deliverStaffNotifications();
-    return Response.json({ queued, workerInvoices, ...result }, { status: result.unknown ? 500 : 200 });
+    return Response.json({ queued, overdueActions, workerInvoices, ...result }, { status: result.unknown ? 500 : 200 });
   } catch {
     console.error("[staff-notification] cron-failed");
     return Response.json({ error: "staff-notification-failed" }, { status: 500 });

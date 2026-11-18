@@ -13,6 +13,7 @@ import { dealerPricingEs } from './dealer-pricing';
 
 import { teamWorkflowEs } from "./team-workflow";
 import { usabilityEs } from "./usability";
+import { actielijstEs } from "./actielijst";
 
 export const es: Dictionary = {
   // Eerst: bestaande vertalingen van dezelfde sleutel gaan voor.
@@ -26,6 +27,7 @@ export const es: Dictionary = {
   "Gereserveerd = geaccepteerde of handmatig gereserveerde offertes, minus afgeboekte leveringen. Verkocht = facturen min creditnota's. Voorraad nu:": "Reservado = presupuestos aceptados o reservados manualmente, menos las salidas de stock. Vendido = facturas menos abonos. Stock actual:",
   ...appleCalendarEs,
   ...usabilityEs,
+  ...actielijstEs,
   ...reportSpanish,
   ...teamWorkflowEs,
   ...dealerPricingEs,

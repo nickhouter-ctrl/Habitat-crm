@@ -29,6 +29,7 @@ import {
   LayoutDashboard,
   Layers,
   LineChart,
+  ListChecks,
   Mail,
   MessageSquare,
   Megaphone,
@@ -51,7 +52,7 @@ import {
   Users,
 } from "lucide-react";
 
-import { magAlles, magPad } from "@/lib/auth/modules";
+import { magPadAls } from "@/lib/auth/modules";
 import type { LucideIcon } from "lucide-react";
 
 export interface StartTegel {
@@ -86,6 +87,7 @@ export const START_TEGELS: StartTegel[] = [
   t("/aanvragen", "Aanvragen", "Offerte-aanvragen via de website", Inbox, "Klantcontact"),
   t("/agenda", "Agenda", "Afspraken en taken van het team", CalendarDays, "Klantcontact"),
   t("/teamberichten", "Teamberichten", "Berichten en taken voor collega's", MessageSquare, "Klantcontact"),
+  t("/actielijst", "Actielijst", "Interne acties met verantwoordelijke en deadline", ListChecks, "Klantcontact"),
   t("/contacts", "Contacten", "Alle klanten en relaties", Users, "Klantcontact"),
   t("/beurs/contacten", "Beurscontacten", "Alle contacten van de beurs, met kaart en filters", Users, "Klantcontact"),
   t("/opvolging", "Opvolging", "Mailvoorstellen, gesprekken en afspraken per klant", Send, "Klantcontact"),
@@ -148,6 +150,7 @@ export const START_GROEPEN = [...new Set(START_TEGELS.map((x) => x.groep))];
  */
 export const STANDAARD_HOOFDKNOPPEN = [
   "/agenda",
+  "/actielijst",
   "/opvolging",
   "/contacts",
   "/teamberichten",
@@ -174,6 +177,8 @@ export function applyStartPrefs(
   prefs: StartPrefs | null | undefined,
   /** Rol: tegels buiten de eigen modules vallen weg (cosmetisch, zie modules.ts). */
   rol?: string,
+  /** E-mailadres: een module met een ledenlijst (de actielijst) kijkt daarnaar. */
+  email?: string | null,
 ): {
   volgorde: StartTegel[];
   pinned: StartTegel[];
@@ -181,7 +186,7 @@ export function applyStartPrefs(
   hidden: Set<string>;
 } {
   const p = normalizeStartPrefs(prefs);
-  const tegels = magAlles(rol) ? START_TEGELS : START_TEGELS.filter((x) => magPad(rol, x.href));
+  const tegels = START_TEGELS.filter((x) => magPadAls(rol, email, x.href));
   const byKey = new Map(tegels.map((x) => [x.key, x]));
   const inOrder = (p.order ?? []).map((k) => byKey.get(k)!).filter(Boolean);
   const restKeys = new Set(inOrder.map((x) => x.key));

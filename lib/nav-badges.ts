@@ -9,10 +9,10 @@
 import "server-only";
 import { and, count, eq, gte, isNull, sql } from "drizzle-orm";
 
-import { magPad } from "@/lib/auth/modules";
+import { magPadAls } from "@/lib/auth/modules";
 import { voorstelZichtbaarVoor, mailZichtbaarVoor } from "@/lib/mail-visibility";
 import { db } from "@/lib/db";
-import { workerWeekSheets, workerLumpInvoices, emailInbox, inboxSuggestions, purchaseInvoiceReviews, quoteRequests, staffMessages, socialPosts } from "@/lib/db/schema";
+import { actionItems, workerWeekSheets, workerLumpInvoices, emailInbox, inboxSuggestions, purchaseInvoiceReviews, quoteRequests, staffMessages, socialPosts } from "@/lib/db/schema";
 import { openVoorstellenFilter } from "@/lib/assistant/achterhaald";
 import { telAntwoordNodig } from "@/lib/followup-checklist-data";
 import { gewoneAanvragen } from "@/lib/aanvraag-selectie";
@@ -20,10 +20,10 @@ import { gewoneAanvragen } from "@/lib/aanvraag-selectie";
 export async function verzamelNavBadges(rol?: string, userEmail?: string | null, userId?: string): Promise<Record<string, number>> {
   // Een teller op een menu-item dat iemand niet mag zien, hoeft niet geteld te
   // worden. Voor de bestaande rollen verandert er niets.
-  const mag = (pad: string) => rol === undefined || magPad(rol, pad);
+  const mag = (pad: string) => rol === undefined || magPadAls(rol, userEmail, pad);
   const nul = [{ value: 0 }];
 
-  const [[pending], [inboxNew], [teKeuren], [suggestions], antwoordNodig, [teamUnread], [weekPending], [invoicePending], [lumpPending], [socialPending]] = await Promise.all([
+  const [[pending], [inboxNew], [teKeuren], [suggestions], antwoordNodig, [teamUnread], [weekPending], [invoicePending], [lumpPending], [socialPending], [actieTeLaat]] = await Promise.all([
     mag("/aanvragen")
       ? db.select({ value: count() }).from(quoteRequests).where(and(gewoneAanvragen, eq(quoteRequests.status, "pending")))
       : nul,
@@ -55,6 +55,11 @@ export async function verzamelNavBadges(rol?: string, userEmail?: string | null,
     mag("/marketing/social")
       ? db.select({ value: count() }).from(socialPosts).where(and(eq(socialPosts.status, "draft"), gte(socialPosts.plannedDate, sql`current_date`)))
       : nul,
+    // Eigen actiepunten waarvan de deadline verstreken is — dezelfde rode regels
+    // als in de lijst zelf.
+    mag("/actielijst") && userId
+      ? db.select({ value: count() }).from(actionItems).where(and(eq(actionItems.assigneeId, userId), isNull(actionItems.archivedAt), sql`${actionItems.status} <> 'done'`, sql`${actionItems.dueDate} < current_date`))
+      : nul,
   ]);
   return {
     "/assistent": suggestions?.value ?? 0,
@@ -66,5 +71,6 @@ export async function verzamelNavBadges(rol?: string, userEmail?: string | null,
     "/opvolging": antwoordNodig,
     "/teamberichten": teamUnread?.value ?? 0,
     "/marketing/social": socialPending?.value ?? 0,
+    "/actielijst": actieTeLaat?.value ?? 0,
   };
 }
