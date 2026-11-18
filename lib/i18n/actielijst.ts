@@ -44,6 +44,10 @@ const rows: [string, string, string][] = [
   ["Terugzetten in de lijst", "Restore to the list", "Devolver a la lista"],
   ["Uit de lijst halen laat het punt en de opmerkingen staan onder ‘Uit de lijst gehaald’.", "Removing it from the list keeps the item and its comments under “Removed from the list”.", "Al quitarlo de la lista, el punto y sus comentarios se conservan en «Quitados de la lista»."],
 
+  ["Houdt de lijst bij", "Keeps the list", "Mantiene la lista"],
+  ["Overige medewerkers (zien het in hun agenda)", "Other colleagues (they see it in their calendar)", "Otros compañeros (lo ven en su agenda)"],
+  ["Een collega die de lijst niet bijhoudt, ziet dit punt alleen in de agenda. Zet er dus een deadline op, anders komt het nergens langs.", "A colleague who does not keep the list only sees this item in the calendar, so give it a deadline — otherwise it never comes up.", "Un compañero que no mantiene la lista solo ve este punto en la agenda, así que ponle una fecha límite; si no, no aparece en ningún sitio."],
+
   // ── persoonlijke links en agenda ──────────────────────────────────────────
   ["Persoonlijke links", "Personal links", "Enlaces personales"],
   ["Met deze link staat de lijst op de telefoon open zonder inloggen. De link is persoonlijk: afvinken en opmerkingen komen op naam. Maak een nieuwe link als iemand hem kwijt is — de oude werkt dan direct niet meer.", "With this link the list opens on a phone without logging in. The link is personal: ticking off and comments are recorded by name. Create a new link if someone loses theirs — the old one stops working immediately.", "Con este enlace la lista se abre en el móvil sin iniciar sesión. El enlace es personal: lo que marques y comentes queda a tu nombre. Crea un enlace nuevo si alguien lo pierde; el antiguo deja de funcionar al instante."],

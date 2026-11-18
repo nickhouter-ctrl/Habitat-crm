@@ -34,6 +34,14 @@ Alleen-lezen accounts kunnen niets wijzigen en worden ook niet als
 verantwoordelijke geaccepteerd: een mail over een punt dat je niet kunt
 afvinken heeft geen zin.
 
+**Toewijzen mag wél aan iedere medewerker**, ook aan wie de lijst niet mag
+openen (keuze Nick 18-11-2026). Zo iemand ziet het punt niet in de lijst, maar
+wel in de agenda — daar komt een punt met een deadline toch al terecht — en de
+herinneringsmail wijst hem naar `/agenda` in plaats van naar de lijst. De
+keuzelijst staat daarom in twee groepen: wie de lijst bijhoudt en wie het
+alleen in zijn agenda ziet. Zonder deadline komt het punt bij zo'n collega
+nergens langs; dat staat ook bij het formulier.
+
 ## De persoonlijke link
 
 - Eén rij per medewerker in `action_list_links` met een token van 32
@@ -91,7 +99,7 @@ het punt.
 - Vlak voor verzenden wordt het punt opnieuw gelezen: afgevinkt, gearchiveerd,
   aan iemand anders gegeven of met een andere deadline → de melding vervalt.
 - **Zonder verantwoordelijke gaat er geen mail uit.** Dat staat ook bij het punt
-  op het scherm.
+  op het scherm. Een alleen-lezen account krijgt niets: dat kan niets afvinken.
 - Systeemmeldingen gaan uitsluitend naar de adressen in
   `SYSTEM_MAIL_RECIPIENTS` (`lib/mail-bcc.ts`). `hi@habitat-one.com` (Elles)
   staat daar niet in: zij ziet de punten in de lijst en in de agenda, maar krijgt

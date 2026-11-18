@@ -1,8 +1,8 @@
 import { randomUUID } from "node:crypto";
 import { Check, ListChecks, Plus } from "lucide-react";
 
-import { actielijstLeden, actielijstLinkVoorToken, noteerActielijstBezoek } from "@/lib/actielijst-link";
-import { laadActielijst, type Weergave } from "@/lib/actielijst-db";
+import { actielijstLinkVoorToken, noteerActielijstBezoek } from "@/lib/actielijst-link";
+import { laadActielijst, toewijsbareMedewerkers, type Weergave } from "@/lib/actielijst-db";
 import { ACTIE_STATUSSEN, actieKleur, bestaandeIndeling, groepeer, isAchterstallig } from "@/lib/actielijst";
 import { agendaDay, AGENDA_TIME_ZONE } from "@/lib/agenda-dates";
 import { archiefViaLink, klaarViaLink, opmerkingViaLink, puntBewarenViaLink } from "./actions";
@@ -52,9 +52,9 @@ export default async function ActielijstViaLink({ params, searchParams }: Props)
   const weergave: Weergave = sp.toon === "alles" ? "alles" : sp.toon === "weg" ? "archief" : "open";
   const alleenIk = sp.wie === "mij", nieuwOpen = sp.nieuw === "1";
   const vandaag = agendaDay(new Date());
-  const [{ rijen, alles, opmerkingen }, leden] = await Promise.all([
+  const [{ rijen, alles, opmerkingen }, medewerkers] = await Promise.all([
     laadActielijst({ weergave, alleenVoor: alleenIk ? lid.userId : null }),
-    actielijstLeden(),
+    toewijsbareMedewerkers(),
   ]);
   const indeling = bestaandeIndeling(alles);
   const open = alles.filter(r => r.status !== "done"), teLaat = open.filter(r => isAchterstallig(r, vandaag));
@@ -84,7 +84,9 @@ export default async function ActielijstViaLink({ params, searchParams }: Props)
       <label className="block text-sm font-medium text-stone-700">Wie
         <select name="assigneeId" defaultValue={rij?.assigneeId ?? ""} className={`mt-1 ${veld}`}>
           <option value="">Nog niemand</option>
-          {leden.map(l => <option key={l.id} value={l.id}>{voornaam(l.name) || l.email}</option>)}
+          {/* Wie de lijst niet bijhoudt, ziet het punt alleen in zijn agenda. */}
+          <optgroup label="Houdt de lijst bij">{medewerkers.filter(m => m.inLijst).map(m => <option key={m.id} value={m.id}>{voornaam(m.name) || m.email}</option>)}</optgroup>
+          <optgroup label="Overig (ziet het in de agenda)">{medewerkers.filter(m => !m.inLijst).map(m => <option key={m.id} value={m.id}>{voornaam(m.name) || m.email}</option>)}</optgroup>
         </select>
       </label>
       <label className="block text-sm font-medium text-stone-700">Deadline

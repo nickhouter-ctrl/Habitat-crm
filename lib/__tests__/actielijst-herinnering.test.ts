@@ -34,13 +34,12 @@ it("draait alleen om acht uur 's ochtends in Madrid", async () => {
   expect(mocks.query).not.toHaveBeenCalled();
 });
 
-it("mailt niemand die niet op de ledenlijst van de actielijst staat", async () => {
-  // Teresa en Mourad horen niet bij deze lijst, ook al kunnen ze wel mail krijgen.
-  for (const email of ["teresa@habitat-one.com", "mourad.h@habitat-one.com"]) {
+it("mailt ook een verantwoordelijke die de lijst zelf niet bijhoudt", async () => {
+  // Teresa en Mourad mogen de lijst niet in; de mail wijst hen naar de agenda.
+  for (const [email, role] of [["teresa@habitat-one.com", "admin"], ["mourad.h@habitat-one.com", "sales"]]) {
     vi.clearAllMocks();
-    mocks.query.mockResolvedValueOnce({ rows: punt({ email }) });
-    expect(await queueOverdueActionItems(achtUurMadrid)).toBe(0);
-    expect(mocks.query).toHaveBeenCalledTimes(1);
+    mocks.query.mockResolvedValueOnce({ rows: punt({ email, role }) }).mockResolvedValueOnce({ rows: [["melding-1"]] });
+    expect(await queueOverdueActionItems(achtUurMadrid)).toBe(1);
   }
 });
 
@@ -50,7 +49,7 @@ it("mailt niemand die geen systeemmeldingen ontvangt", async () => {
   expect(mocks.query).toHaveBeenCalledTimes(1);
 });
 
-it("mailt niemand zonder toegang tot de actielijst", async () => {
+it("mailt geen alleen-lezen account, dat kan niets afvinken", async () => {
   mocks.query.mockResolvedValueOnce({ rows: punt({ role: "viewer" }) });
   expect(await queueOverdueActionItems(achtUurMadrid)).toBe(0);
   expect(mocks.query).toHaveBeenCalledTimes(1);

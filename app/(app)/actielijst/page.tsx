@@ -9,8 +9,8 @@ import { db } from "@/lib/db";
 import { actionItemComments, actionItems, users } from "@/lib/db/schema";
 import { datumTaal, tekst } from "@/lib/i18n/server";
 import { agendaDay, AGENDA_TIME_ZONE } from "@/lib/agenda-dates";
-import { heeftCap, magModuleAls } from "@/lib/auth/modules";
 import { actieKleur, bestaandeIndeling, deadlineTekst, groepeer, isAchterstallig } from "@/lib/actielijst";
+import { toewijsbareMedewerkers } from "@/lib/actielijst-db";
 import { Badge, Card, CardContent, CardHeader, CardTitle, EmptyState, PageHeader, StatTile, Table, TBody, Td, Th, THead, Tr } from "@/components/ui";
 import { WorkflowModal } from "@/components/workflow-modal";
 import { ActiepuntForm, ActieArchiefKnop, ActieKlaarVinkje, LinkKopieerKnop, OpmerkingForm } from "./forms";
@@ -34,13 +34,13 @@ export default async function ActielijstPage({ searchParams }: { searchParams: P
     alleenIk ? eq(actionItems.assigneeId, ik.id) : undefined,
   );
   const kolommen = { id: actionItems.id, groupName: actionItems.groupName, subgroup: actionItems.subgroup, title: actionItems.title, description: actionItems.description, helpers: actionItems.helpers, dueDate: actionItems.dueDate, status: actionItems.status, assigneeId: actionItems.assigneeId, assigneeName: toegewezen.name, assigneeEmail: toegewezen.email, doneAt: actionItems.doneAt, archivedAt: actionItems.archivedAt, createdAt: actionItems.createdAt };
-  const [rijen, alles, team, selectieRijen] = await Promise.all([
+  const [rijen, alles, selectieRijen, medewerkers] = await Promise.all([
     db.select(kolommen).from(actionItems).leftJoin(toegewezen, eq(toegewezen.id, actionItems.assigneeId)).where(filter)
       .orderBy(asc(actionItems.groupName), sql`${actionItems.subgroup} nulls first`, sql`case when ${actionItems.status} = 'done' then 1 else 0 end`, sql`${actionItems.dueDate} asc nulls last`, asc(actionItems.createdAt)).limit(500),
     // De indeling en de tellers horen bij de hele lijst, niet bij dit filter.
     db.select({ groupName: actionItems.groupName, subgroup: actionItems.subgroup, status: actionItems.status, dueDate: actionItems.dueDate, assigneeId: actionItems.assigneeId }).from(actionItems).where(isNull(actionItems.archivedAt)).limit(2000),
-    db.select({ id: users.id, name: users.name, email: users.email, role: users.role }).from(users).orderBy(asc(users.name)),
     geselecteerd ? db.select(kolommen).from(actionItems).leftJoin(toegewezen, eq(toegewezen.id, actionItems.assigneeId)).where(eq(actionItems.id, geselecteerd)) : [],
+    toewijsbareMedewerkers(),
   ]);
   const zichtbaar = rijen.map(r => r.id);
   const opmerkingen = zichtbaar.length || geselecteerd
@@ -50,7 +50,6 @@ export default async function ActielijstPage({ searchParams }: { searchParams: P
         .orderBy(asc(actionItemComments.createdAt))
     : [];
   const selectie = selectieRijen[0] ?? null;
-  const verantwoordelijken = team.filter(u => magModuleAls(u.role, u.email, "actielijst") && heeftCap(u.role, "schrijven"));
   const indeling = bestaandeIndeling(alles);
   // De persoonlijke links staan hier, want hier beheer je ze ook.
   const links = mag ? await zorgVoorActielijstLinks() : [];
@@ -121,12 +120,12 @@ export default async function ActielijstPage({ searchParams }: { searchParams: P
     </Card>}
 
     {mag && nieuw && <WorkflowModal title={t("Nieuw actiepunt")} closeHref={lijstHref}>
-      <ActiepuntForm submissionId={randomUUID()} team={verantwoordelijken} indeling={indeling} vandaag={vandaag} sluitHref={lijstHref}/>
+      <ActiepuntForm submissionId={randomUUID()} team={medewerkers} indeling={indeling} vandaag={vandaag} sluitHref={lijstHref}/>
     </WorkflowModal>}
 
     {selectie && <WorkflowModal title={selectie.title} closeHref={lijstHref}>
       <div className="space-y-6">
-        {mag ? <ActiepuntForm submissionId={selectie.id} team={verantwoordelijken} indeling={indeling} vandaag={vandaag} sluitHref={lijstHref}
+        {mag ? <ActiepuntForm submissionId={selectie.id} team={medewerkers} indeling={indeling} vandaag={vandaag} sluitHref={lijstHref}
           punt={{ id: selectie.id, groupName: selectie.groupName, subgroup: selectie.subgroup, title: selectie.title, description: selectie.description, assigneeId: selectie.assigneeId, helpers: selectie.helpers, dueDate: selectie.dueDate, status: selectie.status }}/>
           : <div className="space-y-2 text-sm"><p className="text-muted">{selectie.groupName}{selectie.subgroup ? ` · ${selectie.subgroup}` : ""}</p>{selectie.description && <p className="whitespace-pre-wrap leading-relaxed">{selectie.description}</p>}<p>{t("Wie")}: {selectie.assigneeName ?? t("Nog niemand")}</p>{selectie.dueDate && <p>{t("Deadline")}: {deadlineTekst(selectie.dueDate, locale)}</p>}</div>}
         {selectie.dueDate && isAchterstallig(selectie, vandaag) && <p className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-danger">{selectie.assigneeId ? t("De deadline van {datum} is verstreken. De verantwoordelijke krijgt hierover een mail.", { datum: deadlineTekst(selectie.dueDate, locale) }) : t("De deadline van {datum} is verstreken. Zonder verantwoordelijke gaat er geen mail uit.", { datum: deadlineTekst(selectie.dueDate, locale) })}</p>}
