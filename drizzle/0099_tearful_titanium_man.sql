@@ -1,0 +1,1 @@
+ALTER TABLE "action_items" ADD COLUMN "teamwide" boolean DEFAULT false NOT NULL;

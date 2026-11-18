@@ -6,8 +6,8 @@ import { Field, Input, Select, Textarea } from "@/components/ui";
 import { ACTIE_STATUSSEN, type ActieStatus } from "@/lib/actielijst";
 import { bewaarActiepunt, plaatsOpmerking, zetActieArchief, zetActieKlaar, type ActieResult } from "./actions";
 
-type Teamlid = { id: string; name: string | null; email: string; inLijst: boolean };
-type Punt = { id: string; groupName: string; subgroup: string | null; title: string; description: string | null; assigneeId: string | null; helpers: string | null; dueDate: string | null; status: ActieStatus };
+type Teamlid = { id: string; name: string | null; email: string };
+type Punt = { id: string; groupName: string; subgroup: string | null; title: string; description: string | null; assigneeId: string | null; teamwide: boolean; helpers: string | null; dueDate: string | null; status: ActieStatus };
 
 const STATUS_LABEL: Record<ActieStatus, string> = { open: "Open", in_progress: "Bezig", done: "Klaar" };
 
@@ -36,12 +36,10 @@ export function ActiepuntForm({ submissionId, punt, team, indeling, vandaag, slu
     <Field label={t("Toelichting (optioneel)")} htmlFor="actie-toelichting"><Textarea id="actie-toelichting" name="description" rows={3} maxLength={4000} defaultValue={punt?.description ?? ""}/></Field>
     <div className="grid gap-3 sm:grid-cols-3">
       <Field label={t("Wie pakt het op?")} htmlFor="actie-wie">
-        <Select id="actie-wie" name="assigneeId" defaultValue={punt?.assigneeId ?? ""}>
+        <Select id="actie-wie" name="assigneeId" defaultValue={punt?.teamwide ? "team" : punt?.assigneeId ?? ""}>
           <option value="">{t("Nog niemand")}</option>
-          {/* Twee groepen, zodat je ziet wie de lijst zelf bijhoudt en wie het
-              punt alleen in zijn agenda tegenkomt. */}
-          <optgroup label={t("Houdt de lijst bij")}>{team.filter(u => u.inLijst).map(u => <option key={u.id} value={u.id}>{u.name ?? u.email}</option>)}</optgroup>
-          <optgroup label={t("Overige medewerkers (zien het in hun agenda)")}>{team.filter(u => !u.inLijst).map(u => <option key={u.id} value={u.id}>{u.name ?? u.email}</option>)}</optgroup>
+          <option value="team">{t("Hele team")}</option>
+          {team.map(u => <option key={u.id} value={u.id}>{u.name ?? u.email}</option>)}
         </Select>
       </Field>
       <Field label={t("Deadline")} htmlFor="actie-deadline"><Input id="actie-deadline" name="dueDate" type="date" min="2000-01-01" max="2100-12-31" defaultValue={punt?.dueDate ?? ""}/></Field>
@@ -49,7 +47,7 @@ export function ActiepuntForm({ submissionId, punt, team, indeling, vandaag, slu
     </div>
     <Field label={t("Samen met (optioneel)")} htmlFor="actie-samen" hint={t("Wie er verder bij nodig is — ook iemand buiten het CRM.")}><Input id="actie-samen" name="helpers" maxLength={200} defaultValue={punt?.helpers ?? ""}/></Field>
     <p className="text-xs leading-relaxed text-muted">{t("Staat de deadline op {datum} of eerder en is het punt dan nog niet afgevinkt, dan krijgt de verantwoordelijke daarover een aparte mail. Tijdzone: Madrid.", { datum: vandaag })}</p>
-    <p className="text-xs leading-relaxed text-muted">{t("Een collega die de lijst niet bijhoudt, ziet dit punt alleen in de agenda. Zet er dus een deadline op, anders komt het nergens langs.")}</p>
+    <p className="text-xs leading-relaxed text-muted">{t("Bij ‘Hele team’ krijgt iedereen die de lijst bijhoudt die mail, en staat het punt bij iedereen onder ‘van mij’.")}</p>
     <div className="flex flex-wrap items-center gap-3">
       <button disabled={pending} className="rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-accent-foreground disabled:opacity-50">{pending ? t("Opslaan…") : punt ? t("Wijzigingen opslaan") : t("Actiepunt toevoegen")}</button>
       {!punt && <button type="button" onClick={() => { router.replace(sluitHref, { scroll: false }); router.refresh(); }} className="rounded-lg border border-border px-4 py-2 text-sm">{t("Sluiten")}</button>}

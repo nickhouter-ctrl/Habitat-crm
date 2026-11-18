@@ -344,6 +344,11 @@ export const actionItems = pgTable("action_items", {
   description: text(),
   /** De verantwoordelijke. Leeg = nog niemand, en dan gaat er ook geen mail uit. */
   assigneeId: uuid().references(() => users.id, { onDelete: "set null" }),
+  /**
+   * Van het hele team in plaats van van één persoon. Dan staat er niemand bij
+   * `assignee_id` en krijgt iedereen die de lijst bijhoudt de herinnering.
+   */
+  teamwide: boolean().notNull().default(false),
   /** Wie er verder bij nodig is — vrije tekst, ook voor mensen buiten het CRM. */
   helpers: text(),
   dueDate: date(),

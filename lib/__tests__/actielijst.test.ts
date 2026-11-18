@@ -33,17 +33,22 @@ describe("herinnering bij een gemiste deadline", () => {
   });
 
   it("stuurt één mail per dag en daarna één keer per week", () => {
-    const sleutel = (dag: string) => actieMailSleutel("abc", "2026-11-17", dag);
+    const sleutel = (dag: string) => actieMailSleutel("abc", "2026-11-17", dag, "hans");
     // Dag na de deadline en de dagen erna: dezelfde sleutel, dus één mail.
     expect(sleutel("2026-11-18")).toBe(sleutel("2026-11-20"));
-    expect(sleutel("2026-11-18")).toBe("actie:abc:2026-11-17:w0");
+    expect(sleutel("2026-11-18")).toBe("actie:abc:2026-11-17:w0:hans");
     // Een week later mag hij zich opnieuw melden.
-    expect(sleutel("2026-11-24")).toBe("actie:abc:2026-11-17:w1");
-    expect(sleutel("2026-12-01")).toBe("actie:abc:2026-11-17:w2");
+    expect(sleutel("2026-11-24")).toBe("actie:abc:2026-11-17:w1:hans");
+    expect(sleutel("2026-12-01")).toBe("actie:abc:2026-11-17:w2:hans");
   });
 
   it("geeft een verzette deadline een eigen sleutel", () => {
-    expect(actieMailSleutel("abc", "2026-12-01", "2026-12-02")).not.toBe(actieMailSleutel("abc", "2026-11-17", "2026-12-02"));
+    expect(actieMailSleutel("abc", "2026-12-01", "2026-12-02", "hans")).not.toBe(actieMailSleutel("abc", "2026-11-17", "2026-12-02", "hans"));
+  });
+
+  it("geeft bij een teampunt iedereen zijn eigen sleutel", () => {
+    // Anders zou de eerste melding de rest van het team wegdrukken.
+    expect(actieMailSleutel("abc", "2026-11-17", "2026-11-18", "hans")).not.toBe(actieMailSleutel("abc", "2026-11-17", "2026-11-18", "elles"));
   });
 
   const punt = { kind: "action_overdue" as const, itemId: "00000000-0000-4000-8000-000000000001", title: "Stalenkast opruimen", body: "Showroom · Stalen", day: "2026-11-17" };
@@ -62,13 +67,7 @@ describe("herinnering bij een gemiste deadline", () => {
     expect(m.text).toContain("Open het actiepunt");
   });
 
-  it("stuurt een collega buiten de lijst naar zijn agenda, want daar staat het punt", () => {
-    const m = staffNotificationEmail({ ...punt, inLijst: false }, { name: "Teresa", locale: "nl" });
-    expect(m.html).toContain("/agenda?owner=mine");
-    expect(m.html).not.toContain("/actielijst");
-    expect(m.html).not.toContain("/lijst/");
-    expect(m.text).toContain("Open je agenda");
-  });
+
 
   it("vertaalt de mail en laat geen regeleinde in het onderwerp staan", () => {
     const m = staffNotificationEmail({ kind: "action_overdue", itemId: "00000000-0000-4000-8000-000000000002", title: "Voorraad tellen\nBcc: attacker", body: "<script>alert(1)</script>", day: "2026-11-17" }, { name: "Teresa", locale: "es" });

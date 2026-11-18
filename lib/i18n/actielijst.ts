@@ -21,6 +21,8 @@ const rows: [string, string, string][] = [
   ["De deadline van {datum} is verstreken. Zonder verantwoordelijke gaat er geen mail uit.", "The deadline of {datum} has passed. Without someone responsible no email is sent.", "La fecha límite del {datum} ha vencido. Sin responsable no se envía ningún correo."],
   ["Rood = deadline verstreken · Oranje = iemand is ermee bezig · Groen = klaar", "Red = deadline passed · Amber = someone is working on it · Green = done", "Rojo = fecha límite vencida · Naranja = alguien está en ello · Verde = hecho"],
   ["Nog niemand", "Nobody yet", "Todavía nadie"],
+  ["Hele team", "Whole team", "Todo el equipo"],
+  ["Bij ‘Hele team’ krijgt iedereen die de lijst bijhoudt die mail, en staat het punt bij iedereen onder ‘van mij’.", "With “Whole team” everyone who keeps the list gets that email, and the item shows under “mine” for all of them.", "Con «Todo el equipo» ese correo lo recibe todo el que mantiene la lista, y el punto aparece en «míos» para todos."],
   ["Samen met", "Together with", "Junto con"],
   ["Nog geen actiepunten.", "No action items yet.", "Todavía no hay puntos de acción."],
   ["Geen punten voor jou.", "No items for you.", "No hay puntos para ti."],
@@ -44,9 +46,6 @@ const rows: [string, string, string][] = [
   ["Terugzetten in de lijst", "Restore to the list", "Devolver a la lista"],
   ["Uit de lijst halen laat het punt en de opmerkingen staan onder ‘Uit de lijst gehaald’.", "Removing it from the list keeps the item and its comments under “Removed from the list”.", "Al quitarlo de la lista, el punto y sus comentarios se conservan en «Quitados de la lista»."],
 
-  ["Houdt de lijst bij", "Keeps the list", "Mantiene la lista"],
-  ["Overige medewerkers (zien het in hun agenda)", "Other colleagues (they see it in their calendar)", "Otros compañeros (lo ven en su agenda)"],
-  ["Een collega die de lijst niet bijhoudt, ziet dit punt alleen in de agenda. Zet er dus een deadline op, anders komt het nergens langs.", "A colleague who does not keep the list only sees this item in the calendar, so give it a deadline — otherwise it never comes up.", "Un compañero que no mantiene la lista solo ve este punto en la agenda, así que ponle una fecha límite; si no, no aparece en ningún sitio."],
 
   // ── persoonlijke links en agenda ──────────────────────────────────────────
   ["Persoonlijke links", "Personal links", "Enlaces personales"],

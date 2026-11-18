@@ -9,7 +9,7 @@
  * authenticatie en niets meer.
  */
 import "server-only";
-import { and, asc, eq, inArray, isNotNull, isNull, ne, sql } from "drizzle-orm";
+import { and, asc, eq, inArray, isNotNull, isNull, ne, or, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import { z } from "zod";
 
@@ -20,7 +20,8 @@ import { ACTIE_STATUSSEN } from "@/lib/actielijst";
 import { agendaDateTime, validDay } from "@/lib/agenda-dates";
 import { crmUrl } from "@/lib/crm-url";
 
-const leegOfUuid = z.union([z.string().uuid(), z.literal("")]);
+/** Leeg = nog niemand, "team" = van het hele team, anders één medewerker. */
+const wie = z.union([z.string().uuid(), z.literal(""), z.literal("team")]);
 
 export const actiepuntInvoer = z.object({
   /** Bij een nieuw punt het id uit het formulier: twee keer versturen geeft één punt. */
@@ -30,7 +31,7 @@ export const actiepuntInvoer = z.object({
   subgroup: z.string().trim().max(60).regex(/^[^\r\n]*$/).default(""),
   title: z.string().trim().min(3).max(200).regex(/^[^\r\n]+$/),
   description: z.string().trim().max(4000).default(""),
-  assigneeId: leegOfUuid.default(""),
+  assigneeId: wie.default(""),
   helpers: z.string().trim().max(200).regex(/^[^\r\n]*$/).default(""),
   dueDate: z.string().max(10).default(""),
   status: z.enum(ACTIE_STATUSSEN).default("open"),
@@ -42,27 +43,21 @@ export const klaarInvoer = z.object({ id: z.string().uuid(), klaar: z.boolean() 
 export const archiefInvoer = z.object({ id: z.string().uuid(), archief: z.boolean() });
 
 /**
- * Iedere medewerker die iets mag wijzigen kan verantwoordelijk zijn — ook wie
- * de lijst zelf niet mag openen (keuze Nick 18-11-2026). Zo'n collega ziet het
- * punt niet in de lijst maar wél in de agenda, want een punt met een deadline
- * is ook een taak. Alleen-lezen accounts vallen af: die kunnen niets afvinken.
+ * De verantwoordelijke moet de lijst zelf kunnen openen en bijwerken: anders
+ * krijgt iemand een mail over een punt dat hij niet eens kan zien.
  */
 export async function isGeldigeVerantwoordelijke(id: string): Promise<boolean> {
-  const [gebruiker] = await db.select({ role: users.role }).from(users).where(eq(users.id, id));
-  return !!gebruiker && heeftCap(gebruiker.role, "schrijven");
+  const [gebruiker] = await db.select({ role: users.role, email: users.email }).from(users).where(eq(users.id, id));
+  return !!gebruiker && magModuleAls(gebruiker.role, gebruiker.email, "actielijst") && heeftCap(gebruiker.role, "schrijven");
 }
 
-export type Medewerker = { id: string; name: string | null; email: string; inLijst: boolean };
+export type Medewerker = { id: string; name: string | null; email: string };
 
-/**
- * Wie je kunt toewijzen, in twee groepen: de mensen die de lijst zelf bijhouden
- * en de overige collega's. Die scheiding staat ook op het scherm, zodat je weet
- * wie het punt in de lijst ziet en wie alleen in zijn agenda.
- */
+/** Wie je kunt toewijzen: de mensen die de lijst bijhouden. */
 export async function toewijsbareMedewerkers(): Promise<Medewerker[]> {
   const team = await db.select({ id: users.id, name: users.name, email: users.email, role: users.role }).from(users).orderBy(asc(users.name));
-  return team.filter(u => heeftCap(u.role, "schrijven"))
-    .map(u => ({ id: u.id, name: u.name, email: u.email, inLijst: magModuleAls(u.role, u.email, "actielijst") }));
+  return team.filter(u => magModuleAls(u.role, u.email, "actielijst") && heeftCap(u.role, "schrijven"))
+    .map(u => ({ id: u.id, name: u.name, email: u.email }));
 }
 
 
@@ -83,7 +78,7 @@ export async function toewijsbareMedewerkers(): Promise<Medewerker[]> {
  *    degene die het punt aanmaakte.
  */
 async function stemTaakAf(itemId: string, actorId: string): Promise<void> {
-  const [item] = await db.select({ id: actionItems.id, title: actionItems.title, description: actionItems.description, groupName: actionItems.groupName, subgroup: actionItems.subgroup, dueDate: actionItems.dueDate, status: actionItems.status, assigneeId: actionItems.assigneeId, createdById: actionItems.createdById, archivedAt: actionItems.archivedAt, taskId: actionItems.taskId }).from(actionItems).where(eq(actionItems.id, itemId));
+  const [item] = await db.select({ id: actionItems.id, title: actionItems.title, description: actionItems.description, groupName: actionItems.groupName, subgroup: actionItems.subgroup, dueDate: actionItems.dueDate, status: actionItems.status, assigneeId: actionItems.assigneeId, teamwide: actionItems.teamwide, createdById: actionItems.createdById, archivedAt: actionItems.archivedAt, taskId: actionItems.taskId }).from(actionItems).where(eq(actionItems.id, itemId));
   if (!item) return;
   const dueAt = item.dueDate ? agendaDateTime(item.dueDate, "17:00") : null;
   if (!dueAt) {
@@ -97,7 +92,9 @@ async function stemTaakAf(itemId: string, actorId: string): Promise<void> {
     body: [[item.groupName, item.subgroup].filter(Boolean).join(" \u00b7 "), item.description, `${crmUrl()}/actielijst?taak=${item.id}`].filter(Boolean).join("\n\n"),
     dueAt,
     completedAt: afgerond ? new Date() : null,
-    assigneeId: item.assigneeId ?? item.createdById ?? actorId,
+    // Een teampunt hangt aan niemand in het bijzonder; dan staat het in de
+    // teamagenda bij degene die het aanmaakte.
+    assigneeId: item.teamwide ? null : item.assigneeId ?? item.createdById ?? actorId,
     authorId: item.createdById ?? actorId,
   };
   if (item.taskId) {
@@ -113,13 +110,16 @@ export type BewaarUitkomst = { itemId: string; nieuw: boolean; bestond: boolean 
 /** Nieuw actiepunt of een bestaand punt bijwerken. */
 export async function bewaarActiepuntDb(d: ActiepuntInvoer, actorId: string): Promise<BewaarUitkomst> {
   if (d.dueDate && !validDay(d.dueDate)) return { fout: "deadline" };
-  if (d.assigneeId && !(await isGeldigeVerantwoordelijke(d.assigneeId))) return { fout: "verantwoordelijke" };
+  const heleTeam = d.assigneeId === "team";
+  const assigneeId = heleTeam ? "" : d.assigneeId;
+  if (assigneeId && !(await isGeldigeVerantwoordelijke(assigneeId))) return { fout: "verantwoordelijke" };
   const velden = {
     groupName: d.groupName,
     subgroup: d.subgroup || null,
     title: d.title,
     description: d.description || null,
-    assigneeId: d.assigneeId || null,
+    assigneeId: assigneeId || null,
+    teamwide: heleTeam,
     helpers: d.helpers || null,
     dueDate: d.dueDate || null,
     status: d.status,
@@ -175,16 +175,17 @@ export type Weergave = "open" | "alles" | "archief";
  */
 export async function laadActielijst(opts: { weergave: Weergave; alleenVoor?: string | null; punt?: string | null }) {
   const toegewezen = alias(users, "action_assignee");
-  const kolommen = { id: actionItems.id, groupName: actionItems.groupName, subgroup: actionItems.subgroup, title: actionItems.title, description: actionItems.description, helpers: actionItems.helpers, dueDate: actionItems.dueDate, status: actionItems.status, assigneeId: actionItems.assigneeId, assigneeName: toegewezen.name, assigneeEmail: toegewezen.email, doneAt: actionItems.doneAt, archivedAt: actionItems.archivedAt, createdAt: actionItems.createdAt };
+  const kolommen = { id: actionItems.id, groupName: actionItems.groupName, subgroup: actionItems.subgroup, title: actionItems.title, description: actionItems.description, helpers: actionItems.helpers, dueDate: actionItems.dueDate, status: actionItems.status, assigneeId: actionItems.assigneeId, teamwide: actionItems.teamwide, assigneeName: toegewezen.name, assigneeEmail: toegewezen.email, doneAt: actionItems.doneAt, archivedAt: actionItems.archivedAt, createdAt: actionItems.createdAt };
   const lijst = () => db.select(kolommen).from(actionItems).leftJoin(toegewezen, eq(toegewezen.id, actionItems.assigneeId));
   const [rijen, alles, selectieRijen] = await Promise.all([
     lijst().where(and(
       opts.weergave === "archief" ? isNotNull(actionItems.archivedAt) : isNull(actionItems.archivedAt),
       opts.weergave === "open" ? ne(actionItems.status, "done") : undefined,
-      opts.alleenVoor ? eq(actionItems.assigneeId, opts.alleenVoor) : undefined,
+      // Van mij = aan mij toegewezen, plus wat van het hele team is.
+      opts.alleenVoor ? or(eq(actionItems.assigneeId, opts.alleenVoor), eq(actionItems.teamwide, true)) : undefined,
     )).orderBy(asc(actionItems.groupName), sql`${actionItems.subgroup} nulls first`, sql`case when ${actionItems.status} = 'done' then 1 else 0 end`, sql`${actionItems.dueDate} asc nulls last`, asc(actionItems.createdAt)).limit(500),
     // De tellers en de groepnamen horen bij de hele lijst, niet bij dit filter.
-    db.select({ groupName: actionItems.groupName, subgroup: actionItems.subgroup, status: actionItems.status, dueDate: actionItems.dueDate, assigneeId: actionItems.assigneeId }).from(actionItems).where(isNull(actionItems.archivedAt)).limit(2000),
+    db.select({ groupName: actionItems.groupName, subgroup: actionItems.subgroup, status: actionItems.status, dueDate: actionItems.dueDate, assigneeId: actionItems.assigneeId, teamwide: actionItems.teamwide }).from(actionItems).where(isNull(actionItems.archivedAt)).limit(2000),
     opts.punt ? lijst().where(eq(actionItems.id, opts.punt)) : [],
   ]);
   const ids = [...new Set([...rijen.map(r => r.id), ...(opts.punt ? [opts.punt] : [])])];
