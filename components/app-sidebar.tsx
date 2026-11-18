@@ -15,6 +15,7 @@ import {
   LayoutDashboard,
   LineChart,
   LogOut,
+  ListChecks,
   Mail,
   MessageSquare,
   Megaphone,
@@ -57,7 +58,7 @@ import { useState, useSyncExternalStore } from "react";
 
 import { signOutAction } from "@/lib/auth/actions";
 import { useT } from "@/components/taal-provider";
-import { magAlles, magPad, ROLE_LABEL, type Role } from "@/lib/auth/modules";
+import { magPadAls, ROLE_LABEL, type Role } from "@/lib/auth/modules";
 import { ThemaSchakelaar } from "@/components/thema-schakelaar";
 import { GlobalSearch } from "@/components/global-search";
 import { cn, initials } from "@/lib/utils";
@@ -131,6 +132,7 @@ const NAV_GROUPS: { id: string; label: string | null; items: NavItem[] }[] = [
       { href: "/contacts", label: "Contacten", icon: Users },
       { href: "/inbox", label: "Mail-inbox", icon: Mail },
       { href: "/teamberichten", label: "Teamberichten", icon: MessageSquare },
+      { href: "/actielijst", label: "Actielijst", icon: ListChecks },
     ],
   },
   // Wie er zijn, in de volgorde waarin ze binnenkomen: gesproken → aanvraag →
@@ -262,11 +264,9 @@ export function AppSidebar({
 
   // Alleen netheid: de echte grens ligt in app/(app)/layout.tsx en in de guards
   // bij de server actions. Dit voorkomt dode links in het menu.
-  const groups = magAlles(user.role)
-    ? NAV_GROUPS
-    : NAV_GROUPS.map((g) => ({ ...g, items: g.items.filter((i) => magPad(user.role, i.href)) })).filter(
-        (g) => g.items.length > 0,
-      );
+  // Ook bij "mag alles" wordt er gefilterd: een module met een ledenlijst (de
+  // actielijst) hoort niet in het menu van wie er niet bij hoort.
+  const groups = NAV_GROUPS.map((g) => ({ ...g, items: g.items.filter((i) => magPadAls(user.role, user.email, i.href)) })).filter((g) => g.items.length > 0);
 
   const isActive = (href: string, exact?: boolean) =>
     exact ? pathname === href : pathname === href || pathname.startsWith(`${href}/`);

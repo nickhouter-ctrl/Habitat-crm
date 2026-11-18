@@ -4,7 +4,7 @@ import { dateLocale, isLocale, maakT } from "@/lib/i18n";
 import { AGENDA_TIME_ZONE } from "@/lib/agenda-dates";
 
 export type StaffAgendaItem = { id: string; kind: "task" | "appointment"; title: string; body: string | null; at: Date; contactId: string | null; contactName: string | null; location?: string | null; overdue?: boolean };
-export type StaffMailContent = { kind: "followup_assignment" | "task_assignment" | "appointment_assignment" | "team_message" | "daily_agenda" | "worker_week_submitted"; title?: string; body?: string | null; at?: Date | null; actorName?: string | null; contactId?: string | null; contactName?: string | null; messageId?: string; sheetId?: string; lumpId?: string; day?: string; items?: StaffAgendaItem[] };
+export type StaffMailContent = { kind: "followup_assignment" | "task_assignment" | "appointment_assignment" | "team_message" | "daily_agenda" | "worker_week_submitted" | "action_overdue"; title?: string; body?: string | null; at?: Date | null; actorName?: string | null; contactId?: string | null; contactName?: string | null; messageId?: string; sheetId?: string; lumpId?: string; itemId?: string; linkToken?: string; day?: string; items?: StaffAgendaItem[] };
 
 export function staffNotificationEmail(content: StaffMailContent, recipient: { name: string | null; locale: string }) {
   const locale = isLocale(recipient.locale) ? recipient.locale : "nl", t = maakT(locale), base = crmUrl();
@@ -19,11 +19,16 @@ export function staffNotificationEmail(content: StaffMailContent, recipient: { n
     case "appointment_assignment": subject = t("Nieuwe afspraak voor jou: {titel}", { titel: content.title ?? "" }); intro = t("Er is een afspraak aan jou toegewezen."); href = "/agenda"; label = t("Open je agenda"); break;
     case "team_message": subject = t("Bericht van {naam}: {titel}", { naam: content.actorName ?? t("Medewerker"), titel: content.title ?? "" }); intro = t("Je hebt een nieuw teambericht ontvangen."); href = `/teamberichten?bericht=${content.messageId}`; label = t("Lees het teambericht"); break;
     case "daily_agenda": subject = t("Jouw agenda voor {datum}", { datum: day }); intro = t("Dit staat voor jou klaar: afspraken van vandaag, te volgen taken en achterstallige acties."); href = `/agenda?date=${content.day}&owner=mine`; label = t("Open je agenda"); break;
+    // Aparte mail, los van het ochtendoverzicht: één gemiste deadline, één bericht.
+    // De persoonlijke link opent zonder inloggen; die werkt op de telefoon.
+    // Geen link bekend? Dan de pagina in het CRM, achter de login.
+    case "action_overdue": subject = t("Actie nodig – {taak} is nog niet uitgevoerd", { taak: content.title ?? "" }); intro = t("Deze taak uit de gedeelde actielijst staat na de deadline nog open. Vink hem af zodra hij klaar is, of zet er een nieuwe deadline op."); href = content.linkToken ? `/lijst/${content.linkToken}#punt-${content.itemId}` : `/actielijst?taak=${content.itemId}`; label = t("Open het actiepunt"); break;
   }
   const lines = [recipient.name ? t("Hallo {naam},", { naam: recipient.name }) : t("Hallo,"), intro];
   const parts = [`<p>${escapeHtml(lines[0])}</p><p>${escapeHtml(intro)}</p>`];
   if (content.actorName && content.kind !== "team_message") { const actor = t("Toegewezen door {naam}", { naam: content.actorName }); parts.push(`<p style="color:#7a6f63;font-size:13px">${escapeHtml(actor)}</p>`); lines.push(actor); }
   if (content.title) { parts.push(`<h2 style="font-size:18px">${escapeHtml(content.title)}</h2>`); lines.push(content.title); }
+  if (content.kind === "action_overdue" && content.day) { const regel = t("Gemiste deadline: {datum}", { datum: day }); parts.push(`<p style="margin:6px 0;color:#a4372b"><strong>${escapeHtml(regel)}</strong></p>`); lines.push(regel); }
   if (content.contactName) { parts.push(`<p><strong>${escapeHtml(t("Klant"))}:</strong> ${escapeHtml(content.contactName)}</p>`); lines.push(`${t("Klant")}: ${content.contactName}`); }
   if (content.at) { parts.push(`<p><strong>${escapeHtml(t("Wanneer"))}:</strong> ${escapeHtml(date(content.at))}</p>`); lines.push(date(content.at)); }
   if (content.body) { parts.push(`<p style="white-space:pre-wrap;line-height:1.6">${escapeHtml(content.body)}</p>`); lines.push(content.body); }

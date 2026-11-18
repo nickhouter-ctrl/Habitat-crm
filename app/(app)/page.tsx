@@ -173,6 +173,7 @@ export default async function StartPage({
           <div className="flex flex-wrap gap-3">
             {ik.magModule("klantopvolging")&&<LinkButton href="/opvolging" variant="secondary">{t("Opvolging")}{(badges['/opvolging']??0)>0?` · ${badges['/opvolging']}`:''}</LinkButton>}
             {ik.magModule("teamberichten")&&<LinkButton href="/teamberichten" variant="secondary">{t("Teamberichten")}{(badges['/teamberichten']??0)>0?` · ${badges['/teamberichten']}`:''}</LinkButton>}
+            {ik.magModule("actielijst")&&<LinkButton href="/actielijst" variant="secondary">{t("Actielijst")}{(badges['/actielijst']??0)>0?` · ${badges['/actielijst']}`:''}</LinkButton>}
             {ik.heeftCap("teambeheer")&&<LinkButton href="/agenda?owner=all&kind=task" variant="secondary">{t("Taken per medewerker")}</LinkButton>}
           </div>
         </div>
@@ -183,7 +184,7 @@ export default async function StartPage({
       </details>
       <details id="onderdelen" className="rounded-xl border bg-surface p-4">
         <summary className="cursor-pointer text-sm font-semibold">{t("Onderdelen")}</summary>
-        <div className="mt-4"><TegelGrid prefs={(prefsRow?.startPrefs as StartPrefs | null) ?? null} badges={tegelBadges} saveAction={saveStartPrefs} rol={ik?.rol}/></div>
+        <div className="mt-4"><TegelGrid prefs={(prefsRow?.startPrefs as StartPrefs | null) ?? null} badges={tegelBadges} saveAction={saveStartPrefs} rol={ik?.rol} email={ik?.email}/></div>
       </details>
     </>
   );

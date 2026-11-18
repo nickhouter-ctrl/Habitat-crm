@@ -310,7 +310,7 @@ export const staffNotifications = pgTable("staff_notifications", {
   id: uuid().primaryKey().defaultRandom(),
   eventKey: text().notNull().unique(),
   userId: uuid().notNull().references(() => users.id, { onDelete: "cascade" }),
-  kind: text().$type<"followup_assignment" | "task_assignment" | "appointment_assignment" | "team_message" | "daily_agenda" | "worker_week_submitted">().notNull(),
+  kind: text().$type<"followup_assignment" | "task_assignment" | "appointment_assignment" | "team_message" | "daily_agenda" | "worker_week_submitted" | "action_overdue">().notNull(),
   entityId: uuid(),
   day: date(),
   actorId: uuid().references(() => users.id, { onDelete: "set null" }),
@@ -321,8 +321,75 @@ export const staffNotifications = pgTable("staff_notifications", {
   lastError: text(),
   ...timestamps,
 }, t => [index("staff_notifications_pending_idx").on(t.status, t.availableAt),
-  check("staff_notifications_kind_check", sql`${t.kind} in ('followup_assignment','task_assignment','appointment_assignment','team_message','daily_agenda','worker_week_submitted')`),
+  check("staff_notifications_kind_check", sql`${t.kind} in ('followup_assignment','task_assignment','appointment_assignment','team_message','daily_agenda','worker_week_submitted','action_overdue')`),
   check("staff_notifications_status_check", sql`${t.status} in ('pending','sending','sent','skipped','unknown')`)]).enableRLS();
+
+/* --------------------------------------------------------------- actielijst */
+
+/**
+ * De gedeelde interne actielijst: wat moet er gebeuren, wie pakt het op en tot
+ * wanneer. Groep en subgroep zijn vrije tekst (Showroom · Stalen, Magazijn ·
+ * Voorraadtelling), zodat het team zelf indeelt zonder beheerpagina erbij.
+ *
+ * De kleur van een regel staat niet in de database: groen is `done`, rood is
+ * een verstreken deadline die nog openstaat. Eén waarheid, dus een gemiste
+ * deadline kan nooit stil op neutraal blijven staan — en de mail en het scherm
+ * kunnen niet uit elkaar lopen.
+ */
+export const actionItems = pgTable("action_items", {
+  id: uuid().primaryKey().defaultRandom(),
+  groupName: text().notNull(),
+  subgroup: text(),
+  title: text().notNull(),
+  description: text(),
+  /** De verantwoordelijke. Leeg = nog niemand, en dan gaat er ook geen mail uit. */
+  assigneeId: uuid().references(() => users.id, { onDelete: "set null" }),
+  /** Wie er verder bij nodig is — vrije tekst, ook voor mensen buiten het CRM. */
+  helpers: text(),
+  dueDate: date(),
+  status: text().$type<"open" | "in_progress" | "done">().notNull().default("open"),
+  doneAt: timestamp({ withTimezone: true }),
+  doneById: uuid().references(() => users.id, { onDelete: "set null" }),
+  createdById: uuid().references(() => users.id, { onDelete: "set null" }),
+  /** Uit de lijst gehaald zonder de historie weg te gooien. */
+  archivedAt: timestamp({ withTimezone: true }),
+  /**
+   * De taak in de teamagenda die bij dit punt hoort. Een punt met een deadline
+   * staat ook in `/agenda` en gaat daardoor mee in de Apple-agenda-sync en het
+   * ochtendoverzicht van 08:00 — één punt, niet twee lijstjes die uit elkaar
+   * lopen. Geen deadline (meer) = geen taak.
+   */
+  taskId: uuid().references((): AnyPgColumn => activities.id, { onDelete: "set null" }),
+  ...timestamps,
+}, t => [index("action_items_open_idx").on(t.status, t.dueDate), index("action_items_assignee_idx").on(t.assigneeId, t.status),
+  check("action_items_status_check", sql`${t.status} in ('open','in_progress','done')`)]).enableRLS();
+
+/**
+ * Persoonlijke link naar de actielijst, zonder inloggen — één per medewerker
+ * (keuze Nick 18-11-2026: op de telefoon moet het in één tik open staan).
+ *
+ * Zelfde opzet als het urenportaal: de link is de sleutel, dus hij staat
+ * nergens in een mail naar buiten en de pagina is noindex. Eén rij per
+ * medewerker: een nieuwe link maken overschrijft het token, waardoor de oude
+ * link direct dood is.
+ */
+export const actionListLinks = pgTable("action_list_links", {
+  id: uuid().primaryKey().defaultRandom(),
+  userId: uuid().notNull().references(() => users.id, { onDelete: "cascade" }),
+  token: text().notNull(),
+  /** Laatste keer dat de link geopend is — zodat je ziet of hij gebruikt wordt. */
+  lastSeenAt: timestamp({ withTimezone: true }),
+  ...timestamps,
+}, t => [uniqueIndex("action_list_links_token_idx").on(t.token), uniqueIndex("action_list_links_user_idx").on(t.userId)]).enableRLS();
+
+/** Opmerkingen bij een actiepunt: iedereen die de lijst bijhoudt mag erbij. */
+export const actionItemComments = pgTable("action_item_comments", {
+  id: uuid().primaryKey().defaultRandom(),
+  itemId: uuid().notNull().references(() => actionItems.id, { onDelete: "cascade" }),
+  authorId: uuid().references(() => users.id, { onDelete: "set null" }),
+  body: text().notNull(),
+  ...timestamps,
+}, t => [index("action_item_comments_item_idx").on(t.itemId, t.createdAt)]).enableRLS();
 
 /* ----------------------------------------------------------------- companies */
 

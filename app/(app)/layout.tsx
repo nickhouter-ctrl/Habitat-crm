@@ -8,7 +8,7 @@ import { isLocale } from "@/lib/i18n";
 import { TaalProvider } from "@/components/taal-provider";
 import { TaalKeuze } from "@/components/taal-keuze";
 import { zetTaal } from "@/lib/i18n/actions";
-import { magAlles, startPadVoorRol } from "@/lib/auth/modules";
+import { heeftLedenlijst, magAlles, moduleVoorPad, startPadVoorRol } from "@/lib/auth/modules";
 import { verzamelNavBadges } from "@/lib/nav-badges";
 import { AppSidebar } from "@/components/app-sidebar";
 import { GlobalSearch } from "@/components/global-search";
@@ -30,8 +30,10 @@ export default async function AppLayout({
 
   // Rollen met volledige toegang hoeven niet op pad gecontroleerd te worden —
   // en dan kan een ontbrekende header ze ook nooit buitensluiten.
-  if (!magAlles(toegang.rol)) {
-    const pad = (await headers()).get("x-pathname");
+  const pad = (await headers()).get("x-pathname");
+  // Een module met een ledenlijst wordt altijd gecontroleerd, ook voor rollen
+  // die overal mogen komen: anders staat de actielijst voor elke beheerder open.
+  if (!magAlles(toegang.rol) || (pad && heeftLedenlijst(moduleVoorPad(pad)))) {
     // Geen pad bekend? Dan kunnen we niet controleren, en valt het dicht.
     if (!pad || !toegang.magPad(pad)) {
       const start = startPadVoorRol(toegang.rol);
