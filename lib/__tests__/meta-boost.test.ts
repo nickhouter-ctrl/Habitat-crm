@@ -2,32 +2,37 @@ import { describe, expect, it, vi } from "vitest";
 
 vi.mock("server-only", () => ({}));
 
-import { adsToPause, postsToBoost } from "@/lib/meta/boost";
+import { adsToPause, postToBoost } from "@/lib/meta/boost";
 
 const now = new Date("2026-11-20T12:00:00Z");
 
-describe("postsToBoost", () => {
-  it("picks recent, unboosted, promotable posts oldest first", () => {
-    const posts = [
-      { id: "p_3", created_time: "2026-11-19T10:00:00+0000" },
-      { id: "p_1", created_time: "2026-11-01T10:00:00+0000" }, // te oud
-      { id: "p_2", created_time: "2026-11-18T10:00:00+0000" },
-      { id: "p_4", created_time: "2026-11-19T11:00:00+0000", is_eligible_for_promotion: false },
-      { id: "p_5", created_time: "2026-11-17T10:00:00+0000" }, // al geboost
-    ];
-    const ads = [{ id: "a", created_time: "2026-11-17T12:00:00+0000", status: "ACTIVE", objectStoryId: "p_5" }];
-    expect(postsToBoost(posts, ads, now).map((p) => p.id)).toEqual(["p_2", "p_3"]);
+describe("postToBoost", () => {
+  const posts = [
+    { id: "p_2", created_time: "2026-11-18T10:00:00+0000" },
+    { id: "p_1", created_time: "2026-11-01T10:00:00+0000" }, // te oud
+    { id: "p_4", created_time: "2026-11-19T11:00:00+0000", is_eligible_for_promotion: false },
+    { id: "p_3", created_time: "2026-11-19T10:00:00+0000" },
+  ];
+  it("picks only the newest promotable post", () => {
+    expect(postToBoost(posts, [], now)?.id).toBe("p_3");
+  });
+  it("does nothing when the newest post already ran, even if paused", () => {
+    const ads = [{ id: "a", created_time: "2026-11-19T12:00:00+0000", status: "PAUSED", objectStoryId: "p_3" }];
+    expect(postToBoost(posts, ads, now)).toBeNull();
+  });
+  it("ignores posts older than the lookback", () => {
+    expect(postToBoost([posts[1]], [], now)).toBeNull();
   });
 });
 
 describe("adsToPause", () => {
-  it("pauses only active ads older than 21 days", () => {
+  it("pauses every other active ad so one post runs", () => {
     const ads = [
-      { id: "old", created_time: "2026-10-25T00:00:00+0000", status: "ACTIVE", objectStoryId: "x" },
+      { id: "old", created_time: "2026-11-14T00:00:00+0000", status: "ACTIVE", objectStoryId: "x" },
       { id: "oldPaused", created_time: "2026-10-25T00:00:00+0000", status: "PAUSED", objectStoryId: "y" },
-      { id: "new", created_time: "2026-11-10T00:00:00+0000", status: "ACTIVE", objectStoryId: "z" },
+      { id: "new", created_time: "2026-11-20T00:00:00+0000", status: "ACTIVE", objectStoryId: "z" },
     ];
-    expect(adsToPause(ads, now).map((a) => a.id)).toEqual(["old"]);
+    expect(adsToPause(ads, "new").map((a) => a.id)).toEqual(["old"]);
   });
 });
 
@@ -95,25 +100,5 @@ describe("postImageList", () => {
   it("prefers carousel subattachments", () => {
     expect(postImageList({ attachments: { data: [{ subattachments: { data: [{ media: { image: { src: "1" } } }, { media: { image: { src: "2" } } }] } }] } })).toEqual(["1", "2"]);
     expect(postImageList({ full_picture: "f" })).toEqual(["f"]);
-  });
-});
-
-import { pickPromotion } from "@/lib/meta/boost";
-
-describe("pickPromotion", () => {
-  const now = new Date("2026-11-21T12:00:00Z");
-  const perf = [
-    { adId: "a", objectStoryId: "p_1", impressions: 1000, clicks: 5, engagements: 10 },
-    { adId: "b", objectStoryId: "p_2", impressions: 800, clicks: 20, engagements: 30 },
-    { adId: "c", objectStoryId: "p_3", impressions: 100, clicks: 50, engagements: 50 }, // te weinig data
-  ];
-  it("promotes the best proven post when the customer ad is a week old", () => {
-    const customer = [{ id: "x", created_time: "2026-11-14T10:00:00+0000", status: "ACTIVE", objectStoryId: "p_0" }];
-    expect(pickPromotion(perf, customer, now)?.objectStoryId).toBe("p_2");
-  });
-  it("waits while the customer ad is fresh and skips posts already used", () => {
-    expect(pickPromotion(perf, [{ id: "x", created_time: "2026-11-18T10:00:00+0000", status: "ACTIVE", objectStoryId: "p_0" }], now)).toBeNull();
-    const used = [{ id: "y", created_time: "2026-11-01T00:00:00+0000", status: "PAUSED", objectStoryId: "p_2" }];
-    expect(pickPromotion(perf, used, now)?.objectStoryId).toBe("p_1");
   });
 });
