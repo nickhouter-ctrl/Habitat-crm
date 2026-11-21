@@ -132,6 +132,10 @@ and outdoor. Do NOT claim "lightweight", "waterproof"/"waterbestendig", a weight
 price — those are not in the data sheet.
 
 ## Reels for followers (Nick, 21-11: "reels voor meer volgers", besides the Mon/Wed/Fri posts)
+Own photos/clips: Nick and colleagues fill the shared iCloud folder "Habitat One - Eigen beeld";
+a launchd job (com.habitatone.eigen-beeld-sync, hourly rsync, never deletes) mirrors it to
+`~/Library/Application Support/habitat-social/eigen-beeld/` — always read from that mirror (iCloud itself is
+blocked for unattended runs). Skip files ending in `.icloud` (not downloaded yet) and log them.
 Goal: reach and new followers on Instagram, and showing what Habitat One really does (panels AND full renovations/projects). Every week 4 extra Reels on Tue, Thu, Sat and Sun at 19:00.
 The Mon/Wed/Fri posts stay exactly as described above.
 - Create the empty draft rows first: `npx tsx scripts/social-studio/add-reel-slot.ts <date>` for each of
@@ -154,12 +158,12 @@ The Mon/Wed/Fri posts stay exactly as described above.
      tiles? curves? outdoors? samples?) — only facts from "Verified technical facts"; never prices.
   6. **Behind the scenes** (also like @dizzplace: real, light-hearted clips of cutting, sorting and
      packing samples, the showroom, a delivery): ONLY from Nick's own clips/photos in
-     `~/Habitat One - Eigen beeld/Achter de schermen/` (newest first, never reuse a file, log used files in
+     `~/Library/Application Support/habitat-social/eigen-beeld/Achter de schermen/` (newest first, never reuse a file, log used files in
      history.md). Cut 2–4 short clips to 9:16 with ffmpeg, add hook text + music via reel.py. If the
      folder is empty, skip this type. Never fake behind-the-scenes footage with AI.
   7. **Our projects — renovations** (Nick, 21-11: "mensen moeten zien wat wij doen, ook verbouwingen
      en projecten", photos of ongoing projects will be delivered): ONLY real photos/clips from
-     `~/Habitat One - Eigen beeld/Projecten/<project>/1-voor|2-tijdens|3-na/` (+ optional info.txt).
+     `~/Library/Application Support/habitat-social/eigen-beeld/Projecten/<project>/1-voor|2-tijdens|3-na/` (+ optional info.txt).
      Tell the story in 10–15 s: hook ("¿Cómo quedó esta casa en Moraira?" / "Día 1 vs. día 30"),
      before → work in progress (craftsmen, demolition, new walls, panels going up) → result.
      Use `reel.py --brand habitat` (Habitat One logo instead of Flex-Surfaces), Habitat One does the
