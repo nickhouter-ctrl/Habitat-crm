@@ -1,5 +1,7 @@
 "use server";
 
+import { recordLesson } from "@/lib/autopilot/lessons";
+
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { and, eq, ilike, inArray, isNull, ne, sql } from "drizzle-orm";
@@ -317,6 +319,9 @@ export async function replyToMail(emailId: string, formData: FormData) {
     } catch { console.warn('[inbox] verzonden antwoord wordt opnieuw gekoppeld bij mailboxsynchronisatie'); }
     await db.update(emailInbox).set({ readAt: mail.readAt ?? new Date() }).where(eq(emailInbox.id, emailId));
     revalidatePath("/", "layout");
+    // Leren: wat stelde het systeem voor en wat ging er écht uit?
+    const voorstel = await db.query.inboxSuggestions.findFirst({ where: eq(inboxSuggestions.emailId, emailId), columns: { draft: true } });
+    if (voorstel?.draft) await recordLesson({ kind: "mail", context: `${mail.subject ?? ""} — van ${mail.fromEmail}`, draft: voorstel.draft, final: message });
     await db.update(inboxSuggestions).set({ status: "reviewed", draft: null, draftSubject: null, draftAttachments: [], needsReply: false, reviewedBy: user.id, reviewedAt: new Date(), updatedAt: new Date() }).where(eq(inboxSuggestions.emailId, emailId));
     const archiefTekst =
       bodyWithLinks + (bijlagePaden.length > 0 ? `\n\n📎 ${bijlagePaden.join(", ")}` : "");
