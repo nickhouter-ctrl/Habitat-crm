@@ -17,6 +17,7 @@ import type { AiInvoiceFields } from "@/lib/ai-invoice-extract";
 import { poExVat } from "@/lib/purchase-orders";
 import { downloadPurchaseOrderBuffer } from "@/lib/storage";
 import { holded, holdedListAll, HoldedError } from "./client";
+import { createPurchase } from "./purchase-v2";
 import { holdedProjecten } from "./sync";
 import type { HoldedAccount, HoldedContact, HoldedDocument, HoldedTax } from "./types";
 import {
@@ -320,10 +321,11 @@ export async function pushPurchaseToHolded(input: PushInput): Promise<PushResult
   const proposedSnap: HoldedPushSnapshot = { contactId: ctx.contact.matched?.id ?? null, docNumber: ctx.docNumber, date: ctx.date, lines: proposed, totals: bookingTotals(proposed, taxKeys) };
 
   let holdedId: string;
+  let v2Note: string | null = null;
   try {
-    const r = await holded.documents.create("purchase", body);
-    if (!r?.id) return fail("unknown", "Holded gaf geen document-id terug. Zoek de factuur terug in Holded voordat je opnieuw boekt.");
+    const r = await createPurchase(body);
     holdedId = r.id;
+    if (r.via === "v1" && r.v2Error) v2Note = `Holded v2 weigerde (${r.v2Error}); via v1 geboekt, dus zonder project per regel.`;
   } catch (e) {
     // Een 4xx is een weigering: er is niets aangemaakt. Alles anders (time-out,
     // 5xx) kan wél aangekomen zijn — dan alleen terugzoeken.
@@ -333,7 +335,7 @@ export async function pushPurchaseToHolded(input: PushInput): Promise<PushResult
   }
 
   await remember(input.poId, holdedId);
-  const warnings: string[] = [];
+  const warnings: string[] = v2Note ? [v2Note] : [];
   try {
     const remote = await holded.documents.get("purchase", holdedId);
     warnings.push(...verifyRemote(remote, sent));
