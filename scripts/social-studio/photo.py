@@ -29,8 +29,12 @@ def main():
     tmp = tempfile.mkdtemp(prefix="photo-")
     if a.es:
         sc = os.path.join(tmp, "scrim.png")
-        top_scrim_png(W, H, sc, depth=a.text_y + 0.3, opacity=0.55)
-        im.alpha_composite(Image.open(sc))
+        if a.text_y <= 0.5:
+            top_scrim_png(W, H, sc, depth=min(0.95, a.text_y + 0.3), opacity=0.55)
+            im.alpha_composite(Image.open(sc))
+        else:  # tekst onderin: verloop van onderen
+            top_scrim_png(W, H, sc, depth=min(0.95, 1 - a.text_y + 0.15), opacity=0.55)
+            im.alpha_composite(Image.open(sc).transpose(Image.FLIP_TOP_BOTTOM))
         p = os.path.join(tmp, "cue.png")
         cue_png({"es": a.es, "en": a.en or ""}, W, p)
         im.alpha_composite(Image.open(p), (0, int(H * a.text_y)))

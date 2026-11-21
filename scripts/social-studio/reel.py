@@ -79,6 +79,7 @@ def top_scrim_png(W, H, path, depth=0.38, opacity=0.5):
 
 LOGO_DARK_SUB = os.path.join(ROOT, "public", "brand", "flex-surfaces-logo-sub-dark.png")    # voor lichte achtergrond
 LOGO_CREAM_SUB = os.path.join(ROOT, "public", "brand", "flex-surfaces-logo-sub-cream.png")  # voor donkere achtergrond
+LOGO_CREAM_SOCIAL = os.path.join(ROOT, "public", "brand", "flex-surfaces-logo-sub-cream-social.png")  # crème met schaduw
 LOGO_WIDTH = 0.40   # fractie van de beeldbreedte
 LOGO_TOP = 0.035    # marge boven, fractie van de beeldhoogte
 
@@ -90,26 +91,41 @@ def logo_box(W, H):
     return (W - lw) // 2, int(H * LOGO_TOP), lw, lh
 
 
-def brand_png(W, H, path, background=None):
-    """Officieel Flex-Surfaces-logo bovenaan in het midden. De onderregel ("BY HABITAT-ONE")
-    is zwart op lichte en crème op donkere achtergrond; `background` = beeld om dat te bepalen."""
+def logo_style(background, W, H):
+    """Zelfde regel als lib/social/image-prep.ts (logoStyleFor): lichte, rustige achtergrond →
+    zwarte onderregel; anders crème onderregel met een zacht donker verloop bovenaan."""
+    if background is None:
+        return LOGO_CREAM_SUB, True
     x, y, lw, lh = logo_box(W, H)
-    variant = LOGO_DARK_SUB
-    if background is not None:
-        bg = background.convert("L").resize((W, H))
-        region = bg.crop((x, y + int(lh * 0.75), x + lw, y + lh))
-        lum = sum(region.getdata()) / max(1, region.width * region.height)
-        variant = LOGO_DARK_SUB if lum > 140 else LOGO_CREAM_SUB
-    logo = Image.open(variant).convert("RGBA").resize((lw, lh), Image.LANCZOS)
+    bg = background.convert("L").resize((W, H))
+    region = bg.crop((x, y + int(lh * 0.78), x + lw, y + lh))
+    px = list(region.getdata()); n = max(1, len(px))
+    mean = sum(px) / n
+    sd = (sum((v - mean) ** 2 for v in px) / n) ** 0.5
+    return (LOGO_DARK_SUB, False) if mean > 165 and sd < 28 else (LOGO_CREAM_SUB, True)
+
+
+def brand_png(W, H, path, background=None):
+    """Officieel Flex-Surfaces-logo bovenaan in het midden; `background` (beeld) bepaalt de onderregel."""
+    x, y, lw, lh = logo_box(W, H)
+    variant, gradient = logo_style(background, W, H)
     canvas = Image.new("RGBA", (W, H), (0, 0, 0, 0))
-    # Zachte schaduw (crème onderregel) of lichte gloed (zwarte onderregel) zodat "BY HABITAT-ONE" altijd leesbaar is.
-    halo_rgb = (0, 0, 0) if variant == LOGO_CREAM_SUB else (255, 250, 240)
-    halo = Image.new("RGBA", logo.size, halo_rgb + (0,))
-    halo.putalpha(logo.split()[3].point(lambda v: int(v * 0.7)))
-    halo = halo.filter(ImageFilter.GaussianBlur(max(3, W // 220)))
-    canvas.alpha_composite(halo, (x, y + max(1, W // 540)))
-    canvas.alpha_composite(halo, (x, y))
-    canvas.alpha_composite(logo, (x, y))
+    if gradient:
+        depth = H * 0.24
+        col = Image.new("L", (1, H), 0)
+        for j in range(int(depth) + 1):
+            col.putpixel((0, j), int(175 * max(0.0, 1 - j / depth) ** 1.6))
+        shade = Image.new("RGBA", (W, H), (20, 16, 12, 0)); shade.putalpha(col.resize((W, H)))
+        canvas.alpha_composite(shade)
+    if variant == LOGO_CREAM_SUB:
+        # versie met zachte schaduw (60 px rand), even groot geschaald als de gewone
+        soc = Image.open(LOGO_CREAM_SOCIAL).convert("RGBA")
+        k = lw / Image.open(LOGO_DARK_SUB).width
+        soc = soc.resize((int(soc.width * k), int(soc.height * k)), Image.LANCZOS)
+        pad = int(60 * k)
+        canvas.alpha_composite(soc, (max(0, x - pad), max(0, y - pad)))
+    else:
+        canvas.alpha_composite(Image.open(variant).convert("RGBA").resize((lw, lh), Image.LANCZOS), (x, y))
     canvas.save(path)
 
 
