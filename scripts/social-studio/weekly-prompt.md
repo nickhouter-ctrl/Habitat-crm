@@ -15,6 +15,10 @@ scenes, panels, music or themes from the last 6 weeks).
 - NEVER approve, schedule or publish anything. Only touch posts with status `draft` or `failed`.
   Skip posts that are `approved`, `scheduled`, `published`, `rejected`, or already `customMedia: true`.
 - If next week has no posts yet, stop and log "geen posts gepland".
+- IMPORTANT (Nick, 21-11): even when all Mon/Wed/Fri posts of next week are already approved/scheduled,
+  you are NOT done: always make the 4 "Reels for followers" (Tue/Thu/Sat/Sun 19:00) for next week. Only
+  skip a reel day if a post already exists on that date (add-reel-slot.ts tells you). The notification
+  then says how many reels you made.
 - Always realistic: real Spanish homes on the Costa Blanca / Ibiza style (whitewashed lime walls,
   wooden beams, terracotta, olive trees, pools, sea light). Nothing that looks fake or CGI.
   No black or dark marble. No close-ups of hands pressing a panel onto a wall (looked fake before).
