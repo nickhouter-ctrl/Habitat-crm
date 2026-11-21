@@ -172,7 +172,7 @@ def main():
     brand = os.path.join(tmp, "brand.png"); brand_png(W, H, brand, frame_at(a.src, min(1.0, D / 2), tmp), a.brand)
     cues = json.load(open(a.cues)) if a.cues else []
     if cues:
-        scrim = os.path.join(tmp, "scrim.png"); top_scrim_png(W, H, scrim, depth=a.text_y + 0.22, opacity=0.42)
+        scrim = os.path.join(tmp, "scrim.png"); top_scrim_png(W, H, scrim, depth=a.text_y + 0.22, opacity=0.58)
         merged = Image.open(scrim); merged.alpha_composite(Image.open(brand)); merged.save(brand)
     args = [FFMPEG, "-hide_banner", "-y", "-i", a.src, "-loop", "1", "-i", brand]
     for i, c in enumerate(cues):
