@@ -61,7 +61,7 @@ Rotate through these formats (check history.md; use each at least once per ~3 we
 
 Room types to rotate: bathroom, shower, living room, kitchen, bedroom (wall behind the bed),
 hallway/entrance, staircase, terrace/porch, pool area, garden wall, façade, columns/arches.
-Spanish on-screen text is always the big line; English small underneath.
+On-screen text: English big, Spanish small underneath (Nick, 21-11).
 
 ## Vary the panels (Nick, 14-11: "you keep doing the same kinds")
 We have 37 panels in 133 colour variants (MS codes in the Drive library, each with a real `…-01-panel.jpg`).
@@ -139,6 +139,33 @@ Verified facts — ONLY from our own website flex-surfaces.com (checked 21-11; i
 - Do NOT claim: a fire class (A2-s1 is NOT confirmed — never use it), PVC-free, waterproof, lightweight, a
   weight, a thickness, a bend radius, an installation time, prices, warranties.
 - Samples and the showroom: Habitat One in Jávea / Xàbia is the stockist with a showroom.
+
+## REAL FOOTAGE FIRST (Nick, 21-11 — "die is perfect")
+Nick approved Reels cut from our own real 4K footage and rejected AI-looking/static ones ("te nep",
+"te simpel"). Default for Reels from now on:
+- Source: `~/Library/Application Support/habitat-social/bron/graded-footage.mp4` (28:48, 3840x2160, no text)
+  plus supplier product clips in the same folder, and Nick's own clips in the eigen-beeld mirror.
+  Timecodes (s): 36 mixing adhesive · 60-66 two men unroll a big sheet in a garage · 84/312-324 measuring
+  on the panel · 348-396 cutting on the lawn (villa, palm) · 238-244 carrying a panel to the pool wall ·
+  456-530 placing/pressing panels on a pool wall with sea view · 551-556 palm + view over Jávea ·
+  612-680 sample wall in the showroom · 684-900 truck, forklift, crates, warehouse racks · 900-1320
+  texture close-ups with a hand (ribbed, rough stone, travertine, wood, fanned samples) · 1320-1372
+  a hand bends a sheet (hero shot) · 1375-1400 showroom ("Experience stone" sign, person holding a
+  panel) · 1404-1536 niche project indoors · 1540-1728 drone over the Habitat One building.
+- Cut with `python3 scripts/social-studio/cut_shots.py <source> shots.json raw.mp4`
+  (shots.json = [[start, duration, x], ...], x = left edge of the 9:16 crop in source pixels; check every
+  shot with a frame grab). Then `reel.py raw.mp4 out.mp4 --cues cues.json --music … --text-y 0.13`.
+- EVERY shot must show our panel (bending, carrying, cutting, placing, texture, samples). Never a shot
+  of just a bare wall, adhesive or tools without the panel.
+- Text: ENGLISH FIRST (big line = cue "es" field) and Spanish small underneath (cue "en" field).
+  Captions too: English block first, then Spanish.
+- Fun questions that invite comments ("Real stone? Look closely.", "Guess what this is made of.",
+  "Which wall for your home in Jávea? Comment your number", "Guess how many fit in here?",
+  "Would you put this on your wall?") and ALWAYS end with a follow call
+  ("Follow us for more real projects in Jávea" / "Síguenos para más obras reales en Jávea").
+- Reuse is fine but vary: never the same shot sequence twice within 6 weeks (log the timecodes you used
+  in history.md). AI (Codex/Higgsfield) only for before/after or "one room, several panels", and then
+  rich, beautiful, realistic rooms — never simple/empty scenes.
 
 ## Reels for followers (Nick, 21-11: "reels voor meer volgers", besides the Mon/Wed/Fri posts)
 Own photos/clips: Nick and colleagues fill the shared iCloud folder "Habitat One - Eigen beeld";
