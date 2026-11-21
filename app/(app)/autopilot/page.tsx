@@ -4,6 +4,7 @@ import { Badge, Card, Input, PageHeader, Textarea } from "@/components/ui";
 import { SubmitButton } from "@/components/submit-button";
 import { requireModuleRead } from "@/lib/auth/guards";
 import { recentAccountDecisions } from "@/lib/autopilot/accounts";
+import { recentLaborDecisions } from "@/lib/autopilot/labor-invoices";
 import { lessonStats } from "@/lib/autopilot/lessons";
 import { listProposals, MIN_MARGIN_PCT } from "@/lib/autopilot/quotes";
 import { formatEUR } from "@/lib/utils";
@@ -20,11 +21,12 @@ export default async function AutopilotPage() {
   const toegang = await requireModuleRead("assistent");
   const uiT = await uiTranslation();
   if (!toegang.heeftCap("bedragen")) return <p className="text-sm text-muted">{uiT("Geen toegang tot bedragen.")}</p>;
-  const [open, done, accounts, stats] = await Promise.all([
+  const [open, done, accounts, stats, labor] = await Promise.all([
     listProposals(["ready", "review"]),
     listProposals(["sent", "rejected"], 14),
     recentAccountDecisions(14),
     lessonStats(14),
+    recentLaborDecisions(14),
   ]);
 
   return (
@@ -112,6 +114,23 @@ export default async function AutopilotPage() {
           </div>
         ))}
         <div className="p-3 text-sm"><Link className="text-accent hover:underline" href="/accounts">{uiT("Naar klantaccounts")}</Link></div>
+      </Card>
+
+      <h2 className="mb-2 text-lg font-semibold">{uiT("Urenfacturen")}</h2>
+      <Card className="mb-8 divide-y">
+        {labor.length === 0 && <p className="p-4 text-sm text-muted">{uiT("Nog geen urenfacturen met urenstaat verwerkt.")}</p>}
+        {labor.map((l) => (
+          <div key={l.reviewId} className="flex flex-wrap items-center gap-2 p-3 text-sm">
+            <Badge tone={l.outcome === "approved" ? "success" : l.outcome === "returned" ? "neutral" : "warning"}>
+              {l.outcome === "approved" ? uiT("Geboekt") : l.outcome === "returned" ? uiT("Teruggestuurd") : uiT("Naar jou")}
+            </Badge>
+            <span className="font-medium">{l.reference ?? l.supplier}</span>
+            {l.amount != null && <span className="text-muted">{formatEUR(l.amount)}</span>}
+            {l.summary && <span className="text-muted">· {l.summary}</span>}
+            {l.outcome !== "approved" && l.reasons.length > 0 && <span className="w-full text-danger">{l.reasons.join(" · ")}</span>}
+          </div>
+        ))}
+        <div className="p-3 text-sm"><Link className="text-accent hover:underline" href="/inkooporders/te-verwerken">{uiT("Naar facturen keuren")}</Link></div>
       </Card>
 
       {done.length > 0 && (

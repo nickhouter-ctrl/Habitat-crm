@@ -639,6 +639,13 @@ export type ApprovalOverrides = {
    */
   extras?: { label: string; amount: number }[];
   /**
+   * Urenregels per dag en werf uit een urenstaat (autopilot, lib/autopilot/
+   * labor-invoices.ts). Vervangt de ene regel per werf: de verdeling volgt
+   * hieruit en elke regel komt met zijn eigen datum, persoon en tarief op de
+   * inkooporder. De sluitcontrole geldt gewoon — samen moeten ze de factuur zijn.
+   */
+  timeEntries?: { projectId: string; date: string; hours: number; workerId: string; workerName: string; hourlyCostEur: number; paymentMethod: "cash" | "invoice"; note: string }[];
+  /**
    * Vaste last (energie, telefonie, verzekering): hoort bij geen project. Zet de
    * leverancier op de overhead-lijst, zodat de volgende factuur van dezelfde
    * partij niet opnieuw om een werfreferentie vraagt.
@@ -654,7 +661,7 @@ export async function approveInvoiceReview(args: {
   reviewId: string;
   overrides?: ApprovalOverrides;
   userId: string | null;
-  via: "app" | "mail";
+  via: "app" | "mail" | "agent";
 }): Promise<{ purchaseOrderId: string | null; reason?: string }> {
   const candidate = await db.query.purchaseInvoiceReviews.findFirst({ where: eq(purchaseInvoiceReviews.id, args.reviewId) });
   if ((candidate?.aiFields as { documentType?: string } | null)?.documentType === "timesheet")
@@ -794,7 +801,15 @@ export async function approveInvoiceReview(args: {
             .from(workers),
         )
       : null;
-  const split = o.split?.length ? o.split : null;
+  const detail = kind === "labor" && o.timeEntries?.length ? o.timeEntries : null;
+  const split = detail
+    ? [...detail.reduce((m, e) => {
+        const d = m.get(e.projectId) ?? { projectId: e.projectId, hours: 0, amount: 0 };
+        d.hours = Math.round((d.hours + e.hours) * 100) / 100;
+        d.amount = Math.round((d.amount + e.hours * e.hourlyCostEur) * 100) / 100;
+        return m.set(e.projectId, d);
+      }, new Map<string, { projectId: string; hours: number; amount: number }>()).values()]
+    : o.split?.length ? o.split : null;
   const projectId = split ? null : (o.projectId ?? review.suggestedProjectId);
 
   // Kosten op de juiste plek zetten.
@@ -897,6 +912,7 @@ export async function approveInvoiceReview(args: {
     ));
   }
   for (const deel of verdelingen) {
+    if (detail) continue; // detailregels hieronder, met eigen datum en persoon
     if (kind === "labor" && !o.hoursAlreadyLogged && !hasApprovedTimesheet) {
       const uren = deel.hours && deel.hours > 0 ? deel.hours : 1;
       await db.insert(timeEntries).values({
@@ -932,6 +948,21 @@ export async function approveInvoiceReview(args: {
         amountEur: deel.amount.toFixed(2),
       });
     }
+  }
+
+  if (detail) {
+    await db.insert(timeEntries).values(detail.map((e) => ({
+      projectId: e.projectId,
+      workerId: e.workerId,
+      workerName: e.workerName,
+      date: e.date,
+      hours: String(e.hours),
+      hourlyCostEur: e.hourlyCostEur.toFixed(6),
+      paymentMethod: e.paymentMethod,
+      approvedAt: new Date(),
+      purchaseOrderId: po.id,
+      note: e.note,
+    })));
   }
 
   // De extra posten als kostenregel per werf. Niet bij materiaal op één werf:
@@ -982,7 +1013,8 @@ export async function approveInvoiceReview(args: {
       `${verdelingen.length ? ` · ${kind === "labor" ? "uren" : "materiaal"} op ${verdelingen.length} project(en)` : " · nog geen project"}` +
       `${extras.length ? ` · ${extras.map((x) => `${x.label.toLowerCase()} €${x.amount.toFixed(2)}`).join(", ")} verdeeld over de werven` : ""}` +
       `${correcties.length ? ` · ${correcties.join(", ")}` : ""}` +
-      `${args.via === "mail" ? " · goedgekeurd vanuit de meldingsmail" : ""}`,
+      `${args.via === "mail" ? " · goedgekeurd vanuit de meldingsmail" : ""}` +
+      `${args.via === "agent" ? " · automatisch goedgekeurd op basis van de urenstaat" : ""}`,
     authorId: args.userId,
   });
 
@@ -995,7 +1027,7 @@ export async function rejectInvoiceReview(args: {
   reviewId: string;
   reason: string;
   userId: string | null;
-  via: "app" | "mail";
+  via: "app" | "mail" | "agent";
   messageId?: string | null;
   /** Terugsturen naar de leverancier; leeg = alleen intern afkeuren. */
   mail?: { to: string; subject: string; html: string; text: string; attachInvoice?: boolean };
