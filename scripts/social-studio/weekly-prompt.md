@@ -15,6 +15,10 @@ scenes, panels, music or themes from the last 6 weeks).
 - NEVER approve, schedule or publish anything. Only touch posts with status `draft` or `failed`.
   Skip posts that are `approved`, `scheduled`, `published`, `rejected`, or already `customMedia: true`.
 - If next week has no posts yet, stop and log "geen posts gepland".
+- IMPORTANT (Nick, 21-11): even when all Mon/Wed/Fri posts of next week are already approved/scheduled,
+  you are NOT done: always make the 4 "Reels for followers" (Tue/Thu/Sat/Sun 19:00) for next week. Only
+  skip a reel day if a post already exists on that date (add-reel-slot.ts tells you). The notification
+  then says how many reels you made.
 - Always realistic: real Spanish homes on the Costa Blanca / Ibiza style (whitewashed lime walls,
   wooden beams, terracotta, olive trees, pools, sea light). Nothing that looks fake or CGI.
   No black or dark marble. No close-ups of hands pressing a panel onto a wall (looked fake before).
@@ -51,8 +55,8 @@ Rotate through these formats (check history.md; use each at least once per ~3 we
    Show it realistically (no fake hand-pressing close-ups).
 6. **Specifications** (carousel with clean text slides over real photos/texture close-ups): only
    facts from the data sheet (see "Verified technical facts") + "which formats/kinds exist" with
-   real panel photos, e.g. "Más de 200 acabados", families (lime, concrete, wood, travertine, rust…),
-   "Interior y exterior", "Se curva en paredes redondas", "Clase de fuego A2-s1".
+   real panel photos, e.g. "133 variantes de color", families (lime, concrete, wood, travertine, rust…),
+   "Interior y exterior", "Se curva en paredes redondas", "Sobre azulejos bien adheridos", "Hasta 3000 × 1200 mm".
 7. **Exterior / façades**: Spanish villa façades, garden walls, pool surrounds, entrances, columns —
    photo carousel or ambience video (camera along the façade, Mediterranean light).
 8. **Ambience video**: camera along a stone wall, a hand gently touching the stone, curved walls.
@@ -61,10 +65,10 @@ Rotate through these formats (check history.md; use each at least once per ~3 we
 
 Room types to rotate: bathroom, shower, living room, kitchen, bedroom (wall behind the bed),
 hallway/entrance, staircase, terrace/porch, pool area, garden wall, façade, columns/arches.
-Spanish on-screen text is always the big line; English small underneath.
+On-screen text: English big, Spanish small underneath (Nick, 21-11).
 
 ## Vary the panels (Nick, 14-11: "you keep doing the same kinds")
-We have 200+ panels (MS-001 … MS-288 in the Drive library, each with a real `…-01-panel.jpg`).
+We have 37 panels in 133 colour variants (MS codes in the Drive library, each with a real `…-01-panel.jpg`).
 Do NOT keep using the same few travertine/white ones (Roman White, Beige, White Golden). Every week
 pick panels you have not used in the last 8 weeks (check history.md and log every MS code you use),
 and spread across families: lime/plaster, concrete, bush-hammered stone, rammed earth / clay tones,
@@ -124,18 +128,62 @@ the result for spelling; regenerate if any text is wrong. Do NOT add the Flex-Su
 of a poster (the brand is already in it) — publish the poster as-is.
 Never announce events (open day etc.) unless Nick has put the date in the instructions.
 
-Verified technical facts (from public/docs/flexible-stone-technical-data-sheet.pdf) that MAY be used
-sometimes, e.g. as an icon strip on a poster or in a product post: fire class A2-s1 (tested to
-GB/T 14402 / GB/T 20284); CE — EN 15102:2019; UV light-ageing tested (ASTM G154); freeze-thaw tested
-(ASTM C1026, no visible change); PVC-free; no VOCs detected; flexible / bends around curves; indoor
-and outdoor. Do NOT claim "lightweight", "waterproof"/"waterbestendig", a weight, a thickness or a
-price — those are not in the data sheet.
+Verified facts — ONLY from our own website flex-surfaces.com (checked 21-11; it overrules the old data sheet):
+- Flexible decorative panels with the look and relief of stone, travertine, concrete, wood or earth;
+  they bend with the form: curves, columns, rounded walls, niches.
+- Material: MODIFIED CLAY. They are NOT natural stone, NOT solid travertine/concrete/wood. Never write
+  "real stone", "natural stone", "piedra natural", "100% piedra" or #piedranatural. Say "stone look",
+  "aspecto de piedra", "flexible stone panels" / "paneles de piedra flexible" (brand term) is fine.
+- Can go over existing tiles, if the tiles are firmly bonded and the surface is clean, dry and level.
+- Three standard sizes: 3000 × 1200, 1200 × 600 and 900 × 600 mm ("up to 3000 × 1200 mm"). No other sizes.
+- Collection: 37 panels, 133 colour variants, 7 texture families (travertine, concrete, wood, marble,
+  stone textures, linear/relief, earth). Not "200+".
+- Indoors and outdoors (walls, columns, bathrooms, kitchens, façades) — always as "possible", never as a
+  guarantee; a panel is not waterproofing.
+- Do NOT claim: a fire class (A2-s1 is NOT confirmed — never use it), PVC-free, waterproof, lightweight, a
+  weight, a thickness, a bend radius, an installation time, prices, warranties.
+- Samples and the showroom: Habitat One in Jávea / Xàbia is the stockist with a showroom.
+
+## REAL FOOTAGE FIRST (Nick, 21-11 — "die is perfect")
+Nick approved Reels cut from our own real 4K footage and rejected AI-looking/static ones ("te nep",
+"te simpel"). Default for Reels from now on:
+- Source: `~/Library/Application Support/habitat-social/bron/graded-footage.mp4` (28:48, 3840x2160, no text)
+  plus supplier product clips in the same folder, and Nick's own clips in the eigen-beeld mirror.
+  Timecodes (s): 36 mixing adhesive · 60-66 two men unroll a big sheet in a garage · 84/312-324 measuring
+  on the panel · 348-396 cutting on the lawn (villa, palm) · 238-244 carrying a panel to the pool wall ·
+  456-530 placing/pressing panels on a pool wall with sea view · 551-556 palm + view over Jávea ·
+  612-680 sample wall in the showroom · 684-900 truck, forklift, crates, warehouse racks · 900-1320
+  texture close-ups with a hand (ribbed, rough stone, travertine, wood, fanned samples) · 1320-1372
+  a hand bends a sheet (hero shot) · 1375-1400 showroom ("Experience stone" sign, person holding a
+  panel) · 1404-1536 niche project indoors · 1540-1728 drone over the Habitat One building.
+- Cut with `python3 scripts/social-studio/cut_shots.py <source> shots.json raw.mp4`
+  (shots.json = [[start, duration, x], ...], x = left edge of the 9:16 crop in source pixels; check every
+  shot with a frame grab). Then `reel.py raw.mp4 out.mp4 --cues cues.json --music … --text-y 0.13`.
+- EVERY shot must show our panel (bending, carrying, cutting, placing, texture, samples). Never a shot
+  of just a bare wall, adhesive or tools without the panel.
+- Text: ENGLISH FIRST (big line = cue "es" field) and Spanish small underneath (cue "en" field).
+  Captions too: English block first, then Spanish.
+- Fun questions that invite comments ("Real stone? Look closely.", "Guess what this is made of.",
+  "Which wall for your home in Jávea? Comment your number", "Guess how many fit in here?",
+  "Would you put this on your wall?") and ALWAYS end with a follow call
+  ("Follow us for more real projects in Jávea" / "Síguenos para más obras reales en Jávea").
+- Reuse is fine but vary: never the same shot sequence twice within 6 weeks (log the timecodes you used
+  in history.md). AI (Codex/Higgsfield) only for before/after or "one room, several panels", and then
+  rich, beautiful, realistic rooms — never simple/empty scenes.
 
 ## Reels for followers (Nick, 21-11: "reels voor meer volgers", besides the Mon/Wed/Fri posts)
 Own photos/clips: Nick and colleagues fill the shared iCloud folder "Habitat One - Eigen beeld";
 a launchd job (com.habitatone.eigen-beeld-sync, hourly rsync, never deletes) mirrors it to
 `~/Library/Application Support/habitat-social/eigen-beeld/` — always read from that mirror (iCloud itself is
 blocked for unattended runs). Skip files ending in `.icloud` (not downloaded yet) and log them.
+LOCAL FOCUS (Nick, 21-11): the goal is to become known in Jávea and surroundings (Xàbia, Dénia, Moraira,
+Benitachell, Calp, El Poble Nou de Benitatxell, Teulada, Pedreguer, Gata). Every Reel must feel local:
+local hooks ("¿Vives en Jávea?", "Jávea, ¿qué pared cambiarías?", "From Jávea with love"), local scenes
+(white Mediterranean villas with the Montgó in view, riu-rau porches, terraces with sea view, casas de
+pueblo in the old town, pool terraces), local light. Questions in BOTH Spanish (big) and English (small,
+many residents are international), in the video and in the caption. Promote the product in a fun,
+light way and always end with an invitation to the showroom in Jávea. Never use real addresses or
+recognisable private houses of others; Codex scenes are "inspired by" the area.
 Goal: reach and new followers on Instagram, and showing what Habitat One really does (panels AND full renovations/projects). Every week 4 extra Reels on Tue, Thu, Sat and Sun at 19:00.
 The Mon/Wed/Fri posts stay exactly as described above.
 - Create the empty draft rows first: `npx tsx scripts/social-studio/add-reel-slot.ts <date>` for each of
@@ -154,8 +202,13 @@ The Mon/Wed/Fri posts stay exactly as described above.
   3. **Quiz**: "¿Piedra maciza o panel flexible?", "¿Interior o exterior?" — answer at the end,
      only verified facts.
   4. **How it works in 15 s**: 4–5 numbered steps (photos), ending with the bending sheet.
-  5. **You asked, we answer** (like @dizzplace: a short FAQ-style Reel with ✔️ lines, e.g. over old
-     tiles? curves? outdoors? samples?) — only facts from "Verified technical facts"; never prices.
+  5. **You asked, we answer** (Nick loves @dizzplace's version): moving background clips (Higgsfield
+     kling3_0 std 5 s, sound off, ≈7.5 credits each, from library photos), and per question a comment
+     bubble (as if a follower from Jávea asks it), a numbered info card (01/04) and a short answer —
+     made with `python3 scripts/social-studio/faq_cards.py spec.json outdir/` (card types: layers,
+     sizes, curve, pin) and placed with `reel.py --overlays overlays.json` (bubble y≈0.20, card y≈0.30,
+     answer y≈0.60). 3–4 questions, ~3.5 s each, last one = showroom in Jávea (pin card). Only facts
+     from "Verified facts".
   6. **Behind the scenes** (also like @dizzplace: real, light-hearted clips of cutting, sorting and
      packing samples, the showroom, a delivery): ONLY from Nick's own clips/photos in
      `~/Library/Application Support/habitat-social/eigen-beeld/Achter de schermen/` (newest first, never reuse a file, log used files in

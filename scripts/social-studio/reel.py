@@ -163,6 +163,7 @@ def main():
     ap.add_argument("--cues"); ap.add_argument("--music")
     ap.add_argument("--text-y", type=float, default=0.15, help="bovenkant tekst, fractie van de hoogte")
     ap.add_argument("--volume", type=float, default=0.9)
+    ap.add_argument("--overlays", help='json: [{"file": "card1.png", "start": 2, "end": 5, "y": 0.30}] (PNG 1080 breed)')
     ap.add_argument("--brand", choices=["flex", "habitat"], default="flex",
                     help="flex = Flex-Surfaces-panelen (standaard), habitat = Habitat One (verbouwingen/projecten)")
     a = ap.parse_args()
@@ -171,12 +172,16 @@ def main():
     brand = os.path.join(tmp, "brand.png"); brand_png(W, H, brand, frame_at(a.src, min(1.0, D / 2), tmp), a.brand)
     cues = json.load(open(a.cues)) if a.cues else []
     if cues:
-        scrim = os.path.join(tmp, "scrim.png"); top_scrim_png(W, H, scrim, depth=a.text_y + 0.22, opacity=0.42)
+        scrim = os.path.join(tmp, "scrim.png"); top_scrim_png(W, H, scrim, depth=a.text_y + 0.22, opacity=0.58)
         merged = Image.open(scrim); merged.alpha_composite(Image.open(brand)); merged.save(brand)
     args = [FFMPEG, "-hide_banner", "-y", "-i", a.src, "-loop", "1", "-i", brand]
     for i, c in enumerate(cues):
         p = os.path.join(tmp, f"cue{i}.png"); cue_png(c, W, p)
         args += ["-loop", "1", "-i", p]
+    ovs = json.load(open(a.overlays)) if a.overlays else []
+    ov_base = len(cues) + 2
+    for o in ovs:
+        args += ["-loop", "1", "-i", o["file"]]
     if a.music:
         args += ["-stream_loop", "-1", "-i", a.music]
     f, last = [], "[0:v]"
@@ -186,10 +191,15 @@ def main():
         f.append(f"[{i+2}:v]format=rgba,fade=t=in:st={s}:d=0.4:alpha=1,fade=t=out:st={max(s, e-0.4)}:d=0.4:alpha=1[c{i}]")
         y = int(H * float(c.get("y", a.text_y)))  # per cue een eigen hoogte mogelijk (bv. haakzin in het midden)
         f.append(f"{last}[c{i}]overlay=0:{y}:shortest=1:enable='between(t,{s},{e})'[v{i}]"); last = f"[v{i}]"
+    for k, o in enumerate(ovs):
+        s_, e_ = float(o["start"]), min(float(o["end"]), D)
+        f.append(f"[{ov_base+k}:v]format=rgba,scale={W}:-1,fade=t=in:st={s_}:d=0.3:alpha=1,fade=t=out:st={max(s_, e_-0.3)}:d=0.3:alpha=1[o{k}]")
+        y = int(H * float(o.get("y", 0.3)))
+        f.append(f"{last}[o{k}]overlay=0:{y}:shortest=1:enable='between(t,{s_},{e_})'[w{k}]"); last = f"[w{k}]"
     f.append(f"{last}format=yuv420p[vout]")
     maps = ["-map", "[vout]"]
     if a.music:
-        mi = len(cues) + 2
+        mi = len(cues) + 2 + len(ovs)
         f.append(f"[{mi}:a]volume={a.volume},afade=t=in:d=0.8,afade=t=out:st={max(0, D-2):.2f}:d=2[aout]")
         maps += ["-map", "[aout]", "-c:a", "aac", "-b:a", "192k"]
     args += ["-filter_complex", ";".join(f), *maps, "-t", f"{D:.2f}", "-c:v", "libx264", "-preset", "medium",

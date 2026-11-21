@@ -52,10 +52,12 @@ def main():
         ],
     }
     if a.post_id:
+        # Eerst kijken, dan pas wijzigen: een ingeplande/gepubliceerde post nooit aanraken.
+        cur = proxy("GET", f"/posts/{a.post_id}")
+        cur = (cur.get("data") or cur).get("post", cur.get("data") or cur)
+        if cur.get("status") not in (None, "draft"):
+            raise SystemExit(f"Niet gewijzigd: Zernio-post {a.post_id} heeft status {cur.get('status')}")
         res = proxy("PUT", f"/posts/{a.post_id}", body)
-        post = res.get("post", res)
-        if post.get("status") not in (None, "draft"):
-            raise SystemExit(f"Let op: Zernio-post {a.post_id} heeft status {post.get('status')}")
         pid = a.post_id
     else:
         res = proxy("POST", "/posts", {**body, "isDraft": True})
