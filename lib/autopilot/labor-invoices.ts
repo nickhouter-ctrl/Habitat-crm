@@ -29,6 +29,7 @@ import { db } from "@/lib/db";
 import { emailInbox, mailAttachments, purchaseInvoiceReviews, purchaseOrders, workers } from "@/lib/db/schema";
 import { alleAliassen, normaliseerLabel, zoekProject } from "@/lib/project-aliases";
 import { approveInvoiceReview, rejectInvoiceReview } from "@/lib/purchase-invoice-intake";
+import { autoPushLaborInvoice } from "./labor-holded";
 import { copyMailAttachmentToPoBucket, downloadMailAttachmentBuffer } from "@/lib/storage";
 import { dagVerdeling, parseWideTimesheet, type WideTimesheet } from "@/lib/timesheet-wide";
 import { workerRate } from "@/lib/worker-rate";
@@ -43,12 +44,14 @@ export type LaborDecision = {
   /** Korte samenvatting: "LUIS 31 u: Silvestre 20 u, Finca Lisa 11 u". */
   summary: string | null;
   sheet: string | null;
+  /** Wat er met Holded gebeurde (concept gezet, of waarom niet). */
+  holded?: string | null;
   at: string;
 };
 
 /** Een bevinding; `supplier` = fout van de leverancier → terugsturen. */
 export type Finding = { text: string; supplier: boolean };
-type Entry = { projectId: string; date: string; hours: number; workerId: string; workerName: string; hourlyCostEur: number; paymentMethod: "cash" | "invoice"; note: string };
+type Entry = { projectId: string; date: string; hours: number; workerId: string; workerName: string; hourlyCostEur: number; paymentMethod: "cash" | "invoice"; note: string; work: string[] };
 type WorkerLike = { id: string; name: string; active: boolean; defaultPaymentMethod: "cash" | "invoice"; hourlyCostEur: string | null; hourlyCostCashEur: string | null };
 
 const key = (id: string) => `autopilot:labor:${id}`;
@@ -97,8 +100,9 @@ export function planFromSheet(args: {
       if (!p) { findings.push({ text: `Werfkolom "${s.label}" is aan geen (of meer dan één) project gekoppeld`, supplier: false }); continue; }
       if (!row.date) continue;
       const bestaand = entries.find((e) => e.projectId === p.projectId && e.date === row.date);
-      if (bestaand) bestaand.hours = r2(bestaand.hours + s.hours);
+      if (bestaand) { bestaand.hours = r2(bestaand.hours + s.hours); if (row.note) bestaand.work.push(row.note); }
       else entries.push({
+        work: row.note ? [row.note] : [],
         projectId: p.projectId, date: row.date, hours: s.hours,
         workerId: worker.id, workerName: worker.name, hourlyCostEur: rate ?? 0, paymentMethod: worker.defaultPaymentMethod,
         note: [`Urenstaat ${args.tag}`, row.note, `kolom ${s.label}`, afwijkend ? `werfkolom ${row.sites[0].hours} u, gefactureerd ${row.hours} u` : null].filter(Boolean).join(" · "),
@@ -312,6 +316,7 @@ export async function runLaborInvoiceAutopilot(opts: { dryRun?: boolean } = {}) 
     const supplierFaults = p.findings.filter((f) => f.supplier);
     const ourFaults = p.findings.filter((f) => !f.supplier);
     let outcome: LaborDecision["outcome"] = "manual";
+    let holdedNote: string | null = null;
     let reasons = p.findings.map((f) => f.text);
 
     const kanGoed = p.sheet && p.exact && p.findings.length === 0 && p.entries.length > 0;
@@ -327,6 +332,15 @@ export async function runLaborInvoiceAutopilot(opts: { dryRun?: boolean } = {}) 
             .set({ attachments: sql`coalesce(${purchaseOrders.attachments}, '[]'::jsonb) || ${JSON.stringify([{ ...copied, uploadedAt: new Date().toISOString() }])}::jsonb` })
             .where(eq(purchaseOrders.id, res.purchaseOrderId));
           await db.update(purchaseInvoiceReviews).set({ decisionNote: `Autopilot: ${p.summary} (urenstaat ${p.sheet!.filename})` }).where(eq(purchaseInvoiceReviews.id, r.id));
+          // Meteen als concept in Holded, met factuur + urenstaat in één PDF (Nick 21-11).
+          try {
+            const notesPerProject = new Map<string, string[]>();
+            for (const e of p.entries) notesPerProject.set(e.projectId, [...(notesPerProject.get(e.projectId) ?? []), ...e.work]);
+            const h = await autoPushLaborInvoice({ poId: res.purchaseOrderId, sheet: p.sheet!, workerName: p.sheet!.worker.name, notesPerProject });
+            holdedNote = h.message;
+          } catch (e) {
+            holdedNote = `Niet naar Holded: ${e instanceof Error ? e.message : String(e)}`;
+          }
         } else reasons = [res.reason ?? "Goedkeuren gaf geen inkooporder"];
       } catch (err) {
         reasons = [`Automatisch goedkeuren mislukt: ${err instanceof Error ? err.message : String(err)}`];
@@ -345,7 +359,7 @@ export async function runLaborInvoiceAutopilot(opts: { dryRun?: boolean } = {}) 
       else if (res.ok) reasons = [...reasons, `Teruggestuurd mislukt (${res.mailReason ?? "onbekend"}) — handmatig mailen`];
     }
 
-    const d: LaborDecision = { reviewId: r.id, supplier: r.supplier ?? "?", reference: r.reference, amount, outcome, reasons, summary: p.summary, sheet: p.sheet?.filename ?? null, at: new Date().toISOString() };
+    const d: LaborDecision = { reviewId: r.id, supplier: r.supplier ?? "?", reference: r.reference, amount, outcome, reasons, summary: p.summary, sheet: p.sheet?.filename ?? null, holded: holdedNote, at: new Date().toISOString() };
     if (opts.dryRun) { results.push({ ...d, outcome: kanGoed ? "approved" : terug || (p.sheet && supplierFaults.length) ? "returned" : "manual", plan: p }); continue; }
     // Alleen opslaan als er iets veranderd is, zodat de briefing geen ruis krijgt.
     const prev = await db.execute(sql`select value from kv_cache where key = ${key(r.id)}`) as unknown as { value: LaborDecision }[];

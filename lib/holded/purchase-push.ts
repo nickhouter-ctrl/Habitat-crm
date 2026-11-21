@@ -206,11 +206,21 @@ export type PushInput = {
   /** Per regel-key wat er gekozen is; aantallen en bedragen komen altijd uit het keuren. */
   choices: Record<string, { account: string; vat: string; retention: string | null; holdedProjectId: string | null; desc: string }>;
   userId: string | null;
+  /** Eigen bijlage in plaats van de eerste PDF van de inkooporder (autopilot: factuur + urenstaat in één PDF). */
+  attachment?: { name: string; bytes: Uint8Array };
 };
 
 export type PushResult = { ok: boolean; message: string; holdedId?: string; warnings?: string[] };
 
-async function attachPdf(holdedId: string, po: typeof purchaseOrders.$inferSelect): Promise<string | null> {
+async function attachPdf(holdedId: string, po: typeof purchaseOrders.$inferSelect, eigen?: { name: string; bytes: Uint8Array }): Promise<string | null> {
+  if (eigen) {
+    try {
+      await holded.documents.attach("purchase", holdedId, eigen.bytes, eigen.name);
+      return null;
+    } catch {
+      return "PDF niet meegestuurd — voeg hem in Holded toe.";
+    }
+  }
   const atts = (po.attachments ?? []) as { name: string; path: string }[];
   const pdf = atts.find((a) => /\.pdf$/i.test(a.name)) ?? atts[0];
   if (!pdf) return "Geen bijlage om mee te sturen.";
@@ -331,7 +341,7 @@ export async function pushPurchaseToHolded(input: PushInput): Promise<PushResult
   } catch {
     warnings.push("Kon de factuur niet terugladen uit Holded om te controleren.");
   }
-  const attachWarn = await attachPdf(holdedId, ctx.po);
+  const attachWarn = await attachPdf(holdedId, ctx.po, input.attachment);
   if (attachWarn) warnings.push(attachWarn);
 
   await db
