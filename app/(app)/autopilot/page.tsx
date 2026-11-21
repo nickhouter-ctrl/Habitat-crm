@@ -127,7 +127,7 @@ export default async function AutopilotPage() {
             <span className="font-medium">{l.reference ?? l.supplier}</span>
             {l.amount != null && <span className="text-muted">{formatEUR(l.amount)}</span>}
             {l.summary && <span className="text-muted">· {l.summary}</span>}
-            {l.outcome !== "approved" && l.reasons.length > 0 && <span className="w-full text-danger">{l.reasons.join(" · ")}</span>}
+            {l.reasons.length > 0 && <span className={`w-full ${l.outcome === "approved" ? "text-muted" : "text-danger"}`}>{l.reasons.join(" · ")}</span>}
           </div>
         ))}
         <div className="p-3 text-sm"><Link className="text-accent hover:underline" href="/inkooporders/te-verwerken">{uiT("Naar facturen keuren")}</Link></div>

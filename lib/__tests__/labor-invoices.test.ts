@@ -92,9 +92,34 @@ describe("plan uit urenstaat", () => {
     expect(plan.entries.every((e) => e.workerId === "w-luis" && e.note.includes("[urenstaat:x]"))).toBe(true);
   });
 
-  it("bedrag wijkt af → fout van de leverancier", () => {
+  it("meer gefactureerd dan de uren → terugsturen", () => {
+    const plan = planFromSheet({ sheet: parsed, worker: luis, subtotal: 270, resolve, tag: "t" });
+    expect(plan.findings).toContainEqual({ text: "Volgens de urenstaat is het 17 uur × € 15,00 = € 255,00, maar de factuur is € 270,00 ex btw (€ 15,00 te veel)", supplier: true, overbilled: true });
+  });
+
+  it("minder gefactureerd → niet mailen, boeken wat gefactureerd is", () => {
     const plan = planFromSheet({ sheet: parsed, worker: luis, subtotal: 240, resolve, tag: "t" });
-    expect(plan.findings).toContainEqual({ text: "Volgens de urenstaat is het 17 uur × € 15,00 = € 255,00, maar de factuur is € 240,00 ex btw", supplier: true });
+    expect(plan.findings.every((f) => f.info)).toBe(true);
+    expect(plan.findings.some((f) => f.overbilled)).toBe(false);
+    const total = plan.entries.reduce((s, e) => s + e.hours * e.hourlyCostEur, 0);
+    expect(Math.abs(total - 240)).toBeLessThan(0.001);
+    expect(plan.entries.map((e) => e.hours)).toEqual([8, 5, 4]);
+  });
+
+  it("veel minder gefactureerd → naar Nick", () => {
+    const plan = planFromSheet({ sheet: parsed, worker: luis, subtotal: 120, resolve, tag: "t" });
+    expect(plan.findings.some((f) => !f.info && !f.supplier)).toBe(true);
+  });
+
+  it("Luis 17-20 nov: totaalregel 31 u bij 4 × 8 u, factuur € 465 → boeken", () => {
+    const luisSheet = parseWideTimesheet(sheet("Hollandsemeesters Luis", ["SILVSTER"], [
+      ["a", madrid("2026-11-17"), 8, 8, 15, 120], ["b", madrid("2026-11-18"), 8, 8, 15, 120],
+      ["c", madrid("2026-11-19"), 8, 8, 15, 120], ["d", "20/112026", 8, 8, 15, 120],
+    ], ["Totaal", "", "", 31, "", 465]), "Luis.xlsx")!;
+    const plan = planFromSheet({ sheet: luisSheet, worker: luis, subtotal: 465, resolve, tag: "t" });
+    expect(plan.findings.every((f) => f.info)).toBe(true);
+    expect(plan.entries).toHaveLength(4);
+    expect(plan.entries.reduce((s, e) => s + e.hours * e.hourlyCostEur, 0)).toBeCloseTo(465, 6);
   });
 
   it("verkeerd tarief → fout van de leverancier", () => {

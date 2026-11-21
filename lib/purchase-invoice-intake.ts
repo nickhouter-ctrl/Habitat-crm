@@ -806,7 +806,8 @@ export async function approveInvoiceReview(args: {
     ? [...detail.reduce((m, e) => {
         const d = m.get(e.projectId) ?? { projectId: e.projectId, hours: 0, amount: 0 };
         d.hours = Math.round((d.hours + e.hours) * 100) / 100;
-        d.amount = Math.round((d.amount + e.hours * e.hourlyCostEur) * 100) / 100;
+        // Niet per werf afronden: bij een uurbedrag naar rato (14,53125) zou dat de sluitcontrole een cent laten missen.
+        d.amount += e.hours * e.hourlyCostEur;
         return m.set(e.projectId, d);
       }, new Map<string, { projectId: string; hours: number; amount: number }>()).values()]
     : o.split?.length ? o.split : null;

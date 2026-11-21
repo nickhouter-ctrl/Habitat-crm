@@ -13,9 +13,14 @@
  *  - per dag tellen de werfkolommen op tot UREN, of er staat maar één werf;
  *  - die persoon heeft op die dagen nog geen uren, en de staat is nog niet gebruikt.
  *
- * Kloppen de BEDRAGEN niet (fout van de leverancier), dan gaat de factuur met
- * een mail terug naar de afzender met wat er niet klopt (Nick: "dat komt nog
- * wel eens voor"); zijn verbeterde factuur komt vanzelf weer in de wachtrij.
+ * Factureert hij MEER dan uren × tarief, dan gaat de factuur met een mail
+ * terug naar de afzender met wat er niet klopt (Nick: "dat komt nog wel eens
+ * voor"); zijn verbeterde factuur komt vanzelf weer in de wachtrij.
+ * Factureert hij MINDER (Nick 21-11: vaak een verrekening van een vorige keer
+ * te veel), dan niet mailen maar boeken wat gefactureerd is — de uren blijven,
+ * het uurbedrag gaat naar rato omlaag en het verschil staat in de notitie.
+ * Alleen tot {@link MAX_MINDER} minder; daarboven kijkt Nick.
+ * Andere fouten op de staat (datum, werven die niet optellen) → naar Nick.
  * Ligt het aan ons (onbekende werfkolom, al uren op die dag) → blijft staan
  * voor Nick, met de reden erbij.
  *
@@ -46,8 +51,12 @@ export type LaborDecision = {
   at: string;
 };
 
-/** Een bevinding; `supplier` = fout van de leverancier → terugsturen. */
-export type Finding = { text: string; supplier: boolean };
+/**
+ * Een bevinding. `supplier` = fout van de leverancier; `overbilled` = hij
+ * factureert meer dan de uren → terugsturen; `info` = ter kennisgeving, houdt
+ * het boeken niet tegen.
+ */
+export type Finding = { text: string; supplier: boolean; overbilled?: boolean; info?: boolean };
 type Entry = { projectId: string; date: string; hours: number; workerId: string; workerName: string; hourlyCostEur: number; paymentMethod: "cash" | "invoice"; note: string };
 type WorkerLike = { id: string; name: string; active: boolean; defaultPaymentMethod: "cash" | "invoice"; hourlyCostEur: string | null; hourlyCostCashEur: string | null };
 
@@ -57,6 +66,9 @@ const eur = (n: number) => `€ ${n.toFixed(2).replace(".", ",")}`;
 const sheetTag = (attachmentId: string) => `[urenstaat:${attachmentId}]`;
 /** Pas terugsturen als de factuur zo oud is: de urenstaat komt soms in een tweede mail. */
 const RETURN_AFTER_MS = 2 * 3600_000;
+/** Minder gefactureerd dan de uren: tot dit deel boeken we het gewoon. */
+export const MAX_MINDER = 0.25;
+const TOTAALREGEL = /^De (dagen|dagbedragen) zijn samen/;
 
 /** Persoon op de staat: een woord uit titel/bestandsnaam dat in precies één ploegnaam voorkomt. */
 export function workerForSheet<T extends { name: string; active: boolean }>(words: string[], ploeg: T[]): T | null {
@@ -74,14 +86,25 @@ export function planFromSheet(args: {
   tag: string;
 }): { findings: Finding[]; entries: Entry[]; summary: string } {
   const { sheet, worker, subtotal } = args;
-  const findings: Finding[] = sheet.warnings.map((text) => ({ text, supplier: true }));
   const rate = workerRate(worker, worker.defaultPaymentMethod);
+  const sheetAmount = rate != null ? r2(sheet.totalHours * rate) : null;
+  const meer = sheetAmount != null && subtotal > sheetAmount + 0.01;
+  const minder = sheetAmount != null && subtotal < sheetAmount - 0.01;
+  const minderOk = minder && subtotal >= sheetAmount! * (1 - MAX_MINDER);
+  // Bij minder factureren is een totaalregel die op het factuurbedrag uitkomt juist logisch.
+  const findings: Finding[] = sheet.warnings.map((text) => (minderOk && TOTAALREGEL.test(text) ? { text, supplier: true, info: true } : { text, supplier: true }));
   if (rate == null) findings.push({ text: `Geen uurtarief bij ${worker.name}`, supplier: false });
   const rates = [...new Set(sheet.rows.map((r) => r.rate).filter((x): x is number => x != null))];
   if (rate != null && rates.some((x) => Math.abs(x - rate) > 0.001))
     findings.push({ text: `Het uurtarief op de urenstaat (${rates.map(eur).join(", ")}) is niet het afgesproken tarief van ${eur(rate)}`, supplier: true });
-  if (rate != null && Math.abs(r2(sheet.totalHours * rate) - subtotal) > 0.01)
-    findings.push({ text: `Volgens de urenstaat is het ${sheet.totalHours} uur × ${eur(rate)} = ${eur(r2(sheet.totalHours * rate))}, maar de factuur is ${eur(subtotal)} ex btw`, supplier: true });
+  if (meer)
+    findings.push({ text: `Volgens de urenstaat is het ${sheet.totalHours} uur × ${eur(rate!)} = ${eur(sheetAmount!)}, maar de factuur is ${eur(subtotal)} ex btw (${eur(r2(subtotal - sheetAmount!))} te veel)`, supplier: true, overbilled: true });
+  if (minderOk)
+    findings.push({ text: `${eur(r2(sheetAmount! - subtotal))} minder gefactureerd dan de uren (${sheet.totalHours} u × ${eur(rate!)} = ${eur(sheetAmount!)}); geboekt wat gefactureerd is`, supplier: false, info: true });
+  else if (minder)
+    findings.push({ text: `Factuur ${eur(subtotal)} is veel lager dan de urenstaat (${eur(sheetAmount!)}) — hoort deze staat wel bij deze factuur?`, supplier: false });
+  // Minder gefactureerd: uurbedrag naar rato, zodat de werven samen precies de factuur zijn.
+  const uurbedrag = minderOk && sheet.totalHours > 0 ? Math.round((subtotal / sheet.totalHours) * 1e6) / 1e6 : rate;
 
   const perProject = new Map<string, { naam: string; hours: number }>();
   const entries: Entry[] = [];
@@ -100,8 +123,9 @@ export function planFromSheet(args: {
       if (bestaand) bestaand.hours = r2(bestaand.hours + s.hours);
       else entries.push({
         projectId: p.projectId, date: row.date, hours: s.hours,
-        workerId: worker.id, workerName: worker.name, hourlyCostEur: rate ?? 0, paymentMethod: worker.defaultPaymentMethod,
-        note: [`Urenstaat ${args.tag}`, row.note, `kolom ${s.label}`, afwijkend ? `werfkolom ${row.sites[0].hours} u, gefactureerd ${row.hours} u` : null].filter(Boolean).join(" · "),
+        workerId: worker.id, workerName: worker.name, hourlyCostEur: uurbedrag ?? 0, paymentMethod: worker.defaultPaymentMethod,
+        note: [`Urenstaat ${args.tag}`, row.note, `kolom ${s.label}`, afwijkend ? `werfkolom ${row.sites[0].hours} u, gefactureerd ${row.hours} u` : null,
+          minderOk ? `${eur(r2(sheetAmount! - subtotal))} minder gefactureerd dan ${sheet.totalHours} u × ${eur(rate!)}` : null].filter(Boolean).join(" · "),
       });
       const pp = perProject.get(p.projectId) ?? { naam: p.projectNaam, hours: 0 };
       pp.hours = r2(pp.hours + s.hours);
@@ -116,7 +140,7 @@ export function planFromSheet(args: {
 /** Mail aan de leverancier: wat klopt er niet, en graag verbeterd terugsturen. */
 export function returnMail(args: { name: string; invoice: string; amount: number; sheet: string; findings: Finding[] }) {
   const voornaam = args.name.split(/\s+/)[0] || args.name;
-  const punten = args.findings.filter((f) => f.supplier).map((f) => f.text);
+  const punten = args.findings.filter((f) => f.supplier && !f.info).map((f) => f.text);
   const text = [
     `Hoi ${voornaam},`,
     "",
@@ -309,13 +333,17 @@ export async function runLaborInvoiceAutopilot(opts: { dryRun?: boolean } = {}) 
   for (const p of plans) {
     const r = p.review;
     const amount = r.subtotal != null ? Number(r.subtotal) : null;
-    const supplierFaults = p.findings.filter((f) => f.supplier);
-    const ourFaults = p.findings.filter((f) => !f.supplier);
+    const blocking = p.findings.filter((f) => !f.info);
+    const info = p.findings.filter((f) => f.info && !f.supplier);
+    const supplierFaults = blocking.filter((f) => f.supplier);
+    const ourFaults = blocking.filter((f) => !f.supplier);
     let outcome: LaborDecision["outcome"] = "manual";
-    let reasons = p.findings.map((f) => f.text);
+    let reasons = blocking.map((f) => f.text);
 
-    const kanGoed = p.sheet && p.exact && p.findings.length === 0 && p.entries.length > 0;
-    const terug = p.sheet && supplierFaults.length > 0 && mailAan && Date.now() - r.createdAt.getTime() >= RETURN_AFTER_MS;
+    const kanGoed = !!p.sheet && blocking.length === 0 && p.entries.length > 0;
+    // Alleen terugsturen als hij méér factureert dan de uren (Nick 21-11).
+    const meer = p.findings.some((f) => f.overbilled);
+    const terug = !!p.sheet && meer && mailAan && Date.now() - r.createdAt.getTime() >= RETURN_AFTER_MS;
 
     if (!opts.dryRun && kanGoed) {
       try {
@@ -326,7 +354,8 @@ export async function runLaborInvoiceAutopilot(opts: { dryRun?: boolean } = {}) 
           if (copied) await db.update(purchaseOrders)
             .set({ attachments: sql`coalesce(${purchaseOrders.attachments}, '[]'::jsonb) || ${JSON.stringify([{ ...copied, uploadedAt: new Date().toISOString() }])}::jsonb` })
             .where(eq(purchaseOrders.id, res.purchaseOrderId));
-          await db.update(purchaseInvoiceReviews).set({ decisionNote: `Autopilot: ${p.summary} (urenstaat ${p.sheet!.filename})` }).where(eq(purchaseInvoiceReviews.id, r.id));
+          await db.update(purchaseInvoiceReviews).set({ decisionNote: `Autopilot: ${p.summary} (urenstaat ${p.sheet!.filename})${info.length ? ` — ${info.map((f) => f.text).join("; ")}` : ""}` }).where(eq(purchaseInvoiceReviews.id, r.id));
+          reasons = info.map((f) => f.text);
         } else reasons = [res.reason ?? "Goedkeuren gaf geen inkooporder"];
       } catch (err) {
         reasons = [`Automatisch goedkeuren mislukt: ${err instanceof Error ? err.message : String(err)}`];
@@ -346,7 +375,7 @@ export async function runLaborInvoiceAutopilot(opts: { dryRun?: boolean } = {}) 
     }
 
     const d: LaborDecision = { reviewId: r.id, supplier: r.supplier ?? "?", reference: r.reference, amount, outcome, reasons, summary: p.summary, sheet: p.sheet?.filename ?? null, at: new Date().toISOString() };
-    if (opts.dryRun) { results.push({ ...d, outcome: kanGoed ? "approved" : terug || (p.sheet && supplierFaults.length) ? "returned" : "manual", plan: p }); continue; }
+    if (opts.dryRun) { results.push({ ...d, reasons: p.findings.map((f) => f.text), outcome: kanGoed ? "approved" : p.sheet && meer ? "returned" : "manual", plan: p }); continue; }
     // Alleen opslaan als er iets veranderd is, zodat de briefing geen ruis krijgt.
     const prev = await db.execute(sql`select value from kv_cache where key = ${key(r.id)}`) as unknown as { value: LaborDecision }[];
     const old = prev[0]?.value;
