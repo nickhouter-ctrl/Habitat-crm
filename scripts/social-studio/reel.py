@@ -80,6 +80,8 @@ def top_scrim_png(W, H, path, depth=0.38, opacity=0.5):
 LOGO_DARK_SUB = os.path.join(ROOT, "public", "brand", "flex-surfaces-logo-sub-dark.png")    # voor lichte achtergrond
 LOGO_CREAM_SUB = os.path.join(ROOT, "public", "brand", "flex-surfaces-logo-sub-cream.png")  # voor donkere achtergrond
 LOGO_CREAM_SOCIAL = os.path.join(ROOT, "public", "brand", "flex-surfaces-logo-sub-cream-social.png")  # crème met schaduw
+HABITAT_DARK = os.path.join(ROOT, "public", "brand", "habitat-one-logo.png")         # verbouwingen/projecten
+HABITAT_CREAM = os.path.join(ROOT, "public", "brand", "habitat-one-logo-cream.png")
 LOGO_WIDTH = 0.40   # fractie van de beeldbreedte
 LOGO_TOP = 0.035    # marge boven, fractie van de beeldhoogte
 
@@ -105,8 +107,28 @@ def logo_style(background, W, H):
     return (LOGO_DARK_SUB, False) if mean > 165 and sd < 28 else (LOGO_CREAM_SUB, True)
 
 
-def brand_png(W, H, path, background=None):
-    """Officieel Flex-Surfaces-logo bovenaan in het midden; `background` (beeld) bepaalt de onderregel."""
+def habitat_png(W, H, path, background=None):
+    """Habitat One-logo (verbouwingen/projecten) bovenaan in het midden, zwart of crème naar de ondergrond."""
+    variant, gradient = logo_style(background, W, H)
+    logo = Image.open(HABITAT_DARK if variant == LOGO_DARK_SUB else HABITAT_CREAM).convert("RGBA")
+    lw = int(W * 0.30); lh = int(logo.height * lw / logo.width)
+    canvas = Image.new("RGBA", (W, H), (0, 0, 0, 0))
+    if gradient:
+        depth = H * 0.24
+        col = Image.new("L", (1, H), 0)
+        for j in range(int(depth) + 1):
+            col.putpixel((0, j), int(175 * max(0.0, 1 - j / depth) ** 1.6))
+        shade = Image.new("RGBA", (W, H), (20, 16, 12, 0)); shade.putalpha(col.resize((W, H)))
+        canvas.alpha_composite(shade)
+    canvas.alpha_composite(logo.resize((lw, lh), Image.LANCZOS), ((W - lw) // 2, int(H * LOGO_TOP)))
+    canvas.save(path)
+
+
+def brand_png(W, H, path, background=None, brand="flex"):
+    """Officieel Flex-Surfaces-logo bovenaan in het midden; `background` (beeld) bepaalt de onderregel.
+    brand="habitat": Habitat One-logo (voor verbouwingen en projecten)."""
+    if brand == "habitat":
+        return habitat_png(W, H, path, background)
     x, y, lw, lh = logo_box(W, H)
     variant, gradient = logo_style(background, W, H)
     canvas = Image.new("RGBA", (W, H), (0, 0, 0, 0))
@@ -141,10 +163,12 @@ def main():
     ap.add_argument("--cues"); ap.add_argument("--music")
     ap.add_argument("--text-y", type=float, default=0.15, help="bovenkant tekst, fractie van de hoogte")
     ap.add_argument("--volume", type=float, default=0.9)
+    ap.add_argument("--brand", choices=["flex", "habitat"], default="flex",
+                    help="flex = Flex-Surfaces-panelen (standaard), habitat = Habitat One (verbouwingen/projecten)")
     a = ap.parse_args()
     W, H, D = probe(a.src)
     tmp = tempfile.mkdtemp(prefix="reel-")
-    brand = os.path.join(tmp, "brand.png"); brand_png(W, H, brand, frame_at(a.src, min(1.0, D / 2), tmp))
+    brand = os.path.join(tmp, "brand.png"); brand_png(W, H, brand, frame_at(a.src, min(1.0, D / 2), tmp), a.brand)
     cues = json.load(open(a.cues)) if a.cues else []
     if cues:
         scrim = os.path.join(tmp, "scrim.png"); top_scrim_png(W, H, scrim, depth=a.text_y + 0.22, opacity=0.42)

@@ -4,6 +4,7 @@ You are running unattended on Nick's Mac (Thursday morning) to finish next week'
 Habitat One in Jávea (Costa Blanca): flexible stone wall panels (Flex-Surfaces / Stone-Motion).
 The CRM has already planned next week (Mon/Wed/Fri 08:00) as DRAFTS. Your job: replace those drafts
 with high-quality, realistic content per the mix below. Nick reviews and approves everything himself.
+On top of that you make 4 extra REELS FOR FOLLOWERS (Tue/Thu/Sat/Sun 19:00) — see "Reels for followers".
 
 Work in the repo root (the directory this prompt lives two levels below). Scratch work goes in
 `~/Library/Application Support/habitat-social/<weekStart>/`. Keep a short log of what you did in
@@ -130,6 +131,52 @@ GB/T 14402 / GB/T 20284); CE — EN 15102:2019; UV light-ageing tested (ASTM G15
 and outdoor. Do NOT claim "lightweight", "waterproof"/"waterbestendig", a weight, a thickness or a
 price — those are not in the data sheet.
 
+## Reels for followers (Nick, 21-11: "reels voor meer volgers", besides the Mon/Wed/Fri posts)
+Own photos/clips: Nick and colleagues fill the shared iCloud folder "Habitat One - Eigen beeld";
+a launchd job (com.habitatone.eigen-beeld-sync, hourly rsync, never deletes) mirrors it to
+`~/Library/Application Support/habitat-social/eigen-beeld/` — always read from that mirror (iCloud itself is
+blocked for unattended runs). Skip files ending in `.icloud` (not downloaded yet) and log them.
+Goal: reach and new followers on Instagram, and showing what Habitat One really does (panels AND full renovations/projects). Every week 4 extra Reels on Tue, Thu, Sat and Sun at 19:00.
+The Mon/Wed/Fri posts stay exactly as described above.
+- Create the empty draft rows first: `npx tsx scripts/social-studio/add-reel-slot.ts <date>` for each of
+  the 4 dates (prints the new id; does nothing if a post already exists that day). Then fill each one
+  like the other posts (zernio.py → update.json with kind "video" → update-post.ts).
+- 9:16 mp4, 7–15 s, fast and light-hearted. The first 1–2 s carry a big Spanish hook QUESTION or
+  surprise (small English line below), centred (`"y": 0.38`). Music from public/brand/music.
+- Default is 0 credits: build from real library photos and/or Codex images with
+  `python3 scripts/social-studio/slideshow.py a.jpg b.jpg c.jpg raw.mp4 [--sec 2.5] [--transition wipeleft]`
+  then `reel.py raw.mp4 out.mp4 --cues cues.json --music ...`. The Higgsfield budget stays the same
+  (max 1 draft video per week in total).
+- Rotate these Reel types (each at least once every 2 weeks, never the same type twice in a row):
+  1. **Before → after reveal**: before photo, `--transition wipeleft` to the after photo.
+     Hook "¿Te atreverías?" / "De esto… a esto".
+  2. **¿Cuál elegirías tú?**: one room, 3–4 of our panels, numbered; the caption asks for a number.
+  3. **Quiz**: "¿Piedra maciza o panel flexible?", "¿Interior o exterior?" — answer at the end,
+     only verified facts.
+  4. **How it works in 15 s**: 4–5 numbered steps (photos), ending with the bending sheet.
+  5. **You asked, we answer** (like @dizzplace: a short FAQ-style Reel with ✔️ lines, e.g. over old
+     tiles? curves? outdoors? samples?) — only facts from "Verified technical facts"; never prices.
+  6. **Behind the scenes** (also like @dizzplace: real, light-hearted clips of cutting, sorting and
+     packing samples, the showroom, a delivery): ONLY from Nick's own clips/photos in
+     `~/Library/Application Support/habitat-social/eigen-beeld/Achter de schermen/` (newest first, never reuse a file, log used files in
+     history.md). Cut 2–4 short clips to 9:16 with ffmpeg, add hook text + music via reel.py. If the
+     folder is empty, skip this type. Never fake behind-the-scenes footage with AI.
+  7. **Our projects — renovations** (Nick, 21-11: "mensen moeten zien wat wij doen, ook verbouwingen
+     en projecten", photos of ongoing projects will be delivered): ONLY real photos/clips from
+     `~/Library/Application Support/habitat-social/eigen-beeld/Projecten/<project>/1-voor|2-tijdens|3-na/` (+ optional info.txt).
+     Tell the story in 10–15 s: hook ("¿Cómo quedó esta casa en Moraira?" / "Día 1 vs. día 30"),
+     before → work in progress (craftsmen, demolition, new walls, panels going up) → result.
+     Use `reel.py --brand habitat` (Habitat One logo instead of Flex-Surfaces), Habitat One does the
+     whole renovation. Place = town only, never an address or client name; no recognisable client
+     faces. A project can return as a series ("Parte 2") when new 2-tijdens/3-na photos arrive.
+     Whenever a project folder has new, unused photos, make at least ONE project Reel that week —
+     this type has priority over the others. Renders/3D designs only if they are in the project folder
+     (then label them "Diseño" on screen).
+- Caption: short and chatty (1–3 sentences per language), ends with a question that invites a
+  comment, then the showroom lines, `📍 Jávea · Costa Blanca` and the hashtags (add #reels #reelsespaña
+  #reformas #interiorismo where they fit).
+- Log the Reels in history.md like the posts (type, hook, photos used).
+
 ## How to make things
 - Real photos: `npx tsx scripts/social-studio/week-status.ts` shows the CRM's chosen images. The full
   Drive library is in `~/Library/Application Support/habitat-social/drive_all/` if present.
@@ -175,9 +222,11 @@ price — those are not in the data sheet.
   (use ` ` between number and unit). Product posts: text on every slide; ambience: text on the
   first slide only or none.
 - Caption (write it yourself), exactly this structure:
-  English text (2–4 short sentences, warm, concrete, no hype, max one emoji) + blank line +
+  English text (2–4 short sentences, warm, concrete, no hype, max one emoji, ending with ONE
+  question that invites a comment, e.g. "Which one would you put in your living room?") + blank line +
   `📅 Come and see and touch the panels in our showroom in Jávea. Book your visit 👉 habitat-one.com/showroom`
-  + blank line + `—` + blank line + the same in native Castilian Spanish ending with
+  + blank line + `—` + blank line + the same in native Castilian Spanish (with the same question,
+  e.g. "¿Cuál pondrías tú en tu salón?") ending with
   `📅 Ven a ver y tocar los paneles en nuestro showroom en Jávea. Reserva tu visita 👉 habitat-one.com/showroom`
   + blank line + `📍 Jávea · Costa Blanca` + blank line + hashtags starting with
   `#Javea #Xabia #CostaBlanca #Denia #Moraira #Benitachell #flexiblestone #piedraflexible #FlexSurfaces #HabitatOne`
@@ -190,7 +239,7 @@ price — those are not in the data sheet.
 
 ## Finish
 Append to history.md: date, per post the type, scene, panel(s), music, credits used. Then show a
-macOS notification: `osascript -e 'display notification "Posts voor volgende week staan klaar in het CRM" with title "Habitat One social"'`.
+macOS notification: `osascript -e 'display notification "3 posts + 4 reels voor volgende week staan klaar in het CRM" with title "Habitat One social"'`.
 End with a 5-line summary.
 
 Write history.md entries, notifications and the final summary in Dutch (Nick reads them).
