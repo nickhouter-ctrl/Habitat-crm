@@ -17,5 +17,8 @@ export const requestSchema = z.discriminatedUnion("action", [
   z.object({ action: z.literal("email_draft"), ...write, emailId: id, subject: z.string().trim().min(1).max(500), body: text, expectedDraft: z.string().max(30000).nullable() }).strict(),
   z.object({ action: z.literal("invoice_project"), ...write, reviewId: id, projectId: id, expectedProjectId: id.nullable() }).strict(),
   z.object({ action: z.literal("windows_note"), ...write, orderId: id, body: text }).strict(),
+  // Alleen lezen: ochtendbriefing en wat de autopilot heeft klaargezet.
+  z.object({ action: z.literal("briefing") }).strict(),
+  z.object({ action: z.literal("autopilot_status") }).strict(),
 ]);
 export type AgentRequest = z.infer<typeof requestSchema>;

@@ -69,6 +69,16 @@ def habitat_windows_note(request_id: UUID, order_id: UUID, body: str) -> dict:
     return call(dict(action='windows_note', requestId=str(request_id), orderId=str(order_id), body=body))
 
 @mcp.tool(annotations=READ)
+def habitat_briefing() -> dict:
+    """Morning briefing for Nick as plain text: today's appointments, open tasks, new requests, what the autopilot prepared, mails/invoices waiting and yesterday's ad results. Send the text as-is to Telegram."""
+    return call(dict(action='briefing'))
+
+@mcp.tool(annotations=READ)
+def habitat_autopilot_status() -> dict:
+    """Quotes the autopilot prepared (ready = passes price/margin checks, review = needs Nick, with reasons) and recent automatic account decisions. Sending happens only in the CRM at /autopilot."""
+    return call(dict(action='autopilot_status'))
+
+@mcp.tool(annotations=READ)
 def habitat_systems() -> dict:
     """Return the three connected Habitat systems and code checkout paths. Read the habitat-systems skill before making code changes."""
     return {'systems': [

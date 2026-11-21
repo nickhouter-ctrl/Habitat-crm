@@ -1,7 +1,7 @@
 "use client";
 import { useT as useUiTranslation } from '@/components/taal-provider';
 
-import {
+import { Bot,
   ChevronRight,
   History,
   Activity,
@@ -142,6 +142,7 @@ const NAV_GROUPS: { id: string; label: string | null; items: NavItem[] }[] = [
     label: "Klanten",
     items: [
       { href: "/assistent", label: "Assistent", icon: FileCheck },
+      { href: "/autopilot", label: "Autopilot", icon: Bot },
       { href: "/beurs/contacten", label: "Beurscontacten", icon: Users },
       { href: "/wederverkopers", label: "Verkooppunten", icon: Store },
       { href: "/aanvragen", label: "Aanvragen", icon: Inbox },

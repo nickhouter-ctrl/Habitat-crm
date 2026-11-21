@@ -95,7 +95,7 @@ export const MODULES: ModuleDef[] = [
   { key: "verkoopprijzen", label: "Verkoopprijzen", paths: ["/prijslijst", "/wederverkopers/prijzen"] },
   { key: "leads", label: "Leads", paths: ["/leads"] },
   { key: "broadcast", label: "Broadcast", paths: ["/broadcast"] },
-  { key: "assistent", label: "Assistent", paths: ["/assistent"] },
+  { key: "assistent", label: "Assistent", paths: ["/assistent", "/autopilot"] },
   { key: "agenda", label: "Agenda", paths: ["/agenda"] },
   { key: "teamberichten", label: "Teamberichten", paths: ["/teamberichten"] },
   // Open voor de rollen die overal mogen komen, en daarbinnen alleen voor de

@@ -3863,7 +3863,31 @@ const rows: [string,string,string][] = [
   ["Zoek terug in Holded", "Buscar en Holded", "Look it up in Holded"],
   ["Ik heb gekeken: hij staat niet in Holded", "He comprobado: no está en Holded", "I checked: it is not in Holded"],
   ["✓ Factuur staat in Holded","✓ La factura está en Holded","✓ Invoice is in Holded"],
-  ["Gaat automatisch als concept naar Holded.","Se envía automáticamente a Holded como borrador.","Goes to Holded automatically as a draft."]
+  ["Gaat automatisch als concept naar Holded.","Se envía automáticamente a Holded como borrador.","Goes to Holded automatically as a draft."],
+  ["Autopilot", "Autopilot", "Autopilot"],
+  ["Geen toegang tot bedragen.", "Sin acceso a importes.", "No access to amounts."],
+  ["Offertes en antwoorden die het systeem klaarzet. Meekijkperiode: er gaat niets vanzelf naar klanten — jij verstuurt, het systeem leert van je aanpassingen.", "Presupuestos y respuestas que prepara el sistema. Periodo de prueba: nada se envía solo a los clientes — tú envías y el sistema aprende de tus cambios.", "Quotes and replies prepared by the system. Trial period: nothing goes to customers automatically — you send, and the system learns from your edits."],
+  ["Mailconcepten ongewijzigd verstuurd", "Borradores enviados sin cambios", "Mail drafts sent unchanged"],
+  ["Offertes ongewijzigd verstuurd", "Presupuestos enviados sin cambios", "Quotes sent unchanged"],
+  ["laatste 14 dagen", "últimos 14 días", "last 14 days"],
+  ["Accounts automatisch goedgekeurd", "Cuentas aprobadas automáticamente", "Accounts approved automatically"],
+  ["naar jou", "para ti", "to you"],
+  ["Offertes ter goedkeuring", "Presupuestos para aprobar", "Quotes awaiting approval"],
+  ["Niets te doen.", "Nada pendiente.", "Nothing to do."],
+  ["Klopt — klaar om te versturen", "Correcto — listo para enviar", "Checks out — ready to send"],
+  ["Even naar kijken", "Revisar", "Needs a look"],
+  ["min.", "mín.", "min."],
+  ["kostprijs ?", "coste ?", "cost ?"],
+  ["Offerte openen/aanpassen", "Abrir/editar presupuesto", "Open/edit quote"],
+  ["Aanvraag bekijken", "Ver solicitud", "View request"],
+  ["Offerte versturen", "Enviar presupuesto", "Send quote"],
+  ["Mail versturen", "Enviar correo", "Send email"],
+  ["Zelf afhandelen", "Gestionar yo mismo", "Handle myself"],
+  ["Accountaanvragen", "Solicitudes de cuenta", "Account requests"],
+  ["Nog geen aanvragen beoordeeld.", "Aún no se ha revisado ninguna solicitud.", "No requests reviewed yet."],
+  ["Naar jou", "Para ti", "To you"],
+  ["Naar klantaccounts", "Ir a cuentas de clientes", "Go to customer accounts"],
+  ["Zelf afgehandeld", "Gestionado manualmente", "Handled manually"]
 ];
 export const crmEs = Object.fromEntries(rows.map(([key,es])=>[key,es]));
 export const crmEn = Object.fromEntries(rows.map(([key,,en])=>[key,en]));

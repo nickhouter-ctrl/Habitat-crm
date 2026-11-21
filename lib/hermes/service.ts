@@ -4,6 +4,9 @@ import { sql } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { mailZichtbaarVoorSql } from "@/lib/mail-visibility";
 import type { AgentRequest } from "./contract";
+import { briefingText, buildBriefing } from "@/lib/autopilot/briefing";
+import { listProposals } from "@/lib/autopilot/quotes";
+import { recentAccountDecisions } from "@/lib/autopilot/accounts";
 
 export class AgentConflict extends Error {}
 export async function executeAgentRequest(input: AgentRequest, actorId: string, database: Pick<typeof db, "execute" | "transaction"> = db) {
@@ -22,6 +25,14 @@ export async function executeAgentRequest(input: AgentRequest, actorId: string, 
       case "windows_projects": return database.execute(sql`select id,name,customer->>'name' as customer_name,left(notes,4000) as notes,archived,updated_at from windows.projects where (${id}::uuid is null or id=${id}::uuid) and name ilike ${q} order by updated_at desc limit ${n}`);
       case "windows_orders": return database.execute(sql`select o.id,o.number,o.status,o.project_id,p.name as project_name,o.planned_delivery,o.delivered_at,o.updated_at from windows.orders o join windows.projects p on p.id=o.project_id where (${id}::uuid is null or o.id=${id}::uuid) and (o.number ilike ${q} or p.name ilike ${q}) order by o.updated_at desc limit ${n}`);
     }
+  }
+  if (input.action === "briefing") return { text: briefingText(await buildBriefing()) };
+  if (input.action === "autopilot_status") {
+    const [quotes, accounts] = await Promise.all([listProposals(["ready", "review"]), recentAccountDecisions(7)]);
+    return {
+      quotes: quotes.map(q => ({ requestId: q.requestId, customer: q.customer, status: q.status, total: q.total, marginPct: q.marginPct, reasons: q.reasons, link: `/autopilot` })),
+      accounts: accounts.map(a => ({ name: a.name, kind: a.kind, approved: a.approved, reasons: a.reasons })),
+    };
   }
   return database.transaction(async tx => {
     const key = `hermes:${actorId}:${input.requestId}`;

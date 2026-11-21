@@ -71,7 +71,7 @@ describe("woordenboeken", () => {
     // Reviewed shared terminology: product/brand names, codes, units and
     // international words keep their spelling. Each target also has source
     // labels already written in that language (e.g. Spanish “Fase”).
-    const gelijk = new Set([
+    const gelijk = new Set(["Autopilot", "min.", 
   "Accounts",
   "Posts",
   "· IP",

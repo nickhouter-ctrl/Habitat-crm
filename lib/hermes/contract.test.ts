@@ -24,4 +24,9 @@ describe("Hermes trust boundary", () => {
     expect(requestSchema.safeParse({...draft,requestId:crypto.randomUUID()}).success).toBe(false);
     expect(requestSchema.safeParse({...draft,requestId:crypto.randomUUID(),expectedDraft:null}).success).toBe(true);
   });
+  it("allows the read-only briefing and autopilot status without extra fields", () => {
+    expect(requestSchema.safeParse({action:"briefing"}).success).toBe(true);
+    expect(requestSchema.safeParse({action:"autopilot_status"}).success).toBe(true);
+    expect(requestSchema.safeParse({action:"briefing",query:"x"}).success).toBe(false);
+  });
 });

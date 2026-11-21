@@ -4,6 +4,7 @@ import { and, desc, eq, inArray, isNull, sql } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "@/lib/db";
 import { contacts, companies, emailInbox, inboxSuggestions } from "@/lib/db/schema";
+import { lessonsPrompt } from "@/lib/autopilot/lessons";
 import { canAutoArchive, suggestMail, type MailInput, type MailSuggestion } from "./mail-rules";
 
 const outputSchema = z.array(z.object({
@@ -26,7 +27,8 @@ Groepeer elk bericht in urgent, important, low, newsletter, receipt of spam (ver
 Geef een Nederlandse samenvatting en reden. deadline: uitsluitend een letterlijk aangehaalde termijn met context uit de mail, anders null. Verwar oude deadlines niet met vandaag.
 Schrijf waar een antwoord nodig is een voorzichtig bewerkbaar concept in de taal van de afzender, ondertekend Habitat One. Geen verzonnen prijzen, beschikbaarheid, toezeggingen, betalingen of bijlagen. Bij mogelijke spam geen antwoordconcept.
 Financiële documenten verwijzen naar menselijke factuurkeuring. Afmelden en archiveren zijn alleen voorstellen; verander nooit een mailbox.
-Retourneer uitsluitend JSON array van {id,category,needsReply,summary,reason,deadline,draft}. Vandaag: ${new Date().toISOString().slice(0, 10)}.`,
+Retourneer uitsluitend JSON array van {id,category,needsReply,summary,reason,deadline,draft}. Vandaag: ${new Date().toISOString().slice(0, 10)}.
+${await lessonsPrompt("mail")}`,
         messages: [{ role: "user", content: JSON.stringify(mails) }] }),
     });
     if (!response.ok) return results;
