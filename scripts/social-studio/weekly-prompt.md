@@ -29,15 +29,38 @@ scenes, panels, music or themes from the last 6 weeks).
   `node_modules/ffmpeg-static/ffmpeg`, then Read them). If something looks fake, wrong or off-brand,
   regenerate once; if still bad, fall back to real photos from the library and log why.
 
-## Content mix (vary, never the same thing three times)
-Use the ISO week number of the week being filled:
-- **Odd week** — Mon: *product* (formats, close-up of the texture, which colours/types exist —
-  real photos from `<scratch>/library` or the Drive download with explanation text in the image);
-  Wed: *how it works / before → after* video; Fri: *ambience* (villa scenes).
-- **Even week** — Mon: *before → after* photo carousel (Codex before + after, text "Antes / Before",
-  "Después / After"); Wed: *ambience* video (camera along a stone wall, a hand gently touching the
-  stone, curved walls, pool, sea light); Fri: *ambience* or *product detail*, whichever was used
-  least recently according to history.md.
+## Content mix (Nick, 14-11 — vary, never the same thing three times)
+Every week: 3 posts (Mon/Wed/Fri), each a DIFFERENT format and a different room type, all in
+realistic Spanish homes (villas, fincas, casas de pueblo, apartments on the Costa Blanca).
+Rotate through these formats (check history.md; use each at least once per ~3 weeks):
+
+1. **Before → after video** (Higgsfield time-lapse, fixed camera, workmen carry large flexible
+   sheets): tired wall → finished wall. Max 1 Higgsfield video per week.
+2. **Before / after poster** in the style of `scripts/social-studio/ad-style/voor-na-*.jpeg`:
+   cream background, official Flex-Surfaces logo on top, small hook line "¿Baño antiguo?",
+   big two-tone headline "Mismo baño. / Un gran cambio." (Spanish big, English small line),
+   ANTES / DESPUÉS photos side by side (Codex: before.png, then after.png as edit of before),
+   website at the bottom. Single image or as 3-slide carousel (poster, before, after).
+3. **Ideas carousel** (5–7 slides): "5 ideas para tu baño / salón / cocina / dormitorio /
+   fachada / piscina / entrada / escalera / columna" — each slide a different realistic Spanish
+   room with one of our panels, a short Spanish line + small English line on each slide.
+4. **One room, several stones** Reel or carousel ("¿Cuál elegirías tú?") — see below.
+5. **How it works** (carousel or Reel): 4–6 numbered steps — measure, prepare the wall, apply the
+   adhesive, place the large flexible sheet, cut/finish edges, done; plus "bends around curves".
+   Show it realistically (no fake hand-pressing close-ups).
+6. **Specifications** (carousel with clean text slides over real photos/texture close-ups): only
+   facts from the data sheet (see "Verified technical facts") + "which formats/kinds exist" with
+   real panel photos, e.g. "Más de 200 acabados", families (lime, concrete, wood, travertine, rust…),
+   "Interior y exterior", "Se curva en paredes redondas", "Clase de fuego A2-s1".
+7. **Exterior / façades**: Spanish villa façades, garden walls, pool surrounds, entrances, columns —
+   photo carousel or ambience video (camera along the façade, Mediterranean light).
+8. **Ambience video**: camera along a stone wall, a hand gently touching the stone, curved walls.
+9. **Poster** in the style of `ad-style/poster-*.jpeg` (headline + inset of a bending sheet).
+10. **Own material**: samples in hand, sample box, texture close-ups (see below).
+
+Room types to rotate: bathroom, shower, living room, kitchen, bedroom (wall behind the bed),
+hallway/entrance, staircase, terrace/porch, pool area, garden wall, façade, columns/arches.
+Spanish on-screen text is always the big line; English small underneath.
 
 ## Vary the panels (Nick, 14-11: "you keep doing the same kinds")
 We have 200+ panels (MS-001 … MS-288 in the Drive library, each with a real `…-01-panel.jpg`).
@@ -142,6 +165,12 @@ price — those are not in the data sheet.
   views, Mediterranean light. No shops, cafés, offices or non-Spanish architecture. On-screen text
   is Spanish first and dominant (English only small underneath); hooks are written as a Spaniard
   would say them, not translated.
+- Before/after poster: `python3 scripts/social-studio/before_after_poster.py before.png after.png
+  bend.jpg out.jpg --hook "¿Baño antiguo?" --line1 "Mismo baño." --line2 "Un gran cambio." --en
+  "Same bathroom. A big difference."` — bend.jpg = a REAL photo of a bending sheet from the library
+  (`bending-roll.jpg`, `faq-bending-hand.jpg`; never the dark grey one). Publish as a carousel:
+  slide 1 the poster, slide 2 the real bending photo full-size via photo.py with "Una lámina fina
+  que se curva" (Nick: always show how flexible it is), slide 3 the after photo.
 - Finish photos: `python3 scripts/social-studio/photo.py in out.jpg [--es "..."] [--en "..."]`
   (use ` ` between number and unit). Product posts: text on every slide; ambience: text on the
   first slide only or none.

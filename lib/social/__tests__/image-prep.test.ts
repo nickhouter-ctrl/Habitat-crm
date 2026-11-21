@@ -76,3 +76,12 @@ describe("parseFfmpegInfo", () => {
     expect(parseFfmpegInfo("garbage")).toBeNull();
   });
 });
+
+describe("logoStyleFor", () => {
+  it("zwarte onderregel alleen op een lichte, rustige achtergrond", async () => {
+    const { logoStyleFor } = await import("../image-prep");
+    expect(logoStyleFor(220, 10)).toEqual({ variant: "sub-dark", gradient: false });
+    expect(logoStyleFor(200, 60)).toEqual({ variant: "sub-cream", gradient: true }); // druk: bladeren tegen de lucht
+    expect(logoStyleFor(70, 10)).toEqual({ variant: "sub-cream", gradient: true });
+  });
+});

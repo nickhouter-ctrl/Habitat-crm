@@ -88,7 +88,7 @@ const logoCache = new Map<LogoVariant, Buffer | null>();
 
 async function loadLogo(variant: LogoVariant): Promise<Buffer | null> {
   if (logoCache.has(variant)) return logoCache.get(variant)!;
-  const file = path.join(process.cwd(), "public", "brand", `flex-surfaces-logo-${variant}-social.png`);
+  const file = path.join(process.cwd(), "public", "brand", `flex-surfaces-logo-${variant}.png`);
   try {
     const buf = await readFile(file);
     logoCache.set(variant, buf);
@@ -100,18 +100,70 @@ async function loadLogo(variant: LogoVariant): Promise<Buffer | null> {
   }
 }
 
-/** Het juiste logo, geschaald en geplaatst op een beeld van width×height (`base` = het beeld zelf). */
-async function logoLayer(base: Buffer, width: number, height: number): Promise<{ input: Buffer; left: number; top: number } | null> {
+/**
+ * Lichte, rustige achtergrond onder de onderregel → zwarte "BY HABITAT-ONE".
+ * Anders (donker of druk, bv. bladeren tegen de lucht) → crème onderregel met
+ * een zacht donker verloop bovenaan het beeld, zodat hij altijd leesbaar is.
+ */
+export function logoStyleFor(mean: number, stdev: number): { variant: LogoVariant; gradient: boolean } {
+  return mean > 165 && stdev < 28 ? { variant: "sub-dark", gradient: false } : { variant: "sub-cream", gradient: true };
+}
+
+let socialCache: Buffer | null | undefined;
+async function loadSocial(): Promise<Buffer | null> {
+  if (socialCache !== undefined) return socialCache;
+  socialCache = await readFile(path.join(process.cwd(), "public", "brand", "flex-surfaces-logo-sub-cream-social.png")).catch(() => null);
+  return socialCache;
+}
+
+/** Zacht verloop van boven (warm donker, ~69%) naar transparant op ~24% van de hoogte. */
+async function topGradient(width: number, height: number): Promise<Buffer> {
+  const sharp = (await import("sharp")).default;
+  const depth = height * 0.24;
+  const raw = Buffer.alloc(width * height * 4);
+  for (let y = 0; y < height; y++) {
+    const alpha = Math.round(175 * Math.pow(Math.max(0, 1 - y / depth), 1.6));
+    if (!alpha) break;
+    for (let x = 0; x < width; x++) {
+      const i = (y * width + x) * 4;
+      raw[i] = 20; raw[i + 1] = 16; raw[i + 2] = 12; raw[i + 3] = alpha;
+    }
+  }
+  return sharp(raw, { raw: { width, height, channels: 4 } }).png().toBuffer();
+}
+
+/** Logo (+ eventueel verloop) als composite-lagen op een beeld van width×height (`base` = het beeld zelf). */
+async function logoLayers(base: Buffer, width: number, height: number): Promise<{ input: Buffer; left: number; top: number }[]> {
   const sharp = (await import("sharp")).default;
   const probe = await loadLogo("sub-dark");
-  if (!probe) return null;
+  if (!probe) return [];
   const meta = await sharp(probe).metadata();
   const place = logoPlacement(width, height, meta.width ?? 1, meta.height ?? 1);
-  const band = { left: place.left, top: place.top + Math.round(place.height * 0.7), width: place.width, height: Math.max(1, Math.round(place.height * 0.2)) };
+  const band = { left: place.left, top: place.top + Math.round(place.height * 0.78), width: place.width, height: Math.max(1, Math.round(place.height * 0.2)) };
   const stats = await sharp(base).resize(width, height, { fit: "fill" }).extract(band).greyscale().stats();
-  const logo = (await loadLogo(logoVariantFor(stats.channels[0].mean))) ?? probe;
-  const input = await sharp(logo).resize(place.width, place.height).png().toBuffer();
-  return { input, left: place.left, top: place.top };
+  const style = logoStyleFor(stats.channels[0].mean, stats.channels[0].stdev);
+  const layers: { input: Buffer; left: number; top: number }[] = [];
+  if (style.gradient) layers.push({ input: await topGradient(width, height), left: 0, top: 0 });
+  // Crème onderregel: de "-social"-versie met zachte schaduw (60 px rand rondom), zo
+  // geschaald dat het logo even groot en op dezelfde plek staat als de gewone versie.
+  const shadowed = style.variant === "sub-cream" ? await loadSocial() : null;
+  if (shadowed) {
+    const k = place.width / (meta.width ?? 1);
+    const sm = await sharp(shadowed).metadata();
+    const w = Math.round((sm.width ?? 1) * k);
+    const h = Math.round((sm.height ?? 1) * k);
+    const pad = Math.round(60 * k);
+    const input = await sharp(shadowed).resize(w, h).png().toBuffer();
+    const left = place.left - pad;
+    const top = place.top - pad;
+    if (left >= 0 && top >= 0 && left + w <= width && top + h <= height) {
+      layers.push({ input, left, top });
+      return layers;
+    }
+  }
+  const logo = (await loadLogo(style.variant)) ?? probe;
+  layers.push({ input: await sharp(logo).resize(place.width, place.height).png().toBuffer(), left: place.left, top: place.top });
+  return layers;
 }
 
 /** Snijd bij, schaal naar het formaat en zet het merk erop. Geeft JPEG terug. */
@@ -129,9 +181,9 @@ export async function prepareSocialImage(
 
   if (opts.brand !== false) {
     const baseBuf = await img.png().toBuffer();
-    const layer = await logoLayer(baseBuf, tw, th);
+    const layers = await logoLayers(baseBuf, tw, th);
     img = sharp(baseBuf);
-    if (layer) img = img.composite([layer]);
+    if (layers.length) img = img.composite(layers);
   }
   return img.jpeg({ quality: 88, mozjpeg: true }).toBuffer();
 }
@@ -144,10 +196,10 @@ const MUSIC_DIR = path.join(process.cwd(), "public", "brand", "music");
 async function renderVideoOverlay(width: number, height: number, frame: Buffer | null): Promise<Buffer | null> {
   const sharp = (await import("sharp")).default;
   const base = frame ?? (await sharp({ create: { width, height, channels: 3, background: { r: 128, g: 128, b: 128 } } }).png().toBuffer());
-  const layer = await logoLayer(base, width, height);
-  if (!layer) return null;
+  const layers = await logoLayers(base, width, height);
+  if (!layers.length) return null;
   return sharp({ create: { width, height, channels: 4, background: { r: 0, g: 0, b: 0, alpha: 0 } } })
-    .composite([layer])
+    .composite(layers)
     .png()
     .toBuffer();
 }
