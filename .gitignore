@@ -62,3 +62,8 @@ tmp-*.ts
 # ook e-mailadressen van bedrijven — die horen al helemaal niet in git.
 scripts/_tmp-*
 reports/
+
+# Lokale data/exports (catalogi, PDF-batches, tijdelijke bestanden) — horen niet in git
+/output/
+/outputs/
+/tmp/
