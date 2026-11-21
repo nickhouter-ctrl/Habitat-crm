@@ -127,6 +127,7 @@ export default async function AutopilotPage() {
             <span className="font-medium">{l.reference ?? l.supplier}</span>
             {l.amount != null && <span className="text-muted">{formatEUR(l.amount)}</span>}
             {l.summary && <span className="text-muted">· {l.summary}</span>}
+            {l.holded && <span className={`w-full ${l.holded.startsWith("Niet") ? "text-danger" : "text-muted"}`}>Holded: {l.holded}</span>}
             {l.outcome !== "approved" && l.reasons.length > 0 && <span className="w-full text-danger">{l.reasons.join(" · ")}</span>}
           </div>
         ))}

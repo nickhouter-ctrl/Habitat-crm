@@ -3,6 +3,7 @@ import { and,eq,inArray,isNotNull,lt,or,isNull } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { workerWeekSheets as sheets,workerLumpInvoices as lumps,purchaseOrders,projects } from "@/lib/db/schema";
 import { holded, holdedListAll } from "@/lib/holded/client";
+import { createPurchase } from "@/lib/holded/purchase-v2";
 import type { HoldedDocument, HoldedTax } from "@/lib/holded/types";
 import { suggestBooking, type HistoryLine } from "@/lib/holded/purchase-learning";
 import type { WeekDay, WorkerInvoice } from "@/lib/worker-week";
@@ -61,7 +62,8 @@ async function deliver(src:Source,knownHoldedId:string|null,setStatus:(status:st
       return workerPurchaseBody(src.id,invoice,contact,booking);
     },
     posting:async()=>{if(!await claimPosting())throw Error("Sync claim expired");},
-    create:async body=>{const result=await holded.documents.create("purchase",body);if(!result.id)throw Error("No document ID");return result.id;},
+    // v2 als die sleutel er is: alleen dan neemt Holded het project per regel over.
+    create:async body=>(await createPurchase(body)).id,
     remember:async remoteId=>{await db.update(purchaseOrders).set({holdedId:remoteId,updatedAt:new Date()}).where(eq(purchaseOrders.id,src.poId));},
     verify:async remoteId=>{verifyWorkerPurchase(await holded.documents.get("purchase",remoteId),invoice);},
   },knownHoldedId,["posting","unknown"].includes(src.status));

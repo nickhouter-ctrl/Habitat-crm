@@ -17,6 +17,7 @@ import type { AiInvoiceFields } from "@/lib/ai-invoice-extract";
 import { poExVat } from "@/lib/purchase-orders";
 import { downloadPurchaseOrderBuffer } from "@/lib/storage";
 import { holded, holdedListAll, HoldedError } from "./client";
+import { createPurchase } from "./purchase-v2";
 import { holdedProjecten } from "./sync";
 import type { HoldedAccount, HoldedContact, HoldedDocument, HoldedTax } from "./types";
 import {
@@ -206,11 +207,21 @@ export type PushInput = {
   /** Per regel-key wat er gekozen is; aantallen en bedragen komen altijd uit het keuren. */
   choices: Record<string, { account: string; vat: string; retention: string | null; holdedProjectId: string | null; desc: string }>;
   userId: string | null;
+  /** Eigen bijlage in plaats van de eerste PDF van de inkooporder (autopilot: factuur + urenstaat in één PDF). */
+  attachment?: { name: string; bytes: Uint8Array };
 };
 
 export type PushResult = { ok: boolean; message: string; holdedId?: string; warnings?: string[] };
 
-async function attachPdf(holdedId: string, po: typeof purchaseOrders.$inferSelect): Promise<string | null> {
+async function attachPdf(holdedId: string, po: typeof purchaseOrders.$inferSelect, eigen?: { name: string; bytes: Uint8Array }): Promise<string | null> {
+  if (eigen) {
+    try {
+      await holded.documents.attach("purchase", holdedId, eigen.bytes, eigen.name);
+      return null;
+    } catch {
+      return "PDF niet meegestuurd — voeg hem in Holded toe.";
+    }
+  }
   const atts = (po.attachments ?? []) as { name: string; path: string }[];
   const pdf = atts.find((a) => /\.pdf$/i.test(a.name)) ?? atts[0];
   if (!pdf) return "Geen bijlage om mee te sturen.";
@@ -310,10 +321,11 @@ export async function pushPurchaseToHolded(input: PushInput): Promise<PushResult
   const proposedSnap: HoldedPushSnapshot = { contactId: ctx.contact.matched?.id ?? null, docNumber: ctx.docNumber, date: ctx.date, lines: proposed, totals: bookingTotals(proposed, taxKeys) };
 
   let holdedId: string;
+  let v2Note: string | null = null;
   try {
-    const r = await holded.documents.create("purchase", body);
-    if (!r?.id) return fail("unknown", "Holded gaf geen document-id terug. Zoek de factuur terug in Holded voordat je opnieuw boekt.");
+    const r = await createPurchase(body);
     holdedId = r.id;
+    if (r.via === "v1" && r.v2Error) v2Note = `Holded v2 weigerde (${r.v2Error}); via v1 geboekt, dus zonder project per regel.`;
   } catch (e) {
     // Een 4xx is een weigering: er is niets aangemaakt. Alles anders (time-out,
     // 5xx) kan wél aangekomen zijn — dan alleen terugzoeken.
@@ -323,7 +335,7 @@ export async function pushPurchaseToHolded(input: PushInput): Promise<PushResult
   }
 
   await remember(input.poId, holdedId);
-  const warnings: string[] = [];
+  const warnings: string[] = v2Note ? [v2Note] : [];
   try {
     const remote = await holded.documents.get("purchase", holdedId);
     warnings.push(...verifyRemote(remote, sent));
@@ -331,7 +343,7 @@ export async function pushPurchaseToHolded(input: PushInput): Promise<PushResult
   } catch {
     warnings.push("Kon de factuur niet terugladen uit Holded om te controleren.");
   }
-  const attachWarn = await attachPdf(holdedId, ctx.po);
+  const attachWarn = await attachPdf(holdedId, ctx.po, input.attachment);
   if (attachWarn) warnings.push(attachWarn);
 
   await db

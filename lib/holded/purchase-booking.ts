@@ -223,8 +223,8 @@ export function holdedPurchaseBody(args: {
       taxes: [l.vat, ...(l.retention ? [l.retention] : [])],
       // v1 neemt de rekening alleen als `accountingAccountId` (getest 11-11-2026).
       accountingAccountId: l.account,
-      // Het project per regel neemt v1 niet over (ook niet bij verkoopfacturen);
-      // dat kan pas met een v2-sleutel (items[].project_id). Meesturen kan geen kwaad.
+      // v1 negeert het project per regel; createPurchase (purchase-v2.ts) zet dit om
+      // naar v2 (items[].project_id) zodra HOLDED_API_KEY_V2 er is.
       ...(l.holdedProjectId ? { projectid: l.holdedProjectId } : {}),
     })),
   };
