@@ -11,6 +11,7 @@ import { sendEmail } from "@/lib/email";
 import { getLiveStatsCached } from "@/lib/meta/live-stats";
 import { formatEUR } from "@/lib/utils";
 import { recentAccountDecisions } from "./accounts";
+import { recentLaborDecisions } from "./labor-invoices";
 import { listProposals } from "./quotes";
 
 const OWNER = process.env.HERMES_AGENT_OWNER_EMAIL || "nick@habitat-one.com";
@@ -23,7 +24,7 @@ const time = (d: unknown) => new Intl.DateTimeFormat("nl-NL", { timeZone: TZ, ho
 export type Briefing = { title: string; sections: { heading: string; lines: string[] }[] };
 
 export async function buildBriefing(): Promise<Briefing> {
-  const [appointments, tasks, requests, mails, invoices, overdue, proposals, accounts] = await Promise.all([
+  const [appointments, tasks, requests, mails, invoices, overdue, proposals, accounts, labor] = await Promise.all([
     rows(sql`select title, starts_at, all_day, location from appointments
       where status <> 'cancelled' and (starts_at at time zone ${TZ})::date = (now() at time zone ${TZ})::date order by starts_at`),
     rows(sql`select a.subject, a.due_at, c.name as contact from activities a left join contacts c on c.id = a.contact_id
@@ -37,6 +38,7 @@ export async function buildBriefing(): Promise<Briefing> {
       where d.kind = 'invoice' and d.status not in ('paid', 'void', 'draft') and d.due_date < current_date order by d.due_date limit 10`),
     listProposals(["ready", "review"], 14),
     recentAccountDecisions(1),
+    recentLaborDecisions(1),
   ]);
 
   const sections: Briefing["sections"] = [];
@@ -49,6 +51,7 @@ export async function buildBriefing(): Promise<Briefing> {
   if (requests.length) sections.push({ heading: `📥 Nieuwe aanvragen (24 u): ${requests.length}`, lines: requests.map((r) => `${r.kind === "appointment" ? "Afspraak" : r.kind === "contact" ? "Contact" : "Offerte"}: ${r.name}${r.company ? ` (${r.company})` : ""}`) });
   if (proposals.length) sections.push({ heading: "🤖 Autopilot: wacht op jou", lines: proposals.map((p) => `${p.status === "ready" ? "Klaar om te versturen" : "Even kijken"}: offerte ${p.customer}${p.total ? ` ${formatEUR(p.total)}` : ""}${p.marginPct != null ? `, marge ${p.marginPct}%` : ""}`) });
   if (accounts.length) sections.push({ heading: "👤 Accounts (24 u)", lines: accounts.map((a) => `${a.approved ? "Automatisch goedgekeurd" : "Naar jou"}: ${a.name}${a.approved ? "" : ` — ${a.reasons.join(", ")}`}`) });
+  if (labor.length) sections.push({ heading: "🧾 Urenfacturen (24 u)", lines: labor.map((l) => `${l.outcome === "approved" ? "Automatisch geboekt" : l.outcome === "returned" ? "Teruggestuurd (bedrag klopt niet)" : "Naar jou"}: ${l.reference ?? l.supplier}${l.amount != null ? ` ${formatEUR(l.amount)}` : ""}${l.outcome === "approved" ? ` — ${l.summary ?? ""}` : ` — ${l.reasons.join(", ")}`}`) });
   const mailCount = Number(mails[0]?.n ?? 0);
   const invoiceCount = Number(invoices[0]?.n ?? 0);
   sections.push({ heading: "📬 Wacht op actie", lines: [
