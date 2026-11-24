@@ -229,6 +229,11 @@ The Mon/Wed/Fri posts stay exactly as described above.
      projects, rotate so every project gets a turn) and make one of the Mon/Wed/Fri posts a project
      carousel (5–8 best photos, story voor → tijdens → na) with the same place/privacy rules.
      Folders may also be named `Voor`/`Tijdens`/`Na` (e.g. Finca Lisa) — treat them the same.
+     ONLY the nice photos (Nick, 24-11): sharp, well lit, straight, a clear view of the space or
+     the craft; skip dark/blurry/crooked shots, piles of rubble, bins, hoses and messy corners
+     unless they are the "before" of a strong before → after. Rather fewer photos than a weak one.
+     FIRST project content = Finca Lisa (Tijdens folder), as a normal Mon/Wed/Fri carousel POST,
+     not a Reel (Nick, 24-11); log it in history.md so the next project goes next.
      Big folders (Costa Nova has 200+ files): pick the sharpest, most telling shots, skip
      near-duplicates; short clips (.mp4/.MOV) from the folder may be cut in. A project with only
      "tijdens" photos is fine: frame it as "work in progress / Parte 1". Renders/3D designs only if they are in the project folder
