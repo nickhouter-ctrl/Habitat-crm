@@ -216,14 +216,27 @@ The Mon/Wed/Fri posts stay exactly as described above.
      folder is empty, skip this type. Never fake behind-the-scenes footage with AI.
   7. **Our projects — renovations** (Nick, 21-11: "mensen moeten zien wat wij doen, ook verbouwingen
      en projecten", photos of ongoing projects will be delivered): ONLY real photos/clips from
-     `~/Library/Application Support/habitat-social/eigen-beeld/Projecten/<project>/1-voor|2-tijdens|3-na/` (+ optional info.txt).
+     `~/Library/Application Support/habitat-social/eigen-beeld/Projecten/<project>/1-voor|2-tijdens|3-na/` or `Voor|Tijdens|Na/` (+ optional info.txt).
      Tell the story in 10–15 s: hook ("¿Cómo quedó esta casa en Moraira?" / "Día 1 vs. día 30"),
      before → work in progress (craftsmen, demolition, new walls, panels going up) → result.
      Use `reel.py --brand habitat` (Habitat One logo instead of Flex-Surfaces), Habitat One does the
      whole renovation. Place = town only, never an address or client name; no recognisable client
      faces. A project can return as a series ("Parte 2") when new 2-tijdens/3-na photos arrive.
      Whenever a project folder has new, unused photos, make at least ONE project Reel that week —
-     this type has priority over the others. Renders/3D designs only if they are in the project folder
+     this type has priority over the others. Nick (24-11) added photos of several projects
+     (Costa Nova, Xixona, Finca Lisa, het Palijsje, appartement Thomas) and wants fun content from
+     them: while unused project photos remain, make TWO project Reels a week (two different
+     projects, rotate so every project gets a turn) and make one of the Mon/Wed/Fri posts a project
+     carousel (5–8 best photos, story voor → tijdens → na) with the same place/privacy rules.
+     Folders may also be named `Voor`/`Tijdens`/`Na` (e.g. Finca Lisa) — treat them the same.
+     ONLY the nice photos (Nick, 24-11): sharp, well lit, straight, a clear view of the space or
+     the craft; skip dark/blurry/crooked shots, piles of rubble, bins, hoses and messy corners
+     unless they are the "before" of a strong before → after. Rather fewer photos than a weak one.
+     FIRST project content = Finca Lisa (Tijdens folder), as a normal Mon/Wed/Fri carousel POST,
+     not a Reel (Nick, 24-11); log it in history.md so the next project goes next.
+     Big folders (Costa Nova has 200+ files): pick the sharpest, most telling shots, skip
+     near-duplicates; short clips (.mp4/.MOV) from the folder may be cut in. A project with only
+     "tijdens" photos is fine: frame it as "work in progress / Parte 1". Renders/3D designs only if they are in the project folder
      (then label them "Diseño" on screen).
 - Caption: short and chatty (1–3 sentences per language), ends with a question that invites a
   comment, then the showroom lines, `📍 Jávea · Costa Blanca` and the hashtags (add #reels #reelsespaña
