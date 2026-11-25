@@ -109,9 +109,13 @@ async function currentContent(n: typeof staffNotifications.$inferSelect): Promis
   }
   if (n.kind === "worker_week_submitted") {
     if(!magModule(recipient.role,"projects"))return null;
-    const [s]=await db.select({id:workerWeekSheets.id,version:workerWeekSheets.version,status:workerWeekSheets.status,week:workerWeekSheets.weekStart,days:workerWeekSheets.days,at:workerWeekSheets.submittedAt,workerName:workers.name,projectId:projects.id,projectName:projects.name}).from(workerWeekSheets).innerJoin(workers,eq(workers.id,workerWeekSheets.workerId)).innerJoin(projects,eq(projects.id,workerWeekSheets.projectId)).where(eq(workerWeekSheets.id,n.entityId));
+    const [s]=await db.select({id:workerWeekSheets.id,version:workerWeekSheets.version,status:workerWeekSheets.status,week:workerWeekSheets.weekStart,days:workerWeekSheets.days,history:workerWeekSheets.history,at:workerWeekSheets.submittedAt,workerName:workers.name,projectId:projects.id,projectName:projects.name}).from(workerWeekSheets).innerJoin(workers,eq(workers.id,workerWeekSheets.workerId)).innerJoin(projects,eq(projects.id,workerWeekSheets.projectId)).where(eq(workerWeekSheets.id,n.entityId));
     // Do not send obsolete notifications after review or a newer submission.
-    if(!s || s.status!=="submitted" || n.eventKey!==`worker-week:${s.id}:${s.version}:${n.userId}`)return null;
+    // Vergelijk met de versie van de laatste indiening, niet met de huidige:
+    // een factuur die direct mee wordt ingediend verhoogt de versie ook, en
+    // mag de melding van die indiening niet laten vervallen (A0055, 24-11).
+    const submittedVersion=s?.history.filter(h=>h.action==="submitted").at(-1)?.version;
+    if(!s || s.status!=="submitted" || n.eventKey!==`worker-week:${s.id}:${submittedVersion}:${n.userId}`)return null;
     return {kind:n.kind,title:`${s.workerName} · ${periodRange(s.week,"nl",s.days.at(-1)?.date)}`,body:`${s.projectName} · ${totalWeekHours(s.days)} h`,at:s.at,sheetId:s.id};
   }
   if (n.kind === "followup_assignment") {
