@@ -16,6 +16,15 @@ export class PrepareError extends Error {}
 /** Losse factuur zonder uren: geen uren × tarief, maar één bedrag met een omschrijving. */
 const isLump=(invoice:WorkerInvoice)=>!!invoice.concept;
 
+/**
+ * De hele gewerkte week, zoals ze het in Holded willen zien: "16/11/2026 - 21/11/2026"
+ * (maandag t/m zaterdag). Eerst stond alleen de maandag erin (Nick, 25-11-2026).
+ */
+export function weekPeriod(weekStart:string){
+  const d=(offset:number)=>{const t=new Date(`${weekStart}T12:00:00Z`);t.setUTCDate(t.getUTCDate()+offset);return `${String(t.getUTCDate()).padStart(2,"0")}/${String(t.getUTCMonth()+1).padStart(2,"0")}/${t.getUTCFullYear()}`;};
+  return `${d(0)} - ${d(5)}`;
+}
+
 export function workerPurchaseBody(id:string,invoice:WorkerInvoice,contact:string,booking?:WorkerBooking) {
   supplierInvoiceSchema.parse(invoice);
   const extras=isLump(invoice)?[]:invoice.extras??[];
@@ -26,7 +35,7 @@ export function workerPurchaseBody(id:string,invoice:WorkerInvoice,contact:strin
   const project=booking?{projectid:booking.projectId}:{};
   const main={
     name:isLump(invoice)?invoice.projectName:`Trabajo · ${invoice.projectName}`,
-    desc:isLump(invoice)?invoice.concept!:`Periodo desde ${invoice.weekStart} · ${invoice.hours} horas`,
+    desc:isLump(invoice)?invoice.concept!:`Periodo ${weekPeriod(invoice.weekStart)} · ${invoice.hours} horas`,
     // Aanmaken: `subtotal` is de stuksprijs ex btw, `tax` het btw-percentage (uitlezen heet het `price`).
     units:laborUnits,subtotal:laborPrice,tax:invoice.vatRate,
     taxes:booking?[booking.main.vat,...(booking.main.retention?[booking.main.retention]:[])]:[`p_iva_${invoice.vatRate}`,...(invoice.withholdingRate?[`p_ret_${invoice.withholdingRate}`]:[])],
@@ -41,7 +50,7 @@ export function workerPurchaseBody(id:string,invoice:WorkerInvoice,contact:strin
   // Bij aanmaken heet het nummer `invoiceNum` en de regels `items` (uitlezen: docNumber/products).
   // Een nieuw document is in Holded standaard een concept: daar nog goedkeuren (Nick, 11-11-2026).
   return {contactId:contact,invoiceNum:invoice.number,docNumber:invoice.number,date:Math.floor(Date.parse(invoice.date)/1000),currency:"eur",
-    desc:`${invoice.projectName} · ${invoice.weekStart}`,tags:[workerInvoiceTag(id)],
+    desc:isLump(invoice)?`${invoice.projectName} · ${invoice.weekStart}`:`${invoice.projectName} ${weekPeriod(invoice.weekStart)}`,tags:[workerInvoiceTag(id)],
     notes:`${workerInvoiceTag(id)}\nLeverancier: ${invoice.legalName} · NIF/CIF: ${invoice.taxId}\n${invoice.address}${invoice.email?`\n${invoice.email}`:""}\nIBAN: ${invoice.iban||"—"}${invoice.accountHolder?` · titular ${invoice.accountHolder}`:""}\nProject: ${invoice.projectName}\n${invoice.taxNote}`,
     items:[main,...extraLines],
   };
