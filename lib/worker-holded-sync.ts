@@ -59,7 +59,7 @@ async function deliver(src:Source,knownHoldedId:string|null,setStatus:(status:st
       let contact=matches[0]?.id;
       if(!contact){const result=await holded.contacts.create({name:invoice.legalName,code:invoice.taxId,type:"supplier",...(invoice.email?{email:invoice.email}:{}),iban:invoice.iban,billAddress:{address:invoice.address}});if(!result.id)throw Error("No supplier ID");contact=result.id;}
       const booking=await bookingFor(invoice,src.projectId,contact,await allDocs());
-      return workerPurchaseBody(src.id,invoice,contact,booking);
+      return workerPurchaseBody(src.id,invoice,contact,booking,src.days);
     },
     posting:async()=>{if(!await claimPosting())throw Error("Sync claim expired");},
     // v2 als die sleutel er is: alleen dan neemt Holded het project per regel over.
