@@ -1005,7 +1005,10 @@ export function LineItemsEditor({
                           // tientallen uitvoeringen pas na een klik of een zoekterm.
                           const toonMaten =
                             hasSizes && (maten.totaal <= 6 || maten.gefilterd || openMaten.has(p.id));
-                          const vanaf = price ? null : vanafPrijs(p);
+                          // Met uitvoeringen: de laagste uitvoeringsprijs tonen, niet de basisprijs —
+                          // die hoort vaak bij de grootste maat (Milan Travertine: € 231 = 2900×1200,
+                          // terwijl 1200×600 € 43,76 is; Nick 25-11-2026).
+                          const vanaf = hasSizes ? vanafPrijs(p) : price ? null : vanafPrijs(p);
                           return (
                             <li key={p.id}>
                               <button
@@ -1027,10 +1030,10 @@ export function LineItemsEditor({
                                 </span>
                                 <span className="flex shrink-0 items-center gap-3">
                                   <span className="tabular-nums">
-                                    {price ? (
-                                      formatEUR(price)
-                                    ) : vanaf != null ? (
+                                    {vanaf != null ? (
                                       <span className="text-muted">{uiT("vanaf")} {formatEUR(vanaf)}</span>
+                                    ) : price ? (
+                                      formatEUR(price)
                                     ) : (
                                       "—"
                                     )}
