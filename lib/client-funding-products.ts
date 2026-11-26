@@ -59,6 +59,11 @@ export function clientFundingProducts(
   }).sort((a, b) => (a.documentNumber ?? "").localeCompare(b.documentNumber ?? ""));
 }
 
+/** "Kozijnen — Allpack HANH002604010001" → "Kozijnen": leverancier en inkoopnummer blijven intern. */
+export function clientProductName(name: string): string {
+  return name.replace(/\s+[—–-]\s+.*\b(allpack|hanhai|foshan|kingkonree|magic stone|china|hanh\d+)\b.*$/i, "").trim() || name.trim();
+}
+
 export type ClientDeliveredProduct = { date: string | null; documentNumber: string | null; name: string; quantity: number; total: number };
 
 /**
@@ -87,13 +92,13 @@ export function clientDeliveredProducts(input: {
     const sign = d.kind === "creditnote" ? -1 : 1;
     for (const it of normalizeDocItems(d.items)) {
       if (!isOwnProductLine(it, input.productCost) || lineNet(it) === 0) continue;
-      rows.push({ date: day(d.date), documentNumber: d.docNumber, name: it.name.trim(), quantity: sign * (Number(it.units) || 0), total: cent(sign * lineNet(it)) });
+      rows.push({ date: day(d.date), documentNumber: d.docNumber, name: clientProductName(it.name), quantity: sign * (Number(it.units) || 0), total: cent(sign * lineNet(it)) });
     }
   }
   for (const l of input.deliveries) {
     const [it] = normalizeDocItems([l]);
     if (!it || !isOwnProductLine(it, input.productCost) || lineNet(it) === 0) continue;
-    rows.push({ date: day(l.date), documentNumber: null, name: it.name.trim(), quantity: Number(it.units) || 0, total: cent(lineNet(it)) });
+    rows.push({ date: day(l.date), documentNumber: null, name: clientProductName(it.name), quantity: Number(it.units) || 0, total: cent(lineNet(it)) });
   }
   for (const e of input.extras) {
     const total = cent(Number(e.amountEur) || 0);

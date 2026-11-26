@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { clientFundingProducts } from "../client-funding-products";
+import { clientFundingProducts, clientProductName } from "../client-funding-products";
 import { projectReceiptShares, splitProjectReceipts } from "../receipts";
 import { clientFundingReport } from "../client-funding-report";
 
@@ -94,5 +94,12 @@ describe("customer product receipt specification", () => {
       amounts: { received: 2000, products: 1200, work: 300, advanceCredit: 0, advanceCreditDescription: null, unpaidProducts: 0, remaining: 500, labor: 300, materials: 0, other: 0 },
       products: [{ documentNumber: "F-1", products: ["Kozijnen"], received: 1199.99 }],
     })).toThrow(/does not reconcile/);
+  });
+});
+
+describe("productnaam voor de klant", () => {
+  it("laat leverancier en inkoopnummer weg, maar houdt uitvoeringen", () => {
+    expect(clientProductName("Kozijnen — Allpack HANH002604010001")).toBe("Kozijnen");
+    expect(clientProductName("LED Ground Spot 3W IP65 — steel/glass")).toBe("LED Ground Spot 3W IP65 — steel/glass");
   });
 });
