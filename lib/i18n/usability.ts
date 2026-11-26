@@ -248,6 +248,7 @@ const rows: [string, string, string][] = [
   ["Incl. opslag, eigen producten en meerwerk · ex. btw", "Incl. markup, our products and extra work · excl. VAT", "Incluye recargo, nuestros productos y trabajos adicionales · sin IVA"],
   ["Resterende voorschotruimte", "Remaining advance coverage", "Cobertura restante del anticipo"],
   ["Interne stand (PDF)", "Internal status (PDF)", "Estado interno (PDF)"],
+  ["Kostenoverzicht intern (PDF)", "Internal cost overview (PDF)", "Resumen interno de costes (PDF)"],
   ["Tegoed toegevoegd aan voorschotruimte", "Credit added to advance coverage", "Crédito añadido a la cobertura del anticipo"],
   ["Dit tegoed verhoogt de voorschotruimte en is geen nieuwe betaling.", "This credit increases the available advance balance and is not a new payment.", "Este crédito aumenta el saldo disponible del anticipo y no es un nuevo pago."],
   ["Een apart tegoed is toegevoegd aan de voorschotruimte. Dit is geen nieuwe betaling.", "A separate credit has been added to the advance balance. This is not a new payment.", "Se ha añadido un crédito separado al saldo del anticipo. No es un nuevo pago."],

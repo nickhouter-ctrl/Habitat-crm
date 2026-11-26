@@ -768,9 +768,14 @@ export default async function ProjectDetailPage({
             <CardTitle>{uiT("Eigen kosten — wat zijn wij echt kwijt?")}</CardTitle>
             <span className="text-xs text-muted">{uiT("intern · niet zichtbaar voor de klant · alle bedragen ex. btw")}</span>
           </div>
-          <LinkButton href={`/projects/${id}/stand-intern/pdf`} target="_blank" variant="secondary">
-            <Printer className="size-4" /> {uiT("Interne stand (PDF)")}
-          </LinkButton>
+          <div className="flex flex-wrap gap-2">
+            <LinkButton href={`/projects/${id}/stand-intern/pdf`} target="_blank" variant="secondary">
+              <Printer className="size-4" /> {uiT("Interne stand (PDF)")}
+            </LinkButton>
+            <LinkButton href={`/projects/${id}/kostenoverzicht-intern/pdf`} target="_blank" variant="secondary">
+              <Printer className="size-4" /> {uiT("Kostenoverzicht intern (PDF)")}
+            </LinkButton>
+          </div>
         </div>
       </CardHeader>
       <CardContent>
