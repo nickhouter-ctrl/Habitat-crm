@@ -763,8 +763,15 @@ export default async function ProjectDetailPage({
   const eigenKostenCard = (
     <Card id="eigen-kosten" data-own-costs className="mb-5 scroll-mt-24">
       <CardHeader>
-        <CardTitle>{uiT("Eigen kosten — wat zijn wij echt kwijt?")}</CardTitle>
-        <span className="text-xs text-muted">{uiT("intern · niet zichtbaar voor de klant · alle bedragen ex. btw")}</span>
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <CardTitle>{uiT("Eigen kosten — wat zijn wij echt kwijt?")}</CardTitle>
+            <span className="text-xs text-muted">{uiT("intern · niet zichtbaar voor de klant · alle bedragen ex. btw")}</span>
+          </div>
+          <LinkButton href={`/projects/${id}/stand-intern/pdf`} target="_blank" variant="secondary">
+            <Printer className="size-4" /> {uiT("Interne stand (PDF)")}
+          </LinkButton>
+        </div>
       </CardHeader>
       <CardContent>
         <div className="grid gap-5 lg:grid-cols-2">
