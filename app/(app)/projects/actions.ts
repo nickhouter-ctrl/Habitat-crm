@@ -38,7 +38,7 @@ import { brandedEmail, escapeHtml, sendEmail } from "@/lib/email";
 import { recordSentEmail } from "@/lib/sent-email";
 import { COMPANY } from "@/lib/company";
 import { formatEUR } from "@/lib/utils";
-import { workerRate } from "@/lib/worker-rate";
+import { CASH_ACTUAL_RATE_EUR, timeEntryRates } from "@/lib/worker-rate";
 import { moneyOrNull, moneyOrZero as numOrZero } from "@/lib/parse-money";
 import { defaultReceiptVatRate } from "@/lib/receipts";
 
@@ -197,18 +197,15 @@ export async function addTimeEntry(projectId: string, formData: FormData) {
   if (!parsed.success) throw new Error(parsed.error.issues.map((i) => i.message).join(", "));
   const d = parsed.data;
   const workerId = uuidOrNull(d.workerId);
-  // Tarief: expliciet ingevuld wint; anders het tarief van de arbeider dat bij
-  // DEZE betaalwijze hoort — contant werken gaat vaak tegen een ander tarief.
-  let rate = moneyOrNull(d.hourlyCostEur);
-  let workerName: string | null = null;
-  if (workerId) {
-    const w = await db.query.workers.findFirst({ where: eq(workers.id, workerId) });
-    workerName = w?.name ?? null;
-    if (rate == null) {
-      const tarief = workerRate(w, d.paymentMethod);
-      rate = tarief != null ? String(tarief) : null;
-    }
-  }
+  // Tarief: expliciet ingevuld wint. Anders: contant = altijd € 28 door te
+  // berekenen (€ 20 werkelijk), per factuur = factuurtarief van de ploegkaart.
+  const w = workerId ? await db.query.workers.findFirst({ where: eq(workers.id, workerId) }) : null;
+  const workerName = w?.name ?? null;
+  const standaard = timeEntryRates(w, d.paymentMethod);
+  const rate = moneyOrNull(d.hourlyCostEur) ?? standaard?.hourlyCostEur ?? null;
+  const werkelijkInvoer = d.actualHourlyCostEur?.trim()
+    ? d.actualHourlyCostEur
+    : d.paymentMethod === "cash" ? String(CASH_ACTUAL_RATE_EUR) : "";
   await db.insert(timeEntries).values({
     projectId,
     workerId,
@@ -216,6 +213,7 @@ export async function addTimeEntry(projectId: string, formData: FormData) {
     date: d.date,
     hours: numOrZero(d.hours),
     hourlyCostEur: rate ?? "0",
+    actualHourlyCostEur: werkelijkTarief(werkelijkInvoer, rate ?? "0"),
     paymentMethod: d.paymentMethod,
     note: d.note || null,
   });

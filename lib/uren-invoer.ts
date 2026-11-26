@@ -20,6 +20,8 @@ export const timeEntrySchema = z.object({
   date: z.string().trim().min(1, "Datum is verplicht"),
   hours: z.string().trim().min(1, "Uren zijn verplicht"),
   hourlyCostEur: z.string().trim().optional(),
+  /** Contant: leeg → € 20 (zie CASH_ACTUAL_RATE_EUR). Per factuur: leeg → gelijk aan tarief. */
+  actualHourlyCostEur: z.string().trim().optional(),
   paymentMethod: z.enum(["cash", "invoice"]).default("invoice"),
   note: z.string().trim().optional(),
 });

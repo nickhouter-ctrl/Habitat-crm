@@ -31,3 +31,27 @@ function getal(v: string | number | null | undefined): number | null {
   const n = Number(v);
   return Number.isFinite(n) && n > 0 ? n : null;
 }
+
+/**
+ * Contante uren (afspraak Nick, 26-11-2026): ALTIJD € 28 doorberekenen aan de
+ * klant (daar komt de projectopslag van 15% nog bovenop) en ALTIJD € 20 als
+ * werkelijk betaald. Wijkt het af, dan passen ze de regel zelf aan.
+ */
+export const CASH_BILLED_RATE_EUR = 28;
+export const CASH_ACTUAL_RATE_EUR = 20;
+
+/**
+ * Tarieven voor een nieuwe urenregel: `hourlyCostEur` = doorberekend tarief,
+ * `actualHourlyCostEur` = wat de arbeider echt krijgt (null = gelijk).
+ * Per factuur: het factuurtarief van de ploegkaart, geen apart werkelijk tarief.
+ */
+export function timeEntryRates(
+  worker: WorkerRates | null | undefined,
+  paymentMethod: "cash" | "invoice",
+): { hourlyCostEur: string; actualHourlyCostEur: string | null } | null {
+  if (paymentMethod === "cash") {
+    return { hourlyCostEur: String(CASH_BILLED_RATE_EUR), actualHourlyCostEur: String(CASH_ACTUAL_RATE_EUR) };
+  }
+  const rate = workerRate(worker, "invoice");
+  return rate == null ? null : { hourlyCostEur: String(rate), actualHourlyCostEur: null };
+}

@@ -15,6 +15,7 @@ import { Combobox } from "@/components/combobox";
 import { SubmitButton } from "@/components/submit-button";
 import { Field, Input } from "@/components/ui";
 import { cn } from "@/lib/utils";
+import { CASH_ACTUAL_RATE_EUR, CASH_BILLED_RATE_EUR } from "@/lib/worker-rate";
 
 export type TimeEntryWorker = {
   value: string;
@@ -23,6 +24,8 @@ export type TimeEntryWorker = {
   hourlyCostEur: number | null;
   /** Tweede tarief, als hij er twee heeft. */
   hourlyCostCashEur: number | null;
+  /** Standaard betaalwijze van zijn ploegkaart. */
+  defaultPaymentMethod?: "cash" | "invoice";
 };
 
 export function TimeEntryForm({
@@ -35,17 +38,31 @@ export function TimeEntryForm({
   const uiT = useUiTranslation();
   const [workerId, setWorkerId] = useState("");
   const [tarief, setTarief] = useState("");
+  const [betaalwijze, setBetaalwijze] = useState<"cash" | "invoice">("invoice");
+  const [werkelijk, setWerkelijk] = useState("");
 
   const gekozen = workers.find((w) => w.value === workerId) ?? null;
   // Zonder dubbele waarden: heeft hij twee keer hetzelfde staan, dan is het één knop.
   const tarieven = [...new Set([gekozen?.hourlyCostEur, gekozen?.hourlyCostCashEur]
     .filter((t): t is number => typeof t === "number" && t > 0))];
 
+  /** Contant = altijd € 28 doorberekenen en € 20 werkelijk; per factuur = tarief van de ploegkaart. */
+  function zetBetaalwijze(wijze: "cash" | "invoice", w: TimeEntryWorker | null) {
+    setBetaalwijze(wijze);
+    if (wijze === "cash") {
+      setTarief(String(CASH_BILLED_RATE_EUR));
+      setWerkelijk(String(CASH_ACTUAL_RATE_EUR));
+    } else {
+      const eerste = w?.hourlyCostEur ?? w?.hourlyCostCashEur ?? null;
+      setTarief(eerste != null ? String(eerste) : "");
+      setWerkelijk("");
+    }
+  }
+
   function kiesArbeider(id: string) {
     setWorkerId(id);
     const w = workers.find((x) => x.value === id) ?? null;
-    const eerste = w?.hourlyCostEur ?? w?.hourlyCostCashEur ?? null;
-    setTarief(eerste != null ? String(eerste) : "");
+    zetBetaalwijze(w?.defaultPaymentMethod ?? "invoice", w);
   }
 
   return (
@@ -96,6 +113,35 @@ export function TimeEntryForm({
               € {t}
             </button>
           ))}
+        </div>
+      </Field>
+      <Field label={uiT("Betaald")} className="lg:col-span-2" hint={betaalwijze === "cash" ? uiT("contant: klant € {v0} + opslag, werkelijk € {v1}", { v0: CASH_BILLED_RATE_EUR, v1: CASH_ACTUAL_RATE_EUR }) : undefined}>
+        <input type="hidden" name="paymentMethod" value={betaalwijze} />
+        <div className="flex flex-wrap items-center gap-2">
+          {(["invoice", "cash"] as const).map((wijze) => (
+            <button
+              key={wijze}
+              type="button"
+              onClick={() => zetBetaalwijze(wijze, gekozen)}
+              className={cn(
+                "rounded-md border px-2.5 py-1.5 text-xs transition-colors",
+                betaalwijze === wijze ? "border-accent bg-accent/10 text-accent" : "bg-surface text-muted hover:bg-background",
+              )}
+            >
+              {wijze === "cash" ? uiT("Contant") : uiT("Per factuur")}
+            </button>
+          ))}
+          <Input
+            name="actualHourlyCostEur"
+            inputMode="decimal"
+            className="w-28 text-right"
+            value={werkelijk}
+            onChange={(e) => setWerkelijk(e.target.value)}
+            placeholder={uiT("= tarief")}
+            aria-label={uiT("Werkelijk betaald (€/u)")}
+            title={uiT("Werkelijk betaald (€/u)")}
+          />
+          <span className="text-xs text-muted">{uiT("werkelijk betaald")}</span>
         </div>
       </Field>
       <Field label={uiT("Notitie")} className="lg:col-span-2">

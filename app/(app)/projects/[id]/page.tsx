@@ -875,6 +875,7 @@ export default async function ProjectDetailPage({
     rate: Number(w.hourlyCostEur ?? 0),
     hourlyCostEur: w.hourlyCostEur != null ? Number(w.hourlyCostEur) : null,
     hourlyCostCashEur: w.hourlyCostCashEur != null ? Number(w.hourlyCostCashEur) : null,
+    defaultPaymentMethod: w.defaultPaymentMethod,
   }));
 
   const contactOptions: ComboOption[] = contactOpts.map((c) => ({ value: c.id, label: c.name }));
