@@ -11,7 +11,7 @@ describe("customer advance statement", () => {
   }
   it("reconciles to the CRM balance, including the client price of work, and only exposes client amounts", () => {
     const { amounts, cover } = fixture();
-    expect(amounts).toEqual({ received: 10000, products: 3000, work: 7475, advanceCredit: 0, advanceCreditDescription: null, remaining: -475, labor: 4600, materials: 2300, other: 575 });
+    expect(amounts).toEqual({ received: 10000, products: 3000, work: 7475, advanceCredit: 0, advanceCreditDescription: null, unpaidProducts: 0, remaining: -475, labor: 4600, materials: 2300, other: 575 });
     expect(amounts.received - amounts.products - amounts.work).toBe(cover.saldo);
     expect(amounts.labor + amounts.materials + amounts.other).toBe(amounts.work);
   });
@@ -46,5 +46,23 @@ describe("customer advance statement", () => {
     expect(table.rows.slice(0, 2).map(r => r[1])).toEqual(["Factuur F260009", "Contante betaling"]);
     expect(table.rows.at(-1)?.slice(2)).toEqual(["€\u00a011.260,00", "€\u00a01.260,00", "€\u00a010.000,00"]);
     expect(() => clientFundingReport({ projectName: "T", clientName: null, generatedAt: new Date(), locale: "nl", amounts, payments: payments.slice(1) })).toThrow();
+  });
+
+  it("shows unpaid delivered products at sales price in the balance and lists them", () => {
+    const margins = deriveProjectMargins({ laborCost: 1000, purchaseCost: 0, productRevenue: 0, productCost: 0 });
+    const cover = deriveAdvanceCover({ laborCost: 1000, purchaseCost: 0, coverReceivedEx: 2000, ownProductReceivedEx: 0,
+      ownProductCost: 600, requiredRevenue: margins.laborRevenue });
+    const amounts = clientFundingAmounts(cover, margins, 900);
+    expect(amounts.unpaidProducts).toBe(900);
+    expect(amounts.remaining).toBe(2000 - 1150 - 900);
+    const delivered = [{ date: "2026-08-10", documentNumber: null, name: "Shower tray", quantity: 3, total: 900 }];
+    const report = clientFundingReport({ projectName: "T", clientName: null, generatedAt: new Date(), locale: "nl", amounts, delivered });
+    expect(report.tables[0].rows.map(r => r[0])).toContain("Geleverde producten, nog niet betaald");
+    expect(report.tables[0].rows.at(-1)?.[1]).toBe("€\u00a0-50,00");
+    const spec = report.tables.find(t => t.title === "Specificatie van de geleverde producten")!;
+    expect(spec.rows.map(r => r[1])).toEqual(["Shower tray", "Totaal producten", "Nog niet betaald"]);
+    expect(JSON.stringify(report)).not.toContain("600,00");
+    expect(() => clientFundingReport({ projectName: "T", clientName: null, generatedAt: new Date(), locale: "nl", amounts,
+      delivered: [{ ...delivered[0], total: 800 }] })).toThrow();
   });
 });
