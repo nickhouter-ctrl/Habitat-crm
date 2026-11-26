@@ -15,11 +15,25 @@ describe("afgeboekt werk per factuur en week", () => {
     });
     expect(rows.map(r => [r.date, r.kind, r.description, r.hours ?? null])).toEqual([
       ["2026-10-01", "material", "Materiaalbonnen LaVibro", null],
-      ["2026-10-12", "labor", "Ahmed Bouzekri", 16],
+      ["2026-10-13", "labor", "Ahmed Bouzekri (13-10 t/m 15-10)", 16],
       ["2026-10-14", "material", "BRICOMAN 029-1", null],
-      ["2026-10-19", "labor", "Imad", 8],
+      ["2026-10-20", "labor", "Imad (20-10)", 8],
     ]);
     expect(rows.reduce((s, r) => s + Math.round(r.amount * 100), 0)).toBe(Math.round((745.2 + 153.33) * 100));
+  });
+  it("geeft elke urenfactuur een eigen regel met periode, losse uren per week", () => {
+    const rows = clientWorkRows({
+      labor: [
+        { date: "2026-11-03", crew: "Ahmed", hours: 24, cost: 672, invoiceId: "a50", invoiceDate: "2026-11-12", invoiceRef: "A0050", supplier: "AHMED BOUZEKRI" },
+        { date: "2026-11-07", crew: "Ahmed", hours: 24, cost: 672, invoiceId: "a50", invoiceDate: "2026-11-12", invoiceRef: "A0050", supplier: "AHMED BOUZEKRI" },
+        { date: "2026-11-08", crew: "Ahmed Bouzekri", hours: 350, cost: 9800 },
+      ],
+      purchases: [], costs: [], laborRevenue: 12815.6, purchaseRevenue: 0, otherRevenue: 0,
+    });
+    expect(rows.map(r => [r.date, r.kind, r.description, r.amount])).toEqual([
+      ["2026-11-08", "labor", "Ahmed Bouzekri (08-11)", 11270],
+      ["2026-11-12", "laborInvoice", "AHMED BOUZEKRI A0050 (03-11 t/m 07-11)", 1545.6],
+    ]);
   });
   it("haalt interne aantekeningen uit omschrijvingen", () => {
     expect(clientCostLabel("Vervoer (5 × € 15) — 36% naar rato van de uren — factuur 260048")).toBe("Vervoer (5 × € 15) — factuur 260048");

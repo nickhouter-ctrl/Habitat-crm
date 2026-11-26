@@ -25,8 +25,9 @@ export async function loadProjectFunding(projectId?:string, includeClosed = fals
     }>(sql`select p.id,p.name,p.labor_margin_pct "laborPct",p.purchase_margin_pct "purchasePct",
       coalesce((select sum(t.hours*t.hourly_cost_eur) from time_entries t where t.project_id=p.id
         and not(t.self_logged_at is not null and t.approved_at is null)),0)::text labor,
-      coalesce((select jsonb_agg(jsonb_build_object('date',t.date,'crew',coalesce(w.name,t.worker_name),'hours',t.hours,'cost',t.hours*t.hourly_cost_eur))
-        from time_entries t left join workers w on w.id=t.worker_id where t.project_id=p.id
+      coalesce((select jsonb_agg(jsonb_build_object('date',t.date,'crew',coalesce(w.name,t.worker_name),'hours',t.hours,'cost',t.hours*t.hourly_cost_eur,
+        'invoiceId',po.id,'invoiceDate',coalesce(po.order_date,po.created_at::date),'invoiceRef',po.reference,'supplier',po.supplier))
+        from time_entries t left join workers w on w.id=t.worker_id left join purchase_orders po on po.id=t.purchase_order_id where t.project_id=p.id
         and not(t.self_logged_at is not null and t.approved_at is null)),'[]'::jsonb) "laborEntries",
       coalesce((select jsonb_agg(jsonb_build_object('documentId',r.document_id,'advanceRequestId',r.advance_request_id,'amountEur',r.amount_eur,'method',r.method,'vatRate',r.vat_rate,
         'vatAmountEur',r.vat_amount_eur,'docSubtotal',d.subtotal_eur,'docTotal',d.total_eur,'date',r.date,'docNumber',d.doc_number))

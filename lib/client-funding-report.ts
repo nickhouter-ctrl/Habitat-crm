@@ -79,7 +79,7 @@ export function clientFundingReport(input: {
   if (work.length && work.reduce((sum, r) => sum + cents(r.amount), 0) !== cents(a.work)) {
     throw new Error("Work list does not reconcile with the project balance");
   }
-  const workKind = { labor: t("Arbeid (week)"), material: t("Bouwmaterialen"), other: t("Overige") };
+  const workKind = { labor: t("Arbeid (week)"), laborInvoice: t("Arbeid"), material: t("Bouwmaterialen"), other: t("Overige") };
   const workRows = work.map(r => [
     r.date ? dateFmt.format(new Date(`${r.date}T00:00:00Z`)) : "-",
     r.description,

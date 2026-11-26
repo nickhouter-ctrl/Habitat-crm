@@ -10,7 +10,11 @@ import { splitLooseCost, splitPurchaseCost } from "@/lib/project-cost-streams";
  * opslag in de PDF. Arbeid per week per ploeg. Pure functies — geen db.
  */
 
-export type WorkLaborEntry = { date: string; crew: string | null; hours: number | string; cost: number | string };
+export type WorkLaborEntry = {
+  date: string; crew: string | null; hours: number | string; cost: number | string;
+  /** Uren die uit een factuur van een onderaannemer komen: één regel per factuur. */
+  invoiceId?: string | null; invoiceDate?: string | null; invoiceRef?: string | null; supplier?: string | null;
+};
 type PurchaseIn = Parameters<typeof splitPurchaseCost>[0] & { date?: string | null; reference?: string | null };
 type CostIn = Parameters<typeof splitLooseCost>[0] & { date?: string | null };
 
@@ -19,7 +23,7 @@ export type ClientWorkRow = {
   date: string | null;
   /** Bij arbeid: laatste gewerkte dag van die week. */
   endDate?: string | null;
-  kind: "labor" | "material" | "other";
+  kind: "labor" | "laborInvoice" | "material" | "other";
   description: string;
   hours?: number;
   amount: number;
@@ -85,21 +89,25 @@ export function clientWorkRows(input: {
   purchaseRevenue: number;
   otherRevenue: number;
 }): ClientWorkRow[] {
-  // Arbeid: per week per ploeg.
-  const weeks = new Map<string, { date: string; endDate: string; crew: string; hours: number; cost: number }>();
+  // Arbeid: per factuur van de onderaannemer; losse uren per week per ploeg.
+  const fmt = (iso: string) => `${iso.slice(8, 10)}-${iso.slice(5, 7)}`;
+  const groups = new Map<string, { date: string; first: string; last: string; label: string; invoice: boolean; hours: number; cost: number }>();
   for (const e of input.labor) {
     const date = String(e.date).slice(0, 10);
-    const crew = crewLabel(e.crew);
-    const key = `${weekStart(date)}|${crew.toLowerCase()}`;
-    const w = weeks.get(key) ?? { date: weekStart(date), endDate: date, crew, hours: 0, cost: 0 };
-    w.hours += Number(e.hours) || 0;
-    w.cost += Number(e.cost) || 0;
-    if (date > w.endDate) w.endDate = date;
-    weeks.set(key, w);
+    const invoice = !!e.invoiceId;
+    const key = invoice ? `po|${e.invoiceId}` : `wk|${weekStart(date)}|${crewLabel(e.crew).toLowerCase()}`;
+    const label = invoice ? purchaseLabel({ supplier: e.supplier ?? e.crew ?? "", reference: e.invoiceRef ?? null } as PurchaseIn) : crewLabel(e.crew);
+    const g = groups.get(key) ?? { date: invoice ? String(e.invoiceDate ?? date).slice(0, 10) : weekStart(date), first: date, last: date, label, invoice, hours: 0, cost: 0 };
+    g.hours += Number(e.hours) || 0;
+    g.cost += Number(e.cost) || 0;
+    if (date < g.first) g.first = date;
+    if (date > g.last) g.last = date;
+    groups.set(key, g);
   }
-  const labor = allocate([...weeks.values()].filter(w => w.cost !== 0), input.laborRevenue).map(w => ({
-    date: w.date, endDate: w.endDate, kind: "labor" as const, hours: Math.round(w.hours * 100) / 100,
-    description: w.crew, amount: w.amount,
+  const labor = allocate([...groups.values()].filter(g => g.cost !== 0), input.laborRevenue).map(g => ({
+    date: g.invoice ? g.date : g.first, endDate: g.last, kind: (g.invoice ? "laborInvoice" : "labor") as ClientWorkRow["kind"], hours: Math.round(g.hours * 100) / 100,
+    description: `${g.label} (${g.first === g.last ? fmt(g.first) : `${fmt(g.first)} t/m ${fmt(g.last)}`})`,
+    amount: g.amount,
   }));
 
   // Materiaal en overige: per factuur/kostenpost, zelfde verdeling als de projectstand.
