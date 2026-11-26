@@ -320,6 +320,13 @@ const rows: [string, string, string][] = [
   ["Regels & bedragen", "Line items & amounts", "Líneas e importes"],
   ["Overzicht cijfers", "Key figures", "Cifras principales"],
   ["Alle kolommen", "All columns", "Todas las columnas"],
+  ["Ontvangen betalingen op datum", "Payments received by date", "Pagos recibidos por fecha"],
+  ["Ontvangen betalingen op datum (vervolg)", "Payments received by date (continued)", "Pagos recibidos por fecha (continuación)"],
+  ["Alle verwerkte betalingen van oud naar nieuw. Contante betalingen en losse voorschotten zijn zonder btw; deze worden bij de eindafrekening verrekend.", "All processed payments, oldest first. Cash payments and separate advances carry no VAT; they are settled on the final invoice.", "Todos los pagos registrados, del más antiguo al más reciente. Los pagos en efectivo y los anticipos sueltos no llevan IVA; se compensan en la liquidación final."],
+  ["Contante betaling", "Cash payment", "Pago en efectivo"],
+  ["Bankbetaling", "Bank transfer", "Transferencia bancaria"],
+  ["Incl. btw", "Incl. VAT", "IVA incl."],
+  ["Ex. btw", "Excl. VAT", "Sin IVA"],
   ["Berichten en taken voor collega’s", "Messages and tasks for colleagues", "Mensajes y tareas para compañeros"],
 ];
 

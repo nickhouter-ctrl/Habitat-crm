@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { clientFundingAmounts, clientFundingReport } from "../client-funding-report";
+import { clientFundingAmounts, clientFundingPayments, clientFundingReport } from "../client-funding-report";
 import { deriveAdvanceCover, deriveProjectMargins } from "../project-financials";
 
 describe("customer advance statement", () => {
@@ -11,7 +11,7 @@ describe("customer advance statement", () => {
   }
   it("reconciles to the CRM balance, including the client price of work, and only exposes client amounts", () => {
     const { amounts, cover } = fixture();
-    expect(amounts).toEqual({ received: 10000, products: 3000, work: 7475, remaining: -475, labor: 4600, materials: 2300, other: 575 });
+    expect(amounts).toEqual({ received: 10000, products: 3000, work: 7475, advanceCredit: 0, advanceCreditDescription: null, remaining: -475, labor: 4600, materials: 2300, other: 575 });
     expect(amounts.received - amounts.products - amounts.work).toBe(cover.saldo);
     expect(amounts.labor + amounts.materials + amounts.other).toBe(amounts.work);
   });
@@ -30,5 +30,21 @@ describe("customer advance statement", () => {
     expect(amounts.remaining).toBe(balance);
     expect(report.kpis[2].label).toBe(balance < 0 ? "Nog aan te vullen" : "Resterend voorschot");
     expect(report.kpis[2].value).not.toContain("-");
+  });
+
+  it("lists every payment by date and reconciles the total to the balance", () => {
+    const { amounts } = fixture();
+    const payments = clientFundingPayments([
+      { method: "cash", amountEur: "4000", date: "2026-04-18" },
+      { method: "invoice", amountEur: "7260", vatAmountEur: "1260", date: "2026-01-16", docNumber: "F260009" },
+    ]);
+    expect(payments.map(p => [p.date, p.net, p.vat])).toEqual([["2026-01-16", 6000, 1260], ["2026-04-18", 4000, 0]]);
+    const report = clientFundingReport({ projectName: "T", clientName: null, generatedAt: new Date(), locale: "nl", amounts, payments });
+    const table = report.tables[1];
+    expect(table.title).toBe("Ontvangen betalingen op datum");
+    expect(table.rows.map(r => r[0] || r[1])).toEqual(["16-01-2026", "18-04-2026", "Totaal ontvangen"]);
+    expect(table.rows.slice(0, 2).map(r => r[1])).toEqual(["Factuur F260009", "Contante betaling"]);
+    expect(table.rows.at(-1)?.slice(2)).toEqual(["€\u00a011.260,00", "€\u00a01.260,00", "€\u00a010.000,00"]);
+    expect(() => clientFundingReport({ projectName: "T", clientName: null, generatedAt: new Date(), locale: "nl", amounts, payments: payments.slice(1) })).toThrow();
   });
 });
