@@ -4,7 +4,7 @@ import type {WorkerInvoice} from "../worker-week";
 const invoice:WorkerInvoice={legalName:"Test Supplier",taxId:"B12345678",address:"Calle Test 1, Alicante, Spain",email:"test@example.invalid",iban:"ES91 2100 0418 4502 0005 1332",accountHolder:"Example SL",number:"OWN/15",date:"2026-11-08",vatRate:21,withholdingRate:15,taxNote:"",confirmed:true,customer:{name:"Habitat",taxId:"B00000000",address:"Customer address"},hours:16,rate:28,subtotal:448,vat:94.08,withholding:67.2,total:474.88,language:"es",projectName:"Test project",weekStart:"2026-11-02"};
 const io=():DeliveryIO=>({find:vi.fn(async()=>null),prepare:vi.fn(async()=>({})),posting:vi.fn(async()=>{}),create:vi.fn(async()=>"remote"),remember:vi.fn(async()=>{}),verify:vi.fn(async()=>{})});
 it("sends supplier identity, own numbering, project, VAT and retention independently",()=>{
- const body=workerPurchaseBody("sheet",invoice,"supplier");expect(body.contactId).toBe("supplier");expect(body.docNumber).toBe("OWN/15");expect(body.invoiceNum).toBe("OWN/15");expect(body.items[0].taxes).toEqual(["p_iva_21","p_ret_15"]);expect(body.notes).toContain("B12345678");expect(body.desc).toBe("Test project 02/11/2026 - 07/11/2026");expect(body.items[0].desc).toBe("Periodo 02/11/2026 - 07/11/2026 · 16 horas");
+ const body=workerPurchaseBody("sheet",invoice,"supplier");expect(body.contactId).toBe("supplier");expect(body.docNumber).toBe("OWN/15");expect(body.invoiceNum).toBe("OWN/15");expect(body.items[0].taxes).toEqual(["p_iva_21","p_ret_15"]);expect(body.notes).toContain("B12345678");expect(body.desc).toBe("Test project 02/11/2026 - 08/11/2026");
  expect(supplierMatches({id:"s",name:invoice.legalName,code:"OTHER"},invoice)).toBe(false);expect(supplierMatches({id:"s",code:"B-12345678"},invoice)).toBe(true);
  expect(()=>workerPurchaseBody("sheet",{...invoice,total:999},"supplier")).toThrow();
 });
@@ -33,4 +33,12 @@ it("books a fixed-price invoice without hours as one line with its description (
 it("explains a missing Holded project instead of a generic error, and never posts",async()=>{
  const x=io();vi.mocked(x.prepare).mockRejectedValueOnce(new PrepareError("Project niet gekoppeld"));
  expect(await deliverWorkerPurchase(x,null,false)).toEqual({status:"error",error:"Project niet gekoppeld"});expect(x.create).not.toHaveBeenCalled();
+});
+
+it("shows the worked period from the first to the last worked day (Nick 25-11)",()=>{
+ const day=(date:string,hours:number)=>({date,state:hours?"work" as const:"off" as const,crews:hours?[{people:1,names:"A",hours,description:"x",zone:""}]:[],note:""});
+ const days=[day("2026-11-02",8),day("2026-11-03",8),day("2026-11-07",0),day("2026-11-06",8)];
+ const body=workerPurchaseBody("sheet",invoice,"supplier",undefined,days);
+ expect(body.desc).toBe("Test project 02/11/2026 - 06/11/2026");
+ expect(body.items[0].desc).toBe("Periodo 02/11/2026 - 06/11/2026 · 16 horas");
 });

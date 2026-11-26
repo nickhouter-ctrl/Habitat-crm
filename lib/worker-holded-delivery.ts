@@ -1,4 +1,4 @@
-import { invoiceAmounts, supplierInvoiceSchema, type WorkerInvoice } from "./worker-week";
+import { invoiceAmounts, supplierInvoiceSchema, type WeekDay, type WorkerInvoice } from "./worker-week";
 import type { HoldedDocument, HoldedContact } from "./holded/types";
 export const workerInvoiceTag=(id:string)=>`crm-worker-${id}`;
 const normal=(s:string|undefined)=>s?.replace(/[^a-z0-9]/gi,"").toUpperCase()??"";
@@ -17,15 +17,20 @@ export class PrepareError extends Error {}
 const isLump=(invoice:WorkerInvoice)=>!!invoice.concept;
 
 /**
- * De hele gewerkte week, zoals ze het in Holded willen zien: "16/11/2026 - 21/11/2026"
- * (maandag t/m zaterdag). Eerst stond alleen de maandag erin (Nick, 25-11-2026).
+ * De gewerkte periode, zoals ze het in Holded willen zien: "16/11/2026 - 21/11/2026".
+ * Van de eerste t/m de laatste dag waarop gewerkt is op de weekstaat — niet elke
+ * werker begint op maandag (Abdelmjid: zaterdag). Zonder dagen: de hele week.
+ * Eerst stond alleen de begindatum erin (Nick, 25-11-2026).
  */
-export function weekPeriod(weekStart:string){
-  const d=(offset:number)=>{const t=new Date(`${weekStart}T12:00:00Z`);t.setUTCDate(t.getUTCDate()+offset);return `${String(t.getUTCDate()).padStart(2,"0")}/${String(t.getUTCMonth()+1).padStart(2,"0")}/${t.getUTCFullYear()}`;};
-  return `${d(0)} - ${d(5)}`;
+export function weekPeriod(weekStart:string,days?:WeekDay[]){
+  const fmt=(iso:string)=>`${iso.slice(8,10)}/${iso.slice(5,7)}/${iso.slice(0,4)}`;
+  const worked=(days??[]).filter(d=>d.state==="work"&&d.crews.some(c=>c.hours>0)).map(d=>d.date).sort();
+  if(worked.length)return `${fmt(worked[0])} - ${fmt(worked[worked.length-1])}`;
+  const end=new Date(`${weekStart}T12:00:00Z`);end.setUTCDate(end.getUTCDate()+6);
+  return `${fmt(weekStart)} - ${fmt(end.toISOString().slice(0,10))}`;
 }
 
-export function workerPurchaseBody(id:string,invoice:WorkerInvoice,contact:string,booking?:WorkerBooking) {
+export function workerPurchaseBody(id:string,invoice:WorkerInvoice,contact:string,booking?:WorkerBooking,days?:WeekDay[]) {
   supplierInvoiceSchema.parse(invoice);
   const extras=isLump(invoice)?[]:invoice.extras??[];
   const laborUnits=isLump(invoice)?1:invoice.hours;
@@ -35,7 +40,7 @@ export function workerPurchaseBody(id:string,invoice:WorkerInvoice,contact:strin
   const project=booking?{projectid:booking.projectId}:{};
   const main={
     name:isLump(invoice)?invoice.projectName:`Trabajo · ${invoice.projectName}`,
-    desc:isLump(invoice)?invoice.concept!:`Periodo ${weekPeriod(invoice.weekStart)} · ${invoice.hours} horas`,
+    desc:isLump(invoice)?invoice.concept!:`Periodo ${weekPeriod(invoice.weekStart,days)} · ${invoice.hours} horas`,
     // Aanmaken: `subtotal` is de stuksprijs ex btw, `tax` het btw-percentage (uitlezen heet het `price`).
     units:laborUnits,subtotal:laborPrice,tax:invoice.vatRate,
     taxes:booking?[booking.main.vat,...(booking.main.retention?[booking.main.retention]:[])]:[`p_iva_${invoice.vatRate}`,...(invoice.withholdingRate?[`p_ret_${invoice.withholdingRate}`]:[])],
@@ -50,7 +55,7 @@ export function workerPurchaseBody(id:string,invoice:WorkerInvoice,contact:strin
   // Bij aanmaken heet het nummer `invoiceNum` en de regels `items` (uitlezen: docNumber/products).
   // Een nieuw document is in Holded standaard een concept: daar nog goedkeuren (Nick, 11-11-2026).
   return {contactId:contact,invoiceNum:invoice.number,docNumber:invoice.number,date:Math.floor(Date.parse(invoice.date)/1000),currency:"eur",
-    desc:isLump(invoice)?`${invoice.projectName} · ${invoice.weekStart}`:`${invoice.projectName} ${weekPeriod(invoice.weekStart)}`,tags:[workerInvoiceTag(id)],
+    desc:isLump(invoice)?`${invoice.projectName} · ${invoice.weekStart}`:`${invoice.projectName} ${weekPeriod(invoice.weekStart,days)}`,tags:[workerInvoiceTag(id)],
     notes:`${workerInvoiceTag(id)}\nLeverancier: ${invoice.legalName} · NIF/CIF: ${invoice.taxId}\n${invoice.address}${invoice.email?`\n${invoice.email}`:""}\nIBAN: ${invoice.iban||"—"}${invoice.accountHolder?` · titular ${invoice.accountHolder}`:""}\nProject: ${invoice.projectName}\n${invoice.taxNote}`,
     items:[main,...extraLines],
   };
