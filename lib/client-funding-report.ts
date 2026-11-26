@@ -4,6 +4,7 @@ import type { ReportPdfInput, ReportTable } from "@/lib/report-pdf";
 import { formatEUR } from "@/lib/utils";
 import type { ClientFundingProduct } from "./client-funding-products";
 import { receiptExVat, type ReceiptLike } from "./receipts";
+import type { ClientWorkRow } from "./client-funding-work";
 
 export type ClientPaymentLike = ReceiptLike & { date?: string | null; docNumber?: string | null };
 export type ClientFundingPayment = { date: string | null; documentNumber: string | null; method: string; gross: number; vat: number; net: number };
@@ -45,6 +46,7 @@ export function clientFundingReport(input: {
   amounts: ReturnType<typeof clientFundingAmounts>;
   products?: ClientFundingProduct[];
   payments?: ClientFundingPayment[];
+  work?: ClientWorkRow[];
 }): ReportPdfInput {
   const { amounts: a, locale } = input;
   const t = maakT(locale);
@@ -70,6 +72,27 @@ export function clientFundingReport(input: {
       columns: [{ header: t("Datum"), flex: 1.2 }, { header: t("Omschrijving"), flex: 2.6 }, { header: t("Incl. btw"), flex: 1.3, align: "right" },
         { header: t("Btw"), flex: 1.1, align: "right" }, { header: t("Ex. btw"), flex: 1.3, align: "right" }],
       rows: [...rows, ...(last ? [[t("Totaal ontvangen"), "", formatEUR(totalGross), formatEUR((cents(totalGross) - cents(a.received)) / 100), formatEUR(a.received)]] : [])],
+      emphasizeRow: row => last && row === rows.length,
+    };
+  });
+  const work = input.work ?? [];
+  if (work.length && work.reduce((sum, r) => sum + cents(r.amount), 0) !== cents(a.work)) {
+    throw new Error("Work list does not reconcile with the project balance");
+  }
+  const workKind = { labor: t("Arbeid (week)"), material: t("Bouwmaterialen"), other: t("Overige") };
+  const workRows = work.map(r => [
+    r.date ? dateFmt.format(new Date(`${r.date}T00:00:00Z`)) : "-",
+    r.description,
+    workKind[r.kind], formatEUR(r.amount),
+  ]);
+  const workTables: ReportTable[] = Array.from({ length: Math.ceil(workRows.length / 25) }, (_, i) => {
+    const rows = workRows.slice(i * 25, (i + 1) * 25);
+    const last = (i + 1) * 25 >= workRows.length;
+    return {
+      title: t(i === 0 ? "Afgeboekt werk per factuur en week" : "Afgeboekt werk per factuur en week (vervolg)"),
+      subtitle: i === 0 ? t("Alle facturen en gewerkte weken van oud naar nieuw, ex. btw, zoals afgeboekt op uw project. Arbeid staat per week per ploeg.") : undefined,
+      columns: [{ header: t("Datum"), flex: 1.1 }, { header: t("Omschrijving"), flex: 4 }, { header: t("Soort"), flex: 1.4 }, { header: t("Bedrag"), flex: 1.3, align: "right" }],
+      rows: [...rows, ...(last ? [["", t("Totaal afgeboekt werk"), "", formatEUR(a.work)]] : [])],
       emphasizeRow: row => last && row === rows.length,
     };
   });
@@ -153,6 +176,7 @@ export function clientFundingReport(input: {
         ],
         emphasizeRow: i => i === 3,
       },
+      ...workTables,
       {
         title: t("Toelichting"),
         columns: [{ header: "", flex: 1 }],
