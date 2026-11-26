@@ -1,0 +1,1 @@
+ALTER TABLE "time_entries" ADD COLUMN "actual_hourly_cost_eur" numeric(12, 6);

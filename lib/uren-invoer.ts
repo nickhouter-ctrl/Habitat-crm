@@ -28,6 +28,8 @@ export const timeEntryUpdateSchema = z.object({
   date: z.string().trim().optional(),
   hours: z.string().trim().min(1, "Uren zijn verplicht"),
   hourlyCostEur: z.string().trim().min(1, "Tarief is verplicht"),
+  /** Werkelijk betaald per uur (intern). Leeg = gelijk aan het tarief. */
+  actualHourlyCostEur: z.string().trim().optional(),
   paymentMethod: z.enum(["cash", "invoice"]).optional(),
   note: z.string().trim().optional(),
 });

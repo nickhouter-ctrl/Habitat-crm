@@ -270,12 +270,24 @@ export async function updateTimeEntry(projectId: string, entryId: string, formDa
       date: dateOrNull(d.date) ?? undefined,
       hours: String(uren),
       hourlyCostEur: tarief,
+      // Alleen bewaren als het echt afwijkt — anders blijft het leeg (= gelijk).
+      // Ontbreekt het veld in het formulier, dan niet aanraken.
+      ...(d.actualHourlyCostEur === undefined
+        ? {}
+        : { actualHourlyCostEur: werkelijkTarief(d.actualHourlyCostEur, tarief) }),
       paymentMethod: d.paymentMethod ?? undefined,
       note: d.note?.trim() ? d.note : null,
       updatedAt: new Date(),
     })
     .where(and(eq(timeEntries.id, entryId), eq(timeEntries.projectId, projectId), isNull(timeEntries.weekSheetId)));
   revalidatePath(`/projects/${projectId}`);
+}
+
+/** Leeg of gelijk aan het doorberekende tarief → null (geen apart werkelijk tarief). */
+function werkelijkTarief(invoer: string, tarief: string): string | null {
+  const v = moneyOrNull(invoer);
+  if (v == null) return null;
+  return Math.abs(Number(v) - Number(tarief)) < 0.000001 ? null : v;
 }
 
 export async function deleteTimeEntry(projectId: string, entryId: string) {
