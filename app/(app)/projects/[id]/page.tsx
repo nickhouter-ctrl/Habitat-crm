@@ -69,7 +69,7 @@ import { isOwnProductLine, ownProductGroup, lineNet, docProductMargin, lineCostE
 import { deliveryTotals } from "@/lib/project-delivery";
 import { gecrediteerdeParen } from "@/lib/credit-pairs";
 import { poExVat, poExVatAmount, poExVatAssumingSpanishVat } from "@/lib/purchase-orders";
-import { DEFAULT_LABOR_MARGIN_PCT, DEFAULT_PURCHASE_MARGIN_PCT, deriveAdvanceCover, deriveProjectMargins } from "@/lib/project-financials";
+import { DEFAULT_LABOR_MARGIN_PCT, DEFAULT_PURCHASE_MARGIN_PCT, deriveAdvanceCover, deriveProjectMargins, projectWorkProfit } from "@/lib/project-financials";
 import { defaultReceiptVatRate, receiptExVat as exBtwVanOntvangst, splitReceipt, splitProjectReceipts } from "@/lib/receipts";
 import { moneyForInput } from "@/lib/parse-money";
 import { formatEUR } from "@/lib/utils";
@@ -484,6 +484,16 @@ export default async function ProjectDetailPage({
   const pendingHours = pendingTimeRows.reduce((s, t) => s + Number(t.hours ?? 0), 0);
   const laborHours = approvedTimeRows.reduce((s, t) => s + Number(t.hours ?? 0), 0);
   const laborCost = approvedTimeRows.reduce((s, t) => s + Number(t.hours ?? 0) * Number(t.hourlyCostEur ?? 0), 0);
+  // Intern: wat we de jongens ÉCHT betalen. Contante uren gaan soms tegen € 28
+  // naar de klant terwijl we € 20 betalen; het verschil is extra winst voor ons
+  // en mag nergens in het voorschot of het klantoverzicht opduiken.
+  const werkelijkUurtarief = (t: (typeof timeRows)[number]) =>
+    t.actualHourlyCostEur != null ? Number(t.actualHourlyCostEur) : Number(t.hourlyCostEur ?? 0);
+  const laborCostActual = approvedTimeRows.reduce((s, t) => s + Number(t.hours ?? 0) * werkelijkUurtarief(t), 0);
+  const laborRateGain = Math.round((laborCost - laborCostActual) * 100) / 100;
+  const laborRateGainHours = approvedTimeRows
+    .filter((t) => t.actualHourlyCostEur != null)
+    .reduce((s, t) => s + Number(t.hours ?? 0), 0);
   // Als uren gekoppelde inkooporders tellen NIET als materiaal (ze zitten al als
   // arbeidskost in de uren via een uren-regel) — anders dubbel.
   const materialPOs = linkedPOs.filter((p) => !p.countAsLabor);
@@ -737,6 +747,88 @@ export default async function ProjectDetailPage({
   });
   const ownProductRevenue = projectFunding?.own.totalRevenue ?? margins.productRevenue + margins.uncostedProductRevenue;
 
+  /* ── Eigen kosten: wat zijn WIJ echt kwijt? ──────────────────────────────
+     Alles hierboven (voorschot, brutowinst, klantoverzicht) rekent met het
+     doorberekende uurtarief. Hier staat wat er werkelijk de deur uit ging:
+     uren tegen wat de arbeider echt kreeg, plus inkoop en eigen producten
+     tegen kostprijs. Alleen voor intern gebruik. */
+  const ownCostLabor = Math.round(laborCostActual * 100) / 100;
+  const ownCostOther = Math.round((realizedCost - laborCost - ownProductCostRealized) * 100) / 100;
+  const ownCostProducts = Math.round(ownProductCostRealized * 100) / 100;
+  const ownCostTotal = Math.round((ownCostLabor + ownCostOther + ownCostProducts) * 100) / 100;
+  const ownCashPosition = Math.round((receivedTotalEx - ownCostTotal) * 100) / 100;
+  const bookedGrossProfit = Math.round((projectWorkProfit(cover) + margins.productMargin) * 100) / 100;
+  const realGrossProfit = Math.round((bookedGrossProfit + laborRateGain) * 100) / 100;
+  const realExpectedResult = Math.round((targetRevenue - ownCostTotal) * 100) / 100;
+  const eigenKostenCard = (
+    <Card id="eigen-kosten" data-own-costs className="mb-5 scroll-mt-24">
+      <CardHeader>
+        <CardTitle>{uiT("Eigen kosten — wat zijn wij echt kwijt?")}</CardTitle>
+        <span className="text-xs text-muted">{uiT("intern · niet zichtbaar voor de klant · alle bedragen ex. btw")}</span>
+      </CardHeader>
+      <CardContent>
+        <div className="grid gap-5 lg:grid-cols-2">
+          <dl className="space-y-2 text-sm">
+            <div className="flex justify-between gap-2">
+              <dt>
+                {uiT("Uren — werkelijk betaald")}
+                <span className="block text-xs text-muted">
+                  {uiT("{v0} uur", { v0: laborHours.toLocaleString(uiDateLocale) })}
+                  {laborRateGain !== 0 ? ` · ${uiT("doorberekend als {v0}", { v0: formatEUR(laborCost) })}` : ""}
+                </span>
+              </dt>
+              <dd className="tabular-nums">{formatEUR(ownCostLabor)}</dd>
+            </div>
+            <div className="flex justify-between gap-2">
+              <dt>{uiT("Bouwmaterialen, inkoop derden en overige kosten")}</dt>
+              <dd className="tabular-nums">{formatEUR(ownCostOther)}</dd>
+            </div>
+            <div className="flex justify-between gap-2">
+              <dt>{uiT("Kostprijs eigen producten")}</dt>
+              <dd className="tabular-nums">{formatEUR(ownCostProducts)}</dd>
+            </div>
+            <div className="flex justify-between gap-2 border-t pt-2 font-semibold">
+              <dt>{uiT("Totaal echt kwijt")}</dt>
+              <dd data-own-cost-total data-amount={ownCostTotal} className="tabular-nums">{formatEUR(ownCostTotal)}</dd>
+            </div>
+          </dl>
+          <dl className="space-y-2 text-sm">
+            <div className="flex justify-between gap-2">
+              <dt>{uiT("Ontvangen van de klant")}</dt>
+              <dd className="tabular-nums">{formatEUR(receivedTotalEx)}</dd>
+            </div>
+            <div className="flex justify-between gap-2">
+              <dt>{uiT("Ontvangen min echt kwijt")}<span className="block text-xs text-muted">{uiT("wat er nu netto in de kas zit voor dit project")}</span></dt>
+              <dd className={`tabular-nums font-medium ${ownCashPosition < 0 ? "text-danger" : "text-success"}`}>{formatEUR(ownCashPosition)}</dd>
+            </div>
+            <div className="flex justify-between gap-2 border-t pt-2">
+              <dt>{uiT("Brutowinst volgens projectstand")}</dt>
+              <dd className="tabular-nums">{formatEUR(bookedGrossProfit)}</dd>
+            </div>
+            <div className="flex justify-between gap-2">
+              <dt>
+                {uiT("+ verschil doorberekend en betaald uurtarief")}
+                {laborRateGainHours > 0 && <span className="block text-xs text-muted">{uiT("over {v0} uur met een lager werkelijk tarief", { v0: laborRateGainHours.toLocaleString(uiDateLocale) })}</span>}
+              </dt>
+              <dd className="tabular-nums">{formatEUR(laborRateGain)}</dd>
+            </div>
+            <div className="flex justify-between gap-2 font-semibold">
+              <dt>{uiT("Echte brutowinst tot nu toe")}</dt>
+              <dd data-real-gross-profit data-amount={realGrossProfit} className={`tabular-nums ${realGrossProfit < 0 ? "text-danger" : "text-success"}`}>{formatEUR(realGrossProfit)}</dd>
+            </div>
+            {!targetIsImplicit && (
+              <div className="flex justify-between gap-2 text-muted">
+                <dt>{uiT("Verwacht resultaat op echte kosten")}<span className="block text-xs">{uiT("{v0} min echt kwijt", { v0: contractPrice != null ? uiT("aanneemprijs") : uiT("doel") })}</span></dt>
+                <dd className="tabular-nums">{formatEUR(realExpectedResult)}</dd>
+              </div>
+            )}
+          </dl>
+        </div>
+        <p className="mt-4 text-xs leading-relaxed text-muted">{uiT("Uren tellen hier tegen wat de arbeider echt kreeg. Staat bij een urenregel geen 'werkelijk betaald', dan geldt het gewone tarief. Algemene bedrijfskosten zijn niet afgetrokken.")}</p>
+      </CardContent>
+    </Card>
+  );
+
   const PAY_LABEL = { cash: "Contant", invoice: "Per factuur" } as const;
   const RECEIVED_METHOD_LABEL: Record<string, string> = {
     cash: "Contant",
@@ -783,6 +875,7 @@ export default async function ProjectDetailPage({
     rate: Number(w.hourlyCostEur ?? 0),
     hourlyCostEur: w.hourlyCostEur != null ? Number(w.hourlyCostEur) : null,
     hourlyCostCashEur: w.hourlyCostCashEur != null ? Number(w.hourlyCostCashEur) : null,
+    defaultPaymentMethod: w.defaultPaymentMethod,
   }));
 
   const contactOptions: ComboOption[] = contactOpts.map((c) => ({ value: c.id, label: c.name }));
@@ -1103,6 +1196,7 @@ export default async function ProjectDetailPage({
         <TabPanel id="overzicht" className="order-3">
       <p className="mb-3 text-xs text-muted">{uiT("Klik op een financieel blok voor de berekening en onderliggende boekingen.")}</p>
       <ProjectSnapshot id={id} cover={cover} ownProducts={margins} ownProductSales={ownProductRevenue} progress={progress} status={project.status} requestedOpen={openAdvanceRequests.reduce((sum,r)=>sum+r.open,0)} outstandingInvoices={openOutstanding} startDate={project.startDate} endDate={project.endDate}/>
+      <div className="mt-5">{eigenKostenCard}</div>
 
       {/* ─────────────── Resultaat (P&L) ─────────────── */}
       </TabPanel><TabPanel id="resultaat" className="order-3"><div className="order-1 mb-6 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
@@ -1800,6 +1894,11 @@ export default async function ProjectDetailPage({
                                       werd bij opslaan 3,8 miljard. Zie lib/parse-money.ts. */}
                                   <Input name="hourlyCostEur" defaultValue={moneyForInput(t.hourlyCostEur)} inputMode="decimal" className="w-24 text-right tabular-nums" />
                                 </Field>
+                                {/* Intern: tarief hierboven gaat naar de klant (+ opslag),
+                                    dit is wat de arbeider echt krijgt. Leeg = gelijk. */}
+                                <Field label={uiT("Werkelijk betaald (€/u)")}>
+                                  <Input name="actualHourlyCostEur" defaultValue={t.actualHourlyCostEur != null ? moneyForInput(t.actualHourlyCostEur) : ""} placeholder={uiT("= tarief")} inputMode="decimal" className="w-24 text-right tabular-nums" />
+                                </Field>
                                 {/* Betaalwijze hoort hier te staan: zonder dit veld kon je
                                     een regel niet van contant naar per factuur zetten. */}
                                 <Field label={uiT("Betaald")}>
@@ -1811,7 +1910,7 @@ export default async function ProjectDetailPage({
                                 <SubmitButton size="sm" variant="secondary" pendingLabel="…">{uiT("Opslaan")}</SubmitButton>
                                 <Link href={`/projects/${id}#uren`} className="px-2 py-2 text-xs text-muted hover:underline">
                                   {uiT("Annuleer")} </Link>
-                                <p className="w-full text-xs text-muted">{uiT("Kosten = uren × tarief — wordt na opslaan herberekend.")}</p>
+                                <p className="w-full text-xs text-muted">{uiT("Kosten = uren × tarief — wordt na opslaan herberekend.")} {uiT("Betaal je de arbeider minder dan het tarief (bv. contant € 20 terwijl de klant € 28 ziet), vul dan 'werkelijk betaald' in: dat telt alleen mee in Eigen kosten.")}</p>
                               </form>
                             </Td>
                           </Tr>
@@ -1832,7 +1931,12 @@ export default async function ProjectDetailPage({
                             {t.note ? <span className="block text-xs text-muted">{t.note}</span> : null}
                           </Td>
                           <Td className="text-right tabular-nums">{Number(t.hours).toLocaleString(uiDateLocale)}</Td>
-                          <Td className="text-right tabular-nums text-muted">{formatEUR(t.hourlyCostEur)}</Td>
+                          <Td className="text-right tabular-nums text-muted">
+                            {formatEUR(t.hourlyCostEur)}
+                            {t.actualHourlyCostEur != null && (
+                              <span className="block text-xs" title={uiT("Wat de arbeider echt krijgt — alleen in Eigen kosten")}>{uiT("werkelijk {v0}", { v0: formatEUR(t.actualHourlyCostEur) })}</span>
+                            )}
+                          </Td>
                           <Td className="text-right tabular-nums font-medium">{formatEUR(Number(t.hours) * Number(t.hourlyCostEur))}</Td>
                           <Td className="text-right whitespace-nowrap">
                             <div className="flex items-center justify-end gap-1">

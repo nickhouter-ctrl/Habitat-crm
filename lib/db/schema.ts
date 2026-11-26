@@ -1578,6 +1578,14 @@ export const timeEntries = pgTable(
     hours: numeric({ precision: 6, scale: 2 }).notNull(),
     /** Tarief-snapshot op het moment van invoeren. */
     hourlyCostEur: numeric({ precision: 12, scale: 6 }).notNull().default("0"),
+    /**
+     * Wat we de arbeider ÉCHT per uur betalen, als dat afwijkt van
+     * {@link hourlyCostEur}. Contante uren rekenen we de klant door tegen bv.
+     * € 28 terwijl Imad € 20 contant krijgt: `hourlyCostEur` blijft dan het
+     * doorberekende tarief (voorschot, klantoverzicht, opslag), dit veld voedt
+     * alleen het interne overzicht "wat zijn we zelf kwijt". Leeg = gelijk.
+     */
+    actualHourlyCostEur: numeric({ precision: 12, scale: 6 }),
     paymentMethod: paymentMethod().notNull().default("cash"),
     /** Gezet zodra afgerekend (contant betaald / factuur voldaan). */
     paidAt: timestamp({ withTimezone: true }),

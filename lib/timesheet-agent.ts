@@ -3,7 +3,7 @@ import { and, eq, ne } from "drizzle-orm";
 
 import { db } from "@/lib/db";
 import { activities, projectAliases, projects, purchaseInvoiceReviews, timeEntries, workers } from "@/lib/db/schema";
-import { workerRate } from "@/lib/worker-rate";
+import { timeEntryRates } from "@/lib/worker-rate";
 
 type SheetRow = { workerHint?: string | null; date?: string | null; projectHint?: string | null; hours?: number | null; note?: string | null; warning?: string | null };
 const normalize = (value: string) => value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]/g, "");
@@ -28,7 +28,7 @@ export async function autoApproveTimesheet(reviewId: string): Promise<boolean> {
       projectMatches.set(normalize(a.label), found);
     }
 
-    const entries: { projectId: string; workerId: string; workerName: string; date: string; hours: string; hourlyCostEur: string; paymentMethod: "cash" | "invoice"; approvedAt: Date; note: string | null }[] = [];
+    const entries: { projectId: string; workerId: string; workerName: string; date: string; hours: string; hourlyCostEur: string; actualHourlyCostEur: string | null; paymentMethod: "cash" | "invoice"; approvedAt: Date; note: string | null }[] = [];
     const duplicateKeys = new Set<string>();
     for (const row of sheet.rows) {
       if (row.warning || !row.workerHint || !row.date || !row.projectHint || row.hours == null || !Number.isFinite(row.hours) || row.hours <= 0 || row.hours > 24) return false;
@@ -38,8 +38,8 @@ export async function autoApproveTimesheet(reviewId: string): Promise<boolean> {
       if (workerCandidates.length !== 1 || !projectIds || projectIds.size !== 1) return false;
       const worker = workerCandidates[0];
       const projectId = [...projectIds][0];
-      const rate = workerRate(worker, worker.defaultPaymentMethod);
-      if (rate == null) return false;
+      const rates = timeEntryRates(worker, worker.defaultPaymentMethod);
+      if (rates == null) return false;
       const key = `${worker.id}:${projectId}:${row.date}`;
       if (duplicateKeys.has(key)) return false;
       duplicateKeys.add(key);
@@ -47,7 +47,7 @@ export async function autoApproveTimesheet(reviewId: string): Promise<boolean> {
       if (existing.length) return false;
       entries.push({
         workerId: worker.id, workerName: worker.name, projectId, date: row.date,
-        hours: String(Math.round(row.hours * 100) / 100), hourlyCostEur: String(rate),
+        hours: String(Math.round(row.hours * 100) / 100), ...rates,
         paymentMethod: worker.defaultPaymentMethod, approvedAt: new Date(),
         note: [`Excel-urenstaat [urenstaat-email:${review.emailId}]`, row.note, `Excel-project: ${row.projectHint}`].filter(Boolean).join(" · "),
       });

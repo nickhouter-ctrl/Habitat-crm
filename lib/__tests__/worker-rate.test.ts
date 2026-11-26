@@ -26,3 +26,15 @@ describe("workerRate", () => {
     expect(workerRate(null, "cash")).toBeNull();
   });
 });
+
+import { timeEntryRates } from "@/lib/worker-rate";
+describe("timeEntryRates", () => {
+  it("contant: altijd € 28 doorberekend en € 20 werkelijk, ongeacht de ploegkaart", () => {
+    expect(timeEntryRates({ hourlyCostEur: "24", hourlyCostCashEur: "20" }, "cash")).toEqual({ hourlyCostEur: "28", actualHourlyCostEur: "20" });
+    expect(timeEntryRates(null, "cash")).toEqual({ hourlyCostEur: "28", actualHourlyCostEur: "20" });
+  });
+  it("per factuur: factuurtarief, geen apart werkelijk tarief", () => {
+    expect(timeEntryRates({ hourlyCostEur: "24", hourlyCostCashEur: "20" }, "invoice")).toEqual({ hourlyCostEur: "24", actualHourlyCostEur: null });
+    expect(timeEntryRates({ hourlyCostEur: null, hourlyCostCashEur: null }, "invoice")).toBeNull();
+  });
+});

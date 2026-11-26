@@ -18,7 +18,7 @@ import {
 } from "@/lib/purchase-invoice-intake";
 import { db } from "@/lib/db";
 import { activities, projects, purchaseInvoiceReviews, timeEntries, workers } from "@/lib/db/schema";
-import { workerRate } from "@/lib/worker-rate";
+import { timeEntryRates } from "@/lib/worker-rate";
 import { VerdelingFoutError } from "@/lib/verdeel-bedragen";
 
 /** Bedrag-string (NL-komma of punt) → number; leeg/ongeldig → null. */
@@ -70,10 +70,10 @@ export async function approveTimesheetReviewAction(reviewId: string, formData: F
       const [worker] = await tx.select().from(workers).where(and(eq(workers.id, workerId), eq(workers.active, true))).limit(1);
       const [project] = await tx.select({ id: projects.id }).from(projects).where(and(eq(projects.id, projectId), ne(projects.status, "archived"))).limit(1);
       if (!worker || !project) throw new Error(`Regel ${i + 1}: werknemer of project is niet meer actief.`);
-      const rate = workerRate(worker, worker.defaultPaymentMethod);
-      if (rate == null) throw new Error(`${worker.name} heeft geen uurtarief voor ${worker.defaultPaymentMethod === "cash" ? "contante betaling" : "factuur"}. Vul eerst het juiste tarief in bij de ploeg.`);
+      const rates = timeEntryRates(worker, worker.defaultPaymentMethod);
+      if (rates == null) throw new Error(`${worker.name} heeft geen uurtarief voor ${worker.defaultPaymentMethod === "cash" ? "contante betaling" : "factuur"}. Vul eerst het juiste tarief in bij de ploeg.`);
       const original = (fields.timesheet.rows[i] ?? {}) as { note?: string | null; projectHint?: string | null };
-      entries.push({ projectId, workerId, workerName: worker.name, date, hours: String(hours), hourlyCostEur: String(rate), paymentMethod: worker.defaultPaymentMethod, approvedAt: new Date(), note: [`Excel-urenstaat [urenstaat-email:${review.emailId}]`, original.note, original.projectHint ? `Excel-project: ${original.projectHint}` : null].filter(Boolean).join(" · ") });
+      entries.push({ projectId, workerId, workerName: worker.name, date, hours: String(hours), ...rates, paymentMethod: worker.defaultPaymentMethod, approvedAt: new Date(), note: [`Excel-urenstaat [urenstaat-email:${review.emailId}]`, original.note, original.projectHint ? `Excel-project: ${original.projectHint}` : null].filter(Boolean).join(" · ") });
     }
     await tx.insert(timeEntries).values(entries);
     await tx.update(purchaseInvoiceReviews).set({
