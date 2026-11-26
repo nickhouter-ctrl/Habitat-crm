@@ -1,4 +1,5 @@
 /** Shared helpers to populate pickers in the deal/property/document/product forms. */
+import { withProductStock } from "@/lib/size-stock";
 import { and, asc, desc, eq, sql } from "drizzle-orm";
 
 import { db } from "@/lib/db";
@@ -84,7 +85,7 @@ async function listActiveProducts(): Promise<ProductOption[]> {
       eq(products.isActive, true),
       sql`not (${products.category} in ('Binnendeuren', 'Buitendeuren') and coalesce(${products.sku}, '') not like '%-SET')`,
     ),
-    columns: { id: true, name: true, sku: true, category: true, collection: true, unit: true, priceEur: true, tradePriceEur: true, costEur: true, vatRate: true, additionalSizes: true },
+    columns: { id: true, name: true, sku: true, category: true, collection: true, unit: true, priceEur: true, tradePriceEur: true, costEur: true, vatRate: true, additionalSizes: true, stockQty: true, widthMm: true, heightMm: true },
     orderBy: [asc(products.category), asc(products.name)],
     limit: 2000,
   });
@@ -97,17 +98,18 @@ async function listActiveProducts(): Promise<ProductOption[]> {
   // die volle jsonb zitten ook leveranciersprijzen en andere velden die deze
   // interne kiezer niet nodig heeft. Alleen de landed kostprijs gaat mee voor
   // de margecontrole, net als de kostprijs van het hoofdproduct.
-  return rijen.map((p) => ({
+  return rijen.map(({ stockQty, widthMm, heightMm, ...p }) => ({
     ...p,
-    additionalSizes:
-      p.additionalSizes?.map((m) => ({
+    additionalSizes: p.additionalSizes
+      ? withProductStock(p.additionalSizes.map((m) => ({
         sku: m.sku,
         label: m.label,
         priceEur: m.priceEur ?? null,
         costEur: m.costEur ?? null,
         inStock: m.inStock,
         stockQty: m.stockQty ?? null,
-      })) ?? null,
+      })), { stockQty, widthMm, heightMm })
+      : null,
   }));
 }
 

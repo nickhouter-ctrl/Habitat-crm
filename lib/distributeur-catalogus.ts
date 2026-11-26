@@ -1,3 +1,4 @@
+import { withProductStock } from "@/lib/size-stock";
 import { distributeurPrijzen, type Distributeurprijs, type PrijsOpties } from "@/lib/distributeur-prijzen";
 
 export type Kostenbron = "maat" | "basis" | "conservatief" | "raming" | "ontbreekt";
@@ -34,7 +35,7 @@ export function catalogusItems(rows: CatalogusPaneel[], opties: PrijsOpties = {}
   return rows.flatMap(r => {
     const basisArea = positief(r.widthMm) && positief(r.heightMm) ? Number(r.widthMm) * Number(r.heightMm) / 1_000_000 : oppervlak(r.description);
     const basisPrijs = positief(r.price), basisKost = positief(r.cost);
-    const matenBron = r.additionalSizes?.filter(a => a.label) ?? [];
+    const matenBron = withProductStock(r.additionalSizes?.filter(a => a.label) ?? [], r);
     const maten = (matenBron.length ? matenBron : [{ sku: r.sku ?? undefined,
       label: basisArea && positief(r.widthMm) && positief(r.heightMm) ? `${Number(r.widthMm)}*${Number(r.heightMm)}` : r.description?.match(/(\d{2,4})\s*[*x×]\s*(\d{2,4})/)?.[0] ?? "",
       priceEur: basisPrijs, costEur: basisKost, inStock: Number(r.stockQty) > 0 }]).flatMap(a => {
