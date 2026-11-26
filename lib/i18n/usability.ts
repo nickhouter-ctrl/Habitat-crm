@@ -327,6 +327,12 @@ const rows: [string, string, string][] = [
   ["Bankbetaling", "Bank transfer", "Transferencia bancaria"],
   ["Incl. btw", "Incl. VAT", "IVA incl."],
   ["Ex. btw", "Excl. VAT", "Sin IVA"],
+  ["Afgeboekt werk per factuur en week", "Work charged per invoice and week", "Trabajo descontado por factura y semana"],
+  ["Afgeboekt werk per factuur en week (vervolg)", "Work charged per invoice and week (continued)", "Trabajo descontado por factura y semana (continuación)"],
+  ["Alle facturen en gewerkte weken van oud naar nieuw, ex. btw, zoals afgeboekt op uw project. Arbeid staat per week per ploeg.", "All invoices and weeks worked, oldest first, excluding VAT, as charged to your project. Labour is shown per week per crew.", "Todas las facturas y semanas trabajadas, de la más antigua a la más reciente, sin IVA, tal como se han cargado a su proyecto. La mano de obra se muestra por semana y cuadrilla."],
+  ["Arbeid (week)", "Labour (week)", "Mano de obra (semana)"],
+  ["Soort", "Type", "Tipo"],
+  ["Overige", "Other", "Otros"],
   ["Berichten en taken voor collega’s", "Messages and tasks for colleagues", "Mensajes y tareas para compañeros"],
 ];
 

@@ -8,6 +8,7 @@ import { projectCostStreams, projectOwnProducts } from "@/lib/project-cost-strea
 import { clientFundingProducts } from "@/lib/client-funding-products";
 import { gecrediteerdeParen } from "@/lib/credit-pairs";
 import { clientFundingPayments, type ClientPaymentLike } from "@/lib/client-funding-report";
+import { clientWorkRows, type WorkLaborEntry } from "@/lib/client-funding-work";
 
 /** One funding calculation for the start screen, project list and detail.
  * Pending invoice reviews are not purchase orders and are deliberately absent.
@@ -16,22 +17,26 @@ import { clientFundingPayments, type ClientPaymentLike } from "@/lib/client-fund
 export async function loadProjectFunding(projectId?:string, includeClosed = false) {
   const [rows,productCostOf]=await Promise.all([
     db.execute<{
-      id:string;name:string;labor:string;laborPct:string|null;purchasePct:string|null;
+      id:string;name:string;labor:string;laborEntries:WorkLaborEntry[];laborPct:string|null;purchasePct:string|null;
       payments:ClientPaymentLike[];docs:{id:string;docNumber:string|null;kind:string;status:string;items:unknown;subtotal:string;total:string|null;paid:string|null}[];
-      purchases:Parameters<typeof projectCostStreams>[0]; costs:Parameters<typeof projectCostStreams>[1];
+      purchases:(Parameters<typeof projectCostStreams>[0][number]&{date?:string|null;reference?:string|null})[]; costs:(Parameters<typeof projectCostStreams>[1][number]&{date?:string|null})[];
       deliveries:unknown;extraRevenue:string;extraCost:string;
       advanceCredit:string;advanceCreditDescription:string|null;
     }>(sql`select p.id,p.name,p.labor_margin_pct "laborPct",p.purchase_margin_pct "purchasePct",
       coalesce((select sum(t.hours*t.hourly_cost_eur) from time_entries t where t.project_id=p.id
         and not(t.self_logged_at is not null and t.approved_at is null)),0)::text labor,
+      coalesce((select jsonb_agg(jsonb_build_object('date',t.date,'crew',coalesce(w.name,t.worker_name),'hours',t.hours,'cost',t.hours*t.hourly_cost_eur,
+        'invoiceId',po.id,'invoiceDate',coalesce(po.order_date,po.created_at::date),'invoiceRef',po.reference,'supplier',po.supplier))
+        from time_entries t left join workers w on w.id=t.worker_id left join purchase_orders po on po.id=t.purchase_order_id where t.project_id=p.id
+        and not(t.self_logged_at is not null and t.approved_at is null)),'[]'::jsonb) "laborEntries",
       coalesce((select jsonb_agg(jsonb_build_object('documentId',r.document_id,'advanceRequestId',r.advance_request_id,'amountEur',r.amount_eur,'method',r.method,'vatRate',r.vat_rate,
         'vatAmountEur',r.vat_amount_eur,'docSubtotal',d.subtotal_eur,'docTotal',d.total_eur,'date',r.date,'docNumber',d.doc_number))
         from project_payments r left join documents d on d.id=r.document_id where r.project_id=p.id),'[]'::jsonb) payments,
       coalesce((select jsonb_agg(jsonb_build_object('id',d.id,'docNumber',d.doc_number,'kind',d.kind,'status',d.status,'items',d.items,'subtotal',d.subtotal_eur,'total',d.total_eur,'paid',d.paid_eur)) from documents d
         where d.project_id=p.id),'[]'::jsonb) docs,
       coalesce((select jsonb_agg(jsonb_build_object('supplier',po.supplier,'currency',po.currency,'notes',po.notes,'items',po.items,
-        'subtotal',po.subtotal,'tax',po.tax,'total',po.total)) from purchase_orders po where po.project_id=p.id and not po.count_as_labor),'[]'::jsonb) purchases,
-      coalesce((select jsonb_agg(jsonb_build_object('description',c.description,'category',c.category,'note',c.note,'amountEur',c.amount_eur,
+        'subtotal',po.subtotal,'tax',po.tax,'total',po.total,'date',coalesce(po.order_date,po.created_at::date),'reference',po.reference)) from purchase_orders po where po.project_id=p.id and not po.count_as_labor),'[]'::jsonb) purchases,
+      coalesce((select jsonb_agg(jsonb_build_object('description',c.description,'category',c.category,'note',c.note,'amountEur',c.amount_eur,'date',c.date,
         'source',case when po.id is null then null else jsonb_build_object('supplier',po.supplier,'notes',po.notes,'items',po.items,'countAsLabor',po.count_as_labor) end))
         from project_costs c left join purchase_orders po on po.id=c.purchase_order_id where c.project_id=p.id),'[]'::jsonb) costs,
       coalesce((select jsonb_agg(jsonb_build_object('name',d.product_name,'productId',d.product_id,'description',d.sku,'category','eigen_producten',
@@ -71,6 +76,8 @@ export async function loadProjectFunding(projectId?:string, includeClosed = fals
     const productReceipts = clientFundingProducts(p.docs, p.payments, ownShareByDoc,
       productCostOf);
     const paymentRows = clientFundingPayments(p.payments);
-    return [p.id,{id:p.id,name:p.name,openInvoicedEx,cover,ownShareByDoc,costs,own,margins,productReceipts,paymentRows}] as const;
+    const workRows = clientWorkRows({labor:p.laborEntries,purchases:p.purchases,costs:p.costs,
+      laborRevenue:margins.laborRevenue,purchaseRevenue:margins.purchaseRevenue,otherRevenue:margins.otherRevenue});
+    return [p.id,{id:p.id,name:p.name,openInvoicedEx,cover,ownShareByDoc,costs,own,margins,productReceipts,paymentRows,workRows}] as const;
   }));
 }
