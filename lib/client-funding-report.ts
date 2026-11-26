@@ -3,6 +3,21 @@ import type { AdvanceCover, ProjectMargins } from "@/lib/project-financials";
 import type { ReportPdfInput, ReportTable } from "@/lib/report-pdf";
 import { formatEUR } from "@/lib/utils";
 import type { ClientFundingProduct } from "./client-funding-products";
+import { receiptExVat, type ReceiptLike } from "./receipts";
+
+export type ClientPaymentLike = ReceiptLike & { date?: string | null; docNumber?: string | null };
+export type ClientFundingPayment = { date: string | null; documentNumber: string | null; method: string; gross: number; vat: number; net: number };
+
+const cents = (n: number) => Math.round(n * 100);
+
+/** Every receipt on its own row, oldest first; amounts as the balance counts them. */
+export function clientFundingPayments(payments: ClientPaymentLike[]): ClientFundingPayment[] {
+  return payments.map(p => {
+    const gross = cents(Number(p.amountEur ?? 0)) / 100;
+    const net = cents(receiptExVat(p)) / 100;
+    return { date: p.date ? String(p.date).slice(0, 10) : null, documentNumber: p.docNumber ?? null, method: p.method, gross, net, vat: (cents(gross) - cents(net)) / 100 };
+  }).sort((a, b) => (a.date ?? "").localeCompare(b.date ?? ""));
+}
 
 /** Explicit customer-facing projection: never pass costs, notes or profit to the PDF. */
 export function clientFundingAmounts(
@@ -29,12 +44,35 @@ export function clientFundingReport(input: {
   locale: Locale;
   amounts: ReturnType<typeof clientFundingAmounts>;
   products?: ClientFundingProduct[];
+  payments?: ClientFundingPayment[];
 }): ReportPdfInput {
   const { amounts: a, locale } = input;
   const t = maakT(locale);
   if (input.products && input.products.reduce((sum, p) => sum + Math.round(p.received * 100), 0) !== Math.round(a.products * 100)) {
     throw new Error("Product specification does not reconcile with the project balance");
   }
+  const payments = input.payments ?? [];
+  if (payments.length && payments.reduce((sum, p) => sum + cents(p.net), 0) !== cents(a.received)) {
+    throw new Error("Payment list does not reconcile with the project balance");
+  }
+  const dateFmt = new Intl.DateTimeFormat(locale, { day: "2-digit", month: "2-digit", year: "numeric", timeZone: "UTC" });
+  const paymentLabel = (p: ClientFundingPayment) => p.documentNumber ? t("Factuur {n}", { n: p.documentNumber })
+    : t(p.method === "cash" ? "Contante betaling" : p.method === "advance" ? "Voorschot" : p.method === "bank" ? "Bankbetaling" : "Betaling");
+  const paymentRows = payments.map(p => [p.date ? dateFmt.format(new Date(`${p.date}T00:00:00Z`)) : "-", paymentLabel(p),
+    formatEUR(p.gross), formatEUR(p.vat), formatEUR(p.net)]);
+  const totalGross = payments.reduce((sum, p) => sum + cents(p.gross), 0) / 100;
+  const paymentTables: ReportTable[] = Array.from({ length: Math.ceil(paymentRows.length / 12) }, (_, i) => {
+    const rows = paymentRows.slice(i * 12, (i + 1) * 12);
+    const last = (i + 1) * 12 >= paymentRows.length;
+    return {
+      title: t(i === 0 ? "Ontvangen betalingen op datum" : "Ontvangen betalingen op datum (vervolg)"),
+      subtitle: t("Alle verwerkte betalingen van oud naar nieuw. Contante betalingen en losse voorschotten zijn zonder btw; deze worden bij de eindafrekening verrekend."),
+      columns: [{ header: t("Datum"), flex: 1.2 }, { header: t("Omschrijving"), flex: 2.6 }, { header: t("Incl. btw"), flex: 1.3, align: "right" },
+        { header: t("Btw"), flex: 1.1, align: "right" }, { header: t("Ex. btw"), flex: 1.3, align: "right" }],
+      rows: [...rows, ...(last ? [[t("Totaal ontvangen"), "", formatEUR(totalGross), formatEUR((cents(totalGross) - cents(a.received)) / 100), formatEUR(a.received)]] : [])],
+      emphasizeRow: row => last && row === rows.length,
+    };
+  });
   const columns = [{ header: t("Omschrijving"), flex: 4 }, { header: t("Bedrag"), align: "right" as const, flex: 1.5 }];
   const receipts = input.products ?? [];
   const productRows = receipts.map(p => [
@@ -101,6 +139,7 @@ export function clientFundingReport(input: {
         ],
         emphasizeRow: i => i === (a.advanceCredit > 0 ? 4 : 3),
       },
+      ...paymentTables,
       ...productTables,
       {
         title: t("Specificatie van het afgeboekte werk"),

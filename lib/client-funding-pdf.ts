@@ -24,6 +24,7 @@ export async function renderClientFundingPdf(projectId: string, requestedLocale?
     generatedAt: new Date(), locale,
     amounts: clientFundingAmounts(current.cover, current.margins),
     products: current.productReceipts,
+    payments: current.paymentRows,
   }));
   return {
     buffer,

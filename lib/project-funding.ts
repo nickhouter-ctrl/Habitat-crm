@@ -3,10 +3,11 @@ import "server-only";
 import { sql } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { deriveAdvanceCover, deriveProjectMargins } from "@/lib/project-financials";
-import { projectReceiptShares, splitProjectReceipts, type ReceiptLike } from "@/lib/receipts";
+import { projectReceiptShares, splitProjectReceipts } from "@/lib/receipts";
 import { projectCostStreams, projectOwnProducts } from "@/lib/project-cost-streams";
 import { clientFundingProducts } from "@/lib/client-funding-products";
 import { gecrediteerdeParen } from "@/lib/credit-pairs";
+import { clientFundingPayments, type ClientPaymentLike } from "@/lib/client-funding-report";
 
 /** One funding calculation for the start screen, project list and detail.
  * Pending invoice reviews are not purchase orders and are deliberately absent.
@@ -16,7 +17,7 @@ export async function loadProjectFunding(projectId?:string, includeClosed = fals
   const [rows,productCostOf]=await Promise.all([
     db.execute<{
       id:string;name:string;labor:string;laborPct:string|null;purchasePct:string|null;
-      payments:ReceiptLike[];docs:{id:string;docNumber:string|null;kind:string;status:string;items:unknown;subtotal:string;total:string|null;paid:string|null}[];
+      payments:ClientPaymentLike[];docs:{id:string;docNumber:string|null;kind:string;status:string;items:unknown;subtotal:string;total:string|null;paid:string|null}[];
       purchases:Parameters<typeof projectCostStreams>[0]; costs:Parameters<typeof projectCostStreams>[1];
       deliveries:unknown;extraRevenue:string;extraCost:string;
       advanceCredit:string;advanceCreditDescription:string|null;
@@ -24,7 +25,7 @@ export async function loadProjectFunding(projectId?:string, includeClosed = fals
       coalesce((select sum(t.hours*t.hourly_cost_eur) from time_entries t where t.project_id=p.id
         and not(t.self_logged_at is not null and t.approved_at is null)),0)::text labor,
       coalesce((select jsonb_agg(jsonb_build_object('documentId',r.document_id,'advanceRequestId',r.advance_request_id,'amountEur',r.amount_eur,'method',r.method,'vatRate',r.vat_rate,
-        'vatAmountEur',r.vat_amount_eur,'docSubtotal',d.subtotal_eur,'docTotal',d.total_eur))
+        'vatAmountEur',r.vat_amount_eur,'docSubtotal',d.subtotal_eur,'docTotal',d.total_eur,'date',r.date,'docNumber',d.doc_number))
         from project_payments r left join documents d on d.id=r.document_id where r.project_id=p.id),'[]'::jsonb) payments,
       coalesce((select jsonb_agg(jsonb_build_object('id',d.id,'docNumber',d.doc_number,'kind',d.kind,'status',d.status,'items',d.items,'subtotal',d.subtotal_eur,'total',d.total_eur,'paid',d.paid_eur)) from documents d
         where d.project_id=p.id),'[]'::jsonb) docs,
@@ -69,6 +70,7 @@ export async function loadProjectFunding(projectId?:string, includeClosed = fals
       requiredRevenue:margins.laborRevenue+margins.purchaseRevenue+margins.otherRevenue,advanceCreditEx:Number(p.advanceCredit),advanceCreditDescription:p.advanceCreditDescription});
     const productReceipts = clientFundingProducts(p.docs, p.payments, ownShareByDoc,
       productCostOf);
-    return [p.id,{id:p.id,name:p.name,openInvoicedEx,cover,ownShareByDoc,costs,own,margins,productReceipts}] as const;
+    const paymentRows = clientFundingPayments(p.payments);
+    return [p.id,{id:p.id,name:p.name,openInvoicedEx,cover,ownShareByDoc,costs,own,margins,productReceipts,paymentRows}] as const;
   }));
 }
