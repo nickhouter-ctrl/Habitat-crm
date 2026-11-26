@@ -22,10 +22,11 @@ export async function renderClientFundingPdf(projectId: string, requestedLocale?
   const buffer = await renderReportPdf(clientFundingReport({
     projectName: project.name, clientName: contact?.name ?? null,
     generatedAt: new Date(), locale,
-    amounts: clientFundingAmounts(current.cover, current.margins),
+    amounts: clientFundingAmounts(current.cover, current.margins, current.own.totalRevenue),
     products: current.productReceipts,
     payments: current.paymentRows,
     work: current.workRows,
+    delivered: current.deliveredProducts,
   }));
   return {
     buffer,

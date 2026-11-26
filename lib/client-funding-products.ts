@@ -58,3 +58,46 @@ export function clientFundingProducts(
     };
   }).sort((a, b) => (a.documentNumber ?? "").localeCompare(b.documentNumber ?? ""));
 }
+
+export type ClientDeliveredProduct = { date: string | null; documentNumber: string | null; name: string; quantity: number; total: number };
+
+/**
+ * Alle eigen producten die de klant (nog) moet betalen, tegen verkoopprijs:
+ * leveringen op het project, productregels van facturen die níet volledig
+ * gecrediteerd zijn, en meerwerk. Telt op tot dezelfde productwaarde als de
+ * projectstand (projectOwnProducts + extras). Nick 26-11-2026: "het is niet
+ * ontvangen, maar producten moeten wel laten zien worden en gespecificeerd".
+ */
+export function clientDeliveredProducts(input: {
+  docs: (ProductDocument & { date?: string | null })[];
+  credited: ReadonlySet<string>;
+  /** Leveringen in dezelfde vorm als de projectstand ze als factuurregel meetelt, plus datum. */
+  deliveries: (Record<string, unknown> & { date?: string | null })[];
+  extras: { date?: string | null; description: string; amountEur: number | string }[];
+  productCost?: (item: DocumentLineItem) => number | undefined;
+}): ClientDeliveredProduct[] {
+  const day = (d?: string | null) => (d ? String(d).slice(0, 10) : null);
+  const cent = (n: number) => Math.round(n * 100) / 100;
+  const settled = new Set(input.docs.filter(d => d.kind === "invoice" && !["draft", "void"].includes(d.status))
+    .flatMap(d => normalizeDocItems(d.items).flatMap(it => it.advanceRef ? [it.advanceRef] : [])));
+  const rows: ClientDeliveredProduct[] = [];
+  for (const d of input.docs) {
+    if (!["invoice", "creditnote", "fondos"].includes(d.kind) || ["draft", "void"].includes(d.status)) continue;
+    if (input.credited.has(d.id) || (d.kind === "fondos" && settled.has(d.id))) continue;
+    const sign = d.kind === "creditnote" ? -1 : 1;
+    for (const it of normalizeDocItems(d.items)) {
+      if (!isOwnProductLine(it, input.productCost) || lineNet(it) === 0) continue;
+      rows.push({ date: day(d.date), documentNumber: d.docNumber, name: it.name.trim(), quantity: sign * (Number(it.units) || 0), total: cent(sign * lineNet(it)) });
+    }
+  }
+  for (const l of input.deliveries) {
+    const [it] = normalizeDocItems([l]);
+    if (!it || !isOwnProductLine(it, input.productCost) || lineNet(it) === 0) continue;
+    rows.push({ date: day(l.date), documentNumber: null, name: it.name.trim(), quantity: Number(it.units) || 0, total: cent(lineNet(it)) });
+  }
+  for (const e of input.extras) {
+    const total = cent(Number(e.amountEur) || 0);
+    if (total !== 0) rows.push({ date: day(e.date), documentNumber: null, name: e.description.trim(), quantity: 1, total });
+  }
+  return rows.sort((a, b) => (a.date ?? "").localeCompare(b.date ?? "") || a.name.localeCompare(b.name));
+}

@@ -357,6 +357,13 @@ const rows: [string, string, string][] = [
   ["Arbeid (week)", "Labour (week)", "Mano de obra (semana)"],
   ["Soort", "Type", "Tipo"],
   ["Overige", "Other", "Otros"],
+  ["Specificatie van de geleverde producten", "Breakdown of products supplied", "Desglose de los productos suministrados"],
+  ["Specificatie van de geleverde producten (vervolg)", "Breakdown of products supplied (continued)", "Desglose de los productos suministrados (continuación)"],
+  ["Alle producten voor uw project tegen verkoopprijs, ex. btw. Wat nog niet betaald is, staat in het saldo hierboven.", "All products for your project at sales price, excluding VAT. The unpaid part is included in the balance above.", "Todos los productos de su proyecto a precio de venta, sin IVA. La parte pendiente de pago figura en el saldo anterior."],
+  ["Totaal producten", "Total products", "Total de productos"],
+  ["Nog niet betaald", "Not yet paid", "Pendiente de pago"],
+  ["Geleverde producten, nog niet betaald", "Products supplied, not yet paid", "Productos suministrados, pendientes de pago"],
+  ["Geleverde producten die nog niet betaald zijn, staan tegen verkoopprijs in het saldo en worden per product gespecificeerd.", "Products supplied but not yet paid are included in the balance at sales price and are listed per product.", "Los productos suministrados y aún no pagados se incluyen en el saldo a precio de venta y se detallan por producto."],
   ["Berichten en taken voor collega’s", "Messages and tasks for colleagues", "Mensajes y tareas para compañeros"],
 ];
 
