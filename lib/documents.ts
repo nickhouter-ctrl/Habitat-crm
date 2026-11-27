@@ -216,6 +216,105 @@ export function computeTotals(items: DocumentLineItem[]): {
   return { subtotal, tax, total: round2(subtotal + tax) };
 }
 
+/** Regelbedrag vóór korting (aantal × stukprijs, ex. btw). */
+export function lineGross(item: Pick<DocumentLineItem, "units" | "price">): number {
+  return round2((Number(item.units) || 0) * (Number(item.price) || 0));
+}
+
+/** Kortingsbedrag van een regel in euro's (ex. btw). */
+export function lineDiscountAmount(item: Pick<DocumentLineItem, "units" | "price" | "discount">): number {
+  return round2(lineGross(item) - lineNet(item));
+}
+
+/** Regeltotaal inclusief btw (netto + btw van die regel). */
+export function lineTotalIncl(item: DocumentLineItem): number {
+  return round2(lineNet(item) + lineTax(item));
+}
+
+/**
+ * Totaalblok zoals op een gewone factuur: bruto (zonder korting), korting,
+ * subtotaal ex. btw, btw per tarief en totaal. `subtotal`/`tax`/`total` zijn
+ * gelijk aan {@link computeTotals}.
+ */
+export function documentSummary(items: DocumentLineItem[]): {
+  gross: number;
+  discount: number;
+  subtotal: number;
+  taxByRate: { rate: number; base: number; tax: number }[];
+  tax: number;
+  total: number;
+} {
+  const { subtotal, tax, total } = computeTotals(items);
+  const gross = round2(items.reduce((s, it) => s + lineGross(it), 0));
+  const perRate = new Map<number, { base: number; tax: number }>();
+  for (const it of items) {
+    const rate = Number(it.taxRate) || 0;
+    const cur = perRate.get(rate) ?? { base: 0, tax: 0 };
+    cur.base += lineNet(it);
+    cur.tax += lineTax(it);
+    perRate.set(rate, cur);
+  }
+  const taxByRate = [...perRate.entries()]
+    .map(([rate, v]) => ({ rate, base: round2(v.base), tax: round2(v.tax) }))
+    .sort((a, b) => b.rate - a.rate);
+  return { gross, discount: round2(gross - subtotal), subtotal, taxByRate, tax, total };
+}
+
+/**
+ * Korting op de hele order: zet hetzelfde percentage op elke gewone regel.
+ * Verrekenregels (aanbetaling wegstrepen) en negatieve regels blijven buiten
+ * schot. Per regel en niet als losse totaalkorting, zodat Holded, marge en
+ * btw per regel gewoon blijven kloppen.
+ */
+export function orderDiscountEligible(item: Pick<DocumentLineItem, "price" | "advanceRef">): boolean {
+  return !item.advanceRef && (Number(item.price) || 0) > 0;
+}
+
+/**
+ * Welk percentage geeft (zo dicht mogelijk) `amountEur` korting over de
+ * bruto som van de regels die meedoen? Vier decimalen: € 500 op € 12.345
+ * wordt 4,0502% — op de cent na exact (stukprijzen worden op centen afgerond).
+ */
+export function orderDiscountPctForAmount(
+  items: Pick<DocumentLineItem, "units" | "price" | "advanceRef">[],
+  amountEur: number,
+): number | null {
+  const gross = items.filter(orderDiscountEligible).reduce((s, it) => s + lineGross(it), 0);
+  if (!(gross > 0) || !(amountEur > 0)) return null;
+  return Math.min(100, Math.round((amountEur / gross) * 100 * 10000) / 10000);
+}
+
+/**
+ * Percentages per regel voor een €-korting op de hele order. Eerst overal
+ * hetzelfde percentage; omdat stukprijzen op centen worden afgerond blijft er
+ * een restje over (€ 499,82 i.p.v. € 500). Dat restje gaat naar de regel met
+ * het kleinste aantal — daar is de afronding het fijnst — zodat het totaal
+ * op de cent klopt waar dat kan. Regels die niet meedoen krijgen `undefined`.
+ */
+export function orderDiscountPlan<T extends Pick<DocumentLineItem, "units" | "price" | "advanceRef">>(
+  items: T[],
+  amountEur: number,
+): (number | undefined)[] | null {
+  const pct = orderDiscountPctForAmount(items, amountEur);
+  if (pct == null) return null;
+  const plan = items.map((it) => (orderDiscountEligible(it) ? pct : undefined));
+  const discountOf = (p: (number | undefined)[]) =>
+    items.reduce((s, it, i) => s + (p[i] == null ? 0 : lineDiscountAmount({ ...it, discount: p[i] })), 0);
+  const rest = round2(amountEur - discountOf(plan));
+  if (Math.abs(rest) < 0.005) return plan;
+  const kandidaten = items
+    .map((it, i) => ({ i, units: Math.abs(Number(it.units) || 0), gross: lineGross(it) }))
+    .filter((k) => plan[k.i] != null && k.gross > 0)
+    .sort((a, b) => a.units - b.units || b.gross - a.gross);
+  const k = kandidaten[0];
+  if (!k) return plan;
+  const doel = lineDiscountAmount({ ...items[k.i], discount: plan[k.i] }) + rest;
+  const nieuw = Math.min(100, Math.max(0, Math.round((doel / k.gross) * 100 * 10000) / 10000));
+  const poging = [...plan];
+  poging[k.i] = nieuw;
+  return Math.abs(amountEur - discountOf(poging)) < Math.abs(rest) ? poging : plan;
+}
+
 /**
  * Lees document-regels robuust uit. Sommige (geïmporteerde/legacy) rijen staan
  * als (dubbel) ge-encode JSON-string in de jsonb-kolom — die zouden `.map()`

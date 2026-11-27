@@ -8,7 +8,7 @@ import { useEffect, useRef, useState } from "react";
 import { Button, Input, Select } from "@/components/ui";
 import type { ProductOption } from "@/app/(app)/_options";
 import type { DocumentLineItem } from "@/lib/db/schema";
-import { computeTotals, lineNet, lineUnitPrice } from "@/lib/documents";
+import { documentSummary, lineDiscountAmount, lineGross, lineNet, lineTotalIncl, lineUnitPrice, orderDiscountEligible, orderDiscountPlan } from "@/lib/documents";
 import { LINE_CATEGORIES, vatForCategory } from "@/lib/products";
 import { cn, formatEUR } from "@/lib/utils";
 import { catalogLineCost } from "@/lib/catalog-line-cost";
@@ -165,7 +165,27 @@ export function LineItemsEditor({
   // valt terug op priceEur als die leeg is).
   const [audience, setAudience] = useState<"particulier" | "aannemer">("particulier");
 
-  const totals = computeTotals(rows.map(rowToItem).filter((r) => r.name.length > 0));
+  const totals = documentSummary(rows.map(rowToItem).filter((r) => r.name.length > 0));
+
+  // Korting op de hele order: één keer invullen i.p.v. regel voor regel.
+  const [orderDiscount, setOrderDiscount] = useState("");
+  const [orderDiscountMode, setOrderDiscountMode] = useState<"pct" | "eur">("pct");
+  const applyOrderDiscount = () => {
+    const value = Number(String(orderDiscount).replace(",", "."));
+    if (!Number.isFinite(value) || value < 0) return;
+    if (orderDiscountMode === "pct" || value === 0) {
+      const pct = Math.min(100, value);
+      setRows((rs) => rs.map((row) => (orderDiscountEligible(rowToItem(row)) ? { ...row, discount: String(pct) } : row)));
+      return;
+    }
+    // € ex. btw: lege regels tellen niet mee in de verdeling.
+    setRows((rs) => {
+      const telt = rs.map((row) => row.name.trim().length > 0);
+      const plan = orderDiscountPlan(rs.map((row, i) => (telt[i] ? rowToItem(row) : { ...rowToItem(row), price: 0 })), value);
+      if (!plan) return rs;
+      return rs.map((row, i) => (plan[i] == null ? row : { ...row, discount: String(plan[i]) }));
+    });
+  };
   const productCostOf = catalogLineCost(products);
   /** Kostprijs van een regel: eigen costEur (kozijn), anders via productId of SKU. */
   const costOfRow = (r: Row): number | null => {
@@ -530,7 +550,7 @@ export function LineItemsEditor({
       </div>
 
       <div className="overflow-x-auto">
-        <table className="w-full min-w-[920px] text-sm">
+        <table className="w-full min-w-[1020px] text-sm">
           <thead className="text-left text-xs uppercase tracking-wide text-muted">
             <tr>
               <th className="px-1 py-1.5">{uiT("Omschrijving")}</th>
@@ -539,7 +559,8 @@ export function LineItemsEditor({
               <th className="w-24 px-1 py-1.5 text-right">{uiT("Prijs (ex.)")}</th>
               <th className="w-20 px-1 py-1.5 text-right">{uiT("Korting%")}</th>
               <th className="w-20 px-1 py-1.5 text-right">{uiT("BTW%")}</th>
-              <th className="w-28 px-1 py-1.5 text-right">{uiT("Netto")}</th>
+              <th className="w-28 px-1 py-1.5 text-right">{uiT("Netto (ex.)")}</th>
+              <th className="w-28 px-1 py-1.5 text-right">{uiT("Incl. btw")}</th>
               <th className="w-8 px-1 py-1.5" />
             </tr>
           </thead>
@@ -639,13 +660,18 @@ export function LineItemsEditor({
                   <td className="px-1 py-2">
                     <Input
                       type="number"
-                      step="1"
+                      step="any"
                       min="0"
                       max="100"
                       value={r.discount}
                       onChange={(e) => patchRow(i, { discount: e.target.value })}
                       className={cn("text-right", (loss || low) && "border-warning")}
                     />
+                    {hasDiscount && (
+                      <span className="mt-0.5 block text-right text-xs tabular-nums text-muted">
+                        −{formatEUR(lineDiscountAmount(rowToItem(r)))}
+                      </span>
+                    )}
                   </td>
                   <td className="px-1 py-2">
                     <Input
@@ -661,10 +687,13 @@ export function LineItemsEditor({
                   <td className="px-1 py-2 text-right tabular-nums">
                     {formatEUR(lineNet(rowToItem(r)))}
                     {hasDiscount && (
-                      <span className="block text-xs text-muted line-through">
-                        {formatEUR((Number(r.units) || 0) * (Number(r.price) || 0))}
+                      <span className="block text-xs text-muted line-through" title={uiT("Zonder korting")}>
+                        {formatEUR(lineGross(rowToItem(r)))}
                       </span>
                     )}
+                  </td>
+                  <td className="px-1 py-2 text-right tabular-nums font-medium">
+                    {formatEUR(lineTotalIncl(rowToItem(r)))}
                   </td>
                   <td className="px-1 py-2 text-right">
                     <button
@@ -772,17 +801,71 @@ export function LineItemsEditor({
         </div>
       )}
 
-      <div className="ml-auto w-full max-w-xs space-y-1 border-t pt-3 text-sm">
+      <div className="flex flex-wrap items-end justify-between gap-4 border-t pt-3">
+        <div className="space-y-1.5" data-order-discount>
+          <p className="text-xs font-medium text-muted">{uiT("Korting op de hele order")}</p>
+          <div className="flex flex-wrap items-center gap-2">
+            <Input
+              type="number"
+              step="any"
+              min="0"
+              value={orderDiscount}
+              onChange={(e) => setOrderDiscount(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  applyOrderDiscount();
+                }
+              }}
+              placeholder={orderDiscountMode === "pct" ? "10" : "500"}
+              className="w-28 text-right"
+            />
+            <Select value={orderDiscountMode} onChange={(e) => setOrderDiscountMode(e.target.value as "pct" | "eur")} className="w-20">
+              <option value="pct">%</option>
+              <option value="eur">€</option>
+            </Select>
+            <Button type="button" variant="secondary" size="sm" onClick={applyOrderDiscount}>
+              {uiT("Toepassen op alle regels")}
+            </Button>
+          </div>
+          <p className="text-[11px] text-muted">
+            {orderDiscountMode === "eur"
+              ? uiT("Bedrag ex. btw, verdeeld naar rato over alle regels. Verrekenregels blijven buiten de korting.")
+              : uiT("Overschrijft de korting op elke regel. Daarna kun je per regel nog aanpassen.")}
+          </p>
+        </div>
+      <div className="ml-auto w-full max-w-xs space-y-1 text-sm">
+        {totals.discount > 0.005 && (
+          <>
+            <div className="flex justify-between">
+              <span className="text-muted">{uiT("Totaal zonder korting")}</span>
+              <span className="tabular-nums">{formatEUR(totals.gross)}</span>
+            </div>
+            <div className="flex justify-between text-success">
+              <span>{uiT("Korting")}{totals.gross > 0 ? ` (${((totals.discount / totals.gross) * 100).toFixed(1).replace(".", ",")}%)` : ""}</span>
+              <span className="tabular-nums">−{formatEUR(totals.discount)}</span>
+            </div>
+          </>
+        )}
         <div className="flex justify-between">
-          <span className="text-muted">{uiT("Subtotaal")}</span>
+          <span className="text-muted">{uiT("Subtotaal (ex. btw)")}</span>
           <span className="tabular-nums">{formatEUR(totals.subtotal)}</span>
         </div>
-        <div className="flex justify-between">
-          <span className="text-muted">{uiT("BTW")}</span>
-          <span className="tabular-nums">{formatEUR(totals.tax)}</span>
-        </div>
+        {totals.taxByRate.length > 1 ? (
+          totals.taxByRate.map((t) => (
+            <div key={t.rate} className="flex justify-between">
+              <span className="text-muted">{uiT("BTW {v0}% over {v1}", { v0: t.rate, v1: formatEUR(t.base) })}</span>
+              <span className="tabular-nums">{formatEUR(t.tax)}</span>
+            </div>
+          ))
+        ) : (
+          <div className="flex justify-between">
+            <span className="text-muted">{uiT("BTW")}{totals.taxByRate[0] ? ` ${totals.taxByRate[0].rate}%` : ""}</span>
+            <span className="tabular-nums">{formatEUR(totals.tax)}</span>
+          </div>
+        )}
         <div className="flex justify-between border-t pt-1 font-semibold">
-          <span>{uiT("Totaal")}</span>
+          <span>{uiT("Totaal incl. btw")}</span>
           <span className="tabular-nums">{formatEUR(totals.total)}</span>
         </div>
         {costedCount > 0 && (
@@ -804,6 +887,7 @@ export function LineItemsEditor({
             </span>
           </div>
         )}
+      </div>
       </div>
 
       {kozijnOpen && (

@@ -31,7 +31,7 @@ import {
 import { db } from "@/lib/db";
 import { brands, companies, deliveries, documents, holdedSyncMap, products } from "@/lib/db/schema";
 import { SubmitButton } from "@/components/submit-button";
-import { lineCostEur, lineNet, lineTax, normalizeDocItems } from "@/lib/documents";
+import { documentSummary, lineCostEur, lineDiscountAmount, lineGross, lineNet, lineTax, lineTotalIncl, normalizeDocItems } from "@/lib/documents";
 import { missingBillingFields } from "@/lib/invoice-validation";
 import { labelForCategory } from "@/lib/products";
 import { HOOFDSTUKKEN } from "@/lib/price-book";
@@ -233,6 +233,7 @@ export default async function DocumentDetailPage({
   const remainingPct = Math.min(100, Math.max(1, 100 - invoicedPct));
 
   const items = normalizeDocItems(doc.items);
+  const summary = documentSummary(items);
 
   // Fases op deze offerte: groepeer regels op `phase`. Per fase: subtotaal (ex. BTW
   // na korting) en of er al een factuur voor bestaat (coveredPhase op een factuur).
@@ -1237,10 +1238,11 @@ export default async function DocumentDetailPage({
                       <Th>{uiT("Categorie")}</Th>
                       <Th className="text-right">{uiT("Aantal")}</Th>
                       <Th className="text-right">{uiT("Prijs")}</Th>
+                      <Th className="text-right">{uiT("Zonder korting")}</Th>
                       <Th className="text-right">{uiT("Korting")}</Th>
-                      <Th className="text-right">{uiT("BTW%")}</Th>
-                      <Th className="text-right">{uiT("Netto")}</Th>
+                      <Th className="text-right">{uiT("Netto (ex.)")}</Th>
                       <Th className="text-right">{uiT("BTW")}</Th>
+                      <Th className="text-right">{uiT("Incl. btw")}</Th>
                     </tr>
                   </THead>
                   <TBody>
@@ -1255,30 +1257,58 @@ export default async function DocumentDetailPage({
                         <Td className="text-muted">{labelForCategory(it.category)}</Td>
                         <Td className="text-right tabular-nums">{it.units}{it.unit ? ` ${it.unit}` : ""}</Td>
                         <Td className="text-right tabular-nums">{formatEUR(it.price)}</Td>
+                        <Td className="text-right tabular-nums text-muted">{formatEUR(lineGross(it))}</Td>
                         <Td className="text-right tabular-nums text-muted">
-                          {it.discount ? `${it.discount}%` : "—"}
+                          {it.discount ? (
+                            <>
+                              −{formatEUR(lineDiscountAmount(it))}
+                              <span className="block text-xs">{Number(it.discount).toLocaleString("nl-NL", { maximumFractionDigits: 2 })}%</span>
+                            </>
+                          ) : "—"}
                         </Td>
-                        <Td className="text-right tabular-nums">{it.taxRate ?? 0}%</Td>
                         <Td className="text-right tabular-nums">{formatEUR(lineNet(it))}</Td>
                         <Td className="text-right tabular-nums text-muted">
                           {formatEUR(lineTax(it))}
+                          <span className="block text-xs">{it.taxRate ?? 0}%</span>
                         </Td>
+                        <Td className="text-right tabular-nums font-medium">{formatEUR(lineTotalIncl(it))}</Td>
                       </Tr>
                     ))}
                   </TBody>
                 </Table>
                 <div className="border-t px-5 py-4">
                   <div className="ml-auto w-full max-w-xs space-y-1 text-sm">
+                    {summary.discount > 0.005 && (
+                      <>
+                        <div className="flex justify-between">
+                          <span className="text-muted">{uiT("Totaal zonder korting")}</span>
+                          <span className="tabular-nums">{formatEUR(summary.gross)}</span>
+                        </div>
+                        <div className="flex justify-between text-success">
+                          <span>{uiT("Korting")}</span>
+                          <span className="tabular-nums">−{formatEUR(summary.discount)}</span>
+                        </div>
+                      </>
+                    )}
                     <div className="flex justify-between">
-                      <span className="text-muted">{uiT("Subtotaal")}</span>
+                      <span className="text-muted">{uiT("Subtotaal (ex. btw)")}</span>
                       <span className="tabular-nums">{formatEUR(doc.subtotalEur)}</span>
                     </div>
-                    <div className="flex justify-between">
-                      <span className="text-muted">{uiT("BTW")}</span>
-                      <span className="tabular-nums">{formatEUR(doc.taxEur)}</span>
-                    </div>
+                    {summary.taxByRate.length > 1 ? (
+                      summary.taxByRate.map((t) => (
+                        <div key={t.rate} className="flex justify-between">
+                          <span className="text-muted">{uiT("BTW {v0}% over {v1}", { v0: t.rate, v1: formatEUR(t.base) })}</span>
+                          <span className="tabular-nums">{formatEUR(t.tax)}</span>
+                        </div>
+                      ))
+                    ) : (
+                      <div className="flex justify-between">
+                        <span className="text-muted">{uiT("BTW")}{summary.taxByRate[0] ? ` ${summary.taxByRate[0].rate}%` : ""}</span>
+                        <span className="tabular-nums">{formatEUR(doc.taxEur)}</span>
+                      </div>
+                    )}
                     <div className="flex justify-between border-t pt-1 text-base font-semibold">
-                      <span>{uiT("Totaal")}</span>
+                      <span>{uiT("Totaal incl. btw")}</span>
                       <span className="tabular-nums">{formatEUR(doc.totalEur)}</span>
                     </div>
                     {costedRevenue > 0 && (
