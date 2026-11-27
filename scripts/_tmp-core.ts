@@ -18,7 +18,8 @@ const DEFS: Def[] = [
   { naam: "Meubelset Core A2", type: "Meubelset", site: true, omschrijving: "Complete badkamermeubelset uit de CORE-serie: greeploze onderkast met twee softclose lades en keramische wastafel Starfall met 1 kraangat. Uit voorraad leverbaar.", codes: (c) => c.startsWith("MS-COA2") },
 ];
 function opties(code: string): Record<string, string> {
-  const m = code.match(/^(?:OK|MS)-COA\d?(\d{2,3})(?:-(\d))?([A-Z]{2})$/)!;
+  // Alleen meubelsets hebben een setcijfer (MS-COA1…/MS-COA2…); bij OK-COA100 at "\d?" anders de 1 van 100 op.
+  const m = code.match(/^(?:OK-COA|MS-COA\d)(\d{2,3})(?:-(\d))?([A-Z]{2})$/)!;
   const b = Number(m[1]); const o: Record<string, string> = { kleur: KLEUR[m[3]] ?? m[3], breedte: `${b} cm`, lades: "2 lades", uitsparingen: m[2] === "2" ? "2 uitsparingen" : "1 uitsparing" };
   if (m[2] === "2") o.wasbakken = "2 wasbakken";
   return o;
