@@ -46,6 +46,15 @@ export function postToBoost(posts: PagePost[], ads: BoostAd[], now: Date): PageP
   return newest && !boosted.has(newest.id) ? newest : null;
 }
 
+/**
+ * Een advertentie die Nick zelf heeft gekozen (naam begint met "Gekozen:")
+ * blijft staan: zolang die actief is, boost de cron niets automatisch.
+ */
+export const CHOSEN_PREFIX = "Gekozen:";
+export function hasChosenAd(ads: { status: string; name?: string | null }[]): boolean {
+  return ads.some((a) => a.status === "ACTIVE" && (a.name ?? "").startsWith(CHOSEN_PREFIX));
+}
+
 /** Welke actieve advertenties uit moeten zodra `keepAdId` draait. */
 export function adsToPause(ads: BoostAd[], keepAdId: string): BoostAd[] {
   return ads.filter((a) => a.status === "ACTIVE" && a.id !== keepAdId);
@@ -87,8 +96,9 @@ export async function runMetaBoost(now = new Date()): Promise<BoostResult> {
   const posts = ((await postsRes.json()) as Paged<PagePost>).data ?? [];
 
   const adsRaw = await meta.request<
-    Paged<{ id: string; created_time: string; status: string; creative?: { object_story_id?: string } }>
-  >(`/${adSetId}/ads`, { query: { fields: "id,created_time,status,creative{object_story_id}", limit: 200 } });
+    Paged<{ id: string; name?: string; created_time: string; status: string; creative?: { object_story_id?: string } }>
+  >(`/${adSetId}/ads`, { query: { fields: "id,name,created_time,status,creative{object_story_id}", limit: 200 } });
+  if (hasChosenAd(adsRaw.data ?? [])) return result;
   const ads: BoostAd[] = (adsRaw.data ?? []).map((a) => ({
     id: a.id,
     created_time: a.created_time,
