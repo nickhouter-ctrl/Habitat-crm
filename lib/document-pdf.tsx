@@ -16,12 +16,15 @@ import { shortHash } from "@/lib/canonical-json";
 import { COMPANY } from "@/lib/company";
 import { CONTRACT_T } from "@/lib/contract-terms";
 import type { DocumentLineItem, DocumentSignature } from "@/lib/db/schema";
-import { lineNet } from "@/lib/documents";
+import { documentSummary, lineDiscountAmount, lineGross, lineNet, lineTotalIncl } from "@/lib/documents";
 import { amountEur, phaseKey } from "@/lib/pdf-shared";
 import type { Locale } from "@/lib/translate";
 
 // Habitat One huisstijl-lettertype (Sora) — zelfde als website + prijslijst-PDF.
 const FONT_DIR = path.join(process.cwd(), "public", "fonts", "sora");
+// Geen woordafbreking ("lev-ering", "ver-bouwing") in smalle kolommen.
+Font.registerHyphenationCallback((word) => [word]);
+
 Font.register({
   family: "Sora",
   fonts: [
@@ -149,6 +152,8 @@ type Dict = {
   discountCol: string;
   /** Totaalregel: het bedrag vóór korting. */
   beforeDiscount: string;
+  /** Kolom: regeltotaal inclusief btw. */
+  inclCol: string;
   noLines: string;
   subtotal: string;
   vatTotal: string;
@@ -174,6 +179,7 @@ const DICT: Record<Locale, Dict> = {
     qty: "AANTAL",
     price: "PRIJS",
     vat: "BTW",
+    inclCol: "INCL. BTW",
     net: "NETTO",
     discount: "Korting",
     discountCol: "KORT.",
@@ -201,6 +207,7 @@ const DICT: Record<Locale, Dict> = {
     qty: "MENGE",
     price: "PREIS",
     vat: "MwSt",
+    inclCol: "INKL. MWST",
     net: "NETTO",
     discount: "Rabatt",
     discountCol: "RAB.",
@@ -228,6 +235,7 @@ const DICT: Record<Locale, Dict> = {
     qty: "QTY",
     price: "PRICE",
     vat: "VAT",
+    inclCol: "INCL. VAT",
     net: "NET",
     discount: "Discount",
     discountCol: "DISC.",
@@ -255,6 +263,7 @@ const DICT: Record<Locale, Dict> = {
     qty: "CANT.",
     price: "PRECIO",
     vat: "IVA",
+    inclCol: "CON IVA",
     net: "NETO",
     discount: "Descuento",
     discountCol: "DTO.",
@@ -383,17 +392,20 @@ const s = StyleSheet.create({
     borderColor: "#e5e3de",
   },
   trAlt: { backgroundColor: "#faf8f4" },
-  cDesc: { flex: 4, paddingRight: 6 },
-  cCat: { flex: 1.6, color: C.muted, paddingRight: 4 },
+  cDesc: { flex: 3.5, paddingRight: 6 },
+  cCat: { flex: 1.7, color: C.muted, paddingRight: 4 },
   cNum: { flex: 1, textAlign: "right" },
   // Aantal-kolom: eigen rechter-marge zodat het aantal niet tegen de prijs plakt
   // (anders leest "1" + "19.687,71" als "119.687,71").
-  cQty: { flex: 0.7, textAlign: "right", paddingRight: 12 },
+  cQty: { flex: 0.9, textAlign: "right", paddingRight: 10 },
   cVat: { flex: 0.8, textAlign: "right" },
   // Kortingskolom: de korting stond alleen als grijs regeltje onder de
   // omschrijving en was in de pdf niet terug te vinden.
   cDisc: { flex: 0.8, textAlign: "right" },
   cAmt: { flex: 1.3, textAlign: "right" },
+  cIncl: { flex: 1.3, textAlign: "right", fontFamily: "Sora", fontWeight: 700, color: C.charcoal },
+  subAmt: { fontSize: 6.5, color: C.muted, marginTop: 1 },
+  struck: { fontSize: 6.5, color: C.muted, marginTop: 1, textDecoration: "line-through" },
   itemName: { fontFamily: "Sora", fontWeight: 700, color: C.charcoal },
   itemSku: { fontFamily: "Sora", fontWeight: 500, fontSize: 7, color: C.brown, marginTop: 1 },
   itemDesc: { fontSize: 7.5, color: C.muted, marginTop: 1.5, lineHeight: 1.4 },
@@ -647,6 +659,11 @@ function DocumentPdf({ doc }: { doc: PdfDoc }) {
     0,
   );
   const kortingTotaal = Math.round((brutoSubtotaal - Number(doc.subtotalEur ?? 0)) * 100) / 100;
+  // Zoals elke factuur: per regel ook het bedrag incl. btw (niet bij een
+  // provisión de fondos en niet bij btw verlegd — daar is incl. = ex.).
+  const toonIncl = !isDelivery && !isFondos && !doc.vatReverseCharge;
+  const btwPerTarief = documentSummary(items).taxByRate;
+  const fmtPct = (n: number) => Number(n).toLocaleString(locale === "en" ? "en-GB" : locale === "de" ? "de-DE" : locale === "es" ? "es-ES" : "nl-NL", { maximumFractionDigits: 2 });
 
   // Voor-/eindblad met Magic Stone-sfeerimpressie (niet op pakbonnen).
   // [ext, ext] op het voorblad, [int, int] op het eindblad.
@@ -774,6 +791,7 @@ function DocumentPdf({ doc }: { doc: PdfDoc }) {
                 {heeftKorting && <Text style={[s.thText, s.cDisc]}>{t.discountCol}</Text>}
                 {!isFondos && <Text style={[s.thText, s.cVat]}>{t.vat}</Text>}
                 <Text style={[s.thText, s.cAmt]}>{t.net}</Text>
+                {toonIncl && <Text style={[s.thText, s.cIncl]}>{t.inclCol}</Text>}
               </>
             )}
           </View>
@@ -814,10 +832,21 @@ function DocumentPdf({ doc }: { doc: PdfDoc }) {
                     <>
                       <Text style={s.cNum}>{eur(it.price)}</Text>
                       {heeftKorting && (
-                        <Text style={s.cDisc}>{it.discount ? `−${it.discount}%` : ""}</Text>
+                        <View style={s.cDisc}>
+                          {it.discount ? (
+                            <>
+                              <Text>−{fmtPct(Number(it.discount))}%</Text>
+                              <Text style={s.subAmt}>−{eur(lineDiscountAmount(it))}</Text>
+                            </>
+                          ) : null}
+                        </View>
                       )}
                       {!isFondos && <Text style={s.cVat}>{it.taxRate ?? 0}%</Text>}
-                      <Text style={s.cAmt}>{eur(lineNet(it))}</Text>
+                      <View style={s.cAmt}>
+                        <Text>{eur(lineNet(it))}</Text>
+                        {it.discount ? <Text style={s.struck}>{eur(lineGross(it))}</Text> : null}
+                      </View>
+                      {toonIncl && <Text style={s.cIncl}>{eur(lineTotalIncl(it))}</Text>}
                     </>
                   )}
                 </View>
@@ -849,7 +878,10 @@ function DocumentPdf({ doc }: { doc: PdfDoc }) {
                       <Text>{eur(brutoSubtotaal)}</Text>
                     </View>
                     <View style={s.totalRow}>
-                      <Text style={s.muted}>{t.discount}</Text>
+                      <Text style={s.muted}>
+                        {t.discount}
+                        {brutoSubtotaal > 0 ? ` (${fmtPct(Math.round((kortingTotaal / brutoSubtotaal) * 1000) / 10)}%)` : ""}
+                      </Text>
                       <Text>−{eur(kortingTotaal)}</Text>
                     </View>
                   </>
@@ -860,12 +892,19 @@ function DocumentPdf({ doc }: { doc: PdfDoc }) {
                     <Text>{eur(doc.subtotalEur)}</Text>
                   </View>
                 )}
-                {!isFondos && (
-                  <View style={s.totalRow}>
-                    <Text style={s.muted}>{t.vatTotal}</Text>
-                    <Text>{eur(doc.taxEur)}</Text>
-                  </View>
-                )}
+                {!isFondos && btwPerTarief.length > 1
+                  ? btwPerTarief.map((b) => (
+                      <View key={b.rate} style={s.totalRow}>
+                        <Text style={s.muted}>{t.vat} {b.rate}% · {eur(b.base)}</Text>
+                        <Text>{eur(b.tax)}</Text>
+                      </View>
+                    ))
+                  : !isFondos && (
+                      <View style={s.totalRow}>
+                        <Text style={s.muted}>{t.vatTotal}{btwPerTarief[0] ? ` ${btwPerTarief[0].rate}%` : ""}</Text>
+                        <Text>{eur(doc.taxEur)}</Text>
+                      </View>
+                    )}
                 <View style={s.totalGrand}>
                   <Text style={s.totalGrandText}>{t.total}</Text>
                   <Text style={s.totalGrandText}>{eur(doc.totalEur)}</Text>

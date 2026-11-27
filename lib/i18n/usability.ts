@@ -1,6 +1,16 @@
 import type { Dictionary } from "@/lib/i18n";
 
 const rows: [string, string, string][] = [
+  ["Zonder korting", "Without discount", "Sin descuento"],
+  ["Netto (ex.)", "Net (excl.)", "Neto (sin IVA)"],
+  ["Totaal zonder korting", "Total before discount", "Total sin descuento"],
+  ["Subtotaal (ex. btw)", "Subtotal (excl. VAT)", "Subtotal (sin IVA)"],
+  ["BTW {v0}% over {v1}", "VAT {v0}% on {v1}", "IVA {v0}% sobre {v1}"],
+  ["Totaal incl. btw", "Total incl. VAT", "Total con IVA"],
+  ["Korting op de hele order", "Discount on the whole order", "Descuento en todo el pedido"],
+  ["Toepassen op alle regels", "Apply to all lines", "Aplicar a todas las líneas"],
+  ["Bedrag ex. btw, verdeeld naar rato over alle regels. Verrekenregels blijven buiten de korting.", "Amount excl. VAT, spread pro rata over all lines. Settlement lines are excluded from the discount.", "Importe sin IVA, repartido proporcionalmente entre todas las líneas. Las líneas de compensación quedan fuera del descuento."],
+  ["Overschrijft de korting op elke regel. Daarna kun je per regel nog aanpassen.", "Overwrites the discount on every line. You can still adjust each line afterwards.", "Sobrescribe el descuento de cada línea. Después puedes ajustarlo por línea."],
   ["Eigen kosten — wat zijn wij echt kwijt?", "Own costs — what are we really spending?", "Costes propios — ¿cuánto gastamos realmente?"],
   ["intern · niet zichtbaar voor de klant · alle bedragen ex. btw", "internal · not visible to the client · all amounts excl. VAT", "interno · no visible para el cliente · importes sin IVA"],
   ["Uren — werkelijk betaald", "Hours — actually paid", "Horas — pagado realmente"],
